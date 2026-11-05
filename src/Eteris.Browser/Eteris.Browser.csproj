@@ -10,6 +10,7 @@
     <RootNamespace>Eteris.Browser</RootNamespace>
     <Version>0.1.0</Version>
     <Product>Éteris</Product>
+    <StartupObject>Eteris.Browser.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
