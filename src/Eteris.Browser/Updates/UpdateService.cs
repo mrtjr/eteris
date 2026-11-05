@@ -5,7 +5,7 @@ namespace Eteris.Browser.Updates;
 
 public static class UpdateService
 {
-    public const string RepoUrl = "https://github.com/OWNER/eteris";
+    public const string RepoUrl = "https://github.com/mrtjr/eteris";
 
     public static UpdateInfo? Pending { get; private set; }
 
