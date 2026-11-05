@@ -1,0 +1,10 @@
+bin/
+obj/
+publish/
+Releases/
+node_modules/
+target/
+*.user
+.vs/
+TestResults/
+.superpowers/
