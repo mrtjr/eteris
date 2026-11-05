@@ -145,8 +145,11 @@ build.
 
 ### 4.7 Instalador e atualizações
 
-- Velopack: `vpk pack` gera `Eteris-Setup.exe` (instala em
-  `%LocalAppData%\Eteris`, sem admin) e pacotes delta.
+- Velopack: `vpk pack` com `packId` **`EterisBrowser`** gera
+  `EterisBrowser-win-Setup.exe` (instala em `%LocalAppData%\EterisBrowser`,
+  sem admin) e pacotes delta. O `packId` é deliberadamente diferente da
+  pasta de dados `%LocalAppData%\Eteris`: o Velopack apaga a pasta de
+  instalação ao desinstalar, e os dados do utilizador têm de sobreviver.
 - Ao arrancar, verifica GitHub Releases do repositório; se houver versão
   nova, descarrega em segundo plano e aplica no próximo arranque (aviso
   discreto no menu `⋮`).
