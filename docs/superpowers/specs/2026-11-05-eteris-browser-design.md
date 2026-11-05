@@ -151,8 +151,11 @@ build.
   pasta de dados `%LocalAppData%\Eteris`: o Velopack apaga a pasta de
   instalação ao desinstalar, e os dados do utilizador têm de sobreviver.
 - Ao arrancar, verifica GitHub Releases do repositório; se houver versão
-  nova, descarrega em segundo plano e aplica no próximo arranque (aviso
-  discreto no menu `⋮`).
+  nova, descarrega em segundo plano. O Velopack **não aplica sozinho**: ao
+  sair, a app chama `WaitExitThenApplyUpdates` e o `Update.exe` troca a
+  pasta `current\` depois de o processo terminar, pelo que o próximo
+  arranque já é a versão nova (aviso discreto no menu `⋮`, com
+  "Reiniciar para atualizar" via `ApplyUpdatesAndRestart`).
 - Falha de rede/update → silenciosa; tenta na próxima abertura.
 
 ## 5. Eteris.Shields (Rust)

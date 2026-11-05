@@ -17,6 +17,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        UpdateService.ApplyPendingOnExit();
         Cef.Shutdown();
         base.OnExit(e);
     }

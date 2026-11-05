@@ -18,6 +18,6 @@ public class CefConfiguratorTests
         => Assert.Equal(LogSeverity.Disable, CefConfigurator.Build("p").LogSeverity);
 
     [Fact]
-    public void Build_DisablesMediaStreamByDefault()
-        => Assert.Equal("false", CefConfigurator.Build("p").CefCommandLineArgs["enable-media-stream"]);
+    public void Build_DoesNotSetMediaStreamSwitch()
+        => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("enable-media-stream"));
 }

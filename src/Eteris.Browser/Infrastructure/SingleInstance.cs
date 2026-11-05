@@ -22,9 +22,14 @@ public sealed class SingleInstance : IDisposable
         var current = Environment.ProcessId;
         foreach (var process in Process.GetProcessesByName(processName))
         {
-            if (process.Id == current || process.MainWindowHandle == 0) continue;
-            SetForegroundWindow(process.MainWindowHandle);
-            return;
+            using (process)
+            {
+                var handle = process.MainWindowHandle;
+                if (process.Id == current || handle == 0) continue;
+                if (IsIconic(handle)) ShowWindow(handle, SW_RESTORE);
+                SetForegroundWindow(handle);
+                return;
+            }
         }
     }
 
@@ -34,6 +39,14 @@ public sealed class SingleInstance : IDisposable
         _mutex.Dispose();
     }
 
+    private const int SW_RESTORE = 9;
+
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(nint hWnd, int nCmdShow);
 }

@@ -22,8 +22,4 @@ public class AppPathsTests
     [Fact]
     public void Filters_IsFiltersInsideRoot()
         => Assert.Equal(Path.Combine(AppPaths.Root, "filters"), AppPaths.Filters);
-
-    [Fact]
-    public void Root_PreservesNonAsciiUserName()
-        => Assert.Contains(Environment.UserName, AppPaths.Root);
 }

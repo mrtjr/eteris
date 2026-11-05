@@ -13,7 +13,6 @@ public static class CefConfigurator
             Locale = "pt-PT",
             LogSeverity = LogSeverity.Disable,
         };
-        settings.CefCommandLineArgs["enable-media-stream"] = "false";
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
         return settings;
     }
