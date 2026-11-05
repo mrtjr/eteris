@@ -1,2 +1,8 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Eteris.Browser/Eteris.Browser.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Eteris.Browser.Tests/Eteris.Browser.Tests.csproj" />
+  </Folder>
 </Solution>
