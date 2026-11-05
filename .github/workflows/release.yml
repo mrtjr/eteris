@@ -1,0 +1,21 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet tool install -g vpk
+      - run: .\build\publish.ps1
+      - run: .\build\pack.ps1 -Version ("${{ github.ref_name }}".TrimStart("v"))
+      - run: vpk upload github --repoUrl "https://github.com/${{ github.repository }}" --publish --releaseName "Éteris ${{ github.ref_name }}" --tag "${{ github.ref_name }}" --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
