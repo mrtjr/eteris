@@ -1023,6 +1023,13 @@
                 </TextBlock>
             </Border>
 
+            <!-- Para onde vai o link debaixo do rato -->
+            <Border x:Name="LinkStatusBubble" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    Margin="12,0,0,12" CornerRadius="8" Padding="10,4" MaxWidth="720" IsHitTestVisible="False" Visibility="Collapsed"
+                    Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1">
+                <TextBlock x:Name="LinkStatusText" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
+            </Border>
+
             <!-- Aviso genérico (copiado, guardado, ...) -->
             <Border x:Name="Toast" Grid.Row="2" Panel.ZIndex="55" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,28" CornerRadius="18" Padding="18,9" Background="{DynamicResource ToastBrush}" IsHitTestVisible="False"

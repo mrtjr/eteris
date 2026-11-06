@@ -179,6 +179,11 @@ public partial class MainWindow : Window
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             if (!IsPrivate) Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
         };
+        browser.StatusMessage += (_, e) =>
+        {
+            var text = Eteris.Browser.Omnibox.LinkStatus.Format(e.Value);
+            Dispatcher.InvokeAsync(() => ShowLinkStatus(tab, text));
+        };
         browser.IsBrowserInitializedChanged += (_, _) =>
         {
             if (browser.IsBrowserInitialized && tab.IsMuted) browser.GetBrowserHost()?.SetAudioMuted(true);

@@ -1,10 +1,22 @@
 using System.Windows;
 using System.Windows.Media.Animation;
+using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
 
 public partial class MainWindow
 {
+    private void ShowLinkStatus(BrowserTab tab, string? text)
+    {
+        if (!ReferenceEquals(tab, Tabs.Active) || text is null)
+        {
+            LinkStatusBubble.Visibility = Visibility.Collapsed;
+            return;
+        }
+        LinkStatusText.Text = text;
+        LinkStatusBubble.Visibility = Visibility.Visible;
+    }
+
     // Aviso curto no fundo da janela: aparece, fica ~1,8 s e desvanece.
     private void ShowToast(string message)
     {
