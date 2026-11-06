@@ -34,13 +34,18 @@ public partial class MainWindow : Window
         Tabs.Tabs.CollectionChanged += OnTabsChanged;
         Tabs.PropertyChanged += OnTabsPropertyChanged;
         StateChanged += (_, _) => OnWindowStateChanged();
-        SourceInitialized += (_, _) => WindowEffects.Apply(this, borderColorRef: isPrivate ? 0x00ED3A7Cu : 0x0042302Bu);
+        SourceInitialized += (_, _) =>
+        {
+            WindowEffects.Apply(this, borderColorRef: isPrivate ? 0x00ED3A7Cu : 0x0042302Bu);
+            ApplyBackdrop();
+        };
         Deactivated += (_, _) => CloseSuggestions();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
         StartTabs(initialUrl);
         WatchUpdates();
+        WatchBackdropSetting();
         StartAudioWatch();
     }
 

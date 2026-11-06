@@ -52,6 +52,7 @@ public static class SettingsPage
             sleep = settings.SleepMinutes,
             httpsFirst = settings.HttpsFirst,
             cookies = settings.BlockThirdPartyCookies,
+            mica = settings.Mica,
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

@@ -231,7 +231,9 @@ public partial class MainWindow
 
     private void ApplyTint()
     {
-        var target = Tabs.Active?.Tint ?? SiteTint.Base;
+        var tint = Tabs.Active?.Tint ?? SiteTint.Base;
+        // Com Mica, a superfície das barras fica translúcida para o material do sistema transparecer.
+        var target = _mica ? Color.FromArgb(ChromeAlpha, tint.R, tint.G, tint.B) : tint;
         var brush = (SolidColorBrush)Resources["ChromeSurfaceBrush"];
         brush.BeginAnimation(SolidColorBrush.ColorProperty,
             new ColorAnimation(target, TimeSpan.FromMilliseconds(380)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } });

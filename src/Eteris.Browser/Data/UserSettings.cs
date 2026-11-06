@@ -15,6 +15,7 @@ public sealed record UserSettings
     public int SleepMinutes { get; init; } = 20;
     public bool HttpsFirst { get; init; } = true;
     public bool BlockThirdPartyCookies { get; init; } = true;
+    public bool Mica { get; init; } = true;
 
     public UserSettings? With(string key, string value) => key switch
     {
@@ -23,6 +24,7 @@ public sealed record UserSettings
         "sleep" when int.TryParse(value, out var minutes) && minutes >= 0 && minutes <= 24 * 60 => this with { SleepMinutes = minutes },
         "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
         "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
+        "mica" when bool.TryParse(value, out var on) => this with { Mica = on },
         _ => null,
     };
 }
