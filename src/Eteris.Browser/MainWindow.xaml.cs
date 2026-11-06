@@ -47,6 +47,7 @@ public partial class MainWindow : Window
         WatchUpdates();
         WatchBackdropSetting();
         WatchTabLayoutSetting();
+        WatchMouseAndDrops();
         StartAudioWatch();
     }
 
