@@ -25,6 +25,7 @@ public partial class MainWindow
             .Separator()
             .Item("", tab.IsPinned ? "Desafixar aba" : "Fixar aba", () => Tabs.TogglePin(tab))
             .Item("", "Duplicar", () => Tabs.NewTab(tab.Address))
+            .Item(tab.IsMuted ? "" : "", tab.IsMuted ? "Reativar o som" : "Silenciar aba", () => ToggleMute(tab))
             .Item("", "Recarregar", () =>
             {
                 Tabs.Active = tab;

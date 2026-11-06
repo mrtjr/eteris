@@ -104,8 +104,13 @@
                                 <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5"
                                            Foreground="{StaticResource TextMutedBrush}" />
-                                <Button x:Name="TabClose" Grid.Column="2" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
-                                        Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" />
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button x:Name="TabAudio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
+                                            FontSize="11" Click="TabAudio_Click" ToolTip="Silenciar / reativar o som desta aba"
+                                            Visibility="Collapsed" />
+                                    <Button x:Name="TabClose" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
+                                            Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" />
+                                </StackPanel>
                             </Grid>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -127,6 +132,12 @@
                                 <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsAudible}" Value="True">
+                                <Setter TargetName="TabAudio" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                <Setter TargetName="TabAudio" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsPinned}" Value="True">
                                 <Setter TargetName="TabRoot" Property="Width" Value="44" />

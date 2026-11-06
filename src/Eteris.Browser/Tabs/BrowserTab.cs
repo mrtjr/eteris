@@ -40,6 +40,15 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isPinned;
 
+    [ObservableProperty]
+    private bool _isMuted;
+
+    public string? AudioGlyph => AudioIndicator.Glyph(IsAudible, IsMuted);
+
+    partial void OnIsAudibleChanged(bool value) => OnPropertyChanged(nameof(AudioGlyph));
+
+    partial void OnIsMutedChanged(bool value) => OnPropertyChanged(nameof(AudioGlyph));
+
     public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
 
     private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);

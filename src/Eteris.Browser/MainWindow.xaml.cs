@@ -40,6 +40,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
         StartTabs(initialUrl);
+        StartAudioWatch();
     }
 
     public TabsViewModel Tabs { get; } = new();
@@ -151,6 +152,10 @@ public partial class MainWindow : Window
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             if (!IsPrivate) Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
+        };
+        browser.IsBrowserInitializedChanged += (_, _) =>
+        {
+            if (browser.IsBrowserInitialized && tab.IsMuted) browser.GetBrowserHost()?.SetAudioMuted(true);
         };
         _browsers[tab] = browser;
         BrowserHost.Children.Add(browser);
