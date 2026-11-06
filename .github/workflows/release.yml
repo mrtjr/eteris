@@ -25,7 +25,9 @@ jobs:
             throw "UpdateService.RepoUrl nao corresponde a $env:REPO_URL"
           }
       - run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
-      - run: dotnet test -c Release
+      - run: dotnet restore
+      - run: dotnet build -c Release --no-restore
+      - run: dotnet test -c Release --no-build
       - name: O instalador tem de levar o motor do escudo
         run: |
           .\build\publish.ps1 -Version $env:VERSION.TrimStart("v")
