@@ -37,6 +37,15 @@ public partial class MainWindow
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.97, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
     }
 
+    // As cores são lidas quando a folha é construída: com outro tema, constrói-se de novo.
+    private void ResetShortcutsForTheme()
+    {
+        if (_shortcuts is null) return;
+        CloseShortcuts();
+        ((Grid)RootBorder.Child).Children.Remove(_shortcuts);
+        _shortcuts = null;
+    }
+
     private void CloseShortcuts()
     {
         if (!ShortcutsOpen) return;
@@ -53,7 +62,7 @@ public partial class MainWindow
         Panel.SetZIndex(overlay, 110);
         WindowChrome.SetIsHitTestVisibleInChrome(overlay, true);
 
-        var backdrop = new System.Windows.Shapes.Rectangle { Fill = Frozen("#B3050710") };
+        var backdrop = new System.Windows.Shapes.Rectangle { Fill = Res("ScrimBrush") };
         backdrop.MouseLeftButtonDown += (_, _) => CloseShortcuts();
         overlay.Children.Add(backdrop);
 
@@ -71,8 +80,8 @@ public partial class MainWindow
                 var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3), LastChildFill = true };
                 var keys = new Border
                 {
-                    CornerRadius = new CornerRadius(7), Background = Frozen("#262A38"), Padding = new Thickness(8, 3, 8, 3),
-                    BorderBrush = Frozen("#3A3F55"), BorderThickness = new Thickness(0, 0, 0, 1.5),
+                    CornerRadius = new CornerRadius(7), Background = Res("HoverBrush"), Padding = new Thickness(8, 3, 8, 3),
+                    BorderBrush = Res("PressedBrush"), BorderThickness = new Thickness(0, 0, 0, 1.5),
                     Child = new TextBlock { Text = item.Keys, FontSize = 11.5, Foreground = Res("TextBrush") },
                 };
                 DockPanel.SetDock(keys, Dock.Right);
