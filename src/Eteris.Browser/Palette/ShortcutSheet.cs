@@ -29,6 +29,7 @@ public static class ShortcutSheet
         new("Ferramentas", [
             new("Ctrl+K", "Paleta de comandos"),
             new("Ctrl+F · F3", "Procurar na página"),
+            new("Ctrl+Shift+L", "Seguir link pelo teclado"),
             new("Ctrl+D", "Favorito"),
             new("Ctrl+H", "Histórico"),
             new("Ctrl+Shift+O", "Favoritos"),

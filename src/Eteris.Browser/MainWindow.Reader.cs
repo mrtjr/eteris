@@ -22,6 +22,19 @@ public partial class MainWindow
 
     private void Reader_Click(object sender, RoutedEventArgs e) => ToggleReader();
 
+    // Etiquetas de letras sobre os links e botões visíveis; o foco vai para a página para receber as letras.
+    private async void ShowLinkHints()
+    {
+        if (ActiveBrowser is not { } browser || !ReaderScripts.IsCandidate(Tabs.Active?.Address ?? string.Empty)) return;
+        Keyboard.Focus(browser);
+        try
+        {
+            var response = await browser.EvaluateScriptAsync(LinkHints.Script, TimeSpan.FromSeconds(3));
+            if (response.Success && response.Result as string == "none") ShowToast("Não há links visíveis nesta página");
+        }
+        catch (Exception) { }
+    }
+
     private async void ToggleReader()
     {
         if (ActiveBrowser is not { } browser || Tabs.Active is not { IsReaderable: true }) return;

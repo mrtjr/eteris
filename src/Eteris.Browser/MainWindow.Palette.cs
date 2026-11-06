@@ -119,6 +119,7 @@ public partial class MainWindow
             if (AppData.HiddenElements(pickHost).Count is > 0 and var hiddenCount)
                 yield return new("", "Repor elementos escondidos", $"{hiddenCount} escondido(s) em {pickHost}", null, ResetHiddenElements);
         }
+        yield return new("", "Seguir um link pelo teclado", "Letras sobre cada link; escreva-as para o abrir", "Ctrl+Shift+L", ShowLinkHints);
         if (Tabs.Active?.IsReaderable == true)
             yield return new("", "Modo de leitura", "Só o artigo, sem anúncios nem distrações", "F9", ToggleReader);
         if (IsSplit)
