@@ -42,7 +42,41 @@ public partial class MainWindow
         var active = Downloads.HasActive;
         DownloadsTrack.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
         DownloadsRing.Data = active ? RingArc(Downloads.OverallPercent) : null;
+
+        TaskbarItemInfo ??= new System.Windows.Shell.TaskbarItemInfo();
+        var (state, value) = TaskbarProgress.For(active, Downloads.OverallPercent);
+        TaskbarItemInfo.ProgressState = state;
+        TaskbarItemInfo.ProgressValue = value;
+        if (TaskbarProgress.ShouldFlash(_hadActiveDownloads, active, IsActive)) FlashTaskbar();
+        _hadActiveDownloads = active;
     }
+
+    private bool _hadActiveDownloads;
+
+    private void FlashTaskbar()
+    {
+        var info = new FLASHWINFO
+        {
+            cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<FLASHWINFO>(),
+            hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle,
+            dwFlags = 0x2 | 0xC, // FLASHW_TRAY | FLASHW_TIMERNOFG: pisca até a janela voltar ao primeiro plano
+            uCount = 3,
+        };
+        FlashWindowEx(ref info);
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct FLASHWINFO
+    {
+        public uint cbSize;
+        public nint hwnd;
+        public uint dwFlags;
+        public uint uCount;
+        public uint dwTimeout;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool FlashWindowEx(ref FLASHWINFO info);
 
     // Arco do anel de progresso à volta do botão (raio 15, começa no topo, sentido horário).
     private static Geometry? RingArc(int percent)
