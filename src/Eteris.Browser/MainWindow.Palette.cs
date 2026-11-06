@@ -103,6 +103,8 @@ public partial class MainWindow
                     UpdateShieldButton();
                 });
         }
+        if (Tabs.Active?.IsReaderable == true)
+            yield return new("", "Modo de leitura", "Só o artigo, sem anúncios nem distrações", "F9", ToggleReader);
         if (IsSplit)
             yield return new("", "Fechar ecrã dividido", "Voltar a uma página de cada vez", null, CloseSplit);
         else if (SplitCandidate() is { } partner)

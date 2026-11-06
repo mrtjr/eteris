@@ -129,6 +129,7 @@ public partial class MainWindow : Window
                 tab.Tint = null;
             }
             tab.Address = address;
+            tab.IsReaderable = false;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
         };
         browser.TitleChanged += (_, e) =>
@@ -164,6 +165,7 @@ public partial class MainWindow : Window
             Dispatcher.InvokeAsync(() =>
             {
                 DetectSiteTint(tab, browser, url);
+                DetectReaderable(tab, browser, url);
                 _ = ApplyGenericCosmeticsAsync(browser, url);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
@@ -303,6 +305,7 @@ public partial class MainWindow : Window
         else if (ctrl && key == Key.D) ToggleBookmark();
         else if ((ctrl && key == Key.F) || key == Key.F3) OpenFind();
         else if (key == Key.F11) ToggleFocusMode();
+        else if (key == Key.F9) ToggleReader();
         else if (key == Key.F12 || (ctrl && shift && key == Key.I)) ShowDevTools();
         else if (ctrl && key == Key.U) ViewSource();
         else if (ctrl && key == Key.H) OpenHistory();

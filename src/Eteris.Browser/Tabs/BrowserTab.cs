@@ -16,6 +16,10 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
+    // A página parece um artigo: mostra o botão do modo de leitura.
+    [ObservableProperty]
+    private bool _isReaderable;
+
     [ObservableProperty]
     private bool _canGoBack;
 

@@ -17,6 +17,7 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <SolidColorBrush x:Key="ChromeSurfaceBrush" Color="#1A1D27" />
 
         <Style x:Key="PaletteItemStyle" TargetType="ListBoxItem">
@@ -452,6 +453,11 @@
                                            Foreground="{StaticResource TextMutedBrush}" />
                             </Button>
 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="ReaderButton" Style="{StaticResource IconButton}" Width="28" Height="28" Margin="0,0,2,0"
+                                        Click="Reader_Click" ToolTip="Modo de leitura (F9)"
+                                        Visibility="{Binding Active.IsReaderable, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="&#xE736;" FontFamily="{StaticResource IconFont}" FontSize="14" />
+                                </Button>
                                 <Button x:Name="ZoomBadge" Visibility="Collapsed" Click="ZoomBadge_Click" Cursor="Hand"
                                         ToolTip="Repor o zoom deste site (Ctrl+0)" Margin="0,0,4,0">
                                     <Button.Template>
