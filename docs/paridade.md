@@ -12,7 +12,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 
 | # | Lacuna | Chrome | Firefox | Brave | Éteris hoje | Prioridade |
 |---|---|---|---|---|---|---|
-| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | (não instalado) | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
+| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (CefSharp não o suporta num executável .NET) | **[bloqueia]** |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje), mas sem processo garantido | **[bloqueia]** |
@@ -31,12 +31,17 @@ janela 1360×860, 10 s, soma do processador de todos os processos do navegador e
 a 60 fps (confirmado pelo título da página). Éteris em build Release; Chrome e Brave com perfis temporários,
 apagados no fim. Scripts: `perf-render.ps1` (Éteris) e `perf-browser.ps1` (referências).
 
-| Página | Éteris 0.2.2 (fora da tela) | Protótipo em janela própria | `main` (bb9b908) | Chrome 156 | Brave 157 |
-|---|---|---|---|---|---|
-| Animação | 28,1% | 8,4% | **11,1%** | 6,7% | 8,0% |
-| Rolagem contínua | 35,9% | 8,8% | **8,4%** | 6,6% | 4,8% |
-| Animação + 1 aba escondida animada | 60,9% | 18,0% | **10,5%** | — | — |
-| Rolagem + 1 aba escondida animada | 60,0% | 15,5% | **8,0%** | — | — |
+| Página | Éteris 0.2.2 (fora da tela) | Protótipo em janela própria | Éteris 0.2.3 | Chrome 156 | Brave 157 | Firefox 159 |
+|---|---|---|---|---|---|---|
+| Animação | 28,1% | 8,4% | **11,1%** | 6,7% | 8,0% | 28,3% |
+| Rolagem contínua | 35,9% | 8,8% | **8,4%** | 6,6% | 4,8% | 21,7% |
+| Animação + 1 aba escondida animada | 60,9% | 18,0% | **10,5%** | — | — | — |
+| Rolagem + 1 aba escondida animada | 60,0% | 15,5% | **8,0%** | — | — | — |
+
+Firefox 159.0.1 (versão da Microsoft Store) medido com `perf-firefox.ps1`: perfil temporário próprio
+(`-no-remote -new-instance`, sem tocar no Firefox aberto), sem ecrãs de primeira utilização, janela 1360×860,
+20 s de espera antes de medir. Num perfil novo o Firefox pode ainda ter tarefas de fundo (ex.: listas de
+navegação segura), por isso o valor pode estar um pouco acima do uso normal.
 
 O protótipo (ramo `prototipo/hwndhost`, `CefSharp.Wpf.HwndHost`) troca só o controlo do motor e fica ao nível do
 Chrome e do Brave. Custo conhecido: tudo o que o Éteris desenha por cima da página (avisos, paleta, barra de
