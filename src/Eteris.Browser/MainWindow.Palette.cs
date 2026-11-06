@@ -159,6 +159,8 @@ public partial class MainWindow
         yield return new("", "Aumentar zoom", $"Atual: {zoom}%", "Ctrl +", () => Zoom(1));
         yield return new("", "Reduzir zoom", $"Atual: {zoom}%", "Ctrl −", () => Zoom(-1));
         yield return new("", "Repor zoom", "Voltar a 100%", "Ctrl+0", () => Zoom(0));
+        yield return new("\uE8A7", _miniMode ? "Sair da janela flutuante" : "Janela flutuante",
+            _miniMode ? "Voltar ao tamanho e posição de antes" : "Pequena, num canto e sempre por cima — para ver um vídeo enquanto trabalha", null, ToggleMiniWindow);
         yield return new("", _focusMode ? "Sair do modo foco" : "Modo foco",
             "Esconde abas e barras para ler sem distrações", "F11", ToggleFocusMode);
     }

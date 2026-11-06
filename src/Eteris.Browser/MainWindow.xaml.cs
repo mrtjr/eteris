@@ -53,6 +53,7 @@ public partial class MainWindow : Window
         TrackActivation();
         RememberWhenClosing();
         StartAudioWatch();
+        WatchMiniBar();
     }
 
     public TabsViewModel Tabs { get; } = new();

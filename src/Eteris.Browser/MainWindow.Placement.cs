@@ -27,6 +27,14 @@ public partial class MainWindow
 
     private void SavePlacement()
     {
+        // Fechada em janela flutuante, guarda-se o tamanho de antes.
+        if (_miniMode)
+        {
+            if (!_beforeMiniBounds.IsEmpty)
+                WindowPlacement.Save(PlacementPath, new WindowPlacement(_beforeMiniBounds.Left, _beforeMiniBounds.Top,
+                    _beforeMiniBounds.Width, _beforeMiniBounds.Height, _beforeMiniState == WindowState.Maximized));
+            return;
+        }
         var maximized = WindowState == WindowState.Maximized && !_pageFullscreen
                         || (_pageFullscreen && _beforeFullscreenState == WindowState.Maximized);
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, ActualWidth, ActualHeight) : RestoreBounds;

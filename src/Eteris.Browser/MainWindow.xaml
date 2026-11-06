@@ -1045,6 +1045,21 @@
                 </Grid>
             </Border>
 
+            <!-- Janela flutuante: barra para arrastar e voltar ao tamanho normal (aparece com o rato) -->
+            <Border x:Name="MiniBar" Grid.Row="2" Panel.ZIndex="60" VerticalAlignment="Top" Height="34" Visibility="Collapsed"
+                    Background="#CC0B0D13" MouseLeftButtonDown="MiniBar_MouseLeftButtonDown" Cursor="SizeAll"
+                    ToolTip="Arraste para mover · duplo clique para voltar ao tamanho normal">
+                <DockPanel Margin="10,0,4,0">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="12"
+                            Content="&#xE73F;" Click="MiniRestore_Click" Cursor="Hand" Foreground="White"
+                            AutomationProperties.AutomationId="MiniRestore" ToolTip="Voltar ao tamanho normal" />
+                    <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="#C4B5FD"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock x:Name="MiniTitle" Foreground="White" FontSize="12.5" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+            </Border>
+
             <!-- Pedido de permissão de um site -->
             <Border x:Name="PermissionBar" Grid.Row="2" Panel.ZIndex="45" HorizontalAlignment="Left" VerticalAlignment="Top"
                     Margin="20,10,0,0" CornerRadius="18" Padding="18,14" MaxWidth="460"
