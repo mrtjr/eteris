@@ -73,7 +73,9 @@ public static class ReaderScripts
           let extracted = null;
           try {
             if (typeof Readability === 'function') {
-              const parsed = new Readability(document.cloneNode(true), { serializer: el => el }).parse();
+              // O Readability apaga as classes; estas ficam para a limpeza abaixo reconhecer caixas de navegação e afins.
+              const keep = ['infobox', 'navbox', 'ambox', 'metadata', 'noprint', 'hatnote', 'editsection', 'toc', 'reference', 'references', 'catlinks', 'share', 'social', 'related', 'advert', 'promo', 'newsletter', 'subscribe', 'breadcrumb'];
+              const parsed = new Readability(document.cloneNode(true), { serializer: el => el, classesToPreserve: keep }).parse();
               if (parsed && parsed.content && (parsed.textContent || '').trim().length > 200) extracted = parsed;
             }
           } catch (e) { extracted = null; }
@@ -132,8 +134,10 @@ public static class ReaderScripts
           const heading = ((document.querySelector('h1') || {}).innerText || '').trim();
           const fullTitle = meta('og:title') || document.title;
           // «Fado – Wikipédia, a enciclopédia livre» → «Fado»: o h1 ganha quando está contido no título.
-          const title = (extracted && extracted.title) || (heading && (!fullTitle || fullTitle.includes(heading)) ? heading : (fullTitle || heading));
-          const site = (extracted && extracted.siteName) || meta('og:site_name') || location.hostname.replace(/^www\./, '');
+          // «HTML: Linguagem… | MDN» → o h1 ganha quando está contido no título (sem o nome do site).
+          const baseTitle = (extracted && extracted.title) || fullTitle;
+          const title = heading && (!baseTitle || baseTitle.includes(heading)) ? heading : (baseTitle || heading);
+          const site = meta('og:site_name') || (extracted && extracted.siteName) || location.hostname.replace(/^www\./, '');
           const author = (extracted && extracted.byline) || meta('author') || meta('article:author');
           content.querySelectorAll('h1').forEach(h => { if ((h.innerText || '').trim() === title.trim()) h.remove(); });
           const words = (content.textContent || '').trim().split(/\s+/).length;
