@@ -734,6 +734,25 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
+                        <Grid x:Name="MediaHost" Visibility="Collapsed" Margin="0,0,4,0">
+                            <Button x:Name="MediaButton" Style="{StaticResource IconButton}" Click="MediaButton_Click"
+                                    AutomationProperties.AutomationId="MediaButton" AutomationProperties.Name="Multimédia"
+                                    ToolTip="Multimédia: o que está a tocar nas abas">
+                                <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+                            </Button>
+                            <Ellipse x:Name="MediaLiveDot" Width="7" Height="7" Fill="{StaticResource IrisBrush}" IsHitTestVisible="False"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Visibility="Collapsed">
+                                <Ellipse.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.35" Duration="0:0:0.9" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Ellipse.Triggers>
+                            </Ellipse>
+                        </Grid>
                         <Grid x:Name="DownloadsHost" Visibility="Collapsed" Margin="0,0,4,0">
                             <Button x:Name="DownloadsButton" Style="{StaticResource IconButton}" Click="Downloads_Click"
                                     ToolTip="Transferências (Ctrl+J)">
@@ -760,6 +779,62 @@
                         <Button x:Name="MenuButton" Content="&#xE712;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Menu_Click"
                                 ToolTip="Comandos (Ctrl+K)" />
                     </StackPanel>
+
+                    <Popup x:Name="MediaPopup" PlacementTarget="{Binding ElementName=MediaButton}" Placement="Bottom"
+                           HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           PopupAnimation="Fade">
+                        <Border Margin="14,0,14,24" Width="370" Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="10,14">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <DockPanel Margin="10,0,6,8">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="12"
+                                            Content="&#xE769;" Click="PauseAllMedia_Click" ToolTip="Pausar tudo" />
+                                    <TextBlock Text="Multimédia" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <ItemsControl x:Name="MediaList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="Row" CornerRadius="12" Padding="10,8" Background="Transparent" Cursor="Hand"
+                                                    MouseLeftButtonUp="MediaRow_Click" ToolTip="Ir para esta aba">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="40" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Width="34" Height="34" CornerRadius="10" Background="{Binding MonogramBrush}">
+                                                        <Grid>
+                                                            <TextBlock Text="{Binding Monogram}" FontWeight="Bold" FontSize="15" Foreground="White"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            <Image Source="{Binding Favicon}" Width="18" Height="18" />
+                                                        </Grid>
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding MediaHeadline}" FontSize="13.5" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding MediaSubline}" FontSize="11.5" Foreground="{DynamicResource TextFaintBrush}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="14"
+                                                            Content="{Binding PlayPauseGlyph}" Click="MediaPlayPause_Click" ToolTip="Tocar / pausar" />
+                                                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="14"
+                                                            Content="{Binding MuteGlyph}" Click="MediaMute_Click" ToolTip="Silenciar / repor o som" />
+                                                </Grid>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                                                </Trigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
 
                     <Popup x:Name="DownloadsPopup" PlacementTarget="{Binding ElementName=DownloadsButton}" Placement="Bottom"
                            HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"

@@ -8,6 +8,7 @@ public partial class BrowserTab : ObservableObject
     public BrowserTab(string address) => _address = address;
 
     [NotifyPropertyChangedFor(nameof(Host))]
+    [NotifyPropertyChangedFor(nameof(MediaSubline))]
     [ObservableProperty]
     private string _address;
 
@@ -74,7 +75,43 @@ public partial class BrowserTab : ObservableObject
 
     partial void OnIsAudibleChanged(bool value) => OnPropertyChanged(nameof(AudioGlyph));
 
-    partial void OnIsMutedChanged(bool value) => OnPropertyChanged(nameof(AudioGlyph));
+    partial void OnIsMutedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(AudioGlyph));
+        OnPropertyChanged(nameof(MuteGlyph));
+    }
+
+    // ---------- Centro de multimédia ----------
+
+    [NotifyPropertyChangedFor(nameof(PlayPauseGlyph))]
+    [ObservableProperty]
+    private MediaState _media;
+
+    [NotifyPropertyChangedFor(nameof(MediaHeadline))]
+    [ObservableProperty]
+    private string? _mediaTitle;
+
+    [NotifyPropertyChangedFor(nameof(MediaSubline))]
+    [ObservableProperty]
+    private string? _mediaArtist;
+
+    public string MediaHeadline => MediaTitle ?? Title;
+
+    public string MediaSubline => MediaArtist is { } artist ? $"{artist} · {Host}" : Host;
+
+    public string PlayPauseGlyph => Media == MediaState.Playing ? "\uE769" : "\uE768";
+
+    public string MuteGlyph => IsMuted ? "\uE74F" : "\uE767";
+
+    public void ApplyMedia(MediaInfo info)
+    {
+        Media = info.State;
+        MediaTitle = info.Title;
+        MediaArtist = info.Artist;
+        IsAudible = info.Audible;
+    }
+
+    partial void OnTitleChanged(string value) => OnPropertyChanged(nameof(MediaHeadline));
 
     public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
 

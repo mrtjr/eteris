@@ -18,11 +18,12 @@ public partial class MainWindow
                 if (!browser.IsBrowserInitialized || browser.IsDisposed) continue;
                 try
                 {
-                    var result = await browser.EvaluateScriptAsync(AudioIndicator.AudibleScript);
-                    tab.IsAudible = result.Success && result.Result is true;
+                    var result = await browser.EvaluateScriptAsync(MediaInfo.Script);
+                    tab.ApplyMedia(result.Success ? MediaInfo.Parse(result.Result as string) : MediaInfo.Nothing);
                 }
-                catch (Exception) { tab.IsAudible = false; }
+                catch (Exception) { tab.ApplyMedia(MediaInfo.Nothing); }
             }
+            RefreshMediaHub();
         }, Dispatcher);
         _audioTimer.Start();
         Closed += (_, _) => _audioTimer.Stop();

@@ -96,6 +96,10 @@ public partial class MainWindow
         foreach (var command in SessionCommands()) yield return command;
         yield return new("", "Esquecer os últimos 15 minutos", "Apaga o histórico desse período e as abas fechadas recentes", null, () => Forget(15));
         yield return new("", "Esquecer a última hora", "Apaga o histórico da última hora e as abas fechadas recentes", null, () => Forget(60));
+        if (Tabs.Tabs.Any(t => t.Media == Eteris.Browser.Tabs.MediaState.Playing))
+            yield return new("\uE769", "Pausar tudo o que está a tocar", "Vídeos e áudio de todas as abas", null, PauseAllMedia);
+        if (Tabs.Tabs.Any(t => !ReferenceEquals(t, Tabs.Active) && !t.IsMuted && t.Media != Eteris.Browser.Tabs.MediaState.None))
+            yield return new("\uE74F", "Silenciar outras abas", "Fica só o som desta aba", null, MuteOtherTabs);
         yield return new("", "Adormecer abas em segundo plano", "Liberta a memória das abas que não está a usar", null,
             SleepAllBackgroundTabs);
         yield return new("", "Nova janela", "Abrir outra janela do Éteris", "Ctrl+N", () => OpenWindow(isPrivate: false));
