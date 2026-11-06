@@ -26,6 +26,7 @@ public partial class MainWindow
             return;
         }
         if (url is not null) target.Tabs.NewTab(url);
+        else if (StartupArgs.WantsNewTab(args)) target.OpenNewTab();
         target.BringToFront();
     }
 

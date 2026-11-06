@@ -17,6 +17,7 @@ public partial class App : Application
         Data.AppData.StartShieldStats();
         new MainWindow(StartupArgs.InitialUrl(e.Args), StartupArgs.IsPrivate(e.Args)).Show();
         _ = UpdateService.CheckAndDownloadAsync();
+        JumpListTasks.Install();
         _channel = InstanceChannel.Listen(Program.ChannelName, args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
     }
 

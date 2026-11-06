@@ -14,6 +14,9 @@ public static class StartupArgs
                                         || (uri.Scheme == "eteris" && SafeInternalPages.Contains(uri.Host)
                                             && uri.AbsolutePath == "/" && uri.Query.Length == 0)));
 
+    public static bool WantsNewTab(IEnumerable<string> args)
+        => args.Any(a => a.Equals("--new-tab", StringComparison.OrdinalIgnoreCase));
+
     public static bool IsPrivate(IEnumerable<string> args)
         => args.Any(a => a.Equals("--private", StringComparison.OrdinalIgnoreCase)
                          || a.Equals("--incognito", StringComparison.OrdinalIgnoreCase));
