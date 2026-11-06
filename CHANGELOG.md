@@ -12,7 +12,6 @@ Duas rondas de 50 ciclos de melhorias.
 
 ### Leitura e vídeo
 - **Modo de leitura com o Readability.js do Firefox** (Mozilla, Apache-2.0): extração e deteção de artigos muito mais fiáveis; a heurística própria fica como reserva (p. ex. em sites com Trusted Types).
-- **Vídeos em formatos patenteados** (H.264/AAC, que o Éteris não pode incluir por razões de licença): barra «Abrir no navegador do sistema» quando um vídeo não consegue tocar (Twitch, por exemplo). Se o Éteris for o navegador do sistema, abre o Edge.
 - Teste que compila com o Node todos os scripts injetados nas páginas (apanhou um erro de sintaxe no leitor).
 
 ### Novo (segunda ronda)

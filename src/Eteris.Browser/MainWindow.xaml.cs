@@ -55,7 +55,6 @@ public partial class MainWindow : Window
         StartAudioWatch();
         WatchMiniBar();
         WatchOmniboxMenu();
-        WatchMediaFallback();
         SetUpSideFilter();
         Closing += (_, _) => FlushNotes();
     }
@@ -93,7 +92,8 @@ public partial class MainWindow : Window
 
     private void CreateBrowser(BrowserTab tab)
     {
-        var injector = new ScriptletInjector(AppData.IsShieldOn, EarlyScripts);
+        var injector = new ScriptletInjector(AppData.IsShieldOn,
+            url => DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript : null);
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
@@ -147,11 +147,6 @@ public partial class MainWindow : Window
         };
         browser.ConsoleMessage += (_, e) =>
         {
-            if (Eteris.Browser.Tabs.MediaFallback.ParseReport(e.Message) is { } mediaReason)
-            {
-                Dispatcher.InvokeAsync(() => OnMediaUnsupported(tab, mediaReason));
-                return;
-            }
             // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.
             if (ReaderScripts.ParseReport(e.Message) is not { } reader) return;
             Dispatcher.InvokeAsync(() =>
