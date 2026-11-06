@@ -61,6 +61,13 @@ public partial class MainWindow
         catch (Exception) { }
     }
 
+    // Reaproveita uma aba de histórico já aberta.
+    private void OpenHistory()
+    {
+        if (Tabs.Tabs.FirstOrDefault(t => HistoryPage.IsHistory(t.Address)) is { } open) Tabs.Active = open;
+        else Tabs.NewTab(HistoryPage.Url);
+    }
+
     private void ShowDevTools() => ActiveBrowser?.GetBrowserHost()?.ShowDevTools();
 
     private void ViewSource()

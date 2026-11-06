@@ -296,6 +296,7 @@ public partial class MainWindow : Window
         else if (key == Key.F11) ToggleFocusMode();
         else if (key == Key.F12 || (ctrl && shift && key == Key.I)) ShowDevTools();
         else if (ctrl && key == Key.U) ViewSource();
+        else if (ctrl && key == Key.H) OpenHistory();
         else if (ctrl && key == Key.P) ActiveBrowser?.Print();
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
         else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);

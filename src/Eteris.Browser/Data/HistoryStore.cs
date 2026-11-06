@@ -4,6 +4,8 @@ namespace Eteris.Browser.Data;
 
 public sealed record HistoryEntry(string Url, string Title, int Visits);
 
+public sealed record Visit(long Id, string Url, string Title, DateTime VisitedUtc);
+
 public sealed record TopSite(string Host, string Url, string Title, int Visits);
 
 public sealed class HistoryStore
@@ -50,6 +52,29 @@ public sealed class HistoryStore
             .Take(limit)
             .Select(r => new HistoryEntry(r.Url, r.Title, r.Visits))
             .ToList();
+    }
+
+    public IReadOnlyList<Visit> Visits(int limit)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT id, url, title, visited_at FROM history ORDER BY visited_at DESC, id DESC LIMIT {limit}";
+        using var reader = command.ExecuteReader();
+        var visits = new List<Visit>();
+        while (reader.Read())
+            visits.Add(new Visit(reader.GetInt64(0), reader.GetString(1), reader.GetString(2),
+                DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(3)).UtcDateTime));
+        return visits;
+    }
+
+    public void DeleteVisit(long id) => Execute("DELETE FROM history WHERE id = $i", ("$i", id));
+
+    // DateTime.MinValue apaga tudo.
+    public void DeleteSince(DateTime sinceUtc)
+    {
+        if (sinceUtc == DateTime.MinValue) { Execute("DELETE FROM history"); return; }
+        Execute("DELETE FROM history WHERE visited_at >= $v",
+            ("$v", new DateTimeOffset(DateTime.SpecifyKind(sinceUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds()));
     }
 
     public IReadOnlyList<TopSite> TopSites(int limit)

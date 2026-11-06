@@ -103,6 +103,7 @@ public partial class MainWindow
                     UpdateShieldButton();
                 });
         }
+        yield return new("", "Histórico", "Ver, pesquisar e apagar páginas visitadas", "Ctrl+H", OpenHistory);
         yield return new("", "Aumentar zoom", $"Atual: {zoom}%", "Ctrl +", () => Zoom(1));
         yield return new("", "Reduzir zoom", $"Atual: {zoom}%", "Ctrl −", () => Zoom(-1));
         yield return new("", "Repor zoom", "Voltar a 100%", "Ctrl+0", () => Zoom(0));
