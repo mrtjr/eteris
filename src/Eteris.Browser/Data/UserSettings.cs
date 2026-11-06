@@ -23,6 +23,7 @@ public sealed record UserSettings
     public string SecureDns { get; init; } = "off";
     public bool ClearOnExit { get; init; }
     public string Theme { get; init; } = "dark";
+    public bool CleanUrls { get; init; } = true;
     public string NewTabTheme { get; init; } = "aurora";
     public bool NewTabClock { get; init; } = true;
     public bool NewTabTiles { get; init; } = true;
@@ -41,6 +42,7 @@ public sealed record UserSettings
         "ntClock" when bool.TryParse(value, out var on) => this with { NewTabClock = on },
         "ntTiles" when bool.TryParse(value, out var on) => this with { NewTabTiles = on },
         "ntWeek" when bool.TryParse(value, out var on) => this with { NewTabWeek = on },
+        "cleanUrls" when bool.TryParse(value, out var on) => this with { CleanUrls = on },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },
         "clearOnExit" when bool.TryParse(value, out var on) => this with { ClearOnExit = on },
         "dns" when value == "off" || Shields.SecureDns.Providers.ContainsKey(value) => this with { SecureDns = value },

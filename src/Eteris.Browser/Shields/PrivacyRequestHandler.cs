@@ -28,6 +28,12 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             if (request.ResourceType == ResourceType.MainFrame)
             {
+                // Links sem parâmetros de rastreio (utm_*, fbclid…): o pedido sai já limpo.
+                if (Data.Settings.Current.CleanUrls && UrlCleaner.Clean(request.Url) is var clean && clean != request.Url)
+                {
+                    request.Url = clean;
+                    return CefReturnValue.Continue;
+                }
                 if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url) is { } secure)
                 {
                     request.Url = secure;

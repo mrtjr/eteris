@@ -54,6 +54,7 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("autoplay", "false")]
     [InlineData("suggest", "true")]
     [InlineData("clearOnExit", "true")]
+    [InlineData("cleanUrls", "false")]
     [InlineData("ntTheme", "sunset")]
     [InlineData("ntTiles", "false")]
     [InlineData("sidebarCollapsed", "true")]

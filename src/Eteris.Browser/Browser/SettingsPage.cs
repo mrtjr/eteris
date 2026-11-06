@@ -59,6 +59,7 @@ public static class SettingsPage
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
             theme = settings.Theme,
+            cleanUrls = settings.CleanUrls,
             imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
             tabs = settings.VerticalTabs ? "side" : "top",
         };

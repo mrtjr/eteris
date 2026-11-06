@@ -39,7 +39,7 @@ public partial class MainWindow
             case PageCommand.Inspect: browser.GetBrowserHost()?.ShowDevTools(null, x, y); break;
             case PageCommand.OpenLinkNewTab: Tabs.NewTab(context.LinkUrl!, activate: false); break;
             case PageCommand.OpenLinkPrivate: OpenWindow(isPrivate: true, context.LinkUrl); break;
-            case PageCommand.CopyLink: CopyText(context.LinkUrl!, "Endereço do link copiado"); break;
+            case PageCommand.CopyLink: CopyText(Shields.UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
             case PageCommand.OpenImageNewTab: Tabs.NewTab(context.ImageUrl!, activate: false); break;
             case PageCommand.SaveImage: browser.GetBrowserHost()?.StartDownload(context.ImageUrl!); break;
             case PageCommand.CopyImageUrl: CopyText(context.ImageUrl!, "Endereço da imagem copiado"); break;
