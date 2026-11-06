@@ -4,6 +4,12 @@
 
 Duas rondas de 50 ciclos de melhorias.
 
+### Licenças e privacidade (preparação para distribuir)
+- O Éteris passa a ser software livre sob a **GPL-3.0 ou posterior** (`LICENSE`).
+- Pasta `licenses/` com os textos completos de todas as licenças de terceiros (Chromium, CEF, CefSharp, .NET, pacotes NuGet e os 59 crates do motor de bloqueio), gerada por `build/licenses/collect.py` e incluída na instalação. Acrescentados o SQLitePCLRaw (Apache-2.0) e os créditos completos do Chromium, que faltavam.
+- Testes que impedem uma dependência de entrar sem o texto da sua licença.
+- O motor deixa de descarregar componentes da Google em segundo plano (num perfil novo: 27 → 0, incluindo o módulo DRM Widevine e os modelos de IA); o Widevine que ficou de versões anteriores é apagado no arranque.
+
 ### Novo (segunda ronda)
 - **Privacidade**: DNS cifrado (Cloudflare, Quad9, Mullvad), links sem parâmetros de rastreio (ao navegar e ao copiar), modo rigoroso por site (sem scripts/frames de terceiros), pedidos de notificações recusados sem perguntar, apagar cookies e dados ao fechar, histórico interno do Chromium desligado.
 - **Tema claro** (e «seguir o Windows») em toda a interface e nas páginas internas.
