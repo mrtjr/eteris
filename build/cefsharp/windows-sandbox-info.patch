@@ -1,0 +1,93 @@
+diff --git a/CefSharp.Core.Runtime.RefAssembly/CefSharp.Core.Runtime.netcore.cs b/CefSharp.Core.Runtime.RefAssembly/CefSharp.Core.Runtime.netcore.cs
+index edb3e9e..a9c9ebd 100644
+--- a/CefSharp.Core.Runtime.RefAssembly/CefSharp.Core.Runtime.netcore.cs
++++ b/CefSharp.Core.Runtime.RefAssembly/CefSharp.Core.Runtime.netcore.cs
+@@ -121,6 +121,7 @@ namespace CefSharp.Core
+         public string LogFile { get { throw null; } set { } }
+         public CefSharp.LogSeverity LogSeverity { get { throw null; } set { } }
+         public bool MultiThreadedMessageLoop { get { throw null; } set { } }
++        public System.IntPtr WindowsSandboxInfo { get { throw null; } set { } }
+         public bool PersistSessionCookies { get { throw null; } set { } }
+         public int RemoteDebuggingPort { get { throw null; } set { } }
+         public string ResourcesDirPath { get { throw null; } set { } }
+diff --git a/CefSharp.Core.Runtime/Cef.h b/CefSharp.Core.Runtime/Cef.h
+index 9b08009..4adeb37 100644
+--- a/CefSharp.Core.Runtime/Cef.h
++++ b/CefSharp.Core.Runtime/Cef.h
+@@ -367,7 +367,8 @@ namespace CefSharp
+                 CefMainArgs main_args;
+                 CefSettings settings = *(cefSettings->_cefSettings);
+ 
+-                auto success = CefInitialize(main_args, settings, app.get(), nullptr);
++                // Windows sandbox: the pointer handed to RunWinMain by CEF's bootstrap.exe (nullptr = no sandbox).
++                auto success = CefInitialize(main_args, settings, app.get(), cefSettings->WindowsSandboxInfo.ToPointer());
+ 
+                 if (!success)
+                 {
+diff --git a/CefSharp.Core.Runtime/CefSettingsBase.h b/CefSharp.Core.Runtime/CefSettingsBase.h
+index c8b3b85..431e2f7 100644
+--- a/CefSharp.Core.Runtime/CefSettingsBase.h
++++ b/CefSharp.Core.Runtime/CefSettingsBase.h
+@@ -27,6 +27,11 @@ namespace CefSharp
+             /// </summary>
+             CommandLineArgDictionary^ _cefCommandLineArgs;
+ 
++            /// <summary>
++            /// Windows sandbox information (see WindowsSandboxInfo).
++            /// </summary>
++            IntPtr _windowsSandboxInfo;
++
+         internal:
+             /// <summary>
+             /// CefSettings unmanaged pointer
+@@ -118,6 +123,22 @@ namespace CefSharp
+                 void set(bool value) { _cefSettings->multi_threaded_message_loop = value; }
+             }
+ 
++            /// <summary>
++            /// Windows only. The sandbox information pointer that CEF's bootstrap.exe passes to the client DLL's RunWinMain
++            /// (see include/cef_sandbox_win.h). When set, it is passed to CefInitialize and the sandbox is enabled
++            /// (no_sandbox = false); sub-processes must then also be launched through the bootstrap executable.
++            /// The default (IntPtr.Zero) keeps the current behaviour: sandbox disabled.
++            /// </summary>
++            property IntPtr WindowsSandboxInfo
++            {
++                IntPtr get() { return _windowsSandboxInfo; }
++                void set(IntPtr value)
++                {
++                    _windowsSandboxInfo = value;
++                    _cefSettings->no_sandbox = value == IntPtr::Zero;
++                }
++            }
++
+             /// <summary>
+             /// The path to a separate executable that will be launched for sub-processes. By default the browser process executable is used.
+             /// See the comments on Cef.ExecuteProcess() for details. If this value is non-empty then it must be an absolute path.
+diff --git a/CefSharp.Core/CefSettingsBase.cs b/CefSharp.Core/CefSettingsBase.cs
+index f53bead..7b20f11 100644
+--- a/CefSharp.Core/CefSettingsBase.cs
++++ b/CefSharp.Core/CefSettingsBase.cs
+@@ -1,4 +1,4 @@
+-// Copyright © 2020 The CefSharp Authors. All rights reserved.
++﻿// Copyright © 2020 The CefSharp Authors. All rights reserved.
+ //
+ // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
+ 
+@@ -103,6 +103,17 @@ namespace CefSharp
+             set { settings.MultiThreadedMessageLoop = value; }
+         }
+ 
++        /// <summary>
++        /// Windows only. The sandbox information pointer that CEF's bootstrap.exe passes to the client DLL's RunWinMain
++        /// (see include/cef_sandbox_win.h). When set, the sandbox is enabled; sub-processes must then also be launched
++        /// through the bootstrap executable. Default IntPtr.Zero: sandbox disabled (current behaviour).
++        /// </summary>
++        public System.IntPtr WindowsSandboxInfo
++        {
++            get { return settings.WindowsSandboxInfo; }
++            set { settings.WindowsSandboxInfo = value; }
++        }
++
+         /// <summary>
+         /// The path to a separate executable that will be launched for sub-processes. By default the browser process executable is used.
+         /// See the comments on Cef.ExecuteProcess() for details. If this value is non-empty then it must be an absolute path.
