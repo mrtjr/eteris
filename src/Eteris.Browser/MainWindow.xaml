@@ -105,12 +105,13 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Grid x:Name="TabRoot" Height="36" Background="Transparent"
+                        <Grid x:Name="TabRoot" Height="36" Background="Transparent" RenderTransformOrigin="0,0.5"
                               Width="{Binding TabWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                               ToolTipService.InitialShowDelay="450" ToolTipService.Placement="Bottom">
                             <Grid.ToolTip>
                                 <ToolTip Style="{StaticResource TabCardTip}" />
                             </Grid.ToolTip>
+                            <Grid.RenderTransform><ScaleTransform /></Grid.RenderTransform>
                             <Border x:Name="Bg" CornerRadius="10,10,0,0" Background="Transparent" />
                             <Border x:Name="Glow" Height="2" VerticalAlignment="Top" Margin="14,0" CornerRadius="1"
                                     Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
@@ -148,6 +149,16 @@
                             </Grid>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="TabRoot" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.18" />
+                                        <DoubleAnimation Storyboard.TargetName="TabRoot" Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.85" To="1" Duration="0:0:0.2">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <DataTrigger Binding="{Binding Favicon}" Value="{x:Null}">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Globe" Property="Visibility" Value="Visible" />
@@ -207,10 +218,11 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Grid x:Name="Row" Height="38" Margin="6,1" Background="Transparent" Cursor="Hand" ToolTipService.InitialShowDelay="450" ToolTipService.Placement="Bottom">
+                        <Grid x:Name="Row" Height="38" Margin="6,1" Background="Transparent" Cursor="Hand" RenderTransformOrigin="0,0.5" ToolTipService.InitialShowDelay="450" ToolTipService.Placement="Bottom">
                             <Grid.ToolTip>
                                 <ToolTip Style="{StaticResource TabCardTip}" />
                             </Grid.ToolTip>
+                            <Grid.RenderTransform><ScaleTransform /></Grid.RenderTransform>
                             <Border x:Name="Bg" CornerRadius="10" Background="Transparent" />
                             <Border x:Name="Bar" Width="3" HorizontalAlignment="Left" Margin="0,9" CornerRadius="1.5"
                                     Background="{StaticResource IrisBrush}" Visibility="Hidden" />
@@ -245,6 +257,16 @@
                             </Grid>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Row" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.18" />
+                                        <DoubleAnimation Storyboard.TargetName="Row" Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.85" To="1" Duration="0:0:0.2">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <DataTrigger Binding="{Binding Favicon}" Value="{x:Null}">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Badge" Property="Visibility" Value="Visible" />
