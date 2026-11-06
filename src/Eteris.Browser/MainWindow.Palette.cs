@@ -103,6 +103,8 @@ public partial class MainWindow
                     UpdateShieldButton();
                 });
         }
+        yield return new("", VerticalTabs ? "Abas no topo" : "Abas verticais",
+            VerticalTabs ? "Voltar à faixa de abas clássica" : "Lista de abas na lateral, ideal para muitas abas", null, ToggleVerticalTabs);
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
         yield return new("", "Histórico", "Ver, pesquisar e apagar páginas visitadas", "Ctrl+H", OpenHistory);
         yield return new("", "Aumentar zoom", $"Atual: {zoom}%", "Ctrl +", () => Zoom(1));
@@ -194,11 +196,7 @@ public partial class MainWindow
     private void ToggleFocusMode()
     {
         _focusMode = !_focusMode;
-        TitleRow.Height = new GridLength(_focusMode ? 0 : 42);
-        ToolbarRow.Height = new GridLength(_focusMode ? 0 : 48);
-        TitleBar.Visibility = Toolbar.Visibility = _focusMode ? Visibility.Collapsed : Visibility.Visible;
-        PageFrame.Padding = _focusMode ? new Thickness(0) : new Thickness(6, 0, 6, 6);
-        WindowChrome.GetWindowChrome(this).CaptionHeight = _focusMode ? 0 : 42;
+        ApplyChromeLayout();
         _pageRadius = _focusMode ? 0 : 10;
         BrowserHost.Clip = new RectangleGeometry(new Rect(BrowserHost.RenderSize), _pageRadius, _pageRadius);
         CloseSuggestions();

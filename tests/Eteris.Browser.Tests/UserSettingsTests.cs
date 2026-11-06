@@ -49,6 +49,8 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("httpsFirst", "false")]
     [InlineData("cookies", "false")]
     [InlineData("mica", "false")]
+    [InlineData("verticalTabs", "true")]
+    [InlineData("sidebarCollapsed", "true")]
     public void With_AcceptsValidValues(string key, string value)
         => Assert.NotNull(new UserSettings().With(key, value));
 

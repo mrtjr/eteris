@@ -118,6 +118,13 @@
           <div class="label"><b>Material Mica</b><span>As barras deixam transparecer o ambiente de trabalho, desfocado e tingido (Windows 11). Desligue para um fundo sólido.</span></div>
           <label class="switch"><input type="checkbox" data-key="mica"><i></i></label>
         </div>
+        <div class="item">
+          <div class="label"><b>Posição das abas</b><span>Abas verticais mostram títulos completos e aguentam dezenas de abas abertas.</span></div>
+          <div class="seg" data-key="tabs">
+            <button data-value="top">No topo</button>
+            <button data-value="side">Na lateral</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -231,7 +238,7 @@
     timer = setTimeout(() => saved.classList.remove('show'), 1400);
   }
 
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep) };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs };
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;
     const paint = () => seg.querySelectorAll('button[data-value]').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));
@@ -241,7 +248,8 @@
       if (!b || b.dataset.value === current[key]) return;
       current[key] = b.dataset.value;
       paint();
-      send(key, b.dataset.value);
+      if (key === 'tabs') send('verticalTabs', b.dataset.value === 'side');
+      else send(key, b.dataset.value);
     });
   });
 

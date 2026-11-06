@@ -166,6 +166,92 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SideTabItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
+            <EventSetter Event="PreviewMouseRightButtonUp" Handler="TabItem_PreviewMouseRightButtonUp" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid x:Name="Row" Height="38" Margin="6,1" Background="Transparent" Cursor="Hand" ToolTip="{Binding Title}">
+                            <Border x:Name="Bg" CornerRadius="10" Background="Transparent" />
+                            <Border x:Name="Bar" Width="3" HorizontalAlignment="Left" Margin="0,9" CornerRadius="1.5"
+                                    Background="{StaticResource IrisBrush}" Visibility="Hidden" />
+                            <Grid Margin="13,0,6,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="16" Height="16">
+                                    <Image x:Name="Favicon" Source="{Binding Favicon}" RenderOptions.BitmapScalingMode="HighQuality" />
+                                    <Border x:Name="Badge" CornerRadius="5" Background="{Binding MonogramBrush}" Visibility="Collapsed">
+                                        <TextBlock Text="{Binding Monogram}" FontSize="10" FontWeight="Bold" Foreground="White"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
+                                    </Border>
+                                    <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
+                                             StrokeThickness="2.5" Visibility="Collapsed" />
+                                    <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
+                                </Grid>
+                                <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Margin="10,0,4,0" FontSize="13"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           Foreground="{StaticResource TextMutedBrush}" />
+                                <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal">
+                                    <Button x:Name="Audio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
+                                            FontSize="11" Click="TabAudio_Click" Visibility="Collapsed" />
+                                    <Button x:Name="Close" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
+                                            Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" Visibility="Hidden" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Favicon}" Value="{x:Null}">
+                                <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Badge" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsNewTab}" Value="True">
+                                <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsAudible}" Value="True">
+                                <Setter TargetName="Audio" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                <Setter TargetName="Audio" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSleeping}" Value="True">
+                                <Setter TargetName="Title" Property="Opacity" Value="0.5" />
+                                <Setter TargetName="Favicon" Property="Opacity" Value="0.45" />
+                                <Setter TargetName="Badge" Property="Opacity" Value="0.45" />
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#12FFFFFF" />
+                                <Setter TargetName="Title" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Close" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#2A2F45" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="Title" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Close" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding SideCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter TargetName="Title" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SuggestionItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
             <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Suggestion_Click" />
@@ -322,8 +408,16 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Com abas verticais a barra de título desaparece: os botões da janela vêm para aqui -->
+                    <StackPanel x:Name="ToolbarCaption" Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top"
+                                Height="34" Margin="8,0,-8,0" Visibility="Collapsed">
+                        <Button Content="&#xE921;" Style="{StaticResource CaptionButton}" Click="Minimize_Click" ToolTip="Minimizar" />
+                        <Button x:Name="MaximizeButton2" Content="&#xE922;" Style="{StaticResource CaptionButton}" Click="Maximize_Click" ToolTip="Maximizar" />
+                        <Button Content="&#xE8BB;" Style="{StaticResource CloseCaptionButton}" Click="CloseWindow_Click" ToolTip="Fechar" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <Button Content="&#xE72B;" Style="{StaticResource IconButton}" Click="Back_Click"
                                 IsEnabled="{Binding Active.CanGoBack}" ToolTip="Voltar (Alt+←)" />
                         <Button Content="&#xE72A;" Style="{StaticResource IconButton}" Click="Forward_Click"
@@ -332,6 +426,7 @@
                     </StackPanel>
 
                     <Border x:Name="OmniboxFrame" Grid.Column="1" Style="{StaticResource OmniboxFrame}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             Height="36" CornerRadius="18" BorderThickness="1.5" Margin="8,0,8,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -476,7 +571,8 @@
                         </Border>
                     </Popup>
 
-                    <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <Button x:Name="UpdatePill" Visibility="Collapsed" Click="UpdatePill_Click" Cursor="Hand" Margin="0,0,8,0"
                                 ToolTip="Fecha e reabre o Éteris com a nova versão (as abas são mantidas)">
                             <Button.Template>
@@ -673,6 +769,50 @@
             </Border>
 
             <!-- Página: flutua sobre a superfície, com cantos arredondados -->
+            <!-- Abas verticais -->
+            <Border x:Name="SideBar" Grid.Row="2" Width="248" HorizontalAlignment="Left" Visibility="Collapsed"
+                    Background="{StaticResource ChromeSurfaceBrush}" Padding="0,0,0,6">
+                <DockPanel>
+                    <Button DockPanel.Dock="Top" Click="NewTab_Click" ToolTip="Nova aba (Ctrl+T)" Cursor="Hand" Margin="6,2,6,4">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="B" Height="38" CornerRadius="10" Background="Transparent" Padding="13,0,0,0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="13" Width="16"
+                                                   Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="L" Text="Nova aba" FontSize="13" Margin="12,0,0,0"
+                                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="B" Property="Background" Value="#12FFFFFF" />
+                                        <Setter TargetName="L" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                    </Trigger>
+                                    <DataTrigger Binding="{Binding SideCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter TargetName="L" Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button x:Name="SideCollapseButton" DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="10,4,0,0"
+                            Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="12"
+                            Content="&#xE76B;" Click="SideCollapse_Click" ToolTip="Encolher a barra de abas" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ListBox x:Name="SideTabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
+                                 ItemContainerStyle="{StaticResource SideTabItemStyle}"
+                                 Background="Transparent" BorderThickness="0" Padding="0">
+                            <ListBox.Template>
+                                <ControlTemplate TargetType="ListBox">
+                                    <ItemsPresenter />
+                                </ControlTemplate>
+                            </ListBox.Template>
+                        </ListBox>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
             <Border x:Name="PageFrame" Grid.Row="2" Background="{StaticResource ChromeSurfaceBrush}" Padding="6,0,6,6">
                 <Grid x:Name="BrowserHost" Background="#FFFFFF" SizeChanged="BrowserHost_SizeChanged" PreviewMouseWheel="BrowserHost_PreviewMouseWheel">
                     <Rectangle x:Name="AuroraBar" Height="3" VerticalAlignment="Top" Panel.ZIndex="10"
