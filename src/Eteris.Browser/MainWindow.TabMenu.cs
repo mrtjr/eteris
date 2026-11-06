@@ -22,6 +22,7 @@ public partial class MainWindow
                 Tabs.NewTab(NewTabUrl, activate: false);
                 Tabs.SelectNext();
             })
+            .Item("", "Mover para uma nova janela", () => MoveToNewWindow(tab), enabled: Tabs.Tabs.Count > 1)
             .Item("", "Abrir ao lado (ecrã dividido)", () => OpenSideBySide(tab),
                 enabled: !ReferenceEquals(tab, Tabs.Active) && Tabs.Active is not null)
             .Separator()
@@ -40,5 +41,14 @@ public partial class MainWindow
             .Item("", "Reabrir aba fechada", () => Tabs.ReopenClosed(), "Ctrl+Shift+T")
             .Open((UIElement)sender);
         e.Handled = true;
+    }
+
+    // Destaca a aba para uma janela própria (do mesmo tipo: normal ou privada), com o mesmo endereço.
+    private void MoveToNewWindow(BrowserTab tab)
+    {
+        if (Tabs.Tabs.Count < 2) return;
+        var address = tab.Address;
+        CloseTab(tab);
+        OpenWindow(IsPrivate, address);
     }
 }
