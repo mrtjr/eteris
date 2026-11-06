@@ -40,5 +40,6 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 | Chromium (incluído no CEF) | https://www.chromium.org | BSD-3-Clause e licenças dos seus componentes |
 | Velopack | https://github.com/velopack/velopack | MIT |
 | CommunityToolkit.Mvvm | https://github.com/CommunityToolkit/dotnet | MIT |
+| QRCoder (códigos QR) | https://github.com/codebrainz/QRCoder | MIT |
 | Microsoft.Data.Sqlite / SQLite | https://github.com/dotnet/efcore · https://sqlite.org | MIT · domínio público |
 | .NET | https://github.com/dotnet/runtime | MIT |

@@ -22,8 +22,7 @@
   </PropertyGroup>
 
   <Target Name="BuildShields" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
-    <Exec Command="&quot;$(CargoExe)&quot; build --release --quiet --manifest-path &quot;$(ShieldsDir)Cargo.toml&quot;"
-          IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="&quot;$(CargoExe)&quot; build --release --quiet --manifest-path &quot;$(ShieldsDir)Cargo.toml&quot;" IgnoreStandardErrorWarningFormat="true" />
   </Target>
 
   <ItemGroup>
@@ -36,8 +35,7 @@
     <EmbeddedResource Include="Browser\whatsnew.html" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="Eteris.Browser.THIRD-PARTY-NOTICES.md" />
     <EmbeddedResource Include="Shields\trackers.txt" />
-    <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll"
-          CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <None Include="Shields\lists\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- Gerado por build/scriptlets a partir do uBlock Origin; só muda com uma nova versão do Éteris. -->
     <None Include="Shields\resources\scriptlets.json" CopyToOutputDirectory="PreserveNewest" />
@@ -47,6 +45,7 @@
     <PackageReference Include="CefSharp.Wpf.NETCore" Version="156.0.150" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 

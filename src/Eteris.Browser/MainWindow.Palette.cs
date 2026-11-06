@@ -117,6 +117,8 @@ public partial class MainWindow
         }
         if (host is not null)
         {
+            if (Tabs.Active is { } qrTab && ReaderScripts.IsCandidate(qrTab.Address))
+                yield return new("\uED14", "Código QR desta página", "Para abrir no telemóvel — feito neste computador", null, ShowQrCode);
             yield return new("", "Copiar endereço", address, null, () => Clipboard.SetText(address));
             var on = AppData.IsShieldOn(host);
             yield return new("", on ? "Desligar o escudo neste site" : "Ligar o escudo neste site",

@@ -1047,6 +1047,40 @@
                 </Grid>
             </Border>
 
+            <!-- Código QR da página: cartão ao centro, por cima da página escurecida -->
+            <Grid x:Name="QrOverlay" Grid.Row="2" Panel.ZIndex="58" Visibility="Collapsed" Focusable="True"
+                  Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="QrOverlay_MouseLeftButtonDown" KeyDown="QrOverlay_KeyDown">
+                <Border Width="340" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="22,18,22,20" CornerRadius="22"
+                        Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="40" ShadowDepth="10" Direction="270" Opacity="0.5" Color="Black" />
+                    </Border.Effect>
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,12">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
+                                    Content="&#xE8BB;" Click="QrClose_Click" ToolTip="Fechar (Esc)" />
+                            <StackPanel>
+                                <TextBlock Text="Abrir no telemóvel" FontSize="15" FontWeight="SemiBold" />
+                                <TextBlock x:Name="QrTitle" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </DockPanel>
+                        <Border Background="White" CornerRadius="16" Padding="14" HorizontalAlignment="Center">
+                            <Image x:Name="QrImage" Width="240" Height="240" RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                   AutomationProperties.Name="Código QR do endereço desta página" />
+                        </Border>
+                        <TextBlock x:Name="QrCaption" FontSize="12" Margin="0,10,0,4" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="Aponte a câmara do telemóvel. O código é feito neste computador."
+                                   FontSize="11.5" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12" />
+                        <UniformGrid Columns="2">
+                            <Button Content="Copiar imagem" Click="QrCopy_Click" Margin="0,0,5,0" Style="{StaticResource PillButton}" />
+                            <Button Content="Guardar" Click="QrSave_Click" Margin="5,0,0,0" Style="{StaticResource PillButton}" />
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
             <!-- Notas: bloco de notas por cima da página, à direita -->
             <Border x:Name="NotesPanel" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Right" Width="340" Margin="0,8,16,16"
                     Visibility="Collapsed" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
