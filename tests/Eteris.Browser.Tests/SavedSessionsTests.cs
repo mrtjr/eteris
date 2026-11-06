@@ -48,6 +48,29 @@ public sealed class SavedSessionsTests : IDisposable
     }
 
     [Fact]
+    public void Rename_RefusesANameAlreadyInUse()
+    {
+        var store = new SavedSessionsStore(_path);
+        store.Save("A", [new("https://a.pt/", "A")], T0);
+        store.Save("B", [new("https://b.pt/", "B")], T0);
+        var a = store.All().Single(s => s.Name == "A");
+        Assert.False(store.Rename(a.Id, "B"));
+        Assert.True(store.Rename(a.Id, "Projeto"));
+        Assert.Equal(["B", "Projeto"], store.All().Select(s => s.Name).Order());
+    }
+
+    [Fact]
+    public void BookmarksPage_ListsSessionsSafely()
+    {
+        var html = Eteris.Browser.Browser.BookmarksPage.Render([], [],
+            [new SavedSession(7, "<i>Projeto</i>", T0, [new("https://a.pt/", "A"), new("https://b.pt/", "B")])]);
+        Assert.DoesNotContain("<i>Projeto</i>", html);
+        Assert.Contains("\"id\":7", html);
+        Assert.Contains("\"count\":2", html);
+        Assert.Contains("tabSessions", html);
+    }
+
+    [Fact]
     public void Suggest_UsesMostCommonSiteAndCount()
     {
         SavedTab[] tabs = [new("https://x.pt/", ""), new("https://github.com/a", ""), new("https://www.github.com/b", "")];

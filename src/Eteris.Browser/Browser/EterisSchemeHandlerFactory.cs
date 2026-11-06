@@ -121,6 +121,23 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             else AppData.MarkRead(item, InternalPages.Query(uri, "v") == "true");
             return Text("ok");
         }
+        if (uri.AbsolutePath is "/session-open" or "/session-rename" or "/session-delete")
+        {
+            if (!InternalPages.IsAuthorized(url) || !long.TryParse(InternalPages.Query(uri, "id"), out var sessionId)) return Text("recusado");
+            switch (uri.AbsolutePath)
+            {
+                case "/session-delete":
+                    AppData.DeleteSession(sessionId);
+                    return Text("ok");
+                case "/session-rename":
+                    return InternalPages.Query(uri, "v") is { Length: > 0 and <= 120 } name && AppData.RenameSession(sessionId, name.Trim())
+                        ? Text("ok") : Text("recusado");
+                default:
+                    if (AppData.SavedSessions().FirstOrDefault(s => s.Id == sessionId) is { } session)
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.OpenSavedSessionWindow(session));
+                    return Text("ok");
+            }
+        }
         if (uri.AbsolutePath is "/delete" or "/rename")
         {
             if (!InternalPages.IsAuthorized(url) || InternalPages.Query(uri, "u") is not { } target) return Text("recusado");
@@ -129,7 +146,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             return Text("ok");
         }
         return uri.AbsolutePath == "/"
-            ? Html(BookmarksPage.Render(AppData.Bookmarks(b => b.All(1000)), AppData.ReadingList()))
+            ? Html(BookmarksPage.Render(AppData.Bookmarks(b => b.All(1000)), AppData.ReadingList(), AppData.SavedSessions()))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 

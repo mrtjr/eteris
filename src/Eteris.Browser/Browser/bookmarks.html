@@ -63,6 +63,15 @@
   .tabs .badge-count { margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 9px; background: linear-gradient(135deg, #8b5cf6, #22d3ee); color: #fff; }
   .card.read .title { color: var(--faint); text-decoration: line-through; text-decoration-color: rgba(127, 127, 140, .5); }
   .acts button.ok:hover { background: rgba(52, 211, 153, .18); color: #34d399; }
+  .grid.sessions { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+  .session { cursor: pointer; align-items: flex-start; padding: 16px; }
+  .stack { display: flex; flex: none; padding-top: 2px; }
+  .stack .badge { width: 30px; height: 30px; font-size: 13px; border-radius: 9px; border: 2px solid var(--bg); }
+  .stack .badge + .badge { margin-left: -10px; }
+  .session .titles { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .session .titles div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session .title { font-weight: 600; }
+  .acts button.go:hover { background: rgba(139, 92, 246, .2); color: #c4b5fd; }
 
   /* Tema claro (o servidor acrescenta class="light" ao <html>) */
   html.light {
@@ -85,7 +94,7 @@
 <header>
   <div class="bar">
     <div><h1><b id="heading">Favoritos</b></h1><div class="count" id="count"></div>
-      <div class="tabs"><button id="tabMarks" class="on">Favoritos</button><button id="tabReading">Para ler</button></div></div>
+      <div class="tabs"><button id="tabMarks" class="on">Favoritos</button><button id="tabReading">Para ler</button><button id="tabSessions">Sessões</button></div></div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input class="q" id="q" placeholder="Pesquisar nos favoritos   ( / )" autocomplete="off" spellcheck="false">
@@ -110,7 +119,7 @@
     node.append(text.slice(0, i), el('mark', null, text.slice(i, i + term.length)), text.slice(i + term.length));
   }
 
-  let view = location.hash === '#ler' ? 'reading' : 'marks';
+  let view = location.hash === '#ler' ? 'reading' : location.hash === '#sessoes' ? 'sessions' : 'marks';
   const unread = () => data.reading.filter(r => !r.read).length;
   function paintTabs() {
     document.getElementById('tabMarks').classList.toggle('on', view === 'marks');
@@ -118,10 +127,68 @@
     t.classList.toggle('on', view === 'reading');
     t.textContent = 'Para ler';
     if (unread()) { const b = el('span', 'badge-count', String(unread())); t.append(b); }
-    document.getElementById('heading').textContent = view === 'marks' ? 'Favoritos' : 'Para ler';
+    document.getElementById('tabSessions').classList.toggle('on', view === 'sessions');
+    document.getElementById('heading').textContent = { marks: 'Favoritos', reading: 'Para ler', sessions: 'Sessões' }[view];
+    q.placeholder = view === 'sessions' ? 'Pesquisar nas sessões   ( / )' : view === 'reading' ? 'Pesquisar na lista de leitura   ( / )' : 'Pesquisar nos favoritos   ( / )';
   }
   document.getElementById('tabMarks').addEventListener('click', () => { view = 'marks'; history.replaceState(null, '', '#'); render(); });
   document.getElementById('tabReading').addEventListener('click', () => { view = 'reading'; history.replaceState(null, '', '#ler'); render(); });
+  document.getElementById('tabSessions').addEventListener('click', () => { view = 'sessions'; history.replaceState(null, '', '#sessoes'); render(); });
+
+  function renderSessions(term) {
+    grid.classList.add('sessions');
+    const items = data.sessions.filter(s => !term || s.name.toLowerCase().includes(term) || s.titles.some(t => t.toLowerCase().includes(term)));
+    count.textContent = `${data.sessions.length} ${data.sessions.length === 1 ? 'sessão guardada' : 'sessões guardadas'}`;
+    for (const s of items) {
+      const card = el('div', 'card session'); card.tabIndex = 0; card.title = 'Abrir numa janela nova';
+      const stack = el('span', 'stack');
+      for (const b of s.badges) { const badge = el('span', 'badge', b.letter); badge.style.background = b.color; stack.append(badge); }
+      const text = el('span', 'text'); const title = el('div', 'title'); const host = el('div', 'host');
+      highlight(title, s.name, term);
+      host.textContent = `${s.count} ${s.count === 1 ? 'aba' : 'abas'} · guardada a ${s.when}`;
+      const titles = el('div', 'titles');
+      for (const t of s.titles.slice(0, 3)) { const line = el('div'); highlight(line, t, term); titles.append(line); }
+      if (s.count > 3) titles.append(el('div', null, `+ ${s.count - 3} ${s.count - 3 === 1 ? 'aba' : 'abas'}`));
+      text.append(title, host, titles);
+      const acts = el('span', 'acts');
+      const go = el('button', 'go', '↗'); go.title = 'Abrir numa janela nova';
+      const rename = el('button', null, '✎'); rename.title = 'Mudar o nome';
+      const del = el('button', 'del', '×'); del.title = 'Apagar a sessão';
+      acts.append(go, rename, del);
+      const open = () => { send('session-open', { id: s.id }); card.animate([{ transform: 'scale(.97)' }, { transform: 'none' }], 220); };
+      card.addEventListener('click', open);
+      card.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === card) open(); });
+      go.addEventListener('click', e => { e.stopPropagation(); open(); });
+      rename.addEventListener('click', e => {
+        e.stopPropagation();
+        const input = el('input'); input.value = s.name;
+        title.textContent = ''; title.append(input); input.focus(); input.select();
+        let finished = false;
+        const done = save => {
+          if (finished) return; finished = true;
+          const name = input.value.trim();
+          if (save && name && name !== s.name && !data.sessions.some(x => x !== s && x.name === name)) { s.name = name; send('session-rename', { id: s.id, v: name }); }
+          render();
+        };
+        input.addEventListener('click', ev => ev.stopPropagation());
+        input.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); done(true); } if (ev.key === 'Escape') done(false); });
+        input.addEventListener('blur', () => done(true));
+      });
+      del.addEventListener('click', e => {
+        e.stopPropagation(); send('session-delete', { id: s.id });
+        card.classList.add('gone'); setTimeout(() => { data.sessions = data.sessions.filter(x => x !== s); render(); }, 250);
+      });
+      card.append(stack, text, acts);
+      grid.append(card);
+    }
+    if (!items.length) {
+      const empty = el('div', 'empty');
+      empty.append(el('div', 'star', '◫'), el('h3', null, term ? 'Nada encontrado' : 'Ainda não há sessões guardadas'),
+        el('p', null, term ? 'Experimente outras palavras.' : 'Guarde as abas de uma janela com «Guardar abas como sessão» (Ctrl+K) e reabra-as quando quiser.'));
+      grid.append(empty);
+      grid.style.display = 'block';
+    } else grid.style.display = '';
+  }
 
   function renderReading(term) {
     const items = data.reading.filter(b => !term || b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term));
@@ -156,7 +223,9 @@
   function render() {
     const term = q.value.trim().toLowerCase();
     paintTabs();
+    grid.classList.remove('sessions');
     if (view === 'reading') { grid.textContent = ''; renderReading(term); return; }
+    if (view === 'sessions') { grid.textContent = ''; renderSessions(term); return; }
     grid.textContent = '';
     const items = data.items.filter(b => !term || b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term));
     count.textContent = term ? `${items.length} de ${data.items.length}` : `${data.items.length} ${data.items.length === 1 ? 'favorito' : 'favoritos'}`;

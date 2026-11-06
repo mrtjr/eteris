@@ -22,6 +22,9 @@ public partial class MainWindow
             yield return new("", $"Abrir sessão «{entry.Name}»", $"{Plural(entry.Tabs.Count, "aba", "abas")} · guardada a {when}", null,
                 () => OpenSession(entry));
         }
+        if (saved.Count > 0)
+            yield return new("", "Gerir sessões guardadas", "Abrir, mudar o nome e apagar sessões", null,
+                () => OpenInternal(BookmarksPage.Url + "#sessoes"));
         foreach (var session in saved.Take(8))
         {
             var entry = session;
@@ -32,6 +35,10 @@ public partial class MainWindow
             });
         }
     }
+
+    // Aberta a partir de eteris://bookmarks#sessoes.
+    internal static void OpenSavedSessionWindow(SavedSession session)
+        => OpenWindowWith(session.Tabs.Select(t => t.Url).ToList(), session.Tabs.Select(t => t.Title).ToList(), 0);
 
     private List<SavedTab> SessionTabs()
         => Tabs.Tabs.Where(t => !NewTabPage.IsNewTab(t.Address)).Select(t => new SavedTab(t.Address, t.Title)).ToList();

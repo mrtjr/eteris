@@ -17,11 +17,23 @@ public static class BookmarksPage
         return reader.ReadToEnd();
     });
 
-    public static string Render(IReadOnlyList<Bookmark> bookmarks, IReadOnlyList<ReadingItem>? reading = null)
+    private static readonly System.Globalization.CultureInfo PtCulture = new("pt-PT");
+
+    public static string Render(IReadOnlyList<Bookmark> bookmarks, IReadOnlyList<ReadingItem>? reading = null,
+        IReadOnlyList<SavedSession>? sessions = null)
     {
         var data = new
         {
             token = InternalPages.Token,
+            sessions = (sessions ?? []).Select(s => new
+            {
+                id = s.Id,
+                name = s.Name,
+                count = s.Tabs.Count,
+                when = s.CreatedUtc.ToLocalTime().ToString("d MMM, HH:mm", PtCulture),
+                titles = s.Tabs.Take(4).Select(t => t.Title.Length > 0 ? t.Title : t.Url),
+                badges = s.Tabs.Take(4).Select(t => new { letter = SiteBadge.Letter(t.Url) ?? "?", color = SiteBadge.Palette[SiteBadge.ColorIndex(t.Url)] }),
+            }),
             reading = (reading ?? []).Select(r => new
             {
                 url = r.Url,

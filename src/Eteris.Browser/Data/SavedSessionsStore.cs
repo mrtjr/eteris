@@ -29,6 +29,17 @@ public sealed class SavedSessionsStore
             """,
             ("$n", name), ("$c", new DateTimeOffset(nowUtc).ToUnixTimeMilliseconds()), ("$t", JsonSerializer.Serialize(tabs)));
 
+    // Falso quando já há outra sessão com esse nome.
+    public bool Rename(long id, string name)
+    {
+        try
+        {
+            Execute("UPDATE saved_sessions SET name = $n WHERE id = $i", ("$n", name), ("$i", id));
+            return true;
+        }
+        catch (SqliteException e) when (e.SqliteErrorCode == 19) { return false; }
+    }
+
     public void Delete(long id) => Execute("DELETE FROM saved_sessions WHERE id = $i", ("$i", id));
 
     public IReadOnlyList<SavedSession> All()

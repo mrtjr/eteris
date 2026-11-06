@@ -165,6 +165,12 @@ public static class AppData
         catch (Exception) { }
     }
 
+    public static bool RenameSession(long id, string name)
+    {
+        try { return LazySessions.Value?.Rename(id, name) == true; }
+        catch (Exception) { return false; }
+    }
+
     public static void DeleteSession(long id)
     {
         try { LazySessions.Value?.Delete(id); }
