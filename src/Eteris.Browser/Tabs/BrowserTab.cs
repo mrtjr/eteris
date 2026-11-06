@@ -28,18 +28,20 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private ImageSource? _favicon;
 
-    private static readonly Brush[] BadgePalette =
-        new[] { "#8B5CF6", "#0EA5C6", "#10B981", "#EC4899", "#F59E0B", "#3B82F6" }
-            .Select(hex => { var b = (Brush)new BrushConverter().ConvertFromString(hex)!; b.Freeze(); return b; })
-            .ToArray();
+    private static readonly Brush[] BadgePalette = SiteBadge.Palette
+        .Select(hex => { var b = (Brush)new BrushConverter().ConvertFromString(hex)!; b.Freeze(); return b; })
+        .ToArray();
 
     public string? Monogram => SiteBadge.Letter(Address);
 
     public Brush MonogramBrush => BadgePalette[SiteBadge.ColorIndex(Address)];
 
+    public bool IsNewTab => Browser.NewTabPage.IsNewTab(Address);
+
     partial void OnAddressChanged(string value)
     {
         OnPropertyChanged(nameof(Monogram));
         OnPropertyChanged(nameof(MonogramBrush));
+        OnPropertyChanged(nameof(IsNewTab));
     }
 }

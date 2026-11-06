@@ -47,6 +47,8 @@
                                                    Foreground="{StaticResource TextMutedBrush}" Visibility="Collapsed"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
+                                    <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
+                                             StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
                                 </Grid>
                                 <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0"
@@ -65,9 +67,15 @@
                                 <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="GlobeGlyph" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding IsNewTab}" Value="True">
+                                <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding IsLoading}" Value="True">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">

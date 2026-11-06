@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<meta name="color-scheme" content="dark">
+<title>Nova aba</title>
+<style>
+  :root {
+    --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
+    --glass: rgba(22, 25, 35, .62); --line: rgba(255, 255, 255, .09);
+    --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); overflow: hidden;
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .aurora { position: fixed; inset: -25%; z-index: 0; filter: blur(90px) saturate(150%); opacity: .5; }
+  .aurora span {
+    position: absolute; width: 48vmax; height: 48vmax; border-radius: 50%;
+    mix-blend-mode: screen; animation: drift 28s ease-in-out infinite alternate;
+  }
+  .aurora span:nth-child(1) { background: #8b5cf6; top: 2%; left: 8%; }
+  .aurora span:nth-child(2) { background: #22d3ee; top: 28%; left: 52%; animation-duration: 34s; animation-delay: -7s; }
+  .aurora span:nth-child(3) { background: #34d399; top: 58%; left: 18%; animation-duration: 40s; animation-delay: -14s; opacity: .65; }
+  .aurora span:nth-child(4) { background: #f472b6; top: -12%; left: 62%; animation-duration: 30s; animation-delay: -3s; opacity: .55; }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(9vmax, -7vmax) scale(1.18); }
+    100% { transform: translate(-7vmax, 6vmax) scale(.88); }
+  }
+  .veil {
+    position: fixed; inset: 0; z-index: 1;
+    background: radial-gradient(ellipse 70% 60% at 50% 38%, rgba(11,13,19,.15) 0%, rgba(11,13,19,.7) 70%, rgba(11,13,19,.95) 100%);
+  }
+  main {
+    position: relative; z-index: 2; width: min(760px, 92vw); margin-top: 14vh;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .clock {
+    font-size: clamp(72px, 10vw, 128px); font-weight: 200; letter-spacing: -.04em; line-height: 1;
+    font-variant-numeric: tabular-nums; text-shadow: 0 6px 40px rgba(34, 211, 238, .18);
+  }
+  .greet { color: var(--muted); font-size: 20px; margin: 10px 0 36px; font-weight: 400; }
+  .greet b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  form { width: 100%; position: relative; }
+  form svg { position: absolute; z-index: 1; left: 22px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; stroke: var(--muted); pointer-events: none; }
+  input {
+    width: 100%; height: 58px; border-radius: 29px; padding: 0 26px 0 58px;
+    font: inherit; font-size: 17px; color: var(--text); outline: none;
+    border: 1.5px solid var(--line); background: var(--glass); backdrop-filter: blur(28px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .35); transition: border-color .2s, box-shadow .2s;
+  }
+  input::placeholder { color: var(--faint); }
+  input:focus {
+    border-color: transparent;
+    background: linear-gradient(var(--glass), var(--glass)) padding-box, var(--iris) border-box;
+    box-shadow: 0 10px 50px rgba(139, 92, 246, .28);
+  }
+  .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; width: 100%; margin-top: 40px; }
+  .tile {
+    width: calc(25% - 10.5px);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px 14px;
+    border-radius: 20px; text-decoration: none; color: var(--text);
+    background: rgba(255, 255, 255, .035); border: 1px solid var(--line); backdrop-filter: blur(18px);
+    transition: transform .18s ease, background .18s ease, border-color .18s ease;
+  }
+  .tile:hover { transform: translateY(-4px); background: rgba(255, 255, 255, .075); border-color: rgba(255, 255, 255, .16); }
+  .tile:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+  .badge {
+    width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center;
+    font-size: 21px; font-weight: 700; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 6px 18px rgba(0,0,0,.35);
+  }
+  .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .tile:hover .name { color: var(--text); }
+  .hint { width: 100%; text-align: center; color: var(--faint); font-size: 14px; padding: 18px; }
+  footer {
+    position: fixed; bottom: 22px; z-index: 2; display: flex; gap: 10px; align-items: center;
+    color: var(--faint); font-size: 12.5px; letter-spacing: .02em;
+  }
+  footer i { width: 8px; height: 8px; border-radius: 50%; background: var(--iris); box-shadow: 0 0 12px #22d3ee; }
+  @media (max-height: 640px) { main { margin-top: 6vh; } .clock { font-size: 64px; } }
+  @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } .tile { transition: none; } }
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+<div class="veil" aria-hidden="true"></div>
+<main>
+  <div class="clock" id="clock">--:--</div>
+  <div class="greet" id="greet"></div>
+  <form id="search" autocomplete="off" role="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="text" spellcheck="false" aria-label="Pesquisar ou escrever um endereço">
+  </form>
+  <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
+</main>
+<footer><i></i><span>Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+  const data = JSON.parse(document.getElementById('data').textContent);
+  const clock = document.getElementById('clock');
+  const tick = () => clock.textContent = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+  tick(); setInterval(tick, 1000);
+
+  const greet = document.getElementById('greet');
+  greet.append(data.greeting + '. O que vamos ');
+  const b = document.createElement('b'); b.textContent = 'descobrir'; greet.append(b, ' hoje?');
+
+  const q = document.getElementById('q');
+  q.placeholder = 'Pesquisar com ' + data.engineName + ' ou escrever um endereço';
+  document.getElementById('search').addEventListener('submit', e => {
+    e.preventDefault();
+    const text = q.value.trim();
+    if (!text) return;
+    const looksLikeUrl = /^[^\s]+\.[a-zÀ-ɏ]{2,}(:\d+)?([/?#]\S*)?$/i.test(text);
+    if (/^https?:\/\//i.test(text)) location.href = text;
+    else if (looksLikeUrl) location.href = 'https://' + text;
+    else location.href = data.engineTemplate.replace('{q}', encodeURIComponent(text));
+  });
+
+  const tiles = document.getElementById('tiles');
+  if (data.sites.length === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'Os sites que mais visitas vão aparecer aqui.';
+    tiles.append(hint);
+  }
+  for (const site of data.sites) {
+    const a = document.createElement('a');
+    a.className = 'tile'; a.href = site.url; a.title = site.title || site.host;
+    const badge = document.createElement('div');
+    badge.className = 'badge'; badge.textContent = site.letter;
+    badge.style.background = 'linear-gradient(145deg, ' + site.color + ', ' + site.color + 'b3)';
+    const name = document.createElement('div');
+    name.className = 'name'; name.textContent = site.host;
+    a.append(badge, name);
+    tiles.append(a);
+  }
+</script>
+</body>
+</html>

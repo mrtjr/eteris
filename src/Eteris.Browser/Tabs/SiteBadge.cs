@@ -2,7 +2,9 @@ namespace Eteris.Browser.Tabs;
 
 public static class SiteBadge
 {
-    public const int PaletteSize = 6;
+    public static readonly string[] Palette = ["#8B5CF6", "#0EA5C6", "#10B981", "#EC4899", "#F59E0B", "#3B82F6"];
+
+    public static int PaletteSize => Palette.Length;
 
     public static string? Letter(string address)
     {

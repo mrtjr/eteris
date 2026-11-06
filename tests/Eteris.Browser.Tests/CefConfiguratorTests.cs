@@ -18,6 +18,16 @@ public class CefConfiguratorTests
         => Assert.Equal(LogSeverity.Disable, CefConfigurator.Build("p").LogSeverity);
 
     [Fact]
+    public void Build_RegistersIsolatedSecureEterisScheme()
+    {
+        var scheme = Assert.Single(CefConfigurator.Build("p").CefCustomSchemes, s => s.SchemeName == "eteris");
+        Assert.True(scheme.IsSecure);
+        Assert.True(scheme.IsStandard);
+        Assert.True(scheme.IsDisplayIsolated);
+        Assert.NotNull(scheme.SchemeHandlerFactory);
+    }
+
+    [Fact]
     public void Build_DoesNotSetMediaStreamSwitch()
         => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("enable-media-stream"));
 }
