@@ -1,8 +1,8 @@
 # Alterações
 
-## 0.2.1 — 2026-11-06
+## 0.2.2 — 2026-11-06
 
-Duas rondas de 50 ciclos de melhorias. (A 0.2.0 não chegou a ser publicada: o fluxo de publicação falhava — ver em baixo.)
+Duas rondas de 50 ciclos de melhorias. (A 0.2.0 e a 0.2.1 não chegaram a ser publicadas: o fluxo de publicação falhava — ver em baixo.)
 
 ### Licenças e privacidade (preparação para distribuir)
 - O Éteris passa a ser software livre sob a **GPL-3.0 ou posterior** (`LICENSE`).
@@ -27,6 +27,7 @@ Duas rondas de 50 ciclos de melhorias. (A 0.2.0 não chegou a ser publicada: o f
 
 ### Publicação
 - O fluxo de publicação no GitHub falhava no restauro do projeto de testes: a variável `VERSION` do fluxo era lida pelo MSBuild como a versão do projeto (`v0.2.0`, inválida). Renomeada, com um teste que o impede de voltar.
+- Dois links abertos de outra aplicação quase ao mesmo tempo: o segundo podia perder-se (apanhava a janela aberta a reabrir o canal entre instâncias). O envio tenta de novo até ao fim do prazo.
 
 ### Novo (segunda ronda)
 - **Privacidade**: DNS cifrado (Cloudflare, Quad9, Mullvad), links sem parâmetros de rastreio (ao navegar e ao copiar), modo rigoroso por site (sem scripts/frames de terceiros), pedidos de notificações recusados sem perguntar, apagar cookies e dados ao fechar, histórico interno do Chromium desligado.
