@@ -135,8 +135,9 @@ public partial class MainWindow : Window
                 tab.Favicon = null;
                 tab.Tint = null;
             }
+            // O CefSharp pode repetir o mesmo endereço depois do fim do carregamento: só uma página nova apaga a deteção do leitor.
+            if (!string.Equals(tab.Address, address, StringComparison.Ordinal)) tab.IsReaderable = false;
             tab.Address = address;
-            tab.IsReaderable = false;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
         };
         browser.TitleChanged += (_, e) =>
