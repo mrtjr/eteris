@@ -21,7 +21,7 @@ public partial class MainWindow
         _ownsSession = !IsPrivate && !s_sessionOwnerTaken;
         if (_ownsSession) s_sessionOwnerTaken = true;
 
-        if (_ownsSession && _session.Load() is { } previous) Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned);
+        if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous) Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned);
 
         if (initialUrl is not null) Tabs.NewTab(initialUrl);
         else if (Tabs.Tabs.Count == 0)

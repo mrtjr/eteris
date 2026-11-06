@@ -61,12 +61,16 @@ public partial class MainWindow
         catch (Exception) { }
     }
 
-    // Reaproveita uma aba de histórico já aberta.
-    private void OpenHistory()
+    // Páginas internas: reaproveita uma aba já aberta em vez de duplicar.
+    private void OpenInternal(string url)
     {
-        if (Tabs.Tabs.FirstOrDefault(t => HistoryPage.IsHistory(t.Address)) is { } open) Tabs.Active = open;
-        else Tabs.NewTab(HistoryPage.Url);
+        if (Tabs.Tabs.FirstOrDefault(t => t.Address.StartsWith(url, StringComparison.OrdinalIgnoreCase)) is { } open) Tabs.Active = open;
+        else Tabs.NewTab(url);
     }
+
+    private void OpenHistory() => OpenInternal(HistoryPage.Url);
+
+    private void OpenSettings() => OpenInternal(SettingsPage.Url);
 
     private void ShowDevTools() => ActiveBrowser?.GetBrowserHost()?.ShowDevTools();
 

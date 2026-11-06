@@ -35,10 +35,11 @@ public partial class MainWindow
     private void SleepIdleTabs()
     {
         var now = DateTime.UtcNow;
+        var threshold = TimeSpan.FromMinutes(Data.Settings.Current.SleepMinutes);
         foreach (var tab in Tabs.Tabs.ToList())
         {
             if (!SleepPolicy.ShouldSleep(ReferenceEquals(tab, Tabs.Active), tab.IsSleeping, tab.IsLoading, tab.IsAudible,
-                    tab.LastActiveUtc, now)) continue;
+                    tab.LastActiveUtc, now, threshold)) continue;
             ReleaseBrowser(tab);
             tab.IsSleeping = true;
         }

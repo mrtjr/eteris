@@ -22,7 +22,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             if (request.ResourceType == ResourceType.MainFrame)
             {
-                if (ShieldEngine.Https.Upgrade(request.Url) is { } secure)
+                if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url) is { } secure)
                 {
                     request.Url = secure;
                     return CefReturnValue.Continue;

@@ -10,5 +10,15 @@ public sealed record SearchEngine(string Name, string Template)
     // O Atenix só fica no ar na fase 5; até lá a pesquisa padrão é o DuckDuckGo.
     public static SearchEngine Default => DuckDuckGo;
 
+    public static SearchEngine ById(string id) => id switch
+    {
+        "brave" => Brave,
+        "startpage" => Startpage,
+        _ => DuckDuckGo,
+    };
+
+    // Motor escolhido em eteris://settings.
+    public static SearchEngine Preferred => ById(Data.Settings.Current.SearchEngine);
+
     public string UrlFor(string query) => Template.Replace("{q}", Uri.EscapeDataString(query));
 }

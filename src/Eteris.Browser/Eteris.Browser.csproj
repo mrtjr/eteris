@@ -30,6 +30,7 @@
     <EmbeddedResource Include="Browser\newtab.html" />
     <EmbeddedResource Include="Browser\error.html" />
     <EmbeddedResource Include="Browser\history.html" />
+    <EmbeddedResource Include="Browser\settings.html" />
     <EmbeddedResource Include="Shields\trackers.txt" />
     <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll"
           CopyToOutputDirectory="PreserveNewest" Visible="false" />

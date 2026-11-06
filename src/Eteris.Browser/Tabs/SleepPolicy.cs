@@ -6,6 +6,11 @@ public static class SleepPolicy
 
     // Uma aba adormece (liberta o processo do Chromium) se estiver em segundo plano sem uso há algum tempo,
     // nunca enquanto carrega ou toca áudio.
-    public static bool ShouldSleep(bool isActive, bool isSleeping, bool isLoading, bool isAudible, DateTime lastActiveUtc, DateTime nowUtc)
-        => !isActive && !isSleeping && !isLoading && !isAudible && nowUtc - lastActiveUtc > Threshold;
+    // threshold zero = nunca adormecer.
+    public static bool ShouldSleep(bool isActive, bool isSleeping, bool isLoading, bool isAudible, DateTime lastActiveUtc, DateTime nowUtc,
+        TimeSpan? threshold = null)
+    {
+        var limit = threshold ?? Threshold;
+        return limit > TimeSpan.Zero && !isActive && !isSleeping && !isLoading && !isAudible && nowUtc - lastActiveUtc > limit;
+    }
 }

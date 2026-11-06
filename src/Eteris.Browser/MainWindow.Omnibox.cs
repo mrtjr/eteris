@@ -15,7 +15,7 @@ public partial class MainWindow
     private bool _suppressCompletion;
     private string _typed = string.Empty;
 
-    private static SearchEngine Engine => SearchEngine.Default;
+    private static SearchEngine Engine => SearchEngine.Preferred;
 
     // Nunca sobrescreve o que o utilizador está a escrever; fora disso a omnibox espelha sempre a aba ativa.
     private void SyncOmnibox()

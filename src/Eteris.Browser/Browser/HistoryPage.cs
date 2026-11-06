@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Eteris.Browser.Data;
 using Eteris.Browser.Tabs;
@@ -14,7 +13,7 @@ public static class HistoryPage
     public const string Url = "eteris://history/";
     public const int MaxVisits = 3000;
 
-    public static readonly string Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+    public static string Token => InternalPages.Token;
 
     private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-PT");
 
@@ -44,20 +43,9 @@ public static class HistoryPage
         _ => null,
     };
 
-    public static bool IsAuthorized(string url)
-        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && Query(uri, "t") is { } token
-           && CryptographicOperations.FixedTimeEquals(
-               System.Text.Encoding.ASCII.GetBytes(token), System.Text.Encoding.ASCII.GetBytes(Token));
+    public static bool IsAuthorized(string url) => InternalPages.IsAuthorized(url);
 
-    public static string? Query(Uri uri, string name)
-    {
-        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var parts = pair.Split('=', 2);
-            if (parts[0] == name) return parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : string.Empty;
-        }
-        return null;
-    }
+    public static string? Query(Uri uri, string name) => InternalPages.Query(uri, name);
 
     public static string Render(IReadOnlyList<Visit> visits, DateTime now)
     {

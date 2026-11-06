@@ -15,18 +15,33 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         Uri.TryCreate(request.Url, UriKind.Absolute, out var uri);
         if (uri is { Host: "newtab", AbsolutePath: "/" })
         {
-            var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Default, DateTime.Now,
+            var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Preferred, DateTime.Now,
                 Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url));
             return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
+        if (uri is { Host: "settings" }) return SettingsRoute(uri, request.Url);
 
         if (ErrorPage.IsErrorPage(request.Url))
             return ResourceHandler.FromString(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty),
                 Encoding.UTF8, false, "text/html");
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+    }
+
+    private static IResourceHandler SettingsRoute(Uri uri, string url)
+    {
+        if (uri.AbsolutePath == "/set")
+        {
+            var ok = InternalPages.IsAuthorized(url)
+                     && InternalPages.Query(uri, "k") is { } key && InternalPages.Query(uri, "v") is { } value
+                     && Settings.Set(key, value);
+            return ResourceHandler.FromString(ok ? "ok" : "recusado", Encoding.UTF8, false, "text/plain");
+        }
+        return uri.AbsolutePath == "/"
+            ? ResourceHandler.FromString(SettingsPage.Render(Settings.Current), Encoding.UTF8, false, "text/html")
+            : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 
     private static IResourceHandler History(Uri uri, string url)

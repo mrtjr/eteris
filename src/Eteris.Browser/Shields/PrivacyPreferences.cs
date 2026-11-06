@@ -13,8 +13,10 @@ public static class PrivacyPreferences
     public static Task ApplyAsync(IRequestContext? context = null) => Cef.UIThreadTaskFactory.StartNew(() =>
     {
         var target = context ?? Cef.GetGlobalRequestContext();
-        var cookies = target.SetPreference("profile.block_third_party_cookies", true, out _)
-                      | target.SetPreference("profile.cookie_controls_mode", 1, out _);
+        var block = Data.Settings.Current.BlockThirdPartyCookies;
+        var cookies = target.SetPreference("profile.block_third_party_cookies", block, out _)
+                      | target.SetPreference("profile.cookie_controls_mode", block ? 1 : 0, out _);
+        cookies &= block;
         var webRtc = target.SetPreference("webrtc.ip_handling_policy", "disable_non_proxied_udp", out _);
         if (context is not null) return;
         ThirdPartyCookiesBlocked = cookies;
