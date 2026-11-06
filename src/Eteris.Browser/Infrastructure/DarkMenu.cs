@@ -33,6 +33,13 @@ public sealed class DarkMenu
         return this;
     }
 
+    // Para juntar itens calculados (ex.: um por grupo de abas) sem partir a cadeia fluente.
+    public DarkMenu With(Action<DarkMenu> add)
+    {
+        add(this);
+        return this;
+    }
+
     public DarkMenu Separator()
     {
         _menu.Items.Add(new Separator { Style = (Style)Application.Current.FindResource("DarkSeparator") });

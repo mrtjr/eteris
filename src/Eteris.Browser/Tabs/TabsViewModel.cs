@@ -56,6 +56,7 @@ public partial class TabsViewModel : ObservableObject
         }
         var wasActive = ReferenceEquals(tab, Active);
         Tabs.RemoveAt(index);
+        RefreshGroups();
 
         if (Tabs.Count == 0)
         {
@@ -80,6 +81,102 @@ public partial class TabsViewModel : ObservableObject
 
     public void ForgetClosed() => _closed.Clear();
 
+    // ---------- Grupos de abas ----------
+
+    public IReadOnlyList<TabGroup> Groups => Tabs.Select(t => t.Group).OfType<TabGroup>().Distinct().ToList();
+
+    private int _groupsCreated;
+
+    public TabGroup NewGroup(BrowserTab tab)
+    {
+        _groupsCreated++;
+        var used = Groups.Select(g => g.ColorIndex).ToHashSet();
+        var color = Enumerable.Range(0, TabGroup.Palette.Length).FirstOrDefault(i => !used.Contains(i));
+        var group = new TabGroup($"Grupo {_groupsCreated}", color);
+        if (!tab.IsPinned) AddToGroup(tab, group);
+        return group;
+    }
+
+    // A aba entra para o fim do grupo (as abas de um grupo ficam sempre seguidas).
+    public void AddToGroup(BrowserTab tab, TabGroup group)
+    {
+        if (tab.IsPinned || !Tabs.Contains(tab)) return;
+        tab.Group = null;
+        var last = LastIndexOf(group);
+        tab.Group = group;
+        if (last >= 0)
+        {
+            var from = Tabs.IndexOf(tab);
+            var to = from > last ? last + 1 : last;
+            if (to != from) Tabs.Move(from, to);
+        }
+        RefreshGroups();
+    }
+
+    public void Ungroup(BrowserTab tab)
+    {
+        if (tab.Group is not { } group) return;
+        var last = LastIndexOf(group);
+        tab.Group = null;
+        var from = Tabs.IndexOf(tab);
+        if (from < last) Tabs.Move(from, last);
+        RefreshGroups();
+    }
+
+    public void UngroupAll(TabGroup group)
+    {
+        foreach (var tab in group.Members(this).ToList()) tab.Group = null;
+        RefreshGroups();
+    }
+
+    public void CloseGroup(TabGroup group)
+    {
+        foreach (var tab in group.Members(this).ToList()) Close(tab);
+        RefreshGroups();
+    }
+
+    public void ToggleCollapse(TabGroup group)
+    {
+        group.IsCollapsed = !group.IsCollapsed;
+        // Encolher o grupo da aba ativa passa para a primeira aba fora dele.
+        if (group.IsCollapsed && ReferenceEquals(Active?.Group, group))
+        {
+            var outside = Tabs.FirstOrDefault(t => !ReferenceEquals(t.Group, group));
+            Active = outside ?? NewTab(Browser.NewTabPage.Url);
+        }
+        RefreshGroups();
+    }
+
+    public void RefreshGroups()
+    {
+        TabGroup? previous = null;
+        foreach (var tab in Tabs)
+        {
+            var group = tab.Group;
+            tab.IsGroupHead = group is not null && !ReferenceEquals(previous, group);
+            tab.IsHiddenByGroup = group is { IsCollapsed: true } && !tab.IsGroupHead;
+            tab.GroupCount = group is null ? 0 : Tabs.Count(t => ReferenceEquals(t.Group, group));
+            previous = group;
+        }
+    }
+
+    private int LastIndexOf(TabGroup group)
+    {
+        for (var i = Tabs.Count - 1; i >= 0; i--)
+            if (ReferenceEquals(Tabs[i].Group, group)) return i;
+        return -1;
+    }
+
+    // Ir para uma aba de um grupo encolhido abre o grupo.
+    partial void OnActiveChanged(BrowserTab? value)
+    {
+        if (value?.Group is { IsCollapsed: true } group)
+        {
+            group.IsCollapsed = false;
+            RefreshGroups();
+        }
+    }
+
     public int PinnedCount => Tabs.Count(t => t.IsPinned);
 
     // Abas fixadas e normais não se misturam: cada uma só se move dentro do seu grupo.
@@ -89,7 +186,14 @@ public partial class TabsViewModel : ObservableObject
         if (from < 0) return;
         var pinned = PinnedCount;
         var to = tab.IsPinned ? Math.Clamp(newIndex, 0, pinned - 1) : Math.Clamp(newIndex, pinned, Tabs.Count - 1);
-        if (to != from) Tabs.Move(from, to);
+        if (to == from) return;
+        Tabs.Move(from, to);
+        // Largada entre duas abas do mesmo grupo, entra nele; arrastada para longe do seu grupo, sai dele.
+        var left = to > 0 ? Tabs[to - 1].Group : null;
+        var right = to < Tabs.Count - 1 ? Tabs[to + 1].Group : null;
+        if (left is not null && ReferenceEquals(left, right)) tab.Group = left;
+        else if (tab.Group is not null && !ReferenceEquals(left, tab.Group) && !ReferenceEquals(right, tab.Group)) tab.Group = null;
+        RefreshGroups();
     }
 
     // Fixar leva a aba para o fim do grupo fixado; desafixar, para logo a seguir a ele.

@@ -17,6 +17,19 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
+    // Grupo de abas (null = sem grupo). As marcas abaixo são calculadas pelo TabsViewModel.
+    [ObservableProperty]
+    private TabGroup? _group;
+
+    [ObservableProperty]
+    private bool _isGroupHead;
+
+    [ObservableProperty]
+    private bool _isHiddenByGroup;
+
+    [ObservableProperty]
+    private int _groupCount;
+
     // Pré-visualização da página para o cartão da aba (capturada depois de carregar).
     [ObservableProperty]
     private ImageSource? _thumbnail;

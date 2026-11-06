@@ -26,6 +26,8 @@ public partial class MainWindow
             .Item("", "Abrir ao lado (ecrã dividido)", () => OpenSideBySide(tab),
                 enabled: !ReferenceEquals(tab, Tabs.Active) && Tabs.Active is not null)
             .Separator()
+            .With(menu => AddGroupItems(menu, tab))
+            .Separator()
             .Item("", tab.IsPinned ? "Desafixar aba" : "Fixar aba", () => Tabs.TogglePin(tab))
             .Item("", "Duplicar", () => Tabs.NewTab(tab.Address))
             .Item(tab.IsMuted ? "" : "", tab.IsMuted ? "Reativar o som" : "Silenciar aba", () => ToggleMute(tab))
@@ -50,5 +52,27 @@ public partial class MainWindow
         var address = tab.Address;
         CloseTab(tab);
         OpenWindow(IsPrivate, address);
+    }
+
+    private void AddGroupItems(DarkMenu menu, BrowserTab tab)
+    {
+        if (tab.IsPinned) return;
+        if (tab.Group is { } current)
+        {
+            menu.Item("", $"Remover do grupo «{current.Name}»", () => Tabs.Ungroup(tab));
+            return;
+        }
+        menu.Item("", "Adicionar a um novo grupo", () => StartGroup(tab));
+        foreach (var group in Tabs.Groups)
+        {
+            var target = group;
+            menu.Item("", $"Adicionar ao grupo «{target.Name}»", () => Tabs.AddToGroup(tab, target));
+        }
+    }
+
+    private void StartGroup(BrowserTab tab)
+    {
+        var group = Tabs.NewGroup(tab);
+        ShowToast($"«{group.Name}» criado — clique com o botão direito na etiqueta para mudar o nome ou a cor");
     }
 }
