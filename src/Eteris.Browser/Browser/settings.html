@@ -126,6 +126,14 @@
       <h2>Aspeto</h2>
       <div class="card">
         <div class="item">
+          <div class="label"><b>Tema</b><span>Escuro, claro ou o mesmo do Windows. As janelas privadas ficam sempre escuras.</span></div>
+          <div class="seg" data-key="theme">
+            <button data-value="dark">Escuro</button>
+            <button data-value="light">Claro</button>
+            <button data-value="system">Sistema</button>
+          </div>
+        </div>
+        <div class="item">
           <div class="label"><b>Material Mica</b><span>As barras deixam transparecer o ambiente de trabalho, desfocado e tingido (Windows 11). Desligue para um fundo sólido.</span></div>
           <label class="switch"><input type="checkbox" data-key="mica"><i></i></label>
         </div>
@@ -304,7 +312,7 @@
     timer = setTimeout(() => saved.classList.remove('show'), 1400);
   }
 
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs, dns: data.dns };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs, dns: data.dns, theme: data.theme };
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;
     const paint = () => seg.querySelectorAll('button[data-value]').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));

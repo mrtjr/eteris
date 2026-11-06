@@ -47,11 +47,11 @@ public static class WindowEffects
         return true;
     }
 
-    public static void Apply(Window window, uint borderColorRef)
+    public static void Apply(Window window, uint borderColorRef, bool darkMode = true)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == 0) return;
-        var dark = 1;
+        var dark = darkMode ? 1 : 0;
         var corners = DWMWCP_ROUND;
         var border = (int)borderColorRef;
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));

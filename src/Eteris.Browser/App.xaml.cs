@@ -11,6 +11,8 @@ public partial class App : Application
     {
         base.OnStartup(e);
         CefConfigurator.Initialize();
+        Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
+        Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.ThemeManager.Apply(s.Theme));
         _ = Shields.PrivacyPreferences.ApplyAsync();
         Data.Settings.Changed += _ => { var __ = Shields.PrivacyPreferences.ApplyAsync(); };
         _ = Shields.ShieldEngine.StartAsync(Shields.FilterLists.ForApp());

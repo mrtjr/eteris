@@ -57,6 +57,7 @@ public static class SettingsPage
             suggest = settings.SearchSuggestions,
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
+            theme = settings.Theme,
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));

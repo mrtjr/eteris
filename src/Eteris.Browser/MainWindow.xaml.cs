@@ -36,7 +36,7 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => OnWindowStateChanged();
         SourceInitialized += (_, _) =>
         {
-            WindowEffects.Apply(this, borderColorRef: isPrivate ? 0x00ED3A7Cu : 0x0042302Bu);
+            WindowEffects.Apply(this, BorderColor, darkMode: !UsesLight);
             ApplyBackdrop();
         };
         Deactivated += (_, _) => CloseSuggestions();
@@ -48,6 +48,7 @@ public partial class MainWindow : Window
         WatchUpdates();
         WatchBackdropSetting();
         WatchTabLayoutSetting();
+        WatchTheme();
         WatchMouseAndDrops();
         TrackActivation();
         StartAudioWatch();

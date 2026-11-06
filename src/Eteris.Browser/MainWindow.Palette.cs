@@ -260,7 +260,8 @@ public partial class MainWindow
 
     private void ApplyTint()
     {
-        var tint = Tabs.Active?.Tint ?? SiteTint.Base;
+        // As cores dos sites estão afinadas para o tema escuro; no claro a superfície fica neutra.
+        var tint = UsesLight ? LightChrome : Tabs.Active?.Tint ?? SiteTint.Base;
         // Com Mica, a superfície das barras fica translúcida para o material do sistema transparecer.
         var target = _mica ? Color.FromArgb(ChromeAlpha, tint.R, tint.G, tint.B) : tint;
         var brush = (SolidColorBrush)Resources["ChromeSurfaceBrush"];
