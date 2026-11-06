@@ -42,6 +42,7 @@ public partial class MainWindow
             })
             .Separator()
             .Item(group.IsCollapsed ? "" : "", group.IsCollapsed ? "Expandir o grupo" : "Encolher o grupo", () => Tabs.ToggleCollapse(group))
+            .Item("", "Guardar grupo como sessão", () => SaveGroupAsSession(group), enabled: !IsPrivate)
             .Item("", "Desagrupar", () => Tabs.UngroupAll(group))
             .Item("", "Fechar o grupo", () => Tabs.CloseGroup(group))
             .Open(pill);
@@ -85,5 +86,15 @@ public partial class MainWindow
         var collapsedHeads = Tabs.Tabs.Count(t => t.IsGroupHead && t.Group is { IsCollapsed: true });
         var visible = Tabs.Tabs.Count(t => !t.IsPinned && !t.IsHiddenByGroup) - collapsedHeads;
         return (heads * GroupPillWidth, Math.Max(visible, 1));
+    }
+
+    // O grupo fica guardado como sessão com o nome do grupo (guardar de novo atualiza-a).
+    private void SaveGroupAsSession(TabGroup group)
+    {
+        var tabs = group.Members(Tabs).Where(t => !Browser.NewTabPage.IsNewTab(t.Address))
+            .Select(t => new Data.SavedTab(t.Address, t.Title)).ToList();
+        if (tabs.Count == 0) return;
+        Data.AppData.SaveSession(group.Name, tabs);
+        ShowToast($"Grupo «{group.Name}» guardado como sessão ({(tabs.Count == 1 ? "1 aba" : $"{tabs.Count} abas")})");
     }
 }
