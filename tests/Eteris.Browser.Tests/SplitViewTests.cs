@@ -1,0 +1,52 @@
+using Eteris.Browser.Tabs;
+
+namespace Eteris.Browser.Tests;
+
+public class SplitViewTests
+{
+    private readonly BrowserTab _a = new("https://a.pt/"), _b = new("https://b.pt/"), _c = new("https://c.pt/");
+
+    [Fact]
+    public void Panes_AreLeftAndRight()
+    {
+        var split = new SplitView(_a, _b);
+        Assert.Equal(SplitPane.Left, split.PaneOf(_a));
+        Assert.Equal(SplitPane.Right, split.PaneOf(_b));
+        Assert.Null(split.PaneOf(_c));
+    }
+
+    [Fact]
+    public void SwitchingBetweenPanes_KeepsSplit()
+        => Assert.True(new SplitView(_a, _b).SurvivesActivation(_b));
+
+    [Fact]
+    public void ActivatingAnotherTab_EndsSplit()
+        => Assert.False(new SplitView(_a, _b).SurvivesActivation(_c));
+
+    [Fact]
+    public void ClosingAMember_EndsSplit()
+    {
+        var split = new SplitView(_a, _b);
+        Assert.False(split.SurvivesRemoval(_b));
+        Assert.True(split.SurvivesRemoval(_c));
+    }
+
+    [Fact]
+    public void CannotSplitTabWithItself()
+        => Assert.Throws<ArgumentException>(() => new SplitView(_a, _a));
+
+    [Fact]
+    public void Partner_IsTheOtherPane()
+    {
+        var split = new SplitView(_a, _b);
+        Assert.Same(_b, split.PartnerOf(_a));
+        Assert.Same(_a, split.PartnerOf(_b));
+    }
+
+    [Theory]
+    [InlineData(0.5, 0.5)]
+    [InlineData(0.05, 0.2)]
+    [InlineData(0.97, 0.8)]
+    public void Ratio_IsClamped(double requested, double expected)
+        => Assert.Equal(expected, SplitView.ClampRatio(requested), 3);
+}

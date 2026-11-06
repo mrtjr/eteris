@@ -103,6 +103,10 @@ public partial class MainWindow
                     UpdateShieldButton();
                 });
         }
+        if (IsSplit)
+            yield return new("", "Fechar ecrã dividido", "Voltar a uma página de cada vez", null, CloseSplit);
+        else if (SplitCandidate() is { } partner)
+            yield return new("", "Dividir ecrã", $"Mostrar «{partner.Title}» ao lado", null, () => OpenSideBySide(partner));
         yield return new("", VerticalTabs ? "Abas no topo" : "Abas verticais",
             VerticalTabs ? "Voltar à faixa de abas clássica" : "Lista de abas na lateral, ideal para muitas abas", null, ToggleVerticalTabs);
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);

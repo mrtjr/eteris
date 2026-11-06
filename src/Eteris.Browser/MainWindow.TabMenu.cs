@@ -22,6 +22,8 @@ public partial class MainWindow
                 Tabs.NewTab(NewTabUrl, activate: false);
                 Tabs.SelectNext();
             })
+            .Item("", "Abrir ao lado (ecrã dividido)", () => OpenSideBySide(tab),
+                enabled: !ReferenceEquals(tab, Tabs.Active) && Tabs.Active is not null)
             .Separator()
             .Item("", tab.IsPinned ? "Desafixar aba" : "Fixar aba", () => Tabs.TogglePin(tab))
             .Item("", "Duplicar", () => Tabs.NewTab(tab.Address))

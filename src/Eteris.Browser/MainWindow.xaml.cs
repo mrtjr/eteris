@@ -73,6 +73,7 @@ public partial class MainWindow : Window
 
         foreach (BrowserTab tab in e.OldItems ?? Array.Empty<BrowserTab>())
         {
+            OnSplitTabRemoved(tab);
             tab.PropertyChanged -= OnTabPropertyChanged;
             ReleaseBrowser(tab);
         }
@@ -174,6 +175,8 @@ public partial class MainWindow : Window
         };
         _browsers[tab] = browser;
         BrowserHost.Children.Add(browser);
+        WatchPaneFocus(tab, browser);
+        if (IsSplit) LayoutBrowsers();
     }
 
     private static bool SameHost(string a, string b)
@@ -211,8 +214,7 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName != nameof(TabsViewModel.Active)) return;
         OnActiveTabChanging();
-        foreach (var (tab, browser) in _browsers)
-            browser.Visibility = ReferenceEquals(tab, Tabs.Active) ? Visibility.Visible : Visibility.Hidden;
+        OnSplitActiveChanged();
         _omniboxEdited = false;
         CloseFind();
         CloseSuggestions();
