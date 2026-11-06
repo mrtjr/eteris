@@ -91,6 +91,7 @@ public partial class MainWindow : Window
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url))),
             RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
             DownloadHandler = DownloadHandler,
+            FindHandler = NewFindHandler(),
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
                 AppData.IsShieldOn,
@@ -185,6 +186,7 @@ public partial class MainWindow : Window
         foreach (var (tab, browser) in _browsers)
             browser.Visibility = ReferenceEquals(tab, Tabs.Active) ? Visibility.Visible : Visibility.Hidden;
         _omniboxEdited = false;
+        CloseFind();
         CloseSuggestions();
         SyncOmnibox();
         SyncLoading();
@@ -218,6 +220,7 @@ public partial class MainWindow : Window
     {
         Tabs.NewTab(NewTabPage.Url);
         _omniboxEdited = false;
+        CloseFind();
         SetOmniboxText(string.Empty);
         Omnibox.Focus();
         UpdateOmniboxChrome();
@@ -260,6 +263,7 @@ public partial class MainWindow : Window
         if (ctrl && key == Key.K) TogglePalette();
         else if (ctrl && key == Key.J) ToggleDownloads();
         else if (ctrl && key == Key.D) ToggleBookmark();
+        else if ((ctrl && key == Key.F) || key == Key.F3) OpenFind();
         else if (key == Key.F11) ToggleFocusMode();
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
         else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);

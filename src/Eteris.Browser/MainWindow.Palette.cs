@@ -81,6 +81,10 @@ public partial class MainWindow
             yield return new("", "Fechar aba", tab.Title, "Ctrl+W", () => CloseTab(tab));
             yield return new("", "Duplicar aba", tab.Title, null, () => Tabs.NewTab(address));
             yield return new("", "Recarregar página", tab.Title, "F5", () => ActiveBrowser?.Reload());
+            yield return new("", "Procurar na página", tab.Title, "Ctrl+F", OpenFind);
+            yield return new("", AppData.IsBookmarked(address) ? "Remover dos favoritos" : "Adicionar aos favoritos",
+                tab.Title, "Ctrl+D", ToggleBookmark);
+            yield return new("", "Transferências", "Ver transferências desta sessão", "Ctrl+J", ToggleDownloads);
         }
         if (host is not null)
         {

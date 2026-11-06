@@ -528,6 +528,33 @@
                 </Grid>
             </Border>
 
+            <!-- Procurar na página -->
+            <Border x:Name="FindBar" Grid.Row="2" Panel.ZIndex="40" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,12,24,0" CornerRadius="20" Padding="14,4,6,4" Background="{StaticResource SurfaceRaisedBrush}"
+                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1.5" Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.45" Color="Black" />
+                </Border.Effect>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextMutedBrush}" Margin="0,0,10,0" />
+                    <Grid Width="220">
+                        <TextBox x:Name="FindInput" Style="{StaticResource BareTextBox}" FontSize="13.5"
+                                 TextChanged="FindInput_TextChanged" PreviewKeyDown="FindInput_PreviewKeyDown" />
+                        <TextBlock x:Name="FindPlaceholder" Text="Procurar na página" IsHitTestVisible="False" FontSize="13.5"
+                                   Margin="2,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextFaintBrush}" />
+                    </Grid>
+                    <TextBlock x:Name="FindCount" FontSize="12" MinWidth="70" TextAlignment="Right" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextMutedBrush}" Margin="8,0" />
+                    <Button x:Name="FindPrevButton" Content="&#xE70E;" Style="{StaticResource IconButton}" Width="28" Height="28"
+                            FontSize="11" Click="FindPrev_Click" ToolTip="Anterior (Shift+Enter)" />
+                    <Button x:Name="FindNextButton" Content="&#xE70D;" Style="{StaticResource IconButton}" Width="28" Height="28"
+                            FontSize="11" Click="FindNext_Click" ToolTip="Seguinte (Enter)" />
+                    <Button x:Name="FindCloseButton" Content="&#xE8BB;" Style="{StaticResource IconButton}" Width="28" Height="28"
+                            FontSize="10" Click="FindClose_Click" ToolTip="Fechar (Esc)" />
+                </StackPanel>
+            </Border>
+
             <!-- Aviso do modo foco -->
             <Border x:Name="FocusToast" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Center" VerticalAlignment="Top"
                     Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="#E61A1D27" IsHitTestVisible="False"
