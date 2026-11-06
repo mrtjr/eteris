@@ -5,9 +5,9 @@
         Title="{Binding Active.Title, StringFormat={}{0} — Éteris, FallbackValue=Éteris}"
         Height="860" Width="1360" MinWidth="560" MinHeight="400"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource FrameBrush}"
+        Background="{DynamicResource FrameBrush}"
         FontFamily="{StaticResource UiFont}"
-        Foreground="{StaticResource TextBrush}"
+        Foreground="{DynamicResource TextBrush}"
         UseLayoutRounding="True"
         PreviewKeyDown="Window_PreviewKeyDown">
 
@@ -35,17 +35,17 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,3" />
-                                <Border Grid.Column="1" Width="30" Height="30" CornerRadius="9" Background="#30354A">
+                                <Border Grid.Column="1" Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PressedBrush}">
                                     <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14"
-                                               Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                               Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                                 <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,0,10,0">
-                                    <TextBlock Text="{Binding Title}" FontSize="14.5" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource TextFaintBrush}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Title}" FontSize="14.5" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Border x:Name="Chip" Grid.Column="3" CornerRadius="7" Background="#262A38" Padding="8,3" VerticalAlignment="Center"
-                                        BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
-                                    <TextBlock Text="{Binding Shortcut}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" />
+                                <Border x:Name="Chip" Grid.Column="3" CornerRadius="7" Background="{DynamicResource HoverBrush}" Padding="8,3" VerticalAlignment="Center"
+                                        BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1">
+                                    <TextBlock Text="{Binding Shortcut}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" />
                                 </Border>
                             </Grid>
                         </Border>
@@ -54,10 +54,10 @@
                                 <Setter TargetName="Chip" Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#2C3145" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
                                 <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -74,7 +74,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ToolTip">
                         <Border Margin="10,0,10,20" Width="300" CornerRadius="14" Padding="14,12"
-                                Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
+                                Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="22" ShadowDepth="6" Direction="270" Opacity="0.5" Color="Black" />
                             </Border.Effect>
@@ -84,9 +84,9 @@
                                         <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentY="Top" />
                                     </Border.Background>
                                 </Border>
-                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"
+                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
                                            TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0" />
                                 <TextBlock x:Name="Status" Text="{Binding StatusLine}" FontSize="11.5" Foreground="{StaticResource IrisBrush}"
                                            Margin="0,8,0,0" TextWrapping="Wrap" />
                             </StackPanel>
@@ -137,7 +137,7 @@
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                                         </Border>
                                         <TextBlock x:Name="GlobeGlyph" Text="&#xE774;" FontFamily="{StaticResource IconFont}" FontSize="13"
-                                                   Foreground="{StaticResource TextMutedBrush}" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
@@ -146,7 +146,7 @@
                                 </Grid>
                                 <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5"
-                                           Foreground="{StaticResource TextMutedBrush}" />
+                                           Foreground="{DynamicResource TextMutedBrush}" />
                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                                     <Button x:Name="TabAudio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" ToolTip="Silenciar / reativar o som desta aba"
@@ -205,13 +205,13 @@
                                 <Setter TargetName="Globe" Property="Opacity" Value="0.45" />
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
-                                <Setter TargetName="TabTitle" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                                <Setter TargetName="TabTitle" Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="{StaticResource ChromeSurfaceBrush}" />
                                 <Setter TargetName="Glow" Property="Visibility" Value="Visible" />
-                                <Setter TargetName="TabTitle" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="TabTitle" Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -247,7 +247,7 @@
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                                     </Border>
                                     <TextBlock x:Name="SideGlobe" Text="&#xE774;" FontFamily="{StaticResource IconFont}" FontSize="13"
-                                               Foreground="{StaticResource TextMutedBrush}" Visibility="Collapsed"
+                                               Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
@@ -255,7 +255,7 @@
                                 </Grid>
                                 <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Margin="10,0,4,0" FontSize="13"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                           Foreground="{StaticResource TextMutedBrush}" />
+                                           Foreground="{DynamicResource TextMutedBrush}" />
                                 <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal">
                                     <Button x:Name="Audio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" Visibility="Collapsed" />
@@ -311,14 +311,14 @@
                                 <Setter TargetName="Badge" Property="Opacity" Value="0.45" />
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#12FFFFFF" />
-                                <Setter TargetName="Title" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                                <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextBrush}" />
                                 <Setter TargetName="Close" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#2A2F45" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
                                 <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
-                                <Setter TargetName="Title" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextBrush}" />
                                 <Setter TargetName="Close" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <DataTrigger Binding="{Binding SideCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
@@ -347,17 +347,17 @@
                                 </Grid.ColumnDefinitions>
                                 <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,2" />
                                 <TextBlock x:Name="Icon" Grid.Column="1" Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="14"
-                                           Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Visibility="Collapsed" />
                                 <Border x:Name="Mono" Grid.Column="1" Width="22" Height="22" CornerRadius="7"
                                         Background="{Binding MonogramColor}" HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Monogram}" FontSize="11" FontWeight="Bold" Foreground="White"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                                 </Border>
-                                <TextBlock x:Name="Label" Grid.Column="2" Text="{Binding Text}" FontSize="14" Foreground="{StaticResource TextBrush}"
+                                <TextBlock x:Name="Label" Grid.Column="2" Text="{Binding Text}" FontSize="14" Foreground="{DynamicResource TextBrush}"
                                            TextTrimming="CharacterEllipsis" MaxWidth="520" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="3" Text="{Binding Detail, StringFormat={} — {0}}" FontSize="13"
-                                           Foreground="{StaticResource TextFaintBrush}" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center" />
                             </Grid>
                         </Border>
@@ -386,12 +386,12 @@
                                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#2C3145" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
                                 <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
-                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -400,8 +400,8 @@
         </Style>
 
         <Style x:Key="OmniboxFrame" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource FieldBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FieldBorderBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource Self}}" Value="True">
                     <Setter Property="BorderBrush" Value="{StaticResource IrisBrush}" />
@@ -453,7 +453,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Left">
                         <Grid Width="40" Height="36" ToolTip="Éteris">
                             <Ellipse Width="18" Height="18" Stroke="{StaticResource IrisBrush}" StrokeThickness="3" />
-                            <Ellipse Width="5" Height="5" Fill="{StaticResource TextBrush}" />
+                            <Ellipse Width="5" Height="5" Fill="{DynamicResource TextBrush}" />
                         </Grid>
                         <Border x:Name="PrivateBadge" Visibility="Collapsed" VerticalAlignment="Center" Margin="0,0,8,3"
                                 CornerRadius="10" Padding="10,3" Background="#3B1D6E" BorderBrush="#7C3AED" BorderThickness="1"
@@ -526,7 +526,7 @@
                             <Button x:Name="SiteInfoButton" Style="{StaticResource IconButton}" Width="28" Height="28"
                                     Margin="6,0,2,0" Click="SiteInfo_Click">
                                 <TextBlock x:Name="SiteIcon" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
-                                           Foreground="{StaticResource TextMutedBrush}" />
+                                           Foreground="{DynamicResource TextMutedBrush}" />
                             </Button>
 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="ReaderButton" Style="{StaticResource IconButton}" Width="28" Height="28" Margin="0,0,2,0"
@@ -538,7 +538,7 @@
                                         ToolTip="Repor o zoom deste site (Ctrl+0)" Margin="0,0,4,0">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
-                                            <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="#2A2F45"
+                                            <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="{DynamicResource SelectedBrush}"
                                                     BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE71E;" FontFamily="{StaticResource IconFont}" FontSize="10"
@@ -548,12 +548,12 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Pill" Property="Background" Value="#3A4060" />
+                                                    <Setter TargetName="Pill" Property="Background" Value="{DynamicResource PressedBrush}" />
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
-                                    <TextBlock x:Name="ZoomBadgeText" FontSize="11.5" Foreground="{StaticResource TextBrush}" />
+                                    <TextBlock x:Name="ZoomBadgeText" FontSize="11.5" Foreground="{DynamicResource TextBrush}" />
                                 </Button>
                                                             <Button x:Name="StarButton" Style="{StaticResource IconButton}" Width="28" Height="28"
                                     Margin="0,0,4,0" Click="Star_Click" ToolTip="Adicionar aos favoritos (Ctrl+D)" Visibility="Collapsed">
@@ -568,10 +568,10 @@
                                          LostKeyboardFocus="Omnibox_LostKeyboardFocus" />
                                 <TextBlock x:Name="OmniboxDisplay" IsHitTestVisible="False" VerticalAlignment="Center"
                                            FontSize="14" Margin="2,0,0,1" TextTrimming="CharacterEllipsis">
-                                    <Run x:Name="DisplayHost" Foreground="{StaticResource TextBrush}" /><Run x:Name="DisplayRest" Foreground="{StaticResource TextFaintBrush}" />
+                                    <Run x:Name="DisplayHost" Foreground="{DynamicResource TextBrush}" /><Run x:Name="DisplayRest" Foreground="{DynamicResource TextFaintBrush}" />
                                 </TextBlock>
                                 <TextBlock x:Name="OmniboxPlaceholder" IsHitTestVisible="False" VerticalAlignment="Center"
-                                           FontSize="14" Margin="2,0,0,1" Foreground="{StaticResource TextFaintBrush}"
+                                           FontSize="14" Margin="2,0,0,1" Foreground="{DynamicResource TextFaintBrush}"
                                            Text="Pesquisar ou escrever um endereço" />
                             </Grid>
                         </Grid>
@@ -581,8 +581,8 @@
                     <Popup x:Name="SiteInfoPopup" PlacementTarget="{Binding ElementName=SiteInfoButton}" Placement="Bottom"
                            HorizontalOffset="-20" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="360" Background="{StaticResource SurfaceRaisedBrush}"
-                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
+                        <Border Margin="14,0,14,24" Width="360" Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
                             </Border.Effect>
@@ -599,19 +599,19 @@
                                     </Grid>
                                     <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                                         <TextBlock x:Name="SiteInfoTitle" FontSize="15" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="SiteInfoHost" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                        <TextBlock x:Name="SiteInfoHost" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Grid>
-                                <TextBlock x:Name="SiteInfoDetail" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                <TextBlock x:Name="SiteInfoDetail" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                            TextWrapping="Wrap" Margin="0,12,0,0" LineHeight="18" />
 
                                 <StackPanel x:Name="SiteInfoSiteSection">
-                                    <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,16,0,12" />
-                                    <TextBlock Text="PERMISSÕES" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextFaintBrush}"
+                                    <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,16,0,12" />
+                                    <TextBlock Text="PERMISSÕES" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextFaintBrush}"
                                                Margin="0,0,0,6" />
                                     <TextBlock x:Name="SiteInfoNoPermissions" Text="Este site não tem permissões guardadas."
-                                               FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" />
+                                               FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" />
                                     <ItemsControl x:Name="SiteInfoPermissions">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -621,7 +621,7 @@
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextBrush}"
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                                                VerticalAlignment="Center" />
                                                     <Border Grid.Column="1" CornerRadius="8" Background="{Binding StateBrush}" Padding="8,2"
                                                             VerticalAlignment="Center">
@@ -635,8 +635,8 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
-                                    <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,14,0,12" />
-                                    <TextBlock x:Name="SiteInfoTrackers" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" />
+                                    <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,14,0,12" />
+                                    <TextBlock x:Name="SiteInfoTrackers" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" />
                                     <Button x:Name="SiteInfoClear" Content="Apagar cookies e dados deste site" Style="{StaticResource PillButton}"
                                             HorizontalAlignment="Left" Margin="0,14,0,0" Click="SiteInfoClear_Click" />
                                 </StackPanel>
@@ -648,7 +648,7 @@
                            HorizontalOffset="-14" VerticalOffset="4" AllowsTransparency="True" StaysOpen="True"
                            PopupAnimation="Fade" Focusable="False">
                         <Border Margin="14,0,14,24" Width="{Binding ActualWidth, ElementName=OmniboxFrame}"
-                                Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}"
+                                Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
                                 BorderThickness="1" CornerRadius="16" Padding="6">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
@@ -698,7 +698,7 @@
                                     ToolTip="Transferências (Ctrl+J)">
                                 <TextBlock Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="15" />
                             </Button>
-                            <Ellipse Width="30" Height="30" Stroke="#2B3042" StrokeThickness="2" IsHitTestVisible="False"
+                            <Ellipse Width="30" Height="30" Stroke="{DynamicResource FieldBorderBrush}" StrokeThickness="2" IsHitTestVisible="False"
                                      x:Name="DownloadsTrack" Visibility="Collapsed" />
                             <Path x:Name="DownloadsRing" Stroke="{StaticResource IrisBrush}" StrokeThickness="2.5"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False"
@@ -723,8 +723,8 @@
                     <Popup x:Name="DownloadsPopup" PlacementTarget="{Binding ElementName=DownloadsButton}" Placement="Bottom"
                            HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="370" Background="{StaticResource SurfaceRaisedBrush}"
-                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="10,14">
+                        <Border Margin="14,0,14,24" Width="370" Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="10,14">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
                             </Border.Effect>
@@ -745,19 +745,19 @@
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <Border Width="30" Height="30" CornerRadius="9" Background="#30354A">
+                                                    <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PressedBrush}">
                                                         <TextBlock x:Name="Glyph" Text="&#xE8A5;" FontFamily="{StaticResource IconFont}" FontSize="14"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                     </Border>
                                                     <StackPanel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding FileName}" FontSize="13.5" TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}" />
+                                                        <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{DynamicResource TextFaintBrush}" />
                                                         <ProgressBar x:Name="Bar" Height="3" Margin="0,5,0,0" Minimum="0" Maximum="100"
                                                                      Value="{Binding Percent, Mode=OneWay}">
                                                             <ProgressBar.Template>
                                                                 <ControlTemplate TargetType="ProgressBar">
                                                                     <Grid>
-                                                                        <Border x:Name="PART_Track" CornerRadius="1.5" Background="#2B3042" />
+                                                                        <Border x:Name="PART_Track" CornerRadius="1.5" Background="{DynamicResource FieldBorderBrush}" />
                                                                         <Border x:Name="PART_Indicator" CornerRadius="1.5" HorizontalAlignment="Left"
                                                                                 Background="{StaticResource IrisBrush}" />
                                                                     </Grid>
@@ -784,7 +784,7 @@
                                                     <Setter TargetName="Folder" Property="Visibility" Value="Collapsed" />
                                                 </DataTrigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Row" Property="Background" Value="#14FFFFFF" />
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
                                                 </Trigger>
                                             </DataTemplate.Triggers>
                                         </DataTemplate>
@@ -797,8 +797,8 @@
                     <Popup x:Name="ShieldPopup" PlacementTarget="{Binding ElementName=ShieldButton}" Placement="Bottom"
                            HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="350" Background="{StaticResource SurfaceRaisedBrush}"
-                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
+                        <Border Margin="14,0,14,24" Width="350" Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
                             </Border.Effect>
@@ -816,19 +816,19 @@
                                     </Grid>
                                     <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
                                         <TextBlock x:Name="ShieldTitle" Text="Escudo ativo" FontSize="15" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="ShieldSite" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                        <TextBlock x:Name="ShieldSite" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <CheckBox x:Name="ShieldToggle" Grid.Column="2" Style="{StaticResource ToggleSwitch}"
                                               VerticalAlignment="Center" Click="ShieldToggle_Click" ToolTip="Proteção neste site" />
                                 </Grid>
 
-                                <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,16" />
+                                <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,16" />
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="ShieldBigCount" FontSize="40" FontWeight="Light" Foreground="{StaticResource IrisBrush}"
                                                VerticalAlignment="Bottom" />
-                                    <TextBlock x:Name="ShieldCountLabel" FontSize="13" Foreground="{StaticResource TextMutedBrush}"
+                                    <TextBlock x:Name="ShieldCountLabel" FontSize="13" Foreground="{DynamicResource TextMutedBrush}"
                                                Margin="10,0,0,9" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="220" />
                                 </StackPanel>
 
@@ -840,23 +840,23 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Key}" FontSize="12.5" Foreground="{StaticResource TextBrush}"
+                                                <TextBlock Text="{Binding Key}" FontSize="12.5" Foreground="{DynamicResource TextBrush}"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <Border Grid.Column="1" CornerRadius="8" Background="#30354A" Padding="7,1" Margin="8,0,0,0">
-                                                    <TextBlock Text="{Binding Value}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" />
+                                                <Border Grid.Column="1" CornerRadius="8" Background="{DynamicResource PressedBrush}" Padding="7,1" Margin="8,0,0,0">
+                                                    <TextBlock Text="{Binding Value}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
                                                 </Border>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,14,0,12" />
+                                <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,14,0,12" />
 
-                                <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
-                                <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
-                                <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
-                                <TextBlock x:Name="ShieldCheckDns" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
-                                <TextBlock x:Name="ShieldSession" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}" Margin="0,12,0,0" />
+                                <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldCheckDns" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldSession" FontSize="11.5" Foreground="{DynamicResource TextFaintBrush}" Margin="0,12,0,0" />
                             </StackPanel>
                         </Border>
                     </Popup>
@@ -876,13 +876,13 @@
                                         <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="13" Width="16"
                                                    Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" />
                                         <TextBlock x:Name="L" Text="Nova aba" FontSize="13" Margin="12,0,0,0"
-                                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                                                   Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="B" Property="Background" Value="#12FFFFFF" />
-                                        <Setter TargetName="L" Property="Foreground" Value="{StaticResource TextBrush}" />
+                                        <Setter TargetName="B" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                                        <Setter TargetName="L" Property="Foreground" Value="{DynamicResource TextBrush}" />
                                     </Trigger>
                                     <DataTrigger Binding="{Binding SideCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                         <Setter TargetName="L" Property="Visibility" Value="Collapsed" />
@@ -918,7 +918,7 @@
             <!-- Pedido de permissão de um site -->
             <Border x:Name="PermissionBar" Grid.Row="2" Panel.ZIndex="45" HorizontalAlignment="Left" VerticalAlignment="Top"
                     Margin="20,10,0,0" CornerRadius="18" Padding="18,14" MaxWidth="460"
-                    Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}"
+                    Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
                     BorderThickness="1" Visibility="Collapsed">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
@@ -936,7 +936,7 @@
                     <DockPanel Margin="0,14,0,0" LastChildFill="False">
                         <CheckBox x:Name="PermissionRemember" Style="{StaticResource ToggleSwitch}" IsChecked="True"
                                   VerticalAlignment="Center" />
-                        <TextBlock Text="Lembrar neste site" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                        <TextBlock Text="Lembrar neste site" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                    VerticalAlignment="Center" Margin="8,0,0,0" />
                         <Button x:Name="PermissionAllowButton" DockPanel.Dock="Right" Content="Permitir"
                                 Style="{StaticResource PrimaryPillButton}" Click="PermissionAllow_Click" Margin="8,0,0,0" />
@@ -948,22 +948,22 @@
 
             <!-- Procurar na página -->
             <Border x:Name="FindBar" Grid.Row="2" Panel.ZIndex="40" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,12,24,0" CornerRadius="20" Padding="14,4,6,4" Background="{StaticResource SurfaceRaisedBrush}"
+                    Margin="0,12,24,0" CornerRadius="20" Padding="14,4,6,4" Background="{DynamicResource SurfaceRaisedBrush}"
                     BorderBrush="{StaticResource IrisBrush}" BorderThickness="1.5" Visibility="Collapsed">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.45" Color="Black" />
                 </Border.Effect>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="12" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextMutedBrush}" Margin="0,0,10,0" />
+                               Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,10,0" />
                     <Grid Width="220">
                         <TextBox x:Name="FindInput" Style="{StaticResource BareTextBox}" FontSize="13.5"
                                  TextChanged="FindInput_TextChanged" PreviewKeyDown="FindInput_PreviewKeyDown" />
                         <TextBlock x:Name="FindPlaceholder" Text="Procurar na página" IsHitTestVisible="False" FontSize="13.5"
-                                   Margin="2,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextFaintBrush}" />
+                                   Margin="2,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFaintBrush}" />
                     </Grid>
                     <TextBlock x:Name="FindCount" FontSize="12" MinWidth="70" TextAlignment="Right" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextMutedBrush}" Margin="8,0" />
+                               Foreground="{DynamicResource TextMutedBrush}" Margin="8,0" />
                     <Button x:Name="FindPrevButton" Content="&#xE70E;" Style="{StaticResource IconButton}" Width="28" Height="28"
                             FontSize="11" Click="FindPrev_Click" ToolTip="Anterior (Shift+Enter)" />
                     <Button x:Name="FindNextButton" Content="&#xE70D;" Style="{StaticResource IconButton}" Width="28" Height="28"
@@ -975,30 +975,30 @@
 
             <!-- Aviso do modo foco -->
             <Border x:Name="FocusToast" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Center" VerticalAlignment="Top"
-                    Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="#E61A1D27" IsHitTestVisible="False"
+                    Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="{DynamicResource ToastBrush}" IsHitTestVisible="False"
                     BorderBrush="{StaticResource IrisBrush}" BorderThickness="1" Opacity="0">
-                <TextBlock FontSize="13" Foreground="{StaticResource TextBrush}">
+                <TextBlock FontSize="13" Foreground="{DynamicResource TextBrush}">
                     Modo foco — prima <Bold>F11</Bold> ou <Bold>Ctrl+K</Bold> para voltar
                 </TextBlock>
             </Border>
 
             <!-- Aviso genérico (copiado, guardado, ...) -->
             <Border x:Name="Toast" Grid.Row="2" Panel.ZIndex="55" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                    Margin="0,0,0,28" CornerRadius="18" Padding="18,9" Background="#F21A1D27" IsHitTestVisible="False"
-                    BorderBrush="#33FFFFFF" BorderThickness="1" Opacity="0">
+                    Margin="0,0,0,28" CornerRadius="18" Padding="18,9" Background="{DynamicResource ToastBrush}" IsHitTestVisible="False"
+                    BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" Opacity="0">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,10,0"
                                Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="ToastText" FontSize="13" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ToastText" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
 
             <!-- Paleta de comandos -->
             <Grid x:Name="PaletteOverlay" Grid.Row="0" Grid.RowSpan="3" Panel.ZIndex="100" Visibility="Collapsed"
                   shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                <Rectangle Fill="#99050710" MouseLeftButtonDown="PaletteBackdrop_MouseLeftButtonDown" />
+                <Rectangle Fill="{DynamicResource ScrimBrush}" MouseLeftButtonDown="PaletteBackdrop_MouseLeftButtonDown" />
                 <Border x:Name="PaletteCard" Width="680" VerticalAlignment="Top" Margin="0,92,0,0" CornerRadius="22"
-                        Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource IrisBrush}"
+                        Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{StaticResource IrisBrush}"
                         BorderThickness="1.5" RenderTransformOrigin="0.5,0">
                     <Border.RenderTransform>
                         <ScaleTransform x:Name="PaletteScale" />
@@ -1013,14 +1013,14 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="17"
-                                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                                       Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
                             <TextBox x:Name="PaletteInput" Grid.Column="1" Style="{StaticResource BareTextBox}" FontSize="18"
                                      TextChanged="PaletteInput_TextChanged" PreviewKeyDown="PaletteInput_PreviewKeyDown" />
                             <TextBlock x:Name="PalettePlaceholder" Grid.Column="1" IsHitTestVisible="False" FontSize="18"
-                                       Margin="2,0,0,1" VerticalAlignment="Center" Foreground="{StaticResource TextFaintBrush}"
+                                       Margin="2,0,0,1" VerticalAlignment="Center" Foreground="{DynamicResource TextFaintBrush}"
                                        Text="Escreva um comando, o nome de uma aba ou um site…" />
                         </Grid>
-                        <Border Height="1" Background="{StaticResource FieldBorderBrush}" />
+                        <Border Height="1" Background="{DynamicResource FieldBorderBrush}" />
                         <ListBox x:Name="PaletteList" Margin="8,8,8,4" MaxHeight="452" Focusable="False"
                                  Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource PaletteItemStyle}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -1032,7 +1032,7 @@
                                 </ControlTemplate>
                             </ListBox.Template>
                         </ListBox>
-                        <TextBlock Margin="22,4,22,14" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}"
+                        <TextBlock Margin="22,4,22,14" FontSize="11.5" Foreground="{DynamicResource TextFaintBrush}"
                                    Text="↑ ↓ navegar   ·   Enter executar   ·   Esc fechar" />
                     </StackPanel>
                 </Border>

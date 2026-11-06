@@ -4,6 +4,8 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- A paleta é a primeira entrada: o ThemeManager troca-a entre Dark.xaml e Light.xaml -->
+                <ResourceDictionary Source="Theme/Dark.xaml" />
                 <ResourceDictionary Source="Theme/Theme.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

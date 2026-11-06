@@ -1,0 +1,21 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Paleta clara: superfícies quase brancas, texto grafite, o mesmo acento íris. -->
+    <Color x:Key="FrameColor">#E9ECF3</Color>
+    <SolidColorBrush x:Key="FrameBrush" Color="#E9ECF3" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#F6F7FB" />
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#ECEEF5" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#DDE1EC" />
+    <SolidColorBrush x:Key="FieldBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="FieldBorderBrush" Color="#D5D9E4" />
+    <SolidColorBrush x:Key="TextBrush" Color="#1B1F2A" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#535B6E" />
+    <SolidColorBrush x:Key="TextFaintBrush" Color="#868DA0" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
+    <SolidColorBrush x:Key="SelectedBrush" Color="#E1E5F2" />
+    <SolidColorBrush x:Key="HoverOverlayBrush" Color="#0F0B1530" />
+    <SolidColorBrush x:Key="SubtleBorderBrush" Color="#1F0B1530" />
+    <SolidColorBrush x:Key="ScrimBrush" Color="#5C1B1F2A" />
+    <SolidColorBrush x:Key="ToastBrush" Color="#F7FFFFFF" />
+</ResourceDictionary>

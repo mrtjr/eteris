@@ -1,0 +1,21 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Paleta escura (a original do Éteris). As chaves têm de existir também em Light.xaml. -->
+    <Color x:Key="FrameColor">#0D0F15</Color>
+    <SolidColorBrush x:Key="FrameBrush" Color="#0D0F15" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#1A1D27" />
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#242836" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#262A38" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#30354A" />
+    <SolidColorBrush x:Key="FieldBrush" Color="#0F121A" />
+    <SolidColorBrush x:Key="FieldBorderBrush" Color="#2B3042" />
+    <SolidColorBrush x:Key="TextBrush" Color="#E9EBF2" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#9097A8" />
+    <SolidColorBrush x:Key="TextFaintBrush" Color="#5E6577" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
+    <SolidColorBrush x:Key="SelectedBrush" Color="#2A2F45" />
+    <SolidColorBrush x:Key="HoverOverlayBrush" Color="#14FFFFFF" />
+    <SolidColorBrush x:Key="SubtleBorderBrush" Color="#33FFFFFF" />
+    <SolidColorBrush x:Key="ScrimBrush" Color="#99050710" />
+    <SolidColorBrush x:Key="ToastBrush" Color="#F21A1D27" />
+</ResourceDictionary>
