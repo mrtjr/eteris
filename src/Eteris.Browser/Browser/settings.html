@@ -458,14 +458,16 @@
     const find = document.getElementById('find');
     const fold = text => (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const apply = () => {
-      const words = fold(find.value).split(/\s+/).filter(Boolean);
+      // Cada palavra tem de começar uma palavra do texto («tema» não apanha «sistema»).
+      const words = fold(find.value).split(/\s+/).filter(Boolean)
+        .map(w => new RegExp('(^|[^a-z0-9])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       let any = false;
       for (const section of document.querySelectorAll('main section')) {
         const title = fold(section.querySelector('h2')?.textContent);
-        const sectionHit = words.length > 0 && words.every(w => title.includes(w));
+        const sectionHit = words.length > 0 && words.every(w => w.test(title));
         let visible = 0;
         for (const item of section.querySelectorAll('.item, .about')) {
-          const hit = !words.length || sectionHit || words.every(w => fold(item.textContent).includes(w));
+          const hit = !words.length || sectionHit || words.every(w => w.test(fold(item.textContent)));
           item.classList.toggle('filtered-out', !hit);
           item.classList.toggle('hit', words.length > 0 && hit && !sectionHit);
           if (hit) visible++;
