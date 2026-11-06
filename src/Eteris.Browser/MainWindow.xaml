@@ -183,7 +183,7 @@
                                 <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,2" />
                                 <TextBlock x:Name="Icon" Grid.Column="1" Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="14"
                                            Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="{Binding Text}" FontSize="14" Foreground="{StaticResource TextBrush}"
+                                <TextBlock x:Name="Label" Grid.Column="2" Text="{Binding Text}" FontSize="14" Foreground="{StaticResource TextBrush}"
                                            TextTrimming="CharacterEllipsis" MaxWidth="520" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="3" Text="{Binding Detail, StringFormat={} — {0}}" FontSize="13"
                                            Foreground="{StaticResource TextFaintBrush}" TextTrimming="CharacterEllipsis"
@@ -207,6 +207,8 @@
                             <DataTrigger Binding="{Binding Kind}" Value="Answer">
                                 <Setter TargetName="Icon" Property="Text" Value="&#xE8EF;" />
                                 <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Label" Property="FontSize" Value="17" />
+                                <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
@@ -624,6 +626,17 @@
                 <TextBlock FontSize="13" Foreground="{StaticResource TextBrush}">
                     Modo foco — prima <Bold>F11</Bold> ou <Bold>Ctrl+K</Bold> para voltar
                 </TextBlock>
+            </Border>
+
+            <!-- Aviso genérico (copiado, guardado, ...) -->
+            <Border x:Name="Toast" Grid.Row="2" Panel.ZIndex="55" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,28" CornerRadius="18" Padding="18,9" Background="#F21A1D27" IsHitTestVisible="False"
+                    BorderBrush="#33FFFFFF" BorderThickness="1" Opacity="0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,10,0"
+                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ToastText" FontSize="13" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" />
+                </StackPanel>
             </Border>
 
             <!-- Paleta de comandos -->

@@ -98,11 +98,26 @@ public partial class MainWindow
         var bookmarks = AppData.Bookmarks(b => b.Search(text, 3)).Select(b => new HistoryEntry(b.Url, b.Title, 0)).ToList();
         var list = Suggestions.Build(Omnibox.Text, Engine, history, bookmarks);
         SuggestionList.ItemsSource = list;
-        SuggestionList.SelectedIndex = list.Count > 0 ? 0 : -1;
+        SuggestionList.SelectedIndex = PrimaryIndex(list);
         SuggestionPopup.IsOpen = list.Count > 0 && Omnibox.IsKeyboardFocusWithin;
     }
 
     private void CloseSuggestions() => SuggestionPopup.IsOpen = false;
+
+    // A resposta instantânea fica no topo, mas o Enter continua a pesquisar/abrir o que foi escrito.
+    private static int PrimaryIndex(IReadOnlyList<Suggestion> list)
+    {
+        for (var i = 0; i < list.Count; i++)
+            if (list[i].Kind != SuggestionKind.Answer) return i;
+        return -1;
+    }
+
+    private void CopyAnswer(Suggestion answer)
+    {
+        try { Clipboard.SetText(answer.Text.TrimStart('=', ' ')); } catch { }
+        CloseSuggestions();
+        ShowToast($"Copiado: {answer.Text.TrimStart('=', ' ')}");
+    }
 
     private void MoveSuggestion(int delta)
     {
@@ -111,7 +126,7 @@ public partial class MainWindow
         SuggestionList.SelectedIndex = (SuggestionList.SelectedIndex + delta + count) % count;
         if (SuggestionList.SelectedItem is Suggestion s)
         {
-            SetOmniboxText(s.Kind == SuggestionKind.History ? s.Url : s.Text);
+            SetOmniboxText(s.Kind switch { SuggestionKind.History => s.Url, SuggestionKind.Answer => _typed, _ => s.Text });
             Omnibox.CaretIndex = Omnibox.Text.Length;
         }
     }
@@ -134,7 +149,10 @@ public partial class MainWindow
                 e.Handled = true;
                 break;
             case Key.Enter:
-                if (SuggestionPopup.IsOpen && SuggestionList.SelectedIndex > 0 && SuggestionList.SelectedItem is Suggestion s)
+                if (SuggestionPopup.IsOpen && SuggestionList.SelectedItem is Suggestion { Kind: SuggestionKind.Answer } answer)
+                    CopyAnswer(answer);
+                else if (SuggestionPopup.IsOpen && SuggestionList.SelectedItem is Suggestion s
+                    && SuggestionList.SelectedIndex != PrimaryIndex((IReadOnlyList<Suggestion>)SuggestionList.ItemsSource))
                     LoadUrl(s.Url, newTab: alt);
                 else
                     Go(Omnibox.Text, newTab: alt);
@@ -186,7 +204,11 @@ public partial class MainWindow
 
     private void Suggestion_Click(object sender, MouseButtonEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is Suggestion s) LoadUrl(s.Url);
+        if ((sender as FrameworkElement)?.DataContext is Suggestion s)
+        {
+            if (s.Kind == SuggestionKind.Answer) CopyAnswer(s);
+            else LoadUrl(s.Url);
+        }
         e.Handled = true;
     }
 }

@@ -23,6 +23,9 @@ public static class Suggestions
                 : new Suggestion(SuggestionKind.Navigate, input.Trim(), "Abrir endereço", primary.Url),
         };
 
+        if (InstantAnswer.Answer(input) is { } answer)
+            list.Insert(0, new Suggestion(SuggestionKind.Answer, "= " + answer, "Clique para copiar", string.Empty));
+
         var marked = (bookmarks ?? []).Where(b => !SameUrl(b.Url, primary.Url)).Take(3).ToList();
         list.AddRange(marked.Select(b => new Suggestion(SuggestionKind.Bookmark, b.Title.Length > 0 ? b.Title : b.Url, b.Url, b.Url)));
 
