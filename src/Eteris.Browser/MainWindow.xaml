@@ -528,6 +528,37 @@
                 </Grid>
             </Border>
 
+            <!-- Pedido de permissão de um site -->
+            <Border x:Name="PermissionBar" Grid.Row="2" Panel.ZIndex="45" HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Margin="20,10,0,0" CornerRadius="18" Padding="18,14" MaxWidth="460"
+                    Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}"
+                    BorderThickness="1" Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                </Border.Effect>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Grid Width="38" Height="38" VerticalAlignment="Top">
+                            <Ellipse Fill="{StaticResource IrisBrush}" />
+                            <TextBlock x:Name="PermissionGlyph" Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="17"
+                                       Foreground="#0B0D13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock x:Name="PermissionText" TextWrapping="Wrap" MaxWidth="360" Margin="12,0,0,0"
+                                   VerticalAlignment="Center" FontSize="14" />
+                    </StackPanel>
+                    <DockPanel Margin="0,14,0,0" LastChildFill="False">
+                        <CheckBox x:Name="PermissionRemember" Style="{StaticResource ToggleSwitch}" IsChecked="True"
+                                  VerticalAlignment="Center" />
+                        <TextBlock Text="Lembrar neste site" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                        <Button x:Name="PermissionAllowButton" DockPanel.Dock="Right" Content="Permitir"
+                                Style="{StaticResource PrimaryPillButton}" Click="PermissionAllow_Click" Margin="8,0,0,0" />
+                        <Button x:Name="PermissionDenyButton" DockPanel.Dock="Right" Content="Bloquear"
+                                Style="{StaticResource PillButton}" Click="PermissionDeny_Click" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Procurar na página -->
             <Border x:Name="FindBar" Grid.Row="2" Panel.ZIndex="40" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,12,24,0" CornerRadius="20" Padding="14,4,6,4" Background="{StaticResource SurfaceRaisedBrush}"

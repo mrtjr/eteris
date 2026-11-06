@@ -92,6 +92,7 @@ public partial class MainWindow : Window
             RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
             DownloadHandler = DownloadHandler,
             FindHandler = NewFindHandler(),
+            PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
                 AppData.IsShieldOn,
