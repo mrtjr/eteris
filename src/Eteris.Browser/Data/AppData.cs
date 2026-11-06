@@ -147,6 +147,12 @@ public static class AppData
         catch (Exception) { }
     }
 
+    public static int ImportBookmarks(IReadOnlyList<Bookmark> marks)
+    {
+        try { return BookmarkImport.Import(LazyBookmarks.Value, marks, DateTime.UtcNow); }
+        catch (Exception) { return 0; }
+    }
+
     public static void RemoveBookmark(string url)
     {
         try { LazyBookmarks.Value.Remove(url); }

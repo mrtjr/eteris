@@ -35,7 +35,8 @@ public static class SettingsPage
         return $"{lists.Count} listas · {rules.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("pt-PT"))} regras · {when}";
     }
 
-    public static string Render(UserSettings settings, About? about = null, bool focusAbout = false)
+    public static string Render(UserSettings settings, About? about = null, bool focusAbout = false,
+        IReadOnlyList<ImportSource>? imports = null)
     {
         var data = new
         {
@@ -58,6 +59,7 @@ public static class SettingsPage
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
             theme = settings.Theme,
+            imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));

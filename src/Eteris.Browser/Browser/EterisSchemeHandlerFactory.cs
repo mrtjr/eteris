@@ -55,8 +55,17 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             return Text(Updates.UpdateService.Status);
         }
         if (uri.AbsolutePath == "/status") return Text(Updates.UpdateService.Status);
+        if (uri.AbsolutePath == "/import" && InternalPages.IsAuthorized(url))
+        {
+            var source = BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
+                .FirstOrDefault(s => s.Id == InternalPages.Query(uri, "from"));
+            if (source is null) return Text("Navegador não encontrado");
+            var added = AppData.ImportBookmarks(BookmarkImport.Read(source.Path));
+            return Text(added == 0 ? $"Nada de novo em {source.Name}" : $"{added} favoritos importados de {source.Name}");
+        }
         return uri.AbsolutePath == "/"
-            ? Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: uri.Host == "about"))
+            ? Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: uri.Host == "about",
+                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 
