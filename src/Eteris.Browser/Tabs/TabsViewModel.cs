@@ -118,6 +118,47 @@ public partial class TabsViewModel : ObservableObject
         RefreshGroups();
     }
 
+    // ---------- Arrumar abas ----------
+
+    // Uma aba por endereço («/» final ignorada); fica a ativa, senão a fixada, senão a primeira.
+    public int CloseDuplicates()
+    {
+        var closed = 0;
+        foreach (var same in Tabs.GroupBy(t => DuplicateKey(t.Address)).Where(g => g.Count() > 1).ToList())
+        {
+            var keep = same.FirstOrDefault(t => ReferenceEquals(t, Active)) ?? same.FirstOrDefault(t => t.IsPinned) ?? same.First();
+            foreach (var tab in same.Where(t => !ReferenceEquals(t, keep) && !t.IsPinned).ToList())
+            {
+                Close(tab);
+                closed++;
+            }
+        }
+        return closed;
+    }
+
+    private static string DuplicateKey(string address) => address.TrimEnd('/').ToLowerInvariant();
+
+    // Abas do mesmo site ficam juntas. Fixadas e abas de grupos não saem do sítio.
+    public void SortBySite()
+    {
+        var slots = Tabs.Select((t, i) => (t, i)).Where(p => !p.t.IsPinned && p.t.Group is null).ToList();
+        var sorted = slots.Select(p => p.t)
+            .OrderBy(t => SiteKey(t.Address), StringComparer.Ordinal)
+            .ThenBy(t => Tabs.IndexOf(t))
+            .ToList();
+        for (var k = 0; k < slots.Count; k++)
+        {
+            var from = Tabs.IndexOf(sorted[k]);
+            if (from != slots[k].i) Tabs.Move(from, slots[k].i);
+        }
+        RefreshGroups();
+    }
+
+    private static string SiteKey(string address)
+        => Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Host.Length > 0
+            ? Shields.TrackerBlocker.RegistrableDomain(uri.Host.ToLowerInvariant())
+            : "~" + address;
+
     public void Ungroup(BrowserTab tab)
     {
         if (tab.Group is not { } group) return;
