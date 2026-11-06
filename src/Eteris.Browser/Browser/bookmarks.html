@@ -62,6 +62,8 @@
   .tabs button.on { color: var(--text); background: var(--row); border-color: var(--line); }
   .tabs .badge-count { margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 9px; background: linear-gradient(135deg, #8b5cf6, #22d3ee); color: #fff; }
   .card.read .title { color: var(--faint); text-decoration: line-through; text-decoration-color: rgba(127, 127, 140, .5); }
+  .tabs button.export { margin-left: auto; color: var(--faint); }
+  .tabs button.export:hover { color: var(--text); border-color: var(--line); }
   .acts button.ok:hover { background: rgba(52, 211, 153, .18); color: #34d399; }
   .grid.sessions { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
   .session { cursor: pointer; align-items: flex-start; padding: 16px; }
@@ -94,7 +96,7 @@
 <header>
   <div class="bar">
     <div><h1><b id="heading">Favoritos</b></h1><div class="count" id="count"></div>
-      <div class="tabs"><button id="tabMarks" class="on">Favoritos</button><button id="tabReading">Para ler</button><button id="tabSessions">Sessões</button></div></div>
+      <div class="tabs"><button id="tabMarks" class="on">Favoritos</button><button id="tabReading">Para ler</button><button id="tabSessions">Sessões</button><button id="exportMarks" class="export" title="Guarda um ficheiro HTML em Transferências que qualquer navegador importa">Exportar ↓</button></div></div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input class="q" id="q" placeholder="Pesquisar nos favoritos   ( / )" autocomplete="off" spellcheck="false">
@@ -134,6 +136,7 @@
   }
   document.getElementById('tabMarks').addEventListener('click', () => { view = 'marks'; history.replaceState(null, '', '#'); render(); });
   document.getElementById('tabReading').addEventListener('click', () => { view = 'reading'; history.replaceState(null, '', '#ler'); render(); });
+  document.getElementById('exportMarks').addEventListener('click', () => send('export', {}));
   document.getElementById('tabSessions').addEventListener('click', () => { view = 'sessions'; history.replaceState(null, '', '#sessoes'); render(); });
 
   function renderSessions(term) {

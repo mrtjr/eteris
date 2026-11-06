@@ -46,7 +46,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));
         if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url);
-        if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url);
+        if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
         if (ErrorPage.IsErrorPage(request.Url))
             return Html(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty));
@@ -122,13 +122,19 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         return Text(request.Summary);
     }
 
-    private static IResourceHandler BookmarksRoute(Uri uri, string url)
+    private static IResourceHandler BookmarksRoute(Uri uri, string url, int browserId)
     {
         if (uri.AbsolutePath is "/reading-read" or "/reading-remove")
         {
             if (!InternalPages.IsAuthorized(url) || InternalPages.Query(uri, "u") is not { } item) return Text("recusado");
             if (uri.AbsolutePath == "/reading-remove") AppData.RemoveFromReadingList(item);
             else AppData.MarkRead(item, InternalPages.Query(uri, "v") == "true");
+            return Text("ok");
+        }
+        if (uri.AbsolutePath == "/export")
+        {
+            if (!InternalPages.IsAuthorized(url)) return Text("recusado");
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.WindowOf(browserId)?.ExportBookmarks());
             return Text("ok");
         }
         if (uri.AbsolutePath is "/session-open" or "/session-rename" or "/session-delete")

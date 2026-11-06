@@ -43,13 +43,37 @@ public partial class MainWindow
     // A partir da nova aba: a janela dessa aba abre a sessão (e é reaproveitada se só tiver abas novas).
     internal static void OpenSavedSessionFrom(int browserId, SavedSession session)
     {
-        var owner = System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault(w => w._browsers.Values.Any(b =>
+        if (WindowOf(browserId) is { } owner) owner.OpenSession(session);
+        else OpenSavedSessionWindow(session);
+    }
+
+    internal static MainWindow? WindowOf(int browserId)
+        => System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault(w => w._browsers.Values.Any(b =>
         {
             try { return b.IsBrowserInitialized && b.GetBrowser()?.Identifier == browserId; }
             catch (Exception) { return false; }
         }));
-        if (owner is null) OpenSavedSessionWindow(session);
-        else owner.OpenSession(session);
+
+    // Exportar favoritos para Transferências (pela paleta ou pelo botão em eteris://bookmarks).
+    internal void ExportBookmarks()
+    {
+        var marks = AppData.Bookmarks(b => b.All(100_000));
+        if (marks.Count == 0)
+        {
+            ShowToast("Ainda não há favoritos para exportar");
+            return;
+        }
+        try
+        {
+            var folder = Eteris.Browser.Downloads.DownloadPaths.DownloadsFolder();
+            var path = Eteris.Browser.Downloads.DownloadPaths.Unique(folder, BookmarkExport.FileName(DateTime.Now));
+            System.IO.File.WriteAllText(path, BookmarkExport.ToHtml(marks, DateTime.UtcNow), new System.Text.UTF8Encoding(false));
+            ShowToast($"{(marks.Count == 1 ? "1 favorito exportado" : $"{marks.Count} favoritos exportados")} para Transferências › {System.IO.Path.GetFileName(path)}");
+        }
+        catch (Exception)
+        {
+            ShowToast("Não foi possível exportar os favoritos");
+        }
     }
 
     private List<SavedTab> SessionTabs()
