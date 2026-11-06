@@ -388,9 +388,25 @@ public partial class MainWindow : Window
 
     private void TabItem_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Middle) return;
-        CloseTab((sender as FrameworkElement)?.DataContext as BrowserTab);
-        e.Handled = true;
+        if ((sender as FrameworkElement)?.DataContext is not BrowserTab tab) return;
+        if (e.ChangedButton == MouseButton.Middle)
+        {
+            CloseTab(tab);
+            e.Handled = true;
+            return;
+        }
+        // As abas não recebem foco (Focusable=False, para não roubarem o teclado à página), e um ListBoxItem só se
+        // seleciona com o clique se conseguir o foco: por isso a aba é ativada aqui, ao carregar no botão, como no Chrome.
+        // O «x» e a etiqueta do grupo têm as suas próprias ações.
+        if (e.ChangedButton == MouseButton.Left && !IsInsideTabControl(e.OriginalSource as DependencyObject, (DependencyObject)sender))
+            Tabs.Active = tab;
+    }
+
+    private static bool IsInsideTabControl(DependencyObject? node, DependencyObject tabItem)
+    {
+        for (; node is not null && !ReferenceEquals(node, tabItem); node = VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node))
+            if (node is System.Windows.Controls.Primitives.ButtonBase || node is FrameworkElement { Name: "GroupPill" }) return true;
+        return false;
     }
 
     private void CloseTab_Click(object sender, RoutedEventArgs e)
