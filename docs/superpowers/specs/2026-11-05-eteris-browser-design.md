@@ -162,18 +162,26 @@ build.
 
 ### 5.1 Crate
 
-- `src/Eteris.Shields/` — crate `eteris_shields`, `crate-type = ["cdylib"]`,
-  dependência `adblock` (Brave). Target `x86_64-pc-windows-msvc`.
-- C-ABI exportada:
+- `src/Eteris.Shields/` — crate `eteris_shields`, `crate-type = ["cdylib", "rlib"]`,
+  dependência `adblock` 0.13 (Brave) **sem** a feature `single-thread` (o CEF
+  consulta o motor a partir de várias threads). Target `x86_64-pc-windows-msvc`.
+- O Rust só é preciso para compilar: a build do `Eteris.Browser` chama o
+  `cargo` e copia `eteris_shields.dll` para a saída e para o instalador. Os
+  utilizadores não instalam nada.
+- C-ABI exportada (nenhum pânico atravessa a fronteira; em erro: não bloquear / NULL):
 
 ```c
-ShieldsHandle* shields_new(const char* filter_lists_utf8);      // texto das listas concatenadas
-bool  shields_check(ShieldsHandle*, const char* url, const char* source_url,
-                    const char* resource_type);                   // true = bloquear
-char* shields_cosmetic_css(ShieldsHandle*, const char* url);      // CSS a injetar (ou NULL)
+Shields* shields_new(const char* rules_utf8);                       // listas concatenadas
+int   shields_check(Shields*, const char* url, const char* source_url,
+                    const char* resource_type);                     // 1 = bloquear
+char* shields_url_css(Shields*, const char* url);                   // regras ##específicas do site
+char* shields_generic_css(Shields*, const char* url,
+                          const char* classes, const char* ids);    // regras ##.classe/###id genéricas
 void  shields_string_free(char*);
-void  shields_free(ShieldsHandle*);
+void  shields_free(Shields*);
 ```
+
+- O motor carrega ~174 mil regras em ~75 ms; não é preciso cache serializada.
 
 - `resource_type` segue os nomes do adblock-rust (`script`, `image`,
   `stylesheet`, `xmlhttprequest`, `sub_frame`, `font`, `media`, `other`),
@@ -181,18 +189,28 @@ void  shields_free(ShieldsHandle*);
 
 ### 5.2 Listas
 
-- EasyList, EasyPrivacy, uBlock filters (unbreak + privacy). Uma cópia é
-  **embutida no exe** como recurso para o primeiro arranque offline.
+- As listas que o **uBlock Origin Lite** ativa por omissão — uBlock filters
+  (filters, privacy, unbreak, badware, quick-fixes), EasyList, EasyPrivacy —
+  mais a EasyList Portuguesa. Ficam de fora a URLhaus (11,8 MB) e a de Peter
+  Lowe (termos de uso pouco claros); licenças em `THIRD-PARTY-NOTICES.md`.
+- Uma cópia vai junto do exe (`Shields/lists/`) para o primeiro arranque offline.
 - Atualização semanal em segundo plano para `%LocalAppData%\Eteris\filters\`;
-  se o download falhar, continua com a cópia anterior. Nunca arranca sem
-  Shields.
+  respostas inválidas (páginas de erro, ficheiros curtos) nunca substituem a
+  cópia anterior. Nunca arranca sem escudo: até o motor carregar (ou se a DLL
+  faltar) usa a lista mínima em C# (`TrackerBlocker`).
 
 ### 5.3 Integração no browser
 
-- `IResourceRequestHandler.OnBeforeResourceLoad` → P/Invoke `shields_check`.
-  Bloqueado → `CefReturnValue.Cancel` + `BlockedCount++` na aba.
-- `OnFrameLoadEnd` (frame principal) → `shields_cosmetic_css` → injeta
-  `<style>` via `ExecuteScriptAsync`.
+- `IResourceRequestHandler.OnBeforeResourceLoad` → P/Invoke `shields_check`
+  com o tipo de recurso e o URL do documento que fez o pedido (pode ser um
+  iframe). Bloqueado → `CefReturnValue.Cancel` + `BlockedCount++` na aba.
+- Regras específicas do site: injetadas em `OnContextCreated` (antes de os
+  anúncios aparecerem). Regras genéricas: no `FrameLoadEnd`, a partir das
+  classes e ids presentes na página, e de novo 2,5 s depois.
+- Pop-ups: sem gesto do utilizador são sempre bloqueados; com gesto, o destino
+  passa pelo motor como navegação (o adblock-rust ainda não implementa `$popup`).
+- Em falta: **scriptlets** do uBlock (`+js(...)`), que neutralizam avisos
+  anti-bloqueador (ex.: o "ad block recovery" do Funding Choices da Google).
 - Exceções por host (`shield_exceptions`) desligam a verificação nesse host;
   toggle no popup do ícone Shields.
 - Níveis: **padrão** (listas acima), **agressivo** (+ listas de anúncios

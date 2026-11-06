@@ -4,10 +4,10 @@ namespace Eteris.Browser.Shields;
 
 public interface IRequestBlocker
 {
-    bool ShouldBlock(string requestUrl, string? pageUrl);
+    bool ShouldBlock(string requestUrl, string? pageUrl, string resourceType);
 }
 
-// Bloqueio por domínio, provisório até ao motor adblock-rust; quem o usa depende só de IRequestBlocker.
+// Lista mínima por domínio: usada só enquanto o motor adblock-rust arranca ou se a DLL faltar.
 public sealed class TrackerBlocker : IRequestBlocker
 {
     private static readonly HashSet<string> SecondLevelLabels = ["co", "com", "org", "net", "gov", "edu", "ac", "gob", "nom"];
@@ -31,7 +31,7 @@ public sealed class TrackerBlocker : IRequestBlocker
 
     public int Count => _domains.Count;
 
-    public bool ShouldBlock(string requestUrl, string? pageUrl)
+    public bool ShouldBlock(string requestUrl, string? pageUrl, string resourceType = "other")
     {
         if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) return false;
         if (request.Scheme != Uri.UriSchemeHttp && request.Scheme != Uri.UriSchemeHttps) return false;

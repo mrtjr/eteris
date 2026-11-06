@@ -77,11 +77,18 @@ public partial class MainWindow : Window
         var browser = new ChromiumWebBrowser(tab.Address)
         {
             Visibility = Visibility.Hidden,
-            LifeSpanHandler = new PopupToTabHandler((url, foreground) =>
-                Dispatcher.InvokeAsync(() => Tabs.NewTab(url, foreground))),
+            LifeSpanHandler = new PopupToTabHandler(
+                (gesture, url, opener) => PopupPolicy.Allow(gesture, url, opener, ShieldEngine.Current, AppData.IsShieldOn),
+                (url, foreground) => Dispatcher.InvokeAsync(() => Tabs.NewTab(url, foreground)),
+                host =>
+                {
+                    ShieldStats.CountBlocked();
+                    Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
+                }),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url))),
+            RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
             RequestHandler = new PrivacyRequestHandler(
-                TrackerBlocker.Default,
+                () => ShieldEngine.Current,
                 AppData.IsShieldOn,
                 onNavigate: () => Dispatcher.InvokeAsync(tab.ResetShield),
                 onBlocked: host =>
@@ -121,7 +128,11 @@ public partial class MainWindow : Window
         {
             if (!e.Frame.IsMain) return;
             var url = e.Url;
-            Dispatcher.InvokeAsync(() => DetectSiteTint(tab, browser, url));
+            Dispatcher.InvokeAsync(() =>
+            {
+                DetectSiteTint(tab, browser, url);
+                _ = ApplyGenericCosmeticsAsync(browser, url);
+            });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
         };

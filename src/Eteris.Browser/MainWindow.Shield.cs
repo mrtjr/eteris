@@ -56,6 +56,25 @@ public partial class MainWindow
         ShieldSession.Text = $"{session} {(session == 1 ? "rastreador bloqueado" : "rastreadores bloqueados")} desde que abriu o Éteris";
     }
 
+    // Regras genéricas das listas (##.classe, ###id): aplicadas às classes e ids que existem na página,
+    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde.
+    private static async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.ChromiumWebBrowser browser, string url)
+    {
+        if (ShieldEngine.Cosmetic is not { } engine) return;
+        if (WebHost(url) is not { } host || !AppData.IsShieldOn(host)) return;
+
+        foreach (var delay in new[] { 0, 2500 })
+        {
+            if (delay > 0) await Task.Delay(delay);
+            if (browser.IsDisposed || browser.GetMainFrame()?.Url != url) return;
+            var result = await browser.EvaluateScriptAsync(CosmeticScripts.CollectClassesAndIds);
+            if (!result.Success || result.Result is not string raw) return;
+            var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
+            var css = engine.GenericCss(url, classes, ids);
+            if (css.Length > 0) browser.ExecuteScriptAsync(CosmeticScripts.Inject(css));
+        }
+    }
+
     private void Shield_Click(object sender, RoutedEventArgs e)
     {
         FillShieldPopup();

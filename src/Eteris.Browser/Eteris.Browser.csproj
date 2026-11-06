@@ -11,11 +11,27 @@
     <Version>0.1.0</Version>
     <Product>Éteris</Product>
     <StartupObject>Eteris.Browser.Program</StartupObject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <!-- Escudo: crate Rust (adblock-rust) compilado como eteris_shields.dll e distribuído junto do exe. -->
+  <PropertyGroup>
+    <ShieldsDir>$(MSBuildThisFileDirectory)..\Eteris.Shields\</ShieldsDir>
+    <CargoExe Condition="'$(CargoExe)' == '' And Exists('$(USERPROFILE)\.cargo\bin\cargo.exe')">$(USERPROFILE)\.cargo\bin\cargo.exe</CargoExe>
+    <CargoExe Condition="'$(CargoExe)' == ''">cargo</CargoExe>
+  </PropertyGroup>
+
+  <Target Name="BuildShields" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="&quot;$(CargoExe)&quot; build --release --quiet --manifest-path &quot;$(ShieldsDir)Cargo.toml&quot;"
+          IgnoreStandardErrorWarningFormat="true" />
+  </Target>
 
   <ItemGroup>
     <EmbeddedResource Include="Browser\newtab.html" />
     <EmbeddedResource Include="Shields\trackers.txt" />
+    <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll"
+          CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="Shields\lists\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

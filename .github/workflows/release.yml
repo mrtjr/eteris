@@ -24,11 +24,16 @@ jobs:
           if (-not (Select-String -Path src/Eteris.Browser/Updates/UpdateService.cs -Pattern $expected -SimpleMatch)) {
             throw "UpdateService.RepoUrl nao corresponde a $env:REPO_URL"
           }
+      - run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet test -c Release
+      - name: O instalador tem de levar o motor do escudo
+        run: |
+          .\build\publish.ps1 -Version $env:VERSION.TrimStart("v")
+          if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
+          if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 8) { throw "listas de filtros em falta no publish" }
       - run: dotnet tool install -g vpk
       - name: Descarregar releases anteriores para gerar pacotes delta
         run: vpk download github --repoUrl $env:REPO_URL --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
         continue-on-error: true
-      - run: .\build\publish.ps1 -Version $env:VERSION.TrimStart("v")
       - run: .\build\pack.ps1 -Version $env:VERSION.TrimStart("v")
       - run: vpk upload github --repoUrl $env:REPO_URL --publish --releaseName "Éteris $env:VERSION" --tag $env:VERSION --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases

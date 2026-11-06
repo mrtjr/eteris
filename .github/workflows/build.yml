@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Escudo (Rust) — testes, incluindo as listas reais
+        run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
       - run: dotnet test -c Release --no-build
