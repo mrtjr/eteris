@@ -40,6 +40,18 @@ public partial class MainWindow
     internal static void OpenSavedSessionWindow(SavedSession session)
         => OpenWindowWith(session.Tabs.Select(t => t.Url).ToList(), session.Tabs.Select(t => t.Title).ToList(), 0);
 
+    // A partir da nova aba: a janela dessa aba abre a sessão (e é reaproveitada se só tiver abas novas).
+    internal static void OpenSavedSessionFrom(int browserId, SavedSession session)
+    {
+        var owner = System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault(w => w._browsers.Values.Any(b =>
+        {
+            try { return b.IsBrowserInitialized && b.GetBrowser()?.Identifier == browserId; }
+            catch (Exception) { return false; }
+        }));
+        if (owner is null) OpenSavedSessionWindow(session);
+        else owner.OpenSession(session);
+    }
+
     private List<SavedTab> SessionTabs()
         => Tabs.Tabs.Where(t => !NewTabPage.IsNewTab(t.Address)).Select(t => new SavedTab(t.Address, t.Title)).ToList();
 

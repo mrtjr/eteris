@@ -33,13 +33,16 @@ public static class NewTabPage
     public static bool IsPrivate(string url) => url.StartsWith(PrivateUrl, StringComparison.OrdinalIgnoreCase);
 
     public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0,
-        IReadOnlyList<Bookmark>? bookmarks = null, bool isPrivate = false, int[]? week = null, UserSettings? prefs = null)
+        IReadOnlyList<Bookmark>? bookmarks = null, bool isPrivate = false, int[]? week = null, UserSettings? prefs = null,
+        IReadOnlyList<ReadingItem>? reading = null, IReadOnlyList<SavedSession>? sessions = null)
     {
         // Numa janela privada não se mostra nada do perfil normal.
         if (isPrivate)
         {
             sites = [];
             bookmarks = [];
+            reading = [];
+            sessions = [];
         }
 
         var data = new
@@ -65,6 +68,7 @@ public static class NewTabPage
                 letter = SiteBadge.Letter(b.Url) ?? "?",
                 color = SiteBadge.Palette[SiteBadge.ColorIndex(b.Url)],
             }),
+            resume = Resume(reading ?? [], sessions ?? []),
             sites = sites.Select(s => new
             {
                 host = s.Host,
@@ -76,4 +80,21 @@ public static class NewTabPage
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
+
+    // «Continuar»: até duas sessões guardadas e o resto em artigos por ler — no máximo quatro cartões.
+    public static IReadOnlyList<ResumeCard> Resume(IReadOnlyList<ReadingItem> reading, IReadOnlyList<SavedSession> sessions)
+    {
+        var cards = sessions.Where(s => s.Tabs.Count > 0).Take(2).Select(s => new ResumeCard(
+            "session", s.Name, s.Tabs.Count == 1 ? "Sessão · 1 aba" : $"Sessão · {s.Tabs.Count} abas", null, s.Id,
+            SiteBadge.Letter(s.Tabs[0].Url) ?? "?", SiteBadge.Palette[SiteBadge.ColorIndex(s.Tabs[0].Url)])).ToList();
+        foreach (var item in reading.Where(r => !r.Read).Take(4 - cards.Count))
+        {
+            var host = Uri.TryCreate(item.Url, UriKind.Absolute, out var u) ? u.Host : item.Url;
+            cards.Add(new ResumeCard("read", item.Title.Length > 0 ? item.Title : item.Url, "Para ler · " + host, item.Url, 0,
+                SiteBadge.Letter(item.Url) ?? "?", SiteBadge.Palette[SiteBadge.ColorIndex(item.Url)]));
+        }
+        return cards;
+    }
 }
+
+public sealed record ResumeCard(string Kind, string Title, string Subtitle, string? Url, long SessionId, string Letter, string Color);

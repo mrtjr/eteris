@@ -76,6 +76,24 @@
   }
   .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .tile:hover .name { color: var(--text); }
+  .resume { width: 100%; margin-top: 30px; display: none; }
+  .resume.show { display: block; animation: rise .6s ease-out both; }
+  .resume h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin: 0 0 10px 4px; }
+  .resume .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .rcard {
+    display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-radius: 16px; cursor: pointer; text-align: left;
+    color: var(--text); text-decoration: none; font: inherit; background: rgba(255, 255, 255, .035); border: 1px solid var(--line);
+    backdrop-filter: blur(18px); transition: transform .18s ease, background .18s ease, border-color .18s ease; min-width: 0;
+  }
+  .rcard:hover { transform: translateY(-3px); background: rgba(255, 255, 255, .075); border-color: rgba(255, 255, 255, .16); }
+  .rcard:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+  .rcard .ico { position: relative; width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 15px; }
+  .rcard .ico i { position: absolute; right: -5px; bottom: -5px; width: 17px; height: 17px; border-radius: 6px; display: grid; place-items: center;
+    font-style: normal; font-size: 10px; background: #161923; border: 1px solid var(--line); color: #c4b5fd; }
+  .rcard .txt { min-width: 0; }
+  .rcard .t { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rcard .s { font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  body.no-tiles .resume { display: none; }
   .marks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; margin-top: 22px; }
   .mark {
     display: flex; align-items: center; gap: 8px; max-width: 200px; padding: 6px 12px 6px 6px; border-radius: 999px;
@@ -164,7 +182,9 @@
   html.light .veil { background: radial-gradient(ellipse 70% 60% at 50% 38%, rgba(243,244,249,.1) 0%, rgba(243,244,249,.65) 70%, rgba(243,244,249,.92) 100%); }
   html.light .clock { text-shadow: 0 6px 40px rgba(139, 92, 246, .18); }
   html.light input:focus { background: linear-gradient(#fff, #fff) padding-box, var(--iris) border-box; }
-  html.light .tile, html.light .mark { background: rgba(255, 255, 255, .6); }
+  html.light .tile, html.light .mark, html.light .rcard { background: rgba(255, 255, 255, .6); }
+  html.light .rcard:hover { background: rgba(255, 255, 255, .92); border-color: rgba(20, 24, 40, .15); }
+  html.light .rcard .ico i { background: #fff; }
   html.light .tile:hover, html.light .mark:hover { background: rgba(255, 255, 255, .92); border-color: rgba(20, 24, 40, .15); }
   html.light .week, html.light .gear { background: rgba(255, 255, 255, .7); }
   html.light .custom { background: rgba(255, 255, 255, .94); box-shadow: 0 20px 60px rgba(20, 24, 40, .2); }
@@ -184,6 +204,7 @@
   </form>
   <nav class="marks" id="marks" aria-label="Favoritos"></nav>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
+  <section class="resume" id="resume" aria-label="Continuar"><h4>Continuar</h4><div class="cards" id="cards"></div></section>
 </main>
 <aside class="week" id="week" aria-label="Privacidade esta semana">
   <h4>Esta semana</h4>
@@ -296,6 +317,30 @@
     a.append(dot, label);
     marks.append(a);
   }
+
+  // «Continuar»: sessões guardadas (abrem nesta janela) e artigos da lista de leitura por ler.
+  const cards = document.getElementById('cards');
+  for (const card of data.resume) {
+    const isSession = card.Kind === 'session';
+    const el = document.createElement(isSession ? 'button' : 'a');
+    el.className = 'rcard';
+    if (isSession) {
+      el.type = 'button'; el.title = 'Abrir a sessão nesta janela';
+      el.addEventListener('click', () => {
+        document.getElementById('sink').src = `eteris://newtab/session?id=${card.SessionId}&t=${data.token}&n=${Date.now()}`;
+      });
+    } else { el.href = card.Url; el.title = card.Url; }
+    const ico = document.createElement('span');
+    ico.className = 'ico'; ico.textContent = card.Letter; ico.style.background = card.Color;
+    const mark = document.createElement('i'); mark.textContent = isSession ? '◫' : '☾'; ico.append(mark);
+    const txt = document.createElement('span'); txt.className = 'txt';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = card.Title;
+    const s = document.createElement('div'); s.className = 's'; s.textContent = card.Subtitle;
+    txt.append(t, s);
+    el.append(ico, txt);
+    cards.append(el);
+  }
+  if (data.resume.length) document.getElementById('resume').classList.add('show');
 
   const tiles = document.getElementById('tiles');
   if (data.sites.length === 0) {

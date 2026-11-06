@@ -19,11 +19,21 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
                      && InternalPages.Query(uri, "v") is { } value && Settings.Set(key, value);
             return Text(ok ? "ok" : "recusado");
         }
+        if (uri is { Host: "newtab", AbsolutePath: "/session" })
+        {
+            if (!InternalPages.IsAuthorized(request.Url) || !long.TryParse(InternalPages.Query(uri, "id"), out var sessionId)
+                || AppData.SavedSessions().FirstOrDefault(s => s.Id == sessionId) is not { } session)
+                return Text("recusado");
+            var browserId = browser.Identifier;
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.OpenSavedSessionFrom(browserId, session));
+            return Text("ok");
+        }
         if (uri is { Host: "newtab", AbsolutePath: "/" })
         {
             var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Preferred, DateTime.Now,
                 Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url),
-                NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek(), Settings.Current);
+                NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek(), Settings.Current,
+                AppData.ReadingList(), AppData.SavedSessions());
             // A nova aba privada fica sempre escura.
             return ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme && !NewTabPage.IsPrivate(request.Url)),
                 Encoding.UTF8, false, "text/html");

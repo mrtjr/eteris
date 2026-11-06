@@ -83,4 +83,35 @@ public class NewTabPageTests
     [InlineData("about:blank", false)]
     public void IsNewTab_RecognisesOnlyTheNewTabPage(string address, bool expected)
         => Assert.Equal(expected, NewTabPage.IsNewTab(address));
+
+    private static readonly DateTime T0 = new(2026, 11, 6, 1, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Resume_TwoSessionsThenUnreadArticlesUpToFour()
+    {
+        var sessions = Enumerable.Range(1, 3).Select(i => new SavedSession(i, $"S{i}", T0, [new SavedTab("https://a.pt/", "A")])).ToList();
+        var reading = new List<ReadingItem>
+        {
+            new("https://r1.pt/x", "R1", T0, false),
+            new("https://r2.pt/x", "R2", T0, true),
+            new("https://r3.pt/x", "", T0, false),
+            new("https://r4.pt/x", "R4", T0, false),
+        };
+        var cards = NewTabPage.Resume(reading, sessions);
+        Assert.Equal(["S1", "S2", "R1", "https://r3.pt/x"], cards.Select(c => c.Title));
+        Assert.Equal("Sessão · 1 aba", cards[0].Subtitle);
+        Assert.Equal("Para ler · r1.pt", cards[2].Subtitle);
+        Assert.Equal(2, cards[1].SessionId);
+    }
+
+    [Fact]
+    public void Render_PrivateWindowHidesResumeCards()
+    {
+        var html = NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, isPrivate: true,
+            reading: [new ReadingItem("https://segredo.pt/", "Segredo", T0, false)],
+            sessions: [new SavedSession(1, "Trabalho", T0, [new SavedTab("https://a.pt/", "A")])]);
+        Assert.DoesNotContain("segredo.pt", html);
+        Assert.DoesNotContain("Trabalho", html);
+        Assert.Contains("\"resume\":[]", html);
+    }
 }
