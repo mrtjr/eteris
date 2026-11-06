@@ -9,6 +9,9 @@ public static class CefConfigurator
     // Porta 9 («discard»): nada escuta em 127.0.0.1, por isso o updater do Chrome falha logo, sem sair do PC.
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
+    // Quadros por segundo de cada aba (renderização fora da tela). O CEF usa 30 por omissão; 60 é o máximo neste modo.
+    public const int FrameRate = 60;
+
     public static CefSettings Build(string profilePath, bool blockAutoplay = true)
     {
         var settings = new CefSettings

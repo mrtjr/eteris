@@ -97,6 +97,9 @@ public partial class MainWindow : Window
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
+            // Renderização fora da tela: o CEF fica em 30 quadros por segundo se ninguém disser nada, e a rolagem e as
+            // animações ficam travadas. 60 é o máximo neste modo (o mesmo que a maioria dos ecrãs).
+            BrowserSettings = { WindowlessFrameRate = Infrastructure.CefConfigurator.FrameRate },
             Visibility = Visibility.Hidden,
             LifeSpanHandler = new PopupToTabHandler(
                 (gesture, url, opener) => PopupPolicy.Allow(gesture, url, opener, ShieldEngine.Current, AppData.IsShieldOn),
