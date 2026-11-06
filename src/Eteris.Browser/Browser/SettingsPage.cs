@@ -53,6 +53,7 @@ public static class SettingsPage
             httpsFirst = settings.HttpsFirst,
             cookies = settings.BlockThirdPartyCookies,
             mica = settings.Mica,
+            autoplay = settings.BlockAutoplay,
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));

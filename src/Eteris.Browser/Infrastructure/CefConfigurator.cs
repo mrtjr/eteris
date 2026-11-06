@@ -6,7 +6,7 @@ namespace Eteris.Browser.Infrastructure;
 
 public static class CefConfigurator
 {
-    public static CefSettings Build(string profilePath)
+    public static CefSettings Build(string profilePath, bool blockAutoplay = true)
     {
         var settings = new CefSettings
         {
@@ -15,6 +15,8 @@ public static class CefConfigurator
             LogSeverity = LogSeverity.Disable,
         };
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
+        // Nenhum site começa a tocar som sem um clique do utilizador (política do Chromium; aplica-se ao arrancar).
+        if (blockAutoplay) settings.CefCommandLineArgs["autoplay-policy"] = "document-user-activation-required";
         // A descoberta de dispositivos Cast varre a rede local (SSDP/mDNS) e faz o Windows pedir exceção na firewall.
         settings.CefCommandLineArgs.TryGetValue("disable-features", out var existing);
         settings.CefCommandLineArgs["disable-features"] = string.Join(',',
@@ -34,6 +36,6 @@ public static class CefConfigurator
     public static void Initialize()
     {
         AppPaths.EnsureDirectories();
-        Cef.Initialize(Build(AppPaths.Profile), performDependencyCheck: true, browserProcessHandler: null);
+        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay), performDependencyCheck: true, browserProcessHandler: null);
     }
 }

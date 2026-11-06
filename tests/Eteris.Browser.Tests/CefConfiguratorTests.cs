@@ -14,6 +14,13 @@ public class CefConfiguratorTests
         => Assert.Equal("pt-PT", CefConfigurator.Build("p").Locale);
 
     [Fact]
+    public void Build_BlocksAutoplayByDefault()
+    {
+        Assert.Equal("document-user-activation-required", CefConfigurator.Build("p").CefCommandLineArgs["autoplay-policy"]);
+        Assert.False(CefConfigurator.Build("p", blockAutoplay: false).CefCommandLineArgs.ContainsKey("autoplay-policy"));
+    }
+
+    [Fact]
     public void Build_DisablesCefLogging()
         => Assert.Equal(LogSeverity.Disable, CefConfigurator.Build("p").LogSeverity);
 
