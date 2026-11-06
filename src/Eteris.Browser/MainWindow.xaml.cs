@@ -134,6 +134,12 @@ public partial class MainWindow : Window
             tab.CanGoBack = e.CanGoBack;
             tab.CanGoForward = e.CanGoForward;
         });
+        browser.LoadError += (_, e) =>
+        {
+            if (e.Frame.IsMain && HttpsFirst.IsUpgradeFailure((int)e.ErrorCode)
+                && ShieldEngine.Https.FallbackFor(e.FailedUrl) is { } insecure)
+                Dispatcher.InvokeAsync(() => browser.Load(insecure));
+        };
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;

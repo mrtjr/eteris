@@ -22,6 +22,11 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             if (request.ResourceType == ResourceType.MainFrame)
             {
+                if (ShieldEngine.Https.Upgrade(request.Url) is { } secure)
+                {
+                    request.Url = secure;
+                    return CefReturnValue.Continue;
+                }
                 // O pedido da página só sai depois de os scriptlets estarem registados (máx. 1 s):
                 // sem isto o documento podia nascer antes do registo e o anti-bloqueador ganhava a corrida.
                 var ready = onNavigate(browser, request.Url);

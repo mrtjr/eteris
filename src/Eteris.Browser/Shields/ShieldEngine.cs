@@ -11,6 +11,8 @@ public static class ShieldEngine
 
     public static AdblockEngine? Cosmetic => Current as AdblockEngine;
 
+    public static HttpsFirst Https { get; } = new();
+
     private static readonly string ScriptletsPath =
         System.IO.Path.Combine(AppContext.BaseDirectory, "Shields", "resources", "scriptlets.json");
 
