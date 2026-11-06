@@ -18,6 +18,21 @@ public static class ProfileCleanup
     private static readonly string[] CookieFiles = ["Cookies", "Cookies-journal"];
 
     // «Apagar cookies e dados de sites ao fechar»: garantia no arranque seguinte, mesmo que o fecho tenha falhado.
+    // Versões antigas deixavam o «component updater» do Chrome descarregar o módulo Widevine (DRM) da Google.
+    // Já não é descarregado; apaga-se o que tiver ficado no perfil. Devolve true se havia alguma coisa.
+    public static bool RemoveDownloadedWidevine(string profileRoot)
+    {
+        var dir = Path.Combine(profileRoot, "WidevineCdm");
+        if (!Directory.Exists(dir)) return false;
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     public static void RemoveSiteData(string profileRoot)
     {
         var dir = Path.Combine(profileRoot, "Default");

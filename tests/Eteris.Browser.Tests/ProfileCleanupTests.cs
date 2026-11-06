@@ -58,4 +58,26 @@ public sealed class ProfileCleanupTests : IDisposable
         Assert.Equal(true, Eteris.Browser.Shields.PrivacyPreferences.Hardening["history.saving_disabled"]);
         Assert.Equal(false, Eteris.Browser.Shields.PrivacyPreferences.Hardening["credentials_enable_service"]);
     }
+
+    [Fact]
+    public void RemoveDownloadedWidevine_DeletesTheGoogleModuleOnly()
+    {
+        var widevine = Directory.CreateDirectory(Path.Combine(_root, "WidevineCdm", "4.10.3112.0")).FullName;
+        File.WriteAllText(Path.Combine(widevine, "manifest.json"), "{}");
+        Directory.CreateDirectory(Path.Combine(_root, "Default"));
+        Assert.True(ProfileCleanup.RemoveDownloadedWidevine(_root));
+        Assert.False(Directory.Exists(Path.Combine(_root, "WidevineCdm")));
+        Assert.True(Directory.Exists(Path.Combine(_root, "Default")));
+        Assert.False(ProfileCleanup.RemoveDownloadedWidevine(_root));
+    }
+
+    [Fact]
+    public void Engine_DoesNotDownloadGoogleComponentsInTheBackground()
+    {
+        var args = Eteris.Browser.Infrastructure.CefConfigurator.Build("p").CefCommandLineArgs;
+        Assert.Equal("1", args["disable-component-update"]);
+        Assert.Equal("1", args["disable-background-networking"]);
+        Assert.Equal("url-source=http://127.0.0.1:9/", args["component-updater"]);
+        Assert.Contains("OptimizationGuideModelDownloading", args["disable-features"]);
+    }
 }
