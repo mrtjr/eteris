@@ -37,6 +37,15 @@ public class StartupArgsTests
     [InlineData("javascript:alert(1)")]
     [InlineData("file:///C:/Windows/win.ini")]
     [InlineData("eteris://newtab/")]
+    [InlineData("eteris://history/clear?range=all")]
+    [InlineData("eteris://history/delete")]
     public void InitialUrl_IgnoresAnythingElse(string args)
         => Assert.Null(StartupArgs.InitialUrl(Args(args)));
+
+    [Theory]
+    [InlineData("eteris://history/")]
+    [InlineData("eteris://settings/")]
+    [InlineData("eteris://about/")]
+    public void InitialUrl_AllowsSafeInternalPages(string url)
+        => Assert.Equal(url, StartupArgs.InitialUrl([url]));
 }

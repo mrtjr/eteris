@@ -4,10 +4,15 @@ public static class StartupArgs
 {
     private const string UserDataDirFlag = "--user-data-dir=";
 
-    // Endereço passado ao abrir o Éteris (ex.: um link aberto a partir de outra app). Só http(s).
+    private static readonly HashSet<string> SafeInternalPages = ["history", "settings", "about"];
+
+    // Endereço passado ao abrir o Éteris (ex.: um link aberto a partir de outra app ou da jump list).
+    // Só http(s) e algumas páginas internas, sempre na raiz e sem parâmetros.
     public static string? InitialUrl(IEnumerable<string> args)
         => args.FirstOrDefault(a => Uri.TryCreate(a, UriKind.Absolute, out var uri)
-                                    && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps));
+                                    && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps
+                                        || (uri.Scheme == "eteris" && SafeInternalPages.Contains(uri.Host)
+                                            && uri.AbsolutePath == "/" && uri.Query.Length == 0)));
 
     public static bool IsPrivate(IEnumerable<string> args)
         => args.Any(a => a.Equals("--private", StringComparison.OrdinalIgnoreCase)
