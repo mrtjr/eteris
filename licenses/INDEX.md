@@ -5,9 +5,9 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | Componente | Licença | Ficheiro |
 |---|---|---|
 | Éteris; listas de filtros; scriptlets do uBlock Origin | GPL-3.0 | `GPL-3.0.txt` |
-| CefSharp | BSD-3-Clause | `CefSharp-LICENSE.txt` |
+| CefSharp 156.0.150 | BSD-3-Clause | `CefSharp-LICENSE.txt` |
 | Chromium Embedded Framework | BSD-3-Clause | `CEF-LICENSE.txt` |
-| Chromium e os seus componentes | BSD-3-Clause e outras (ver o ficheiro) | `Chromium-credits.html` |
+| Chromium e os seus componentes (CEF 156.0.15) | BSD-3-Clause e outras (ver o ficheiro) | `Chromium-credits.html` |
 | .NET | MIT | `dotnet-LICENSE.txt` |
 | .NET (componentes de terceiros) | várias | `dotnet-THIRD-PARTY-NOTICES.txt` |
 | WPF / Windows Desktop | MIT | `windowsdesktop-LICENSE.txt` |

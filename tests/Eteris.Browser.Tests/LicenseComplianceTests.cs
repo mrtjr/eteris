@@ -36,13 +36,25 @@ public class LicenseComplianceTests
         Assert.DoesNotContain("WindowsSdkPackageVersion", csproj);
     }
 
+    // Cada versão nova do motor traz componentes e créditos do Chromium diferentes: depois de atualizar o CefSharp
+    // (o Dependabot abre o pedido), as licenças têm de ser geradas de novo — python build/licenses/collect.py.
+    [Fact]
+    public void ChromiumCredits_WereGeneratedForTheCurrentEngine()
+    {
+        var csproj = Read("src", "Eteris.Browser", "Eteris.Browser.csproj");
+        var version = Regex.Match(csproj, "<PackageReference Include=\"CefSharp.Wpf.NETCore\" Version=\"([^\"]+)\"").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(version));
+        Assert.True(Read("licenses", "INDEX.md").Contains($"| CefSharp {version} |", StringComparison.Ordinal),
+            $"licenses/ foi gerado para outra versão do motor; corra: python build/licenses/collect.py (CefSharp {version})");
+    }
+
     [Fact]
     public void EveryNuGetPackage_HasItsLicenseText()
     {
         var index = Read("licenses", "INDEX.md");
         var csproj = Read("src", "Eteris.Browser", "Eteris.Browser.csproj");
         // Nome com que cada pacote aparece no índice (por omissão, o próprio id).
-        var names = new Dictionary<string, string> { ["CefSharp.Wpf.NETCore"] = "CefSharp", ["CefSharp.Wpf.HwndHost"] = "CefSharp" };
+        var names = new Dictionary<string, string> { ["CefSharp.Wpf.NETCore"] = "CefSharp" };
         foreach (Match package in Regex.Matches(csproj, "<PackageReference Include=\"([^\"]+)\""))
         {
             var id = package.Groups[1].Value;

@@ -69,7 +69,7 @@ def main():
 
     # Motor do navegador.
     cefsharp = package_dir("CefSharp.Common.NETCore", refs["CefSharp.Wpf.NETCore"])
-    copy(os.path.join(cefsharp, "LICENSE"), "CefSharp-LICENSE.txt", "CefSharp", "BSD-3-Clause")
+    copy(os.path.join(cefsharp, "LICENSE"), "CefSharp-LICENSE.txt", f"CefSharp {refs['CefSharp.Wpf.NETCore']}", "BSD-3-Clause")
     nuspec = open(glob.glob(os.path.join(cefsharp, "*.nuspec"))[0], encoding="utf-8").read()
     cef_version = re.search(r'id="chromiumembeddedframework\.runtime" version="\[?([^"\],]+)', nuspec, re.I).group(1)
     cef = package_dir("chromiumembeddedframework.runtime.win-x64", cef_version)
@@ -77,7 +77,7 @@ def main():
     pak = os.path.join(cef, "runtimes", "win-x64", "native", "resources.pak")
     subprocess.run(["node", os.path.join(ROOT, "build", "licenses", "chromium-credits.js"), pak,
                     os.path.join(OUT, "Chromium-credits.html")], check=True)
-    index.append(("Chromium e os seus componentes", "BSD-3-Clause e outras (ver o ficheiro)", "Chromium-credits.html"))
+    index.append((f"Chromium e os seus componentes (CEF {cef_version})", "BSD-3-Clause e outras (ver o ficheiro)", "Chromium-credits.html"))
 
     # .NET (vai dentro da instalação, que é autónoma).
     for runtime, name in [("microsoft.netcore.app.runtime.win-x64", ".NET"), ("microsoft.windowsdesktop.app.runtime.win-x64", "WPF / Windows Desktop")]:

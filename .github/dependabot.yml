@@ -1,0 +1,44 @@
+# Atualizações automáticas (docs/paridade.md, #3): o motor do Éteris é o Chromium do CefSharp, e cada versão nova traz
+# correções de segurança. O Dependabot procura todos os dias e abre um pedido de alteração; o fluxo «build» corre os
+# testes nesse pedido. Ao aceitar uma versão nova do CefSharp: python build/licenses/collect.py (o teste
+# ChromiumCredits_WereGeneratedForTheCurrentEngine falha até lá), subir a versão e publicar.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - "/src/Eteris.Browser"
+      - "/tests/Eteris.Browser.Tests"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 5
+    groups:
+      # O motor e os seus pacotes sobem sempre juntos.
+      motor:
+        patterns:
+          - "CefSharp.*"
+      outros:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "CefSharp.*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: "/src/Eteris.Shields"
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # As ações em Node 20 estão a ser descontinuadas pelo GitHub.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
