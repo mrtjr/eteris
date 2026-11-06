@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Browser\newtab.html" />
+    <EmbeddedResource Include="Shields\trackers.txt" />
   </ItemGroup>
 
   <ItemGroup>

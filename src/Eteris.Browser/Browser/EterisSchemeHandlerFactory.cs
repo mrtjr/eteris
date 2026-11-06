@@ -14,7 +14,8 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
     {
         if (Uri.TryCreate(request.Url, UriKind.Absolute, out var uri) && uri.Host == "newtab" && uri.AbsolutePath == "/")
         {
-            var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Default, DateTime.Now);
+            var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Default, DateTime.Now,
+                Shields.ShieldStats.SessionBlocked);
             return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
         }
 

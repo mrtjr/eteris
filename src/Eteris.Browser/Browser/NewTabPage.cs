@@ -28,11 +28,12 @@ public static class NewTabPage
     };
 
     // O JSON vai dentro de <script>: o codificador por omissão escapa < > & e impede fechar a tag.
-    public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now)
+    public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0)
     {
         var data = new
         {
             greeting = Greeting(now.Hour),
+            blocked,
             engineName = engine.Name,
             engineTemplate = engine.Template,
             sites = sites.Select(s => new

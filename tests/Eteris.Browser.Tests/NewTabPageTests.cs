@@ -35,6 +35,10 @@ public class NewTabPageTests
     }
 
     [Fact]
+    public void Render_IncludesSessionBlockedCount()
+        => Assert.Contains("\"blocked\":42", NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, blocked: 42));
+
+    [Fact]
     public void Render_TemplatePlaceholdersAreAllReplaced()
         => Assert.DoesNotContain("{{", NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon));
 

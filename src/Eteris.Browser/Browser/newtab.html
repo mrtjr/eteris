@@ -98,7 +98,7 @@
   </form>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
 </main>
-<footer><i></i><span>Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
+<footer><i></i><span id="status">Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
 <script type="application/json" id="data">{{DATA}}</script>
 <script>
   const data = JSON.parse(document.getElementById('data').textContent);
@@ -121,6 +121,11 @@
     else if (looksLikeUrl) location.href = 'https://' + text;
     else location.href = data.engineTemplate.replace('{q}', encodeURIComponent(text));
   });
+
+  if (data.blocked > 0) {
+    document.getElementById('status').textContent = 'Éteris · ' + data.blocked.toLocaleString('pt-PT') +
+      (data.blocked === 1 ? ' rastreador bloqueado' : ' rastreadores bloqueados') + ' nesta sessão — tudo fica neste computador';
+  }
 
   const tiles = document.getElementById('tiles');
   if (data.sites.length === 0) {

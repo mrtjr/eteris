@@ -10,6 +10,7 @@ using CefSharp.Wpf;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
@@ -79,6 +80,15 @@ public partial class MainWindow : Window
             LifeSpanHandler = new PopupToTabHandler((url, foreground) =>
                 Dispatcher.InvokeAsync(() => Tabs.NewTab(url, foreground))),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url))),
+            RequestHandler = new PrivacyRequestHandler(
+                TrackerBlocker.Default,
+                AppData.IsShieldOn,
+                onNavigate: () => Dispatcher.InvokeAsync(tab.ResetShield),
+                onBlocked: host =>
+                {
+                    ShieldStats.CountBlocked();
+                    Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
+                }),
         };
         browser.AddressChanged += (_, e) =>
         {
@@ -153,13 +163,15 @@ public partial class MainWindow : Window
         CloseSuggestions();
         SyncOmnibox();
         SyncLoading();
+        UpdateShieldButton();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (!ReferenceEquals(sender, Tabs.Active)) return;
-        if (e.PropertyName == nameof(BrowserTab.Address)) SyncOmnibox();
+        if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
+        if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
     }
 
     private void SyncLoading()

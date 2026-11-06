@@ -286,7 +286,86 @@
                         </Border>
                     </Popup>
 
-                    <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" />
+                    <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid>
+                            <Button x:Name="ShieldButton" Style="{StaticResource IconButton}" Click="Shield_Click"
+                                    ToolTip="Escudo do Éteris">
+                                <TextBlock x:Name="ShieldGlyph" Text="&#xEA18;" FontFamily="{StaticResource IconFont}" FontSize="16" />
+                            </Button>
+                            <Border x:Name="ShieldBadge" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Margin="0,0,-3,0" MinWidth="17" Height="16" CornerRadius="8" Padding="4,0"
+                                    Background="{StaticResource IrisBrush}" Visibility="Collapsed">
+                                <TextBlock x:Name="ShieldCount" FontSize="10" FontWeight="Bold" Foreground="#0B0D13"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+
+                    <Popup x:Name="ShieldPopup" PlacementTarget="{Binding ElementName=ShieldButton}" Placement="Bottom"
+                           HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           PopupAnimation="Fade">
+                        <Border Margin="14,0,14,24" Width="350" Background="{StaticResource SurfaceRaisedBrush}"
+                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Width="42" Height="42">
+                                        <Ellipse x:Name="ShieldHalo" Fill="{StaticResource IrisBrush}" Opacity="0.9" />
+                                        <TextBlock Text="&#xEA18;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="#0B0D13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="ShieldTitle" Text="Escudo ativo" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="ShieldSite" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShieldToggle" Grid.Column="2" Style="{StaticResource ToggleSwitch}"
+                                              VerticalAlignment="Center" Click="ShieldToggle_Click" ToolTip="Proteção neste site" />
+                                </Grid>
+
+                                <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,16" />
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="ShieldBigCount" FontSize="40" FontWeight="Light" Foreground="{StaticResource IrisBrush}"
+                                               VerticalAlignment="Bottom" />
+                                    <TextBlock x:Name="ShieldCountLabel" FontSize="13" Foreground="{StaticResource TextMutedBrush}"
+                                               Margin="10,0,0,9" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="220" />
+                                </StackPanel>
+
+                                <ItemsControl x:Name="ShieldHosts" Margin="0,10,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Key}" FontSize="12.5" Foreground="{StaticResource TextBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <Border Grid.Column="1" CornerRadius="8" Background="#30354A" Padding="7,1" Margin="8,0,0,0">
+                                                    <TextBlock Text="{Binding Value}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" />
+                                                </Border>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,14,0,12" />
+
+                                <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldSession" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                 </Grid>
             </Border>
 

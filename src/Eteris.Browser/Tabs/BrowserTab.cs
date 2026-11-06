@@ -28,6 +28,23 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private ImageSource? _favicon;
 
+    private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyList<KeyValuePair<string, int>> BlockedHosts
+        => _blockedHosts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).ToList();
+
+    public void RecordBlocked(string host)
+    {
+        _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
+        BlockedCount++;
+    }
+
+    public void ResetShield()
+    {
+        _blockedHosts.Clear();
+        BlockedCount = 0;
+    }
+
     private static readonly Brush[] BadgePalette = SiteBadge.Palette
         .Select(hex => { var b = (Brush)new BrushConverter().ConvertFromString(hex)!; b.Freeze(); return b; })
         .ToArray();
