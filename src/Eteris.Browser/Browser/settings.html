@@ -47,7 +47,7 @@
     padding: 8px 14px; border-radius: 10px; transition: background .15s, color .15s; white-space: nowrap;
   }
   .seg button:hover:not(:disabled) { color: var(--text); background: rgba(255, 255, 255, .05); }
-  .seg button.on { color: #0b0d13; background: linear-gradient(135deg, #c4b5fd, #67e8f9); font-weight: 600; }
+  .seg button.on, .seg button.on:hover:not(:disabled) { color: #0b0d13; background: linear-gradient(135deg, #c4b5fd, #67e8f9); font-weight: 600; }
   .seg button:disabled { opacity: .45; cursor: default; }
   .seg button small { font-size: 10.5px; opacity: .8; margin-left: 4px; }
   .switch { position: relative; width: 46px; height: 26px; flex: none; cursor: pointer; }
@@ -201,7 +201,7 @@
   function markSection() {
     const atBottom = innerHeight + scrollY >= document.body.scrollHeight - 4;
     let current = sections[0];
-    for (const s of sections) if (s.getBoundingClientRect().top < innerHeight * 0.3) current = s;
+    for (const s of sections) if (s.getBoundingClientRect().top < 120) current = s;
     if (atBottom) current = sections[sections.length - 1];
     links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + current.id));
   }
