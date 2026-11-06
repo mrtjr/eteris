@@ -59,6 +59,10 @@ public static class ReaderScripts
             if (img.src) img.setAttribute('src', img.src);
           });
           content.querySelectorAll('a').forEach(a => { if (a.href) a.setAttribute('href', a.href); });
+          const clutter = /(^|[\s_-])(infobox|navbox|ambox|metadata|noprint|hatnote|editsection|toc|reference|references|catlinks|share|social|related|advert|promo|newsletter|subscribe|breadcrumb)([\s_-]|$)/i;
+          content.querySelectorAll('[class], [id]').forEach(n => {
+            if (clutter.test(n.getAttribute('class') || '') || clutter.test(n.id || '')) n.remove();
+          });
           content.querySelectorAll('script, style, noscript, iframe, form, button, input, select, textarea, nav, aside, footer, svg, video, audio, [aria-hidden="true"], [role="complementary"], [hidden]')
             .forEach(n => n.remove());
           content.querySelectorAll('div, section, ul, ol').forEach(n => {
@@ -73,7 +77,10 @@ public static class ReaderScripts
           content.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
 
           const meta = name => (document.querySelector(`meta[property="${name}"], meta[name="${name}"]`) || {}).content || '';
-          const title = meta('og:title') || (document.querySelector('h1') || {}).innerText || document.title;
+          const heading = ((document.querySelector('h1') || {}).innerText || '').trim();
+          const fullTitle = meta('og:title') || document.title;
+          // «Fado – Wikipédia, a enciclopédia livre» → «Fado»: o h1 ganha quando está contido no título.
+          const title = heading && (!fullTitle || fullTitle.includes(heading)) ? heading : (fullTitle || heading);
           const site = meta('og:site_name') || location.hostname.replace(/^www\./, '');
           const author = meta('author') || meta('article:author');
           content.querySelectorAll('h1').forEach(h => { if ((h.innerText || '').trim() === title.trim()) h.remove(); });
