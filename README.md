@@ -15,6 +15,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - «Esconder elemento»: clique num anúncio ou caixa e desaparece nesse site para sempre.
 - Janelas privadas com perfil em memória; «Esquecer os últimos 15 min / 1 hora»; apagar histórico, cookies e cache.
 - Painel semanal na nova aba: rastreadores bloqueados por dia e estimativa do que foi poupado.
+- DNS cifrado, links sem rastreio, modo rigoroso por site, notificações recusadas sem perguntar, apagar dados ao fechar.
 
 **Barra de endereço**
 - Contas e conversões instantâneas (`(12+8)*1,5`, `10 km em milhas`, `30 °C em F`).
@@ -27,11 +28,14 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - Abas fixadas, a dormir (libertam memória), silenciar, arrastar, cartão ao passar o rato.
 - Paleta de comandos (Ctrl+K), folha de atalhos (F1), abas fechadas recentemente.
 - A janela lembra-se do tamanho e posição; links de outras apps abrem na janela aberta; lista de atalhos na barra de tarefas.
+- Grupos de abas com nome e cor; sessões guardadas; fechar duplicadas e ordenar por site; reabrir janela fechada.
+- Centro de multimédia (♫) com tudo o que toca; janela flutuante sempre por cima (Ctrl+Shift+M).
 
 **Ler e ver**
-- Modo de leitura (F9) com temas escuro, sépia e claro.
+- Modo de leitura (F9) com temas escuro, sépia e claro, «Ouvir» em voz alta (vozes locais) e lista «Ler mais tarde».
+- Notas ao lado da página (Ctrl+Shift+E), código QR da página, escurecer sites, links para um destaque.
 - Zoom memorizado por site, ecrã inteiro para vídeos, captura da página inteira (Ctrl+Shift+S).
-- Material Mica do Windows 11, cor da interface adaptada ao site, tooltips e menus escuros.
+- Tema escuro, claro ou do Windows; material Mica do Windows 11, cor da interface adaptada ao site.
 - Nova aba personalizável (5 temas de fundo), páginas `eteris://history`, `eteris://bookmarks`, `eteris://settings`.
 
 ## Desenvolvimento

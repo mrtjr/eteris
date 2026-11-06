@@ -2,7 +2,30 @@
 
 ## 0.2.0 — por publicar
 
-Primeira ronda de 50 ciclos de melhorias.
+Duas rondas de 50 ciclos de melhorias.
+
+### Novo (segunda ronda)
+- **Privacidade**: DNS cifrado (Cloudflare, Quad9, Mullvad), links sem parâmetros de rastreio (ao navegar e ao copiar), modo rigoroso por site (sem scripts/frames de terceiros), pedidos de notificações recusados sem perguntar, apagar cookies e dados ao fechar, histórico interno do Chromium desligado.
+- **Tema claro** (e «seguir o Windows») em toda a interface e nas páginas internas.
+- **Grupos de abas** com nome e cor, encolhíveis, guardados na sessão; «Guardar grupo como sessão».
+- **Sessões guardadas**: guardar as abas de uma janela e reabri-las (paleta, separador «Sessões» em `eteris://bookmarks`, painel «Continuar» na nova aba).
+- **Arrumar abas**: fechar duplicadas, ordenar por site, filtrar abas na barra lateral, reabrir janela fechada, paleta com abas de todas as janelas.
+- **Centro de multimédia**: o que toca em todas as abas, com tocar/pausar, silenciar e ir para a aba.
+- **Modo de leitura**: «Ouvir» (leitura em voz alta com vozes locais), lista «Ler mais tarde», preferências de tema/tamanho/letra lembradas.
+- **Janela flutuante** (Ctrl+Shift+M), **Notas** ao lado da página (Ctrl+Shift+E), **código QR** da página, **escurecer este site**.
+- **Copiar**: link para um destaque (`#:~:text=`), endereço sem rastreio, link Markdown, título e endereço; «Colar e ir» (Ctrl+Shift+V).
+- **Favoritos**: importar do Chrome/Edge/Brave e exportar para HTML; guardar página como PDF.
+- **Páginas**: boas-vindas no primeiro arranque, «Novidades» uma vez por versão, `eteris://credits`, definições por site com «Repor», procurar nas definições.
+- **Nova aba**: «Continuar» e uma dica por dia («Sabia que…?»).
+- **Acessibilidade**: todos os botões de ícone com nome para leitores de ecrã.
+
+### Corrigido (segunda ronda)
+- O botão do modo de leitura deixava de aparecer (o endereço repetido apagava a deteção).
+- O botão direito na etiqueta de um grupo abria o menu da aba (o menu do grupo era inalcançável).
+- Sugestões da barra de endereço desalinhadas; sombras dos painéis cortadas em páginas claras.
+- «Reabrir janela fechada» punha as abas pela ordem inversa.
+
+### Primeira ronda
 
 ### Novo
 - **Omnibox**: respostas instantâneas (contas, conversões), bangs (`!w`, `!yt`, `!gh`…), «Mudar para este separador», monogramas nos sites, sugestões do motor de pesquisa (opcionais, desligadas por omissão).
