@@ -11,7 +11,7 @@ public static class Suggestions
     public const int MaxHistory = 6;
 
     public static IReadOnlyList<Suggestion> Build(string input, SearchEngine engine, IReadOnlyList<HistoryEntry> history,
-        IReadOnlyList<HistoryEntry>? bookmarks = null)
+        IReadOnlyList<HistoryEntry>? bookmarks = null, IReadOnlyList<HistoryEntry>? openTabs = null)
     {
         var primary = OmniboxClassifier.Classify(input, engine);
         if (primary is null) return [];
@@ -34,11 +34,16 @@ public static class Suggestions
         if (InstantAnswer.Answer(input) is { } answer)
             list.Insert(0, new Suggestion(SuggestionKind.Answer, "= " + answer, "Clique para copiar", string.Empty));
 
-        var marked = (bookmarks ?? []).Where(b => !SameUrl(b.Url, primary.Url)).Take(3).ToList();
+        var tabs = typed.Length >= 2
+            ? (openTabs ?? []).Where(t => Matches(t, typed) && !SameUrl(t.Url, primary.Url)).Take(2).ToList()
+            : [];
+        list.AddRange(tabs.Select(t => new Suggestion(SuggestionKind.Tab, t.Title.Length > 0 ? t.Title : t.Url, "Mudar para este separador", t.Url)));
+
+        var marked = (bookmarks ?? []).Where(b => !SameUrl(b.Url, primary.Url) && !tabs.Any(t => SameUrl(t.Url, b.Url))).Take(3).ToList();
         list.AddRange(marked.Select(b => new Suggestion(SuggestionKind.Bookmark, b.Title.Length > 0 ? b.Title : b.Url, b.Url, b.Url)));
 
         list.AddRange(history
-            .Where(h => !SameUrl(h.Url, primary.Url) && !marked.Any(b => SameUrl(b.Url, h.Url)))
+            .Where(h => !SameUrl(h.Url, primary.Url) && !marked.Any(b => SameUrl(b.Url, h.Url)) && !tabs.Any(t => SameUrl(t.Url, h.Url)))
             .Take(MaxHistory)
             .Select(h => new Suggestion(SuggestionKind.History, h.Title.Length > 0 ? h.Title : h.Url, h.Url, h.Url)));
         return list;
@@ -60,6 +65,20 @@ public static class Suggestions
             }
         }
         return null;
+    }
+
+    private static bool Matches(HistoryEntry tab, string typed)
+    {
+        var needle = Fold(typed);
+        return Fold(tab.Title).Contains(needle) || Fold(tab.Url).Contains(needle);
+    }
+
+    // Minúsculas e sem acentos: «publico» encontra «PÚBLICO».
+    private static string Fold(string text)
+    {
+        var decomposed = text.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        return new string(decomposed.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+            != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
     }
 
     private static bool SameUrl(string a, string b)

@@ -1,3 +1,4 @@
+using Eteris.Browser.Data;
 using Eteris.Browser.Omnibox;
 
 namespace Eteris.Browser.Tests;
@@ -64,4 +65,39 @@ public class BangsTests
         Assert.Contains(list, s => s.Text == "!yt" && s.Detail == "YouTube" && s.Url == "https://www.youtube.com/");
         Assert.DoesNotContain(list, s => s.Text == "!gh");
     }
+}
+
+public class TabSuggestionTests
+{
+    private static readonly HistoryEntry[] Open =
+    [
+        new("https://github.com/mrtjr/eteris", "mrtjr/eteris: navegador", 0),
+        new("https://www.publico.pt/", "PÚBLICO", 0),
+    ];
+
+    [Fact]
+    public void MatchingOpenTab_IsOfferedAfterPrimary()
+    {
+        var list = Suggestions.Build("eteris", SearchEngine.DuckDuckGo, [], openTabs: Open);
+        var tab = Assert.Single(list, s => s.Kind == SuggestionKind.Tab);
+        Assert.Equal("https://github.com/mrtjr/eteris", tab.Url);
+        Assert.Equal("Mudar para este separador", tab.Detail);
+        Assert.Equal(1, list.ToList().IndexOf(tab));
+    }
+
+    [Fact]
+    public void MatchIsCaseAndAccentInsensitive()
+        => Assert.Contains(Suggestions.Build("publico", SearchEngine.DuckDuckGo, [], openTabs: Open), s => s.Kind == SuggestionKind.Tab);
+
+    [Fact]
+    public void OpenTab_IsNotRepeatedAsHistory()
+    {
+        var history = new[] { new HistoryEntry("https://github.com/mrtjr/eteris", "mrtjr/eteris", 3) };
+        var list = Suggestions.Build("eteris", SearchEngine.DuckDuckGo, history, openTabs: Open);
+        Assert.DoesNotContain(list, s => s.Kind == SuggestionKind.History);
+    }
+
+    [Fact]
+    public void ShortInput_DoesNotMatchTabs()
+        => Assert.DoesNotContain(Suggestions.Build("e", SearchEngine.DuckDuckGo, [], openTabs: Open), s => s.Kind == SuggestionKind.Tab);
 }

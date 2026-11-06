@@ -96,7 +96,9 @@ public partial class MainWindow
         _suppressCompletion = false;
 
         var bookmarks = AppData.Bookmarks(b => b.Search(text, 3)).Select(b => new HistoryEntry(b.Url, b.Title, 0)).ToList();
-        var list = Suggestions.Build(Omnibox.Text, Engine, history, bookmarks);
+        var openTabs = Tabs.Tabs.Where(t => !ReferenceEquals(t, Tabs.Active) && !t.IsNewTab)
+            .Select(t => new HistoryEntry(t.Address, t.Title, 0)).ToList();
+        var list = Suggestions.Build(Omnibox.Text, Engine, history, bookmarks, openTabs);
         SuggestionList.ItemsSource = list;
         SuggestionList.SelectedIndex = PrimaryIndex(list);
         SuggestionPopup.IsOpen = list.Count > 0 && Omnibox.IsKeyboardFocusWithin;
@@ -110,6 +112,19 @@ public partial class MainWindow
         for (var i = 0; i < list.Count; i++)
             if (list[i].Kind != SuggestionKind.Answer) return i;
         return -1;
+    }
+
+    private void OpenSuggestion(Suggestion s, bool newTab = false)
+    {
+        if (s.Kind == SuggestionKind.Answer) { CopyAnswer(s); return; }
+        if (s.Kind == SuggestionKind.Tab && Tabs.Tabs.FirstOrDefault(t => t.Address == s.Url) is { } open)
+        {
+            CloseSuggestions();
+            _omniboxEdited = false;
+            Tabs.Active = open;
+            return;
+        }
+        LoadUrl(s.Url, newTab);
     }
 
     private void CopyAnswer(Suggestion answer)
@@ -149,11 +164,9 @@ public partial class MainWindow
                 e.Handled = true;
                 break;
             case Key.Enter:
-                if (SuggestionPopup.IsOpen && SuggestionList.SelectedItem is Suggestion { Kind: SuggestionKind.Answer } answer)
-                    CopyAnswer(answer);
-                else if (SuggestionPopup.IsOpen && SuggestionList.SelectedItem is Suggestion s
+                if (SuggestionPopup.IsOpen && SuggestionList.SelectedItem is Suggestion s
                     && SuggestionList.SelectedIndex != PrimaryIndex((IReadOnlyList<Suggestion>)SuggestionList.ItemsSource))
-                    LoadUrl(s.Url, newTab: alt);
+                    OpenSuggestion(s, newTab: alt);
                 else
                     Go(Omnibox.Text, newTab: alt);
                 e.Handled = true;
@@ -204,11 +217,7 @@ public partial class MainWindow
 
     private void Suggestion_Click(object sender, MouseButtonEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is Suggestion s)
-        {
-            if (s.Kind == SuggestionKind.Answer) CopyAnswer(s);
-            else LoadUrl(s.Url);
-        }
+        if ((sender as FrameworkElement)?.DataContext is Suggestion s) OpenSuggestion(s);
         e.Handled = true;
     }
 }
