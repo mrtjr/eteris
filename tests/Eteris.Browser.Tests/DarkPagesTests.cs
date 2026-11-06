@@ -29,6 +29,8 @@ public sealed class DarkPagesTests : IDisposable
         Assert.Contains("getElementById('eteris-dark')) return", DarkPages.Live(true));
         Assert.Contains("style.remove()", DarkPages.Live(false));
         Assert.DoesNotContain("innerHTML", DarkPages.Live(true));
+        // Corre antes de existir <html>: tem de esperar pela raiz em vez de falhar.
+        Assert.Contains("MutationObserver", DarkPages.EarlyScript);
     }
 
     [Fact]

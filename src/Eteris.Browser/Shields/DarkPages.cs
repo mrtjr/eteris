@@ -30,7 +30,9 @@ public static class DarkPages
                 const style = document.createElement('style');
                 style.id = '{{StyleId}}';
                 style.textContent = {{css}};
-                (document.head || document.documentElement).appendChild(style);
+                // No início do documento ainda não há <html>: espera-se pela raiz (continua antes da primeira pintura).
+                const add = () => { const root = document.head || document.documentElement; if (!root) return false; root.appendChild(style); return true; };
+                if (!add()) new MutationObserver((_, observer) => { if (add()) observer.disconnect(); }).observe(document, { childList: true });
               })();
               """
             : $$"""
