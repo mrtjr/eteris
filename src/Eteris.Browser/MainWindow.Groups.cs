@@ -36,7 +36,7 @@ public partial class MainWindow
                 {
                     var index = i;
                     var check = index == group.ColorIndex ? "  ✓" : string.Empty;
-                    menu.Item("●", TabGroup.PaletteNames[i] + check, () => group.ColorIndex = index,
+                    menu.Item("", TabGroup.PaletteNames[i] + check, () => group.ColorIndex = index,
                         iconBrush: (Brush)new BrushConverter().ConvertFromString(TabGroup.Palette[i])!);
                 }
             })
