@@ -28,8 +28,10 @@ public partial class TabsViewModel : ObservableObject
 
     // Abas da sessão anterior, pela ordem original; só a ativa carrega, as outras ficam a dormir até serem abertas.
     public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null,
-        IReadOnlyList<bool>? pinned = null)
+        IReadOnlyList<bool>? pinned = null, IReadOnlyList<int>? groupIds = null, IReadOnlyList<Data.SessionGroup>? groups = null)
     {
+        var restoredGroups = (groups ?? []).Select(g => new TabGroup(g.Name, g.ColorIndex) { IsCollapsed = g.Collapsed }).ToList();
+        _groupsCreated = restoredGroups.Count;
         for (var i = 0; i < addresses.Count; i++)
         {
             var tab = new BrowserTab(addresses[i])
@@ -38,8 +40,11 @@ public partial class TabsViewModel : ObservableObject
                 IsPinned = pinned is not null && i < pinned.Count && pinned[i],
             };
             if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
+            if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
+                tab.Group = restoredGroups[groupIds[i]];
             Tabs.Add(tab);
         }
+        RefreshGroups();
         if (Tabs.Count > 0) Active = Tabs[Math.Clamp(activeIndex, 0, Tabs.Count - 1)];
     }
 
@@ -145,6 +150,14 @@ public partial class TabsViewModel : ObservableObject
             Active = outside ?? NewTab(Browser.NewTabPage.Url);
         }
         RefreshGroups();
+    }
+
+    // Para gravar a sessão: o índice do grupo de cada aba e a descrição dos grupos.
+    public (List<int> Ids, List<Data.SessionGroup> Groups) GroupSnapshot()
+    {
+        var groups = Groups.ToList();
+        var ids = Tabs.Select(t => t.Group is { } g ? groups.IndexOf(g) : -1).ToList();
+        return (ids, groups.Select(g => new Data.SessionGroup(g.Name, g.ColorIndex, g.IsCollapsed)).ToList());
     }
 
     public void RefreshGroups()
