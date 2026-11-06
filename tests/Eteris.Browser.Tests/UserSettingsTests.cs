@@ -20,6 +20,7 @@ public sealed class UserSettingsTests : IDisposable
         Assert.Equal(20, s.SleepMinutes);
         Assert.True(s.HttpsFirst);
         Assert.True(s.BlockThirdPartyCookies);
+        Assert.False(s.SearchSuggestions);
     }
 
     [Fact]
@@ -51,6 +52,7 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("mica", "false")]
     [InlineData("verticalTabs", "true")]
     [InlineData("autoplay", "false")]
+    [InlineData("suggest", "true")]
     [InlineData("sidebarCollapsed", "true")]
     public void With_AcceptsValidValues(string key, string value)
         => Assert.NotNull(new UserSettings().With(key, value));

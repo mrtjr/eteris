@@ -18,6 +18,7 @@ public sealed record UserSettings
     public bool Mica { get; init; } = true;
     public bool VerticalTabs { get; init; }
     public bool BlockAutoplay { get; init; } = true;
+    public bool SearchSuggestions { get; init; }
     public bool SidebarCollapsed { get; init; }
 
     public UserSettings? With(string key, string value) => key switch
@@ -28,6 +29,7 @@ public sealed record UserSettings
         "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
         "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
         "mica" when bool.TryParse(value, out var on) => this with { Mica = on },
+        "suggest" when bool.TryParse(value, out var on) => this with { SearchSuggestions = on },
         "autoplay" when bool.TryParse(value, out var on) => this with { BlockAutoplay = on },
         "verticalTabs" when bool.TryParse(value, out var on) => this with { VerticalTabs = on },
         "sidebarCollapsed" when bool.TryParse(value, out var on) => this with { SidebarCollapsed = on },

@@ -110,6 +110,28 @@ public partial class MainWindow
         SuggestionList.ItemsSource = list;
         SuggestionList.SelectedIndex = PrimaryIndex(list);
         SuggestionPopup.IsOpen = list.Count > 0 && Omnibox.IsKeyboardFocusWithin;
+        RequestRemoteSuggestions(Omnibox.Text, list);
+    }
+
+    private CancellationTokenSource? _suggestRequest;
+
+    // Sugestões do motor (opcional): pedido com atraso curto, cancelado a cada tecla, nunca em janelas privadas.
+    private async void RequestRemoteSuggestions(string text, IReadOnlyList<Suggestion> local)
+    {
+        _suggestRequest?.Cancel();
+        if (IsPrivate || !Data.Settings.Current.SearchSuggestions || !SearchSuggest.ShouldQuery(text, Engine)) return;
+        var request = _suggestRequest = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(150, request.Token);
+            var remote = await SearchSuggest.FetchAsync(Engine, text.Trim(), request.Token);
+            if (request.IsCancellationRequested || remote.Count == 0 || Omnibox.Text != text || !SuggestionPopup.IsOpen) return;
+            var selected = SuggestionList.SelectedIndex;
+            var merged = SearchSuggest.Merge(local, remote, Engine);
+            SuggestionList.ItemsSource = merged;
+            SuggestionList.SelectedIndex = selected == PrimaryIndex(local) ? PrimaryIndex(merged) : selected;
+        }
+        catch (OperationCanceledException) { }
     }
 
     private void CloseSuggestions() => SuggestionPopup.IsOpen = false;

@@ -54,6 +54,7 @@ public static class SettingsPage
             cookies = settings.BlockThirdPartyCookies,
             mica = settings.Mica,
             autoplay = settings.BlockAutoplay,
+            suggest = settings.SearchSuggestions,
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
