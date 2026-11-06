@@ -69,6 +69,7 @@
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Focusable" Value="False" />
             <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TabItem_PreviewMouseLeftButtonDown" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -264,6 +265,7 @@
                             <TextBlock Text="Privada" FontSize="11.5" FontWeight="SemiBold" Foreground="#E9D5FF" />
                         </Border>
                         <ListBox x:Name="TabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
+                                 PreviewMouseMove="TabList_PreviewMouseMove" PreviewMouseLeftButtonUp="TabList_PreviewMouseLeftButtonUp"
                                  ItemContainerStyle="{StaticResource TabItemStyle}"
                                  Background="Transparent" BorderThickness="0" Padding="0"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"

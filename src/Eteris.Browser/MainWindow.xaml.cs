@@ -55,6 +55,8 @@ public partial class MainWindow : Window
 
     private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        // Mover não cria nem destrói abas: o item vem em OldItems e NewItems e não se pode recriar o browser.
+        if (e.Action == NotifyCollectionChangedAction.Move) return;
         foreach (BrowserTab tab in e.NewItems ?? Array.Empty<BrowserTab>())
         {
             tab.PropertyChanged += OnTabPropertyChanged;

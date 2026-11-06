@@ -96,6 +96,35 @@ public class TabsViewModelTests
         Assert.Same(vm.Tabs[1], vm.Active);
     }
 
+    [Fact]
+    public void Move_ReordersAndKeepsActive()
+    {
+        var vm = WithTabs("https://a.pt", "https://b.pt", "https://c.pt");
+        var active = vm.Active;
+        vm.Move(vm.Tabs[0], 2);
+        Assert.Equal(["https://b.pt", "https://c.pt", "https://a.pt"], vm.Tabs.Select(t => t.Address));
+        Assert.Same(active, vm.Active);
+    }
+
+    [Fact]
+    public void Move_ClampsOutOfRangeIndex()
+    {
+        var vm = WithTabs("https://a.pt", "https://b.pt");
+        vm.Move(vm.Tabs[0], 99);
+        Assert.Equal("https://a.pt", vm.Tabs[1].Address);
+        vm.Move(vm.Tabs[1], -5);
+        Assert.Equal("https://a.pt", vm.Tabs[0].Address);
+    }
+
+    [Theory]
+    [InlineData(10, 0)]
+    [InlineData(235, 1)]
+    [InlineData(700, 3)]
+    [InlineData(5000, 3)]
+    [InlineData(-40, 0)]
+    public void IndexAt_MapsPointerToSlot(double x, int expected)
+        => Assert.Equal(expected, TabLayout.IndexAt(x, tabWidth: 232, count: 4));
+
     [Theory]
     [InlineData(1, 0)]
     [InlineData(3, 2)]

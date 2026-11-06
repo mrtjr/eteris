@@ -63,6 +63,14 @@ public partial class TabsViewModel : ObservableObject
         return tab;
     }
 
+    public void Move(BrowserTab tab, int newIndex)
+    {
+        var from = Tabs.IndexOf(tab);
+        if (from < 0) return;
+        var to = Math.Clamp(newIndex, 0, Tabs.Count - 1);
+        if (to != from) Tabs.Move(from, to);
+    }
+
     public void SelectNext() => SelectOffset(1);
 
     public void SelectPrevious() => SelectOffset(-1);
