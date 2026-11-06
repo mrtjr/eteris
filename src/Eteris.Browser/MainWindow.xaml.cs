@@ -89,7 +89,8 @@ public partial class MainWindow : Window
 
     private void CreateBrowser(BrowserTab tab)
     {
-        var injector = new ScriptletInjector(AppData.IsShieldOn);
+        var injector = new ScriptletInjector(AppData.IsShieldOn,
+            url => DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript : null);
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {

@@ -134,6 +134,12 @@ public partial class MainWindow
         {
             yield return new("\uE7BC", AppData.IsSavedForLater(Tabs.Active!.Address) ? "Já está na lista de leitura" : "Ler mais tarde",
                 "Guarda esta página na lista «Para ler»", null, SaveForLater);
+            if (!IsPrivate && Tabs.Active is { } darkTab && Shields.DarkPages.IsCandidate(darkTab.Address) && WebHost(darkTab.Address) is { } darkSite)
+            {
+                var dark = AppData.IsDark(darkSite);
+                yield return new("\uE793", dark ? "Repor as cores deste site" : "Escurecer este site",
+                    dark ? $"Deixa de escurecer {darkSite}" : $"Modo escuro para {darkSite}, lembrado da próxima vez", null, () => ToggleDarkSite(darkSite, !dark));
+            }
             yield return new("", "Esconder um elemento desta página", "Clique num anúncio, banner ou caixa para o fazer desaparecer neste site", null, PickElementToHide);
             if (AppData.HiddenElements(pickHost).Count is > 0 and var hiddenCount)
                 yield return new("", "Repor elementos escondidos", $"{hiddenCount} escondido(s) em {pickHost}", null, ResetHiddenElements);
@@ -203,6 +209,13 @@ public partial class MainWindow
 
         PaletteList.ItemsSource = items.Take(12).ToList();
         PaletteList.SelectedIndex = items.Count > 0 ? 0 : -1;
+    }
+
+    private void ToggleDarkSite(string host, bool on)
+    {
+        AppData.SetDark(host, on);
+        ActiveBrowser?.GetMainFrame()?.ExecuteJavaScriptAsync(Shields.DarkPages.Live(on));
+        ShowToast(on ? $"{host} fica escuro — também da próxima vez" : $"{host} volta às cores originais");
     }
 
     private static void FocusTabIn(MainWindow window, Tabs.BrowserTab tab)

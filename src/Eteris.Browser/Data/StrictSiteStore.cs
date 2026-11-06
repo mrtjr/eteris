@@ -10,17 +10,21 @@ public sealed class StrictSiteStore
     private readonly HashSet<string> _sites = new(StringComparer.Ordinal);
     private readonly Lock _lock = new();
 
-    public StrictSiteStore(string path)
+    private readonly string _table;
+
+    // A tabela é uma constante interna (strict_sites, dark_sites), nunca texto vindo de fora.
+    public StrictSiteStore(string path, string table = "strict_sites")
     {
+        _table = table;
         _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString();
         using var connection = Open();
         using (var create = connection.CreateCommand())
         {
-            create.CommandText = "CREATE TABLE IF NOT EXISTS strict_sites(host TEXT PRIMARY KEY)";
+            create.CommandText = $"CREATE TABLE IF NOT EXISTS {_table}(host TEXT PRIMARY KEY)";
             create.ExecuteNonQuery();
         }
         using var read = connection.CreateCommand();
-        read.CommandText = "SELECT host FROM strict_sites";
+        read.CommandText = $"SELECT host FROM {_table}";
         using var reader = read.ExecuteReader();
         while (reader.Read()) _sites.Add(reader.GetString(0));
     }
@@ -39,14 +43,14 @@ public sealed class StrictSiteStore
     {
         var site = Site(host);
         lock (_lock) _sites.Add(site);
-        Execute("INSERT OR IGNORE INTO strict_sites(host) VALUES ($h)", site);
+        Execute($"INSERT OR IGNORE INTO {_table}(host) VALUES ($h)", site);
     }
 
     public void Remove(string host)
     {
         var site = Site(host);
         lock (_lock) _sites.Remove(site);
-        Execute("DELETE FROM strict_sites WHERE host = $h", site);
+        Execute($"DELETE FROM {_table} WHERE host = $h", site);
     }
 
     private static string Site(string host) => TrackerBlocker.RegistrableDomain(host.ToLowerInvariant());

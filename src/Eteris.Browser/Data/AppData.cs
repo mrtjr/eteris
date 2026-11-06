@@ -216,6 +216,7 @@ public static class AppData
             catch (Exception) { }
         }
         SetShield(site, true);
+        SetDark(site, false);
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>
@@ -232,6 +233,24 @@ public static class AppData
         {
             if (on) LazyStrict.Value?.Add(host);
             else LazyStrict.Value?.Remove(host);
+        }
+        catch (Exception) { }
+    }
+
+    private static readonly Lazy<StrictSiteStore?> LazyDark = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "dark_sites"); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsDark(string host) => LazyDark.Value?.Contains(host) == true;
+
+    public static void SetDark(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyDark.Value?.Add(host);
+            else LazyDark.Value?.Remove(host);
         }
         catch (Exception) { }
     }

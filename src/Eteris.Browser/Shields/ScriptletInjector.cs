@@ -5,7 +5,7 @@ namespace Eteris.Browser.Shields;
 
 // Scriptlets do uBlock registados via DevTools (Page.addScriptToEvaluateOnNewDocument): o Chromium corre-os
 // antes de qualquer script da página, que é quando os anti-bloqueadores se instalam.
-public sealed class ScriptletInjector(Func<string, bool> isProtected) : IDisposable
+public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<string, string?>? extra = null) : IDisposable
 {
     private readonly Lock _gate = new();
     private DevToolsClient? _client;
@@ -16,10 +16,12 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected) : IDisposa
     // A tarefa termina quando o registo está feito: o pedido da página espera por ela.
     public Task Prepare(IBrowser browser, string url)
     {
-        var script = Uri.TryCreate(url, UriKind.Absolute, out var page) && isProtected(page.Host)
+        var scriptlets = Uri.TryCreate(url, UriKind.Absolute, out var page) && isProtected(page.Host)
             && ShieldEngine.Cosmetic is { } engine
             ? ScriptletScripts.Wrap(engine.Scriptlets(url), url)
             : null;
+        var added = extra?.Invoke(url);
+        var script = scriptlets is null ? added : added is null ? scriptlets : scriptlets + "\n;\n" + added;
 
         lock (_gate)
         {
