@@ -1,6 +1,6 @@
 namespace Eteris.Browser.Omnibox;
 
-public sealed record OmniboxResult(string Url, bool IsSearch, string? Query = null);
+public sealed record OmniboxResult(string Url, bool IsSearch, string? Query = null, SearchEngine? Engine = null);
 
 public static class OmniboxClassifier
 {
@@ -11,6 +11,8 @@ public static class OmniboxClassifier
     {
         var text = input.Trim();
         if (text.Length == 0) return null;
+        if (Bangs.Parse(text) is var (bang, query))
+            return query.Length == 0 ? new OmniboxResult(bang.Home, IsSearch: false) : Search(query, bang.Engine);
         if (text[0] == '?') return Search(text[1..].Trim(), engine);
         if (text.Any(char.IsWhiteSpace)) return Search(text, engine);
 
@@ -28,7 +30,7 @@ public static class OmniboxClassifier
     }
 
     private static OmniboxResult Search(string query, SearchEngine engine)
-        => new(engine.UrlFor(query), IsSearch: true, query);
+        => new(engine.UrlFor(query), IsSearch: true, query, engine);
 
     private static string HostPart(string text)
     {

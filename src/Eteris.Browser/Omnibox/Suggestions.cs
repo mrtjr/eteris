@@ -19,9 +19,17 @@ public static class Suggestions
         var list = new List<Suggestion>
         {
             primary.IsSearch
-                ? new Suggestion(SuggestionKind.Search, primary.Query!, $"Pesquisar com {engine.Name}", primary.Url)
+                ? new Suggestion(SuggestionKind.Search, primary.Query!,
+                    primary.Engine is { } target && target != engine ? $"Pesquisar em {target.Name}" : $"Pesquisar com {engine.Name}", primary.Url)
                 : new Suggestion(SuggestionKind.Navigate, input.Trim(), "Abrir endereço", primary.Url),
         };
+
+        var typed = input.Trim();
+        if (typed.StartsWith('!') && !typed.Any(char.IsWhiteSpace))
+            list.AddRange(Bangs.All
+                .Where(b => b.Trigger.StartsWith(typed[1..], StringComparison.OrdinalIgnoreCase))
+                .Take(6)
+                .Select(b => new Suggestion(SuggestionKind.Navigate, "!" + b.Trigger, b.Engine.Name, b.Home)));
 
         if (InstantAnswer.Answer(input) is { } answer)
             list.Insert(0, new Suggestion(SuggestionKind.Answer, "= " + answer, "Clique para copiar", string.Empty));

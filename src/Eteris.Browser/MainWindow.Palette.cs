@@ -134,7 +134,7 @@ public partial class MainWindow
         {
             var open = new PaletteCommand(result.IsSearch ? "" : "",
                 result.IsSearch ? $"Pesquisar «{result.Query}»" : $"Abrir {query}",
-                result.IsSearch ? $"com {Engine.Name}" : result.Url, null, () => LoadUrl(result.Url));
+                result.IsSearch ? $"com {(result.Engine ?? Engine).Name}" : result.Url, null, () => LoadUrl(result.Url));
             if (result.IsSearch) items.Add(open);
             else items.Insert(0, open);
         }
