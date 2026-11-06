@@ -16,7 +16,8 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         if (uri is { Host: "newtab", AbsolutePath: "/" })
         {
             var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Preferred, DateTime.Now,
-                Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url));
+                Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url),
+                NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek());
             return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
         }
 

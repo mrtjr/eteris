@@ -33,7 +33,7 @@ public static class NewTabPage
     public static bool IsPrivate(string url) => url.StartsWith(PrivateUrl, StringComparison.OrdinalIgnoreCase);
 
     public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0,
-        IReadOnlyList<Bookmark>? bookmarks = null, bool isPrivate = false)
+        IReadOnlyList<Bookmark>? bookmarks = null, bool isPrivate = false, int[]? week = null)
     {
         // Numa janela privada não se mostra nada do perfil normal.
         if (isPrivate)
@@ -47,6 +47,10 @@ public static class NewTabPage
             @private = isPrivate,
             greeting = Greeting(now.Hour),
             blocked,
+            week = isPrivate ? [] : week ?? [],
+            weekTotal = isPrivate ? 0 : week?.Sum() ?? 0,
+            weekSaved = Shields.PrivacyEstimate.Describe(isPrivate ? 0 : week?.Sum() ?? 0),
+            days = Shields.PrivacyEstimate.DayInitials(now),
             engineName = engine.Name,
             engineTemplate = engine.Template,
             bookmarks = (bookmarks ?? []).Take(10).Select(b => new

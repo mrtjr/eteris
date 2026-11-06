@@ -94,7 +94,7 @@ public partial class MainWindow : Window
                 (url, foreground) => Dispatcher.InvokeAsync(() => Tabs.NewTab(url, foreground)),
                 host =>
                 {
-                    ShieldStats.CountBlocked();
+                    ShieldStats.CountBlocked(persist: !IsPrivate);
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 }),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url)),
@@ -114,7 +114,7 @@ public partial class MainWindow : Window
                 },
                 onBlocked: host =>
                 {
-                    ShieldStats.CountBlocked();
+                    ShieldStats.CountBlocked(persist: !IsPrivate);
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 }),
         };

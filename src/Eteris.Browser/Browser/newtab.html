@@ -92,6 +92,22 @@
     color: var(--faint); font-size: 12.5px; letter-spacing: .02em;
   }
   footer i { width: 8px; height: 8px; border-radius: 50%; background: var(--iris); box-shadow: 0 0 12px #22d3ee; }
+  .week {
+    position: fixed; right: 26px; bottom: 22px; z-index: 2; width: 250px; padding: 16px 18px 14px; border-radius: 20px;
+    background: rgba(22, 25, 35, .62); border: 1px solid var(--line); backdrop-filter: blur(20px); display: none;
+  }
+  .week.show { display: block; animation: rise .6s ease-out both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+  .week h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+  .week .num { font-size: 15px; color: var(--muted); margin: 6px 0 2px; }
+  .week .num b { font-size: 30px; font-weight: 600; margin-right: 6px; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .week .saved { color: var(--faint); font-size: 12px; }
+  .bars { display: flex; align-items: flex-end; gap: 7px; height: 52px; margin-top: 12px; }
+  .bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; height: 100%; }
+  .bars i { width: 100%; border-radius: 4px 4px 2px 2px; background: linear-gradient(#22d3ee, #8b5cf6); min-height: 3px; opacity: .7; }
+  .bars div:last-child i { opacity: 1; box-shadow: 0 0 12px rgba(34, 211, 238, .55); }
+  .bars span { font-size: 10px; color: var(--faint); }
+  @media (max-width: 900px), (max-height: 640px) { .week { display: none !important; } }
   body.private { --bg: #0e0a18; }
   body.private .aurora span:nth-child(2), body.private .aurora span:nth-child(3) { background: #6d28d9; }
   body.private .aurora span:nth-child(4) { background: #312e81; }
@@ -113,6 +129,12 @@
   <nav class="marks" id="marks" aria-label="Favoritos"></nav>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
 </main>
+<aside class="week" id="week" aria-label="Privacidade esta semana">
+  <h4>Esta semana</h4>
+  <div class="num" id="weekNum"></div>
+  <div class="saved" id="weekSaved"></div>
+  <div class="bars" id="weekBars"></div>
+</aside>
 <footer><i></i><span id="status">Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
 <script type="application/json" id="data">{{DATA}}</script>
 <script>
@@ -147,6 +169,24 @@
   if (data.blocked > 0) {
     document.getElementById('status').textContent = 'Éteris · ' + data.blocked.toLocaleString('pt-PT') +
       (data.blocked === 1 ? ' rastreador bloqueado' : ' rastreadores bloqueados') + ' nesta sessão — tudo fica neste computador';
+  }
+
+  if (!data.private && data.weekTotal > 0) {
+    const b = document.createElement('b'); b.textContent = data.weekTotal.toLocaleString('pt-PT');
+    document.getElementById('weekNum').append(b, data.weekTotal === 1 ? 'rastreador bloqueado' : 'rastreadores bloqueados');
+    document.getElementById('weekSaved').textContent = data.weekSaved;
+    const bars = document.getElementById('weekBars');
+    const max = Math.max(...data.week, 1);
+    data.week.forEach((count, i) => {
+      const day = document.createElement('div');
+      const bar = document.createElement('i');
+      bar.style.height = Math.round(4 + 30 * count / max) + 'px';
+      bar.title = count.toLocaleString('pt-PT');
+      const label = document.createElement('span'); label.textContent = data.days[i];
+      day.append(bar, label);
+      bars.append(day);
+    });
+    document.getElementById('week').classList.add('show');
   }
 
   const marks = document.getElementById('marks');

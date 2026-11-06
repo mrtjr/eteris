@@ -14,12 +14,14 @@ public partial class App : Application
         _ = Shields.PrivacyPreferences.ApplyAsync();
         Data.Settings.Changed += _ => { var __ = Shields.PrivacyPreferences.ApplyAsync(); };
         _ = Shields.ShieldEngine.StartAsync(Shields.FilterLists.ForApp());
+        Data.AppData.StartShieldStats();
         new MainWindow(StartupArgs.InitialUrl(e.Args), StartupArgs.IsPrivate(e.Args)).Show();
         _ = UpdateService.CheckAndDownloadAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Data.AppData.FlushShieldStats();
         UpdateService.ApplyPendingOnExit();
         Cef.Shutdown();
         base.OnExit(e);

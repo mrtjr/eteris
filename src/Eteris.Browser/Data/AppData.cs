@@ -43,6 +43,32 @@ public static class AppData
         catch (Exception) { }
     }
 
+    private static readonly Lazy<DailyStatsStore?> LazyDaily = new(() =>
+    {
+        try { return new DailyStatsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    private static Timer? _statsTimer;
+
+    // Grava os bloqueios em lote (a cada 20 s e à saída), nunca a cada pedido.
+    public static void StartShieldStats() => _statsTimer ??= new Timer(_ => FlushShieldStats(), null, 20_000, 20_000);
+
+    public static void FlushShieldStats()
+    {
+        var pending = Shields.ShieldStats.TakePending();
+        if (pending == 0) return;
+        try { LazyDaily.Value?.Add(DateTime.Today, pending); }
+        catch (Exception) { }
+    }
+
+    public static int[] ShieldWeek()
+    {
+        FlushShieldStats();
+        try { return LazyDaily.Value?.Week(DateTime.Today) ?? new int[7]; }
+        catch (Exception) { return new int[7]; }
+    }
+
     public static double SiteZoom(string host) => LazyZoom.Value?.Get(host) ?? 0;
 
     public static void SetSiteZoom(string host, double level)
