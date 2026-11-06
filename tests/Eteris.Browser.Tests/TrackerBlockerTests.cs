@@ -53,4 +53,11 @@ public class TrackerBlockerTests
         Assert.True(TrackerBlocker.Default.ShouldBlock("https://securepubads.g.doubleclick.net/tag/js/gpt.js", "https://www.publico.pt/"));
         Assert.True(TrackerBlocker.Default.ShouldBlock("https://www.googletagmanager.com/gtm.js?id=X", "https://www.publico.pt/"));
     }
+
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("192.168.1.20")]
+    [InlineData("[::1]")]
+    public void RegistrableDomain_KeepsIpAddresses(string host)
+        => Assert.Equal(host, TrackerBlocker.RegistrableDomain(host));
 }

@@ -47,6 +47,8 @@ public sealed class TrackerBlocker : IRequestBlocker
     // Aproximação do "eTLD+1" sem a Public Suffix List: cobre .co.uk, .com.br, .com.pt, etc.
     public static string RegistrableDomain(string host)
     {
+        // Um endereço IP não tem «domínio registável»: é o próprio site.
+        if (System.Net.IPAddress.TryParse(host.Trim('[', ']'), out _)) return host;
         var labels = host.Split('.');
         if (labels.Length <= 2) return host;
         var take = labels[^1].Length == 2 && SecondLevelLabels.Contains(labels[^2]) ? 3 : 2;
