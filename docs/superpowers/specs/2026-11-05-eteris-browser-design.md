@@ -209,8 +209,17 @@ void  shields_free(Shields*);
   classes e ids presentes na página, e de novo 2,5 s depois.
 - Pop-ups: sem gesto do utilizador são sempre bloqueados; com gesto, o destino
   passa pelo motor como navegação (o adblock-rust ainda não implementa `$popup`).
-- Em falta: **scriptlets** do uBlock (`+js(...)`), que neutralizam avisos
-  anti-bloqueador (ex.: o "ad block recovery" do Funding Choices da Google).
+- **Scriptlets** do uBlock (`##+js(...)`): os recursos são gerados por
+  `build/scriptlets/build-scriptlets.mjs` a partir do código do uBlock Origin
+  (excluindo os "trusted") e vão no instalador; mudam só com novas versões do
+  Éteris, nunca por download em tempo de execução (são código injetado nas
+  páginas). São registados via DevTools `Page.addScriptToEvaluateOnNewDocument`
+  e o pedido do frame principal fica suspenso (`ContinueAsync`, máx. 1 s) até
+  o registo estar confirmado, para correrem antes do primeiro script da página.
+  O invólucro define `scriptletGlobals` (como o uBlock) e só corre no frame de
+  topo do domínio para o qual foi calculado.
+- Para regenerar os scriptlets: descarregar a tag do uBlock Origin e correr
+  `node build/scriptlets/build-scriptlets.mjs <pasta> src/Eteris.Browser/Shields/resources/scriptlets.json`.
 - Exceções por host (`shield_exceptions`) desligam a verificação nesse host;
   toggle no popup do ícone Shields.
 - Níveis: **padrão** (listas acima), **agressivo** (+ listas de anúncios

@@ -23,8 +23,9 @@ public partial class MainWindow : Window
         nameof(TabWidth), typeof(double), typeof(MainWindow), new PropertyMetadata(TabLayout.MaxTabWidth));
 
     private readonly Dictionary<BrowserTab, ChromiumWebBrowser> _browsers = new();
+    private readonly Dictionary<BrowserTab, ScriptletInjector> _scriptlets = new();
 
-    public MainWindow()
+    public MainWindow(string? initialUrl = null)
     {
         InitializeComponent();
         DataContext = Tabs;
@@ -36,8 +37,8 @@ public partial class MainWindow : Window
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
-        Tabs.NewTab(NewTabPage.Url);
-        Loaded += (_, _) => FocusOmnibox();
+        Tabs.NewTab(initialUrl ?? NewTabPage.Url);
+        if (initialUrl is null) Loaded += (_, _) => FocusOmnibox();
     }
 
     public TabsViewModel Tabs { get; } = new();
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
         foreach (BrowserTab tab in e.OldItems ?? Array.Empty<BrowserTab>())
         {
             tab.PropertyChanged -= OnTabPropertyChanged;
+            if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
             if (_browsers.Remove(tab, out var browser))
             {
                 BrowserHost.Children.Remove(browser);
@@ -74,6 +76,8 @@ public partial class MainWindow : Window
 
     private void CreateBrowser(BrowserTab tab)
     {
+        var injector = new ScriptletInjector(AppData.IsShieldOn);
+        _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
             Visibility = Visibility.Hidden,
@@ -90,7 +94,11 @@ public partial class MainWindow : Window
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
                 AppData.IsShieldOn,
-                onNavigate: () => Dispatcher.InvokeAsync(tab.ResetShield),
+                onNavigate: (cefBrowser, url) =>
+                {
+                    Dispatcher.InvokeAsync(tab.ResetShield);
+                    return injector.Prepare(cefBrowser, url);
+                },
                 onBlocked: host =>
                 {
                     ShieldStats.CountBlocked();
@@ -233,6 +241,8 @@ public partial class MainWindow : Window
 
     private void DisposeBrowsers()
     {
+        foreach (var injector in _scriptlets.Values) injector.Dispose();
+        _scriptlets.Clear();
         foreach (var browser in _browsers.Values) browser.Dispose();
         _browsers.Clear();
     }

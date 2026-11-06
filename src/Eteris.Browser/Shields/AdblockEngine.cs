@@ -12,9 +12,9 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
 
     private AdblockEngine(ShieldsHandle handle) => _handle = handle;
 
-    public static AdblockEngine Create(string rules)
+    public static AdblockEngine Create(string rules, string? scriptletResources = null)
     {
-        var handle = shields_new(rules);
+        var handle = shields_new(rules, scriptletResources);
         if (handle.IsInvalid) throw new InvalidOperationException("O motor do escudo não conseguiu carregar as listas.");
         return new AdblockEngine(handle);
     }
@@ -40,6 +40,14 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
         catch (ObjectDisposedException) { return string.Empty; }
     }
 
+    // JavaScript dos scriptlets do uBlock (##+js(...)) para a página; vazio se não houver.
+    public string Scriptlets(string url)
+    {
+        if (_handle.IsClosed) return string.Empty;
+        try { return TakeString(shields_scriptlets(_handle, url)); }
+        catch (ObjectDisposedException) { return string.Empty; }
+    }
+
     public void Dispose() => _handle.Dispose();
 
     private static string TakeString(nint value)
@@ -59,7 +67,10 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
     }
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial ShieldsHandle shields_new(string rules);
+    private static partial ShieldsHandle shields_new(string rules, string? resources);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial nint shields_scriptlets(ShieldsHandle handle, string url);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int shields_check(ShieldsHandle handle, string url, string sourceUrl, string resourceType);

@@ -32,6 +32,8 @@
     <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll"
           CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <None Include="Shields\lists\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Gerado por build/scriptlets a partir do uBlock Origin; só muda com uma nova versão do Éteris. -->
+    <None Include="Shields\resources\scriptlets.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@ mod ffi;
 use adblock::Engine;
 use adblock::lists::{FilterSet, ParseOptions};
 use adblock::request::Request;
+use adblock::resources::Resource;
 
 pub use ffi::*;
 
@@ -13,10 +14,20 @@ pub struct Shields {
 }
 
 impl Shields {
-    pub fn new(rules: &str) -> Self {
+    /// `resources`: scriptlets do uBlock em JSON (ver build/scriptlets). Inválidos ou ausentes → sem scriptlets.
+    pub fn new(rules: &str, resources: Option<&str>) -> Self {
         let mut set = FilterSet::new(false);
         set.add_filter_list(rules.to_owned(), ParseOptions::default());
-        Shields { engine: Engine::new_with_filter_set(set) }
+        let mut engine = Engine::new_with_filter_set(set);
+        if let Some(parsed) = resources.and_then(|json| serde_json::from_str::<Vec<Resource>>(json).ok()) {
+            engine.use_resources(parsed);
+        }
+        Shields { engine }
+    }
+
+    /// JavaScript dos scriptlets (`##+js(...)`) para a página; vazio se não houver nenhum.
+    pub fn scriptlets(&self, url: &str) -> String {
+        self.engine.url_cosmetic_resources(url).injected_script
     }
 
     pub fn should_block(&self, url: &str, source_url: &str, resource_type: &str) -> bool {
@@ -70,7 +81,32 @@ example.com#@#.banner-publicidade
 ";
 
     fn shields() -> Shields {
-        Shields::new(RULES)
+        Shields::new(RULES, None)
+    }
+
+    // Recurso no formato gerado por build/scriptlets/build-scriptlets.mjs (conteúdo em base64).
+    // base64 de: function testMark(value) { window.__eterisTest = value; }
+    const TEST_RESOURCES: &str = r#"[{"name":"test-mark.js","aliases":["tm.js"],"kind":{"mime":"application/javascript"},"content":"ZnVuY3Rpb24gdGVzdE1hcmsodmFsdWUpIHsgd2luZG93Ll9fZXRlcmlzVGVzdCA9IHZhbHVlOyB9","dependencies":[]}]"#;
+
+    #[test]
+    fn scriptlet_rule_produces_injectable_script() {
+        let s = Shields::new("publico.pt##+js(tm, ola)\n", Some(TEST_RESOURCES));
+        let script = s.scriptlets("https://www.publico.pt/");
+        assert!(script.contains("testMark"), "{script}");
+        assert!(script.contains("ola"), "{script}");
+    }
+
+    #[test]
+    fn scriptlets_only_for_matching_site() {
+        let s = Shields::new("publico.pt##+js(tm, ola)\n", Some(TEST_RESOURCES));
+        assert_eq!(s.scriptlets("https://www.expresso.pt/"), "");
+    }
+
+    #[test]
+    fn invalid_resources_json_still_builds_engine() {
+        let s = Shields::new(RULES, Some("isto não é json"));
+        assert!(s.should_block("https://ad.doubleclick.net/pixel.gif", "https://www.publico.pt/", "image"));
+        assert_eq!(s.scriptlets("https://www.publico.pt/"), "");
     }
 
     #[test]

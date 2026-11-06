@@ -23,6 +23,13 @@ Não são modificadas.
 | EasyPrivacy | https://easylist.to | GPL-3.0 ou CC BY-SA 3.0 |
 | EasyList Portuguesa | https://easylist-downloads.adblockplus.org/easylistportuguese.txt | GPL-3.0 ou CC BY-SA 3.0 |
 
+## Scriptlets
+
+`Shields/resources/scriptlets.json` contém as funções de scriptlet do uBlock Origin 1.75.4
+(https://github.com/gorhill/uBlock, `src/js/resources/`), sem alterações ao código, convertidas para o
+formato de recursos do adblock-rust por `build/scriptlets/build-scriptlets.mjs`. Licença: GPL-3.0.
+O código-fonte corresponde à tag `1.75.4` desse repositório.
+
 ## Navegador
 
 | Componente | Origem | Licença |

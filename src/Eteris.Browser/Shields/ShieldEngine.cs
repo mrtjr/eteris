@@ -11,11 +11,15 @@ public static class ShieldEngine
 
     public static AdblockEngine? Cosmetic => Current as AdblockEngine;
 
+    private static readonly string ScriptletsPath =
+        System.IO.Path.Combine(AppContext.BaseDirectory, "Shields", "resources", "scriptlets.json");
+
     public static Task StartAsync(FilterLists lists) => Task.Run(async () =>
     {
+        var scriptlets = System.IO.File.Exists(ScriptletsPath) ? System.IO.File.ReadAllText(ScriptletsPath) : null;
         try
         {
-            Swap(AdblockEngine.Create(lists.LoadAll()));
+            Swap(AdblockEngine.Create(lists.LoadAll(), scriptlets));
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException)
         {
@@ -26,7 +30,7 @@ public static class ShieldEngine
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Eteris/1.0");
         if (await lists.UpdateAsync(http, CancellationToken.None))
-            Swap(AdblockEngine.Create(lists.LoadAll()));
+            Swap(AdblockEngine.Create(lists.LoadAll(), scriptlets));
     });
 
     private static void Swap(AdblockEngine engine)

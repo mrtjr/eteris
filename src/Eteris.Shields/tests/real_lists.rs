@@ -13,10 +13,25 @@ fn load() -> Shields {
         rules.push_str(&fs::read_to_string(entry.unwrap().path()).unwrap());
         rules.push('\n');
     }
+    let resources = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../Eteris.Browser/Shields/resources/scriptlets.json"),
+    )
+    .expect("scriptlets.json");
     let started = Instant::now();
-    let shields = Shields::new(&rules);
+    let shields = Shields::new(&rules, Some(&resources));
     eprintln!("motor criado em {:?} a partir de {} KB", started.elapsed(), rules.len() / 1024);
     shields
+}
+
+#[test]
+fn real_lists_inject_ublock_scriptlets_against_anti_adblock() {
+    let script = load().scriptlets("https://www.mynet.com/");
+    assert!(script.contains("googlefc"), "sem scriptlet para mynet.com: {script:.200}");
+}
+
+#[test]
+fn real_lists_no_scriptlets_for_plain_site() {
+    assert_eq!(load().scriptlets("https://pt.wikipedia.org/wiki/Lisboa"), "");
 }
 
 #[test]
