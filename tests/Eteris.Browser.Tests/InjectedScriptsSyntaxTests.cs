@@ -22,6 +22,8 @@ public class InjectedScriptsSyntaxTests
         { "multimédia (pausar)", MediaInfo.PauseScript },
         { "áudio", AudioIndicator.AudibleScript },
         { "filtros cosméticos", CosmeticScripts.Inject(".anuncio { display: none !important; }") },
+        { "vigia de vídeo", MediaFallback.WatchScript },
+        { "escurecer + vigia (início do documento)", DarkPages.EarlyScript + "\n;\n" + MediaFallback.WatchScript },
     };
 
     [Theory]

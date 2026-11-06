@@ -1164,6 +1164,33 @@
                 </StackPanel>
             </Border>
 
+            <!-- Vídeo num formato que o Éteris não pode incluir -->
+            <Border x:Name="MediaFallbackBar" Grid.Row="2" Panel.ZIndex="45" HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Margin="20,10,0,0" CornerRadius="18" Padding="18,14" MaxWidth="480"
+                    Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
+                    BorderThickness="1" Visibility="Collapsed">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                </Border.Effect>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Grid Width="38" Height="38" VerticalAlignment="Top">
+                            <Ellipse Fill="{StaticResource IrisBrush}" />
+                            <TextBlock Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="17"
+                                       Foreground="#0B0D13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock x:Name="MediaFallbackText" TextWrapping="Wrap" MaxWidth="380" Margin="12,0,0,0"
+                                   VerticalAlignment="Center" FontSize="14" />
+                    </StackPanel>
+                    <DockPanel Margin="0,14,0,0" LastChildFill="False">
+                        <Button DockPanel.Dock="Right" Content="Abrir no navegador do sistema" Style="{StaticResource PrimaryPillButton}"
+                                Click="MediaFallbackOpen_Click" Margin="8,0,0,0" AutomationProperties.AutomationId="MediaFallbackOpen" />
+                        <Button DockPanel.Dock="Right" Content="Agora não" Style="{StaticResource PillButton}"
+                                Click="MediaFallbackDismiss_Click" AutomationProperties.AutomationId="MediaFallbackDismiss" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Procurar na página -->
             <Border x:Name="FindBar" Grid.Row="2" Panel.ZIndex="40" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,12,24,0" CornerRadius="20" Padding="14,4,6,4" Background="{DynamicResource SurfaceRaisedBrush}"
