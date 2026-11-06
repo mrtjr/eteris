@@ -200,7 +200,7 @@
     if (!text) return;
     status.textContent = text;
     const busy = text.startsWith('A procurar');
-    if (busy && ++tries < 60) setTimeout(() => probe.src = `eteris://settings/status?n=${Date.now()}`, 1000);
+    if (busy && ++tries < 60) setTimeout(() => probe.src = `eteris://${location.host}/status?n=${Date.now()}`, 1000);
     check.disabled = busy || text.startsWith('Versão de desenvolvimento') || text.includes('pronta');
   });
   check.disabled = !data.canCheck;
@@ -208,13 +208,13 @@
     check.disabled = true;
     tries = 0;
     status.textContent = 'A procurar atualizações…';
-    probe.src = `eteris://settings/update?t=${data.token}&n=${Date.now()}`;
+    probe.src = `eteris://${location.host}/update?t=${data.token}&n=${Date.now()}`;
   });
-  if ((data.updateStatus || '').startsWith('A procurar')) probe.src = `eteris://settings/status?n=${Date.now()}`;
+  if ((data.updateStatus || '').startsWith('A procurar')) probe.src = `eteris://${location.host}/status?n=${Date.now()}`;
   if (data.focus) document.getElementById(data.focus).scrollIntoView();
 
   function send(key, value) {
-    document.getElementById('sink').src = `eteris://settings/set?k=${key}&v=${encodeURIComponent(value)}&t=${data.token}&n=${Date.now()}`;
+    document.getElementById('sink').src = `eteris://${location.host}/set?k=${key}&v=${encodeURIComponent(value)}&t=${data.token}&n=${Date.now()}`;
     saved.classList.add('show');
     clearTimeout(timer);
     timer = setTimeout(() => saved.classList.remove('show'), 1400);

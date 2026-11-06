@@ -21,8 +21,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
-        if (uri is { Host: "settings" }) return SettingsRoute(uri, request.Url);
-        if (uri is { Host: "about", AbsolutePath: "/" }) return Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: true));
+        if (uri is { Host: "settings" or "about" }) return SettingsRoute(uri, request.Url);
 
         if (ErrorPage.IsErrorPage(request.Url))
             return ResourceHandler.FromString(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty),
@@ -47,7 +46,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         }
         if (uri.AbsolutePath == "/status") return Text(Updates.UpdateService.Status);
         return uri.AbsolutePath == "/"
-            ? Html(SettingsPage.Render(Settings.Current, AboutInfo()))
+            ? Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: uri.Host == "about"))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 
