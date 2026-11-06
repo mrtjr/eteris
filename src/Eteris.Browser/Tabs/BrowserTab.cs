@@ -17,6 +17,10 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
+    // Pré-visualização da página para o cartão da aba (capturada depois de carregar).
+    [ObservableProperty]
+    private ImageSource? _thumbnail;
+
     // A página parece um artigo: mostra o botão do modo de leitura.
     [ObservableProperty]
     private bool _isReaderable;

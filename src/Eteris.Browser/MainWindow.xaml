@@ -79,6 +79,11 @@
                                 <DropShadowEffect BlurRadius="22" ShadowDepth="6" Direction="270" Opacity="0.5" Color="Black" />
                             </Border.Effect>
                             <StackPanel>
+                                <Border x:Name="Thumb" CornerRadius="8" Height="160" Margin="0,0,0,10" ClipToBounds="True">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentY="Top" />
+                                    </Border.Background>
+                                </Border>
                                 <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"
                                            TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,3,0,0" />
@@ -89,6 +94,9 @@
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding StatusLine}" Value="">
                                 <Setter TargetName="Status" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Thumbnail}" Value="{x:Null}">
+                                <Setter TargetName="Thumb" Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

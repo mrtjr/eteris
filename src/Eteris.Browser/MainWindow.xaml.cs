@@ -172,6 +172,7 @@ public partial class MainWindow : Window
                 DetectSiteTint(tab, browser, url);
                 DetectReaderable(tab, browser, url);
                 ApplyHiddenElements(browser, url);
+                CaptureThumbnail(tab, browser, url);
                 _ = ApplyGenericCosmeticsAsync(browser, url);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
