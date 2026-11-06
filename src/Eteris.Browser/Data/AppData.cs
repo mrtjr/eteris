@@ -111,6 +111,42 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
+    private static readonly Lazy<ReadingListStore?> LazyReading = new(() =>
+    {
+        try { return new ReadingListStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static IReadOnlyList<ReadingItem> ReadingList()
+    {
+        try { return LazyReading.Value?.All() ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    public static void SaveForLater(string url, string title)
+    {
+        try { LazyReading.Value?.Add(url, title, DateTime.UtcNow); }
+        catch (Exception) { }
+    }
+
+    public static bool IsSavedForLater(string url)
+    {
+        try { return LazyReading.Value?.Contains(url) == true; }
+        catch (Exception) { return false; }
+    }
+
+    public static void MarkRead(string url, bool read)
+    {
+        try { LazyReading.Value?.MarkRead(url, read); }
+        catch (Exception) { }
+    }
+
+    public static void RemoveFromReadingList(string url)
+    {
+        try { LazyReading.Value?.Remove(url); }
+        catch (Exception) { }
+    }
+
     public static void RemoveBookmark(string url)
     {
         try { LazyBookmarks.Value.Remove(url); }

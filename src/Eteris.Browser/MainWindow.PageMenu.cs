@@ -2,6 +2,7 @@ using System.Windows;
 using CefSharp;
 using CefSharp.Wpf;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Tabs;
 
@@ -49,6 +50,7 @@ public partial class MainWindow
             case PageCommand.SelectAll: frame?.SelectAll(); break;
             case PageCommand.HideElement: PickElementToHide(); break;
             case PageCommand.SavePdf: SaveAsPdf(); break;
+            case PageCommand.ReadLater: SaveForLater(); break;
             case PageCommand.SearchSelection: Tabs.NewTab(Engine.UrlFor(context.Selection.Trim())); break;
         }
     }
@@ -61,6 +63,13 @@ public partial class MainWindow
             ShowToast(toast);
         }
         catch (Exception) { }
+    }
+
+    private void SaveForLater()
+    {
+        if (Tabs.Active is not { } tab || WebHost(tab.Address) is null) return;
+        AppData.SaveForLater(tab.Address, tab.Title);
+        ShowToast("Guardado em «Para ler» — veja em Favoritos › Para ler");
     }
 
     // Páginas internas: reaproveita uma aba já aberta em vez de duplicar.

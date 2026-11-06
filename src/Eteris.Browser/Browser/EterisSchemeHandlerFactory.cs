@@ -96,6 +96,13 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
 
     private static IResourceHandler BookmarksRoute(Uri uri, string url)
     {
+        if (uri.AbsolutePath is "/reading-read" or "/reading-remove")
+        {
+            if (!InternalPages.IsAuthorized(url) || InternalPages.Query(uri, "u") is not { } item) return Text("recusado");
+            if (uri.AbsolutePath == "/reading-remove") AppData.RemoveFromReadingList(item);
+            else AppData.MarkRead(item, InternalPages.Query(uri, "v") == "true");
+            return Text("ok");
+        }
         if (uri.AbsolutePath is "/delete" or "/rename")
         {
             if (!InternalPages.IsAuthorized(url) || InternalPages.Query(uri, "u") is not { } target) return Text("recusado");
@@ -104,7 +111,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             return Text("ok");
         }
         return uri.AbsolutePath == "/"
-            ? Html(BookmarksPage.Render(AppData.Bookmarks(b => b.All(1000))))
+            ? Html(BookmarksPage.Render(AppData.Bookmarks(b => b.All(1000)), AppData.ReadingList()))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 

@@ -115,6 +115,8 @@ public partial class MainWindow
         yield return new("", "Capturar área visível", "Só o que está no ecrã", null, () => CapturePage(false));
         if (WebHost(Tabs.Active?.Address) is { } pickHost)
         {
+            yield return new("\uE7BC", AppData.IsSavedForLater(Tabs.Active!.Address) ? "Já está na lista de leitura" : "Ler mais tarde",
+                "Guarda esta página na lista «Para ler»", null, SaveForLater);
             yield return new("", "Esconder um elemento desta página", "Clique num anúncio, banner ou caixa para o fazer desaparecer neste site", null, PickElementToHide);
             if (AppData.HiddenElements(pickHost).Count is > 0 and var hiddenCount)
                 yield return new("", "Repor elementos escondidos", $"{hiddenCount} escondido(s) em {pickHost}", null, ResetHiddenElements);
@@ -133,6 +135,7 @@ public partial class MainWindow
             VerticalTabs ? "Voltar à faixa de abas clássica" : "Lista de abas na lateral, ideal para muitas abas", null, ToggleVerticalTabs);
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
+        yield return new("\uE7BC", "Lista de leitura", "Páginas guardadas para ler mais tarde", null, () => OpenInternal(BookmarksPage.Url + "#ler"));
         yield return new("", "Favoritos", "Ver, pesquisar, renomear e remover favoritos", "Ctrl+Shift+O", OpenBookmarks);
         yield return new("", "Histórico", "Ver, pesquisar e apagar páginas visitadas", "Ctrl+H", OpenHistory);
         yield return new("", "Aumentar zoom", $"Atual: {zoom}%", "Ctrl +", () => Zoom(1));

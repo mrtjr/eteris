@@ -54,6 +54,15 @@
   .empty .star { font-size: 56px; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .empty h3 { font-size: 20px; font-weight: 500; color: var(--text); margin: 10px 0 6px; }
   iframe { display: none; }
+  .tabs { display: flex; gap: 6px; margin-top: 12px; }
+  .tabs button {
+    font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 10px; cursor: pointer; color: var(--muted);
+    background: transparent; border: 1px solid transparent;
+  }
+  .tabs button.on { color: var(--text); background: var(--row); border-color: var(--line); }
+  .tabs .badge-count { margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 9px; background: linear-gradient(135deg, #8b5cf6, #22d3ee); color: #fff; }
+  .card.read .title { color: var(--faint); text-decoration: line-through; text-decoration-color: rgba(127, 127, 140, .5); }
+  .acts button.ok:hover { background: rgba(52, 211, 153, .18); color: #34d399; }
 
   /* Tema claro (o servidor acrescenta class="light" ao <html>) */
   html.light {
@@ -75,7 +84,8 @@
 <div class="glow"></div>
 <header>
   <div class="bar">
-    <div><h1><b>Favoritos</b></h1><div class="count" id="count"></div></div>
+    <div><h1><b id="heading">Favoritos</b></h1><div class="count" id="count"></div>
+      <div class="tabs"><button id="tabMarks" class="on">Favoritos</button><button id="tabReading">Para ler</button></div></div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input class="q" id="q" placeholder="Pesquisar nos favoritos   ( / )" autocomplete="off" spellcheck="false">
@@ -100,8 +110,53 @@
     node.append(text.slice(0, i), el('mark', null, text.slice(i, i + term.length)), text.slice(i + term.length));
   }
 
+  let view = location.hash === '#ler' ? 'reading' : 'marks';
+  const unread = () => data.reading.filter(r => !r.read).length;
+  function paintTabs() {
+    document.getElementById('tabMarks').classList.toggle('on', view === 'marks');
+    const t = document.getElementById('tabReading');
+    t.classList.toggle('on', view === 'reading');
+    t.textContent = 'Para ler';
+    if (unread()) { const b = el('span', 'badge-count', String(unread())); t.append(b); }
+    document.getElementById('heading').textContent = view === 'marks' ? 'Favoritos' : 'Para ler';
+  }
+  document.getElementById('tabMarks').addEventListener('click', () => { view = 'marks'; history.replaceState(null, '', '#'); render(); });
+  document.getElementById('tabReading').addEventListener('click', () => { view = 'reading'; history.replaceState(null, '', '#ler'); render(); });
+
+  function renderReading(term) {
+    const items = data.reading.filter(b => !term || b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term));
+    count.textContent = `${unread()} por ler · ${data.reading.length} no total`;
+    for (const b of items) {
+      const card = el('a', 'card' + (b.read ? ' read' : '')); card.href = b.url; card.title = b.url;
+      const badge = el('span', 'badge', b.letter); badge.style.background = b.color;
+      const text = el('span', 'text'); const title = el('div', 'title'); const host = el('div', 'host');
+      highlight(title, b.title, term); highlight(host, b.host, term);
+      text.append(title, host);
+      const acts = el('span', 'acts');
+      const ok = el('button', 'ok', b.read ? '↺' : '✓'); ok.title = b.read ? 'Marcar como por ler' : 'Marcar como lido';
+      const del = el('button', 'del', '×'); del.title = 'Remover da lista';
+      ok.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); b.read = !b.read; send('reading-read', { u: b.url, v: b.read }); render(); });
+      del.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation(); send('reading-remove', { u: b.url });
+        card.classList.add('gone'); setTimeout(() => { data.reading = data.reading.filter(x => x !== b); render(); }, 250);
+      });
+      acts.append(ok, del);
+      card.append(badge, text, acts);
+      grid.append(card);
+    }
+    if (!items.length) {
+      const empty = el('div', 'empty');
+      empty.append(el('div', 'star', '☾'), el('h3', null, term ? 'Nada encontrado' : 'A lista de leitura está vazia'),
+        el('p', null, term ? 'Experimente outras palavras.' : 'Guarde artigos para depois com «Ler mais tarde» (menu da página ou Ctrl+K).'));
+      grid.append(empty);
+      grid.style.display = 'block';
+    } else grid.style.display = '';
+  }
+
   function render() {
     const term = q.value.trim().toLowerCase();
+    paintTabs();
+    if (view === 'reading') { grid.textContent = ''; renderReading(term); return; }
     grid.textContent = '';
     const items = data.items.filter(b => !term || b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term));
     count.textContent = term ? `${items.length} de ${data.items.length}` : `${data.items.length} ${data.items.length === 1 ? 'favorito' : 'favoritos'}`;
