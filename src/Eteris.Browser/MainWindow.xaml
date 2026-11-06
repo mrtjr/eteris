@@ -620,9 +620,9 @@
 
                     <!-- Informação do site (cadeado) -->
                     <Popup x:Name="SiteInfoPopup" PlacementTarget="{Binding ElementName=SiteInfoButton}" Placement="Bottom"
-                           HorizontalOffset="-20" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           HorizontalOffset="-38" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="360" Background="{DynamicResource SurfaceRaisedBrush}"
+                        <Border Margin="32,0,32,44" Width="360" Background="{DynamicResource SurfaceRaisedBrush}"
                                 BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
@@ -686,9 +686,9 @@
                     </Popup>
 
                     <Popup x:Name="SuggestionPopup" PlacementTarget="{Binding ElementName=OmniboxFrame}" Placement="Bottom"
-                           HorizontalOffset="-14" VerticalOffset="4" AllowsTransparency="True" StaysOpen="True"
+                           HorizontalOffset="-32" VerticalOffset="4" AllowsTransparency="True" StaysOpen="True"
                            PopupAnimation="Fade" Focusable="False">
-                        <Border Margin="14,0,14,24" Width="{Binding ActualWidth, ElementName=OmniboxFrame}"
+                        <Border Margin="32,0,32,44" Width="{Binding ActualWidth, ElementName=OmniboxFrame}"
                                 Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
                                 BorderThickness="1" CornerRadius="16" Padding="6">
                             <Border.Effect>
@@ -781,9 +781,9 @@
                     </StackPanel>
 
                     <Popup x:Name="MediaPopup" PlacementTarget="{Binding ElementName=MediaButton}" Placement="Bottom"
-                           HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           HorizontalOffset="-340" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="370" Background="{DynamicResource SurfaceRaisedBrush}"
+                        <Border Margin="32,0,32,44" Width="370" Background="{DynamicResource SurfaceRaisedBrush}"
                                 BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="10,14">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
@@ -837,9 +837,9 @@
                     </Popup>
 
                     <Popup x:Name="DownloadsPopup" PlacementTarget="{Binding ElementName=DownloadsButton}" Placement="Bottom"
-                           HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           HorizontalOffset="-340" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="370" Background="{DynamicResource SurfaceRaisedBrush}"
+                        <Border Margin="32,0,32,44" Width="370" Background="{DynamicResource SurfaceRaisedBrush}"
                                 BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="10,14">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
@@ -911,9 +911,9 @@
                     </Popup>
 
                     <Popup x:Name="ShieldPopup" PlacementTarget="{Binding ElementName=ShieldButton}" Placement="Bottom"
-                           HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           HorizontalOffset="-340" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
                            PopupAnimation="Fade">
-                        <Border Margin="14,0,14,24" Width="350" Background="{DynamicResource SurfaceRaisedBrush}"
+                        <Border Margin="32,0,32,44" Width="350" Background="{DynamicResource SurfaceRaisedBrush}"
                                 BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
