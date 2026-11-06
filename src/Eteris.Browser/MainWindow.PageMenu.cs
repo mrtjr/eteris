@@ -48,6 +48,7 @@ public partial class MainWindow
             case PageCommand.Paste: frame?.Paste(); break;
             case PageCommand.SelectAll: frame?.SelectAll(); break;
             case PageCommand.HideElement: PickElementToHide(); break;
+            case PageCommand.SavePdf: SaveAsPdf(); break;
             case PageCommand.SearchSelection: Tabs.NewTab(Engine.UrlFor(context.Selection.Trim())); break;
         }
     }

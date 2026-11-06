@@ -111,6 +111,7 @@ public partial class MainWindow
                 });
         }
         yield return new("", "Capturar página inteira", "Guarda em Imagens › Éteris e copia a imagem", "Ctrl+Shift+S", () => CapturePage(true));
+        yield return new("", "Guardar como PDF", "Guarda a página na pasta de transferências", null, SaveAsPdf);
         yield return new("", "Capturar área visível", "Só o que está no ecrã", null, () => CapturePage(false));
         if (WebHost(Tabs.Active?.Address) is { } pickHost)
         {
