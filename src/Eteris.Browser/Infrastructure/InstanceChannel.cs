@@ -38,18 +38,34 @@ public static class InstanceChannel
 
     public static bool Send(string name, string[] args, int timeoutMs = 2000)
     {
-        try
+        // Dois envios muito seguidos (dois links abertos de outra aplicação) podem apanhar a instância aberta a
+        // reabrir o canal para a mensagem seguinte: tenta-se de novo até ao fim do prazo em vez de perder o link.
+        var deadline = Environment.TickCount64 + timeoutMs;
+        var payload = JsonSerializer.Serialize(args);
+        while (true)
         {
-            using var client = new NamedPipeClientStream(".", PipeName(name), PipeDirection.Out, PipeOptions.CurrentUserOnly);
-            client.Connect(timeoutMs);
-            using var writer = new StreamWriter(client);
-            writer.Write(JsonSerializer.Serialize(args));
-            writer.Flush();
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
+            var remaining = (int)Math.Max(0, deadline - Environment.TickCount64);
+            try
+            {
+                using var client = new NamedPipeClientStream(".", PipeName(name), PipeDirection.Out, PipeOptions.CurrentUserOnly);
+                client.Connect(remaining);
+                using var writer = new StreamWriter(client);
+                writer.Write(payload);
+                writer.Flush();
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+            catch (Exception) when (Environment.TickCount64 + 50 < deadline)
+            {
+                Thread.Sleep(50);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
     }
 }

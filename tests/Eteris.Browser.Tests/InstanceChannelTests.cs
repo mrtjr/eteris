@@ -22,8 +22,9 @@ public class InstanceChannelTests
         var name = "eteris-test-" + Guid.NewGuid().ToString("N");
         var count = 0;
         var done = new TaskCompletionSource();
-        using var listener = InstanceChannel.Listen(name, _ => { if (Interlocked.Increment(ref count) == 3) done.TrySetResult(); });
-        for (var i = 0; i < 3; i++) Assert.True(InstanceChannel.Send(name, [$"https://s{i}.pt/"]));
+        // Muitos envios seguidos: no servidor do GitHub (mais lento) um deles falhava ao apanhar o canal a reabrir.
+        using var listener = InstanceChannel.Listen(name, _ => { if (Interlocked.Increment(ref count) == 10) done.TrySetResult(); });
+        for (var i = 0; i < 10; i++) Assert.True(InstanceChannel.Send(name, [$"https://s{i}.pt/"]), $"envio {i} falhou");
         await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
