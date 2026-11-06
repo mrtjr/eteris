@@ -76,6 +76,17 @@
   }
   .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .tile:hover .name { color: var(--text); }
+  .tip {
+    display: none; align-items: center; gap: 10px; margin-top: 22px; padding: 8px 8px 8px 14px; border-radius: 999px; max-width: 100%;
+    color: var(--muted); font-size: 13px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); backdrop-filter: blur(18px);
+  }
+  .tip.show { display: inline-flex; animation: rise .6s .2s ease-out both; }
+  .tip b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; flex: none; }
+  .tip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tip button { all: unset; cursor: pointer; width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; color: var(--faint); flex: none; }
+  .tip button:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
+  html.light .tip { background: rgba(255, 255, 255, .6); }
+  body.no-tiles .tip { display: none; }
   .resume {
     position: fixed; left: 26px; bottom: 76px; z-index: 2; width: 250px; padding: 14px 10px 10px; border-radius: 20px;
     background: rgba(22, 25, 35, .62); border: 1px solid var(--line); backdrop-filter: blur(20px); display: none;
@@ -208,6 +219,7 @@
     <input id="q" type="text" spellcheck="false" aria-label="Pesquisar ou escrever um endereço">
   </form>
   <nav class="marks" id="marks" aria-label="Favoritos"></nav>
+  <div class="tip" id="tip" role="note"><b>Sabia que…?</b><span id="tipText"></span><button id="tipClose" title="Não mostrar mais dicas" aria-label="Não mostrar mais dicas">✕</button></div>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
 </main>
 <aside class="resume" id="resume" aria-label="Continuar"><h4>Continuar</h4><div class="cards" id="cards"></div></aside>
@@ -310,6 +322,14 @@
   document.getElementById('gear').addEventListener('click', e => { e.stopPropagation(); custom.classList.toggle('open'); });
   custom.addEventListener('click', e => e.stopPropagation());
   document.addEventListener('click', () => custom.classList.remove('open'));
+
+  if (data.tip) {
+    const tip = document.getElementById('tip');
+    document.getElementById('tipText').textContent = data.tip;
+    tip.title = data.tip;
+    tip.classList.add('show');
+    document.getElementById('tipClose').addEventListener('click', () => { tip.classList.remove('show'); send('ntTips', false); });
+  }
 
   const marks = document.getElementById('marks');
   for (const mark of data.bookmarks) {

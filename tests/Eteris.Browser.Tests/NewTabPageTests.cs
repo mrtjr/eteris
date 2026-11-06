@@ -114,4 +114,15 @@ public class NewTabPageTests
         Assert.DoesNotContain("Trabalho", html);
         Assert.Contains("\"resume\":[]", html);
     }
+
+    [Fact]
+    public void Tip_ChangesDailyAndHidesWhenTurnedOffOrPrivate()
+    {
+        var today = NewTabPage.TipFor(new DateTime(2026, 11, 6, 8, 0, 0));
+        Assert.Equal(today, NewTabPage.TipFor(new DateTime(2026, 11, 6, 23, 59, 0)));
+        Assert.NotEqual(today, NewTabPage.TipFor(new DateTime(2026, 11, 7, 8, 0, 0)));
+        Assert.Contains("Sabia que", NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon));
+        Assert.Contains("\"tip\":null", NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, isPrivate: true));
+        Assert.Contains("\"tip\":null", NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, prefs: new UserSettings { NewTabTips = false }));
+    }
 }

@@ -30,6 +30,7 @@ public sealed record UserSettings
     public bool NewTabClock { get; init; } = true;
     public bool NewTabTiles { get; init; } = true;
     public bool NewTabWeek { get; init; } = true;
+    public bool NewTabTips { get; init; } = true;
     public bool SidebarCollapsed { get; init; }
     public string ReaderTheme { get; init; } = "dark";
     public int ReaderSize { get; init; } = 20;
@@ -47,6 +48,7 @@ public sealed record UserSettings
         "ntClock" when bool.TryParse(value, out var on) => this with { NewTabClock = on },
         "ntTiles" when bool.TryParse(value, out var on) => this with { NewTabTiles = on },
         "ntWeek" when bool.TryParse(value, out var on) => this with { NewTabWeek = on },
+        "ntTips" when bool.TryParse(value, out var on) => this with { NewTabTips = on },
         "notifications" when bool.TryParse(value, out var on) => this with { BlockNotificationPrompts = on },
         "cleanUrls" when bool.TryParse(value, out var on) => this with { CleanUrls = on },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },

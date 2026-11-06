@@ -55,6 +55,7 @@ public static class NewTabPage
             showClock = (prefs ?? new UserSettings()).NewTabClock,
             showTiles = (prefs ?? new UserSettings()).NewTabTiles,
             showWeek = (prefs ?? new UserSettings()).NewTabWeek,
+            tip = isPrivate || !(prefs ?? new UserSettings()).NewTabTips ? null : TipFor(now),
             week = isPrivate ? [] : week ?? [],
             weekTotal = isPrivate ? 0 : week?.Sum() ?? 0,
             weekSaved = Shields.PrivacyEstimate.Describe(isPrivate ? 0 : week?.Sum() ?? 0),
@@ -80,6 +81,25 @@ public static class NewTabPage
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
+
+    // «Sabia que…?»: uma dica por dia (muda à meia-noite), para descobrir o que não salta à vista.
+    public static readonly IReadOnlyList<string> Tips =
+    [
+        "Ctrl+K abre a paleta: comandos, abas de todas as janelas, favoritos e histórico num só sítio.",
+        "Ctrl+Shift+M encolhe a janela para um canto, sempre por cima — ótimo para um vídeo.",
+        "No modo de leitura (F9), «Ouvir» lê o artigo em voz alta com as vozes do Windows.",
+        "Selecione texto e use «Copiar link para este destaque»: o link abre a página já nesse parágrafo.",
+        "«Guardar abas como sessão» (Ctrl+K) guarda esta janela para reabrir quando quiser.",
+        "Ctrl+Shift+E abre as Notas, ao lado da página — e o 🔗 guarda o endereço atual.",
+        "«Escurecer este site» (Ctrl+K) dá modo escuro só aos sites que escolher.",
+        "Clique com o botão direito na barra de endereço: «Colar e ir» (Ctrl+Shift+V).",
+        "«Código QR desta página» (Ctrl+K) abre-a no telemóvel, sem contas nem sincronização.",
+        "Ctrl+Shift+L põe letras sobre os links: escreva-as para os abrir sem rato.",
+        "O ♫ na barra aparece quando algo toca: pause ou silencie qualquer aba sem sair desta.",
+        "Arraste uma aba para o lado da página para ver duas lado a lado.",
+    ];
+
+    public static string TipFor(DateTime localNow) => Tips[(int)(localNow.Date.Ticks / TimeSpan.TicksPerDay % Tips.Count)];
 
     // «Continuar»: até duas sessões guardadas e o resto em artigos por ler — no máximo quatro cartões.
     public static IReadOnlyList<ResumeCard> Resume(IReadOnlyList<ReadingItem> reading, IReadOnlyList<SavedSession> sessions)
