@@ -47,8 +47,16 @@ public partial class MainWindow
         Topmost = true;
         MiniTitle.Text = Tabs.Active?.Title ?? "Éteris";
         MiniBar.Visibility = Visibility.Visible;
-        FadeMiniBar(1);
+        // A barra fica à vista uns segundos para se perceber como voltar; depois só aparece com o rato.
+        _miniBarHoldUntil = DateTime.UtcNow.AddSeconds(3);
+        var intro = new DoubleAnimationUsingKeyFrames();
+        intro.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        intro.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(3))));
+        intro.KeyFrames.Add(new LinearDoubleKeyFrame(IsMouseOver ? 1 : 0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(3.4))));
+        MiniBar.BeginAnimation(OpacityProperty, intro);
     }
+
+    private DateTime _miniBarHoldUntil;
 
     private void ExitMiniWindow()
     {
@@ -73,8 +81,8 @@ public partial class MainWindow
 
     private void WatchMiniBar()
     {
-        MouseEnter += (_, _) => { if (_miniMode) FadeMiniBar(1); };
-        MouseLeave += (_, _) => { if (_miniMode) FadeMiniBar(0); };
+        MouseEnter += (_, _) => { if (_miniMode && DateTime.UtcNow >= _miniBarHoldUntil) FadeMiniBar(1); };
+        MouseLeave += (_, _) => { if (_miniMode && DateTime.UtcNow >= _miniBarHoldUntil) FadeMiniBar(0); };
         Tabs.PropertyChanged += (_, e) =>
         {
             if (_miniMode && e.PropertyName == nameof(TabsViewModel.Active)) MiniTitle.Text = Tabs.Active?.Title ?? "Éteris";
