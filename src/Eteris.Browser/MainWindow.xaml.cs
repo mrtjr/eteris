@@ -37,8 +37,7 @@ public partial class MainWindow : Window
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
-        Tabs.NewTab(initialUrl ?? NewTabPage.Url);
-        if (initialUrl is null) Loaded += (_, _) => FocusOmnibox();
+        StartTabs(initialUrl);
     }
 
     public TabsViewModel Tabs { get; } = new();
@@ -196,6 +195,7 @@ public partial class MainWindow : Window
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(BrowserTab.Address)) ScheduleSessionSave();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
