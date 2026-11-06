@@ -1,7 +1,6 @@
 ﻿using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -9,6 +8,7 @@ using System.Windows.Media.Imaging;
 using CefSharp;
 using CefSharp.Wpf;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Tabs;
 
@@ -16,15 +16,12 @@ namespace Eteris.Browser;
 
 public partial class MainWindow : Window
 {
-    public const string HomeUrl = "https://pt.wikipedia.org";
     private const double TabStripReserved = 40 + 36 + 56;
 
     public static readonly DependencyProperty TabWidthProperty = DependencyProperty.Register(
         nameof(TabWidth), typeof(double), typeof(MainWindow), new PropertyMetadata(TabLayout.MaxTabWidth));
 
     private readonly Dictionary<BrowserTab, ChromiumWebBrowser> _browsers = new();
-    private bool _omniboxEdited;
-    private bool _settingOmnibox;
 
     public MainWindow()
     {
@@ -34,9 +31,12 @@ public partial class MainWindow : Window
         Tabs.PropertyChanged += OnTabsPropertyChanged;
         StateChanged += (_, _) => OnWindowStateChanged();
         SourceInitialized += (_, _) => WindowEffects.Apply(this, borderColorRef: 0x0042302B);
+        Deactivated += (_, _) => CloseSuggestions();
+        LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
-        Tabs.NewTab(HomeUrl);
+        Tabs.NewTab(NewTabPage.Url);
+        Loaded += (_, _) => FocusOmnibox();
     }
 
     public TabsViewModel Tabs { get; } = new();
@@ -86,13 +86,29 @@ public partial class MainWindow : Window
             if (!SameHost(tab.Address, address)) tab.Favicon = null;
             tab.Address = address;
         };
-        browser.TitleChanged += (_, e) => tab.Title = e.NewValue is string { Length: > 0 } title ? title : tab.Address;
+        browser.TitleChanged += (_, e) =>
+        {
+            if (e.NewValue is not string { Length: > 0 } title)
+            {
+                tab.Title = tab.Address;
+                return;
+            }
+            tab.Title = title;
+            var url = tab.Address;
+            AppData.TryWrite(h => h.UpdateTitle(url, title));
+        };
         browser.LoadingStateChanged += (_, e) => Dispatcher.InvokeAsync(() =>
         {
             tab.IsLoading = e.IsLoading;
             tab.CanGoBack = e.CanGoBack;
             tab.CanGoForward = e.CanGoForward;
         });
+        browser.FrameLoadEnd += (_, e) =>
+        {
+            if (!e.Frame.IsMain || e.HttpStatusCode is <= 0 or >= 400) return;
+            var url = e.Url;
+            Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
+        };
         _browsers[tab] = browser;
         BrowserHost.Children.Add(browser);
     }
@@ -134,6 +150,7 @@ public partial class MainWindow : Window
         foreach (var (tab, browser) in _browsers)
             browser.Visibility = ReferenceEquals(tab, Tabs.Active) ? Visibility.Visible : Visibility.Hidden;
         _omniboxEdited = false;
+        CloseSuggestions();
         SyncOmnibox();
         SyncLoading();
     }
@@ -143,22 +160,6 @@ public partial class MainWindow : Window
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) SyncOmnibox();
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
-    }
-
-    // Nunca sobrescreve o que o utilizador está a escrever; fora disso a omnibox espelha sempre a aba ativa.
-    private void SyncOmnibox()
-    {
-        if (_omniboxEdited || Omnibox.IsKeyboardFocusWithin) return;
-        var address = Tabs.Active?.Address ?? string.Empty;
-        SetOmniboxText(address);
-        SiteIcon.Text = address.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? "" : "";
-    }
-
-    private void SetOmniboxText(string text)
-    {
-        _settingOmnibox = true;
-        Omnibox.Text = text;
-        _settingOmnibox = false;
     }
 
     private void SyncLoading()
@@ -172,34 +173,18 @@ public partial class MainWindow : Window
             : null);
     }
 
-    private void Navigate(string input)
-    {
-        var url = input.Trim();
-        if (url.Length == 0 || ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
-        if (!url.Contains("://")) url = "https://" + url;
-        _omniboxEdited = false;
-        tab.Address = url;
-        SetOmniboxText(url);
-        browser.Load(url);
-        Keyboard.Focus(browser);
-    }
-
     private void OpenNewTab()
     {
-        Tabs.NewTab(HomeUrl);
+        Tabs.NewTab(NewTabPage.Url);
+        _omniboxEdited = false;
         SetOmniboxText(string.Empty);
         Omnibox.Focus();
+        UpdateOmniboxChrome();
     }
 
     private void CloseTab(BrowserTab? tab)
     {
         if (tab is not null && Tabs.Close(tab)) Close();
-    }
-
-    private void FocusOmnibox()
-    {
-        Omnibox.Focus();
-        Omnibox.SelectAll();
     }
 
     private void UpdateTabWidth()
@@ -212,6 +197,7 @@ public partial class MainWindow : Window
         RootBorder.Margin = maximized ? new Thickness(frame.Left + 4, frame.Top + 4, frame.Right + 4, frame.Bottom + 4) : new Thickness(0);
         MaximizeButton.Content = maximized ? "" : "";
         MaximizeButton.ToolTip = maximized ? "Restaurar" : "Maximizar";
+        CloseSuggestions();
     }
 
     private void DisposeBrowsers()
@@ -243,42 +229,6 @@ public partial class MainWindow : Window
         else if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) Tabs.SelectByNumber(key - Key.NumPad0);
         else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) ActiveBrowser?.Stop();
         else e.Handled = false;
-    }
-
-    private void Omnibox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
-        {
-            Navigate(Omnibox.Text);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape)
-        {
-            _omniboxEdited = false;
-            SyncOmnibox();
-            if (ActiveBrowser is { } browser) Keyboard.Focus(browser);
-            e.Handled = true;
-        }
-    }
-
-    private void Omnibox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (!_settingOmnibox) _omniboxEdited = true;
-    }
-
-    private void Omnibox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => Omnibox.SelectAll();
-
-    private void Omnibox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (Omnibox.IsKeyboardFocusWithin) return;
-        Omnibox.Focus();
-        e.Handled = true;
-    }
-
-    private void Omnibox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (Omnibox.Text.Length == 0) _omniboxEdited = false;
-        SyncOmnibox();
     }
 
     private void TabStripHost_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateTabWidth();

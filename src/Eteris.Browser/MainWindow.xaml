@@ -85,6 +85,51 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SuggestionItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Suggestion_Click" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bg" CornerRadius="10" Background="Transparent" Padding="0,7,12,7" Cursor="Hand">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3" />
+                                    <ColumnDefinition Width="40" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,2" />
+                                <TextBlock x:Name="Icon" Grid.Column="1" Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                           Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding Text}" FontSize="14" Foreground="{StaticResource TextBrush}"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="520" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{Binding Detail, StringFormat={} — {0}}" FontSize="13"
+                                           Foreground="{StaticResource TextFaintBrush}" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Kind}" Value="Search">
+                                <Setter TargetName="Icon" Property="Text" Value="&#xE721;" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Navigate">
+                                <Setter TargetName="Icon" Property="Text" Value="&#xE71B;" />
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#2C3145" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="OmniboxFrame" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource FieldBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}" />
@@ -195,13 +240,43 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="SiteIcon" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
                                        Foreground="{StaticResource TextMutedBrush}" Margin="16,0,10,0" VerticalAlignment="Center" />
-                            <TextBox x:Name="Omnibox" Grid.Column="1" Style="{StaticResource BareTextBox}" Margin="0,0,16,0"
-                                     KeyDown="Omnibox_KeyDown" GotKeyboardFocus="Omnibox_GotKeyboardFocus"
-                                     TextChanged="Omnibox_TextChanged"
-                                     PreviewMouseLeftButtonDown="Omnibox_PreviewMouseLeftButtonDown"
-                                     LostKeyboardFocus="Omnibox_LostKeyboardFocus" />
+                            <Grid Grid.Column="1" Margin="0,0,16,0">
+                                <TextBox x:Name="Omnibox" Style="{StaticResource BareTextBox}"
+                                         PreviewKeyDown="Omnibox_PreviewKeyDown" GotKeyboardFocus="Omnibox_GotKeyboardFocus"
+                                         TextChanged="Omnibox_TextChanged"
+                                         PreviewMouseLeftButtonDown="Omnibox_PreviewMouseLeftButtonDown"
+                                         LostKeyboardFocus="Omnibox_LostKeyboardFocus" />
+                                <TextBlock x:Name="OmniboxDisplay" IsHitTestVisible="False" VerticalAlignment="Center"
+                                           FontSize="14" Margin="2,0,0,1" TextTrimming="CharacterEllipsis">
+                                    <Run x:Name="DisplayHost" Foreground="{StaticResource TextBrush}" /><Run x:Name="DisplayRest" Foreground="{StaticResource TextFaintBrush}" />
+                                </TextBlock>
+                                <TextBlock x:Name="OmniboxPlaceholder" IsHitTestVisible="False" VerticalAlignment="Center"
+                                           FontSize="14" Margin="2,0,0,1" Foreground="{StaticResource TextFaintBrush}"
+                                           Text="Pesquisar ou escrever um endereço" />
+                            </Grid>
                         </Grid>
                     </Border>
+
+                    <Popup x:Name="SuggestionPopup" PlacementTarget="{Binding ElementName=OmniboxFrame}" Placement="Bottom"
+                           HorizontalOffset="-14" VerticalOffset="4" AllowsTransparency="True" StaysOpen="True"
+                           PopupAnimation="Fade" Focusable="False">
+                        <Border Margin="14,0,14,24" Width="{Binding ActualWidth, ElementName=OmniboxFrame}"
+                                Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="6">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <ListBox x:Name="SuggestionList" Focusable="False" Background="Transparent" BorderThickness="0"
+                                     ItemContainerStyle="{StaticResource SuggestionItemStyle}"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.Template>
+                                    <ControlTemplate TargetType="ListBox">
+                                        <ItemsPresenter />
+                                    </ControlTemplate>
+                                </ListBox.Template>
+                            </ListBox>
+                        </Border>
+                    </Popup>
 
                     <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" />
                 </Grid>
