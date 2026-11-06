@@ -279,7 +279,10 @@ public partial class MainWindow : Window
     {
         var maximized = WindowState == WindowState.Maximized;
         var frame = SystemParameters.WindowResizeBorderThickness;
-        RootBorder.Margin = maximized ? new Thickness(frame.Left + 4, frame.Top + 4, frame.Right + 4, frame.Bottom + 4) : new Thickness(0);
+        // Maximizada com moldura, o Windows estende a janela para lá do ecrã; sem moldura (ecrã inteiro) não.
+        RootBorder.Margin = maximized && WindowStyle != WindowStyle.None
+            ? new Thickness(frame.Left + 4, frame.Top + 4, frame.Right + 4, frame.Bottom + 4)
+            : new Thickness(0);
         MaximizeButton.Content = MaximizeButton2.Content = maximized ? "" : "";
         MaximizeButton.ToolTip = MaximizeButton2.ToolTip = maximized ? "Restaurar" : "Maximizar";
         CloseSuggestions();
