@@ -311,7 +311,7 @@ public partial class MainWindow
 
     // ---------- Íris adaptativa: a interface ganha o tom do site ----------
 
-    private void DetectSiteTint(BrowserTab tab, CefSharp.Wpf.ChromiumWebBrowser browser, string url)
+    private void DetectSiteTint(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
     {
         if (NewTabPage.IsNewTab(url))
         {

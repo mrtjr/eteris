@@ -80,7 +80,4 @@ public sealed class ProfileCleanupTests : IDisposable
         Assert.Equal("url-source=http://127.0.0.1:9/", args["component-updater"]);
         Assert.Contains("OptimizationGuideModelDownloading", args["disable-features"]);
     }
-
-    [Fact]
-    public void Tabs_RenderAtSixtyFramesPerSecond() => Assert.Equal(60, Eteris.Browser.Infrastructure.CefConfigurator.FrameRate);
 }

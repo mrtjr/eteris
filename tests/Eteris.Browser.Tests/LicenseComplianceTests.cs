@@ -42,7 +42,7 @@ public class LicenseComplianceTests
         var index = Read("licenses", "INDEX.md");
         var csproj = Read("src", "Eteris.Browser", "Eteris.Browser.csproj");
         // Nome com que cada pacote aparece no índice (por omissão, o próprio id).
-        var names = new Dictionary<string, string> { ["CefSharp.Wpf.NETCore"] = "CefSharp" };
+        var names = new Dictionary<string, string> { ["CefSharp.Wpf.NETCore"] = "CefSharp", ["CefSharp.Wpf.HwndHost"] = "CefSharp" };
         foreach (Match package in Regex.Matches(csproj, "<PackageReference Include=\"([^\"]+)\""))
         {
             var id = package.Groups[1].Value;

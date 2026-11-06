@@ -2,7 +2,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using CefSharp.Wpf;
+using CefSharp;
+using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
@@ -82,6 +83,7 @@ public partial class MainWindow
             var pane = _split?.PaneOf(tab);
             var visible = pane is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));
             browser.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
+            if (browser is ChromiumWebBrowser cef && cef.IsBrowserInitialized) SetPageVisible(tab, cef, visible);
             Grid.SetColumn(browser, pane == SplitPane.Right ? 2 : 0);
             Grid.SetColumnSpan(browser, pane is null ? 3 : 1);
         }

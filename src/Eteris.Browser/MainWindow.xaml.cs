@@ -6,7 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using CefSharp;
-using CefSharp.Wpf;
+using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
@@ -105,10 +105,13 @@ public partial class MainWindow : Window
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
-            // Renderização fora da tela: o CEF fica em 30 quadros por segundo se ninguém disser nada, e a rolagem e as
-            // animações ficam travadas. 60 é o máximo neste modo (o mesmo que a maioria dos ecrãs).
-            BrowserSettings = { WindowlessFrameRate = Infrastructure.CefConfigurator.FrameRate },
+            // A página é desenhada pelo próprio Chromium numa janela filha (como no Chrome, Firefox e Brave), sem a
+            // cópia de cada quadro para o WPF: ~4× menos processador. Ver docs/paridade.md.
             Visibility = Visibility.Hidden,
+            // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
+            // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
+            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage),
+            FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url)),
@@ -134,9 +137,9 @@ public partial class MainWindow : Window
                 onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab))),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
-        browser.AddressChanged += (_, e) =>
+        DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
         {
-            if (e.NewValue is not string address) return;
+            if (browser.Address is not string address) return;
             // Na página de erro a omnibox continua a mostrar o endereço que falhou.
             if (ErrorPage.IsErrorPage(address)) address = ErrorPage.FailedUrl(address) ?? address;
             var hostChanged = !SameHost(tab.Address, address);
@@ -151,7 +154,7 @@ public partial class MainWindow : Window
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             if (IsVideoSite(address)) Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
-        };
+        });
         browser.ConsoleMessage += (_, e) =>
         {
             // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.
@@ -222,6 +225,8 @@ public partial class MainWindow : Window
         browser.IsBrowserInitializedChanged += (_, _) =>
         {
             if (browser.IsBrowserInitialized && tab.IsMuted) browser.GetBrowserHost()?.SetAudioMuted(true);
+            // Abas abertas em segundo plano: a janela do Chromium fica logo escondida (ver SetPageWindowVisible).
+            if (browser.IsBrowserInitialized) Dispatcher.InvokeAsync(LayoutBrowsers);
         };
         _browsers[tab] = browser;
         BrowserHost.Children.Add(browser);
@@ -356,44 +361,81 @@ public partial class MainWindow : Window
         e.Handled = true;
 
         if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
-        else if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) ToggleShortcuts();
-        else if (ctrl && key == Key.K) TogglePalette();
-        else if (ctrl && key == Key.J) ToggleDownloads();
-        else if (ctrl && key == Key.D) ToggleBookmark();
-        else if ((ctrl && key == Key.F) || key == Key.F3) OpenFind();
-        else if (key == Key.F11) ToggleFocusMode();
-        else if (key == Key.F9) ToggleReader();
-        else if (key == Key.F12 || (ctrl && shift && key == Key.I)) ShowDevTools();
-        else if (ctrl && key == Key.U) ViewSource();
-        else if (ctrl && key == Key.H) OpenHistory();
-        else if (ctrl && shift && key == Key.L) ShowLinkHints();
-        else if (ctrl && shift && key == Key.E && !IsPrivate) ToggleNotes();
-        else if (ctrl && shift && key == Key.M) ToggleMiniWindow();
-        else if (ctrl && shift && key == Key.O) OpenBookmarks();
-        else if (ctrl && shift && key == Key.S) CapturePage(fullPage: true);
-        else if (ctrl && key == Key.OemComma) OpenSettings();
-        else if (ctrl && key == Key.P) ActiveBrowser?.Print();
-        else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
-        else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);
-        else if (ctrl && key is Key.D0 or Key.NumPad0) Zoom(0);
-        else if (ctrl && shift && key == Key.N) OpenWindow(isPrivate: true);
-        else if (ctrl && key == Key.N) OpenWindow(isPrivate: false);
-        else if (ctrl && shift && key == Key.T) Tabs.ReopenClosed();
-        else if (ctrl && key == Key.T) OpenNewTab();
-        else if (ctrl && (key == Key.W || key == Key.F4)) CloseTab(Tabs.Active);
-        else if (ctrl && key == Key.Tab) { if (shift) Tabs.SelectPrevious(); else Tabs.SelectNext(); }
-        else if (ctrl && key == Key.PageDown) Tabs.SelectNext();
-        else if (ctrl && key == Key.PageUp) Tabs.SelectPrevious();
-        else if ((ctrl && key == Key.L) || (alt && key == Key.D) || key == Key.F6) FocusOmnibox();
-        else if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) ReloadActive(ignoreCache: true);
-        else if ((ctrl && key == Key.R) || key == Key.F5) ReloadActive();
-        else if (alt && key == Key.Left) GoBack();
-        else if (alt && key == Key.Right) GoForward();
-        else if (ctrl && key >= Key.D1 && key <= Key.D9) Tabs.SelectByNumber(key - Key.D0);
-        else if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) Tabs.SelectByNumber(key - Key.NumPad0);
+        else if (Shortcut(key, ctrl, shift, alt) is { } action) action();
         else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();
         else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) StopActive();
         else e.Handled = false;
+    }
+
+    // Os atalhos do Éteris, iguais venha a tecla da interface ou da página (que, desenhada numa janela própria, recebe
+    // o teclado diretamente — ver ShortcutFromPage). Só decide; a ação corre na thread da janela.
+    // Ctrl+Alt nunca é atalho: é assim que o Windows comunica o AltGr (AltGr+W, AltGr+Q… escrevem caracteres).
+    private Action? Shortcut(Key key, bool ctrl, bool shift, bool alt)
+    {
+        if (ctrl && alt) return null;
+        if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) return ToggleShortcuts;
+        if (ctrl && key == Key.K) return TogglePalette;
+        if (ctrl && key == Key.J) return ToggleDownloads;
+        if (ctrl && key == Key.D) return ToggleBookmark;
+        if ((ctrl && key == Key.F) || key == Key.F3) return OpenFind;
+        if (key == Key.F11) return ToggleFocusMode;
+        if (key == Key.F9) return ToggleReader;
+        if (key == Key.F12 || (ctrl && shift && key == Key.I)) return ShowDevTools;
+        if (ctrl && key == Key.U) return ViewSource;
+        if (ctrl && key == Key.H) return OpenHistory;
+        if (ctrl && shift && key == Key.L) return ShowLinkHints;
+        if (ctrl && shift && key == Key.E && !IsPrivate) return ToggleNotes;
+        if (ctrl && shift && key == Key.M) return ToggleMiniWindow;
+        if (ctrl && shift && key == Key.O) return OpenBookmarks;
+        if (ctrl && shift && key == Key.S) return () => CapturePage(fullPage: true);
+        if (ctrl && key == Key.OemComma) return OpenSettings;
+        if (ctrl && key == Key.P) return () => ActiveBrowser?.Print();
+        if (ctrl && key is Key.OemPlus or Key.Add) return () => Zoom(1);
+        if (ctrl && key is Key.OemMinus or Key.Subtract) return () => Zoom(-1);
+        if (ctrl && key is Key.D0 or Key.NumPad0) return () => Zoom(0);
+        if (ctrl && shift && key == Key.N) return () => OpenWindow(isPrivate: true);
+        if (ctrl && key == Key.N) return () => OpenWindow(isPrivate: false);
+        if (ctrl && shift && key == Key.T) return () => Tabs.ReopenClosed();
+        if (ctrl && key == Key.T) return OpenNewTab;
+        if (ctrl && (key == Key.W || key == Key.F4)) return () => CloseTab(Tabs.Active);
+        if (ctrl && key == Key.Tab) return shift ? Tabs.SelectPrevious : Tabs.SelectNext;
+        if (ctrl && key == Key.PageDown) return Tabs.SelectNext;
+        if (ctrl && key == Key.PageUp) return Tabs.SelectPrevious;
+        if ((ctrl && key == Key.L) || (alt && key == Key.D) || key == Key.F6) return FocusOmnibox;
+        if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) return () => ReloadActive(ignoreCache: true);
+        if ((ctrl && key == Key.R) || key == Key.F5) return () => ReloadActive();
+        if (alt && key == Key.Left) return GoBack;
+        if (alt && key == Key.Right) return GoForward;
+        if (ctrl && key >= Key.D1 && key <= Key.D9) return () => Tabs.SelectByNumber(key - Key.D0);
+        if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) return () => Tabs.SelectByNumber(key - Key.NumPad0);
+        return null;
+    }
+
+    // Tecla premida com o foco na página (thread do CEF): os atalhos do Éteris são consumidos e corridos na janela;
+    // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
+    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt)
+    {
+        var key = KeyInterop.KeyFromVirtualKey(virtualKey);
+        if (Shortcut(key, ctrl, shift, alt) is { } action)
+        {
+            Dispatcher.InvokeAsync(action);
+            return true;
+        }
+        if (key == Key.Escape)
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (ShortcutsOpen) CloseShortcuts();
+                else if (_pageFullscreen) ExitPageFullscreen();
+                else if (Tabs.Active?.IsLoading == true) StopActive();
+            });
+        return false;
+    }
+
+    // A página recebeu o foco (clique, Tab): no ecrã dividido, a metade em que se clicou passa a ser a ativa.
+    private void OnPageFocused(BrowserTab tab)
+    {
+        CloseSuggestions();
+        if (IsSplit && !ReferenceEquals(Tabs.Active, tab) && _split!.PaneOf(tab) is not null) Tabs.Active = tab;
     }
 
     private void TabStripHost_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateTabWidth();

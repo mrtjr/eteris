@@ -62,7 +62,7 @@ public partial class MainWindow
 
     // Regras genéricas das listas (##.classe, ###id): aplicadas às classes e ids que existem na página,
     // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde.
-    private static async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.ChromiumWebBrowser browser, string url)
+    private static async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
     {
         if (ShieldEngine.Cosmetic is not { } engine) return;
         if (WebHost(url) is not { } host || !AppData.IsShieldOn(host)) return;

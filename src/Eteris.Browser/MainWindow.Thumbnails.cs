@@ -2,7 +2,7 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using CefSharp;
 using CefSharp.DevTools.Page;
-using CefSharp.Wpf;
+using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;

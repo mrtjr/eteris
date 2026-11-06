@@ -1,7 +1,7 @@
 using System.Windows;
 using CefSharp;
 using System.Windows.Input;
-using CefSharp.Wpf;
+using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Tabs;
 
