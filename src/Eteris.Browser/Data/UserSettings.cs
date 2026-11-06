@@ -9,6 +9,7 @@ public sealed record UserSettings
 {
     public static readonly string[] Engines = ["duckduckgo", "brave", "startpage"];
     public static readonly int[] SleepChoices = [0, 5, 20, 60];
+    public static readonly string[] NewTabThemes = ["aurora", "ocean", "sunset", "forest", "minimal"];
 
     public string SearchEngine { get; init; } = "duckduckgo";
     public string Startup { get; init; } = "restore";
@@ -19,6 +20,10 @@ public sealed record UserSettings
     public bool VerticalTabs { get; init; }
     public bool BlockAutoplay { get; init; } = true;
     public bool SearchSuggestions { get; init; }
+    public string NewTabTheme { get; init; } = "aurora";
+    public bool NewTabClock { get; init; } = true;
+    public bool NewTabTiles { get; init; } = true;
+    public bool NewTabWeek { get; init; } = true;
     public bool SidebarCollapsed { get; init; }
 
     public UserSettings? With(string key, string value) => key switch
@@ -29,6 +34,10 @@ public sealed record UserSettings
         "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
         "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
         "mica" when bool.TryParse(value, out var on) => this with { Mica = on },
+        "ntTheme" when NewTabThemes.Contains(value) => this with { NewTabTheme = value },
+        "ntClock" when bool.TryParse(value, out var on) => this with { NewTabClock = on },
+        "ntTiles" when bool.TryParse(value, out var on) => this with { NewTabTiles = on },
+        "ntWeek" when bool.TryParse(value, out var on) => this with { NewTabWeek = on },
         "suggest" when bool.TryParse(value, out var on) => this with { SearchSuggestions = on },
         "autoplay" when bool.TryParse(value, out var on) => this with { BlockAutoplay = on },
         "verticalTabs" when bool.TryParse(value, out var on) => this with { VerticalTabs = on },

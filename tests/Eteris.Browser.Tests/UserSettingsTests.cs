@@ -53,6 +53,8 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("verticalTabs", "true")]
     [InlineData("autoplay", "false")]
     [InlineData("suggest", "true")]
+    [InlineData("ntTheme", "sunset")]
+    [InlineData("ntTiles", "false")]
     [InlineData("sidebarCollapsed", "true")]
     public void With_AcceptsValidValues(string key, string value)
         => Assert.NotNull(new UserSettings().With(key, value));
@@ -64,6 +66,7 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("sleep", "-3")]
     [InlineData("httpsFirst", "talvez")]
     [InlineData("unknown", "x")]
+    [InlineData("ntTheme", "neon")]
     public void With_RejectsInvalidValues(string key, string value)
         => Assert.Null(new UserSettings().With(key, value));
 

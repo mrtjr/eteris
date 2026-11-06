@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; frame-src eteris:">
 <meta name="color-scheme" content="dark">
 <title>Nova aba</title>
 <style>
@@ -23,10 +23,10 @@
     position: absolute; width: 48vmax; height: 48vmax; border-radius: 50%;
     mix-blend-mode: screen; animation: drift 28s ease-in-out infinite alternate;
   }
-  .aurora span:nth-child(1) { background: #8b5cf6; top: 2%; left: 8%; }
-  .aurora span:nth-child(2) { background: #22d3ee; top: 28%; left: 52%; animation-duration: 34s; animation-delay: -7s; }
-  .aurora span:nth-child(3) { background: #34d399; top: 58%; left: 18%; animation-duration: 40s; animation-delay: -14s; opacity: .65; }
-  .aurora span:nth-child(4) { background: #f472b6; top: -12%; left: 62%; animation-duration: 30s; animation-delay: -3s; opacity: .55; }
+  .aurora span:nth-child(1) { background: var(--a1, #8b5cf6); top: 2%; left: 8%; }
+  .aurora span:nth-child(2) { background: var(--a2, #22d3ee); top: 28%; left: 52%; animation-duration: 34s; animation-delay: -7s; }
+  .aurora span:nth-child(3) { background: var(--a3, #34d399); top: 58%; left: 18%; animation-duration: 40s; animation-delay: -14s; opacity: .65; }
+  .aurora span:nth-child(4) { background: var(--a4, #f472b6); top: -12%; left: 62%; animation-duration: 30s; animation-delay: -3s; opacity: .55; }
   @keyframes drift {
     0%   { transform: translate(0, 0) scale(1); }
     50%  { transform: translate(9vmax, -7vmax) scale(1.18); }
@@ -108,6 +108,44 @@
   .bars div:last-child i { opacity: 1; box-shadow: 0 0 12px rgba(34, 211, 238, .55); }
   .bars span { font-size: 10px; color: var(--faint); }
   @media (max-width: 900px), (max-height: 640px) { .week { display: none !important; } }
+  body[data-theme="ocean"]   { --a1: #1d4ed8; --a2: #06b6d4; --a3: #0ea5e9; --a4: #6366f1; }
+  body[data-theme="sunset"]  { --a1: #f97316; --a2: #f43f5e; --a3: #eab308; --a4: #a855f7; }
+  body[data-theme="forest"]  { --a1: #15803d; --a2: #22c55e; --a3: #0d9488; --a4: #65a30d; }
+  body[data-theme="minimal"] .aurora { display: none; }
+  body[data-theme="minimal"] .veil { background: radial-gradient(ellipse 80% 60% at 50% 30%, #141826 0%, var(--bg) 70%); }
+  .aurora span { transition: background 1.2s ease; }
+  body.no-clock .clock { display: none; }
+  body.no-clock .greet { margin-top: 0; }
+  body.no-tiles .tiles, body.no-tiles .marks { display: none; }
+  body.no-week .week { display: none !important; }
+  .gear {
+    position: fixed; left: 22px; bottom: 18px; z-index: 3; width: 38px; height: 38px; border-radius: 19px; cursor: pointer;
+    border: 1px solid var(--line); background: rgba(22, 25, 35, .55); backdrop-filter: blur(14px); color: var(--muted);
+    display: grid; place-items: center; transition: color .15s, transform .4s ease, background .15s;
+  }
+  .gear:hover { color: var(--text); background: rgba(40, 44, 60, .7); transform: rotate(60deg); }
+  .gear svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .custom {
+    position: fixed; left: 22px; bottom: 66px; z-index: 4; width: 290px; padding: 18px; border-radius: 20px; display: none;
+    background: rgba(22, 25, 35, .88); border: 1px solid var(--line); backdrop-filter: blur(24px); box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+  }
+  .custom.open { display: block; animation: rise .25s ease-out both; }
+  .custom h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-bottom: 10px; }
+  .swatches { display: flex; gap: 10px; margin-bottom: 18px; }
+  .swatch { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s, border-color .15s; }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.on { border-color: #e9ebf2; }
+  .swatch[data-theme="aurora"]  { background: conic-gradient(#8b5cf6, #22d3ee, #34d399, #f472b6, #8b5cf6); }
+  .swatch[data-theme="ocean"]   { background: conic-gradient(#1d4ed8, #06b6d4, #0ea5e9, #6366f1, #1d4ed8); }
+  .swatch[data-theme="sunset"]  { background: conic-gradient(#f97316, #f43f5e, #eab308, #a855f7, #f97316); }
+  .swatch[data-theme="forest"]  { background: conic-gradient(#15803d, #22c55e, #0d9488, #65a30d, #15803d); }
+  .swatch[data-theme="minimal"] { background: #141826; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+  .opt { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; font-size: 13.5px; color: var(--muted); cursor: pointer; }
+  .opt input { appearance: none; width: 38px; height: 22px; border-radius: 11px; background: #2c3042; position: relative; cursor: pointer; transition: background .2s; }
+  .opt input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #e9ebf2; transition: transform .2s; }
+  .opt input:checked { background: linear-gradient(135deg, #8b5cf6, #22d3ee); }
+  .opt input:checked::after { transform: translateX(16px); }
+  body.private .gear, body.private .custom { display: none !important; }
   body.private { --bg: #0e0a18; }
   body.private .aurora span:nth-child(2), body.private .aurora span:nth-child(3) { background: #6d28d9; }
   body.private .aurora span:nth-child(4) { background: #312e81; }
@@ -135,6 +173,24 @@
   <div class="saved" id="weekSaved"></div>
   <div class="bars" id="weekBars"></div>
 </aside>
+<button class="gear" id="gear" title="Personalizar a nova aba" aria-label="Personalizar a nova aba">
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+</button>
+<div class="custom" id="custom" role="dialog" aria-label="Personalizar a nova aba">
+  <h4>Fundo</h4>
+  <div class="swatches" id="swatches">
+    <div class="swatch" data-theme="aurora" title="Aurora"></div>
+    <div class="swatch" data-theme="ocean" title="Oceano"></div>
+    <div class="swatch" data-theme="sunset" title="Pôr do sol"></div>
+    <div class="swatch" data-theme="forest" title="Floresta"></div>
+    <div class="swatch" data-theme="minimal" title="Mínimo (sem animação)"></div>
+  </div>
+  <h4>Mostrar</h4>
+  <label class="opt">Relógio e saudação<input type="checkbox" data-key="ntClock" data-class="no-clock"></label>
+  <label class="opt">Sites e favoritos<input type="checkbox" data-key="ntTiles" data-class="no-tiles"></label>
+  <label class="opt">Painel da semana<input type="checkbox" data-key="ntWeek" data-class="no-week"></label>
+</div>
+<iframe id="sink" title="" style="display:none"></iframe>
 <footer><i></i><span id="status">Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
 <script type="application/json" id="data">{{DATA}}</script>
 <script>
@@ -188,6 +244,28 @@
     });
     document.getElementById('week').classList.add('show');
   }
+
+  // Personalização (tema e o que se mostra), guardada nas definições do Éteris.
+  const send = (key, value) => {
+    document.getElementById('sink').src = `eteris://newtab/set?k=${key}&v=${encodeURIComponent(value)}&t=${data.token}&n=${Date.now()}`;
+  };
+  document.body.dataset.theme = data.theme;
+  const flags = { ntClock: data.showClock, ntTiles: data.showTiles, ntWeek: data.showWeek };
+  const swatches = [...document.querySelectorAll('.swatch')];
+  const paintSwatches = () => swatches.forEach(s => s.classList.toggle('on', s.dataset.theme === document.body.dataset.theme));
+  paintSwatches();
+  swatches.forEach(s => s.addEventListener('click', () => {
+    document.body.dataset.theme = s.dataset.theme; paintSwatches(); send('ntTheme', s.dataset.theme);
+  }));
+  document.querySelectorAll('.opt input').forEach(input => {
+    input.checked = !!flags[input.dataset.key];
+    document.body.classList.toggle(input.dataset.class, !input.checked);
+    input.addEventListener('change', () => { document.body.classList.toggle(input.dataset.class, !input.checked); send(input.dataset.key, input.checked); });
+  });
+  const custom = document.getElementById('custom');
+  document.getElementById('gear').addEventListener('click', e => { e.stopPropagation(); custom.classList.toggle('open'); });
+  custom.addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => custom.classList.remove('open'));
 
   const marks = document.getElementById('marks');
   for (const mark of data.bookmarks) {

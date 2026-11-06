@@ -13,11 +13,17 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
     public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request)
     {
         Uri.TryCreate(request.Url, UriKind.Absolute, out var uri);
+        if (uri is { Host: "newtab", AbsolutePath: "/set" })
+        {
+            var ok = InternalPages.IsAuthorized(request.Url) && InternalPages.Query(uri, "k") is { } key && key.StartsWith("nt", StringComparison.Ordinal)
+                     && InternalPages.Query(uri, "v") is { } value && Settings.Set(key, value);
+            return Text(ok ? "ok" : "recusado");
+        }
         if (uri is { Host: "newtab", AbsolutePath: "/" })
         {
             var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Preferred, DateTime.Now,
                 Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url),
-                NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek());
+                NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek(), Settings.Current);
             return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
         }
 
