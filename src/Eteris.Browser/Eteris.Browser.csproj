@@ -28,6 +28,7 @@
   </Target>
 
   <ItemGroup>
+    <Resource Include="Assets\eteris.ico" />
     <EmbeddedResource Include="Browser\newtab.html" />
     <EmbeddedResource Include="Browser\error.html" />
     <EmbeddedResource Include="Browser\history.html" />
