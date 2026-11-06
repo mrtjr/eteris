@@ -79,4 +79,14 @@ public sealed class PermissionsTests : IDisposable
     [InlineData("http://localhost:3000", "localhost:3000")]
     public void Site_IsHostWithNonDefaultPort(string origin, string expected)
         => Assert.Equal(expected, PermissionRules.Site(origin));
+
+    [Fact]
+    public void NotificationOnlyPrompts_AreAutoDeniedByDefault()
+    {
+        Assert.True(PermissionRules.AutoDeny([SitePermission.Notifications], blockNotificationPrompts: true));
+        Assert.False(PermissionRules.AutoDeny([SitePermission.Notifications], blockNotificationPrompts: false));
+        Assert.False(PermissionRules.AutoDeny([SitePermission.Notifications, SitePermission.Camera], blockNotificationPrompts: true));
+        Assert.False(PermissionRules.AutoDeny([SitePermission.Location], blockNotificationPrompts: true));
+        Assert.True(new Eteris.Browser.Data.UserSettings().BlockNotificationPrompts);
+    }
 }

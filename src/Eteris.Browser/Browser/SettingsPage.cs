@@ -60,6 +60,7 @@ public static class SettingsPage
             clearOnExit = settings.ClearOnExit,
             theme = settings.Theme,
             cleanUrls = settings.CleanUrls,
+            notifications = settings.BlockNotificationPrompts,
             imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
             sites = (sites ?? []).Select(s => new
             {

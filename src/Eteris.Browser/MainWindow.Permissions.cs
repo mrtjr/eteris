@@ -17,11 +17,19 @@ public partial class MainWindow
     private SitePermissionStore SitePermissions => _sitePermissions ??= new SitePermissionStore(AppPaths.Database);
 
     private SitePermissionHandler PermissionHandler => _permissionHandler ??= new SitePermissionHandler(SitePermissions,
-        (site, kinds, respond) => Dispatcher.InvokeAsync(() =>
+        (site, kinds, respond) =>
+        {
+            if (PermissionRules.AutoDeny(kinds, Data.Settings.Current.BlockNotificationPrompts))
+            {
+                respond(false);
+                return;
+            }
+            Dispatcher.InvokeAsync(() =>
         {
             _permissionQueue.Enqueue(new PendingPermission(site, kinds, respond));
             ShowNextPermission();
-        }));
+        });
+        });
 
     private void ShowNextPermission()
     {

@@ -55,6 +55,10 @@ public static class PermissionRules
             ? uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}"
             : origin;
 
+    // Pedidos só de notificações são recusados sem perguntar quando o utilizador assim o quer (é o padrão).
+    public static bool AutoDeny(IReadOnlyCollection<SitePermission> kinds, bool blockNotificationPrompts)
+        => blockNotificationPrompts && kinds.Count > 0 && kinds.All(k => k == SitePermission.Notifications);
+
     public static PermissionDecision Decide(SitePermissionStore store, string site, IReadOnlyCollection<SitePermission> kinds)
     {
         if (kinds.Count == 0) return PermissionDecision.Deny;
