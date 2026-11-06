@@ -9,9 +9,11 @@ public partial class MainWindow
 {
     private IEnumerable<PaletteCommand> SessionCommands()
     {
+        // Numa janela privada não se mostra nada do perfil normal (como na nova aba privada).
+        if (IsPrivate) yield break;
         var saved = AppData.SavedSessions();
         var tabs = SessionTabs();
-        if (!IsPrivate && tabs.Count > 0)
+        if (tabs.Count > 0)
             yield return new("", "Guardar abas como sessão",
                 $"{Plural(tabs.Count, "aba", "abas")} desta janela, para reabrir mais tarde pela paleta", null, () => SaveSession(tabs));
 
