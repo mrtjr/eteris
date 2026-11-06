@@ -66,6 +66,36 @@
             </Setter>
         </Style>
 
+        <Style x:Key="TabCardTip" TargetType="ToolTip">
+            <Setter Property="Placement" Value="Bottom" />
+            <Setter Property="VerticalOffset" Value="4" />
+            <Setter Property="HasDropShadow" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border Margin="10,0,10,20" Width="300" CornerRadius="14" Padding="14,12"
+                                Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="22" ShadowDepth="6" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"
+                                           TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,3,0,0" />
+                                <TextBlock x:Name="Status" Text="{Binding StatusLine}" FontSize="11.5" Foreground="{StaticResource IrisBrush}"
+                                           Margin="0,8,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding StatusLine}" Value="">
+                                <Setter TargetName="Status" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="TabItemStyle" TargetType="ListBoxItem">
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Focusable" Value="False" />
@@ -77,7 +107,10 @@
                     <ControlTemplate TargetType="ListBoxItem">
                         <Grid x:Name="TabRoot" Height="36" Background="Transparent"
                               Width="{Binding TabWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                              ToolTip="{Binding Title}">
+                              ToolTipService.InitialShowDelay="450" ToolTipService.Placement="Bottom">
+                            <Grid.ToolTip>
+                                <ToolTip Style="{StaticResource TabCardTip}" />
+                            </Grid.ToolTip>
                             <Border x:Name="Bg" CornerRadius="10,10,0,0" Background="Transparent" />
                             <Border x:Name="Glow" Height="2" VerticalAlignment="Top" Margin="14,0" CornerRadius="1"
                                     Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
@@ -174,7 +207,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Grid x:Name="Row" Height="38" Margin="6,1" Background="Transparent" Cursor="Hand" ToolTip="{Binding Title}">
+                        <Grid x:Name="Row" Height="38" Margin="6,1" Background="Transparent" Cursor="Hand" ToolTipService.InitialShowDelay="450" ToolTipService.Placement="Bottom">
+                            <Grid.ToolTip>
+                                <ToolTip Style="{StaticResource TabCardTip}" />
+                            </Grid.ToolTip>
                             <Border x:Name="Bg" CornerRadius="10" Background="Transparent" />
                             <Border x:Name="Bar" Width="3" HorizontalAlignment="Left" Margin="0,9" CornerRadius="1.5"
                                     Background="{StaticResource IrisBrush}" Visibility="Hidden" />

@@ -7,6 +7,7 @@ public partial class BrowserTab : ObservableObject
 {
     public BrowserTab(string address) => _address = address;
 
+    [NotifyPropertyChangedFor(nameof(Host))]
     [ObservableProperty]
     private string _address;
 
@@ -26,6 +27,7 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _canGoForward;
 
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private int _blockedCount;
 
@@ -35,15 +37,19 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private Color? _tint;
 
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private bool _isSleeping;
 
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private bool _isAudible;
 
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private bool _isPinned;
 
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private bool _isMuted;
 
@@ -64,6 +70,31 @@ public partial class BrowserTab : ObservableObject
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
         BlockedCount++;
+    }
+
+    // Cartão da aba: domínio legível e uma linha de estado.
+    public string Host
+    {
+        get
+        {
+            if (!Uri.TryCreate(Address, UriKind.Absolute, out var uri) || uri.Scheme == "eteris") return "Éteris";
+            var host = uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
+            return uri.IsDefaultPort ? host : $"{host}:{uri.Port}";
+        }
+    }
+
+    public string StatusLine
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (IsPinned) parts.Add("Fixada");
+            if (IsSleeping) parts.Add("A dormir (memória libertada)");
+            if (IsMuted) parts.Add("Som silenciado");
+            else if (IsAudible) parts.Add("A tocar som");
+            if (BlockedCount > 0) parts.Add(BlockedCount == 1 ? "1 rastreador bloqueado" : $"{BlockedCount} rastreadores bloqueados");
+            return string.Join(" · ", parts);
+        }
     }
 
     public void ResetShield()
