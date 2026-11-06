@@ -23,8 +23,12 @@ public sealed class PopupToTabHandler(Func<bool, string, string?, bool> allow, A
     }
 }
 
-public sealed class FaviconHandler(Action<string?> onFavicon) : CefSharp.Handler.DisplayHandler
+public sealed class FaviconHandler(Action<string?> onFavicon, Action<bool>? onFullscreen = null) : CefSharp.Handler.DisplayHandler
 {
     protected override void OnFaviconUrlChange(IWebBrowser chromiumWebBrowser, IBrowser browser, IList<string> urls)
         => onFavicon(urls.Count > 0 ? urls[0] : null);
+
+    // Ecrã inteiro pedido pela página (vídeos, jogos, apresentações).
+    protected override void OnFullscreenModeChange(IWebBrowser chromiumWebBrowser, IBrowser browser, bool fullscreen)
+        => onFullscreen?.Invoke(fullscreen);
 }

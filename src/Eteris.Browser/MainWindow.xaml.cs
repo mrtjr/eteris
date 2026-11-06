@@ -96,7 +96,8 @@ public partial class MainWindow : Window
                     ShieldStats.CountBlocked();
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 }),
-            DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url))),
+            DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url)),
+                fullscreen => Dispatcher.InvokeAsync(() => OnPageFullscreen(tab, fullscreen))),
             RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
             DownloadHandler = DownloadHandler,
             FindHandler = NewFindHandler(),
@@ -329,6 +330,7 @@ public partial class MainWindow : Window
         else if (alt && key == Key.Right) ActiveBrowser?.Forward();
         else if (ctrl && key >= Key.D1 && key <= Key.D9) Tabs.SelectByNumber(key - Key.D0);
         else if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) Tabs.SelectByNumber(key - Key.NumPad0);
+        else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();
         else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) ActiveBrowser?.Stop();
         else e.Handled = false;
     }

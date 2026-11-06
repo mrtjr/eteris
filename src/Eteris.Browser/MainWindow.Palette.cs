@@ -203,8 +203,6 @@ public partial class MainWindow
     {
         _focusMode = !_focusMode;
         ApplyChromeLayout();
-        _pageRadius = _focusMode ? 0 : 10;
-        BrowserHost.Clip = new RectangleGeometry(new Rect(BrowserHost.RenderSize), _pageRadius, _pageRadius);
         CloseSuggestions();
         ShieldPopup.IsOpen = false;
 
