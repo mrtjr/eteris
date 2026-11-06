@@ -29,7 +29,7 @@ public partial class MainWindow
             .Item("", "Recarregar", () =>
             {
                 Tabs.Active = tab;
-                ActiveBrowser?.Reload();
+                ReloadActive();
             }, "Ctrl+R")
             .Separator()
             .Item("", "Fechar", () => CloseTab(tab), "Ctrl+W")

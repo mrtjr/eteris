@@ -85,7 +85,7 @@ public partial class MainWindow
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
         AppData.SetShield(host, ShieldToggle.IsChecked == true);
-        ActiveBrowser?.Reload();
+        ReloadActive();
         UpdateShieldButton();
         FillShieldPopup();
     }

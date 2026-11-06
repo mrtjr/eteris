@@ -111,6 +111,8 @@ public partial class MainWindow : Window
         browser.AddressChanged += (_, e) =>
         {
             if (e.NewValue is not string address) return;
+            // Na página de erro a omnibox continua a mostrar o endereço que falhou.
+            if (ErrorPage.IsErrorPage(address)) address = ErrorPage.FailedUrl(address) ?? address;
             if (!SameHost(tab.Address, address))
             {
                 tab.Favicon = null;
@@ -137,9 +139,12 @@ public partial class MainWindow : Window
         });
         browser.LoadError += (_, e) =>
         {
-            if (e.Frame.IsMain && HttpsFirst.IsUpgradeFailure((int)e.ErrorCode)
-                && ShieldEngine.Https.FallbackFor(e.FailedUrl) is { } insecure)
-                Dispatcher.InvokeAsync(() => browser.Load(insecure));
+            if (!e.Frame.IsMain || ErrorPage.IsErrorPage(e.FailedUrl)) return;
+            var code = (int)e.ErrorCode;
+            var target = HttpsFirst.IsUpgradeFailure(code) && ShieldEngine.Https.FallbackFor(e.FailedUrl) is { } insecure
+                ? insecure
+                : ErrorPage.ShouldShow(code) ? ErrorPage.Url(code, e.FailedUrl) : null;
+            if (target is not null) Dispatcher.InvokeAsync(() => browser.Load(target));
         };
         browser.FrameLoadEnd += (_, e) =>
         {
@@ -298,7 +303,7 @@ public partial class MainWindow : Window
         else if (ctrl && key == Key.PageUp) Tabs.SelectPrevious();
         else if ((ctrl && key == Key.L) || (alt && key == Key.D) || key == Key.F6) FocusOmnibox();
         else if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) ActiveBrowser?.Reload(ignoreCache: true);
-        else if ((ctrl && key == Key.R) || key == Key.F5) ActiveBrowser?.Reload();
+        else if ((ctrl && key == Key.R) || key == Key.F5) ReloadActive();
         else if (alt && key == Key.Left) ActiveBrowser?.Back();
         else if (alt && key == Key.Right) ActiveBrowser?.Forward();
         else if (ctrl && key >= Key.D1 && key <= Key.D9) Tabs.SelectByNumber(key - Key.D0);
@@ -331,7 +336,7 @@ public partial class MainWindow : Window
     private void Reload_Click(object sender, RoutedEventArgs e)
     {
         if (Tabs.Active?.IsLoading == true) ActiveBrowser?.Stop();
-        else ActiveBrowser?.Reload();
+        else ReloadActive();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;

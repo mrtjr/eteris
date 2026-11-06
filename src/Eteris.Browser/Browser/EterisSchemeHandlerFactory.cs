@@ -19,6 +19,10 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
         }
 
+        if (ErrorPage.IsErrorPage(request.Url))
+            return ResourceHandler.FromString(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty),
+                Encoding.UTF8, false, "text/html");
+
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 }

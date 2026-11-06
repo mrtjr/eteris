@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="color-scheme" content="dark">
+<title>Erro</title>
+<style>
+  :root { --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577; --line: rgba(255,255,255,.09);
+          --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: radial-gradient(ellipse 60% 50% at 50% 35%, #161a26 0%, var(--bg) 70%); color: var(--text);
+         font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; display: grid; place-items: center; }
+  main { width: min(620px, 90vw); text-align: center; }
+  .glyph { font-size: 54px; line-height: 1; margin-bottom: 18px; filter: drop-shadow(0 6px 24px rgba(34,211,238,.35)); }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: -.01em; }
+  p { color: var(--muted); font-size: 16px; margin-top: 12px; line-height: 1.5; }
+  .url { color: var(--faint); font-size: 13px; margin-top: 10px; word-break: break-all; }
+  button { margin-top: 26px; border: 0; border-radius: 999px; padding: 11px 26px; font: inherit; font-weight: 600; font-size: 14px;
+           color: #0b0d13; background: var(--iris); cursor: pointer; box-shadow: 0 10px 34px rgba(139,92,246,.3); }
+  button:hover { filter: brightness(1.08); }
+  canvas { display: none; margin: 26px auto 0; border-radius: 18px; border: 1px solid var(--line);
+           background: rgba(255,255,255,.02); cursor: none; }
+  .score { display: none; color: var(--faint); font-size: 13px; margin-top: 8px; }
+  .code { color: var(--faint); font-size: 11px; margin-top: 22px; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<main>
+  <div class="glyph" id="glyph"></div>
+  <h1 id="title"></h1>
+  <p id="detail"></p>
+  <div class="url" id="url"></div>
+  <button id="retry" hidden>Tentar novamente</button>
+  <canvas id="game" width="560" height="220" aria-label="Jogo: apanhe a luz com o rato"></canvas>
+  <div class="score" id="score"></div>
+  <div class="code" id="code"></div>
+</main>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+  const data = JSON.parse(document.getElementById('data').textContent);
+  document.title = data.title;
+  document.getElementById('glyph').textContent = data.glyph;
+  document.getElementById('title').textContent = data.title;
+  document.getElementById('detail').textContent = data.detail;
+  document.getElementById('url').textContent = data.url;
+  document.getElementById('code').textContent = 'código ' + data.code;
+  const retry = document.getElementById('retry');
+  if (data.retry) {
+    retry.hidden = false;
+    retry.addEventListener('click', () => { location.href = data.url; });
+  }
+  if (data.offline) {
+    // Apanhe a luz: o orbe íris segue o rato e apanha as partículas que caem.
+    addEventListener('online', () => { if (data.retry) location.href = data.url; });
+    const canvas = document.getElementById('game'), ctx = canvas.getContext('2d'), scoreEl = document.getElementById('score');
+    canvas.style.display = 'block'; scoreEl.style.display = 'block';
+    const colors = ['#8b5cf6', '#22d3ee', '#34d399', '#f472b6'];
+    let x = canvas.width / 2, score = 0, missed = 0, drops = [], t = 0;
+    canvas.addEventListener('mousemove', e => { x = e.offsetX * canvas.width / canvas.clientWidth; });
+    const tick = () => {
+      t++;
+      if (t % 28 === 0) drops.push({ x: 20 + Math.random() * (canvas.width - 40), y: -10, v: 1.6 + Math.random() * 1.8 + score / 40, c: colors[t % 4] });
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const d of drops) {
+        d.y += d.v;
+        ctx.beginPath(); ctx.arc(d.x, d.y, 5, 0, Math.PI * 2); ctx.fillStyle = d.c; ctx.shadowColor = d.c; ctx.shadowBlur = 14; ctx.fill();
+        if (d.y > canvas.height - 26 && Math.abs(d.x - x) < 26) { d.caught = true; score++; }
+        else if (d.y > canvas.height + 10) { d.caught = true; missed++; }
+      }
+      drops = drops.filter(d => !d.caught);
+      const g = ctx.createLinearGradient(x - 22, 0, x + 22, 0);
+      colors.forEach((c, i) => g.addColorStop(i / 3, c));
+      ctx.beginPath(); ctx.arc(x, canvas.height - 16, 14, 0, Math.PI * 2);
+      ctx.lineWidth = 4; ctx.strokeStyle = g; ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 18; ctx.stroke();
+      ctx.shadowBlur = 0;
+      scoreEl.textContent = 'Luz apanhada: ' + score + ' · perdida: ' + missed;
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+</script>
+</body>
+</html>
