@@ -170,7 +170,7 @@ public partial class MainWindow
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
         if (!IsPrivate)
             yield return new("", NotesPanel.Visibility == Visibility.Visible ? "Fechar as notas" : "Notas",
-            "Bloco de notas ao lado da página, guardado só neste computador", null, ToggleNotes);
+            "Bloco de notas ao lado da página, guardado só neste computador", "Ctrl+Shift+E", ToggleNotes);
         yield return new("\uE7BC", "Lista de leitura", "Páginas guardadas para ler mais tarde", null, () => OpenInternal(BookmarksPage.Url + "#ler"));
         yield return new("\uEDE1", "Exportar favoritos", "Ficheiro HTML em Transferências, que qualquer navegador importa", null, ExportBookmarks);
         yield return new("", "Favoritos", "Ver, pesquisar, renomear e remover favoritos", "Ctrl+Shift+O", OpenBookmarks);
@@ -179,7 +179,7 @@ public partial class MainWindow
         yield return new("", "Reduzir zoom", $"Atual: {zoom}%", "Ctrl −", () => Zoom(-1));
         yield return new("", "Repor zoom", "Voltar a 100%", "Ctrl+0", () => Zoom(0));
         yield return new("\uE8A7", _miniMode ? "Sair da janela flutuante" : "Janela flutuante",
-            _miniMode ? "Voltar ao tamanho e posição de antes" : "Pequena, num canto e sempre por cima — para ver um vídeo enquanto trabalha", null, ToggleMiniWindow);
+            _miniMode ? "Voltar ao tamanho e posição de antes" : "Pequena, num canto e sempre por cima — para ver um vídeo enquanto trabalha", "Ctrl+Shift+M", ToggleMiniWindow);
         yield return new("", _focusMode ? "Sair do modo foco" : "Modo foco",
             "Esconde abas e barras para ler sem distrações", "F11", ToggleFocusMode);
     }

@@ -41,6 +41,8 @@ public static class ShortcutSheet
         new("Vista", [
             new("F9", "Modo de leitura"),
             new("F11", "Modo foco"),
+            new("Ctrl+Shift+M", "Janela flutuante"),
+            new("Ctrl+Shift+E", "Notas"),
             new("Ctrl + / Ctrl −", "Zoom (memorizado por site)"),
             new("Ctrl+0", "Repor zoom"),
             new("Ctrl + roda do rato", "Zoom"),

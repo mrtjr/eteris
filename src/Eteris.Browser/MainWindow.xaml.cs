@@ -347,6 +347,8 @@ public partial class MainWindow : Window
         else if (ctrl && key == Key.U) ViewSource();
         else if (ctrl && key == Key.H) OpenHistory();
         else if (ctrl && shift && key == Key.L) ShowLinkHints();
+        else if (ctrl && shift && key == Key.E && !IsPrivate) ToggleNotes();
+        else if (ctrl && shift && key == Key.M) ToggleMiniWindow();
         else if (ctrl && shift && key == Key.O) OpenBookmarks();
         else if (ctrl && shift && key == Key.S) CapturePage(fullPage: true);
         else if (ctrl && key == Key.OemComma) OpenSettings();
