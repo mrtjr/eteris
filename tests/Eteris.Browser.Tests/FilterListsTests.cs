@@ -37,6 +37,25 @@ public sealed class FilterListsTests : IDisposable
     }
 
     [Fact]
+    public void Sources_IncludeUBlockCookieNoticeLists()
+    {
+        Assert.Contains("ublock-cookies-easylist", FilterLists.Sources.Keys);
+        Assert.Contains("ublock-cookies-adguard", FilterLists.Sources.Keys);
+    }
+
+    [Fact]
+    public void Load_SplitsTrustedUBlockListsFromThirdPartyLists()
+    {
+        var trusted = _lists.Load(trusted: true);
+        var normal = _lists.Load(trusted: false);
+        Assert.Contains("! embutida ublock-filters", trusted);
+        Assert.Contains("! embutida ublock-cookies-adguard", trusted);
+        Assert.DoesNotContain("! embutida easylist\n", trusted);
+        Assert.Contains("! embutida easylist\n", normal);
+        Assert.DoesNotContain("ublock-", normal);
+    }
+
+    [Fact]
     public void LoadAll_WithoutCache_UsesBundledCopies()
     {
         var text = _lists.LoadAll();

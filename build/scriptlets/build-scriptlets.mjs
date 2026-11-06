@@ -16,13 +16,11 @@ const { builtinScriptlets } = await import(pathToFileURL(entry).href);
 const resources = [];
 let skipped = 0;
 for (const scriptlet of builtinScriptlets) {
-    // "Trusted" só pode ser usado por listas de confiança. Os do mundo isolado correm no mundo da página:
-    // funcionam igual, só ficam visíveis aos scripts da página.
-    if (scriptlet.requiresTrust) {
-        skipped++;
-        continue;
-    }
+    // "Trusted" fica com a permissão 1: só as listas do próprio uBlock (ublock-*) a têm, como no uBlock.
+    // Os do mundo isolado correm no mundo da página: funcionam igual, só ficam visíveis aos scripts da página.
+    if (scriptlet.requiresTrust) skipped++;
     resources.push({
+        ...(scriptlet.requiresTrust ? { permission: 1 } : {}),
         name: scriptlet.name,
         aliases: scriptlet.aliases ?? [],
         // No adblock-rust só "application/javascript" é invocável por +js(...); "fn/javascript" serve para as dependências.
@@ -33,4 +31,4 @@ for (const scriptlet of builtinScriptlets) {
 }
 
 fs.writeFileSync(outFile, JSON.stringify(resources));
-console.log(`${resources.length} scriptlets escritos em ${outFile} (${skipped} "trusted" ignorados)`);
+console.log(`${resources.length} scriptlets escritos em ${outFile} (${skipped} "trusted", só para listas ublock-*)`);

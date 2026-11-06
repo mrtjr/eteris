@@ -18,7 +18,7 @@ fn load() -> Shields {
     )
     .expect("scriptlets.json");
     let started = Instant::now();
-    let shields = Shields::new(&rules, Some(&resources));
+    let shields = Shields::new(&rules, "", Some(&resources));
     eprintln!("motor criado em {:?} a partir de {} KB", started.elapsed(), rules.len() / 1024);
     shields
 }

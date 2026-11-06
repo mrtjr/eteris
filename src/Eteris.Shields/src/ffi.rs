@@ -20,10 +20,11 @@ fn into_c(value: String) -> *mut c_char {
 /// Cria o motor a partir do texto de todas as listas concatenadas e, opcionalmente (pode ser NULL),
 /// dos scriptlets em JSON. Devolve NULL em erro.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn shields_new(rules: *const c_char, resources: *const c_char) -> *mut Shields {
+pub unsafe extern "C" fn shields_new(rules: *const c_char, trusted_rules: *const c_char, resources: *const c_char) -> *mut Shields {
     let Some(rules) = (unsafe { text(rules) }) else { return std::ptr::null_mut() };
+    let trusted = unsafe { text(trusted_rules) }.unwrap_or("");
     let resources = unsafe { text(resources) };
-    catch_unwind(|| Box::into_raw(Box::new(Shields::new(rules, resources)))).unwrap_or(std::ptr::null_mut())
+    catch_unwind(|| Box::into_raw(Box::new(Shields::new(rules, trusted, resources)))).unwrap_or(std::ptr::null_mut())
 }
 
 /// JavaScript dos scriptlets para a página (string vazia se não houver). Libertar com `shields_string_free`.
@@ -113,7 +114,7 @@ mod tests {
         let page = CString::new("https://www.publico.pt/").unwrap();
         let script = CString::new("script").unwrap();
         unsafe {
-            let handle = shields_new(rules.as_ptr(), std::ptr::null());
+            let handle = shields_new(rules.as_ptr(), std::ptr::null(), std::ptr::null());
             assert!(!handle.is_null());
             assert_eq!(shields_check(handle, url.as_ptr(), page.as_ptr(), script.as_ptr()), 1);
             assert_eq!(shields_check(handle, page.as_ptr(), page.as_ptr(), script.as_ptr()), 0);
@@ -128,7 +129,7 @@ mod tests {
     #[test]
     fn ffi_null_inputs_are_safe() {
         unsafe {
-            assert!(shields_new(std::ptr::null(), std::ptr::null()).is_null());
+            assert!(shields_new(std::ptr::null(), std::ptr::null(), std::ptr::null()).is_null());
             assert_eq!(shields_check(std::ptr::null(), std::ptr::null(), std::ptr::null(), std::ptr::null()), 0);
             assert!(shields_url_css(std::ptr::null(), std::ptr::null()).is_null());
             shields_string_free(std::ptr::null_mut());
@@ -142,7 +143,7 @@ mod tests {
         let bad = [0xC3u8, 0x28, 0x00];
         let kind = CString::new("script").unwrap();
         unsafe {
-            let handle = shields_new(rules.as_ptr(), std::ptr::null());
+            let handle = shields_new(rules.as_ptr(), std::ptr::null(), std::ptr::null());
             assert_eq!(shields_check(handle, bad.as_ptr().cast(), bad.as_ptr().cast(), kind.as_ptr()), 0);
             shields_free(handle);
         }

@@ -32,7 +32,7 @@ jobs:
         run: |
           .\build\publish.ps1 -Version $env:VERSION.TrimStart("v")
           if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
-          if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 8) { throw "listas de filtros em falta no publish" }
+          if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 10) { throw "listas de filtros em falta no publish" }
           if (-not (Test-Path publish/Shields/resources/scriptlets.json)) { throw "scriptlets.json em falta no publish" }
       - run: dotnet tool install -g vpk
       - name: Descarregar releases anteriores para gerar pacotes delta

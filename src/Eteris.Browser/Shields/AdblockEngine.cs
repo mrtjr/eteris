@@ -12,9 +12,9 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
 
     private AdblockEngine(ShieldsHandle handle) => _handle = handle;
 
-    public static AdblockEngine Create(string rules, string? scriptletResources = null)
+    public static AdblockEngine Create(string rules, string? scriptletResources = null, string trustedRules = "")
     {
-        var handle = shields_new(rules, scriptletResources);
+        var handle = shields_new(rules, trustedRules, scriptletResources);
         if (handle.IsInvalid) throw new InvalidOperationException("O motor do escudo não conseguiu carregar as listas.");
         return new AdblockEngine(handle);
     }
@@ -67,7 +67,7 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
     }
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial ShieldsHandle shields_new(string rules, string? resources);
+    private static partial ShieldsHandle shields_new(string rules, string trustedRules, string? resources);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     private static partial nint shields_scriptlets(ShieldsHandle handle, string url);

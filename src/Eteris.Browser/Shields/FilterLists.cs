@@ -18,7 +18,12 @@ public sealed class FilterLists(string bundledDir, string cacheDir)
         ["easylist"] = "https://ublockorigin.github.io/uAssets/thirdparties/easylist.txt",
         ["easyprivacy"] = "https://ublockorigin.github.io/uAssets/thirdparties/easyprivacy.txt",
         ["easylist-portuguese"] = "https://easylist-downloads.adblockplus.org/easylistportuguese.txt",
+        ["ublock-cookies-easylist"] = "https://ublockorigin.github.io/uAssets/thirdparties/easylist-cookies.txt",
+        ["ublock-cookies-adguard"] = "https://ublockorigin.github.io/uAssets/filters/annoyances-cookies.txt",
     };
+
+    // O uBlock confia nas listas que ele próprio mantém (ids "ublock-"): podem usar scriptlets "trusted".
+    public static bool IsTrusted(string name) => name.StartsWith("ublock-", StringComparison.Ordinal);
 
     public static readonly TimeSpan MaxAge = TimeSpan.FromDays(7);
     private const int MinimumListLength = 1000;
@@ -27,10 +32,14 @@ public sealed class FilterLists(string bundledDir, string cacheDir)
         Path.Combine(AppContext.BaseDirectory, "Shields", "lists"),
         Infrastructure.AppPaths.Filters);
 
-    public string LoadAll()
+    public string LoadAll() => Read(Sources.Keys);
+
+    public string Load(bool trusted) => Read(Sources.Keys.Where(name => IsTrusted(name) == trusted));
+
+    private string Read(IEnumerable<string> names)
     {
         var text = new StringBuilder();
-        foreach (var name in Sources.Keys)
+        foreach (var name in names)
         {
             var cached = Path.Combine(cacheDir, name + ".txt");
             var path = File.Exists(cached) ? cached : Path.Combine(bundledDir, name + ".txt");

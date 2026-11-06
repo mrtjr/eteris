@@ -14,10 +14,14 @@ pub struct Shields {
 }
 
 impl Shields {
+    /// `trusted_rules`: listas do próprio uBlock (ids `ublock-*`), que podem usar scriptlets "trusted" —
+    /// o mesmo modelo de confiança do uBlock Origin.
     /// `resources`: scriptlets do uBlock em JSON (ver build/scriptlets). Inválidos ou ausentes → sem scriptlets.
-    pub fn new(rules: &str, resources: Option<&str>) -> Self {
+    pub fn new(rules: &str, trusted_rules: &str, resources: Option<&str>) -> Self {
         let mut set = FilterSet::new(false);
         set.add_filter_list(rules.to_owned(), ParseOptions::default());
+        let trusted = ParseOptions { permissions: adblock::resources::PermissionMask::from_bits(1), ..ParseOptions::default() };
+        set.add_filter_list(trusted_rules.to_owned(), trusted);
         let mut engine = Engine::new_with_filter_set(set);
         if let Some(parsed) = resources.and_then(|json| serde_json::from_str::<Vec<Resource>>(json).ok()) {
             engine.use_resources(parsed);
@@ -81,7 +85,7 @@ example.com#@#.banner-publicidade
 ";
 
     fn shields() -> Shields {
-        Shields::new(RULES, None)
+        Shields::new(RULES, "", None)
     }
 
     // Recurso no formato gerado por build/scriptlets/build-scriptlets.mjs (conteúdo em base64).
@@ -90,21 +94,36 @@ example.com#@#.banner-publicidade
 
     #[test]
     fn scriptlet_rule_produces_injectable_script() {
-        let s = Shields::new("publico.pt##+js(tm, ola)\n", Some(TEST_RESOURCES));
+        let s = Shields::new("publico.pt##+js(tm, ola)\n", "", Some(TEST_RESOURCES));
         let script = s.scriptlets("https://www.publico.pt/");
         assert!(script.contains("testMark"), "{script}");
         assert!(script.contains("ola"), "{script}");
     }
 
+    // base64 de: function trustedMark(value) { window.__eterisTrusted = value; }  — exige permissão 1
+    const TRUSTED_RESOURCES: &str = r#"[{"name":"trusted-mark.js","aliases":[],"kind":{"mime":"application/javascript"},"content":"ZnVuY3Rpb24gdHJ1c3RlZE1hcmsodmFsdWUpIHsgd2luZG93Ll9fZXRlcmlzVHJ1c3RlZCA9IHZhbHVlOyB9","dependencies":[],"permission":1}]"#;
+
+    #[test]
+    fn trusted_scriptlet_runs_from_trusted_list() {
+        let s = Shields::new("", "publico.pt##+js(trusted-mark, ok)\n", Some(TRUSTED_RESOURCES));
+        assert!(s.scriptlets("https://www.publico.pt/").contains("trustedMark"));
+    }
+
+    #[test]
+    fn trusted_scriptlet_is_refused_from_normal_list() {
+        let s = Shields::new("publico.pt##+js(trusted-mark, ok)\n", "", Some(TRUSTED_RESOURCES));
+        assert_eq!(s.scriptlets("https://www.publico.pt/"), "");
+    }
+
     #[test]
     fn scriptlets_only_for_matching_site() {
-        let s = Shields::new("publico.pt##+js(tm, ola)\n", Some(TEST_RESOURCES));
+        let s = Shields::new("publico.pt##+js(tm, ola)\n", "", Some(TEST_RESOURCES));
         assert_eq!(s.scriptlets("https://www.expresso.pt/"), "");
     }
 
     #[test]
     fn invalid_resources_json_still_builds_engine() {
-        let s = Shields::new(RULES, Some("isto não é json"));
+        let s = Shields::new(RULES, "", Some("isto não é json"));
         assert!(s.should_block("https://ad.doubleclick.net/pixel.gif", "https://www.publico.pt/", "image"));
         assert_eq!(s.scriptlets("https://www.publico.pt/"), "");
     }
