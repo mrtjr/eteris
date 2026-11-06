@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -31,6 +31,7 @@
     <EmbeddedResource Include="Browser\error.html" />
     <EmbeddedResource Include="Browser\history.html" />
     <EmbeddedResource Include="Browser\settings.html" />
+    <EmbeddedResource Include="Browser\bookmarks.html" />
     <EmbeddedResource Include="Shields\trackers.txt" />
     <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll"
           CopyToOutputDirectory="PreserveNewest" Visible="false" />

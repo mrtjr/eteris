@@ -31,6 +31,7 @@ public static class ShortcutSheet
             new("Ctrl+F · F3", "Procurar na página"),
             new("Ctrl+D", "Favorito"),
             new("Ctrl+H", "Histórico"),
+            new("Ctrl+Shift+O", "Favoritos"),
             new("Ctrl+J", "Transferências"),
             new("Ctrl+Shift+S", "Capturar página inteira"),
             new("Ctrl+,", "Definições"),

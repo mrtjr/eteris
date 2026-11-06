@@ -23,6 +23,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
         if (uri is { Host: "settings" or "about" }) return SettingsRoute(uri, request.Url);
+        if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url);
 
         if (ErrorPage.IsErrorPage(request.Url))
             return ResourceHandler.FromString(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty),
@@ -59,6 +60,20 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
     private static IResourceHandler Html(string html) => ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
 
     private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
+
+    private static IResourceHandler BookmarksRoute(Uri uri, string url)
+    {
+        if (uri.AbsolutePath is "/delete" or "/rename")
+        {
+            if (!InternalPages.IsAuthorized(url) || InternalPages.Query(uri, "u") is not { } target) return Text("recusado");
+            if (uri.AbsolutePath == "/delete") AppData.RemoveBookmark(target);
+            else if (InternalPages.Query(uri, "v") is { Length: > 0 and <= 300 } title) AppData.RenameBookmark(target, title);
+            return Text("ok");
+        }
+        return uri.AbsolutePath == "/"
+            ? Html(BookmarksPage.Render(AppData.Bookmarks(b => b.All(1000))))
+            : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+    }
 
     private static IResourceHandler History(Uri uri, string url)
     {

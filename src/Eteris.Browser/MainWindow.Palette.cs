@@ -128,6 +128,7 @@ public partial class MainWindow
             VerticalTabs ? "Voltar à faixa de abas clássica" : "Lista de abas na lateral, ideal para muitas abas", null, ToggleVerticalTabs);
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
+        yield return new("", "Favoritos", "Ver, pesquisar, renomear e remover favoritos", "Ctrl+Shift+O", OpenBookmarks);
         yield return new("", "Histórico", "Ver, pesquisar e apagar páginas visitadas", "Ctrl+H", OpenHistory);
         yield return new("", "Aumentar zoom", $"Atual: {zoom}%", "Ctrl +", () => Zoom(1));
         yield return new("", "Reduzir zoom", $"Atual: {zoom}%", "Ctrl −", () => Zoom(-1));

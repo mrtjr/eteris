@@ -73,6 +73,8 @@ public partial class MainWindow
 
     private void OpenSettings() => OpenInternal(SettingsPage.Url);
 
+    private void OpenBookmarks() => OpenInternal(BookmarksPage.Url);
+
     private void ShowDevTools() => ActiveBrowser?.GetBrowserHost()?.ShowDevTools();
 
     private void ViewSource()

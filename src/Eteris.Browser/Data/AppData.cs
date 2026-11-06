@@ -111,6 +111,18 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
+    public static void RemoveBookmark(string url)
+    {
+        try { LazyBookmarks.Value.Remove(url); }
+        catch (Exception) { }
+    }
+
+    public static void RenameBookmark(string url, string title)
+    {
+        try { LazyBookmarks.Value.Rename(url, title); }
+        catch (Exception) { }
+    }
+
     public static bool IsBookmarked(string url)
     {
         try { return LazyBookmarks.Value.Contains(url); }

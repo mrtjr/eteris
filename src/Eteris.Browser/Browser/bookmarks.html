@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-src eteris:">
+<meta name="color-scheme" content="dark">
+<title>Favoritos</title>
+<style>
+  :root {
+    --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
+    --glass: rgba(22, 25, 35, .72); --line: rgba(255, 255, 255, .08); --row: rgba(255, 255, 255, .04);
+    --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .glow {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(40vmax 30vmax at 90% -10%, rgba(244, 114, 182, .16), transparent 70%),
+                radial-gradient(40vmax 30vmax at 0% 0%, rgba(139, 92, 246, .2), transparent 70%);
+  }
+  header { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(24px); background: linear-gradient(rgba(11, 13, 19, .92), rgba(11, 13, 19, .75)); border-bottom: 1px solid var(--line); }
+  .bar { width: min(860px, 92vw); margin: 0 auto; padding: 28px 0 18px; display: flex; align-items: center; gap: 18px; }
+  h1 { font-size: 30px; font-weight: 300; }
+  h1 b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .count { color: var(--faint); font-size: 13px; margin-top: 6px; }
+  .search { flex: 1; position: relative; }
+  .search svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; stroke: var(--muted); }
+  input.q {
+    width: 100%; height: 42px; border-radius: 21px; padding: 0 16px 0 42px; font: inherit; font-size: 14.5px; color: var(--text); outline: none;
+    border: 1.5px solid var(--line); background: var(--glass); transition: border-color .2s, box-shadow .2s;
+  }
+  input.q::placeholder { color: var(--faint); }
+  input.q:focus { border-color: transparent; background: linear-gradient(#161923, #161923) padding-box, var(--iris) border-box; box-shadow: 0 6px 30px rgba(139, 92, 246, .22); }
+  main { position: relative; width: min(860px, 92vw); margin: 22px auto 80px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .card {
+    position: relative; display: flex; align-items: center; gap: 12px; padding: 14px 14px; border-radius: 16px; text-decoration: none; color: var(--text);
+    background: rgba(255, 255, 255, .03); border: 1px solid var(--line); transition: background .15s, transform .2s, opacity .25s, border-color .15s;
+  }
+  .card:hover { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .14); transform: translateY(-2px); }
+  .card.gone { opacity: 0; transform: scale(.94); }
+  .badge { width: 38px; height: 38px; flex: none; border-radius: 11px; display: grid; place-items: center; font-weight: 700; font-size: 16px; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+  .text { min-width: 0; flex: 1; }
+  .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .host { font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .title input { width: 100%; font: inherit; color: var(--text); background: #12141c; border: 1px solid #8b5cf6; border-radius: 6px; padding: 2px 6px; outline: none; }
+  .acts { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+  .card:hover .acts, .card:focus-within .acts { opacity: 1; }
+  .acts button { width: 28px; height: 28px; border: 0; border-radius: 14px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; }
+  .acts button:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
+  .acts button.del:hover { background: rgba(255, 122, 144, .16); color: #ff8fa3; }
+  mark { background: rgba(34, 211, 238, .22); color: inherit; border-radius: 3px; }
+  .empty { text-align: center; color: var(--muted); margin-top: 16vh; }
+  .empty .star { font-size: 56px; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .empty h3 { font-size: 20px; font-weight: 500; color: var(--text); margin: 10px 0 6px; }
+  iframe { display: none; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<header>
+  <div class="bar">
+    <div><h1><b>Favoritos</b></h1><div class="count" id="count"></div></div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="q" id="q" placeholder="Pesquisar nos favoritos   ( / )" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+</header>
+<main><div class="grid" id="grid"></div></main>
+<iframe id="sink" title=""></iframe>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+  const data = JSON.parse(document.getElementById('data').textContent);
+  const grid = document.getElementById('grid'), q = document.getElementById('q'), count = document.getElementById('count');
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const send = (action, params) => {
+    const query = Object.entries(params).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+    document.getElementById('sink').src = `eteris://bookmarks/${action}?${query}&t=${data.token}&n=${Date.now()}`;
+  };
+  function highlight(node, text, term) {
+    const i = term ? text.toLowerCase().indexOf(term) : -1;
+    if (i < 0) { node.textContent = text; return; }
+    node.textContent = '';
+    node.append(text.slice(0, i), el('mark', null, text.slice(i, i + term.length)), text.slice(i + term.length));
+  }
+
+  function render() {
+    const term = q.value.trim().toLowerCase();
+    grid.textContent = '';
+    const items = data.items.filter(b => !term || b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term));
+    count.textContent = term ? `${items.length} de ${data.items.length}` : `${data.items.length} ${data.items.length === 1 ? 'favorito' : 'favoritos'}`;
+    for (const b of items) {
+      const card = el('a', 'card'); card.href = b.url; card.title = b.url;
+      const badge = el('span', 'badge', b.letter); badge.style.background = b.color;
+      const text = el('span', 'text'); const title = el('div', 'title'); const host = el('div', 'host');
+      highlight(title, b.title, term); highlight(host, b.host, term);
+      text.append(title, host);
+      const acts = el('span', 'acts');
+      const rename = el('button', null, '✎'); rename.title = 'Mudar o nome';
+      const del = el('button', 'del', '×'); del.title = 'Remover dos favoritos';
+      acts.append(rename, del);
+      rename.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        const input = el('input'); input.value = b.title;
+        title.textContent = ''; title.append(input); input.focus(); input.select();
+        const done = save => {
+          if (save && input.value.trim()) { b.title = input.value.trim(); send('rename', { u: b.url, v: b.title }); }
+          render();
+        };
+        input.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); });
+        input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); done(true); } if (ev.key === 'Escape') done(false); });
+        input.addEventListener('blur', () => done(true));
+      });
+      del.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        send('delete', { u: b.url });
+        card.classList.add('gone');
+        setTimeout(() => { data.items = data.items.filter(x => x !== b); render(); }, 250);
+      });
+      card.append(badge, text, acts);
+      grid.append(card);
+    }
+    if (!items.length) {
+      const empty = el('div', 'empty');
+      empty.append(el('div', 'star', '★'), el('h3', null, term ? 'Nada encontrado' : 'Ainda não há favoritos'),
+        el('p', null, term ? 'Experimente outras palavras.' : 'Carregue na estrela da barra de endereço (Ctrl+D) para guardar uma página.'));
+      grid.append(empty);
+      grid.style.display = 'block';
+    } else grid.style.display = '';
+  }
+  q.addEventListener('input', render);
+  document.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); q.focus(); } });
+  render();
+</script>
+</body>
+</html>

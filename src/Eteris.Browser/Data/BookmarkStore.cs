@@ -34,6 +34,11 @@ public sealed class BookmarkStore
         return true;
     }
 
+    public void Remove(string url) => Execute("DELETE FROM bookmarks WHERE url = $u", ("$u", Key(url)));
+
+    public void Rename(string url, string title)
+        => Execute("UPDATE bookmarks SET title = $t WHERE url = $u", ("$u", Key(url)), ("$t", title.Trim()));
+
     public bool Contains(string url) => Query("SELECT url, title FROM bookmarks WHERE url = $u", 1, ("$u", Key(url))).Count > 0;
 
     public IReadOnlyList<Bookmark> All(int limit = 200)
