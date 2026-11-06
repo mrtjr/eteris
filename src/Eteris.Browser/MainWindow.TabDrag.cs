@@ -29,7 +29,11 @@ public partial class MainWindow
             Tabs.Active = _dragTab;
             TabList.CaptureMouse();
         }
-        Tabs.Move(_dragTab, TabLayout.IndexAt(position.X, TabWidth, Tabs.Tabs.Count));
+        var pinned = Tabs.PinnedCount;
+        var index = _dragTab.IsPinned
+            ? TabLayout.IndexAt(position.X, PinnedTabWidth, pinned)
+            : pinned + TabLayout.IndexAt(position.X - pinned * PinnedTabWidth, TabWidth, Tabs.Tabs.Count - pinned);
+        Tabs.Move(_dragTab, index);
     }
 
     private void TabList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

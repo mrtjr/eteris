@@ -15,18 +15,23 @@ public partial class TabsViewModel : ObservableObject
     public BrowserTab NewTab(string address, bool activate = true)
     {
         var tab = new BrowserTab(address);
-        var index = activate || Active is null ? Tabs.Count : Tabs.IndexOf(Active) + 1;
+        var index = activate || Active is null ? Tabs.Count : Math.Max(Tabs.IndexOf(Active) + 1, PinnedCount);
         Tabs.Insert(index, tab);
         if (activate || Active is null) Active = tab;
         return tab;
     }
 
     // Abas da sessão anterior, pela ordem original; só a ativa carrega, as outras ficam a dormir até serem abertas.
-    public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null)
+    public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null,
+        IReadOnlyList<bool>? pinned = null)
     {
         for (var i = 0; i < addresses.Count; i++)
         {
-            var tab = new BrowserTab(addresses[i]) { IsSleeping = i != activeIndex };
+            var tab = new BrowserTab(addresses[i])
+            {
+                IsSleeping = i != activeIndex,
+                IsPinned = pinned is not null && i < pinned.Count && pinned[i],
+            };
             if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
             Tabs.Add(tab);
         }
@@ -63,12 +68,41 @@ public partial class TabsViewModel : ObservableObject
         return tab;
     }
 
+    public int PinnedCount => Tabs.Count(t => t.IsPinned);
+
+    // Abas fixadas e normais não se misturam: cada uma só se move dentro do seu grupo.
     public void Move(BrowserTab tab, int newIndex)
     {
         var from = Tabs.IndexOf(tab);
         if (from < 0) return;
-        var to = Math.Clamp(newIndex, 0, Tabs.Count - 1);
+        var pinned = PinnedCount;
+        var to = tab.IsPinned ? Math.Clamp(newIndex, 0, pinned - 1) : Math.Clamp(newIndex, pinned, Tabs.Count - 1);
         if (to != from) Tabs.Move(from, to);
+    }
+
+    // Fixar leva a aba para o fim do grupo fixado; desafixar, para logo a seguir a ele.
+    public void TogglePin(BrowserTab tab)
+    {
+        var from = Tabs.IndexOf(tab);
+        if (from < 0) return;
+        var pin = !tab.IsPinned;
+        tab.IsPinned = false;
+        var target = PinnedCount;
+        if (from != target) Tabs.Move(from, target);
+        tab.IsPinned = pin;
+    }
+
+    public void CloseOthers(BrowserTab keep)
+    {
+        foreach (var tab in Tabs.Where(t => !ReferenceEquals(t, keep) && !t.IsPinned).ToList()) Close(tab);
+        Active = keep;
+    }
+
+    public void CloseToRight(BrowserTab tab)
+    {
+        var index = Tabs.IndexOf(tab);
+        foreach (var other in Tabs.Skip(index + 1).Where(t => !t.IsPinned).ToList()) Close(other);
+        if (Active is null || !Tabs.Contains(Active)) Active = tab;
     }
 
     public void SelectNext() => SelectOffset(1);

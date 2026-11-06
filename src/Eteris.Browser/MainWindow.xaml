@@ -70,16 +70,17 @@
             <Setter Property="Focusable" Value="False" />
             <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
             <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TabItem_PreviewMouseLeftButtonDown" />
+            <EventSetter Event="PreviewMouseRightButtonUp" Handler="TabItem_PreviewMouseRightButtonUp" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Grid Height="36" Background="Transparent"
+                        <Grid x:Name="TabRoot" Height="36" Background="Transparent"
                               Width="{Binding TabWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                               ToolTip="{Binding Title}">
                             <Border x:Name="Bg" CornerRadius="10,10,0,0" Background="Transparent" />
                             <Border x:Name="Glow" Height="2" VerticalAlignment="Top" Margin="14,0" CornerRadius="1"
                                     Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
-                            <Grid Margin="12,0,8,0">
+                            <Grid x:Name="TabContent" Margin="12,0,8,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="16" />
                                     <ColumnDefinition Width="*" />
@@ -103,7 +104,7 @@
                                 <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5"
                                            Foreground="{StaticResource TextMutedBrush}" />
-                                <Button Grid.Column="2" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
+                                <Button x:Name="TabClose" Grid.Column="2" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
                                         Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" />
                             </Grid>
                         </Grid>
@@ -126,6 +127,13 @@
                                 <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                <Setter TargetName="TabRoot" Property="Width" Value="44" />
+                                <Setter TargetName="TabContent" Property="Margin" Value="14,0,0,0" />
+                                <Setter TargetName="TabTitle" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="TabClose" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Glow" Property="Margin" Value="10,0" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsSleeping}" Value="True">
                                 <Setter TargetName="TabTitle" Property="Opacity" Value="0.5" />

@@ -37,6 +37,9 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isAudible;
 
+    [ObservableProperty]
+    private bool _isPinned;
+
     public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
 
     private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);

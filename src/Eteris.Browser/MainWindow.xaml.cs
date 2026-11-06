@@ -205,7 +205,8 @@ public partial class MainWindow : Window
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title)) ScheduleSessionSave();
+        if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title) or nameof(BrowserTab.IsPinned)) ScheduleSessionSave();
+        if (e.PropertyName == nameof(BrowserTab.IsPinned)) UpdateTabWidth();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
@@ -239,8 +240,14 @@ public partial class MainWindow : Window
         if (tab is not null && Tabs.Close(tab)) Close();
     }
 
+    private const double PinnedTabWidth = 44;
+
     private void UpdateTabWidth()
-        => TabWidth = TabLayout.TabWidth(TabStripHost.ActualWidth - TabStripReserved, Tabs.Tabs.Count);
+    {
+        var pinned = Tabs.PinnedCount;
+        TabWidth = TabLayout.TabWidth(TabStripHost.ActualWidth - TabStripReserved - pinned * PinnedTabWidth,
+            Tabs.Tabs.Count - pinned);
+    }
 
     private void OnWindowStateChanged()
     {

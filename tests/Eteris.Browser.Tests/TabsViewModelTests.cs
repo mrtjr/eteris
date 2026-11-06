@@ -97,6 +97,66 @@ public class TabsViewModelTests
     }
 
     [Fact]
+    public void TogglePin_MovesTabToEndOfPinnedGroup()
+    {
+        var vm = WithTabs("https://a.pt", "https://b.pt", "https://c.pt");
+        vm.TogglePin(vm.Tabs[2]);
+        vm.TogglePin(vm.Tabs[2]);
+        Assert.Equal(["https://c.pt", "https://b.pt", "https://a.pt"], vm.Tabs.Select(t => t.Address));
+        Assert.True(vm.Tabs[0].IsPinned && vm.Tabs[1].IsPinned && !vm.Tabs[2].IsPinned);
+    }
+
+    [Fact]
+    public void TogglePin_UnpinGoesRightAfterPinnedGroup()
+    {
+        var vm = WithTabs("https://a.pt", "https://b.pt", "https://c.pt");
+        vm.TogglePin(vm.Tabs[0]);
+        vm.TogglePin(vm.Tabs[1]);
+        vm.TogglePin(vm.Tabs[0]);
+        Assert.Equal(["https://b.pt", "https://a.pt", "https://c.pt"], vm.Tabs.Select(t => t.Address));
+        Assert.True(vm.Tabs[0].IsPinned && !vm.Tabs[1].IsPinned);
+    }
+
+    [Fact]
+    public void Move_CannotCrossPinnedBoundary()
+    {
+        var vm = WithTabs("https://a.pt", "https://b.pt", "https://c.pt");
+        vm.TogglePin(vm.Tabs[0]);
+        vm.Move(vm.Tabs[2], 0);
+        Assert.Equal("https://a.pt", vm.Tabs[0].Address);
+        vm.Move(vm.Tabs[0], 2);
+        Assert.Equal("https://a.pt", vm.Tabs[0].Address);
+    }
+
+    [Fact]
+    public void NewTab_NeverGoesBeforePinnedTabs()
+    {
+        var vm = WithTabs("https://a.pt");
+        vm.TogglePin(vm.Tabs[0]);
+        vm.NewTab("https://b.pt", activate: false);
+        Assert.Equal("https://a.pt", vm.Tabs[0].Address);
+    }
+
+    [Fact]
+    public void CloseOthers_KeepsTabAndPinned()
+    {
+        var vm = WithTabs("https://p.pt", "https://a.pt", "https://b.pt", "https://c.pt");
+        vm.TogglePin(vm.Tabs[0]);
+        vm.CloseOthers(vm.Tabs[2]);
+        Assert.Equal(["https://p.pt", "https://b.pt"], vm.Tabs.Select(t => t.Address));
+        Assert.Equal("https://b.pt", vm.Active!.Address);
+    }
+
+    [Fact]
+    public void CloseToRight_ClosesOnlyFollowingTabs()
+    {
+        var vm = WithTabs("https://a.pt", "https://b.pt", "https://c.pt");
+        vm.CloseToRight(vm.Tabs[0]);
+        Assert.Single(vm.Tabs);
+        Assert.Equal("https://a.pt", vm.Active!.Address);
+    }
+
+    [Fact]
     public void Move_ReordersAndKeepsActive()
     {
         var vm = WithTabs("https://a.pt", "https://b.pt", "https://c.pt");

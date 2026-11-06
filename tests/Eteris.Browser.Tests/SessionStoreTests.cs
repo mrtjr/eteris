@@ -30,6 +30,14 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_KeepsPinnedFlags()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/", "https://b.pt/"], 1, ["A", "B"], [true, false]);
+        Assert.Equal([true, false], store.Load()!.Pinned);
+    }
+
+    [Fact]
     public void Load_WithoutFile_IsNull()
         => Assert.Null(new SessionStore(_path).Load());
 
