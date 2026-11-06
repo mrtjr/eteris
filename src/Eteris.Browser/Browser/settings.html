@@ -70,6 +70,12 @@
   }
   button.action:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
   button.action:disabled { opacity: .45; cursor: default; }
+  button.action.danger { border-color: rgba(255, 122, 144, .4); color: #ffb3c1; }
+  button.action.danger:hover { background: rgba(255, 122, 144, .14); }
+  .clearpanel { background: rgba(0, 0, 0, .18); align-items: flex-end; }
+  .check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--fg, #e9ebf2); margin: 6px 0; cursor: pointer; }
+  .check input { accent-color: #8b5cf6; width: 16px; height: 16px; }
+  .check small { color: var(--faint); }
   .about b { font-size: 17px; font-weight: 600; }
   .about span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
   .saved {
@@ -176,6 +182,23 @@
           <label class="switch"><input type="checkbox" data-key="autoplay"><i></i></label>
         </div>
         <div class="item">
+          <div class="label"><b>Apagar dados de navegação</b><span id="clearResult">Histórico, cookies e dados de sites, imagens em cache.</span></div>
+          <button class="action" id="clearToggle">Apagar…</button>
+        </div>
+        <div class="item clearpanel" id="clearPanel" hidden>
+          <div class="label">
+            <label class="check"><input type="checkbox" value="history" checked> Histórico de navegação</label>
+            <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões)</small></label>
+            <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache</label>
+            <div class="seg" id="clearRange" style="margin-top:12px">
+              <button data-value="hour" class="on">Última hora</button>
+              <button data-value="today">Hoje</button>
+              <button data-value="all">Desde sempre</button>
+            </div>
+          </div>
+          <button class="action danger" id="clearGo">Apagar agora</button>
+        </div>
+        <div class="item">
           <div class="label"><b>Histórico de navegação</b><span>Pesquise, apague entradas ou limpe a última hora, o dia ou tudo.</span></div>
           <a class="link" href="eteris://history/">Abrir histórico →</a>
         </div>
@@ -237,6 +260,27 @@
     probe.src = `eteris://${location.host}/update?t=${data.token}&n=${Date.now()}`;
   });
   if ((data.updateStatus || '').startsWith('A procurar')) probe.src = `eteris://${location.host}/status?n=${Date.now()}`;
+  // Apagar dados de navegação: o pedido vai por um iframe da mesma origem e a resposta aparece no texto.
+  const clearPanel = document.getElementById('clearPanel');
+  document.getElementById('clearToggle').addEventListener('click', () => { clearPanel.hidden = !clearPanel.hidden; });
+  let clearRange = 'hour';
+  document.querySelectorAll('#clearRange button').forEach(b => b.addEventListener('click', () => {
+    clearRange = b.dataset.value;
+    document.querySelectorAll('#clearRange button').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  const clearProbe = document.createElement('iframe');
+  document.body.append(clearProbe);
+  clearProbe.addEventListener('load', () => {
+    const text = clearProbe.contentDocument && clearProbe.contentDocument.body ? clearProbe.contentDocument.body.textContent.trim() : '';
+    if (!text) return;
+    document.getElementById('clearResult').textContent = '✓ ' + text;
+    clearPanel.hidden = true;
+  });
+  document.getElementById('clearGo').addEventListener('click', () => {
+    const what = [...clearPanel.querySelectorAll('input:checked')].map(i => i.value).join(',');
+    if (!what) return;
+    clearProbe.src = `eteris://${location.host}/clear?what=${what}&range=${clearRange}&t=${data.token}&n=${Date.now()}`;
+  });
   if (data.focus) document.getElementById(data.focus).scrollIntoView();
 
   function send(key, value) {

@@ -28,6 +28,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
+        if (uri is { Host: "settings" or "about", AbsolutePath: "/clear" }) return ClearData(uri, request.Url, browser);
         if (uri is { Host: "settings" or "about" }) return SettingsRoute(uri, request.Url);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url);
 
@@ -66,6 +67,30 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
     private static IResourceHandler Html(string html) => ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
 
     private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
+
+    // Apaga histórico (no período escolhido), cookies e cache do perfil desta aba.
+    private static IResourceHandler ClearData(Uri uri, string url, IBrowser browser)
+    {
+        if (!InternalPages.IsAuthorized(url)
+            || ClearDataRequest.Parse(InternalPages.Query(uri, "what") ?? "", InternalPages.Query(uri, "range") ?? "", DateTime.Now) is not { } request)
+            return Text("recusado");
+        if (request.History)
+            AppData.TryWrite(h => h.DeleteSince(request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime()));
+        if (request.Cookies || request.Cache)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var client = browser.GetDevToolsClient();
+                    if (request.Cookies) await client.Network.ClearBrowserCookiesAsync();
+                    if (request.Cache) await client.Network.ClearBrowserCacheAsync();
+                }
+                catch (Exception) { }
+            });
+        }
+        return Text(request.Summary);
+    }
 
     private static IResourceHandler BookmarksRoute(Uri uri, string url)
     {
