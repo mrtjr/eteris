@@ -36,6 +36,10 @@ public static class CefConfigurator
     public static void Initialize()
     {
         AppPaths.EnsureDirectories();
+        var dns = Data.Settings.Current.SecureDns;
+        Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.ApplySecureDns(
+            System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty)
+            && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay), performDependencyCheck: true, browserProcessHandler: null);
     }
 }
