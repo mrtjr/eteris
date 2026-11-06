@@ -113,12 +113,14 @@ public partial class MainWindow : Window
             if (e.NewValue is not string address) return;
             // Na página de erro a omnibox continua a mostrar o endereço que falhou.
             if (ErrorPage.IsErrorPage(address)) address = ErrorPage.FailedUrl(address) ?? address;
-            if (!SameHost(tab.Address, address))
+            var hostChanged = !SameHost(tab.Address, address);
+            if (hostChanged)
             {
                 tab.Favicon = null;
                 tab.Tint = null;
             }
             tab.Address = address;
+            if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
         };
         browser.TitleChanged += (_, e) =>
         {
@@ -210,6 +212,7 @@ public partial class MainWindow : Window
         SyncLoading();
         UpdateShieldButton();
         UpdateStar();
+        UpdateZoomBadge();
         ApplyTint();
     }
 
@@ -218,7 +221,7 @@ public partial class MainWindow : Window
         if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title) or nameof(BrowserTab.IsPinned)) ScheduleSessionSave();
         if (e.PropertyName == nameof(BrowserTab.IsPinned)) UpdateTabWidth();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
-        if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); }
+        if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); UpdateZoomBadge(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
         if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
         if (e.PropertyName == nameof(BrowserTab.Tint)) ApplyTint();

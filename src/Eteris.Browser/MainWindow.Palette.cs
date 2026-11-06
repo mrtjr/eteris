@@ -187,16 +187,6 @@ public partial class MainWindow
 
     private void Menu_Click(object sender, RoutedEventArgs e) => OpenPalette();
 
-    // ---------- Zoom ----------
-
-    private void Zoom(int direction)
-    {
-        if (ActiveBrowser is not { } browser) return;
-        browser.ZoomLevel = direction == 0
-            ? 0
-            : ZoomSteps.ToLevel(ZoomSteps.Next(ZoomSteps.ToFactor(browser.ZoomLevel), direction));
-    }
-
     // ---------- Modo foco ----------
 
     private void ToggleFocusMode()

@@ -344,10 +344,33 @@
                                 <TextBlock x:Name="SiteIcon" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
                                            Foreground="{StaticResource TextMutedBrush}" />
                             </Button>
-                            <Button x:Name="StarButton" Grid.Column="2" Style="{StaticResource IconButton}" Width="28" Height="28"
+<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="ZoomBadge" Visibility="Collapsed" Click="ZoomBadge_Click" Cursor="Hand"
+                                        ToolTip="Repor o zoom deste site (Ctrl+0)" Margin="0,0,4,0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="#2A2F45"
+                                                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE71E;" FontFamily="{StaticResource IconFont}" FontSize="10"
+                                                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                                    <ContentPresenter VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Pill" Property="Background" Value="#3A4060" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <TextBlock x:Name="ZoomBadgeText" FontSize="11.5" Foreground="{StaticResource TextBrush}" />
+                                </Button>
+                                                            <Button x:Name="StarButton" Style="{StaticResource IconButton}" Width="28" Height="28"
                                     Margin="0,0,4,0" Click="Star_Click" ToolTip="Adicionar aos favoritos (Ctrl+D)" Visibility="Collapsed">
                                 <TextBlock x:Name="StarGlyph" Text="&#xE734;" FontFamily="{StaticResource IconFont}" FontSize="14" />
                             </Button>
+                            </StackPanel>
                             <Grid Grid.Column="1" Margin="0,0,8,0">
                                 <TextBox x:Name="Omnibox" Style="{StaticResource BareTextBox}"
                                          PreviewKeyDown="Omnibox_PreviewKeyDown" GotKeyboardFocus="Omnibox_GotKeyboardFocus"
@@ -625,7 +648,7 @@
 
             <!-- Página: flutua sobre a superfície, com cantos arredondados -->
             <Border x:Name="PageFrame" Grid.Row="2" Background="{StaticResource ChromeSurfaceBrush}" Padding="6,0,6,6">
-                <Grid x:Name="BrowserHost" Background="#FFFFFF" SizeChanged="BrowserHost_SizeChanged">
+                <Grid x:Name="BrowserHost" Background="#FFFFFF" SizeChanged="BrowserHost_SizeChanged" PreviewMouseWheel="BrowserHost_PreviewMouseWheel">
                     <Rectangle x:Name="AuroraBar" Height="3" VerticalAlignment="Top" Panel.ZIndex="10"
                                Fill="{StaticResource AuroraBrush}" IsHitTestVisible="False" Visibility="Collapsed" />
                 </Grid>

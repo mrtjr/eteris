@@ -11,7 +11,21 @@ public static class AppData
         catch (Exception) { return null; }
     });
 
+    private static readonly Lazy<SiteZoomStore?> LazyZoom = new(() =>
+    {
+        try { return new SiteZoomStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
     public static HistoryStore History => LazyHistory.Value;
+
+    public static double SiteZoom(string host) => LazyZoom.Value?.Get(host) ?? 0;
+
+    public static void SetSiteZoom(string host, double level)
+    {
+        try { LazyZoom.Value?.Set(host, level); }
+        catch (Exception) { }
+    }
 
     public static bool IsShieldOn(string host) => LazyShieldExceptions.Value?.Contains(host) != true;
 
