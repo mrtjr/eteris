@@ -54,6 +54,7 @@ public partial class MainWindow : Window
         RememberWhenClosing();
         StartAudioWatch();
         WatchMiniBar();
+        WatchOmniboxMenu();
     }
 
     public TabsViewModel Tabs { get; } = new();
