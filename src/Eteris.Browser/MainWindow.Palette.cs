@@ -75,7 +75,7 @@ public partial class MainWindow
         var zoom = ZoomSteps.Percent(ActiveBrowser?.ZoomLevel ?? 0);
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
-        yield return new("", "Reabrir aba fechada", "Recupera a última aba que fechou", "Ctrl+Shift+T", () => Tabs.ReopenClosed());
+        yield return new("", "Reabrir aba fechada", Tabs.RecentlyClosed.FirstOrDefault() is { } last ? $"«{last.Title}»" : "Nenhuma aba fechada nesta sessão", "Ctrl+Shift+T", () => Tabs.ReopenClosed());
         foreach (var closed in Tabs.RecentlyClosed.Skip(1).Take(5))
         {
             var entry = closed;
