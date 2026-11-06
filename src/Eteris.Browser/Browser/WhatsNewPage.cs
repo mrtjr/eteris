@@ -12,6 +12,7 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("⚡", "Mais leve, como o Chrome", "As páginas gastam até 4× menos processador e as abas em segundo plano deixam de gastar — mais bateria e rolagem mais suave."),
         new("▶", "Vídeo em todos os sites", "Sites que só têm vídeo em H.264, como o Twitch, passam sozinhos para o motor de vídeo do Windows — dentro do Éteris, com o mesmo bloqueador."),
         new("🚫", "Fim dos anúncios em nova aba", "Um clique na página já não abre anúncios noutra aba: só abrem os links em que clicou."),
         new("📖", "Modo de leitura do Firefox", "O Readability da Mozilla extrai os artigos com muito mais fiabilidade.", "F9"),

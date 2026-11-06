@@ -1,6 +1,6 @@
 # Alterações
 
-## Por publicar
+## 0.2.3 — 2026-11-06
 
 Paridade de desempenho com o Chrome e o Brave (ver `docs/paridade.md`).
 
