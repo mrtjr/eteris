@@ -14,6 +14,8 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | CommunityToolkit.Mvvm | MIT | `CommunityToolkit.Mvvm-LICENSE.txt` |
 | QRCoder | MIT | `QRCoder-LICENSE.txt` |
 | Velopack | MIT | `Velopack-LICENSE.txt` |
+| Readability.js (modo de leitura, Mozilla) | Apache-2.0 | `Readability-LICENSE.txt` |
+| Texto completo da Apache-2.0 (Readability, SQLitePCLRaw, crates) | Apache-2.0 | `Apache-2.0.txt` |
 | Microsoft.Data.Sqlite | MIT | `Microsoft.Data.Sqlite-LICENSE.txt` |
 | SQLitePCLRaw | Apache-2.0 | `SQLitePCLRaw-LICENSE.txt` |
 | SQLite | domínio público | `SQLite-public-domain.txt` |

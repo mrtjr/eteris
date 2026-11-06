@@ -35,6 +35,8 @@
     <EmbeddedResource Include="Browser\whatsnew.html" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="Eteris.Browser.THIRD-PARTY-NOTICES.md" />
     <EmbeddedResource Include="Shields\trackers.txt" />
+    <EmbeddedResource Include="Browser\Vendor\readability\Readability.js" LogicalName="Eteris.Browser.Readability.js" />
+    <EmbeddedResource Include="Browser\Vendor\readability\Readability-readerable.js" LogicalName="Eteris.Browser.Readability-readerable.js" />
     <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <None Include="Shields\lists\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- Gerado por build/scriptlets a partir do uBlock Origin; só muda com uma nova versão do Éteris. -->

@@ -10,10 +10,29 @@ public static class ReaderScripts
     public static string Toggle => ToggleWith("dark", 20, true);
 
     public static string ToggleWith(string theme, int size, bool serif)
-        => ToggleTemplate
+        => InjectReadability(ToggleTemplate
             .Replace("__THEME__", theme is "dark" or "sepia" or "light" ? theme : "dark")
             .Replace("__SIZE__", Math.Clamp(size, 15, 28).ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .Replace("__SERIF__", serif ? "true" : "false");
+            .Replace("__SERIF__", serif ? "true" : "false"));
+
+    // Bibliotecas do Firefox (Mozilla, Apache-2.0), embutidas sem alterações em Browser/Vendor/readability.
+    private static readonly Lazy<string> LazyReadability = new(() => Resource("Eteris.Browser.Readability.js"));
+    private static readonly Lazy<string> LazyReaderable = new(() => Resource("Eteris.Browser.Readability-readerable.js"));
+    private static string ReaderableSource => LazyReaderable.Value;
+
+    private static string Resource(string name)
+    {
+        using var stream = typeof(ReaderScripts).Assembly.GetManifestResourceStream(name)!;
+        using var reader = new System.IO.StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    private static string InjectReadability(string script)
+    {
+        const string opening = "(() => {";
+        var at = script.IndexOf(opening, StringComparison.Ordinal);
+        return script[..(at + opening.Length)] + "\n" + LazyReadability.Value + "\n" + script[(at + opening.Length)..];
+    }
 
     // Mensagem de consola do leitor com as preferências; qualquer outra coisa (ou valores fora do intervalo) é ignorada.
     public static (string Theme, int Size, bool Serif)? ParseReport(string? message)
@@ -35,18 +54,11 @@ public static class ReaderScripts
     public static bool IsCandidate(string url)
         => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
 
-    // Igual ao isProbablyReaderable do Firefox: soma de √(comprimento − 140) dos parágrafos longos > 20.
-    public const string Detect = """
+    // Deteção de artigos com o isProbablyReaderable do Firefox (Readability-readerable.js, Mozilla, Apache-2.0).
+    public static string Detect => $$"""
         (() => {
-          let score = 0;
-          for (const p of document.querySelectorAll('p, pre, article div')) {
-            if (p.closest('nav, footer, aside, form')) continue;
-            const length = (p.textContent || '').trim().length;
-            if (length < 140) continue;
-            score += Math.sqrt(length - 140);
-            if (score > 20) return true;
-          }
-          return false;
+          {{ReaderableSource}}
+          try { return isProbablyReaderable(document); } catch (e) { return false; }
         })()
         """;
 
@@ -56,30 +68,43 @@ public static class ReaderScripts
           const open = document.getElementById(ID);
           if (open) { if (window.speechSynthesis) speechSynthesis.cancel(); open.remove(); document.documentElement.style.overflow = ''; return 'closed'; }
 
-          const junk = /comment|footer|sidebar|nav|menu|share|social|related|promo|advert|cookie|newsletter|subscribe|banner/i;
-          const scores = new Map();
-          for (const p of document.querySelectorAll('p, pre, blockquote')) {
-            const text = (p.innerText || '').trim();
-            if (text.length < 40) continue;
-            const score = 1 + Math.min(Math.floor(text.length / 100), 3) + text.split(',').length;
-            let node = p.parentElement, level = 0;
-            while (node && level < 3) {
-              const bad = junk.test((node.className || '') + ' ' + (node.id || ''));
-              const add = (bad ? -0.5 : 1) * score / (level === 0 ? 1 : level * 2);
-              scores.set(node, (scores.get(node) || 0) + add);
-              node = node.parentElement; level++;
+          // Primeiro o Readability (o motor do modo de leitura do Firefox, testado em milhões de páginas). Se falhar
+          // (por exemplo em sites com Trusted Types, que proíbem escrever HTML diretamente), usa-se a heurística própria.
+          let article = null;
+          try {
+            if (typeof Readability === 'function') {
+              const parsed = new Readability(document.cloneNode(true), { serializer: el => el }).parse();
+              if (parsed && parsed.content && (parsed.textContent || '').trim().length > 200) article = parsed;
             }
-          }
-          let best = null, bestScore = 0;
-          for (const [node, score] of scores) {
-            const total = (node.innerText || '').length || 1;
-            const links = [...node.querySelectorAll('a')].reduce((n, a) => n + (a.innerText || '').length, 0);
-            const adjusted = score * (1 - links / total);
-            if (adjusted > bestScore) { bestScore = adjusted; best = node; }
-          }
-          if (!best) return 'none';
+          } catch (e) { article = null; }
 
-          const content = best.cloneNode(true);
+          let best = null;
+          if (!article) {
+            const junk = /comment|footer|sidebar|nav|menu|share|social|related|promo|advert|cookie|newsletter|subscribe|banner/i;
+            const scores = new Map();
+            for (const p of document.querySelectorAll('p, pre, blockquote')) {
+              const text = (p.innerText || '').trim();
+              if (text.length < 40) continue;
+              const score = 1 + Math.min(Math.floor(text.length / 100), 3) + text.split(',').length;
+              let node = p.parentElement, level = 0;
+              while (node && level < 3) {
+                const bad = junk.test((node.className || '') + ' ' + (node.id || ''));
+                const add = (bad ? -0.5 : 1) * score / (level === 0 ? 1 : level * 2);
+                scores.set(node, (scores.get(node) || 0) + add);
+                node = node.parentElement; level++;
+              }
+            }
+            let bestScore = 0;
+            for (const [node, score] of scores) {
+              const total = (node.innerText || '').length || 1;
+              const links = [...node.querySelectorAll('a')].reduce((n, a) => n + (a.innerText || '').length, 0);
+              const adjusted = score * (1 - links / total);
+              if (adjusted > bestScore) { bestScore = adjusted; best = node; }
+            }
+            if (!best) return 'none';
+          }
+
+          const content = article ? article.content : best.cloneNode(true);
           content.querySelectorAll('img').forEach(img => {
             const lazy = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original');
             if (lazy) img.setAttribute('src', lazy);
@@ -107,9 +132,9 @@ public static class ReaderScripts
           const heading = ((document.querySelector('h1') || {}).innerText || '').trim();
           const fullTitle = meta('og:title') || document.title;
           // «Fado – Wikipédia, a enciclopédia livre» → «Fado»: o h1 ganha quando está contido no título.
-          const title = heading && (!fullTitle || fullTitle.includes(heading)) ? heading : (fullTitle || heading);
-          const site = meta('og:site_name') || location.hostname.replace(/^www\./, '');
-          const author = meta('author') || meta('article:author');
+          const title = (article && article.title) || (heading && (!fullTitle || fullTitle.includes(heading)) ? heading : (fullTitle || heading));
+          const site = (article && article.siteName) || meta('og:site_name') || location.hostname.replace(/^www\./, '');
+          const author = (article && article.byline) || meta('author') || meta('article:author');
           content.querySelectorAll('h1').forEach(h => { if ((h.innerText || '').trim() === title.trim()) h.remove(); });
           const words = (content.textContent || '').trim().split(/\s+/).length;
           const minutes = Math.max(1, Math.round(words / 230));

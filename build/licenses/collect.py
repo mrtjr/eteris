@@ -95,6 +95,9 @@ def main():
          "CommunityToolkit.Mvvm-LICENSE.txt", "CommunityToolkit.Mvvm", "MIT")
     copy(os.path.join(package_dir("QRCoder", refs["QRCoder"]), "LICENSE.txt"), "QRCoder-LICENSE.txt", "QRCoder", "MIT")
     copy(os.path.join(STATIC, "velopack-LICENSE.txt"), "Velopack-LICENSE.txt", "Velopack", "MIT")
+    copy(os.path.join(ROOT, "src", "Eteris.Browser", "Browser", "Vendor", "readability", "LICENSE.md"),
+         "Readability-LICENSE.txt", "Readability.js (modo de leitura, Mozilla)", "Apache-2.0")
+    copy(os.path.join(STATIC, "Apache-2.0.txt"), "Apache-2.0.txt", "Texto completo da Apache-2.0 (Readability, SQLitePCLRaw, crates)", "Apache-2.0")
     copy(os.path.join(STATIC, "microsoft-data-sqlite-LICENSE.txt"), "Microsoft.Data.Sqlite-LICENSE.txt", "Microsoft.Data.Sqlite", "MIT")
     copy(os.path.join(STATIC, "sqlitepclraw-LICENSE.txt"), "SQLitePCLRaw-LICENSE.txt", "SQLitePCLRaw", "Apache-2.0")
     with open(os.path.join(OUT, "SQLite-public-domain.txt"), "w", encoding="utf-8") as f:

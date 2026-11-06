@@ -51,6 +51,7 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 | QRCoder (códigos QR) | https://github.com/Shane32/QRCoder | MIT |
 | Microsoft.Data.Sqlite / SQLite | https://github.com/dotnet/efcore · https://sqlite.org | MIT · domínio público |
 | SQLitePCLRaw | https://github.com/ericsink/SQLitePCL.raw | Apache-2.0 |
+| Readability.js 0.6.0 (modo de leitura; sem alterações, em `Browser/Vendor/readability`) | https://github.com/mozilla/readability | Apache-2.0 |
 | .NET e WPF (incluídos na instalação) | https://github.com/dotnet/runtime · https://github.com/dotnet/wpf | MIT, com os avisos de terceiros do .NET |
 
 Os créditos completos do Chromium (centenas de componentes) estão em `licenses/Chromium-credits.html`.

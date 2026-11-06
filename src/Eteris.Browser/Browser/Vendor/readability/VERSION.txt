@@ -1,0 +1,2 @@
+@mozilla/readability 0.6.0 (https://github.com/mozilla/readability), sem alterações. Licença: Apache-2.0 (LICENSE.md).
+Para atualizar: npm pack @mozilla/readability, copiar Readability.js, Readability-readerable.js e LICENSE.md.

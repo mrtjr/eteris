@@ -26,7 +26,9 @@ public class ReaderScriptsTests
     {
         Assert.Contains("attachShadow", ReaderScripts.Toggle);
         Assert.Contains("adoptedStyleSheets", ReaderScripts.Toggle);
-        Assert.DoesNotContain("innerHTML", ReaderScripts.Toggle);
+        // O nosso código não usa innerHTML (sites com Trusted Types). O Readability usa-o em casos raros, protegidos pela reserva.
+        var ours = ReaderScripts.Toggle[ReaderScripts.Toggle.IndexOf("const ID = 'eteris-reader'", StringComparison.Ordinal)..];
+        Assert.DoesNotContain("innerHTML", ours);
     }
 
     [Fact]
@@ -36,7 +38,8 @@ public class ReaderScriptsTests
         Assert.Contains("let theme = 'sepia';", script);
         Assert.Contains("let size = 23;", script);
         Assert.Contains("(false ? ' serif' : ' sans')", script);
-        Assert.DoesNotContain("__", ReaderScripts.ToggleWith("<script>", 99, true).Replace("__proto__", ""));
+        foreach (var marker in new[] { "__THEME__", "__SIZE__", "__SERIF__" })
+            Assert.DoesNotContain(marker, ReaderScripts.ToggleWith("<script>", 99, true));
         Assert.Contains("let theme = 'dark';", ReaderScripts.ToggleWith("<script>", 99, true));
         Assert.Contains("let size = 28;", ReaderScripts.ToggleWith("dark", 99, true));
     }
@@ -54,4 +57,22 @@ public class ReaderScriptsTests
     [InlineData("eteris-reader não é json")]
     [InlineData(null)]
     public void ParseReport_IgnoresAnythingElse(string? message) => Assert.Null(ReaderScripts.ParseReport(message));
+
+    [Fact]
+    public void Toggle_UsesFirefoxReadabilityWithOurExtractorAsFallback()
+    {
+        var script = ReaderScripts.ToggleWith("dark", 20, true);
+        Assert.Contains("function Readability(", script);
+        Assert.Contains("serializer: el => el", script);
+        Assert.Contains("if (!article) {", script);
+        // O Readability fica dentro da função: não se torna uma variável global da página.
+        Assert.True(script.IndexOf("function Readability(", StringComparison.Ordinal) > script.IndexOf("(() => {", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Detect_UsesFirefoxIsProbablyReaderable()
+    {
+        Assert.Contains("function isProbablyReaderable(", ReaderScripts.Detect);
+        Assert.Contains("return isProbablyReaderable(document);", ReaderScripts.Detect);
+    }
 }
