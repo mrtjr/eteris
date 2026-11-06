@@ -31,6 +31,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
         if (uri is { Host: "settings" or "about", AbsolutePath: "/clear" }) return ClearData(uri, request.Url, browser);
+        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));
         if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url);

@@ -25,6 +25,7 @@ public sealed record UserSettings
     public string Theme { get; init; } = "dark";
     public bool CleanUrls { get; init; } = true;
     public bool BlockNotificationPrompts { get; init; } = true;
+    public string LastSeenVersion { get; init; } = string.Empty;
     public string NewTabTheme { get; init; } = "aurora";
     public bool NewTabClock { get; init; } = true;
     public bool NewTabTiles { get; init; } = true;
@@ -94,6 +95,17 @@ public static class Settings
         lock (Gate)
         {
             try { Store.Save(Current); } catch (Exception) { }
+        }
+    }
+
+    // A versão cujas novidades já foram mostradas (fora do With: não é uma escolha da página).
+    public static void MarkVersionSeen(string version)
+    {
+        UserSettings updated;
+        lock (Gate)
+        {
+            _current = updated = Current with { LastSeenVersion = version };
+            try { Store.Save(updated); } catch (Exception) { }
         }
     }
 

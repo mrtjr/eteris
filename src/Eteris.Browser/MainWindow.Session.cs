@@ -23,10 +23,17 @@ public partial class MainWindow
 
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous) Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups);
 
+        var version = Browser.SettingsPage.Version;
         if (_ownsSession && initialUrl is null && Data.Settings.IsFirstRun)
         {
-            Data.Settings.MarkWelcomed();
+            Data.Settings.MarkVersionSeen(version);
             Tabs.NewTab(Browser.WelcomePage.Url);
+        }
+        else if (_ownsSession && Browser.WhatsNewPage.ShouldShow(Data.Settings.Current.LastSeenVersion, version, firstRun: false))
+        {
+            Data.Settings.MarkVersionSeen(version);
+            if (initialUrl is not null) Tabs.NewTab(initialUrl);
+            Tabs.NewTab(Browser.WhatsNewPage.Url);
         }
         else if (initialUrl is not null) Tabs.NewTab(initialUrl);
         else if (Tabs.Tabs.Count == 0)

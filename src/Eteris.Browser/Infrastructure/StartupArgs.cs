@@ -4,7 +4,7 @@ public static class StartupArgs
 {
     private const string UserDataDirFlag = "--user-data-dir=";
 
-    private static readonly HashSet<string> SafeInternalPages = ["history", "settings", "about", "bookmarks", "welcome"];
+    private static readonly HashSet<string> SafeInternalPages = ["history", "settings", "about", "bookmarks", "welcome", "whatsnew"];
 
     // Endereço passado ao abrir o Éteris (ex.: um link aberto a partir de outra app ou da jump list).
     // Só http(s) e algumas páginas internas, sempre na raiz e sem parâmetros.
