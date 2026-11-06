@@ -108,6 +108,7 @@ public partial class MainWindow : Window
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 }),
         };
+        browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += (_, e) =>
         {
             if (e.NewValue is not string address) return;
@@ -293,6 +294,9 @@ public partial class MainWindow : Window
         else if (ctrl && key == Key.D) ToggleBookmark();
         else if ((ctrl && key == Key.F) || key == Key.F3) OpenFind();
         else if (key == Key.F11) ToggleFocusMode();
+        else if (key == Key.F12 || (ctrl && shift && key == Key.I)) ShowDevTools();
+        else if (ctrl && key == Key.U) ViewSource();
+        else if (ctrl && key == Key.P) ActiveBrowser?.Print();
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
         else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);
         else if (ctrl && key is Key.D0 or Key.NumPad0) Zoom(0);
