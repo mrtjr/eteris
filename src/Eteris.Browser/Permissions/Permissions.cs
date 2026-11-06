@@ -19,6 +19,18 @@ public static class PermissionText
         [SitePermission.MultipleDownloads] = "transferir vários ficheiros",
     };
 
+    public static string Name(SitePermission kind) => kind switch
+    {
+        SitePermission.Camera => "Câmara",
+        SitePermission.Microphone => "Microfone",
+        SitePermission.ScreenShare => "Partilha de ecrã",
+        SitePermission.Location => "Localização",
+        SitePermission.Notifications => "Notificações",
+        SitePermission.Clipboard => "Área de transferência",
+        SitePermission.MultipleDownloads => "Várias transferências",
+        _ => kind.ToString(),
+    };
+
     public static string Describe(IReadOnlyCollection<SitePermission> kinds)
     {
         var ordered = kinds.Distinct().Order().ToList();
@@ -92,6 +104,9 @@ public sealed class SitePermissionStore
     public void Set(string site, SitePermission kind, bool allowed)
         => Execute("INSERT OR REPLACE INTO site_permissions(site, kind, allowed) VALUES ($s, $k, $a)",
             ("$s", site), ("$k", kind.ToString()), ("$a", allowed ? 1 : 0));
+
+    public void Forget(string site, SitePermission kind)
+        => Execute("DELETE FROM site_permissions WHERE site = $s AND kind = $k", ("$s", site), ("$k", kind.ToString()));
 
     public void Forget(string site) => Execute("DELETE FROM site_permissions WHERE site = $s", ("$s", site));
 

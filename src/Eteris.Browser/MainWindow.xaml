@@ -339,8 +339,11 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="SiteIcon" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
-                                       Foreground="{StaticResource TextMutedBrush}" Margin="16,0,10,0" VerticalAlignment="Center" />
+                            <Button x:Name="SiteInfoButton" Style="{StaticResource IconButton}" Width="28" Height="28"
+                                    Margin="6,0,2,0" Click="SiteInfo_Click">
+                                <TextBlock x:Name="SiteIcon" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                           Foreground="{StaticResource TextMutedBrush}" />
+                            </Button>
                             <Button x:Name="StarButton" Grid.Column="2" Style="{StaticResource IconButton}" Width="28" Height="28"
                                     Margin="0,0,4,0" Click="Star_Click" ToolTip="Adicionar aos favoritos (Ctrl+D)" Visibility="Collapsed">
                                 <TextBlock x:Name="StarGlyph" Text="&#xE734;" FontFamily="{StaticResource IconFont}" FontSize="14" />
@@ -361,6 +364,73 @@
                             </Grid>
                         </Grid>
                     </Border>
+
+                    <!-- Informação do site (cadeado) -->
+                    <Popup x:Name="SiteInfoPopup" PlacementTarget="{Binding ElementName=SiteInfoButton}" Placement="Bottom"
+                           HorizontalOffset="-20" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           PopupAnimation="Fade">
+                        <Border Margin="14,0,14,24" Width="360" Background="{StaticResource SurfaceRaisedBrush}"
+                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="20,18">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Width="42" Height="42">
+                                        <Ellipse x:Name="SiteInfoHalo" Fill="#3DDC97" />
+                                        <TextBlock x:Name="SiteInfoGlyph" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="18"
+                                                   Foreground="#0B0D13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="SiteInfoTitle" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="SiteInfoHost" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="SiteInfoDetail" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap" Margin="0,12,0,0" LineHeight="18" />
+
+                                <StackPanel x:Name="SiteInfoSiteSection">
+                                    <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,16,0,12" />
+                                    <TextBlock Text="PERMISSÕES" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextFaintBrush}"
+                                               Margin="0,0,0,6" />
+                                    <TextBlock x:Name="SiteInfoNoPermissions" Text="Este site não tem permissões guardadas."
+                                               FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" />
+                                    <ItemsControl x:Name="SiteInfoPermissions">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextBrush}"
+                                                               VerticalAlignment="Center" />
+                                                    <Border Grid.Column="1" CornerRadius="8" Background="{Binding StateBrush}" Padding="8,2"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding State}" FontSize="11" Foreground="#0B0D13" FontWeight="SemiBold" />
+                                                    </Border>
+                                                    <Button Grid.Column="2" Content="&#xE894;" Style="{StaticResource IconButton}" Width="26" Height="26"
+                                                            FontSize="11" Margin="6,0,0,0" ToolTip="Esquecer (voltar a perguntar)"
+                                                            Tag="{Binding Kind}" Click="SiteInfoForget_Click" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Border Height="1" Background="{StaticResource FieldBorderBrush}" Margin="0,14,0,12" />
+                                    <TextBlock x:Name="SiteInfoTrackers" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" />
+                                    <Button x:Name="SiteInfoClear" Content="Apagar cookies e dados deste site" Style="{StaticResource PillButton}"
+                                            HorizontalAlignment="Left" Margin="0,14,0,0" Click="SiteInfoClear_Click" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
 
                     <Popup x:Name="SuggestionPopup" PlacementTarget="{Binding ElementName=OmniboxFrame}" Placement="Bottom"
                            HorizontalOffset="-14" VerticalOffset="4" AllowsTransparency="True" StaysOpen="True"
