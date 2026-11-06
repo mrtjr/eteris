@@ -32,3 +32,20 @@ public class ThemedPagesTests
         Assert.Contains("html.light {", reader.ReadToEnd());
     }
 }
+
+public class WelcomePageTests
+{
+    [Fact]
+    public void Render_CarriesChoicesAndImports()
+    {
+        var html = Eteris.Browser.Browser.WelcomePage.Render(new Eteris.Browser.Data.UserSettings { Theme = "light" },
+            [new Eteris.Browser.Data.ImportSource("chrome", "Google Chrome", "x", 12)]);
+        Assert.Contains("\"theme\":\"light\"", html);
+        Assert.Contains("\"count\":12", html);
+        Assert.Contains(Eteris.Browser.Browser.InternalPages.Token, html);
+    }
+
+    [Fact]
+    public void WelcomePage_CanOpenFromCommandLine()
+        => Assert.NotNull(Eteris.Browser.Infrastructure.StartupArgs.InitialUrl(["eteris://welcome/"]));
+}

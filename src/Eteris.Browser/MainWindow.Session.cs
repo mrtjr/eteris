@@ -23,7 +23,12 @@ public partial class MainWindow
 
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous) Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups);
 
-        if (initialUrl is not null) Tabs.NewTab(initialUrl);
+        if (_ownsSession && initialUrl is null && Data.Settings.IsFirstRun)
+        {
+            Data.Settings.MarkWelcomed();
+            Tabs.NewTab(Browser.WelcomePage.Url);
+        }
+        else if (initialUrl is not null) Tabs.NewTab(initialUrl);
         else if (Tabs.Tabs.Count == 0)
         {
             Tabs.NewTab(NewTabUrl);

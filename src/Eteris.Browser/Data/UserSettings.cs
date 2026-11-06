@@ -81,6 +81,18 @@ public static class Settings
 
     private static SettingsStore Store => _store ??= new SettingsStore(Path.Combine(AppPaths.Root, "settings.json"));
 
+    // Sem ficheiro de definições: é a primeira vez que o Éteris abre (neste perfil).
+    public static bool IsFirstRun => !File.Exists(Path.Combine(AppPaths.Root, "settings.json"));
+
+    // Grava as definições atuais (cria o ficheiro): o acolhimento não volta a aparecer.
+    public static void MarkWelcomed()
+    {
+        lock (Gate)
+        {
+            try { Store.Save(Current); } catch (Exception) { }
+        }
+    }
+
     public static UserSettings Current
     {
         get { lock (Gate) return _current ??= Store.Load(); }

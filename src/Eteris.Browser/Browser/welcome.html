@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-src eteris:">
+<meta name="color-scheme" content="dark">
+<title>Bem-vindo ao Éteris</title>
+<style>
+  :root {
+    --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
+    --line: rgba(255, 255, 255, .08); --card: rgba(255, 255, 255, .035);
+    --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+  }
+  html.light { --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0; --line: rgba(20, 24, 40, .1); --card: rgba(255, 255, 255, .8); }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; overflow-x: hidden; }
+  .aurora { position: fixed; inset: -20%; z-index: 0; filter: blur(100px); opacity: .45; pointer-events: none; }
+  html.light .aurora { opacity: .25; }
+  .aurora span { position: absolute; width: 45vmax; height: 45vmax; border-radius: 50%; animation: drift 30s ease-in-out infinite alternate; }
+  .aurora span:nth-child(1) { background: #8b5cf6; top: 0; left: 5%; }
+  .aurora span:nth-child(2) { background: #22d3ee; top: 30%; left: 55%; animation-duration: 36s; }
+  .aurora span:nth-child(3) { background: #f472b6; top: 60%; left: 20%; animation-duration: 42s; opacity: .6; }
+  @keyframes drift { to { transform: translate(6vmax, -5vmax) scale(1.12); } }
+  main { position: relative; z-index: 1; width: min(880px, 92vw); margin: 0 auto; padding: 9vh 0 80px; }
+  .hero { text-align: center; margin-bottom: 44px; animation: rise .7s ease-out both; }
+  .logo { width: 78px; height: 78px; margin: 0 auto 22px; border-radius: 50%; background: var(--iris); display: grid; place-items: center; box-shadow: 0 0 60px rgba(139, 92, 246, .45); }
+  .logo::after { content: ""; width: 30px; height: 30px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 7px var(--text); }
+  h1 { font-size: clamp(34px, 5vw, 52px); font-weight: 300; letter-spacing: -.02em; }
+  h1 b { font-weight: 650; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--muted); font-size: 17px; margin-top: 12px; line-height: 1.5; }
+  .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; backdrop-filter: blur(18px); animation: rise .7s ease-out both; }
+  .step:nth-child(2) { animation-delay: .08s; } .step:nth-child(3) { animation-delay: .16s; } .step:nth-child(4) { animation-delay: .24s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  .num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 700; color: #0b0d13; background: linear-gradient(135deg, #c4b5fd, #67e8f9); margin-right: 10px; }
+  h2 { font-size: 16px; font-weight: 600; display: flex; align-items: center; margin-bottom: 8px; }
+  .step p { color: var(--muted); font-size: 13.5px; line-height: 1.5; margin-bottom: 14px; }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choices button, .go {
+    font: inherit; font-size: 13.5px; cursor: pointer; padding: 9px 14px; border-radius: 12px; color: var(--muted);
+    background: rgba(127, 127, 140, .08); border: 1px solid var(--line); transition: background .15s, color .15s, border-color .15s;
+  }
+  .choices button:hover { color: var(--text); background: rgba(127, 127, 140, .14); }
+  .choices button.on { color: #0b0d13; font-weight: 600; background: linear-gradient(135deg, #c4b5fd, #67e8f9); border-color: transparent; }
+  .choices button:disabled { opacity: .5; cursor: default; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13.5px; cursor: pointer; }
+  .toggle small { display: block; color: var(--faint); font-size: 12px; margin-top: 2px; }
+  .toggle input { appearance: none; width: 40px; height: 23px; flex: none; border-radius: 12px; background: #2c3042; position: relative; cursor: pointer; transition: background .2s; }
+  html.light .toggle input:not(:checked) { background: #cfd3de; }
+  .toggle input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #e9ebf2; transition: transform .2s; }
+  .toggle input:checked { background: linear-gradient(135deg, #8b5cf6, #22d3ee); }
+  .toggle input:checked::after { transform: translateX(17px); }
+  .status { color: #34d399; font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+  .footer { text-align: center; margin-top: 34px; }
+  .go { color: #0b0d13; font-weight: 650; font-size: 15px; padding: 14px 30px; border-radius: 16px; border: 0; background: var(--iris); box-shadow: 0 10px 40px rgba(139, 92, 246, .35); }
+  .go:hover { filter: brightness(1.06); }
+  .footer p { color: var(--faint); font-size: 12.5px; margin-top: 14px; }
+  iframe { display: none; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+<main>
+  <div class="hero">
+    <div class="logo"></div>
+    <h1>Bem-vindo ao <b>Éteris</b></h1>
+    <p>Um navegador que não o segue pela Internet. Escolha o essencial — muda tudo depois em Definições.</p>
+  </div>
+  <div class="steps">
+    <section class="step">
+      <h2><span class="num">1</span>Aspeto</h2>
+      <p>Escuro, claro, ou o mesmo do Windows.</p>
+      <div class="choices" data-key="theme">
+        <button data-value="dark">Escuro</button><button data-value="light">Claro</button><button data-value="system">Sistema</button>
+      </div>
+    </section>
+    <section class="step">
+      <h2><span class="num">2</span>Pesquisa</h2>
+      <p>O motor da barra de endereço. Nenhum deles cria um perfil seu.</p>
+      <div class="choices" data-key="engine">
+        <button data-value="duckduckgo">DuckDuckGo</button><button data-value="brave">Brave</button><button data-value="startpage">Startpage</button>
+      </div>
+    </section>
+    <section class="step">
+      <h2><span class="num">3</span>Os seus favoritos</h2>
+      <p id="importText">Traga os favoritos do navegador que usava.</p>
+      <div class="choices" id="imports"></div>
+      <div class="status" id="importStatus"></div>
+    </section>
+    <section class="step">
+      <h2><span class="num">4</span>Privacidade extra</h2>
+      <p>O escudo já bloqueia rastreadores e anúncios. Se quiser ir mais longe:</p>
+      <label class="toggle"><span>DNS cifrado (Quad9)<small>O seu fornecedor deixa de ver que sites visita</small></span><input type="checkbox" id="dns"></label>
+      <label class="toggle"><span>Esquecer os sites ao fechar<small>Apaga cookies e dados de sites em cada saída</small></span><input type="checkbox" data-key="clearOnExit"></label>
+    </section>
+  </div>
+  <div class="footer">
+    <button class="go" id="go">Começar a navegar →</button>
+    <p>Sem contas. Sem telemetria. Tudo fica neste computador.</p>
+  </div>
+</main>
+<iframe id="sink" title=""></iframe>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+  const data = JSON.parse(document.getElementById('data').textContent);
+  const sink = document.getElementById('sink');
+  const send = (key, value) => sink.src = `eteris://${location.host}/set?k=${key}&v=${encodeURIComponent(value)}&t=${data.token}&n=${Date.now()}`;
+  const current = { theme: data.theme, engine: data.engine };
+  document.querySelectorAll('.choices[data-key]').forEach(group => {
+    const key = group.dataset.key;
+    const paint = () => group.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));
+    paint();
+    group.addEventListener('click', e => {
+      const b = e.target.closest('button[data-value]');
+      if (!b) return;
+      current[key] = b.dataset.value; paint(); send(key, b.dataset.value);
+      if (key === 'theme') document.documentElement.classList.toggle('light', b.dataset.value === 'light');
+    });
+  });
+  const dns = document.getElementById('dns');
+  dns.checked = data.dns !== 'off';
+  dns.addEventListener('change', () => send('dns', dns.checked ? 'quad9' : 'off'));
+  document.querySelectorAll('.toggle input[data-key]').forEach(input => {
+    input.checked = !!data[input.dataset.key];
+    input.addEventListener('change', () => send(input.dataset.key, input.checked));
+  });
+
+  const imports = document.getElementById('imports');
+  const importStatus = document.getElementById('importStatus');
+  if (!data.imports.length) document.getElementById('importText').textContent = 'Não encontrámos outros navegadores — pode guardar favoritos com a estrela (Ctrl+D).';
+  const probe = document.createElement('iframe');
+  document.body.append(probe);
+  probe.addEventListener('load', () => {
+    const text = probe.contentDocument && probe.contentDocument.body ? probe.contentDocument.body.textContent.trim() : '';
+    if (text) importStatus.textContent = '✓ ' + text;
+  });
+  for (const source of data.imports) {
+    const b = document.createElement('button');
+    b.textContent = `${source.name} · ${source.count}`;
+    b.addEventListener('click', () => { b.disabled = true; probe.src = `eteris://${location.host}/import?from=${source.id}&t=${data.token}&n=${Date.now()}`; });
+    imports.append(b);
+  }
+  document.getElementById('go').addEventListener('click', () => location.href = 'eteris://newtab/');
+</script>
+</body>
+</html>
