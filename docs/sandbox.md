@@ -54,12 +54,37 @@ O que foi preciso (receita em `build/cefsharp/build-cefsharp.cmd`):
 Riscos que ficam: o custo contínuo (recompilar o CefSharp a cada atualização do motor até o oficial aceitar a
 alteração) e os passos B e D, ainda não provados.
 
+## Passo B — resultado (2026-11-06): dá
+
+Processo filho nativo mínimo (`build/sandbox/subprocess/`: ~30 linhas de C++, `CefExecuteProcess` + registo do esquema
+`eteris://`, 454 KB, sem .NET) no lugar do `CefSharp.BrowserSubprocess.exe` do Éteris 0.2.3. Os 5 processos do
+motor (páginas, placa gráfica, utilitários) passaram a ser o nativo e o Éteris funcionou: Wikipédia, nova aba
+(`eteris://newtab`, com relógio, sites frequentes e dicas), bloqueio de anúncio em nova aba, contador do escudo.
+Sem bloqueios nem fechos inesperados.
+
+Deixa de funcionar — tudo o que executa JavaScript pelo processo filho do CefSharp (= passo A): 18 chamadas em 9
+ficheiros, mais `CosmeticFilterHandler.OnContextCreated`:
+
+| Funcionalidade | Ficheiro |
+|---|---|
+| Centro de multimédia (estado, tocar/pausar, pausar) | `MainWindow.Audio.cs`, `MainWindow.Media.cs` |
+| Sair do ecrã inteiro da página | `MainWindow.Fullscreen.cs` |
+| Esconder elementos (seletor e CSS) | `MainWindow.Hide.cs` |
+| Escurecer este site (ao vivo) e cor do site | `MainWindow.Palette.cs` |
+| Modo de leitura (deteção e abrir) e seguir links pelo teclado | `MainWindow.Reader.cs` |
+| Captura da página inteira | `MainWindow.Screenshot.cs` |
+| Filtros cosméticos genéricos | `MainWindow.Shield.cs`, `Shields/CosmeticFilterHandler.cs` |
+
+Continua a funcionar sem nada mudar: navegação, páginas internas `eteris://`, bloqueador (pedidos), scriptlets e
+scripts injetados pelo DevTools (escuro, deteção de vídeo, último clique), mensagens da consola, transferências,
+pop-ups, abas, ecrã dividido.
+
 ## Plano proposto (por ordem, cada passo verificável)
 
 | Passo | O quê | Custo | Verificação |
 |---|---|---|---|
 | A | Trocar as 19 chamadas e o `OnContextCreated` por DevTools (útil já: menos dependência do processo filho do CefSharp) | 1–2 dias | testes + funcionalidades ao vivo |
-| B | Prova: Éteris a correr com um processo filho nativo mínimo (só CEF, ainda sem sandbox) | 1 dia | tudo funciona sem o `CefSharp.BrowserSubprocess` |
+| B | Prova: Éteris a correr com um processo filho nativo mínimo (só CEF, ainda sem sandbox) | ✅ **feito** (2026-11-06) | tudo funciona sem o `CefSharp.BrowserSubprocess` |
 | C | CefSharp com a informação do sandbox no `Cef.Initialize` (versão própria; propor ao projeto oficial) | ✅ **feito** (2026-11-06) | compila e arranca |
 | D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | 2 dias | `chrome://sandbox` mostra os processos isolados |
 | E | Empacotamento (Velopack, licenças, assinatura) | 1 dia | instalador funciona |
