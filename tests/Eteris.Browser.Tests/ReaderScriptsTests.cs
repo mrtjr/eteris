@@ -64,7 +64,7 @@ public class ReaderScriptsTests
         var script = ReaderScripts.ToggleWith("dark", 20, true);
         Assert.Contains("function Readability(", script);
         Assert.Contains("serializer: el => el", script);
-        Assert.Contains("if (!article) {", script);
+        Assert.Contains("if (!extracted) {", script);
         // O Readability fica dentro da função: não se torna uma variável global da página.
         Assert.True(script.IndexOf("function Readability(", StringComparison.Ordinal) > script.IndexOf("(() => {", StringComparison.Ordinal));
     }
