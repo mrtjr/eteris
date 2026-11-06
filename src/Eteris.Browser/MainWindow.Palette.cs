@@ -112,6 +112,12 @@ public partial class MainWindow
         }
         yield return new("", "Capturar página inteira", "Guarda em Imagens › Éteris e copia a imagem", "Ctrl+Shift+S", () => CapturePage(true));
         yield return new("", "Capturar área visível", "Só o que está no ecrã", null, () => CapturePage(false));
+        if (WebHost(Tabs.Active?.Address) is { } pickHost)
+        {
+            yield return new("", "Esconder um elemento desta página", "Clique num anúncio, banner ou caixa para o fazer desaparecer neste site", null, PickElementToHide);
+            if (AppData.HiddenElements(pickHost).Count is > 0 and var hiddenCount)
+                yield return new("", "Repor elementos escondidos", $"{hiddenCount} escondido(s) em {pickHost}", null, ResetHiddenElements);
+        }
         if (Tabs.Active?.IsReaderable == true)
             yield return new("", "Modo de leitura", "Só o artigo, sem anúncios nem distrações", "F9", ToggleReader);
         if (IsSplit)

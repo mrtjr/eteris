@@ -5,7 +5,7 @@ public enum PageCommand
     Back, Forward, Reload, Print, ViewSource, Inspect,
     OpenLinkNewTab, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
-    Undo, Cut, Copy, Paste, SelectAll, SearchSelection,
+    Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement,
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
@@ -66,6 +66,7 @@ public static class PageMenu
             items.Add(null);
             items.Add(new(PageCommand.Print, "", "Imprimir…", "Ctrl+P"));
             items.Add(new(PageCommand.ViewSource, "", "Ver código-fonte", "Ctrl+U"));
+            items.Add(new(PageCommand.HideElement, "", "Esconder um elemento…"));
         }
         items.Add(new(PageCommand.Inspect, "", "Inspecionar", "F12"));
         return Tidy(items);

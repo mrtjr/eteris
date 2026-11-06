@@ -19,6 +19,30 @@ public static class AppData
 
     public static HistoryStore History => LazyHistory.Value;
 
+    private static readonly Lazy<HiddenElementsStore?> LazyHidden = new(() =>
+    {
+        try { return new HiddenElementsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static IReadOnlyList<string> HiddenElements(string host)
+    {
+        try { return LazyHidden.Value?.For(host) ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    public static void HideElement(string host, string selector)
+    {
+        try { LazyHidden.Value?.Add(host, selector); }
+        catch (Exception) { }
+    }
+
+    public static void ClearHiddenElements(string host)
+    {
+        try { LazyHidden.Value?.Clear(host); }
+        catch (Exception) { }
+    }
+
     public static double SiteZoom(string host) => LazyZoom.Value?.Get(host) ?? 0;
 
     public static void SetSiteZoom(string host, double level)
