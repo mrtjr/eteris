@@ -51,6 +51,7 @@ public partial class MainWindow : Window
         WatchTheme();
         WatchMouseAndDrops();
         TrackActivation();
+        RememberWhenClosing();
         StartAudioWatch();
     }
 
