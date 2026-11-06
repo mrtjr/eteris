@@ -12,7 +12,7 @@ public sealed class StrictSiteStore
 
     private readonly string _table;
 
-    // A tabela é uma constante interna (strict_sites, dark_sites), nunca texto vindo de fora.
+    // A tabela é uma constante interna (strict_sites, dark_sites, video_sites), nunca texto vindo de fora.
     public StrictSiteStore(string path, string table = "strict_sites")
     {
         _table = table;

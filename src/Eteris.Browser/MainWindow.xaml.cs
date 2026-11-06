@@ -92,8 +92,15 @@ public partial class MainWindow : Window
 
     private void CreateBrowser(BrowserTab tab)
     {
+        if (TryCreateVideoView(tab)) return;
+        // Scripts do Éteris que correm antes dos da página: modo escuro (se pedido), deteção de vídeo só em H.264 e
+        // registo do último clique (para distinguir um link aberto pelo utilizador de um anúncio pop-under).
         var injector = new ScriptletInjector(AppData.IsShieldOn,
-            url => DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript : null);
+            url => VideoEngine.CanHost(url)
+                ? (DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript + "\n;\n" : "")
+                  + VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript
+                : null);
+        UserActivation? lastActivation = null;
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
@@ -102,12 +109,18 @@ public partial class MainWindow : Window
             BrowserSettings = { WindowlessFrameRate = Infrastructure.CefConfigurator.FrameRate },
             Visibility = Visibility.Hidden,
             LifeSpanHandler = new PopupToTabHandler(
-                (gesture, url, opener) => PopupPolicy.Allow(gesture, url, opener, ShieldEngine.Current, AppData.IsShieldOn),
+                (gesture, url, opener, popupWindow) => PopupPolicy.Allow(gesture, url, opener, ShieldEngine.Current, AppData.IsShieldOn,
+                    Volatile.Read(ref lastActivation), popupWindow),
                 (url, foreground) => Dispatcher.InvokeAsync(() => Tabs.NewTab(url, foreground)),
-                host =>
+                (host, gesture) =>
                 {
                     ShieldStats.CountBlocked(persist: !IsPrivate);
-                    Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        tab.RecordBlocked(host);
+                        // Com clique, o utilizador viu que algo devia acontecer: diz-se o que foi travado.
+                        if (gesture && ReferenceEquals(tab, Tabs.Active)) ShowToast($"Anúncio em nova aba bloqueado ({host})");
+                    });
                 }),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url)),
                 fullscreen => Dispatcher.InvokeAsync(() => OnPageFullscreen(tab, fullscreen))),
@@ -147,10 +160,22 @@ public partial class MainWindow : Window
             if (!string.Equals(tab.Address, address, StringComparison.Ordinal)) tab.IsReaderable = false;
             tab.Address = address;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
+            // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
+            if (IsVideoSite(address)) Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
         };
         browser.ConsoleMessage += (_, e) =>
         {
             // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.
+            if (PopupPolicy.IsActivationReport(e.Message, out var clickedLink))
+            {
+                Volatile.Write(ref lastActivation, new UserActivation(clickedLink, DateTime.UtcNow));
+                return;
+            }
+            if (VideoEngine.IsReport(e.Message))
+            {
+                Dispatcher.InvokeAsync(() => OnPatentedVideoReport(tab, browser.Address ?? tab.Address));
+                return;
+            }
             if (ReaderScripts.ParseReport(e.Message) is not { } reader) return;
             Dispatcher.InvokeAsync(() =>
             {
@@ -259,6 +284,7 @@ public partial class MainWindow : Window
         UpdateShieldButton();
         UpdateStar();
         UpdateZoomBadge();
+        UpdateVideoEngineBadge();
         ApplyTint();
     }
 
@@ -272,6 +298,7 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
         if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
         if (e.PropertyName == nameof(BrowserTab.Tint)) ApplyTint();
+        if (e.PropertyName == nameof(BrowserTab.UsesVideoEngine)) UpdateVideoEngineBadge();
     }
 
     private void SyncLoading()
@@ -328,6 +355,7 @@ public partial class MainWindow : Window
         _scriptlets.Clear();
         foreach (var browser in _browsers.Values) browser.Dispose();
         _browsers.Clear();
+        DisposeVideoViews();
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -368,14 +396,14 @@ public partial class MainWindow : Window
         else if (ctrl && key == Key.PageDown) Tabs.SelectNext();
         else if (ctrl && key == Key.PageUp) Tabs.SelectPrevious();
         else if ((ctrl && key == Key.L) || (alt && key == Key.D) || key == Key.F6) FocusOmnibox();
-        else if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) ActiveBrowser?.Reload(ignoreCache: true);
+        else if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) ReloadActive(ignoreCache: true);
         else if ((ctrl && key == Key.R) || key == Key.F5) ReloadActive();
-        else if (alt && key == Key.Left) ActiveBrowser?.Back();
-        else if (alt && key == Key.Right) ActiveBrowser?.Forward();
+        else if (alt && key == Key.Left) GoBack();
+        else if (alt && key == Key.Right) GoForward();
         else if (ctrl && key >= Key.D1 && key <= Key.D9) Tabs.SelectByNumber(key - Key.D0);
         else if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) Tabs.SelectByNumber(key - Key.NumPad0);
         else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();
-        else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) ActiveBrowser?.Stop();
+        else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) StopActive();
         else e.Handled = false;
     }
 
@@ -412,13 +440,13 @@ public partial class MainWindow : Window
 
     private void NewTab_Click(object sender, RoutedEventArgs e) => OpenNewTab();
 
-    private void Back_Click(object sender, RoutedEventArgs e) => ActiveBrowser?.Back();
+    private void Back_Click(object sender, RoutedEventArgs e) => GoBack();
 
-    private void Forward_Click(object sender, RoutedEventArgs e) => ActiveBrowser?.Forward();
+    private void Forward_Click(object sender, RoutedEventArgs e) => GoForward();
 
     private void Reload_Click(object sender, RoutedEventArgs e)
     {
-        if (Tabs.Active?.IsLoading == true) ActiveBrowser?.Stop();
+        if (Tabs.Active?.IsLoading == true) StopActive();
         else ReloadActive();
     }
 

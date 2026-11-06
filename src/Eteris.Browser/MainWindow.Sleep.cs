@@ -10,6 +10,12 @@ public partial class MainWindow
 
     private void ReleaseBrowser(BrowserTab tab)
     {
+        ReleaseChromium(tab);
+        ReleaseVideoView(tab);
+    }
+
+    private void ReleaseChromium(BrowserTab tab)
+    {
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         if (!_browsers.Remove(tab, out var browser)) return;
         BrowserHost.Children.Remove(browser);

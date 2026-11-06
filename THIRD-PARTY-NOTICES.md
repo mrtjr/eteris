@@ -53,8 +53,14 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 | SQLitePCLRaw | https://github.com/ericsink/SQLitePCL.raw | Apache-2.0 |
 | Readability.js 0.6.0 (modo de leitura; sem alterações, em `Browser/Vendor/readability`) | https://github.com/mozilla/readability | Apache-2.0 |
 | .NET e WPF (incluídos na instalação) | https://github.com/dotnet/runtime · https://github.com/dotnet/wpf | MIT, com os avisos de terceiros do .NET |
+| Microsoft.Web.WebView2 (SDK do motor de vídeo: `Microsoft.Web.WebView2.*.dll`, `WebView2Loader.dll`) | https://www.nuget.org/packages/Microsoft.Web.WebView2 | BSD-3-Clause (Microsoft), com os avisos em `licenses/Microsoft.Web.WebView2-NOTICE.txt` |
 
 Os créditos completos do Chromium (centenas de componentes) estão em `licenses/Chromium-credits.html`.
+
+**Motor de vídeo.** As abas de sites que só têm vídeo em H.264/AAC usam o *WebView2 Runtime* da Microsoft, que faz
+parte do Windows 10/11 e é atualizado pelo próprio Windows. O Éteris **não** distribui esse runtime nem os seus
+codecs: usa o que já está instalado no sistema (componente de sistema, no sentido da secção 1 da GPL-3.0). As
+licenças de patentes do H.264/AAC são, por isso, as do Windows/Edge e não do Éteris.
 
 ## Motor de bloqueio: dependências Rust
 

@@ -3,7 +3,8 @@ using CefSharp;
 namespace Eteris.Browser.Browser;
 
 // Pop-ups nunca abrem janelas: ou viram aba (se a política deixar) ou são bloqueados e contados no escudo.
-public sealed class PopupToTabHandler(Func<bool, string, string?, bool> allow, Action<string, bool> openTab, Action<string> onBlocked)
+// allow(gesto, destino, página que abriu, é janela pop-up com dimensões); onBlocked(domínio, houve gesto).
+public sealed class PopupToTabHandler(Func<bool, string, string?, bool, bool> allow, Action<string, bool> openTab, Action<string, bool> onBlocked)
     : CefSharp.Handler.LifeSpanHandler
 {
     protected override bool OnBeforePopup(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, string targetUrl,
@@ -12,9 +13,9 @@ public sealed class PopupToTabHandler(Func<bool, string, string?, bool> allow, A
     {
         newBrowser = null;
         var opener = frame?.Url is { Length: > 0 } frameUrl ? frameUrl : browser.MainFrame?.Url;
-        if (!allow(userGesture, targetUrl, opener))
+        if (!allow(userGesture, targetUrl, opener, targetDisposition == WindowOpenDisposition.NewPopup))
         {
-            onBlocked(Uri.TryCreate(targetUrl, UriKind.Absolute, out var target) ? target.Host : "pop-up");
+            onBlocked(Uri.TryCreate(targetUrl, UriKind.Absolute, out var target) ? target.Host : "pop-up", userGesture);
             return true;
         }
 

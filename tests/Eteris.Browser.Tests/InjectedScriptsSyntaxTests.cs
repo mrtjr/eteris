@@ -22,6 +22,9 @@ public class InjectedScriptsSyntaxTests
         { "multimédia (pausar)", MediaInfo.PauseScript },
         { "áudio", AudioIndicator.AudibleScript },
         { "filtros cosméticos", CosmeticScripts.Inject(".anuncio { display: none !important; }") },
+        { "vídeo só em H.264 (deteção)", VideoEngine.WatchScript },
+        { "último clique (pop-unders)", PopupPolicy.ActivationScript },
+        { "escurecer (antes da página)", DarkPages.EarlyScript },
     };
 
     [Theory]

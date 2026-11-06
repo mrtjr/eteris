@@ -39,6 +39,10 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isReaderable;
 
+    // A aba usa o motor de vídeo (WebView2) em vez do motor principal — ver Tabs/VideoEngine.cs.
+    [ObservableProperty]
+    private bool _usesVideoEngine;
+
     [ObservableProperty]
     private bool _canGoBack;
 

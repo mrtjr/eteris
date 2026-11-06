@@ -13,6 +13,8 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | WPF / Windows Desktop | MIT | `windowsdesktop-LICENSE.txt` |
 | CommunityToolkit.Mvvm | MIT | `CommunityToolkit.Mvvm-LICENSE.txt` |
 | QRCoder | MIT | `QRCoder-LICENSE.txt` |
+| Microsoft.Web.WebView2 (SDK do motor de vídeo) | BSD-3-Clause | `Microsoft.Web.WebView2-LICENSE.txt` |
+| Microsoft.Web.WebView2 (avisos de terceiros) | várias | `Microsoft.Web.WebView2-NOTICE.txt` |
 | Velopack | MIT | `Velopack-LICENSE.txt` |
 | Readability.js (modo de leitura, Mozilla) | Apache-2.0 | `Readability-LICENSE.txt` |
 | Texto completo da Apache-2.0 (Readability, SQLitePCLRaw, crates) | Apache-2.0 | `Apache-2.0.txt` |

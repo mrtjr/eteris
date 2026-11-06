@@ -577,6 +577,28 @@
                                         Visibility="{Binding Active.IsReaderable, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="&#xE736;" FontFamily="{StaticResource IconFont}" FontSize="14" />
                                 </Button>
+                                <Button x:Name="VideoEngineBadge" Visibility="Collapsed" Click="VideoEngineBadge_Click" Cursor="Hand"
+                                        Margin="0,0,4,0"
+                                        ToolTip="Esta aba usa o motor de vídeo do Windows (WebView2) porque o site só tem vídeo em H.264. Clique para voltar ao motor principal.">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="{DynamicResource SelectedBrush}"
+                                                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="10"
+                                                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                                    <ContentPresenter VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Pill" Property="Background" Value="{DynamicResource PressedBrush}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <TextBlock Text="Motor de vídeo" FontSize="11.5" Foreground="{DynamicResource TextBrush}" />
+                                </Button>
                                 <Button x:Name="ZoomBadge" Visibility="Collapsed" Click="ZoomBadge_Click" Cursor="Hand"
                                         ToolTip="Repor o zoom deste site (Ctrl+0)" Margin="0,0,4,0">
                                     <Button.Template>

@@ -76,7 +76,8 @@ public partial class MainWindow
             columns.Add(new ColumnDefinition { Width = new GridLength(1 - _splitRatio, GridUnitType.Star), MinWidth = 220 });
         }
 
-        foreach (var (tab, browser) in _browsers)
+        foreach (var (tab, browser) in _browsers.Select(p => (p.Key, (FrameworkElement)p.Value))
+                     .Concat(_videoViews.Select(p => (p.Key, (FrameworkElement)p.Value))))
         {
             var pane = _split?.PaneOf(tab);
             var visible = pane is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));
@@ -136,7 +137,7 @@ public partial class MainWindow
     }
 
     // Clicar numa das metades torna-a ativa.
-    private void WatchPaneFocus(BrowserTab tab, ChromiumWebBrowser browser)
+    private void WatchPaneFocus(BrowserTab tab, UIElement browser)
         => browser.PreviewMouseDown += (_, _) =>
         {
             if (IsSplit && !ReferenceEquals(Tabs.Active, tab) && _split!.PaneOf(tab) is not null) Tabs.Active = tab;

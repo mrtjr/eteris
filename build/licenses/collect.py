@@ -94,6 +94,11 @@ def main():
     copy(os.path.join(package_dir("CommunityToolkit.Mvvm", refs["CommunityToolkit.Mvvm"]), "License.md"),
          "CommunityToolkit.Mvvm-LICENSE.txt", "CommunityToolkit.Mvvm", "MIT")
     copy(os.path.join(package_dir("QRCoder", refs["QRCoder"]), "LICENSE.txt"), "QRCoder-LICENSE.txt", "QRCoder", "MIT")
+    # SDK do WebView2 (motor de vídeo): licença ao estilo BSD-3 + avisos de terceiros. O runtime em si é um
+    # componente do Windows e não é distribuído com o Éteris.
+    webview2 = package_dir("Microsoft.Web.WebView2", refs["Microsoft.Web.WebView2"])
+    copy(os.path.join(webview2, "LICENSE.txt"), "Microsoft.Web.WebView2-LICENSE.txt", "Microsoft.Web.WebView2 (SDK do motor de vídeo)", "BSD-3-Clause")
+    copy(os.path.join(webview2, "NOTICE.txt"), "Microsoft.Web.WebView2-NOTICE.txt", "Microsoft.Web.WebView2 (avisos de terceiros)", "várias")
     copy(os.path.join(STATIC, "velopack-LICENSE.txt"), "Velopack-LICENSE.txt", "Velopack", "MIT")
     copy(os.path.join(ROOT, "src", "Eteris.Browser", "Browser", "Vendor", "readability", "LICENSE.md"),
          "Readability-LICENSE.txt", "Readability.js (modo de leitura, Mozilla)", "Apache-2.0")

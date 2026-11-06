@@ -16,8 +16,8 @@ public partial class MainWindow
         // Botões laterais do rato: voltar / avançar, em qualquer ponto da janela.
         PreviewMouseDown += (_, e) =>
         {
-            if (e.ChangedButton == MouseButton.XButton1) { ActiveBrowser?.Back(); e.Handled = true; }
-            else if (e.ChangedButton == MouseButton.XButton2) { ActiveBrowser?.Forward(); e.Handled = true; }
+            if (e.ChangedButton == MouseButton.XButton1) { GoBack(); e.Handled = true; }
+            else if (e.ChangedButton == MouseButton.XButton2) { GoForward(); e.Handled = true; }
         };
 
         // Largar na faixa de abas, na barra de ferramentas ou na barra lateral abre numa nova aba.

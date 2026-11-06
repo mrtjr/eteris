@@ -76,6 +76,12 @@ public partial class MainWindow
             return;
         }
 
+        if (Tabs.Active is { } videoTab && LoadInVideoView(videoTab, url))
+        {
+            SetOmniboxText(url);
+            UpdateOmniboxChrome();
+            return;
+        }
         if (ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
         tab.Address = url;
         SetOmniboxText(url);

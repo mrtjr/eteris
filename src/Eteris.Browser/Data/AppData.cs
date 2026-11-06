@@ -220,6 +220,7 @@ public static class AppData
         SetShield(site, true);
         SetDark(site, false);
         SetStrict(site, false);
+        SetVideoSite(site, false);
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>
@@ -254,6 +255,25 @@ public static class AppData
         {
             if (on) LazyDark.Value?.Add(host);
             else LazyDark.Value?.Remove(host);
+        }
+        catch (Exception) { }
+    }
+
+    // Sites que abrem no motor de vídeo (precisam de H.264/AAC).
+    private static readonly Lazy<StrictSiteStore?> LazyVideo = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "video_sites"); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsVideoSite(string host) => LazyVideo.Value?.Contains(host) == true;
+
+    public static void SetVideoSite(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyVideo.Value?.Add(host);
+            else LazyVideo.Value?.Remove(host);
         }
         catch (Exception) { }
     }
