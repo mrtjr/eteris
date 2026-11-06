@@ -6,6 +6,8 @@ namespace Eteris.Browser.Shields;
 
 // As listas que o uBlock Origin Lite ativa por omissão, mais a EasyList Portuguesa.
 // Há uma cópia junto do exe; a cópia descarregada (atualizada semanalmente) tem prioridade.
+public sealed record ListSummary(string Name, int Rules, DateTime UpdatedUtc, bool Bundled);
+
 public sealed class FilterLists(string bundledDir, string cacheDir)
 {
     public static readonly IReadOnlyDictionary<string, string> Sources = new Dictionary<string, string>
@@ -48,6 +50,18 @@ public sealed class FilterLists(string bundledDir, string cacheDir)
         }
         return text.ToString();
     }
+
+    // Para a página «Sobre»: regras de cada lista e de quando é a cópia em uso.
+    public IReadOnlyList<ListSummary> Summary()
+        => Sources.Keys.Select(name =>
+        {
+            var cached = Path.Combine(cacheDir, name + ".txt");
+            var bundled = !File.Exists(cached);
+            var path = bundled ? Path.Combine(bundledDir, name + ".txt") : cached;
+            if (!File.Exists(path)) return new ListSummary(name, 0, DateTime.MinValue, bundled);
+            var rules = File.ReadLines(path).Count(line => line.Length > 0 && line[0] is not '!' and not '[');
+            return new ListSummary(name, rules, File.GetLastWriteTimeUtc(path), bundled);
+        }).ToList();
 
     public bool IsStale(DateTime nowUtc)
         => Sources.Keys.Any(name =>

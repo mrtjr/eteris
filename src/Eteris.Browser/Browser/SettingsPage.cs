@@ -21,10 +21,30 @@ public static class SettingsPage
         => typeof(SettingsPage).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
            ?? "0.0.0";
 
-    public static string Render(UserSettings settings)
+    public sealed record About(string Chromium, string CefSharp, bool FullEngine, IReadOnlyList<Shields.ListSummary> Lists,
+        string UpdateStatus, bool CanCheck);
+
+    public static string ListsLine(IReadOnlyList<Shields.ListSummary> lists, DateTime nowUtc)
+    {
+        var rules = lists.Sum(l => l.Rules);
+        var newest = lists.Where(l => !l.Bundled).Select(l => l.UpdatedUtc).DefaultIfEmpty(DateTime.MinValue).Max();
+        var when = newest == DateTime.MinValue ? "cópia incluída no Éteris"
+            : (nowUtc - newest).TotalDays < 1 ? "atualizadas hoje"
+            : (int)(nowUtc - newest).TotalDays == 1 ? "atualizadas ontem"
+            : $"atualizadas há {(int)(nowUtc - newest).TotalDays} dias";
+        return $"{lists.Count} listas · {rules.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("pt-PT"))} regras · {when}";
+    }
+
+    public static string Render(UserSettings settings, About? about = null, bool focusAbout = false)
     {
         var data = new
         {
+            focus = focusAbout ? "sobre" : null,
+            chromium = about?.Chromium,
+            cefsharp = about?.CefSharp,
+            shield = about is null ? null : (about.FullEngine ? "uBlock Origin (adblock-rust) · " : "lista mínima · ") + ListsLine(about.Lists, DateTime.UtcNow),
+            updateStatus = about?.UpdateStatus,
+            canCheck = about?.CanCheck ?? false,
             token = InternalPages.Token,
             version = Version,
             engine = settings.SearchEngine,

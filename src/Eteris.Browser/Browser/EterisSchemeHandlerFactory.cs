@@ -22,6 +22,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
         if (uri is { Host: "settings" }) return SettingsRoute(uri, request.Url);
+        if (uri is { Host: "about", AbsolutePath: "/" }) return Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: true));
 
         if (ErrorPage.IsErrorPage(request.Url))
             return ResourceHandler.FromString(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty),
@@ -39,10 +40,25 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
                      && Settings.Set(key, value);
             return ResourceHandler.FromString(ok ? "ok" : "recusado", Encoding.UTF8, false, "text/plain");
         }
+        if (uri.AbsolutePath == "/update" && InternalPages.IsAuthorized(url))
+        {
+            _ = Updates.UpdateService.CheckAndDownloadAsync();
+            return Text(Updates.UpdateService.Status);
+        }
+        if (uri.AbsolutePath == "/status") return Text(Updates.UpdateService.Status);
         return uri.AbsolutePath == "/"
-            ? ResourceHandler.FromString(SettingsPage.Render(Settings.Current), Encoding.UTF8, false, "text/html")
+            ? Html(SettingsPage.Render(Settings.Current, AboutInfo()))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
+
+    private static SettingsPage.About AboutInfo() => new(
+        Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,
+        Shields.FilterLists.ForApp().Summary(), Updates.UpdateService.Status,
+        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready));
+
+    private static IResourceHandler Html(string html) => ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
+
+    private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
 
     private static IResourceHandler History(Uri uri, string url)
     {

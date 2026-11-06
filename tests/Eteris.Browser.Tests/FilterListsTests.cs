@@ -127,4 +127,35 @@ public sealed class FilterListsTests : IDisposable
             return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
         }
     }
+
+    [Fact]
+    public void Summary_CountsRulesAndMarksBundledCopies()
+    {
+        Directory.CreateDirectory(_cache);
+        File.WriteAllText(Path.Combine(_cache, "easylist.txt"), "[Adblock Plus 2.0]\n! comentário\n||a.example^\n\n##.anuncio\n");
+        File.SetLastWriteTimeUtc(Path.Combine(_cache, "easylist.txt"), Now.AddDays(-2));
+
+        var summary = _lists.Summary();
+        var easylist = summary.Single(s => s.Name == "easylist");
+        Assert.Equal(2, easylist.Rules);
+        Assert.False(easylist.Bundled);
+        Assert.Equal(Now.AddDays(-2), easylist.UpdatedUtc);
+
+        var bundled = summary.Single(s => s.Name == "easyprivacy");
+        Assert.True(bundled.Bundled);
+        Assert.Equal(0, bundled.Rules);
+        Assert.Equal(FilterLists.Sources.Count, summary.Count);
+    }
+}
+
+public class UpdateTextTests
+{
+    [Theory]
+    [InlineData(Eteris.Browser.Updates.UpdateState.Development, null, "Versão de desenvolvimento: as atualizações só funcionam na versão instalada.")]
+    [InlineData(Eteris.Browser.Updates.UpdateState.Checking, null, "A procurar atualizações…")]
+    [InlineData(Eteris.Browser.Updates.UpdateState.UpToDate, null, "O Éteris está atualizado.")]
+    [InlineData(Eteris.Browser.Updates.UpdateState.Ready, "0.2.0", "A versão 0.2.0 está pronta: é instalada quando fechar o Éteris.")]
+    [InlineData(Eteris.Browser.Updates.UpdateState.Failed, null, "Não foi possível procurar atualizações (sem ligação?).")]
+    public void Describe_IsPlainPortuguese(Eteris.Browser.Updates.UpdateState state, string? version, string text)
+        => Assert.Equal(text, Eteris.Browser.Updates.UpdateService.Describe(state, version));
 }
