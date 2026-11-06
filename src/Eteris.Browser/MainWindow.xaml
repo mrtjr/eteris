@@ -5,6 +5,7 @@
         Title="{Binding Active.Title, StringFormat={}{0} — Éteris, FallbackValue=Éteris}"
         Height="860" Width="1360" MinWidth="560" MinHeight="400"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Assets/eteris.ico"
         Background="{DynamicResource FrameBrush}"
         FontFamily="{StaticResource UiFont}"
         Foreground="{DynamicResource TextBrush}"

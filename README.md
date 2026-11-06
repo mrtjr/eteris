@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/eteris-512.png" width="128" alt="Ícone do Éteris: um anel com as cores da íris à volta de um núcleo luminoso"></p>
+
 # Éteris
 
 Navegador web privado para Windows, com bloqueio de rastreadores e anúncios ativo por defeito, páginas internas cuidadas e uma interface que se adapta a cada site. Tudo fica no computador: sem contas, sem telemetria.
