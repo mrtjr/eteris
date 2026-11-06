@@ -14,17 +14,19 @@ public partial class MainWindow
     private void WatchMouseAndDrops()
     {
         // Botões laterais do rato: voltar / avançar, em qualquer ponto da janela.
-        PreviewMouseDown += (_, e) =>
-        {
-            if (e.ChangedButton == MouseButton.XButton1) { GoBack(); e.Handled = true; }
-            else if (e.ChangedButton == MouseButton.XButton2) { GoForward(); e.Handled = true; }
-        };
+        PreviewMouseDown += OnSideMouseButton;
 
         // Largar na faixa de abas, na barra de ferramentas ou na barra lateral abre numa nova aba.
         // Largar na própria página continua a ser da página (ex.: enviar ficheiros).
         foreach (var zone in new Panel[] { TitleBar, (Panel)Toolbar.Child })
             WatchDropZone(zone);
         WatchDropZone((Panel)SideBar.Child);
+    }
+
+    private void OnSideMouseButton(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.XButton1) { GoBack(); e.Handled = true; }
+        else if (e.ChangedButton == MouseButton.XButton2) { GoForward(); e.Handled = true; }
     }
 
     private void WatchDropZone(Panel zone)

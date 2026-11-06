@@ -15,7 +15,7 @@ public partial class MainWindow
     private void OpenFind()
     {
         FindBar.Visibility = Visibility.Visible;
-        FindInput.Focus();
+        FocusInOverlay(FindInput);
         FindInput.SelectAll();
         if (FindInput.Text.Length > 0) Find(forward: true, findNext: false);
     }
@@ -25,7 +25,7 @@ public partial class MainWindow
         if (FindBar.Visibility != Visibility.Visible) return;
         FindBar.Visibility = Visibility.Collapsed;
         if (ActiveBrowser is { IsBrowserInitialized: true } initialized) initialized.GetBrowserHost()?.StopFinding(clearSelection: true);
-        if (ActiveBrowser is { } browser) Keyboard.Focus(browser);
+        ReturnFocusToPage();
     }
 
     private void Find(bool forward, bool findNext)

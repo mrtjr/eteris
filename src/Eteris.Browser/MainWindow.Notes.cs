@@ -28,14 +28,14 @@ public partial class MainWindow
         NotesText.CaretIndex = NotesText.Text.Length;
         NotesStatus.Text = "Guardado só neste computador";
         NotesPanel.Visibility = Visibility.Visible;
-        NotesText.Focus();
+        FocusInOverlay(NotesText);
     }
 
     private void CloseNotes()
     {
         FlushNotes();
         NotesPanel.Visibility = Visibility.Collapsed;
-        ActiveBrowser?.Focus();
+        ReturnFocusToPage();
     }
 
     private void NotesText_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -65,7 +65,7 @@ public partial class MainWindow
         var (text, caret) = NotesStore.Insert(NotesText.Text, NotesText.CaretIndex, NotesStore.PageLine(tab.Title, tab.Address));
         NotesText.Text = text;
         NotesText.CaretIndex = caret;
-        NotesText.Focus();
+        FocusInOverlay(NotesText);
     }
 
     private void NotesClose_Click(object sender, RoutedEventArgs e) => CloseNotes();

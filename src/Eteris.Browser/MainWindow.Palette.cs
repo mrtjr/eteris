@@ -50,7 +50,7 @@ public partial class MainWindow
         PaletteScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
         PaletteScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
         PaletteCard.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
-        PaletteInput.Focus();
+        FocusInOverlay(PaletteInput);
     }
 
     private void ClosePalette()
@@ -58,7 +58,7 @@ public partial class MainWindow
         if (!PaletteOpen) return;
         PaletteOverlay.Visibility = Visibility.Collapsed;
         BrowserHost.Effect = null;
-        if (ActiveBrowser is { } browser) Keyboard.Focus(browser);
+        ReturnFocusToPage();
     }
 
     private void TogglePalette()

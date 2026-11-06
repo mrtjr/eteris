@@ -33,7 +33,7 @@ public partial class MainWindow
         QrTitle.Text = tab.Title;
         QrCaption.Text = QrCode.Caption(url);
         QrOverlay.Visibility = Visibility.Visible;
-        QrOverlay.Focus();
+        FocusInOverlay(QrOverlay);
     }
 
     private void CloseQr() => QrOverlay.Visibility = Visibility.Collapsed;

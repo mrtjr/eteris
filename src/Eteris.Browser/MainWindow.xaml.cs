@@ -57,6 +57,7 @@ public partial class MainWindow : Window
         WatchOmniboxMenu();
         SetUpSideFilter();
         Closing += (_, _) => FlushNotes();
+        ContentRendered += (_, _) => SetUpOverlayLayer();
     }
 
     public TabsViewModel Tabs { get; } = new();

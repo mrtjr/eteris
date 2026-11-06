@@ -42,7 +42,7 @@ public partial class MainWindow
     {
         if (_shortcuts is null) return;
         CloseShortcuts();
-        ((Grid)RootBorder.Child).Children.Remove(_shortcuts);
+        OverlayRoot.Children.Remove(_shortcuts);
         _shortcuts = null;
     }
 
@@ -51,7 +51,7 @@ public partial class MainWindow
         if (!ShortcutsOpen) return;
         _shortcuts!.Visibility = Visibility.Collapsed;
         BrowserHost.Effect = null;
-        if (ActiveBrowser is { } browser) System.Windows.Input.Keyboard.Focus(browser);
+        ReturnFocusToPage();
     }
 
     private Grid BuildShortcuts()
@@ -115,7 +115,7 @@ public partial class MainWindow
             Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content },
         };
         overlay.Children.Add(card);
-        ((Grid)RootBorder.Child).Children.Add(overlay);
+        AddToOverlay(overlay);
         return overlay;
     }
 }
