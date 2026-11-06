@@ -8,31 +8,40 @@ public static class MediaFallback
 
     // Corre no início de cada documento. Avisa (uma vez) quando:
     //  - um <video>/<audio> falha por formato não suportado (MediaError 4), ou
-    //  - a página só perguntou por formatos patenteados (nunca por VP8/VP9/AV1/Opus) e tem um vídeo:
-    //    é o caso de leitores como o do Twitch, que desistem sem chegar a dar erro.
-    // O YouTube pergunta também por VP9/AV1 e não é sinalizado.
+    //  - a página perguntou por um formato patenteado e ouviu «não», nunca chegou a ligar vídeo nenhum
+    //    (addSourceBuffer) e, 10 s depois, tem um vídeo visível ainda sem fonte. É o caso do leitor do Twitch,
+    //    que desiste sem dar erro. O YouTube liga o vídeo em AV1/VP9 e não é sinalizado.
     public const string WatchScript = """
         (() => {
-          const patented = /avc1|avc3|mp4a|hvc1|hev1|h264|aac/i, free = /vp8|vp9|vp09|av01|opus|vorbis|flac/i;
-          let askedPatented = false, askedFree = false, reported = false;
+          const patented = /avc1|avc3|mp4a|hvc1|hev1|h264|aac/i;
+          let rejected = false, attached = false, reported = false;
           const report = reason => { if (!reported) { reported = true; console.debug('\u0001eteris-media ' + reason); } };
-          const note = type => {
-            if (typeof type !== 'string') return;
-            if (patented.test(type)) askedPatented = true;
-            if (free.test(type)) askedFree = true;
-          };
-          const watch = (target, name) => {
-            const original = target && target[name];
-            if (typeof original !== 'function') return;
-            target[name] = function (type) { note(type); return original.apply(this, arguments); };
-          };
-          if (window.MediaSource) watch(MediaSource, 'isTypeSupported');
-          if (window.HTMLMediaElement) watch(HTMLMediaElement.prototype, 'canPlayType');
+          if (window.MediaSource) {
+            const isTypeSupported = MediaSource.isTypeSupported;
+            MediaSource.isTypeSupported = function (type) {
+              const supported = isTypeSupported.apply(this, arguments);
+              if (!supported && typeof type === 'string' && patented.test(type)) rejected = true;
+              return supported;
+            };
+            const addSourceBuffer = MediaSource.prototype.addSourceBuffer;
+            MediaSource.prototype.addSourceBuffer = function () {
+              const buffer = addSourceBuffer.apply(this, arguments);
+              attached = true;
+              return buffer;
+            };
+          }
           addEventListener('error', e => {
             const media = e.target;
             if (media instanceof HTMLMediaElement && media.error && media.error.code === 4) report('format');
           }, true);
-          setTimeout(() => { if (askedPatented && !askedFree && document.querySelector('video')) report('patented-only'); }, 6000);
+          setTimeout(() => {
+            if (!rejected || attached) return;
+            const stuck = [...document.querySelectorAll('video')].some(v => {
+              const box = v.getBoundingClientRect();
+              return box.width >= 320 && box.height >= 180 && v.readyState === 0 && !v.currentSrc && !v.srcObject;
+            });
+            if (stuck) report('patented-only');
+          }, 10000);
         })();
         """;
 

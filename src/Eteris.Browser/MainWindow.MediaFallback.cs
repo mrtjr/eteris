@@ -34,7 +34,7 @@ public partial class MainWindow
         _mediaFallbackUrl = tab.Address;
         MediaFallbackText.Text = (reason == "format"
                 ? "Este vídeo usa um formato patenteado (H.264/AAC) que o Éteris não pode incluir."
-                : "Este site só oferece vídeo em formatos patenteados (H.264/AAC), que o Éteris não pode incluir.")
+                : "Se este vídeo não abrir, é provável que o site só o ofereça em formatos patenteados (H.264/AAC), que o Éteris não pode incluir.")
             + (IsPrivate ? " Atenção: ao abrir no navegador do sistema, sai da janela privada." : string.Empty);
         MediaFallbackBar.Visibility = Visibility.Visible;
     }

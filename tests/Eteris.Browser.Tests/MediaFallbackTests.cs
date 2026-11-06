@@ -22,9 +22,10 @@ public class MediaFallbackTests
         => Assert.Equal(expected, MediaFallback.SystemBrowserTarget(progId, url));
 
     [Fact]
-    public void WatchScript_FlagsOnlyPagesWithoutFreeFormats()
+    public void WatchScript_FlagsOnlyVideosThatNeverGetASource()
     {
-        Assert.Contains("askedPatented && !askedFree", MediaFallback.WatchScript);
+        Assert.Contains("if (!rejected || attached) return;", MediaFallback.WatchScript);
+        Assert.Contains("v.readyState === 0 && !v.currentSrc && !v.srcObject", MediaFallback.WatchScript);
         Assert.Contains("media.error.code === 4", MediaFallback.WatchScript);
     }
 }
