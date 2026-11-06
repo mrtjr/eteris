@@ -113,6 +113,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
+                        <StackPanel x:Name="Outer" Orientation="Horizontal">
+                        <Border x:Name="GroupPill" Visibility="Collapsed" Height="24" Margin="4,6,4,6" Padding="10,0" CornerRadius="12"
+                                VerticalAlignment="Center" Background="{Binding Group.ColorBrush}" Cursor="Hand"
+                                ToolTip="Clique para encolher ou expandir · botão direito para o nome e a cor"
+                                PreviewMouseLeftButtonDown="GroupPill_PreviewMouseLeftButtonDown"
+                                PreviewMouseRightButtonUp="GroupPill_PreviewMouseRightButtonUp">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Group.Name}" FontSize="12" FontWeight="SemiBold" Foreground="#0B0D13"
+                                           MaxWidth="140" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="GroupCountText" Text="{Binding GroupCount, StringFormat={} · {0}}" FontSize="12"
+                                           FontWeight="SemiBold" Foreground="#0B0D13" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Border>
                         <Grid x:Name="TabRoot" Height="36" Background="Transparent" RenderTransformOrigin="0,0.5"
                               Width="{Binding TabWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                               ToolTipService.InitialShowDelay="450" ToolTipService.Placement="Bottom">
@@ -123,6 +136,8 @@
                             <Border x:Name="Bg" CornerRadius="10,10,0,0" Background="Transparent" />
                             <Border x:Name="Glow" Height="2" VerticalAlignment="Top" Margin="14,0" CornerRadius="1"
                                     Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
+                            <Border x:Name="GroupLine" Height="2.5" VerticalAlignment="Bottom" Margin="6,0" CornerRadius="1"
+                                    Background="{Binding Group.ColorBrush}" />
                             <Grid x:Name="TabContent" Margin="12,0,8,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="16" />
@@ -156,7 +171,25 @@
                                 </StackPanel>
                             </Grid>
                         </Grid>
+                        </StackPanel>
                         <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Group}" Value="{x:Null}">
+                                <Setter TargetName="GroupLine" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsGroupHead}" Value="True">
+                                <Setter TargetName="GroupPill" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsHiddenByGroup}" Value="True">
+                                <Setter TargetName="Outer" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding IsGroupHead}" Value="True" />
+                                    <Condition Binding="{Binding Group.IsCollapsed}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="TabRoot" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="GroupCountText" Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
                             <EventTrigger RoutedEvent="FrameworkElement.Loaded">
                                 <BeginStoryboard>
                                     <Storyboard>
@@ -234,6 +267,8 @@
                             <Border x:Name="Bg" CornerRadius="10" Background="Transparent" />
                             <Border x:Name="Bar" Width="3" HorizontalAlignment="Left" Margin="0,9" CornerRadius="1.5"
                                     Background="{StaticResource IrisBrush}" Visibility="Hidden" />
+                            <Border x:Name="SideGroup" Width="4" HorizontalAlignment="Right" Margin="0,8,2,8" CornerRadius="2"
+                                    Background="{Binding Group.ColorBrush}" />
                             <Grid Margin="13,0,6,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="18" />
@@ -265,6 +300,12 @@
                             </Grid>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Group}" Value="{x:Null}">
+                                <Setter TargetName="SideGroup" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsHiddenByGroup}" Value="True">
+                                <Setter TargetName="Row" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                             <EventTrigger RoutedEvent="FrameworkElement.Loaded">
                                 <BeginStoryboard>
                                     <Storyboard>

@@ -12,7 +12,7 @@ public sealed class DarkMenu
 
     public DarkMenu() => _menu.Style = (Style)Application.Current.FindResource("DarkContextMenu");
 
-    public DarkMenu Item(string glyph, string header, Action action, string? gesture = null, bool enabled = true)
+    public DarkMenu Item(string glyph, string header, Action action, string? gesture = null, bool enabled = true, Brush? iconBrush = null)
     {
         var item = new MenuItem
         {
@@ -25,7 +25,7 @@ public sealed class DarkMenu
                 Text = glyph,
                 FontFamily = (FontFamily)Application.Current.FindResource("IconFont"),
                 FontSize = 13,
-                Foreground = (Brush)Application.Current.FindResource("TextMutedBrush"),
+                Foreground = iconBrush ?? (Brush)Application.Current.FindResource("TextMutedBrush"),
             },
         };
         item.Click += (_, _) => action();
