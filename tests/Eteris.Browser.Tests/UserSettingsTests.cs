@@ -53,6 +53,7 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("verticalTabs", "true")]
     [InlineData("autoplay", "false")]
     [InlineData("suggest", "true")]
+    [InlineData("clearOnExit", "true")]
     [InlineData("ntTheme", "sunset")]
     [InlineData("ntTiles", "false")]
     [InlineData("sidebarCollapsed", "true")]

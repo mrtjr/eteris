@@ -27,6 +27,11 @@ public partial class App : Application
     {
         _channel?.Dispose();
         Data.AppData.FlushShieldStats();
+        if (Data.Settings.Current.ClearOnExit)
+        {
+            try { Cef.GetGlobalCookieManager().DeleteCookiesAsync(string.Empty, string.Empty).Wait(TimeSpan.FromSeconds(3)); }
+            catch (Exception) { }
+        }
         UpdateService.ApplyPendingOnExit();
         Cef.Shutdown();
         base.OnExit(e);

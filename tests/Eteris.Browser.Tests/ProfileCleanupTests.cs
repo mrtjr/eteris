@@ -30,6 +30,25 @@ public sealed class ProfileCleanupTests : IDisposable
     }
 
     [Fact]
+    public void RemoveSiteData_ClearsStorageAndCookiesButKeepsTheRest()
+    {
+        var def = Directory.CreateDirectory(Path.Combine(_root, "Default")).FullName;
+        foreach (var dir in new[] { "Local Storage", "IndexedDB", "Session Storage", "Service Worker", "Network" })
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(def, dir)).FullName, "data"), "x");
+        File.WriteAllText(Path.Combine(def, "Network", "Cookies"), "x");
+        File.WriteAllText(Path.Combine(def, "Network", "TransportSecurity"), "x");
+        File.WriteAllText(Path.Combine(def, "Preferences"), "x");
+
+        ProfileCleanup.RemoveSiteData(_root);
+
+        Assert.False(Directory.Exists(Path.Combine(def, "Local Storage")));
+        Assert.False(Directory.Exists(Path.Combine(def, "IndexedDB")));
+        Assert.False(File.Exists(Path.Combine(def, "Network", "Cookies")));
+        Assert.True(File.Exists(Path.Combine(def, "Network", "TransportSecurity")));
+        Assert.True(File.Exists(Path.Combine(def, "Preferences")));
+    }
+
+    [Fact]
     public void MissingProfile_IsFine()
         => Assert.Equal(0, ProfileCleanup.RemoveChromiumHistory(Path.Combine(_root, "nada")));
 

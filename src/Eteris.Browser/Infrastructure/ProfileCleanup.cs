@@ -12,6 +12,30 @@ public static class ProfileCleanup
         "Network Action Predictor", "Network Action Predictor-journal", "Shortcuts", "Shortcuts-journal",
     ];
 
+    private static readonly string[] SiteDataFolders =
+        ["Local Storage", "IndexedDB", "Session Storage", "Service Worker", "File System", "WebStorage", "Shared Dictionary"];
+
+    private static readonly string[] CookieFiles = ["Cookies", "Cookies-journal"];
+
+    // «Apagar cookies e dados de sites ao fechar»: garantia no arranque seguinte, mesmo que o fecho tenha falhado.
+    public static void RemoveSiteData(string profileRoot)
+    {
+        var dir = Path.Combine(profileRoot, "Default");
+        if (!Directory.Exists(dir)) return;
+        foreach (var folder in SiteDataFolders)
+        {
+            try { if (Directory.Exists(Path.Combine(dir, folder))) Directory.Delete(Path.Combine(dir, folder), recursive: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        foreach (var file in CookieFiles)
+        {
+            try { File.Delete(Path.Combine(dir, "Network", file)); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
     public static int RemoveChromiumHistory(string profileRoot)
     {
         var dir = Path.Combine(profileRoot, "Default");

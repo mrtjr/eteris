@@ -21,6 +21,7 @@ public sealed record UserSettings
     public bool BlockAutoplay { get; init; } = true;
     public bool SearchSuggestions { get; init; }
     public string SecureDns { get; init; } = "off";
+    public bool ClearOnExit { get; init; }
     public string NewTabTheme { get; init; } = "aurora";
     public bool NewTabClock { get; init; } = true;
     public bool NewTabTiles { get; init; } = true;
@@ -39,6 +40,7 @@ public sealed record UserSettings
         "ntClock" when bool.TryParse(value, out var on) => this with { NewTabClock = on },
         "ntTiles" when bool.TryParse(value, out var on) => this with { NewTabTiles = on },
         "ntWeek" when bool.TryParse(value, out var on) => this with { NewTabWeek = on },
+        "clearOnExit" when bool.TryParse(value, out var on) => this with { ClearOnExit = on },
         "dns" when value == "off" || Shields.SecureDns.Providers.ContainsKey(value) => this with { SecureDns = value },
         "suggest" when bool.TryParse(value, out var on) => this with { SearchSuggestions = on },
         "autoplay" when bool.TryParse(value, out var on) => this with { BlockAutoplay = on },

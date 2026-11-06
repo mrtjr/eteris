@@ -56,6 +56,7 @@ public static class SettingsPage
             autoplay = settings.BlockAutoplay,
             suggest = settings.SearchSuggestions,
             dns = settings.SecureDns,
+            clearOnExit = settings.ClearOnExit,
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
