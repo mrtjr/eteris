@@ -14,7 +14,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 |---|---|---|---|---|---|---|
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
-| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (CefSharp não o suporta num executável .NET) | **[bloqueia]** |
+| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (`--no-sandbox` nos 6 processos); viável em 1–2 semanas, ver `docs/sandbox.md` | **[bloqueia]** |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
@@ -70,12 +70,12 @@ Pendentes desta migração:
 - Por cima da paleta e da folha de atalhos a página fica escurecida, mas já não desfocada.
 - O contorno da metade ativa no ecrã dividido e os cantos arredondados da página ficam por baixo da página.
 
-## 2. Sandbox — por investigar
+## 2. Sandbox — investigado: viável, 1–2 semanas
 
-O Chromium isola cada página num processo com permissões mínimas; no Éteris esse isolamento está desligado
-(o sandbox do CEF exige que o executável principal seja ligado estaticamente a `cef_sandbox.lib`, impossível num
-executável .NET). Caminho a investigar: um lançador nativo (C++) ligado ao sandbox que arranca o .NET por dentro
-(`hostfxr`). Critério: `chrome://sandbox` (ou equivalente) mostra os processos das páginas isolados.
+Os 6 processos do motor correm com `--no-sandbox`. Desde o CEF 138 o sandbox no Windows exige o «bootstrap» (a
+aplicação arranca como DLL nativa que recebe a informação do sandbox); o CefSharp não deixa passar essa informação
+e os processos das páginas não podem carregar o .NET dentro do sandbox. Plano em 5 passos (A–E) e custos em
+`docs/sandbox.md`. Critério: `chrome://sandbox` mostra os processos das páginas isolados.
 
 ## 3. Atualizações do motor
 
