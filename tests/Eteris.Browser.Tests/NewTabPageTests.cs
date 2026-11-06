@@ -35,6 +35,14 @@ public class NewTabPageTests
     }
 
     [Fact]
+    public void Render_IncludesBookmarks()
+    {
+        var html = NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, bookmarks: [new Bookmark("https://mdn.dev/", "MDN Docs")]);
+        Assert.Contains("MDN Docs", html);
+        Assert.Contains("\"bookmarks\":[", html);
+    }
+
+    [Fact]
     public void Render_IncludesSessionBlockedCount()
         => Assert.Contains("\"blocked\":42", NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, blocked: 42));
 

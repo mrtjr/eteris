@@ -190,13 +190,14 @@ public partial class MainWindow : Window
         SyncOmnibox();
         SyncLoading();
         UpdateShieldButton();
+        UpdateStar();
         ApplyTint();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (!ReferenceEquals(sender, Tabs.Active)) return;
-        if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); }
+        if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
         if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
         if (e.PropertyName == nameof(BrowserTab.Tint)) ApplyTint();
@@ -258,6 +259,7 @@ public partial class MainWindow : Window
 
         if (ctrl && key == Key.K) TogglePalette();
         else if (ctrl && key == Key.J) ToggleDownloads();
+        else if (ctrl && key == Key.D) ToggleBookmark();
         else if (key == Key.F11) ToggleFocusMode();
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
         else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);

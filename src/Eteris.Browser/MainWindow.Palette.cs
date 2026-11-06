@@ -114,6 +114,10 @@ public partial class MainWindow
         var items = CommandSearch.RankTitled(query, Actions().Concat(tabs), c => c.Title, c => c.Subtitle);
 
         if (query.Length >= 2)
+            items.AddRange(AppData.Bookmarks(b => b.Search(query, 4)).Select(b =>
+                new PaletteCommand("", b.Title.Length > 0 ? b.Title : b.Url, "Favorito · " + b.Url, null, () => LoadUrl(b.Url))));
+
+        if (query.Length >= 2)
             items.AddRange(AppData.TryRead(h => h.Search(query, 5)).Select(h =>
                 new PaletteCommand("", h.Title.Length > 0 ? h.Title : h.Url, h.Url, null, () => LoadUrl(h.Url))));
 

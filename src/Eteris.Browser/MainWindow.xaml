@@ -172,6 +172,17 @@
                             <DataTrigger Binding="{Binding Kind}" Value="Navigate">
                                 <Setter TargetName="Icon" Property="Text" Value="&#xE71B;" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Bookmark">
+                                <Setter TargetName="Icon" Property="Text" Value="&#xE735;" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource IrisBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Tab">
+                                <Setter TargetName="Icon" Property="Text" Value="&#xE8AB;" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Answer">
+                                <Setter TargetName="Icon" Property="Text" Value="&#xE8EF;" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource IrisBrush}" />
+                            </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
                             </Trigger>
@@ -293,10 +304,15 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="SiteIcon" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
                                        Foreground="{StaticResource TextMutedBrush}" Margin="16,0,10,0" VerticalAlignment="Center" />
-                            <Grid Grid.Column="1" Margin="0,0,16,0">
+                            <Button x:Name="StarButton" Grid.Column="2" Style="{StaticResource IconButton}" Width="28" Height="28"
+                                    Margin="0,0,4,0" Click="Star_Click" ToolTip="Adicionar aos favoritos (Ctrl+D)" Visibility="Collapsed">
+                                <TextBlock x:Name="StarGlyph" Text="&#xE734;" FontFamily="{StaticResource IconFont}" FontSize="14" />
+                            </Button>
+                            <Grid Grid.Column="1" Margin="0,0,8,0">
                                 <TextBox x:Name="Omnibox" Style="{StaticResource BareTextBox}"
                                          PreviewKeyDown="Omnibox_PreviewKeyDown" GotKeyboardFocus="Omnibox_GotKeyboardFocus"
                                          TextChanged="Omnibox_TextChanged"

@@ -38,4 +38,24 @@ public static class AppData
         try { return read(History); }
         catch (Exception) { return []; }
     }
+
+    private static readonly Lazy<BookmarkStore> LazyBookmarks = new(() => new BookmarkStore(AppPaths.Database));
+
+    public static IReadOnlyList<Bookmark> Bookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read)
+    {
+        try { return read(LazyBookmarks.Value); }
+        catch (Exception) { return []; }
+    }
+
+    public static bool IsBookmarked(string url)
+    {
+        try { return LazyBookmarks.Value.Contains(url); }
+        catch (Exception) { return false; }
+    }
+
+    public static bool ToggleBookmark(string url, string title)
+    {
+        try { return LazyBookmarks.Value.Toggle(url, title, DateTime.UtcNow); }
+        catch (Exception) { return false; }
+    }
 }

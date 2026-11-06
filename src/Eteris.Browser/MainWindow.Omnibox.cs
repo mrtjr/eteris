@@ -95,7 +95,8 @@ public partial class MainWindow
         }
         _suppressCompletion = false;
 
-        var list = Suggestions.Build(Omnibox.Text, Engine, history);
+        var bookmarks = AppData.Bookmarks(b => b.Search(text, 3)).Select(b => new HistoryEntry(b.Url, b.Title, 0)).ToList();
+        var list = Suggestions.Build(Omnibox.Text, Engine, history, bookmarks);
         SuggestionList.ItemsSource = list;
         SuggestionList.SelectedIndex = list.Count > 0 ? 0 : -1;
         SuggestionPopup.IsOpen = list.Count > 0 && Omnibox.IsKeyboardFocusWithin;

@@ -76,6 +76,16 @@
   }
   .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .tile:hover .name { color: var(--text); }
+  .marks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; margin-top: 22px; }
+  .mark {
+    display: flex; align-items: center; gap: 8px; max-width: 200px; padding: 6px 12px 6px 6px; border-radius: 999px;
+    text-decoration: none; color: var(--muted); font-size: 13px;
+    background: rgba(255, 255, 255, .045); border: 1px solid var(--line); backdrop-filter: blur(14px);
+    transition: background .15s ease, color .15s ease;
+  }
+  .mark:hover { background: rgba(255, 255, 255, .09); color: var(--text); }
+  .mark .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; flex: none; }
+  .mark span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hint { width: 100%; text-align: center; color: var(--faint); font-size: 14px; padding: 18px; }
   footer {
     position: fixed; bottom: 22px; z-index: 2; display: flex; gap: 10px; align-items: center;
@@ -96,6 +106,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input id="q" type="text" spellcheck="false" aria-label="Pesquisar ou escrever um endereço">
   </form>
+  <nav class="marks" id="marks" aria-label="Favoritos"></nav>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
 </main>
 <footer><i></i><span id="status">Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
@@ -125,6 +136,18 @@
   if (data.blocked > 0) {
     document.getElementById('status').textContent = 'Éteris · ' + data.blocked.toLocaleString('pt-PT') +
       (data.blocked === 1 ? ' rastreador bloqueado' : ' rastreadores bloqueados') + ' nesta sessão — tudo fica neste computador';
+  }
+
+  const marks = document.getElementById('marks');
+  for (const mark of data.bookmarks) {
+    const a = document.createElement('a');
+    a.className = 'mark'; a.href = mark.url; a.title = mark.url;
+    const dot = document.createElement('span');
+    dot.className = 'dot'; dot.textContent = mark.letter; dot.style.background = mark.color;
+    const label = document.createElement('span');
+    label.textContent = mark.title;
+    a.append(dot, label);
+    marks.append(a);
   }
 
   const tiles = document.getElementById('tiles');

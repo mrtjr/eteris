@@ -2,7 +2,7 @@ using Eteris.Browser.Data;
 
 namespace Eteris.Browser.Omnibox;
 
-public enum SuggestionKind { Search, Navigate, History }
+public enum SuggestionKind { Search, Navigate, History, Bookmark, Tab, Answer }
 
 public sealed record Suggestion(SuggestionKind Kind, string Text, string Detail, string Url);
 
@@ -10,7 +10,8 @@ public static class Suggestions
 {
     public const int MaxHistory = 6;
 
-    public static IReadOnlyList<Suggestion> Build(string input, SearchEngine engine, IReadOnlyList<HistoryEntry> history)
+    public static IReadOnlyList<Suggestion> Build(string input, SearchEngine engine, IReadOnlyList<HistoryEntry> history,
+        IReadOnlyList<HistoryEntry>? bookmarks = null)
     {
         var primary = OmniboxClassifier.Classify(input, engine);
         if (primary is null) return [];
@@ -22,8 +23,11 @@ public static class Suggestions
                 : new Suggestion(SuggestionKind.Navigate, input.Trim(), "Abrir endereço", primary.Url),
         };
 
+        var marked = (bookmarks ?? []).Where(b => !SameUrl(b.Url, primary.Url)).Take(3).ToList();
+        list.AddRange(marked.Select(b => new Suggestion(SuggestionKind.Bookmark, b.Title.Length > 0 ? b.Title : b.Url, b.Url, b.Url)));
+
         list.AddRange(history
-            .Where(h => !SameUrl(h.Url, primary.Url))
+            .Where(h => !SameUrl(h.Url, primary.Url) && !marked.Any(b => SameUrl(b.Url, h.Url)))
             .Take(MaxHistory)
             .Select(h => new Suggestion(SuggestionKind.History, h.Title.Length > 0 ? h.Title : h.Url, h.Url, h.Url)));
         return list;

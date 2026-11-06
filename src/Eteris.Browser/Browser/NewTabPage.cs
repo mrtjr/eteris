@@ -28,7 +28,8 @@ public static class NewTabPage
     };
 
     // O JSON vai dentro de <script>: o codificador por omissão escapa < > & e impede fechar a tag.
-    public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0)
+    public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0,
+        IReadOnlyList<Bookmark>? bookmarks = null)
     {
         var data = new
         {
@@ -36,6 +37,13 @@ public static class NewTabPage
             blocked,
             engineName = engine.Name,
             engineTemplate = engine.Template,
+            bookmarks = (bookmarks ?? []).Take(10).Select(b => new
+            {
+                url = b.Url,
+                title = b.Title.Length > 0 ? b.Title : b.Url,
+                letter = SiteBadge.Letter(b.Url) ?? "?",
+                color = SiteBadge.Palette[SiteBadge.ColorIndex(b.Url)],
+            }),
             sites = sites.Select(s => new
             {
                 host = s.Host,
