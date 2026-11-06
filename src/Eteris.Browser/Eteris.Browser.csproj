@@ -34,6 +34,7 @@
     <EmbeddedResource Include="Browser\bookmarks.html" />
     <EmbeddedResource Include="Browser\welcome.html" />
     <EmbeddedResource Include="Browser\whatsnew.html" />
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="Eteris.Browser.THIRD-PARTY-NOTICES.md" />
     <EmbeddedResource Include="Shields\trackers.txt" />
     <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll"
           CopyToOutputDirectory="PreserveNewest" Visible="false" />

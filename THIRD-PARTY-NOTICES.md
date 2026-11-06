@@ -22,6 +22,8 @@ Não são modificadas.
 | EasyList | https://easylist.to | GPL-3.0 ou CC BY-SA 3.0 |
 | EasyPrivacy | https://easylist.to | GPL-3.0 ou CC BY-SA 3.0 |
 | EasyList Portuguesa | https://easylist-downloads.adblockplus.org/easylistportuguese.txt | GPL-3.0 ou CC BY-SA 3.0 |
+| EasyList Cookie (via uBlock) | https://github.com/uBlockOrigin/uAssets | GPL-3.0 ou CC BY-SA 3.0 |
+| AdGuard Cookie Notices (via uBlock) | https://github.com/uBlockOrigin/uAssets | GPL-3.0 |
 
 ## Scriptlets
 
@@ -35,4 +37,8 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 | Componente | Origem | Licença |
 |---|---|---|
 | Chromium Embedded Framework / CefSharp | https://github.com/cefsharp/CefSharp | BSD-3-Clause |
+| Chromium (incluído no CEF) | https://www.chromium.org | BSD-3-Clause e licenças dos seus componentes |
 | Velopack | https://github.com/velopack/velopack | MIT |
+| CommunityToolkit.Mvvm | https://github.com/CommunityToolkit/dotnet | MIT |
+| Microsoft.Data.Sqlite / SQLite | https://github.com/dotnet/efcore · https://sqlite.org | MIT · domínio público |
+| .NET | https://github.com/dotnet/runtime | MIT |
