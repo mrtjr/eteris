@@ -144,6 +144,17 @@ public partial class MainWindow : Window
             tab.Address = address;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
         };
+        browser.ConsoleMessage += (_, e) =>
+        {
+            // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.
+            if (ReaderScripts.ParseReport(e.Message) is not { } reader) return;
+            Dispatcher.InvokeAsync(() =>
+            {
+                Data.Settings.Set("readerTheme", reader.Theme);
+                Data.Settings.Set("readerSize", reader.Size.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                Data.Settings.Set("readerSerif", reader.Serif ? "true" : "false");
+            });
+        };
         browser.TitleChanged += (_, e) =>
         {
             if (e.NewValue is not string { Length: > 0 } title)

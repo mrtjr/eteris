@@ -5,6 +5,33 @@ namespace Eteris.Browser.Browser;
 // e o DOM é criado com createElement, por isso funciona mesmo em sites com CSP ou Trusted Types restritos.
 public static class ReaderScripts
 {
+    public const string ReportPrefix = "\u0001eteris-reader ";
+
+    public static string Toggle => ToggleWith("dark", 20, true);
+
+    public static string ToggleWith(string theme, int size, bool serif)
+        => ToggleTemplate
+            .Replace("__THEME__", theme is "dark" or "sepia" or "light" ? theme : "dark")
+            .Replace("__SIZE__", Math.Clamp(size, 15, 28).ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Replace("__SERIF__", serif ? "true" : "false");
+
+    // Mensagem de consola do leitor com as preferências; qualquer outra coisa (ou valores fora do intervalo) é ignorada.
+    public static (string Theme, int Size, bool Serif)? ParseReport(string? message)
+    {
+        if (message is null || !message.StartsWith(ReportPrefix, StringComparison.Ordinal)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(message[ReportPrefix.Length..]);
+            var root = doc.RootElement;
+            var theme = root.GetProperty("theme").GetString();
+            var size = root.GetProperty("size").GetInt32();
+            var serif = root.GetProperty("serif").GetBoolean();
+            if (theme is not ("dark" or "sepia" or "light") || size is < 15 or > 28) return null;
+            return (theme, size, serif);
+        }
+        catch (Exception) { return null; }
+    }
+
     public static bool IsCandidate(string url)
         => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
 
@@ -23,7 +50,7 @@ public static class ReaderScripts
         })()
         """;
 
-    public const string Toggle = """
+    private const string ToggleTemplate = """
         (() => {
           const ID = 'eteris-reader';
           const open = document.getElementById(ID);
@@ -128,24 +155,30 @@ public static class ReaderScripts
           root.adoptedStyleSheets = [sheet];
 
           const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-          const wrap = el('div', 'wrap dark serif');
-          let size = 20;
+          // Preferências lembradas (tema, tamanho, tipo de letra): vêm do Éteris e cada mudança é-lhe comunicada.
+          let theme = '__THEME__';
+          const wrap = el('div', 'wrap ' + theme + (__SERIF__ ? ' serif' : ' sans'));
+          let size = __SIZE__;
           wrap.style.setProperty('--size', size + 'px');
+          const report = () => console.debug('\u0001eteris-reader ' + JSON.stringify({ theme, size, serif: wrap.classList.contains('serif') }));
 
           const bar = el('div', 'bar');
           const button = (label, title, action) => { const b = el('button', null, label); b.title = title; b.addEventListener('click', action); bar.append(b); return b; };
-          button('A−', 'Letra mais pequena', () => { size = Math.max(15, size - 1); wrap.style.setProperty('--size', size + 'px'); });
-          button('A+', 'Letra maior', () => { size = Math.min(28, size + 1); wrap.style.setProperty('--size', size + 'px'); });
+          button('A−', 'Letra mais pequena', () => { size = Math.max(15, size - 1); wrap.style.setProperty('--size', size + 'px'); report(); });
+          button('A+', 'Letra maior', () => { size = Math.min(28, size + 1); wrap.style.setProperty('--size', size + 'px'); report(); });
           bar.append(el('span', 'gap'));
-          const themes = ['dark', 'sepia', 'light'].map((theme, i) => button(['Escuro', 'Sépia', 'Claro'][i], 'Tema ' + theme, () => {
-            wrap.classList.remove('dark', 'sepia', 'light'); wrap.classList.add(theme);
+          const names = ['dark', 'sepia', 'light'];
+          const themes = names.map((name, i) => button(['Escuro', 'Sépia', 'Claro'][i], 'Tema ' + name, () => {
+            wrap.classList.remove('dark', 'sepia', 'light'); wrap.classList.add(name); theme = name;
             themes.forEach(t => t.classList.toggle('on', t === themes[i]));
+            report();
           }));
-          themes[0].classList.add('on');
+          themes[Math.max(0, names.indexOf(theme))].classList.add('on');
           bar.append(el('span', 'gap'));
-          const font = button('Sem serifa', 'Alternar tipo de letra', () => {
+          const font = button(wrap.classList.contains('serif') ? 'Sem serifa' : 'Com serifa', 'Alternar tipo de letra', () => {
             const serif = wrap.classList.toggle('serif'); wrap.classList.toggle('sans', !serif);
             font.textContent = serif ? 'Sem serifa' : 'Com serifa';
+            report();
           });
           bar.append(el('span', 'gap'));
 

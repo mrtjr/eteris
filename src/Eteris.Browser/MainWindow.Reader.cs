@@ -40,7 +40,9 @@ public partial class MainWindow
         if (ActiveBrowser is not { } browser || Tabs.Active is not { IsReaderable: true }) return;
         try
         {
-            var response = await browser.EvaluateScriptAsync(ReaderScripts.Toggle, TimeSpan.FromSeconds(5));
+            var prefs = Data.Settings.Current;
+            var response = await browser.EvaluateScriptAsync(ReaderScripts.ToggleWith(prefs.ReaderTheme, prefs.ReaderSize, prefs.ReaderSerif),
+                TimeSpan.FromSeconds(5));
             if (response.Success && response.Result as string == "none") ShowToast("Não foi possível encontrar o artigo nesta página");
             else if (response.Success) Keyboard.Focus(browser);
         }

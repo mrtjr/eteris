@@ -31,6 +31,9 @@ public sealed record UserSettings
     public bool NewTabTiles { get; init; } = true;
     public bool NewTabWeek { get; init; } = true;
     public bool SidebarCollapsed { get; init; }
+    public string ReaderTheme { get; init; } = "dark";
+    public int ReaderSize { get; init; } = 20;
+    public bool ReaderSerif { get; init; } = true;
 
     public UserSettings? With(string key, string value) => key switch
     {
@@ -53,6 +56,9 @@ public sealed record UserSettings
         "autoplay" when bool.TryParse(value, out var on) => this with { BlockAutoplay = on },
         "verticalTabs" when bool.TryParse(value, out var on) => this with { VerticalTabs = on },
         "sidebarCollapsed" when bool.TryParse(value, out var on) => this with { SidebarCollapsed = on },
+        "readerTheme" when value is "dark" or "sepia" or "light" => this with { ReaderTheme = value },
+        "readerSize" when int.TryParse(value, out var px) && px >= 15 && px <= 28 => this with { ReaderSize = px },
+        "readerSerif" when bool.TryParse(value, out var on) => this with { ReaderSerif = on },
         _ => null,
     };
 }
