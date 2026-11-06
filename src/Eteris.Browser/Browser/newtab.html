@@ -141,7 +141,7 @@
   .swatch[data-theme="forest"]  { background: conic-gradient(#15803d, #22c55e, #0d9488, #65a30d, #15803d); }
   .swatch[data-theme="minimal"] { background: #141826; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
   .opt { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; font-size: 13.5px; color: var(--muted); cursor: pointer; }
-  .opt input { appearance: none; width: 38px; height: 22px; border-radius: 11px; background: #2c3042; position: relative; cursor: pointer; transition: background .2s; }
+  .opt input { all: unset; flex: none; appearance: none; width: 38px; height: 22px; border-radius: 11px; background: #2c3042; position: relative; cursor: pointer; transition: background .2s; }
   .opt input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #e9ebf2; transition: transform .2s; }
   .opt input:checked { background: linear-gradient(135deg, #8b5cf6, #22d3ee); }
   .opt input:checked::after { transform: translateX(16px); }
