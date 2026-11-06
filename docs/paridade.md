@@ -15,7 +15,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (CefSharp não o suporta num executável .NET) | **[bloqueia]** |
-| 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje), mas sem processo garantido | **[bloqueia]** |
+| 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | por medir | alta |
@@ -80,8 +80,20 @@ executável .NET). Caminho a investigar: um lançador nativo (C++) ligado ao san
 ## 3. Atualizações do motor
 
 Critério: cada versão nova do CefSharp (que segue o Chrome estável) chega aos utilizadores em ≤ 14 dias, com os
-testes a passar. Passos: aviso automático de nova versão do CefSharp no GitHub, publicação pelo fluxo `release.yml`
-(corrigido na 0.2.2) e atualização automática do Velopack.
+testes a passar.
+
+Processo (montado em 2026-11-06):
+1. **Aviso automático.** `.github/dependabot.yml` procura todos os dias versões novas do CefSharp (os pacotes do
+   motor sobem juntos) e abre um pedido de alteração; o fluxo `build` corre os testes nesse pedido. Também vigia os
+   restantes pacotes NuGet, os crates do escudo e as ações do GitHub.
+2. **Licenças.** `licenses/INDEX.md` regista a versão do CefSharp e do CEF; o teste
+   `ChromiumCredits_WereGeneratedForTheCurrentEngine` falha enquanto as licenças não forem geradas para o motor novo
+   (`python build/licenses/collect.py`, que extrai os créditos do Chromium da versão nova).
+3. **Verificar ao vivo** com o perfil de teste (abrir páginas, medir com `perf-render.ps1`).
+4. **Publicar.** Subir a versão (csproj, `build/publish.ps1`, CHANGELOG), tag `v*` → o fluxo `release.yml` publica a
+   Release e o Velopack atualiza os utilizadores sozinho (pacote delta).
+
+O que falta para o ✅ definitivo: fazer uma atualização real do motor de ponta a ponta e medir o tempo total.
 
 ## Restantes
 
