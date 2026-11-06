@@ -147,6 +147,30 @@ public static class AppData
         catch (Exception) { }
     }
 
+    private static readonly Lazy<SavedSessionsStore?> LazySessions = new(() =>
+    {
+        try { return new SavedSessionsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static IReadOnlyList<SavedSession> SavedSessions()
+    {
+        try { return LazySessions.Value?.All() ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    public static void SaveSession(string name, IReadOnlyList<SavedTab> tabs)
+    {
+        try { LazySessions.Value?.Save(name, tabs, DateTime.UtcNow); }
+        catch (Exception) { }
+    }
+
+    public static void DeleteSession(long id)
+    {
+        try { LazySessions.Value?.Delete(id); }
+        catch (Exception) { }
+    }
+
     public static int ImportBookmarks(IReadOnlyList<Bookmark> marks)
     {
         try { return BookmarkImport.Import(LazyBookmarks.Value, marks, DateTime.UtcNow); }

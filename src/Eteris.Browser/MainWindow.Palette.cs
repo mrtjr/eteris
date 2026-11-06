@@ -93,6 +93,7 @@ public partial class MainWindow
             var entry = closed;
             yield return new("", $"Reabrir «{entry.Title}»", entry.Address, null, () => Tabs.ReopenClosed(entry));
         }
+        foreach (var command in SessionCommands()) yield return command;
         yield return new("", "Esquecer os últimos 15 minutos", "Apaga o histórico desse período e as abas fechadas recentes", null, () => Forget(15));
         yield return new("", "Esquecer a última hora", "Apaga o histórico da última hora e as abas fechadas recentes", null, () => Forget(60));
         yield return new("", "Adormecer abas em segundo plano", "Liberta a memória das abas que não está a usar", null,
