@@ -23,6 +23,19 @@ public class LicenseComplianceTests
     public void Project_IsGplV3()
         => Assert.StartsWith("GNU GENERAL PUBLIC LICENSE", Read("LICENSE").TrimStart());
 
+    // Um alvo como net10.0-windows10.0.19041.0 junta à instalação o Microsoft.Windows.SDK.NET.dll, sob a licença do
+    // Windows SDK (obriga a impor termos aos utilizadores e proíbe licenças de código aberto): incompatível com a GPL.
+    [Theory]
+    [InlineData("src", "Eteris.Browser", "Eteris.Browser.csproj")]
+    [InlineData("tests", "Eteris.Browser.Tests", "Eteris.Browser.Tests.csproj")]
+    public void Project_DoesNotPullTheWindowsSdkProjection(params string[] path)
+    {
+        var csproj = Read(path);
+        Assert.Contains("<TargetFramework>net10.0-windows</TargetFramework>", csproj);
+        Assert.DoesNotContain("Microsoft.Windows.SDK.NET", csproj);
+        Assert.DoesNotContain("WindowsSdkPackageVersion", csproj);
+    }
+
     [Fact]
     public void EveryNuGetPackage_HasItsLicenseText()
     {

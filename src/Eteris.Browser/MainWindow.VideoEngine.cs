@@ -14,9 +14,14 @@ namespace Eteris.Browser;
 // Abas no motor de vídeo (WebView2, o motor do Edge que vem com o Windows): para os sites que só têm vídeo em
 // H.264/AAC, formatos patenteados que o motor principal não traz. A aba continua a ser uma aba do Éteris — mesma
 // barra, mesmo bloqueador, mesma sessão —; só o motor por baixo muda. Ver Tabs/VideoEngine.cs.
+//
+// Usa o controlo WebView2 (janela nativa) e não o WebView2CompositionControl: este último precisa da projeção do
+// Windows SDK (Microsoft.Windows.SDK.NET.dll), cuja licença exige impor termos aos utilizadores e proíbe licenças
+// que obriguem a abrir o código — incompatível com a GPL do Éteris. Consequência: os avisos desenhados por cima da
+// página (aviso curto, paleta) não aparecem por cima da área do vídeo; os menus e sugestões (janelas próprias) sim.
 public partial class MainWindow
 {
-    private readonly Dictionary<BrowserTab, WebView2CompositionControl> _videoViews = new();
+    private readonly Dictionary<BrowserTab, WebView2> _videoViews = new();
 
     // Um único ambiente do motor para todas as janelas (o WebView2 exige os mesmos argumentos por pasta de dados).
     // As janelas privadas usam o modo InPrivate do motor: nada fica gravado em disco.
@@ -28,7 +33,7 @@ public partial class MainWindow
             userDataFolder: Path.Combine(AppPaths.Root, "video-engine"),
             options: new CoreWebView2EnvironmentOptions(VideoEngine.BrowserArguments, language: "pt-PT"));
 
-    private WebView2CompositionControl? ActiveVideo
+    private WebView2? ActiveVideo
         => Tabs.Active is { } tab && _videoViews.TryGetValue(tab, out var view) ? view : null;
 
     private static bool IsVideoSite(string? url) => VideoEngine.CanHost(url) && WebHost(url) is { } host && AppData.IsVideoSite(host);
@@ -45,7 +50,7 @@ public partial class MainWindow
 
     private void CreateVideoView(BrowserTab tab)
     {
-        var view = new WebView2CompositionControl
+        var view = new WebView2
         {
             Visibility = Visibility.Hidden,
             DefaultBackgroundColor = System.Drawing.Color.Transparent,
@@ -57,7 +62,7 @@ public partial class MainWindow
         _ = InitializeVideoViewAsync(tab, view, tab.Address);
     }
 
-    private async Task InitializeVideoViewAsync(BrowserTab tab, WebView2CompositionControl view, string url)
+    private async Task InitializeVideoViewAsync(BrowserTab tab, WebView2 view, string url)
     {
         CoreWebView2Environment environment;
         try
@@ -102,7 +107,7 @@ public partial class MainWindow
         catch (Exception) { }
     }
 
-    private void WireVideoView(BrowserTab tab, WebView2CompositionControl view, CoreWebView2 core, CoreWebView2Environment environment)
+    private void WireVideoView(BrowserTab tab, WebView2 view, CoreWebView2 core, CoreWebView2Environment environment)
     {
         string? mainNavigation = null;
 

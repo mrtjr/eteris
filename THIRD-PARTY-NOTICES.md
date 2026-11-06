@@ -53,7 +53,7 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 | SQLitePCLRaw | https://github.com/ericsink/SQLitePCL.raw | Apache-2.0 |
 | Readability.js 0.6.0 (modo de leitura; sem alterações, em `Browser/Vendor/readability`) | https://github.com/mozilla/readability | Apache-2.0 |
 | .NET e WPF (incluídos na instalação) | https://github.com/dotnet/runtime · https://github.com/dotnet/wpf | MIT, com os avisos de terceiros do .NET |
-| Microsoft.Web.WebView2 (SDK do motor de vídeo: `Microsoft.Web.WebView2.*.dll`, `WebView2Loader.dll`) | https://www.nuget.org/packages/Microsoft.Web.WebView2 | BSD-3-Clause (Microsoft), com os avisos em `licenses/Microsoft.Web.WebView2-NOTICE.txt` |
+| Microsoft.Web.WebView2 (SDK do motor de vídeo: `Microsoft.Web.WebView2.*.dll`, `WebView2Loader.dll`; sem a projeção do Windows SDK, cuja licença é incompatível com a GPL) | https://www.nuget.org/packages/Microsoft.Web.WebView2 | BSD-3-Clause (Microsoft), com os avisos em `licenses/Microsoft.Web.WebView2-NOTICE.txt` |
 
 Os créditos completos do Chromium (centenas de componentes) estão em `licenses/Chromium-credits.html`.
 
