@@ -53,4 +53,16 @@ public sealed class SiteOverviewTests : IDisposable
         Assert.Equal(2, hidden.Hosts()["c.pt"]);
         Assert.Single(perms.AllSites()["d.pt"]);
     }
+
+    [Fact]
+    public void Build_ListsStrictAndDarkSitesEvenWithoutOtherSettings()
+    {
+        var sites = SiteOverview.Build(new Dictionary<string, double> { ["www.publico.pt"] = 1 }, [],
+            new Dictionary<string, IReadOnlyList<(Eteris.Browser.Permissions.SitePermission, bool)>>(), new Dictionary<string, int>(),
+            strict: ["publico.pt"], dark: ["wikipedia.org", "publico.pt"]);
+        var publico = sites.Single(s => s.Site == "publico.pt");
+        Assert.Equal(["modo rigoroso", "escurecido"], publico.Flags);
+        Assert.NotNull(publico.ZoomPercent);
+        Assert.Equal(["escurecido"], sites.Single(s => s.Site == "wikipedia.org").Flags);
+    }
 }

@@ -198,7 +198,9 @@ public static class AppData
                 LazyZoom.Value?.All() ?? new Dictionary<string, double>(),
                 LazyShieldExceptions.Value?.All() ?? [],
                 LazyPermissions.Value?.AllSites() ?? new Dictionary<string, IReadOnlyList<(Permissions.SitePermission, bool)>>(),
-                LazyHidden.Value?.Hosts() ?? new Dictionary<string, int>());
+                LazyHidden.Value?.Hosts() ?? new Dictionary<string, int>(),
+                LazyStrict.Value?.All() ?? [],
+                LazyDark.Value?.All() ?? []);
         }
         catch (Exception) { return []; }
     }
@@ -217,6 +219,7 @@ public static class AppData
         }
         SetShield(site, true);
         SetDark(site, false);
+        SetStrict(site, false);
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>

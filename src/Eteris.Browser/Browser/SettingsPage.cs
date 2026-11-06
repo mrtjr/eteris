@@ -70,7 +70,7 @@ public static class SettingsPage
                         s.ZoomPercent is { } z ? $"zoom {z} %" : null,
                         s.ShieldOff ? "escudo desligado" : null,
                         s.HiddenElements > 0 ? $"{s.HiddenElements} elemento(s) escondido(s)" : null,
-                    }.Where(d => d is not null).Concat(s.Permissions),
+                    }.Where(d => d is not null).Concat(s.Flags).Concat(s.Permissions),
             }),
             tabs = settings.VerticalTabs ? "side" : "top",
         };
