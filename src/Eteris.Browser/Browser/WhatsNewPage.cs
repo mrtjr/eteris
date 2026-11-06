@@ -12,16 +12,20 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
-        new("🛡", "Privacidade a sério", "DNS cifrado, links sem parâmetros de rastreio, modo rigoroso por site, notificações bloqueadas e o histórico interno do Chromium desligado."),
+        new("🛡", "Privacidade a sério", "DNS cifrado, links sem rastreio, modo rigoroso por site, notificações bloqueadas e o histórico interno do Chromium desligado."),
+        new("🗂", "Sessões guardadas", "Guarde as abas de uma janela com nome e reabra-as quando quiser — também a partir da nova aba.", "Ctrl+K"),
+        new("♫", "Centro de multimédia", "Um botão mostra o que toca em todas as abas: tocar, pausar, silenciar, ir para a aba."),
+        new("🔊", "Ouvir artigos", "No modo de leitura, «Ouvir» lê o artigo em voz alta com as vozes do Windows — nada sai do computador.", "F9"),
+        new("⧉", "Janela flutuante", "A janela encolhe para um canto e fica por cima — para ver um vídeo enquanto trabalha."),
+        new("🌙", "Escurecer este site", "Modo escuro só para os sites que escolher, lembrado da próxima vez."),
+        new("📝", "Notas", "Um bloco de notas ao lado da página, com um clique para guardar o endereço."),
+        new("▦", "Código QR da página", "Abra a página no telemóvel sem contas nem sincronização."),
         new("🎨", "Tema claro e Mica", "Escuro, claro ou o do Windows — e as barras deixam transparecer o ambiente de trabalho."),
-        new("🗂", "Grupos de abas", "Junte abas por tema, dê-lhes nome e cor e encolha-as numa só etiqueta."),
-        new("⫴", "Abas verticais e ecrã dividido", "Uma lista lateral para dezenas de abas, e duas páginas lado a lado."),
-        new("📖", "Modo de leitura e «Ler mais tarde»", "Só o artigo, em escuro, sépia ou claro; e uma lista para ler depois.", "F9"),
-        new("⌨", "Paleta e atalhos", "Tudo à distância do teclado — inclusive seguir links pelas letras.", "Ctrl+K · F1"),
-        new("🧮", "Barra de endereço esperta", "Contas, conversões, bangs (!w, !yt…) e «Mudar para este separador»."),
-        new("📸", "Capturas e PDF", "A página inteira numa imagem, ou guardada como PDF.", "Ctrl+Shift+S"),
+        new("📚", "Grupos, abas verticais e ecrã dividido", "Grupos com nome e cor, uma lista lateral para dezenas de abas e duas páginas lado a lado."),
+        new("⌨", "Paleta e atalhos", "Tudo à distância do teclado — abas de todas as janelas, comandos e «Colar e ir».", "Ctrl+K · F1"),
+        new("🔗", "Links para um destaque", "Selecione texto e copie um link que abre a página já nesse parágrafo."),
+        new("📸", "Capturas, PDF e favoritos", "A página inteira numa imagem ou em PDF; favoritos importados e exportados.", "Ctrl+Shift+S"),
         new("✂", "Esconder elementos", "Clique num anúncio ou caixa e desaparece para sempre nesse site."),
-        new("📊", "Painel da semana", "Na nova aba: rastreadores bloqueados por dia e o que foi poupado."),
     ];
 
     private static readonly Lazy<string> Template = new(() =>

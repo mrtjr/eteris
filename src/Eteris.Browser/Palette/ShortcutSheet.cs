@@ -20,6 +20,7 @@ public static class ShortcutSheet
         ]),
         new("Navegação", [
             new("Ctrl+L · F6", "Barra de endereço"),
+            new("Ctrl+Shift+V", "Colar e ir (na barra de endereço)"),
             new("Alt+← · botão do rato", "Voltar"),
             new("Alt+→ · botão do rato", "Avançar"),
             new("F5 · Ctrl+R", "Recarregar"),
