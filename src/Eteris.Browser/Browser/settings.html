@@ -190,21 +190,27 @@
   document.getElementById('shield').textContent = data.shield || '';
   document.getElementById('engineInfo').textContent = data.chromium ? `Chromium ${data.chromium} · CefSharp ${data.cefsharp}` : '';
   const check = document.getElementById('checkUpdate');
+  const status = document.getElementById('updateStatus');
+  const probe = document.createElement('iframe');
+  document.body.append(probe);
+  let tries = 0;
+  // Lê o estado num iframe da mesma origem; enquanto procura, volta a perguntar a cada segundo.
+  probe.addEventListener('load', () => {
+    const text = probe.contentDocument && probe.contentDocument.body ? probe.contentDocument.body.textContent.trim() : '';
+    if (!text) return;
+    status.textContent = text;
+    const busy = text.startsWith('A procurar');
+    if (busy && ++tries < 60) setTimeout(() => probe.src = `eteris://settings/status?n=${Date.now()}`, 1000);
+    check.disabled = busy || text.startsWith('Versão de desenvolvimento') || text.includes('pronta');
+  });
   check.disabled = !data.canCheck;
   check.addEventListener('click', () => {
     check.disabled = true;
-    const status = document.getElementById('updateStatus');
-    const probe = document.createElement('iframe');
-    let tries = 0;
-    probe.addEventListener('load', () => {
-      const text = probe.contentDocument && probe.contentDocument.body ? probe.contentDocument.body.textContent : '';
-      if (text) status.textContent = text;
-      if (text.includes('A procurar') && ++tries < 30) setTimeout(() => probe.src = `eteris://settings/status?n=${Date.now()}`, 1000);
-      else check.disabled = text.includes('pronta');
-    });
+    tries = 0;
+    status.textContent = 'A procurar atualizações…';
     probe.src = `eteris://settings/update?t=${data.token}&n=${Date.now()}`;
-    document.body.append(probe);
   });
+  if ((data.updateStatus || '').startsWith('A procurar')) probe.src = `eteris://settings/status?n=${Date.now()}`;
   if (data.focus) document.getElementById(data.focus).scrollIntoView();
 
   function send(key, value) {

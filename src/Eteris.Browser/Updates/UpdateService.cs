@@ -50,8 +50,10 @@ public static class UpdateService
         if (State == UpdateState.Ready || Interlocked.Exchange(ref _checking, 1) == 1) return;
         try
         {
-            var manager = new UpdateManager(new GithubSource(RepoUrl, null, false));
-            if (!manager.IsInstalled)
+            UpdateManager? manager = null;
+            try { manager = new UpdateManager(new GithubSource(RepoUrl, null, false)); }
+            catch (Exception) { /* fora de uma instalação Velopack */ }
+            if (manager is null || !manager.IsInstalled)
             {
                 State = UpdateState.Development;
                 return;
