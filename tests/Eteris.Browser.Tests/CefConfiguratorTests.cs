@@ -28,6 +28,14 @@ public class CefConfiguratorTests
     }
 
     [Fact]
+    public void Build_DisablesLanDiscoveryOfCastDevices()
+    {
+        var features = CefConfigurator.Build("p").CefCommandLineArgs["disable-features"].Split(',');
+        Assert.Contains("MediaRouter", features);
+        Assert.Contains("DialMediaRouteProvider", features);
+    }
+
+    [Fact]
     public void Build_DoesNotSetMediaStreamSwitch()
         => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("enable-media-stream"));
 }

@@ -93,7 +93,11 @@ public partial class MainWindow : Window
         browser.AddressChanged += (_, e) =>
         {
             if (e.NewValue is not string address) return;
-            if (!SameHost(tab.Address, address)) tab.Favicon = null;
+            if (!SameHost(tab.Address, address))
+            {
+                tab.Favicon = null;
+                tab.Tint = null;
+            }
             tab.Address = address;
         };
         browser.TitleChanged += (_, e) =>
@@ -115,8 +119,10 @@ public partial class MainWindow : Window
         });
         browser.FrameLoadEnd += (_, e) =>
         {
-            if (!e.Frame.IsMain || e.HttpStatusCode is <= 0 or >= 400) return;
+            if (!e.Frame.IsMain) return;
             var url = e.Url;
+            Dispatcher.InvokeAsync(() => DetectSiteTint(tab, browser, url));
+            if (e.HttpStatusCode is <= 0 or >= 400) return;
             Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
         };
         _browsers[tab] = browser;
@@ -164,6 +170,7 @@ public partial class MainWindow : Window
         SyncOmnibox();
         SyncLoading();
         UpdateShieldButton();
+        ApplyTint();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -172,6 +179,7 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
         if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
+        if (e.PropertyName == nameof(BrowserTab.Tint)) ApplyTint();
     }
 
     private void SyncLoading()
@@ -226,7 +234,12 @@ public partial class MainWindow : Window
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         e.Handled = true;
 
-        if (ctrl && shift && key == Key.T) Tabs.ReopenClosed();
+        if (ctrl && key == Key.K) TogglePalette();
+        else if (key == Key.F11) ToggleFocusMode();
+        else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
+        else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);
+        else if (ctrl && key is Key.D0 or Key.NumPad0) Zoom(0);
+        else if (ctrl && shift && key == Key.T) Tabs.ReopenClosed();
         else if (ctrl && key == Key.T) OpenNewTab();
         else if (ctrl && (key == Key.W || key == Key.F4)) CloseTab(Tabs.Active);
         else if (ctrl && key == Key.Tab) { if (shift) Tabs.SelectPrevious(); else Tabs.SelectNext(); }
@@ -246,7 +259,7 @@ public partial class MainWindow : Window
     private void TabStripHost_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateTabWidth();
 
     private void BrowserHost_SizeChanged(object sender, SizeChangedEventArgs e)
-        => BrowserHost.Clip = new RectangleGeometry(new Rect(e.NewSize), 10, 10);
+        => BrowserHost.Clip = new RectangleGeometry(new Rect(e.NewSize), _pageRadius, _pageRadius);
 
     private void TabItem_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {

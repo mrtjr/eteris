@@ -28,6 +28,9 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private ImageSource? _favicon;
 
+    [ObservableProperty]
+    private Color? _tint;
+
     private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<KeyValuePair<string, int>> BlockedHosts

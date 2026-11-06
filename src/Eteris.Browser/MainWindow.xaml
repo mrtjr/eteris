@@ -17,6 +17,54 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <SolidColorBrush x:Key="ChromeSurfaceBrush" Color="#1A1D27" />
+
+        <Style x:Key="PaletteItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="PaletteItem_Click" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bg" CornerRadius="12" Background="Transparent" Padding="0,9,14,9" Cursor="Hand">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3" />
+                                    <ColumnDefinition Width="48" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,3" />
+                                <Border Grid.Column="1" Width="30" Height="30" CornerRadius="9" Background="#30354A">
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                               Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,0,10,0">
+                                    <TextBlock Text="{Binding Title}" FontSize="14.5" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource TextFaintBrush}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Border x:Name="Chip" Grid.Column="3" CornerRadius="7" Background="#262A38" Padding="8,3" VerticalAlignment="Center"
+                                        BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
+                                    <TextBlock Text="{Binding Shortcut}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Shortcut}" Value="{x:Null}">
+                                <Setter TargetName="Chip" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#2C3145" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="TabItemStyle" TargetType="ListBoxItem">
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Focusable" Value="False" />
@@ -83,7 +131,7 @@
                                 <Setter TargetName="TabTitle" Property="Foreground" Value="{StaticResource TextBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource SurfaceBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource ChromeSurfaceBrush}" />
                                 <Setter TargetName="Glow" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="TabTitle" Property="Foreground" Value="{StaticResource TextBrush}" />
                             </Trigger>
@@ -176,13 +224,13 @@
     <Border x:Name="RootBorder">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="42" />
-                <RowDefinition Height="48" />
+                <RowDefinition x:Name="TitleRow" Height="42" />
+                <RowDefinition x:Name="ToolbarRow" Height="48" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
             <!-- Barra de título com abas -->
-            <Grid Grid.Row="0">
+            <Grid x:Name="TitleBar" Grid.Row="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -224,7 +272,7 @@
             </Grid>
 
             <!-- Barra de ferramentas -->
-            <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}">
+            <Border x:Name="Toolbar" Grid.Row="1" Background="{StaticResource ChromeSurfaceBrush}">
                 <Grid Margin="8,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -299,6 +347,8 @@
                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                             </Border>
                         </Grid>
+                        <Button x:Name="MenuButton" Content="&#xE712;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Menu_Click"
+                                ToolTip="Comandos (Ctrl+K)" />
                     </StackPanel>
 
                     <Popup x:Name="ShieldPopup" PlacementTarget="{Binding ElementName=ShieldButton}" Placement="Bottom"
@@ -370,12 +420,66 @@
             </Border>
 
             <!-- Página: flutua sobre a superfície, com cantos arredondados -->
-            <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" Padding="6,0,6,6">
+            <Border x:Name="PageFrame" Grid.Row="2" Background="{StaticResource ChromeSurfaceBrush}" Padding="6,0,6,6">
                 <Grid x:Name="BrowserHost" Background="#FFFFFF" SizeChanged="BrowserHost_SizeChanged">
                     <Rectangle x:Name="AuroraBar" Height="3" VerticalAlignment="Top" Panel.ZIndex="10"
                                Fill="{StaticResource AuroraBrush}" IsHitTestVisible="False" Visibility="Collapsed" />
                 </Grid>
             </Border>
+
+            <!-- Aviso do modo foco -->
+            <Border x:Name="FocusToast" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Center" VerticalAlignment="Top"
+                    Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="#E61A1D27" IsHitTestVisible="False"
+                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1" Opacity="0">
+                <TextBlock FontSize="13" Foreground="{StaticResource TextBrush}">
+                    Modo foco — prima <Bold>F11</Bold> ou <Bold>Ctrl+K</Bold> para voltar
+                </TextBlock>
+            </Border>
+
+            <!-- Paleta de comandos -->
+            <Grid x:Name="PaletteOverlay" Grid.Row="0" Grid.RowSpan="3" Panel.ZIndex="100" Visibility="Collapsed"
+                  shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <Rectangle Fill="#99050710" MouseLeftButtonDown="PaletteBackdrop_MouseLeftButtonDown" />
+                <Border x:Name="PaletteCard" Width="680" VerticalAlignment="Top" Margin="0,92,0,0" CornerRadius="22"
+                        Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource IrisBrush}"
+                        BorderThickness="1.5" RenderTransformOrigin="0.5,0">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="PaletteScale" />
+                    </Border.RenderTransform>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="60" ShadowDepth="18" Direction="270" Opacity="0.6" Color="Black" />
+                    </Border.Effect>
+                    <StackPanel>
+                        <Grid Height="62" Margin="22,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="17"
+                                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                            <TextBox x:Name="PaletteInput" Grid.Column="1" Style="{StaticResource BareTextBox}" FontSize="18"
+                                     TextChanged="PaletteInput_TextChanged" PreviewKeyDown="PaletteInput_PreviewKeyDown" />
+                            <TextBlock x:Name="PalettePlaceholder" Grid.Column="1" IsHitTestVisible="False" FontSize="18"
+                                       Margin="2,0,0,1" VerticalAlignment="Center" Foreground="{StaticResource TextFaintBrush}"
+                                       Text="Escreva um comando, o nome de uma aba ou um site…" />
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource FieldBorderBrush}" />
+                        <ListBox x:Name="PaletteList" Margin="8,8,8,4" MaxHeight="452" Focusable="False"
+                                 Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource PaletteItemStyle}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.Template>
+                                <ControlTemplate TargetType="ListBox">
+                                    <ScrollViewer Focusable="False" VerticalScrollBarVisibility="Hidden">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </ControlTemplate>
+                            </ListBox.Template>
+                        </ListBox>
+                        <TextBlock Margin="22,4,22,14" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}"
+                                   Text="↑ ↓ navegar   ·   Enter executar   ·   Esc fechar" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Grid>
     </Border>
 </Window>
