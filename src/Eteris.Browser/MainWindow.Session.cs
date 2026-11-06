@@ -24,16 +24,11 @@ public partial class MainWindow
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous) Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups);
 
         var version = Browser.SettingsPage.Version;
-        if (_ownsSession && initialUrl is null && Data.Settings.IsFirstRun)
+        if (_ownsSession)
         {
-            Data.Settings.MarkVersionSeen(version);
-            Tabs.NewTab(Browser.WelcomePage.Url);
-        }
-        else if (_ownsSession && Browser.WhatsNewPage.ShouldShow(Data.Settings.Current.LastSeenVersion, version, firstRun: false))
-        {
-            Data.Settings.MarkVersionSeen(version);
-            if (initialUrl is not null) Tabs.NewTab(initialUrl);
-            Tabs.NewTab(Browser.WhatsNewPage.Url);
+            var plan = Browser.StartupPages.Plan(Data.Settings.IsFirstRun, Data.Settings.Current.LastSeenVersion, version, initialUrl);
+            if (plan.Any(t => t.Url == Browser.WelcomePage.Url || t.Url == Browser.WhatsNewPage.Url)) Data.Settings.MarkVersionSeen(version);
+            foreach (var tab in plan) Tabs.NewTab(tab.Url, tab.Activate);
         }
         else if (initialUrl is not null) Tabs.NewTab(initialUrl);
         else if (Tabs.Tabs.Count == 0)
