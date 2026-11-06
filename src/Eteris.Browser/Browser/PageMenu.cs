@@ -5,7 +5,7 @@ public enum PageCommand
     Back, Forward, Reload, Print, ViewSource, Inspect,
     OpenLinkNewTab, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
-    Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater,
+    Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink,
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
@@ -54,6 +54,8 @@ public static class PageMenu
         if (hasSelection)
         {
             items.Add(new(PageCommand.SearchSelection, "", $"Pesquisar «{Quote(ctx.Selection)}» com {engineName}"));
+            if (!ctx.IsEditable && ctx.IsWebPage)
+                items.Add(new(PageCommand.CopyHighlightLink, "", "Copiar link para este destaque"));
             items.Add(null);
         }
 

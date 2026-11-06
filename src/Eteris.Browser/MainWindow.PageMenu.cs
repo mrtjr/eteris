@@ -52,6 +52,10 @@ public partial class MainWindow
             case PageCommand.SavePdf: SaveAsPdf(); break;
             case PageCommand.ReadLater: SaveForLater(); break;
             case PageCommand.SearchSelection: Tabs.NewTab(Engine.UrlFor(context.Selection.Trim())); break;
+            case PageCommand.CopyHighlightLink:
+                if (TextFragment.Link(tab.Address, context.Selection) is { } highlight)
+                    CopyText(highlight, "Link para o destaque copiado — abre a página já no texto selecionado");
+                break;
         }
     }
 
