@@ -41,6 +41,8 @@ public partial class MainWindow
         ShieldSite.Text = host is null ? "Nada a proteger aqui" : TrackerBlocker.RegistrableDomain(host);
         ShieldToggle.IsEnabled = host is not null;
         ShieldToggle.IsChecked = on;
+        StrictToggle.IsEnabled = host is not null && on;
+        StrictToggle.IsChecked = host is not null && AppData.IsStrict(host);
         ShieldHalo.Opacity = on ? 0.9 : 0.25;
 
         ShieldBigCount.Text = count.ToString();
@@ -81,6 +83,14 @@ public partial class MainWindow
     {
         FillShieldPopup();
         ShieldPopup.IsOpen = !ShieldPopup.IsOpen;
+    }
+
+    private void StrictToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (WebHost(Tabs.Active?.Address) is not { } host) return;
+        AppData.SetStrict(host, StrictToggle.IsChecked == true);
+        ReloadActive();
+        FillShieldPopup();
     }
 
     private void ShieldToggle_Click(object sender, RoutedEventArgs e)

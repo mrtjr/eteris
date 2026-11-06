@@ -188,6 +188,24 @@ public static class AppData
         SetShield(site, true);
     }
 
+    private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsStrict(string host) => LazyStrict.Value?.Contains(host) == true;
+
+    public static void SetStrict(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyStrict.Value?.Add(host);
+            else LazyStrict.Value?.Remove(host);
+        }
+        catch (Exception) { }
+    }
+
     public static void RemoveBookmark(string url)
     {
         try { LazyBookmarks.Value.Remove(url); }

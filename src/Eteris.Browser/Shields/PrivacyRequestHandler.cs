@@ -54,6 +54,14 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var page) && !isProtected(page.Host))
                 return CefReturnValue.Continue;
 
+            // Modo rigoroso neste site: scripts e frames de outros domínios não carregam (além das listas).
+            if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var top) && Data.AppData.IsStrict(top.Host)
+                && StrictPolicy.ShouldBlock(pageUrl, request.Url, request.ResourceType))
+            {
+                onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var strictBlocked) ? strictBlocked.Host : request.Url);
+                return CefReturnValue.Cancel;
+            }
+
             // As opções $domain e $third-party das listas referem-se ao documento que fez o pedido (pode ser um iframe).
             var documentUrl = frame?.Url is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? frameUrl

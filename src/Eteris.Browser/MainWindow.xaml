@@ -893,6 +893,20 @@
 
                                 <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,14,0,12" />
 
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Modo rigoroso" FontSize="13" FontWeight="SemiBold" />
+                                        <TextBlock Text="Bloqueia scripts e frames de outros domínios neste site" FontSize="11.5"
+                                                   Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,2,8,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="StrictToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                                              Click="StrictToggle_Click" ToolTip="Pode partir partes de alguns sites (vídeos e comentários incorporados)" />
+                                </Grid>
+
                                 <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
