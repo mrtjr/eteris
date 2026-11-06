@@ -4,6 +4,14 @@ namespace Eteris.Browser.Tests;
 
 public class ErrorPageTests
 {
+    [Fact]
+    public void RendererCrash_HasFriendlyText()
+    {
+        var text = ErrorPage.Describe(ErrorPage.RendererCrashed);
+        Assert.Equal("Esta página foi abaixo", text.Title);
+        Assert.Contains("outras abas", text.Detail);
+    }
+
     [Theory]
     [InlineData(-105, "Não encontrámos este site")]
     [InlineData(-106, "Está sem ligação à Internet")]

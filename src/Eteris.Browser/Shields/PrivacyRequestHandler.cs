@@ -2,9 +2,15 @@ using CefSharp;
 
 namespace Eteris.Browser.Shields;
 
-public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked)
+public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
+    Action? onCrashed = null)
     : CefSharp.Handler.RequestHandler
 {
+    // O processo da página morreu (crash, falta de memória): a janela mostra a página de erro em vez de um ecrã vazio.
+    protected override void OnRenderProcessTerminated(IWebBrowser chromiumWebBrowser, IBrowser browser, CefTerminationStatus status,
+        int errorCode, string errorMessage)
+        => onCrashed?.Invoke();
+
     private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,

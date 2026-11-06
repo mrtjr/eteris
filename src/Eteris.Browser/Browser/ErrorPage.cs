@@ -17,11 +17,16 @@ public static class ErrorPage
         return reader.ReadToEnd();
     });
 
+    // Código interno (não é do Chromium) para quando o processo da página termina inesperadamente.
+    public const int RendererCrashed = -9001;
+
     // -3 (ERR_ABORTED) acontece em transferências e ao parar: não é um erro para mostrar.
     public static bool ShouldShow(int code) => code != -3;
 
     public static ErrorDescription Describe(int code) => code switch
     {
+        RendererCrashed => new("Esta página foi abaixo",
+            "O processo que a mostrava terminou inesperadamente (falta de memória ou um erro do site). As outras abas não foram afetadas.", "☄"),
         -105 or -137 => new("Não encontrámos este site", "Verifique se o endereço está bem escrito ou tente pesquisá-lo.", "🔎"),
         -106 => new("Está sem ligação à Internet", "Verifique o Wi-Fi ou o cabo. Enquanto isso, apanhe a luz.", "✦"),
         -100 or -101 or -102 or -104 or -109 or -118 or -7 => new("O site não respondeu",

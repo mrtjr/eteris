@@ -118,7 +118,8 @@ public partial class MainWindow : Window
                 {
                     ShieldStats.CountBlocked(persist: !IsPrivate);
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
-                }),
+                },
+                onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab))),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += (_, e) =>
