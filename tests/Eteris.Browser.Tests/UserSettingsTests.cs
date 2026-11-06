@@ -99,6 +99,15 @@ public sealed class UserSettingsTests : IDisposable
 public class SettingsPageTests
 {
     [Fact]
+    public void Render_HasASearchBoxThatIgnoresAccents()
+    {
+        var html = Eteris.Browser.Browser.SettingsPage.Render(new UserSettings());
+        Assert.Contains("id=\"find\"", html);
+        Assert.Contains("normalize('NFD')", html);
+        Assert.Contains("Nenhuma definição encontrada", html);
+    }
+
+    [Fact]
     public void Render_EmbedsCurrentChoicesAndToken()
     {
         var html = Eteris.Browser.Browser.SettingsPage.Render(new UserSettings { SearchEngine = "brave", SleepMinutes = 0 });

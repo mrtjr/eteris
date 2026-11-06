@@ -34,6 +34,21 @@
   nav a.on { background: rgba(139, 92, 246, .14); color: var(--text); }
   nav svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   section { margin-bottom: 34px; scroll-margin-top: 30px; }
+  .find { position: relative; margin: -8px 0 18px; }
+  .find svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; }
+  .find input {
+    width: 100%; height: 38px; border-radius: 12px; padding: 0 12px 0 36px; font: inherit; font-size: 13.5px; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .find input::placeholder { color: var(--faint); }
+  .find input:focus { border-color: rgba(139, 92, 246, .6); box-shadow: 0 0 0 3px rgba(139, 92, 246, .18); }
+  section.filtered-out, .item.filtered-out, .about.filtered-out { display: none !important; }
+  .item.filtered-out + .item { border-top: 0; }
+  nav a.dim { opacity: .35; }
+  .item.hit .label b { background: linear-gradient(transparent 60%, rgba(34, 211, 238, .28) 60%); border-radius: 2px; display: inline; }
+  .nothing { display: none; color: var(--muted); text-align: center; padding: 60px 20px; }
+  .nothing.show { display: block; }
+  .nothing b { display: block; font-size: 18px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
   h2 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px 4px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
   .item { display: flex; align-items: center; gap: 24px; padding: 18px 22px; }
@@ -114,6 +129,10 @@
 <div class="layout">
   <nav>
     <h1><b>Definições</b></h1>
+    <div class="find" role="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="find" type="search" placeholder="Procurar definição   ( / )" autocomplete="off" spellcheck="false" aria-label="Procurar nas definições">
+    </div>
     <a href="#pesquisa" class="on"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Pesquisa</a>
     <a href="#aspeto"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg>Aspeto</a>
     <a href="#arranque"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Arranque</a>
@@ -124,6 +143,7 @@
     <a href="#sobre"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Sobre</a>
   </nav>
   <main>
+    <div class="nothing" id="nothing"><b>Nenhuma definição encontrada</b>Experimente outra palavra — por exemplo «cookies», «tema» ou «DNS».</div>
     <section id="pesquisa">
       <h2>Pesquisa</h2>
       <div class="card">
@@ -432,6 +452,39 @@
   }
   addEventListener('scroll', markSection, { passive: true });
   markSection();
+
+  // ---------- Procurar nas definições ----------
+  (() => {
+    const find = document.getElementById('find');
+    const fold = text => (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const apply = () => {
+      const words = fold(find.value).split(/\s+/).filter(Boolean);
+      let any = false;
+      for (const section of document.querySelectorAll('main section')) {
+        const title = fold(section.querySelector('h2')?.textContent);
+        const sectionHit = words.length > 0 && words.every(w => title.includes(w));
+        let visible = 0;
+        for (const item of section.querySelectorAll('.item, .about')) {
+          const hit = !words.length || sectionHit || words.every(w => fold(item.textContent).includes(w));
+          item.classList.toggle('filtered-out', !hit);
+          item.classList.toggle('hit', words.length > 0 && hit && !sectionHit);
+          if (hit) visible++;
+        }
+        const show = !words.length || sectionHit || visible > 0;
+        section.classList.toggle('filtered-out', !show);
+        const link = document.querySelector(`nav a[href="#${section.id}"]`);
+        if (link) link.classList.toggle('dim', !show);
+        if (show) any = true;
+      }
+      document.getElementById('nothing').classList.toggle('show', !any);
+      if (words.length) window.scrollTo({ top: 0 });
+    };
+    find.addEventListener('input', apply);
+    find.addEventListener('keydown', e => { if (e.key === 'Escape') { find.value = ''; apply(); find.blur(); } });
+    document.addEventListener('keydown', e => {
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { e.preventDefault(); find.focus(); }
+    });
+  })();
 </script>
 </body>
 </html>
