@@ -314,6 +314,7 @@ public partial class MainWindow : Window
         else if (key == Key.F12 || (ctrl && shift && key == Key.I)) ShowDevTools();
         else if (ctrl && key == Key.U) ViewSource();
         else if (ctrl && key == Key.H) OpenHistory();
+        else if (ctrl && shift && key == Key.S) CapturePage(fullPage: true);
         else if (ctrl && key == Key.OemComma) OpenSettings();
         else if (ctrl && key == Key.P) ActiveBrowser?.Print();
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);

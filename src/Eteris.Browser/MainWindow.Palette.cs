@@ -103,6 +103,8 @@ public partial class MainWindow
                     UpdateShieldButton();
                 });
         }
+        yield return new("", "Capturar página inteira", "Guarda em Imagens › Éteris e copia a imagem", "Ctrl+Shift+S", () => CapturePage(true));
+        yield return new("", "Capturar área visível", "Só o que está no ecrã", null, () => CapturePage(false));
         if (Tabs.Active?.IsReaderable == true)
             yield return new("", "Modo de leitura", "Só o artigo, sem anúncios nem distrações", "F9", ToggleReader);
         if (IsSplit)
