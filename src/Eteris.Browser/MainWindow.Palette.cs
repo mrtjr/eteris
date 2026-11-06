@@ -175,7 +175,14 @@ public partial class MainWindow
             .Select(t => new PaletteCommand("", t.Title, "Mudar para esta aba · " + (WebHost(t.Address) ?? "Éteris"), null,
                 () => Tabs.Active = t));
 
-        var items = CommandSearch.RankTitled(query, Actions().Concat(tabs), c => c.Title, c => c.Subtitle);
+        // Ao escrever, também as abas das outras janelas (só do mesmo tipo: privadas com privadas).
+        var otherWindows = query.Length == 0 ? [] : Application.Current.Windows.OfType<MainWindow>()
+            .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate)
+            .SelectMany(w => w.Tabs.Tabs.Select(t => new PaletteCommand("", t.Title,
+                "Mudar para esta aba · outra janela · " + (WebHost(t.Address) ?? "Éteris"), null, () => FocusTabIn(w, t))))
+            .ToList();
+
+        var items = CommandSearch.RankTitled(query, Actions().Concat(tabs).Concat(otherWindows), c => c.Title, c => c.Subtitle);
 
         if (query.Length >= 2)
             items.AddRange(AppData.Bookmarks(b => b.Search(query, 4)).Select(b =>
@@ -196,6 +203,14 @@ public partial class MainWindow
 
         PaletteList.ItemsSource = items.Take(12).ToList();
         PaletteList.SelectedIndex = items.Count > 0 ? 0 : -1;
+    }
+
+    private static void FocusTabIn(MainWindow window, Tabs.BrowserTab tab)
+    {
+        if (!window.Tabs.Tabs.Contains(tab)) return;
+        window.Tabs.Active = tab;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Activate();
     }
 
     private void RunPaletteCommand(PaletteCommand command)
