@@ -77,7 +77,7 @@ public partial class MainWindow
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         if (s_closedWindows.Latest is { } closedWindow)
             yield return new("\uE8A7", $"Reabrir janela fechada ({closedWindow.Addresses.Count} abas)",
-                closedWindow.Titles.FirstOrDefault() ?? string.Empty, "Ctrl+Shift+T", ReopenClosedWindow);
+                closedWindow.Titles.FirstOrDefault() ?? string.Empty, null, ReopenClosedWindow);
         yield return new("", "Reabrir aba fechada", Tabs.RecentlyClosed.FirstOrDefault() is { } last ? $"«{last.Title}»" : "Nenhuma aba fechada nesta sessão", "Ctrl+Shift+T", () => Tabs.ReopenClosed());
         foreach (var closed in Tabs.RecentlyClosed.Skip(1).Take(5))
         {
