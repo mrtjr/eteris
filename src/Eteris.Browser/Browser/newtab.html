@@ -76,11 +76,15 @@
   }
   .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .tile:hover .name { color: var(--text); }
+  /* A dica ocupa o lugar do rodapé (não empurra os sites para baixo). */
   .tip {
-    display: none; align-items: center; gap: 10px; margin-top: 22px; padding: 8px 8px 8px 14px; border-radius: 999px; max-width: 100%;
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 2; max-width: min(680px, 56vw);
+    display: none; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 999px;
     color: var(--muted); font-size: 13px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); backdrop-filter: blur(18px);
   }
-  .tip.show { display: inline-flex; animation: rise .6s .2s ease-out both; }
+  .tip.show { display: inline-flex; animation: fadein .6s .2s ease-out both; }
+  @keyframes fadein { from { opacity: 0; } }
+  body.has-tip footer { display: none; }
   .tip b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; flex: none; }
   .tip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tip button { all: unset; cursor: pointer; width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; color: var(--faint); flex: none; }
@@ -219,7 +223,6 @@
     <input id="q" type="text" spellcheck="false" aria-label="Pesquisar ou escrever um endereço">
   </form>
   <nav class="marks" id="marks" aria-label="Favoritos"></nav>
-  <div class="tip" id="tip" role="note"><b>Sabia que…?</b><span id="tipText"></span><button id="tipClose" title="Não mostrar mais dicas" aria-label="Não mostrar mais dicas">✕</button></div>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
 </main>
 <aside class="resume" id="resume" aria-label="Continuar"><h4>Continuar</h4><div class="cards" id="cards"></div></aside>
@@ -247,6 +250,7 @@
   <label class="opt">Painel da semana<input type="checkbox" data-key="ntWeek" data-class="no-week"></label>
 </div>
 <iframe id="sink" title="" style="display:none"></iframe>
+<div class="tip" id="tip" role="note"><b>Sabia que…?</b><span id="tipText"></span><button id="tipClose" title="Não mostrar mais dicas" aria-label="Não mostrar mais dicas">✕</button></div>
 <footer><i></i><span id="status">Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
 <script type="application/json" id="data">{{DATA}}</script>
 <script>
@@ -328,7 +332,10 @@
     document.getElementById('tipText').textContent = data.tip;
     tip.title = data.tip;
     tip.classList.add('show');
-    document.getElementById('tipClose').addEventListener('click', () => { tip.classList.remove('show'); send('ntTips', false); });
+    document.body.classList.add('has-tip');
+    document.getElementById('tipClose').addEventListener('click', () => {
+      tip.classList.remove('show'); document.body.classList.remove('has-tip'); send('ntTips', false);
+    });
   }
 
   const marks = document.getElementById('marks');
