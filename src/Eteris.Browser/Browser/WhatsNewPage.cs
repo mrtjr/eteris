@@ -12,6 +12,9 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("▶", "Vídeo em todos os sites", "Sites que só têm vídeo em H.264, como o Twitch, passam sozinhos para o motor de vídeo do Windows — dentro do Éteris, com o mesmo bloqueador."),
+        new("🚫", "Fim dos anúncios em nova aba", "Um clique na página já não abre anúncios noutra aba: só abrem os links em que clicou."),
+        new("📖", "Modo de leitura do Firefox", "O Readability da Mozilla extrai os artigos com muito mais fiabilidade.", "F9"),
         new("🛡", "Privacidade a sério", "DNS cifrado, links sem rastreio, modo rigoroso por site, notificações bloqueadas e o histórico interno do Chromium desligado."),
         new("🗂", "Sessões guardadas", "Guarde as abas de uma janela com nome e reabra-as quando quiser — também a partir da nova aba.", "Ctrl+K"),
         new("♫", "Centro de multimédia", "Um botão mostra o que toca em todas as abas: tocar, pausar, silenciar, ir para a aba."),

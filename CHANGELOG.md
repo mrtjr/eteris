@@ -1,6 +1,6 @@
 # Alterações
 
-## 0.2.0 — por publicar
+## 0.2.0 — 2026-11-06
 
 Duas rondas de 50 ciclos de melhorias.
 
