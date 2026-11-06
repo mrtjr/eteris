@@ -119,7 +119,14 @@ public partial class MainWindow
         {
             if (Tabs.Active is { } qrTab && ReaderScripts.IsCandidate(qrTab.Address))
                 yield return new("\uED14", "Código QR desta página", "Para abrir no telemóvel — feito neste computador", null, ShowQrCode);
-            yield return new("", "Copiar endereço", address, null, () => Clipboard.SetText(address));
+            var cleanAddress = Shields.UrlCleaner.Clean(address);
+            var pageTitle = Tabs.Active?.Title ?? cleanAddress;
+            yield return new("", "Copiar endereço", cleanAddress == address ? address : cleanAddress + "  (sem rastreio)", null,
+                () => CopyText(cleanAddress, cleanAddress == address ? "Endereço copiado" : "Endereço copiado sem parâmetros de rastreio"));
+            yield return new("", "Copiar como link Markdown", Browser.LinkFormats.Markdown(pageTitle, cleanAddress), null,
+                () => CopyText(Browser.LinkFormats.Markdown(pageTitle, cleanAddress), "Link Markdown copiado"));
+            yield return new("", "Copiar título e endereço", "Para colar numa mensagem", null,
+                () => CopyText(Browser.LinkFormats.TitleAndAddress(pageTitle, cleanAddress), "Título e endereço copiados"));
             var on = AppData.IsShieldOn(host);
             yield return new("", on ? "Desligar o escudo neste site" : "Ligar o escudo neste site",
                 $"{TrackerBlocker.RegistrableDomain(host)} · {tab!.BlockedCount} bloqueados nesta página", null, () =>
