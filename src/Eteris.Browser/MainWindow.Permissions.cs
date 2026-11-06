@@ -25,10 +25,10 @@ public partial class MainWindow
                 return;
             }
             Dispatcher.InvokeAsync(() =>
-        {
-            _permissionQueue.Enqueue(new PendingPermission(site, kinds, respond));
-            ShowNextPermission();
-        });
+            {
+                _permissionQueue.Enqueue(new PendingPermission(site, kinds, respond));
+                ShowNextPermission();
+            });
         });
 
     private void ShowNextPermission()
