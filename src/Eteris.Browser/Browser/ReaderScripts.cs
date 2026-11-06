@@ -96,7 +96,7 @@ public static class ReaderScripts
             .bar button:hover { color: var(--fg); }
             .bar button.on { color: var(--fg); border-color: var(--muted); }
             .bar .gap { width: 14px; }
-            article { max-width: 680px; margin: 10px auto 120px; padding: 0 28px; font-size: var(--size); line-height: 1.75; }
+            .doc { max-width: 680px; margin: 10px auto 120px; padding: 0 28px; font-size: var(--size); line-height: 1.75; }
             .site { color: var(--muted); font: 600 12px "Segoe UI", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; margin: 22px 0 10px; }
             h1.title { font-size: 2.05em; line-height: 1.2; margin: 0 0 14px; font-weight: 700; letter-spacing: -.01em; }
             .meta { color: var(--muted); font: 13.5px "Segoe UI", system-ui, sans-serif; padding-bottom: 26px; margin-bottom: 30px; border-bottom: 1px solid var(--line); }
@@ -140,7 +140,7 @@ public static class ReaderScripts
           bar.append(el('span', 'gap'));
           button('✕  Sair', 'Sair do modo de leitura (Esc ou F9)', () => close());
 
-          const article = el('article');
+          const article = el('article', 'doc');
           article.append(el('p', 'site', site), el('h1', 'title', title),
             el('p', 'meta', (author ? author + ' · ' : '') + minutes + ' min de leitura'));
           const body = el('div', 'content');
