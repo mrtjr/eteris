@@ -26,6 +26,16 @@ public partial class TabsViewModel : ObservableObject
         return tab;
     }
 
+    // Abas reabertas em lote (sessão guardada, janela fechada): vão para o fim, pela ordem, a dormir até serem abertas.
+    public BrowserTab AppendSleeping(string address, string? title = null)
+    {
+        var tab = new BrowserTab(address) { IsSleeping = true };
+        if (!string.IsNullOrEmpty(title)) tab.Title = title;
+        Tabs.Add(tab);
+        Active ??= tab;
+        return tab;
+    }
+
     // Abas da sessão anterior, pela ordem original; só a ativa carrega, as outras ficam a dormir até serem abertas.
     public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null,
         IReadOnlyList<bool>? pinned = null, IReadOnlyList<int>? groupIds = null, IReadOnlyList<Data.SessionGroup>? groups = null)

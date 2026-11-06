@@ -43,6 +43,18 @@ public class TidyTabsTests
     }
 
     [Fact]
+    public void AppendSleeping_KeepsOrderAndActiveTab()
+    {
+        var vm = With("https://a.pt/");
+        vm.AppendSleeping("https://b.pt/", "B");
+        vm.AppendSleeping("https://c.pt/");
+        Assert.Equal(["https://a.pt/", "https://b.pt/", "https://c.pt/"], vm.Tabs.Select(t => t.Address));
+        Assert.Equal("https://a.pt/", vm.Active!.Address);
+        Assert.True(vm.Tabs[1].IsSleeping);
+        Assert.Equal("B", vm.Tabs[1].Title);
+    }
+
+    [Fact]
     public void SortBySite_LeavesGroupedTabsAlone()
     {
         var vm = With("https://z.pt/", "https://b.pt/", "https://a.pt/");

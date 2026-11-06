@@ -25,15 +25,15 @@ public partial class MainWindow
     private static void ReopenClosedWindow()
     {
         if (s_closedWindows.Pop() is not { } closed) return;
-        OpenWindowWith(closed.Addresses, closed.ActiveIndex);
+        OpenWindowWith(closed.Addresses, closed.Titles, closed.ActiveIndex);
     }
 
-    private static void OpenWindowWith(IReadOnlyList<string> addresses, int activeIndex)
+    private static void OpenWindowWith(IReadOnlyList<string> addresses, IReadOnlyList<string> titles, int activeIndex)
     {
         if (addresses.Count == 0) return;
         var window = new MainWindow(addresses[0], isPrivate: false);
         window.Show();
-        foreach (var address in addresses.Skip(1)) window.Tabs.NewTab(address, activate: false);
+        for (var i = 1; i < addresses.Count; i++) window.Tabs.AppendSleeping(addresses[i], i < titles.Count ? titles[i] : null);
         if (activeIndex < window.Tabs.Tabs.Count) window.Tabs.Active = window.Tabs.Tabs[activeIndex];
     }
 }

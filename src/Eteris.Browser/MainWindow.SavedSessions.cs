@@ -50,11 +50,11 @@ public partial class MainWindow
         if (addresses.Count == 0) return;
         if (IsPrivate || Tabs.Tabs.Any(t => !NewTabPage.IsNewTab(t.Address)))
         {
-            OpenWindowWith(addresses, 0);
+            OpenWindowWith(addresses, session.Tabs.Select(t => t.Title).ToList(), 0);
             return;
         }
         LoadUrl(addresses[0]);
-        foreach (var address in addresses.Skip(1)) Tabs.NewTab(address, activate: false);
+        foreach (var tab in session.Tabs.Skip(1)) Tabs.AppendSleeping(tab.Url, tab.Title);
     }
 
     private static readonly System.Globalization.CultureInfo PtCulture = new("pt-PT");
