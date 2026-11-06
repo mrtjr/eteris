@@ -34,7 +34,7 @@ public partial class MainWindow
         Closed += (_, _) => _privateContext?.Dispose();
     }
 
-    private static void OpenWindow(bool isPrivate, string? url = null)
+    internal static void OpenWindow(bool isPrivate, string? url = null)
     {
         var window = new MainWindow(url, isPrivate);
         window.Show();

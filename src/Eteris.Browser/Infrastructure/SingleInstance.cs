@@ -39,6 +39,11 @@ public sealed class SingleInstance : IDisposable
         _mutex.Dispose();
     }
 
+    public static void AllowAnyForeground() => AllowSetForegroundWindow(-1);
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int processId);
+
     private const int SW_RESTORE = 9;
 
     [DllImport("user32.dll")]

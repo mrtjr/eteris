@@ -17,10 +17,14 @@ public partial class App : Application
         Data.AppData.StartShieldStats();
         new MainWindow(StartupArgs.InitialUrl(e.Args), StartupArgs.IsPrivate(e.Args)).Show();
         _ = UpdateService.CheckAndDownloadAsync();
+        _channel = InstanceChannel.Listen(Program.ChannelName, args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
     }
+
+    private IDisposable? _channel;
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _channel?.Dispose();
         Data.AppData.FlushShieldStats();
         UpdateService.ApplyPendingOnExit();
         Cef.Shutdown();
