@@ -27,7 +27,7 @@ public static class ReaderScripts
         (() => {
           const ID = 'eteris-reader';
           const open = document.getElementById(ID);
-          if (open) { open.remove(); document.documentElement.style.overflow = ''; return 'closed'; }
+          if (open) { if (window.speechSynthesis) speechSynthesis.cancel(); open.remove(); document.documentElement.style.overflow = ''; return 'closed'; }
 
           const junk = /comment|footer|sidebar|nav|menu|share|social|related|promo|advert|cookie|newsletter|subscribe|banner/i;
           const scores = new Map();
@@ -91,9 +91,9 @@ public static class ReaderScripts
             :host { all: initial; }
             .wrap { position: fixed; inset: 0; overflow-y: auto; z-index: 2147483647; background: var(--bg); color: var(--fg);
                     transition: background .25s, color .25s; font-family: var(--font); }
-            .wrap.dark  { --bg: #12141b; --fg: #dfe2ea; --muted: #8b91a3; --line: #262a36; --link: #7dd3fc; --panel: #1b1e28; }
-            .wrap.sepia { --bg: #f4ecd8; --fg: #3b3226; --muted: #8a7b63; --line: #e2d6b9; --link: #9a4d1b; --panel: #ebe1c7; }
-            .wrap.light { --bg: #ffffff; --fg: #1f2328; --muted: #6b7280; --line: #e5e7eb; --link: #2563eb; --panel: #f3f4f6; }
+            .wrap.dark  { --bg: #12141b; --fg: #dfe2ea; --muted: #8b91a3; --line: #262a36; --link: #7dd3fc; --panel: #1b1e28; --hl: rgba(125, 211, 252, .13); }
+            .wrap.sepia { --bg: #f4ecd8; --fg: #3b3226; --muted: #8a7b63; --line: #e2d6b9; --link: #9a4d1b; --panel: #ebe1c7; --hl: rgba(154, 77, 27, .12); }
+            .wrap.light { --bg: #ffffff; --fg: #1f2328; --muted: #6b7280; --line: #e5e7eb; --link: #2563eb; --panel: #f3f4f6; --hl: rgba(37, 99, 235, .1); }
             .wrap.serif { --font: Charter, "Iowan Old Style", Georgia, Cambria, serif; }
             .wrap.sans  { --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
             .bar { position: sticky; top: 0; display: flex; justify-content: center; gap: 6px; padding: 14px; z-index: 1;
@@ -115,6 +115,9 @@ public static class ReaderScripts
             .content pre { background: var(--panel); padding: 14px; border-radius: 10px; overflow-x: auto; font-size: .82em; line-height: 1.5; }
             .content figure { margin: 1.4em 0; }
             .content figcaption { color: var(--muted); font: 13px "Segoe UI", system-ui, sans-serif; }
+            .speaking { background: var(--hl); box-shadow: 0 0 0 8px var(--hl); border-radius: 4px; transition: background .3s, box-shadow .3s; }
+            .listening .content p, .listening .content li, .listening .content h2, .listening .content h3, .listening .content blockquote { cursor: pointer; }
+            .bar button.live { color: var(--fg); border-color: var(--link); }
           `;
           const host = document.createElement('div');
           host.id = ID;
@@ -145,6 +148,72 @@ public static class ReaderScripts
             font.textContent = serif ? 'Sem serifa' : 'Com serifa';
           });
           bar.append(el('span', 'gap'));
+
+          // «Ouvir»: leitura em voz alta parágrafo a parágrafo, só com vozes instaladas neste computador
+          // (localService) — o texto nunca sai da máquina. Clicar num parágrafo passa a ler a partir dele.
+          const synth = window.speechSynthesis;
+          let stopSpeech = () => {};
+          if (synth) {
+            const lang = (document.documentElement.lang || navigator.language || 'pt').toLowerCase();
+            let queue = [], index = 0, state = 'idle', rate = 1, current = null;
+            const rates = [1, 1.25, 1.5, 0.85];
+            const pickVoice = () => {
+              const voices = synth.getVoices().filter(v => v.localService);
+              const base = lang.split('-')[0];
+              return voices.find(v => v.lang.toLowerCase() === lang) || voices.find(v => v.lang.toLowerCase().startsWith(base)) || null;
+            };
+            const blocks = () => [article.querySelector('h1.title'), ...body.querySelectorAll('h2, h3, p, li, blockquote, figcaption')]
+              .filter(n => n && (n.innerText || '').trim().length > 1 && !(n.parentElement && n.parentElement.closest('p, li, blockquote, figcaption')));
+            const mark = node => {
+              article.querySelectorAll('.speaking').forEach(n => n.classList.remove('speaking'));
+              if (!node) return;
+              node.classList.add('speaking');
+              node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            };
+            const paint = () => {
+              listen.textContent = state === 'playing' ? '❚❚  Pausar' : state === 'paused' ? '▶  Continuar' : '▶  Ouvir';
+              listen.classList.toggle('live', state !== 'idle');
+              speed.style.display = state === 'idle' ? 'none' : '';
+              wrap.classList.toggle('listening', state !== 'idle');
+            };
+            const speakFrom = i => {
+              synth.cancel();
+              if (!queue.length) queue = blocks();
+              index = i; state = 'playing'; paint();
+              const next = () => {
+                if (state !== 'playing') return;
+                if (index >= queue.length) { state = 'idle'; current = null; mark(null); paint(); return; }
+                const node = queue[index];
+                mark(node);
+                const u = new SpeechSynthesisUtterance((node.innerText || '').trim());
+                const voice = pickVoice();
+                if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = lang;
+                u.rate = rate;
+                u.onend = () => { if (current === u) { index++; next(); } };
+                u.onerror = e => { if (current === u && e.error !== 'interrupted' && e.error !== 'canceled') { index++; next(); } };
+                current = u;
+                synth.speak(u);
+              };
+              next();
+            };
+            const pause = () => { state = 'paused'; current = null; synth.cancel(); paint(); };
+            stopSpeech = () => { state = 'idle'; current = null; synth.cancel(); };
+            const listen = button('▶  Ouvir', 'Ler o artigo em voz alta (vozes deste computador)', () => {
+              if (state === 'playing') pause(); else speakFrom(state === 'paused' ? index : 0);
+            });
+            const speed = button('1×', 'Velocidade da leitura', () => {
+              rate = rates[(rates.indexOf(rate) + 1) % rates.length];
+              speed.textContent = String(rate).replace('.', ',') + '×';
+              if (state === 'playing') speakFrom(index);
+            });
+            wrap.addEventListener('click', e => {
+              if (state === 'idle' || e.target.closest('a')) return;
+              const node = queue.find(n => n.contains(e.target));
+              if (node) speakFrom(queue.indexOf(node));
+            });
+            paint();
+            bar.append(el('span', 'gap'));
+          }
           button('✕  Sair', 'Sair do modo de leitura (Esc ou F9)', () => close());
 
           const article = el('article', 'doc');
@@ -156,7 +225,7 @@ public static class ReaderScripts
           wrap.append(bar, article);
           root.append(wrap);
 
-          const close = () => { host.remove(); document.documentElement.style.overflow = ''; removeEventListener('keydown', onKey, true); };
+          const close = () => { stopSpeech(); host.remove(); document.documentElement.style.overflow = ''; removeEventListener('keydown', onKey, true); };
           const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
           addEventListener('keydown', onKey, true);
           document.documentElement.appendChild(host);

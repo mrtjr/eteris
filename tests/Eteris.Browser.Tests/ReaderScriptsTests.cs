@@ -13,6 +13,15 @@ public class ReaderScriptsTests
         => Assert.Equal(expected, ReaderScripts.IsCandidate(url));
 
     [Fact]
+    public void Toggle_ReadsAloudOnlyWithLocalVoicesAndStopsOnClose()
+    {
+        Assert.Contains("speechSynthesis", ReaderScripts.Toggle);
+        Assert.Contains("localService", ReaderScripts.Toggle);
+        Assert.Contains("stopSpeech(); host.remove()", ReaderScripts.Toggle);
+        Assert.Contains("speechSynthesis.cancel(); open.remove()", ReaderScripts.Toggle);
+    }
+
+    [Fact]
     public void Toggle_IsolatesStylesFromThePage()
     {
         Assert.Contains("attachShadow", ReaderScripts.Toggle);
