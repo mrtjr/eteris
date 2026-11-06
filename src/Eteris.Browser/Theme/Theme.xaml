@@ -16,6 +16,8 @@
 
     <Style x:Key="IconButton" TargetType="Button">
         <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+        <!-- Leitores de ecrã: o nome do botão é a dica (senão leriam o glifo do ícone). Um nome explícito continua a ganhar. -->
+        <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
         <Setter Property="FontSize" Value="14" />
@@ -46,6 +48,7 @@
     </Style>
 
     <Style x:Key="CaptionButton" TargetType="Button">
+        <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
