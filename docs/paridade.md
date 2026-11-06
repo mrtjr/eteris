@@ -12,7 +12,8 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 
 | # | Lacuna | Chrome | Firefox | Brave | Éteris hoje | Prioridade |
 |---|---|---|---|---|---|---|
-| 1 | Custo de desenhar as páginas (processador, bateria) | janela própria | janela própria | janela própria | cópia por quadro (OSR): ~60% de 1 núcleo a 60 fps | **[bloqueia]** |
+| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | (não instalado) | 4,8–8,0% | 28–36% (cópia por quadro); protótipo em janela própria: 8,4–8,8% | **[bloqueia]** |
+| 1b | Abas escondidas continuam a ser desenhadas | param | param | param | ~30% de 1 núcleo por aba animada escondida (protótipo: ~9%) | **[bloqueia]** |
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (CefSharp não o suporta num executável .NET) | **[bloqueia]** |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje), mas sem processo garantido | **[bloqueia]** |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) nas abas do motor de vídeo | — | — | — | escondida pela página | com o #1 |
@@ -25,22 +26,30 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 
 ## 1. Desenho das páginas — medido
 
-Medição: `perf-render.ps1` (perfil limpo, páginas locais `fps.html` e `scroll.html` a 60 fps, 10 s, soma do
-processador de todos os processos do navegador, em percentagem de 1 núcleo). Build Release.
+Medição (2026-11-06): páginas locais `fps.html` (animação) e `scroll.html` (rolagem contínua), uma só aba,
+janela 1360×860, 10 s, soma do processador de todos os processos do navegador em percentagem de 1 núcleo; todas
+a 60 fps (confirmado pelo título da página). Éteris em build Release; Chrome e Brave com perfis temporários,
+apagados no fim. Scripts: `perf-render.ps1` (Éteris) e `perf-browser.ps1` (referências).
 
-| Página | 0.2.2 (fora da tela) | Protótipo em janela própria (`CefSharp.Wpf.HwndHost`) |
-|---|---|---|
-| Animação | 60,9% (processo principal 29,7%) | **18,0%** (principal 0,9%) |
-| Rolagem contínua | 60,0% (principal 26,9%) | **15,5%** (principal 1,1%) |
+| Página | Éteris 0.2.2 (fora da tela) | Protótipo em janela própria | Chrome 156 | Brave 157 |
+|---|---|---|---|---|
+| Animação | 28,1% | **8,4%** | 6,7% | 8,0% |
+| Rolagem contínua | 35,9% | **8,8%** | 6,6% | 4,8% |
 
-O protótipo (ramo `prototipo/hwndhost`) troca só o controlo do motor: ~3,5× menos processador, mesmos 60 fps.
-Custo conhecido: tudo o que o Éteris desenha por cima da página (avisos, paleta, barra de pesquisa, menus internos)
-fica escondido pela janela da página — o mesmo que já acontece nas abas do motor de vídeo (#4).
+O protótipo (ramo `prototipo/hwndhost`, `CefSharp.Wpf.HwndHost`) troca só o controlo do motor e fica ao nível do
+Chrome e do Brave. Custo conhecido: tudo o que o Éteris desenha por cima da página (avisos, paleta, barra de
+pesquisa, menus internos) fica escondido pela janela da página — o mesmo que já acontece nas abas do motor de
+vídeo (#4). O efeito Mica não pesa (medido com e sem: igual).
+
+**Abas escondidas (#1b).** Com uma segunda aba escondida que tenha animações (a página de boas-vindas), o total
+sobe para ~61% na 0.2.2 e ~18% no protótipo: o Éteris continua a desenhar abas que ninguém vê, ao contrário das
+três referências. Avisar o motor com `WasHidden` não chega em modo janela (só se aplica fora da tela); a
+investigar: ocultação real da janela da aba, ou congelar as abas escondidas sem som (ciclo de vida da página).
 
 Plano:
 1. Avisos, paleta, pesquisa na página e restantes painéis em janelas próprias (flutuam por cima de qualquer motor).
 2. Migrar o motor principal para janela própria; repetir a medição e confirmar o ganho.
-3. Medir o Chrome e o Brave nas mesmas páginas para fixar a meta (precisa de autorização para os abrir).
+3. Abas escondidas sem custo (#1b): meta ≤ 0,5% de 1 núcleo por aba escondida, como nas referências.
 
 ## 2. Sandbox — por investigar
 
