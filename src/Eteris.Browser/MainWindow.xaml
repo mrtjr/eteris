@@ -189,6 +189,9 @@
                                         <TextBlock Text="{Binding Monogram}" FontSize="10" FontWeight="Bold" Foreground="White"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                                     </Border>
+                                    <TextBlock x:Name="SideGlobe" Text="&#xE774;" FontFamily="{StaticResource IconFont}" FontSize="13"
+                                               Foreground="{StaticResource TextMutedBrush}" Visibility="Collapsed"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
@@ -209,9 +212,18 @@
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Badge" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding Favicon}" Value="{x:Null}" />
+                                    <Condition Binding="{Binding Monogram}" Value="{x:Null}" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="SideGlobe" Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
                             <DataTrigger Binding="{Binding IsNewTab}" Value="True">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="SideGlobe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsLoading}" Value="True">
