@@ -12,7 +12,9 @@ jobs:
     runs-on: windows-latest
     env:
       REPO_URL: https://github.com/${{ github.repository }}
-      VERSION: ${{ github.ref_name }}
+      # Não se pode chamar VERSION: o MSBuild lê variáveis de ambiente como propriedades, e Version=v0.2.0
+      # (com o «v») não é uma versão NuGet válida — o restauro do projeto de testes falhava sem mensagem.
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -30,7 +32,7 @@ jobs:
       - run: dotnet test -c Release --no-build
       - name: O instalador tem de levar o motor do escudo
         run: |
-          .\build\publish.ps1 -Version $env:VERSION.TrimStart("v")
+          .\build\publish.ps1 -Version $env:RELEASE_TAG.TrimStart("v")
           if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
           if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 10) { throw "listas de filtros em falta no publish" }
           if (-not (Test-Path publish/Shields/resources/scriptlets.json)) { throw "scriptlets.json em falta no publish" }
@@ -38,5 +40,5 @@ jobs:
       - name: Descarregar releases anteriores para gerar pacotes delta
         run: vpk download github --repoUrl $env:REPO_URL --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
         continue-on-error: true
-      - run: .\build\pack.ps1 -Version $env:VERSION.TrimStart("v")
-      - run: vpk upload github --repoUrl $env:REPO_URL --publish --releaseName "Éteris $env:VERSION" --tag $env:VERSION --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
+      - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v")
+      - run: vpk upload github --repoUrl $env:REPO_URL --publish --releaseName "Éteris $env:RELEASE_TAG" --tag $env:RELEASE_TAG --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases

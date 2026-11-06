@@ -1,8 +1,8 @@
 # Alterações
 
-## 0.2.0 — 2026-11-06
+## 0.2.1 — 2026-11-06
 
-Duas rondas de 50 ciclos de melhorias.
+Duas rondas de 50 ciclos de melhorias. (A 0.2.0 não chegou a ser publicada: o fluxo de publicação falhava — ver em baixo.)
 
 ### Licenças e privacidade (preparação para distribuir)
 - O Éteris passa a ser software livre sob a **GPL-3.0 ou posterior** (`LICENSE`).
@@ -22,7 +22,11 @@ Duas rondas de 50 ciclos de melhorias.
 - **Motor de vídeo**: os sites que só têm vídeo em H.264/AAC (o Twitch, por exemplo) já tocam dentro do Éteris. A aba deteta sozinha que o vídeo não arranca e passa a usar o WebView2 — o motor do Edge que vem com o Windows e tem as licenças desses formatos —, sem sair da janela; o site fica lembrado. Selo «Motor de vídeo» na barra de endereço para voltar ao motor principal. Nessas abas: as mesmas listas de bloqueio, prevenção de rastreio estrita, sem SmartScreen nem autopreenchimento, e modo InPrivate nas janelas privadas. O YouTube (AV1/VP9) continua no motor principal.
 
 ### Bloqueio de anúncios
-- **Anúncios pop-under travados**: alguns sites abriam um anúncio numa aba nova a qualquer clique na página (por formulário escondido ou pelo `window.open` de um iframe, para fugir aos bloqueadores). Agora uma aba de outro site só abre se o clique foi num link (ou formulário) para esse site; janelas de início de sessão e de partilha continuam a abrir. Aviso «Anúncio em nova aba bloqueado».
+- **Anúncios pop-under travados**: alguns sites abriam um anúncio numa aba nova a qualquer clique na página (por formulário escondido ou pelo `window.open` de um iframe, para fugir aos bloqueadores). Agora uma aba de outro site só abre se o clique foi num link (ou formulário) para esse site; janelas de início de sessão e de partilha continuam a abrir se o clique foi num botão. Aviso «Anúncio em nova aba bloqueado».
+- Os anúncios da PropellerAds (que abrem logo ao carregar no botão do rato, antes de o Éteris saber onde se clicou) também são travados: o pedido da aba espera pelo registo do clique.
+
+### Publicação
+- O fluxo de publicação no GitHub falhava no restauro do projeto de testes: a variável `VERSION` do fluxo era lida pelo MSBuild como a versão do projeto (`v0.2.0`, inválida). Renomeada, com um teste que o impede de voltar.
 
 ### Novo (segunda ronda)
 - **Privacidade**: DNS cifrado (Cloudflare, Quad9, Mullvad), links sem parâmetros de rastreio (ao navegar e ao copiar), modo rigoroso por site (sem scripts/frames de terceiros), pedidos de notificações recusados sem perguntar, apagar cookies e dados ao fechar, histórico interno do Chromium desligado.

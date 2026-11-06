@@ -1,4 +1,4 @@
-param([string]$Version = "0.2.0")
+param([string]$Version = "0.2.1")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o "$root\publish" -p:Version=$Version
