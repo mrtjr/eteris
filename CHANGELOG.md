@@ -10,6 +10,12 @@ Duas rondas de 50 ciclos de melhorias.
 - Testes que impedem uma dependência de entrar sem o texto da sua licença.
 - O motor deixa de descarregar componentes da Google em segundo plano (num perfil novo: 27 → 0, incluindo o módulo DRM Widevine e os modelos de IA); o Widevine que ficou de versões anteriores é apagado no arranque.
 
+### Marca, correções e desempenho
+- **Marca do Éteris**: ícone próprio (anel íris à volta de um núcleo luminoso) no executável, janelas, barra de tarefas, instalador e README; gerado por `build/brand/make-icon.ps1`.
+- **Clicar numa aba não a ativava** (as abas não recebem foco e o Windows só seleciona itens com foco): corrigido na faixa do topo e na barra lateral.
+- **Rolagem e animações a 60 quadros por segundo** (estavam limitadas a 30).
+- Primeiro arranque aberto com um endereço mostrava «Novidades» em vez das boas-vindas.
+
 ### Leitura e vídeo
 - **Modo de leitura com o Readability.js do Firefox** (Mozilla, Apache-2.0): extração e deteção de artigos muito mais fiáveis; a heurística própria fica como reserva (p. ex. em sites com Trusted Types).
 - Teste que compila com o Node todos os scripts injetados nas páginas (apanhou um erro de sintaxe no leitor).
