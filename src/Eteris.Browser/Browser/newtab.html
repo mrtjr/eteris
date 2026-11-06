@@ -76,16 +76,20 @@
   }
   .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .tile:hover .name { color: var(--text); }
-  .resume { width: 100%; margin-top: 30px; display: none; }
-  .resume.show { display: block; animation: rise .6s ease-out both; }
-  .resume h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin: 0 0 10px 4px; }
-  .resume .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-  .rcard {
-    display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-radius: 16px; cursor: pointer; text-align: left;
-    color: var(--text); text-decoration: none; font: inherit; background: rgba(255, 255, 255, .035); border: 1px solid var(--line);
-    backdrop-filter: blur(18px); transition: transform .18s ease, background .18s ease, border-color .18s ease; min-width: 0;
+  .resume {
+    position: fixed; left: 26px; bottom: 76px; z-index: 2; width: 250px; padding: 14px 10px 10px; border-radius: 20px;
+    background: rgba(22, 25, 35, .62); border: 1px solid var(--line); backdrop-filter: blur(20px); display: none;
   }
-  .rcard:hover { transform: translateY(-3px); background: rgba(255, 255, 255, .075); border-color: rgba(255, 255, 255, .16); }
+  .resume.show { display: block; animation: rise .6s ease-out both; }
+  .resume h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin: 0 0 8px 8px; }
+  .resume .cards { display: flex; flex-direction: column; gap: 2px; }
+  .rcard {
+    display: flex; align-items: center; gap: 11px; padding: 8px; border-radius: 12px; cursor: pointer; text-align: left; width: 100%;
+    color: var(--text); text-decoration: none; font: inherit; background: transparent; border: 0;
+    transition: background .15s ease, transform .15s ease; min-width: 0;
+  }
+  .rcard:hover { background: rgba(255, 255, 255, .07); transform: translateX(2px); }
+  @media (max-width: 900px), (max-height: 640px) { .resume { display: none !important; } }
   .rcard:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
   .rcard .ico { position: relative; width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 15px; }
   .rcard .ico i { position: absolute; right: -5px; bottom: -5px; width: 17px; height: 17px; border-radius: 6px; display: grid; place-items: center;
@@ -182,8 +186,9 @@
   html.light .veil { background: radial-gradient(ellipse 70% 60% at 50% 38%, rgba(243,244,249,.1) 0%, rgba(243,244,249,.65) 70%, rgba(243,244,249,.92) 100%); }
   html.light .clock { text-shadow: 0 6px 40px rgba(139, 92, 246, .18); }
   html.light input:focus { background: linear-gradient(#fff, #fff) padding-box, var(--iris) border-box; }
-  html.light .tile, html.light .mark, html.light .rcard { background: rgba(255, 255, 255, .6); }
-  html.light .rcard:hover { background: rgba(255, 255, 255, .92); border-color: rgba(20, 24, 40, .15); }
+  html.light .tile, html.light .mark { background: rgba(255, 255, 255, .6); }
+  html.light .resume { background: rgba(255, 255, 255, .7); }
+  html.light .rcard:hover { background: rgba(20, 24, 40, .05); }
   html.light .rcard .ico i { background: #fff; }
   html.light .tile:hover, html.light .mark:hover { background: rgba(255, 255, 255, .92); border-color: rgba(20, 24, 40, .15); }
   html.light .week, html.light .gear { background: rgba(255, 255, 255, .7); }
@@ -204,8 +209,8 @@
   </form>
   <nav class="marks" id="marks" aria-label="Favoritos"></nav>
   <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
-  <section class="resume" id="resume" aria-label="Continuar"><h4>Continuar</h4><div class="cards" id="cards"></div></section>
 </main>
+<aside class="resume" id="resume" aria-label="Continuar"><h4>Continuar</h4><div class="cards" id="cards"></div></aside>
 <aside class="week" id="week" aria-label="Privacidade esta semana">
   <h4>Esta semana</h4>
   <div class="num" id="weekNum"></div>
