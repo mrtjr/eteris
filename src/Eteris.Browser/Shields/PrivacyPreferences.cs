@@ -10,6 +10,9 @@ public static class PrivacyPreferences
 
     public static bool WebRtcIpProtected { get; private set; }
 
+    // null = DNS do sistema; caso contrário o nome do fornecedor de DNS cifrado aceite pelo Chromium.
+    public static string? SecureDnsProvider { get; private set; }
+
     public static Task ApplyAsync(IRequestContext? context = null) => Cef.UIThreadTaskFactory.StartNew(() =>
     {
         var target = context ?? Cef.GetGlobalRequestContext();
@@ -18,7 +21,11 @@ public static class PrivacyPreferences
                       | target.SetPreference("profile.cookie_controls_mode", block ? 1 : 0, out _);
         cookies &= block;
         var webRtc = target.SetPreference("webrtc.ip_handling_policy", "disable_non_proxied_udp", out _);
+        var dnsId = Data.Settings.Current.SecureDns;
+        var dns = target.SetPreference("dns_over_https.mode", SecureDns.ModeFor(dnsId), out _)
+                  & target.SetPreference("dns_over_https.templates", SecureDns.TemplateFor(dnsId) ?? string.Empty, out _);
         if (context is not null) return;
+        SecureDnsProvider = dns && SecureDns.Providers.TryGetValue(dnsId, out var provider) ? provider.Name : null;
         ThirdPartyCookiesBlocked = cookies;
         WebRtcIpProtected = webRtc;
     });

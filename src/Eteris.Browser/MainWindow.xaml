@@ -847,6 +847,7 @@
                                 <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
+                                <TextBlock x:Name="ShieldCheckDns" FontSize="12.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldSession" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}" Margin="0,12,0,0" />
                             </StackPanel>
                         </Border>

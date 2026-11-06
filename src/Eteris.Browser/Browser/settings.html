@@ -175,6 +175,15 @@
           <label class="switch"><input type="checkbox" data-key="httpsFirst"><i></i></label>
         </div>
         <div class="item">
+          <div class="label"><b>DNS cifrado</b><span>Os nomes dos sites que visita deixam de ir em claro para o seu fornecedor de Internet. Escolha um serviço de DNS seguro.</span></div>
+          <div class="seg" data-key="dns">
+            <button data-value="off">Sistema</button>
+            <button data-value="cloudflare">Cloudflare</button>
+            <button data-value="quad9">Quad9</button>
+            <button data-value="mullvad">Mullvad</button>
+          </div>
+        </div>
+        <div class="item">
           <div class="label"><b>Bloquear cookies de terceiros</b><span>Impede que anunciantes sigam o seu percurso entre sites. Alguns logins incorporados podem deixar de funcionar.</span></div>
           <label class="switch"><input type="checkbox" data-key="cookies"><i></i></label>
         </div>
@@ -291,7 +300,7 @@
     timer = setTimeout(() => saved.classList.remove('show'), 1400);
   }
 
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs, dns: data.dns };
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;
     const paint = () => seg.querySelectorAll('button[data-value]').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));

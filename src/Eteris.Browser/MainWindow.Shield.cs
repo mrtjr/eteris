@@ -52,6 +52,8 @@ public partial class MainWindow
             ? "✓  Cookies de terceiros bloqueados" : "✗  Cookies de terceiros permitidos";
         ShieldCheckWebRtc.Text = PrivacyPreferences.WebRtcIpProtected
             ? "✓  WebRTC não expõe o seu IP local" : "✗  WebRTC sem proteção de IP";
+        ShieldCheckDns.Text = PrivacyPreferences.SecureDnsProvider is { } dns
+            ? $"✓  DNS cifrado ({dns})" : "·  DNS do sistema (pode ativar DNS cifrado nas definições)";
         var session = ShieldStats.SessionBlocked;
         ShieldSession.Text = $"{session} {(session == 1 ? "rastreador bloqueado" : "rastreadores bloqueados")} desde que abriu o Éteris";
     }

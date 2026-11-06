@@ -55,6 +55,7 @@ public static class SettingsPage
             mica = settings.Mica,
             autoplay = settings.BlockAutoplay,
             suggest = settings.SearchSuggestions,
+            dns = settings.SecureDns,
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
