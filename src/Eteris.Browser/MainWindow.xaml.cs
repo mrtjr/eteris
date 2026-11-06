@@ -55,6 +55,7 @@ public partial class MainWindow : Window
         StartAudioWatch();
         WatchMiniBar();
         WatchOmniboxMenu();
+        Closing += (_, _) => FlushNotes();
     }
 
     public TabsViewModel Tabs { get; } = new();
