@@ -481,7 +481,13 @@
                                 ToolTip="Fecha e reabre o Éteris com a nova versão (as abas são mantidas)">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
-                                    <Border x:Name="Pill" CornerRadius="15" Height="30" Padding="12,0" Background="{StaticResource AuroraBrush}">
+                                    <Border x:Name="Pill" CornerRadius="15" Height="30" Padding="12,0">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#C4B5FD" Offset="0" />
+                                                <GradientStop Color="#67E8F9" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock Text="&#xE777;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="#0B0D13"
                                                        VerticalAlignment="Center" Margin="0,1,8,0" />
