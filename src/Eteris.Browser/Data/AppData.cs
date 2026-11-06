@@ -153,6 +153,41 @@ public static class AppData
         catch (Exception) { return 0; }
     }
 
+    private static readonly Lazy<Permissions.SitePermissionStore?> LazyPermissions = new(() =>
+    {
+        try { return new Permissions.SitePermissionStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    // «Definições por site»: zoom, escudo, permissões e elementos escondidos de cada site.
+    public static IReadOnlyList<SiteSummary> SiteSummaries()
+    {
+        try
+        {
+            return SiteOverview.Build(
+                LazyZoom.Value?.All() ?? new Dictionary<string, double>(),
+                LazyShieldExceptions.Value?.All() ?? [],
+                LazyPermissions.Value?.AllSites() ?? new Dictionary<string, IReadOnlyList<(Permissions.SitePermission, bool)>>(),
+                LazyHidden.Value?.Hosts() ?? new Dictionary<string, int>());
+        }
+        catch (Exception) { return []; }
+    }
+
+    public static void ResetSite(string site)
+    {
+        foreach (var host in new[] { site, "www." + site })
+        {
+            try
+            {
+                LazyZoom.Value?.Set(host, 0);
+                LazyPermissions.Value?.Forget(host);
+                LazyHidden.Value?.Clear(host);
+            }
+            catch (Exception) { }
+        }
+        SetShield(site, true);
+    }
+
     public static void RemoveBookmark(string url)
     {
         try { LazyBookmarks.Value.Remove(url); }

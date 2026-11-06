@@ -29,6 +29,11 @@ public sealed class SiteZoomStore
         get { lock (_lock) return _levels.Count; }
     }
 
+    public IReadOnlyDictionary<string, double> All()
+    {
+        lock (_lock) return new Dictionary<string, double>(_levels);
+    }
+
     public double Get(string host)
     {
         lock (_lock) return _levels.TryGetValue(host, out var level) ? level : 0;

@@ -25,6 +25,11 @@ public sealed class ShieldExceptionStore
         while (reader.Read()) _sites.Add(reader.GetString(0));
     }
 
+    public IReadOnlyList<string> All()
+    {
+        lock (_lock) return _sites.Order().ToList();
+    }
+
     public bool Contains(string host)
     {
         lock (_lock) return _sites.Contains(Site(host));

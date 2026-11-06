@@ -28,6 +28,17 @@ public sealed class HiddenElementsStore
         return list;
     }
 
+    public IReadOnlyDictionary<string, int> Hosts()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT host, COUNT(*) FROM hidden_elements GROUP BY host";
+        using var reader = command.ExecuteReader();
+        var hosts = new Dictionary<string, int>();
+        while (reader.Read()) hosts[reader.GetString(0)] = (int)reader.GetInt64(1);
+        return hosts;
+    }
+
     public void Clear(string host) => Execute("DELETE FROM hidden_elements WHERE host = $h", ("$h", host.ToLowerInvariant()));
 
     private void Execute(string sql, params (string Name, object Value)[] parameters)

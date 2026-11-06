@@ -101,6 +101,23 @@ public sealed class SitePermissionStore
         return list;
     }
 
+    public IReadOnlyDictionary<string, IReadOnlyList<(SitePermission Kind, bool Allowed)>> AllSites()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT site, kind, allowed FROM site_permissions ORDER BY site";
+        using var reader = command.ExecuteReader();
+        var sites = new Dictionary<string, List<(SitePermission, bool)>>();
+        while (reader.Read())
+        {
+            if (!Enum.TryParse<SitePermission>(reader.GetString(1), out var kind)) continue;
+            var site = reader.GetString(0);
+            if (!sites.TryGetValue(site, out var list)) sites[site] = list = [];
+            list.Add((kind, reader.GetInt64(2) == 1));
+        }
+        return sites.ToDictionary(p => p.Key, p => (IReadOnlyList<(SitePermission, bool)>)p.Value);
+    }
+
     public void Set(string site, SitePermission kind, bool allowed)
         => Execute("INSERT OR REPLACE INTO site_permissions(site, kind, allowed) VALUES ($s, $k, $a)",
             ("$s", site), ("$k", kind.ToString()), ("$a", allowed ? 1 : 0));

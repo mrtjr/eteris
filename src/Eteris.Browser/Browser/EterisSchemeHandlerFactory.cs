@@ -57,6 +57,11 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             return Text(Updates.UpdateService.Status);
         }
         if (uri.AbsolutePath == "/status") return Text(Updates.UpdateService.Status);
+        if (uri.AbsolutePath == "/site-reset" && InternalPages.IsAuthorized(url) && InternalPages.Query(uri, "site") is { Length: > 0 } site)
+        {
+            AppData.ResetSite(site);
+            return Text("ok");
+        }
         if (uri.AbsolutePath == "/import" && InternalPages.IsAuthorized(url))
         {
             var source = BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
@@ -67,7 +72,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         }
         return uri.AbsolutePath == "/"
             ? Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: uri.Host == "about",
-                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))))
+                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), AppData.SiteSummaries()))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 

@@ -36,7 +36,7 @@ public static class SettingsPage
     }
 
     public static string Render(UserSettings settings, About? about = null, bool focusAbout = false,
-        IReadOnlyList<ImportSource>? imports = null)
+        IReadOnlyList<ImportSource>? imports = null, IReadOnlyList<SiteSummary>? sites = null)
     {
         var data = new
         {
@@ -61,6 +61,16 @@ public static class SettingsPage
             theme = settings.Theme,
             cleanUrls = settings.CleanUrls,
             imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
+            sites = (sites ?? []).Select(s => new
+            {
+                site = s.Site,
+                details = new[]
+                    {
+                        s.ZoomPercent is { } z ? $"zoom {z} %" : null,
+                        s.ShieldOff ? "escudo desligado" : null,
+                        s.HiddenElements > 0 ? $"{s.HiddenElements} elemento(s) escondido(s)" : null,
+                    }.Where(d => d is not null).Concat(s.Permissions),
+            }),
             tabs = settings.VerticalTabs ? "side" : "top",
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
