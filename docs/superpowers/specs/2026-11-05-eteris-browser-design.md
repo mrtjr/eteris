@@ -15,7 +15,11 @@ nossa marca.
 - Pasta do projeto: `C:\Users\Júnior\Desktop\navegador` (repositório git próprio).
 
 Referências de produto: Chrome (omnibox, abas), Firefox (privacidade por
-defeito), Brave (Shields com contador, bloqueio em Rust).
+defeito), Brave (Shields com contador, bloqueio em Rust). **São as únicas
+referências** em comparações, metas de desempenho e decisões de design — o Edge
+não é referência (decisão do dono do projeto, 2026-11-06). Menções técnicas
+continuam: o motor de vídeo usa o WebView2 da Microsoft e os favoritos podem ser
+importados de perfis do Edge.
 
 ### Restrições
 
