@@ -21,6 +21,18 @@ public partial class TabsViewModel : ObservableObject
         return tab;
     }
 
+    // Abas da sessão anterior, pela ordem original; só a ativa carrega, as outras ficam a dormir até serem abertas.
+    public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null)
+    {
+        for (var i = 0; i < addresses.Count; i++)
+        {
+            var tab = new BrowserTab(addresses[i]) { IsSleeping = i != activeIndex };
+            if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
+            Tabs.Add(tab);
+        }
+        if (Tabs.Count > 0) Active = Tabs[Math.Clamp(activeIndex, 0, Tabs.Count - 1)];
+    }
+
     // Devolve true quando a última aba foi fechada (a janela deve fechar, como no Chrome).
     public bool Close(BrowserTab tab)
     {

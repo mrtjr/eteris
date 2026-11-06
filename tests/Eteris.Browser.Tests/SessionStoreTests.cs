@@ -21,6 +21,15 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_KeepsTitlesAlignedWithKeptUrls()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["javascript:x", "https://a.pt/", "https://b.pt/"], 2, ["X", "Página A", "Página B"]);
+        var session = store.Load()!;
+        Assert.Equal(["Página A", "Página B"], session.Titles);
+    }
+
+    [Fact]
     public void Load_WithoutFile_IsNull()
         => Assert.Null(new SessionStore(_path).Load());
 

@@ -58,18 +58,13 @@ public partial class MainWindow : Window
         foreach (BrowserTab tab in e.NewItems ?? Array.Empty<BrowserTab>())
         {
             tab.PropertyChanged += OnTabPropertyChanged;
-            CreateBrowser(tab);
+            if (!tab.IsSleeping) CreateBrowser(tab);
         }
 
         foreach (BrowserTab tab in e.OldItems ?? Array.Empty<BrowserTab>())
         {
             tab.PropertyChanged -= OnTabPropertyChanged;
-            if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
-            if (_browsers.Remove(tab, out var browser))
-            {
-                BrowserHost.Children.Remove(browser);
-                browser.Dispose();
-            }
+            ReleaseBrowser(tab);
         }
 
         UpdateTabWidth();
@@ -193,6 +188,7 @@ public partial class MainWindow : Window
     private void OnTabsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(TabsViewModel.Active)) return;
+        OnActiveTabChanging();
         foreach (var (tab, browser) in _browsers)
             browser.Visibility = ReferenceEquals(tab, Tabs.Active) ? Visibility.Visible : Visibility.Hidden;
         _omniboxEdited = false;
@@ -207,7 +203,7 @@ public partial class MainWindow : Window
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(BrowserTab.Address)) ScheduleSessionSave();
+        if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title)) ScheduleSessionSave();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();

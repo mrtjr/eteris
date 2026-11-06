@@ -31,6 +31,14 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private Color? _tint;
 
+    [ObservableProperty]
+    private bool _isSleeping;
+
+    [ObservableProperty]
+    private bool _isAudible;
+
+    public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
+
     private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<KeyValuePair<string, int>> BlockedHosts

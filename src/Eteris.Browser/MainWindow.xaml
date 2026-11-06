@@ -126,6 +126,11 @@
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSleeping}" Value="True">
+                                <Setter TargetName="TabTitle" Property="Opacity" Value="0.5" />
+                                <Setter TargetName="Favicon" Property="Opacity" Value="0.45" />
+                                <Setter TargetName="Globe" Property="Opacity" Value="0.45" />
+                            </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF" />
                                 <Setter TargetName="TabTitle" Property="Foreground" Value="{StaticResource TextBrush}" />
