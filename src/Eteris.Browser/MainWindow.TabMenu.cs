@@ -10,6 +10,16 @@ public partial class MainWindow
 {
     private void TabItem_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
+        // Os eventos Preview descem do pai para o filho: sem isto, o menu da aba ganhava sempre ao do grupo.
+        for (var node = e.OriginalSource as DependencyObject; node is not null && !ReferenceEquals(node, sender);
+             node = System.Windows.Media.VisualTreeHelper.GetParent(node))
+        {
+            if (node is FrameworkElement { Name: "GroupPill" } pill)
+            {
+                GroupPill_PreviewMouseRightButtonUp(pill, e);
+                return;
+            }
+        }
         if ((sender as FrameworkElement)?.DataContext is not BrowserTab tab) return;
         var index = Tabs.Tabs.IndexOf(tab);
         var hasRight = Tabs.Tabs.Skip(index + 1).Any(t => !t.IsPinned);
