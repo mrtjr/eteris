@@ -87,7 +87,6 @@ public partial class MainWindow
 
         Grid.SetColumnSpan(AuroraBar, 3);
         _splitter!.Visibility = _split is null ? Visibility.Collapsed : Visibility.Visible;
-        BrowserHost.Background = _split is null ? Brushes.White : (Brush)Resources["ChromeSurfaceBrush"];
 
         _focusRing!.Visibility = _split is null ? Visibility.Collapsed : Visibility.Visible;
         if (_split?.PaneOf(Tabs.Active) is { } activePane) Grid.SetColumn(_focusRing, activePane == SplitPane.Right ? 2 : 0);
