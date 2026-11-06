@@ -19,6 +19,8 @@ public static class Program
             return;
         }
 
-        new App().Run();
+        var app = new App();
+        app.InitializeComponent();
+        app.Run();
     }
 }
