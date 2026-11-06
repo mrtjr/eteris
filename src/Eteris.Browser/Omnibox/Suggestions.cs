@@ -4,7 +4,15 @@ namespace Eteris.Browser.Omnibox;
 
 public enum SuggestionKind { Search, Navigate, History, Bookmark, Tab, Answer }
 
-public sealed record Suggestion(SuggestionKind Kind, string Text, string Detail, string Url);
+public sealed record Suggestion(SuggestionKind Kind, string Text, string Detail, string Url)
+{
+    // Sites conhecidos (histórico, favoritos, abas abertas) mostram o monograma colorido do site.
+    public string? Monogram => Kind is SuggestionKind.History or SuggestionKind.Bookmark or SuggestionKind.Tab
+        ? Tabs.SiteBadge.Letter(Url)
+        : null;
+
+    public string MonogramColor => Tabs.SiteBadge.Palette[Tabs.SiteBadge.ColorIndex(Url)];
+}
 
 public static class Suggestions
 {

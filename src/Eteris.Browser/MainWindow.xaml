@@ -317,7 +317,13 @@
                                 </Grid.ColumnDefinitions>
                                 <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,2" />
                                 <TextBlock x:Name="Icon" Grid.Column="1" Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="14"
-                                           Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                           Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Visibility="Collapsed" />
+                                <Border x:Name="Mono" Grid.Column="1" Width="22" Height="22" CornerRadius="7"
+                                        Background="{Binding MonogramColor}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Monogram}" FontSize="11" FontWeight="Bold" Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
+                                </Border>
                                 <TextBlock x:Name="Label" Grid.Column="2" Text="{Binding Text}" FontSize="14" Foreground="{StaticResource TextBrush}"
                                            TextTrimming="CharacterEllipsis" MaxWidth="520" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="3" Text="{Binding Detail, StringFormat={} — {0}}" FontSize="13"
@@ -326,6 +332,10 @@
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Monogram}" Value="{x:Null}">
+                                <Setter TargetName="Mono" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Icon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Search">
                                 <Setter TargetName="Icon" Property="Text" Value="&#xE721;" />
                             </DataTrigger>

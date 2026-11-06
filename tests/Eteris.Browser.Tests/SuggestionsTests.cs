@@ -5,6 +5,14 @@ namespace Eteris.Browser.Tests;
 
 public class SuggestionsTests
 {
+    [Fact]
+    public void HistorySuggestion_HasMonogram_SearchDoesNot()
+    {
+        Assert.Equal("P", new Suggestion(SuggestionKind.History, "Público", "https://www.publico.pt/", "https://www.publico.pt/").Monogram);
+        Assert.Null(new Suggestion(SuggestionKind.Search, "x", "", "https://duckduckgo.com/?q=x").Monogram);
+        Assert.StartsWith("#", new Suggestion(SuggestionKind.Bookmark, "a", "", "https://a.pt/").MonogramColor);
+    }
+
     private static readonly SearchEngine Engine = new("Teste", "https://busca.test/?q={q}");
 
     [Fact]
