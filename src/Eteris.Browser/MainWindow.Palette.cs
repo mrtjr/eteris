@@ -76,6 +76,13 @@ public partial class MainWindow
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         yield return new("", "Reabrir aba fechada", "Recupera a última aba que fechou", "Ctrl+Shift+T", () => Tabs.ReopenClosed());
+        foreach (var closed in Tabs.RecentlyClosed.Skip(1).Take(5))
+        {
+            var entry = closed;
+            yield return new("", $"Reabrir «{entry.Title}»", entry.Address, null, () => Tabs.ReopenClosed(entry));
+        }
+        yield return new("", "Esquecer os últimos 15 minutos", "Apaga o histórico desse período e as abas fechadas recentes", null, () => Forget(15));
+        yield return new("", "Esquecer a última hora", "Apaga o histórico da última hora e as abas fechadas recentes", null, () => Forget(60));
         yield return new("", "Adormecer abas em segundo plano", "Liberta a memória das abas que não está a usar", null,
             SleepAllBackgroundTabs);
         yield return new("", "Nova janela", "Abrir outra janela do Éteris", "Ctrl+N", () => OpenWindow(isPrivate: false));
@@ -199,6 +206,15 @@ public partial class MainWindow
     private void PaletteBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => ClosePalette();
 
     private void Menu_Click(object sender, RoutedEventArgs e) => OpenPalette();
+
+    // ---------- Esquecer ----------
+
+    private void Forget(int minutes)
+    {
+        AppData.TryWrite(h => h.DeleteSince(DateTime.UtcNow.AddMinutes(-minutes)));
+        Tabs.ForgetClosed();
+        ShowToast(minutes < 60 ? $"Os últimos {minutes} minutos foram esquecidos" : "A última hora foi esquecida");
+    }
 
     // ---------- Modo foco ----------
 

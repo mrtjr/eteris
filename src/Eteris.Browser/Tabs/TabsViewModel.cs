@@ -5,7 +5,12 @@ namespace Eteris.Browser.Tabs;
 
 public partial class TabsViewModel : ObservableObject
 {
-    private readonly Stack<(int Index, string Address)> _closed = new();
+    public const int MaxClosed = 25;
+
+    // Abas fechadas, a mais recente no fim.
+    private readonly List<ClosedTab> _closed = [];
+
+    public IReadOnlyList<ClosedTab> RecentlyClosed => _closed.AsEnumerable().Reverse().ToList();
 
     public ObservableCollection<BrowserTab> Tabs { get; } = new();
 
@@ -44,7 +49,11 @@ public partial class TabsViewModel : ObservableObject
         var index = Tabs.IndexOf(tab);
         if (index < 0) return Tabs.Count == 0;
 
-        _closed.Push((index, tab.Address));
+        if (!Browser.NewTabPage.IsNewTab(tab.Address))
+        {
+            _closed.Add(new ClosedTab(index, tab.Address, tab.Title));
+            if (_closed.Count > MaxClosed) _closed.RemoveAt(0);
+        }
         var wasActive = ReferenceEquals(tab, Active);
         Tabs.RemoveAt(index);
 
@@ -58,15 +67,18 @@ public partial class TabsViewModel : ObservableObject
         return false;
     }
 
-    public BrowserTab? ReopenClosed()
+    public BrowserTab? ReopenClosed() => _closed.Count == 0 ? null : ReopenClosed(_closed[^1]);
+
+    public BrowserTab? ReopenClosed(ClosedTab entry)
     {
-        if (_closed.Count == 0) return null;
-        var (index, address) = _closed.Pop();
-        var tab = new BrowserTab(address);
-        Tabs.Insert(Math.Min(index, Tabs.Count), tab);
+        if (!_closed.Remove(entry)) return null;
+        var tab = new BrowserTab(entry.Address) { Title = entry.Title };
+        Tabs.Insert(Math.Min(entry.Index, Tabs.Count), tab);
         Active = tab;
         return tab;
     }
+
+    public void ForgetClosed() => _closed.Clear();
 
     public int PinnedCount => Tabs.Count(t => t.IsPinned);
 
@@ -122,3 +134,5 @@ public partial class TabsViewModel : ObservableObject
         Active = Tabs[index];
     }
 }
+
+public sealed record ClosedTab(int Index, string Address, string Title);
