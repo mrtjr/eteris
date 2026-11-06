@@ -1,0 +1,1 @@
+O crate flatbuffers 25.12.19 declara a licença Apache-2.0 mas não inclui o ficheiro; o texto ao lado é o texto canónico dessa licença. Repositório: https://github.com/google/flatbuffers

@@ -1,6 +1,12 @@
 # Componentes de terceiros
 
-O Éteris distribui os seguintes componentes de terceiros, cada um sob a sua própria licença.
+O Éteris é software livre, distribuído sob a **GPL-3.0 ou posterior** (ficheiro `LICENSE`). O código do
+motor de bloqueio (`src/Eteris.Shields`) é MPL-2.0.
+
+O Éteris distribui os seguintes componentes de terceiros, cada um sob a sua própria licença. **Os textos
+completos de todas as licenças estão na pasta `licenses/`** (índice em `licenses/INDEX.md`), que acompanha
+a instalação. Essa pasta é gerada a partir dos pacotes exatos usados na compilação por
+`build/licenses/collect.py`.
 
 ## Motor de bloqueio
 
@@ -18,6 +24,8 @@ Não são modificadas.
 
 | Lista | Fonte | Licença |
 |---|---|---|
+As listas com licença dupla são usadas e redistribuídas sob a GPL-3.0.
+
 | uBlock filters (filters, privacy, unbreak, badware, quick-fixes) | https://github.com/uBlockOrigin/uAssets | GPL-3.0 |
 | EasyList | https://easylist.to | GPL-3.0 ou CC BY-SA 3.0 |
 | EasyPrivacy | https://easylist.to | GPL-3.0 ou CC BY-SA 3.0 |
@@ -40,6 +48,18 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 | Chromium (incluído no CEF) | https://www.chromium.org | BSD-3-Clause e licenças dos seus componentes |
 | Velopack | https://github.com/velopack/velopack | MIT |
 | CommunityToolkit.Mvvm | https://github.com/CommunityToolkit/dotnet | MIT |
-| QRCoder (códigos QR) | https://github.com/codebrainz/QRCoder | MIT |
+| QRCoder (códigos QR) | https://github.com/Shane32/QRCoder | MIT |
 | Microsoft.Data.Sqlite / SQLite | https://github.com/dotnet/efcore · https://sqlite.org | MIT · domínio público |
-| .NET | https://github.com/dotnet/runtime | MIT |
+| SQLitePCLRaw | https://github.com/ericsink/SQLitePCL.raw | Apache-2.0 |
+| .NET e WPF (incluídos na instalação) | https://github.com/dotnet/runtime · https://github.com/dotnet/wpf | MIT, com os avisos de terceiros do .NET |
+
+Os créditos completos do Chromium (centenas de componentes) estão em `licenses/Chromium-credits.html`.
+
+## Motor de bloqueio: dependências Rust
+
+O `eteris_shields.dll` inclui 59 crates de terceiros, todos sob licenças permissivas: MIT, Apache-2.0,
+Unicode-3.0 e Unlicense (cada um com os seus ficheiros em `licenses/rust/`).
+
+## Listas próprias
+
+`Shields/trackers.txt` (domínios de rastreio de reserva) foi escrita para o Éteris e segue a licença do projeto.

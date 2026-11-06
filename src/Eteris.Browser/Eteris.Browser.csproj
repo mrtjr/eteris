@@ -39,6 +39,9 @@
     <None Include="Shields\lists\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- Gerado por build/scriptlets a partir do uBlock Origin; só muda com uma nova versão do Éteris. -->
     <None Include="Shields\resources\scriptlets.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Licença do Éteris e textos completos das licenças de terceiros: vão sempre com a instalação. -->
+    <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="..\..\licenses\**\*" LinkBase="licenses" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

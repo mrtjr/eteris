@@ -45,5 +45,11 @@ dotnet build
 dotnet test
 ```
 
+## Licença
+
+O Éteris é software livre: pode usá-lo, estudá-lo, alterá-lo e redistribuí-lo nos termos da
+[GNU GPL versão 3 ou posterior](LICENSE). Os componentes de terceiros e as respetivas licenças estão em
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) e na pasta [licenses/](licenses/INDEX.md).
+
 Design e decisões: [docs/superpowers/specs/2026-11-05-eteris-browser-design.md](docs/superpowers/specs/2026-11-05-eteris-browser-design.md).
 Alterações: [CHANGELOG.md](CHANGELOG.md).

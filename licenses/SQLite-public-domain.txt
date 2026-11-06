@@ -1,0 +1,1 @@
+O SQLite (https://sqlite.org) está no domínio público: https://sqlite.org/copyright.html
