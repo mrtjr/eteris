@@ -125,6 +125,9 @@ public partial class MainWindow
             yield return new("", "Fechar ecrã dividido", "Voltar a uma página de cada vez", null, CloseSplit);
         else if (SplitCandidate() is { } partner)
             yield return new("", "Dividir ecrã", $"Mostrar «{partner.Title}» ao lado", null, () => OpenSideBySide(partner));
+        var light = Theme.ThemeManager.Current == Theme.AppTheme.Light;
+        yield return new(light ? "" : "", light ? "Mudar para tema escuro" : "Mudar para tema claro",
+            "Também pode seguir o Windows em Definições › Aspeto", null, () => Data.Settings.Set("theme", light ? "dark" : "light"));
         yield return new("", VerticalTabs ? "Abas no topo" : "Abas verticais",
             VerticalTabs ? "Voltar à faixa de abas clássica" : "Lista de abas na lateral, ideal para muitas abas", null, ToggleVerticalTabs);
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);

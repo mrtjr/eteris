@@ -10,6 +10,20 @@ public static class ThemeManager
 
     public static event Action<AppTheme>? Changed;
 
+    private static bool _watching;
+
+    // Com «Sistema», mudar o modo no Windows muda o Éteris na hora (sem reiniciar).
+    public static void FollowSystemChanges(Func<string> currentChoice)
+    {
+        if (_watching) return;
+        _watching = true;
+        SystemEvents.UserPreferenceChanged += (_, e) =>
+        {
+            if (e.Category != UserPreferenceCategory.General || currentChoice() != "system") return;
+            Application.Current?.Dispatcher.InvokeAsync(() => Apply("system"));
+        };
+    }
+
     public static bool SystemUsesLight()
     {
         try
