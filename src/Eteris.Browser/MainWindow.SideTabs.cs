@@ -36,6 +36,8 @@ public partial class MainWindow
         ToolbarCaption.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
 
         SideBar.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
+        SideFilterHost.Visibility = SideCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        if (SideCollapsed && SideFilter.Text.Length > 0) SideFilter.Clear();
         SideBar.Width = SideCollapsed ? SideCollapsedWidth : SideWidth;
         SideCollapseButton.Content = SideCollapsed ? "" : "";
         SideCollapseButton.ToolTip = SideCollapsed ? "Expandir a barra de abas" : "Encolher a barra de abas";
@@ -63,5 +65,41 @@ public partial class MainWindow
         Settings.Changed += OnChanged;
         Closed += (_, _) => Settings.Changed -= OnChanged;
         ApplyChromeLayout();
+    }
+
+    // ---------- Filtrar abas (barra lateral) ----------
+    // Uma vista própria da lista: o filtro não mexe na faixa de abas do topo.
+    private System.Windows.Data.ListCollectionView? _sideView;
+
+    private void SetUpSideFilter()
+    {
+        _sideView = new System.Windows.Data.ListCollectionView(Tabs.Tabs);
+        SideTabList.ItemsSource = _sideView;
+    }
+
+    private void SideFilter_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (_sideView is null) return;
+        var query = SideFilter.Text.Trim();
+        SideFilterHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _sideView.Filter = query.Length == 0 ? null : item => item is Eteris.Browser.Tabs.BrowserTab tab && Eteris.Browser.Tabs.TabFilter.Matches(tab.Title, tab.Address, query);
+    }
+
+    private void SideFilter_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case System.Windows.Input.Key.Escape:
+                SideFilter.Clear();
+                ActiveBrowser?.Focus();
+                e.Handled = true;
+                break;
+            case System.Windows.Input.Key.Enter when _sideView?.Cast<Eteris.Browser.Tabs.BrowserTab>().FirstOrDefault() is { } first:
+                Tabs.Active = first;
+                SideFilter.Clear();
+                ActiveBrowser?.Focus();
+                e.Handled = true;
+                break;
+        }
     }
 }

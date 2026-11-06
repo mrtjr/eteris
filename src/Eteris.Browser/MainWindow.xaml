@@ -1023,6 +1023,18 @@
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
+                    <Grid x:Name="SideFilterHost" DockPanel.Dock="Top" Margin="10,0,10,6">
+                        <Border Height="32" CornerRadius="9" Background="{DynamicResource FieldBrush}"
+                                BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" />
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="11" Margin="11,0,0,0"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextFaintBrush}" IsHitTestVisible="False" />
+                        <TextBlock x:Name="SideFilterHint" Text="Filtrar abas" FontSize="12.5" Margin="31,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFaintBrush}" IsHitTestVisible="False" />
+                        <TextBox x:Name="SideFilter" Style="{StaticResource BareTextBox}" FontSize="12.5" Margin="29,0,8,0"
+                                 VerticalAlignment="Center" AutomationProperties.AutomationId="SideFilter"
+                                 AutomationProperties.Name="Filtrar abas" TextChanged="SideFilter_TextChanged"
+                                 PreviewKeyDown="SideFilter_PreviewKeyDown" />
+                    </Grid>
                     <Button x:Name="SideCollapseButton" DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="10,4,0,0"
                             Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="12"
                             Content="&#xE76B;" Click="SideCollapse_Click" ToolTip="Encolher a barra de abas" />

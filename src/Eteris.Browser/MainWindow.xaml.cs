@@ -55,6 +55,7 @@ public partial class MainWindow : Window
         StartAudioWatch();
         WatchMiniBar();
         WatchOmniboxMenu();
+        SetUpSideFilter();
         Closing += (_, _) => FlushNotes();
     }
 
