@@ -197,11 +197,16 @@
   });
 
   const links = [...document.querySelectorAll('nav a')];
-  const observer = new IntersectionObserver(entries => {
-    for (const entry of entries) if (entry.isIntersecting)
-      links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + entry.target.id));
-  }, { rootMargin: '-30% 0px -60% 0px' });
-  document.querySelectorAll('main section').forEach(s => observer.observe(s));
+  const sections = [...document.querySelectorAll('main section')];
+  function markSection() {
+    const atBottom = innerHeight + scrollY >= document.body.scrollHeight - 4;
+    let current = sections[0];
+    for (const s of sections) if (s.getBoundingClientRect().top < innerHeight * 0.3) current = s;
+    if (atBottom) current = sections[sections.length - 1];
+    links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + current.id));
+  }
+  addEventListener('scroll', markSection, { passive: true });
+  markSection();
 </script>
 </body>
 </html>
