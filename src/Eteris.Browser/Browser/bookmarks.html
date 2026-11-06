@@ -129,6 +129,7 @@
     if (unread()) { const b = el('span', 'badge-count', String(unread())); t.append(b); }
     document.getElementById('tabSessions').classList.toggle('on', view === 'sessions');
     document.getElementById('heading').textContent = { marks: 'Favoritos', reading: 'Para ler', sessions: 'Sessões' }[view];
+    document.title = document.getElementById('heading').textContent;
     q.placeholder = view === 'sessions' ? 'Pesquisar nas sessões   ( / )' : view === 'reading' ? 'Pesquisar na lista de leitura   ( / )' : 'Pesquisar nos favoritos   ( / )';
   }
   document.getElementById('tabMarks').addEventListener('click', () => { view = 'marks'; history.replaceState(null, '', '#'); render(); });
