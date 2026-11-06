@@ -16,7 +16,7 @@ jobs:
       # (com o «v») não é uma versão NuGet válida — o restauro do projeto de testes falhava sem mensagem.
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
