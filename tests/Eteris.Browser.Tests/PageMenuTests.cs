@@ -22,6 +22,14 @@ public class PageMenuTests
     }
 
     [Fact]
+    public void HideElement_OnlyOnWebPages()
+    {
+        Assert.Contains(PageCommand.HideElement, Commands(Ctx()));
+        var internalPage = PageMenu.Build(new PageContext(null, null, "", false, false, false, false, IsWebPage: false), "DuckDuckGo");
+        Assert.DoesNotContain(internalPage, i => i?.Command == PageCommand.HideElement);
+    }
+
+    [Fact]
     public void ForwardDisabledWhenNoHistory()
     {
         var forward = PageMenu.Build(Ctx(forward: false), "DuckDuckGo").First(i => i?.Command == PageCommand.Forward)!;

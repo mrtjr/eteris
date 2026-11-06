@@ -9,7 +9,7 @@ public enum PageCommand
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
-    bool CanGoBack, bool CanGoForward, bool IsPrivate);
+    bool CanGoBack, bool CanGoForward, bool IsPrivate, bool IsWebPage = true);
 
 public sealed record PageMenuItem(PageCommand Command, string Glyph, string Label, string? Gesture = null, bool Enabled = true);
 
@@ -66,7 +66,7 @@ public static class PageMenu
             items.Add(null);
             items.Add(new(PageCommand.Print, "", "Imprimir…", "Ctrl+P"));
             items.Add(new(PageCommand.ViewSource, "", "Ver código-fonte", "Ctrl+U"));
-            items.Add(new(PageCommand.HideElement, "", "Esconder um elemento…"));
+            if (ctx.IsWebPage) items.Add(new(PageCommand.HideElement, "", "Esconder um elemento…"));
         }
         items.Add(new(PageCommand.Inspect, "", "Inspecionar", "F12"));
         return Tidy(items);
