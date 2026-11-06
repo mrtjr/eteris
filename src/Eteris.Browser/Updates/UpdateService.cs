@@ -8,9 +8,35 @@ public enum UpdateState { Development, Checking, UpToDate, Ready, Failed }
 
 public static class UpdateService
 {
-    public static UpdateState State { get; private set; } = UpdateState.Checking;
+    private static UpdateState _state = UpdateState.Checking;
 
-    public static string? ReadyVersion => Pending?.TargetFullRelease.Version.ToString();
+    public static UpdateState State
+    {
+        get => _state;
+        private set
+        {
+            _state = value;
+            StateChanged?.Invoke();
+        }
+    }
+
+    public static event Action? StateChanged;
+
+    // Pedido pela pílula «Atualizar»: ao sair, o Update.exe aplica a versão nova e reabre o Éteris.
+    public static bool RestartRequested { get; set; }
+
+    // Só numa versão de desenvolvimento: mostra a pílula sem haver atualização real (para testar o aspeto).
+    public static void SimulateReadyForDemo(string version)
+    {
+        if (State is not UpdateState.Development) return;
+        _demoVersion = version;
+        State = UpdateState.Ready;
+    }
+
+    private static string? _demoVersion;
+
+
+    public static string? ReadyVersion => Pending?.TargetFullRelease.Version.ToString() ?? _demoVersion;
 
     public static string Describe(UpdateState state, string? version) => state switch
     {
@@ -87,7 +113,7 @@ public static class UpdateService
         if (Pending is null || _manager is null) return;
         try
         {
-            _manager.WaitExitThenApplyUpdates(Pending.TargetFullRelease, silent: true, restart: false);
+            _manager.WaitExitThenApplyUpdates(Pending.TargetFullRelease, silent: true, restart: RestartRequested);
         }
         catch
         {

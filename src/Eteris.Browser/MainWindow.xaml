@@ -477,6 +477,26 @@
                     </Popup>
 
                     <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="UpdatePill" Visibility="Collapsed" Click="UpdatePill_Click" Cursor="Hand" Margin="0,0,8,0"
+                                ToolTip="Fecha e reabre o Éteris com a nova versão (as abas são mantidas)">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Pill" CornerRadius="15" Height="30" Padding="12,0" Background="{StaticResource AuroraBrush}">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE777;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="#0B0D13"
+                                                       VerticalAlignment="Center" Margin="0,1,8,0" />
+                                            <TextBlock x:Name="UpdatePillText" Text="{TemplateBinding Content}" FontSize="12.5" FontWeight="SemiBold"
+                                                       Foreground="#0B0D13" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Pill" Property="Opacity" Value="0.88" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                         <Grid x:Name="DownloadsHost" Visibility="Collapsed" Margin="0,0,4,0">
                             <Button x:Name="DownloadsButton" Style="{StaticResource IconButton}" Click="Downloads_Click"
                                     ToolTip="Transferências (Ctrl+J)">
