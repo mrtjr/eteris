@@ -46,6 +46,9 @@ public partial class MainWindow
                 PasteAndGo();
             }
         };
+        // Com ContextMenu nulo, a TextBox monta o menu claro do Windows num manipulador de classe (antes do nosso);
+        // um menu vazio desliga isso, e o ContextMenuOpening tratado abre o menu do Éteris no lugar dele.
+        Omnibox.ContextMenu = new ContextMenu();
         Omnibox.ContextMenuOpening += OpenOmniboxMenu;
     }
 
