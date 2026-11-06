@@ -305,7 +305,9 @@ public partial class MainWindow : Window
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         e.Handled = true;
 
-        if (ctrl && key == Key.K) TogglePalette();
+        if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
+        else if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) ToggleShortcuts();
+        else if (ctrl && key == Key.K) TogglePalette();
         else if (ctrl && key == Key.J) ToggleDownloads();
         else if (ctrl && key == Key.D) ToggleBookmark();
         else if ((ctrl && key == Key.F) || key == Key.F3) OpenFind();
