@@ -12,11 +12,11 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 
 | # | Lacuna | Chrome | Firefox | Brave | Éteris hoje | Prioridade |
 |---|---|---|---|---|---|---|
-| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | (não instalado) | 4,8–8,0% | 28–36% (cópia por quadro); protótipo em janela própria: 8,4–8,8% | **[bloqueia]** |
-| 1b | Abas escondidas continuam a ser desenhadas | param | param | param | ~30% de 1 núcleo por aba animada escondida (protótipo: ~9%) | **[bloqueia]** |
+| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | (não instalado) | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
+| 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (CefSharp não o suporta num executável .NET) | **[bloqueia]** |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje), mas sem processo garantido | **[bloqueia]** |
-| 4 | Interface por cima das páginas (avisos, paleta, pesquisa) nas abas do motor de vídeo | — | — | — | escondida pela página | com o #1 |
+| 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | por medir | alta |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | não (Widevine removido por privacidade) | média |
@@ -31,25 +31,39 @@ janela 1360×860, 10 s, soma do processador de todos os processos do navegador e
 a 60 fps (confirmado pelo título da página). Éteris em build Release; Chrome e Brave com perfis temporários,
 apagados no fim. Scripts: `perf-render.ps1` (Éteris) e `perf-browser.ps1` (referências).
 
-| Página | Éteris 0.2.2 (fora da tela) | Protótipo em janela própria | Chrome 156 | Brave 157 |
-|---|---|---|---|---|
-| Animação | 28,1% | **8,4%** | 6,7% | 8,0% |
-| Rolagem contínua | 35,9% | **8,8%** | 6,6% | 4,8% |
+| Página | Éteris 0.2.2 (fora da tela) | Protótipo em janela própria | `main` (bb9b908) | Chrome 156 | Brave 157 |
+|---|---|---|---|---|---|
+| Animação | 28,1% | 8,4% | **11,1%** | 6,7% | 8,0% |
+| Rolagem contínua | 35,9% | 8,8% | **8,4%** | 6,6% | 4,8% |
+| Animação + 1 aba escondida animada | 60,9% | 18,0% | **10,5%** | — | — |
+| Rolagem + 1 aba escondida animada | 60,0% | 15,5% | **8,0%** | — | — |
 
 O protótipo (ramo `prototipo/hwndhost`, `CefSharp.Wpf.HwndHost`) troca só o controlo do motor e fica ao nível do
 Chrome e do Brave. Custo conhecido: tudo o que o Éteris desenha por cima da página (avisos, paleta, barra de
 pesquisa, menus internos) fica escondido pela janela da página — o mesmo que já acontece nas abas do motor de
 vídeo (#4). O efeito Mica não pesa (medido com e sem: igual).
 
-**Abas escondidas (#1b).** Com uma segunda aba escondida que tenha animações (a página de boas-vindas), o total
-sobe para ~61% na 0.2.2 e ~18% no protótipo: o Éteris continua a desenhar abas que ninguém vê, ao contrário das
-três referências. Avisar o motor com `WasHidden` não chega em modo janela (só se aplica fora da tela); a
-investigar: ocultação real da janela da aba, ou congelar as abas escondidas sem som (ciclo de vida da página).
+**Abas escondidas (#1b).** Em modo janela o CEF não deixa dizer ao Chromium que uma aba deixou de se ver: não
+resultaram `WasHidden`, esconder a janela do CEF ou a do Chromium, o rastreio de oclusão nem o estilo Chrome
+(medido com `vis.html`, que mostra no título `document.visibilityState` e os quadros por segundo). Congelar a
+página (`Page.setWebLifecycleState`) parava o custo, mas a página voltava «hidden» e sem desenhar. O que resulta:
+**minimizar a janela do Chromium** da aba escondida (`MainWindow.PageVisibility.cs`) — a página passa a «hidden»,
+deixa de desenhar e os temporizadores abrandam mas continuam (como nas abas de fundo do Chrome); ao restaurar,
+volta «visible» e é redimensionada para a área da aba.
 
-Plano:
-1. Avisos, paleta, pesquisa na página e restantes painéis em janelas próprias (flutuam por cima de qualquer motor).
-2. Migrar o motor principal para janela própria; repetir a medição e confirmar o ganho.
-3. Abas escondidas sem custo (#1b): meta ≤ 0,5% de 1 núcleo por aba escondida, como nas referências.
+Feito (no `main`, por publicar):
+1. Avisos, paleta, pesquisa na página, notas, permissões, código QR, minibarra, bolha do link, folha de atalhos e
+   barra de carregamento numa janela transparente presa à principal (`MainWindow.Overlay.cs`), visível só enquanto
+   algum deles está à vista.
+2. Motor principal em janela própria; atalhos do Éteris com o foco na página (`ShortcutKeyboardHandler`) e metade
+   ativa do ecrã dividido pelo foco (`PageFocusHandler`).
+3. Abas escondidas sem custo.
+
+Pendentes desta migração:
+- Ctrl+roda do rato: o zoom é feito pelo próprio Chromium (lembrado por site, como no Chrome), mas o selo de zoom
+  do Éteris na barra de endereço não o acompanha.
+- Por cima da paleta e da folha de atalhos a página fica escurecida, mas já não desfocada.
+- O contorno da metade ativa no ecrã dividido e os cantos arredondados da página ficam por baixo da página.
 
 ## 2. Sandbox — por investigar
 

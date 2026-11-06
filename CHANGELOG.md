@@ -1,5 +1,14 @@
 # Alterações
 
+## Por publicar
+
+Paridade de desempenho com o Chrome e o Brave (ver `docs/paridade.md`).
+
+- **Páginas desenhadas pelo próprio Chromium numa janela** (como no Chrome, Firefox e Brave), em vez de copiadas para a interface a cada quadro: uma aba a 60 fps passa de 28–36% para 8–11% de um núcleo do processador (Chrome 6,7%, Brave 4,8–8,0%). Menos bateria e rolagem mais leve.
+- **Abas escondidas deixam de gastar processador**: a página passa a «escondida» e para de desenhar, como nas abas de fundo das outras referências (antes, cada aba animada escondida custava ~30% de um núcleo); continua a receber mensagens e notificações.
+- Avisos, paleta, pesquisa na página e painéis aparecem por cima de qualquer página, incluindo as do motor de vídeo.
+- **AltGr deixou de disparar atalhos**: AltGr+W (que em alguns teclados escreve um carácter) fechava a aba.
+
 ## 0.2.2 — 2026-11-06
 
 Duas rondas de 50 ciclos de melhorias. (A 0.2.0 e a 0.2.1 não chegaram a ser publicadas: o fluxo de publicação falhava — ver em baixo.)
