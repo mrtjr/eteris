@@ -36,6 +36,7 @@ public static class CefConfigurator
     public static void Initialize()
     {
         AppPaths.EnsureDirectories();
+        ProfileCleanup.RemoveChromiumHistory(AppPaths.Profile);
         var dns = Data.Settings.Current.SecureDns;
         Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.ApplySecureDns(
             System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty)
