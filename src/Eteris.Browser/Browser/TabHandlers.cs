@@ -2,10 +2,9 @@ using CefSharp;
 
 namespace Eteris.Browser.Browser;
 
-// Pop-ups nunca abrem janelas: ou viram aba (se a política deixar) ou são bloqueados e contados no escudo.
-// allow(gesto, destino, página que abriu, é janela pop-up com dimensões); onBlocked(domínio, houve gesto).
-public sealed class PopupToTabHandler(Func<bool, string, string?, bool, bool> allow, Action<string, bool> openTab, Action<string, bool> onBlocked)
-    : CefSharp.Handler.LifeSpanHandler
+// Pop-ups nunca abrem janelas: o pedido do Chromium é sempre cancelado e entregue à janela, que decide (às vezes
+// uns milissegundos depois, à espera de saber onde o utilizador clicou) se abre uma aba do Éteris ou o bloqueia.
+public sealed class PopupToTabHandler(Action<Shields.PopupRequest> onPopup) : CefSharp.Handler.LifeSpanHandler
 {
     protected override bool OnBeforePopup(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, string targetUrl,
         string targetFrameName, WindowOpenDisposition targetDisposition, bool userGesture, IPopupFeatures popupFeatures,
@@ -13,13 +12,10 @@ public sealed class PopupToTabHandler(Func<bool, string, string?, bool, bool> al
     {
         newBrowser = null;
         var opener = frame?.Url is { Length: > 0 } frameUrl ? frameUrl : browser.MainFrame?.Url;
-        if (!allow(userGesture, targetUrl, opener, targetDisposition == WindowOpenDisposition.NewPopup))
-        {
-            onBlocked(Uri.TryCreate(targetUrl, UriKind.Absolute, out var target) ? target.Host : "pop-up", userGesture);
-            return true;
-        }
-
-        openTab(targetUrl, targetDisposition != WindowOpenDisposition.NewBackgroundTab);
+        onPopup(new Shields.PopupRequest(targetUrl, opener, userGesture,
+            IsPopupWindow: targetDisposition == WindowOpenDisposition.NewPopup,
+            Foreground: targetDisposition != WindowOpenDisposition.NewBackgroundTab,
+            AtUtc: DateTime.UtcNow));
         return true;
     }
 }

@@ -1,23 +1,30 @@
 namespace Eteris.Browser.Shields;
 
-// O último clique (ou Enter) do utilizador na página: para onde apontava o link ou o formulário em que carregou.
-// LinkUrl vazio = carregou em algo que não é link (texto, imagem, fundo da página…).
-public sealed record UserActivation(string LinkUrl, DateTime AtUtc)
-{
-    public static readonly TimeSpan Window = TimeSpan.FromSeconds(2);
+// Um pedido de pop-up/aba nova feito por uma página (window.open, formulário ou link com target=_blank).
+public sealed record PopupRequest(string TargetUrl, string? OpenerUrl, bool UserGesture, bool IsPopupWindow, bool Foreground, DateTime AtUtc);
 
-    public bool IsRecent(DateTime nowUtc) => nowUtc - AtUtc <= Window;
+// O último clique (ou Enter) do utilizador na página: para onde apontava o link ou o formulário em que carregou, e
+// se carregou num controlo (botão, campo, elemento com papel de botão/link) ou em conteúdo (texto, imagem, fundo).
+public sealed record UserActivation(string LinkUrl, DateTime AtUtc, bool Interactive = false)
+{
+    // O pedido de pop-up pode chegar ao motor um pouco antes do aviso do clique (os scripts de anúncios abrem
+    // logo ao carregar no botão do rato): conta um clique até 2 s antes e até 1 s depois do pedido.
+    public bool IsAround(DateTime requestUtc) => requestUtc - AtUtc <= TimeSpan.FromSeconds(2) && AtUtc - requestUtc <= TimeSpan.FromSeconds(1);
 }
 
 public static class PopupPolicy
 {
+    // Tempo que a janela espera pelo aviso do clique antes de decidir um pop-up.
+    public static readonly TimeSpan ActivationWait = TimeSpan.FromMilliseconds(250);
+
     // Como o Chrome: sem gesto do utilizador não há pop-up. Com gesto, o destino passa pelas listas como
     // navegação, porque o adblock-rust ainda não implementa as regras $popup (apanha os redirecionadores ||dominio^).
     //
     // Pop-unders: o script de anúncios espera por um clique qualquer na página e abre o anúncio numa aba — às vezes
     // por um formulário escondido ou pelo window.open de um iframe novo, para fugir a quem vigia window.open. Por isso
     // a decisão é tomada aqui, no motor: uma aba nova noutro site só abre se o clique foi num link (ou formulário)
-    // para esse site. As janelas pop-up com dimensões (início de sessão, partilhar) continuam a abrir.
+    // para esse site. Janelas pop-up com dimensões (início de sessão, partilhar) abrem se o clique foi num botão ou
+    // link — nunca num clique numa imagem ou no fundo da página, que é o que os anúncios aproveitam.
     // Sem registo do clique (o clique foi dentro de um iframe de outro site) fica só a regra das listas.
     public static bool Allow(bool userGesture, string targetUrl, string? openerUrl, IRequestBlocker blocker, Func<string, bool> isProtected,
         UserActivation? activation = null, bool isPopupWindow = false, DateTime? nowUtc = null)
@@ -26,17 +33,25 @@ public static class PopupPolicy
         if (openerUrl is not null && Uri.TryCreate(openerUrl, UriKind.Absolute, out var opener) && !isProtected(opener.Host))
             return true;
         if (blocker.ShouldBlock(targetUrl, openerUrl, "document")) return false;
-        if (isPopupWindow || activation is null || !activation.IsRecent(nowUtc ?? DateTime.UtcNow)) return true;
-        return SameSite(targetUrl, openerUrl) || SameSite(targetUrl, activation.LinkUrl);
+        if (activation is null || !activation.IsAround(nowUtc ?? DateTime.UtcNow)) return true;
+        if (SameSite(targetUrl, openerUrl) || SameSite(targetUrl, activation.LinkUrl)) return true;
+        return isPopupWindow && activation.Interactive;
     }
+
+    public static bool Allow(PopupRequest request, IRequestBlocker blocker, Func<string, bool> isProtected, UserActivation? activation)
+        => Allow(request.UserGesture, request.TargetUrl, request.OpenerUrl, blocker, isProtected, activation, request.IsPopupWindow, request.AtUtc);
 
     public const string ActivationPrefix = "\u0001eteris-click ";
 
-    public static bool IsActivationReport(string? message, out string linkUrl)
+    // Formato: prefixo + «i» (controlo) ou «-» (conteúdo) + endereço do link/formulário (vazio se não houver).
+    public static bool IsActivationReport(string? message, out string linkUrl, out bool interactive)
     {
         linkUrl = string.Empty;
-        if (message is null || !message.StartsWith(ActivationPrefix, StringComparison.Ordinal)) return false;
-        linkUrl = message[ActivationPrefix.Length..];
+        interactive = false;
+        if (message is null || !message.StartsWith(ActivationPrefix, StringComparison.Ordinal) || message.Length <= ActivationPrefix.Length)
+            return false;
+        interactive = message[ActivationPrefix.Length] == 'i';
+        linkUrl = message[(ActivationPrefix.Length + 1)..];
         return true;
     }
 
@@ -45,15 +60,19 @@ public static class PopupPolicy
     public const string ActivationScript = """
         (() => {
           const debug = console.debug.bind(console);
-          const target = e => {
+          const controls = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'A', 'AREA']);
+          const roles = new Set(['button', 'link', 'menuitem', 'tab', 'checkbox', 'switch', 'option']);
+          const describe = e => {
+            let link = '', interactive = false;
             for (const node of (e.composedPath ? e.composedPath() : [e.target])) {
               if (!(node instanceof Element)) continue;
-              if ((node.tagName === 'A' || node.tagName === 'AREA') && node.href) return String(node.href);
-              if (node.form && (node.tagName === 'BUTTON' || node.tagName === 'INPUT')) return String(node.formAction || node.form.action || '');
+              if (controls.has(node.tagName) || roles.has(node.getAttribute('role'))) interactive = true;
+              if (!link && (node.tagName === 'A' || node.tagName === 'AREA') && node.href) link = String(node.href);
+              if (!link && node.form && (node.tagName === 'BUTTON' || node.tagName === 'INPUT')) link = String(node.formAction || node.form.action || '');
             }
-            return '';
+            return (interactive ? 'i' : '-') + link;
           };
-          const report = e => { if (e.isTrusted) debug('\u0001eteris-click ' + target(e)); };
+          const report = e => { if (e.isTrusted) debug('\u0001eteris-click ' + describe(e)); };
           addEventListener('pointerdown', report, true);
           addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') report(e); }, true);
         })();

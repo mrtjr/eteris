@@ -108,20 +108,8 @@ public partial class MainWindow : Window
             // animações ficam travadas. 60 é o máximo neste modo (o mesmo que a maioria dos ecrãs).
             BrowserSettings = { WindowlessFrameRate = Infrastructure.CefConfigurator.FrameRate },
             Visibility = Visibility.Hidden,
-            LifeSpanHandler = new PopupToTabHandler(
-                (gesture, url, opener, popupWindow) => PopupPolicy.Allow(gesture, url, opener, ShieldEngine.Current, AppData.IsShieldOn,
-                    Volatile.Read(ref lastActivation), popupWindow),
-                (url, foreground) => Dispatcher.InvokeAsync(() => Tabs.NewTab(url, foreground)),
-                (host, gesture) =>
-                {
-                    ShieldStats.CountBlocked(persist: !IsPrivate);
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        tab.RecordBlocked(host);
-                        // Com clique, o utilizador viu que algo devia acontecer: diz-se o que foi travado.
-                        if (gesture && ReferenceEquals(tab, Tabs.Active)) ShowToast($"Anúncio em nova aba bloqueado ({host})");
-                    });
-                }),
+            LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
+                () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url)),
                 fullscreen => Dispatcher.InvokeAsync(() => OnPageFullscreen(tab, fullscreen))),
             RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
@@ -166,9 +154,9 @@ public partial class MainWindow : Window
         browser.ConsoleMessage += (_, e) =>
         {
             // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.
-            if (PopupPolicy.IsActivationReport(e.Message, out var clickedLink))
+            if (PopupPolicy.IsActivationReport(e.Message, out var clickedLink, out var interactive))
             {
-                Volatile.Write(ref lastActivation, new UserActivation(clickedLink, DateTime.UtcNow));
+                Volatile.Write(ref lastActivation, new UserActivation(clickedLink, DateTime.UtcNow, interactive));
                 return;
             }
             if (VideoEngine.IsReport(e.Message))
