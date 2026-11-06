@@ -98,6 +98,24 @@
   }
   .empty h3 { font-size: 20px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
   iframe { display: none; }
+
+  /* Tema claro (o servidor acrescenta class="light" ao <html>) */
+  html.light {
+    --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0;
+    --glass: rgba(255, 255, 255, .8); --line: rgba(20, 24, 40, .1); --row: rgba(20, 24, 40, .04); --card: rgba(255, 255, 255, .8);
+  }
+  html.light ::selection { background: rgba(139, 92, 246, .25); }
+
+  html.light header { background: linear-gradient(rgba(243, 244, 249, .95), rgba(243, 244, 249, .82)); }
+  html.light input:focus { background: linear-gradient(#fff, #fff) padding-box, var(--iris) border-box; }
+  html.light button { background: #fff; }
+  html.light button:hover { background: #eef0f6; }
+  html.light .menu { background: #fff; box-shadow: 0 18px 50px rgba(20, 24, 40, .18); }
+  html.light .menu a:hover { background: #f1f2f8; }
+  html.light .card { background: rgba(255, 255, 255, .7); }
+  html.light .row:hover { background: rgba(20, 24, 40, .045); }
+  html.light .del { background: transparent; }
+  html.light mark { background: rgba(14, 165, 233, .2); }
 </style>
 </head>
 <body>

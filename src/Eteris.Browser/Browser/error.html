@@ -24,6 +24,15 @@
            background: rgba(255,255,255,.02); cursor: none; }
   .score { display: none; color: var(--faint); font-size: 13px; margin-top: 8px; }
   .code { color: var(--faint); font-size: 11px; margin-top: 22px; letter-spacing: .04em; }
+
+  /* Tema claro (o servidor acrescenta class="light" ao <html>) */
+  html.light {
+    --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0;
+    --glass: rgba(255, 255, 255, .8); --line: rgba(20, 24, 40, .1); --row: rgba(20, 24, 40, .04); --card: rgba(255, 255, 255, .8);
+  }
+  html.light ::selection { background: rgba(139, 92, 246, .25); }
+
+  html.light body { background: radial-gradient(ellipse 60% 50% at 50% 35%, #ffffff 0%, var(--bg) 70%); }
 </style>
 </head>
 <body>

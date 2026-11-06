@@ -13,6 +13,15 @@ public static class InternalPages
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && Query(uri, "t") is { } token
            && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(token), Encoding.ASCII.GetBytes(Token));
 
+    // As páginas internas seguem o tema da aplicação: o servidor marca <html class="light">.
+    public static string Themed(string html, bool light)
+        => light
+            ? html.Replace("<html lang=\"pt\">", "<html lang=\"pt\" class=\"light\">")
+                  .Replace("<meta name=\"color-scheme\" content=\"dark\">", "<meta name=\"color-scheme\" content=\"light\">")
+            : html;
+
+    public static bool LightTheme => Theme.ThemeManager.Current == Theme.AppTheme.Light;
+
     public static string? Query(Uri uri, string name)
     {
         foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))

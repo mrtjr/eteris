@@ -24,7 +24,9 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Preferred, DateTime.Now,
                 Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url),
                 NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek(), Settings.Current);
-            return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
+            // A nova aba privada fica sempre escura.
+            return ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme && !NewTabPage.IsPrivate(request.Url)),
+                Encoding.UTF8, false, "text/html");
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
@@ -33,8 +35,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url);
 
         if (ErrorPage.IsErrorPage(request.Url))
-            return ResourceHandler.FromString(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty),
-                Encoding.UTF8, false, "text/html");
+            return Html(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty));
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
@@ -64,7 +65,8 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         Shields.FilterLists.ForApp().Summary(), Updates.UpdateService.Status,
         Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready));
 
-    private static IResourceHandler Html(string html) => ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
+    private static IResourceHandler Html(string html)
+        => ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme), Encoding.UTF8, false, "text/html");
 
     private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
 
@@ -122,7 +124,6 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             default:
                 return ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
         }
-        var html = HistoryPage.Render(AppData.TryRead(h => h.Visits(HistoryPage.MaxVisits)), DateTime.Now);
-        return ResourceHandler.FromString(html, Encoding.UTF8, false, "text/html");
+        return Html(HistoryPage.Render(AppData.TryRead(h => h.Visits(HistoryPage.MaxVisits)), DateTime.Now));
     }
 }

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using CefSharp;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Theme;
 
@@ -28,5 +29,9 @@ public partial class MainWindow
     {
         WindowEffects.Apply(this, BorderColor, darkMode: !UsesLight);
         ApplyTint();
+        // As páginas internas abertas são geradas com o tema: recarregam para o acompanhar.
+        if (IsPrivate) return;
+        foreach (var (tab, browser) in _browsers)
+            if (tab.Address.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase) && !browser.IsDisposed) browser.Reload();
     }
 }

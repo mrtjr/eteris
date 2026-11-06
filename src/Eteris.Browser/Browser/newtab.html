@@ -152,6 +152,24 @@
   body.private .hint { display: none; }
   @media (max-height: 640px) { main { margin-top: 6vh; } .clock { font-size: 64px; } }
   @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } .tile { transition: none; } }
+
+  /* Tema claro (o servidor acrescenta class="light" ao <html>) */
+  html.light {
+    --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0;
+    --glass: rgba(255, 255, 255, .8); --line: rgba(20, 24, 40, .1); --row: rgba(20, 24, 40, .04); --card: rgba(255, 255, 255, .8);
+  }
+  html.light ::selection { background: rgba(139, 92, 246, .25); }
+
+  html.light .aurora { opacity: .32; }
+  html.light .veil { background: radial-gradient(ellipse 70% 60% at 50% 38%, rgba(243,244,249,.1) 0%, rgba(243,244,249,.65) 70%, rgba(243,244,249,.92) 100%); }
+  html.light .clock { text-shadow: 0 6px 40px rgba(139, 92, 246, .18); }
+  html.light input:focus { background: linear-gradient(#fff, #fff) padding-box, var(--iris) border-box; }
+  html.light .tile, html.light .mark { background: rgba(255, 255, 255, .6); }
+  html.light .tile:hover, html.light .mark:hover { background: rgba(255, 255, 255, .92); border-color: rgba(20, 24, 40, .15); }
+  html.light .week, html.light .gear { background: rgba(255, 255, 255, .7); }
+  html.light .custom { background: rgba(255, 255, 255, .94); box-shadow: 0 20px 60px rgba(20, 24, 40, .2); }
+  html.light .opt input { background: #cfd3de; }
+  html.light footer i { box-shadow: 0 0 10px rgba(14, 165, 233, .6); }
 </style>
 </head>
 <body>
