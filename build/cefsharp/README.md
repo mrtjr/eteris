@@ -10,3 +10,7 @@ de sempre (sem sandbox). Camadas alteradas: `CefSharp.Core.Runtime` (C++/CLI), a
 
 Para compilar é preciso o Visual Studio 2022 (ou as Build Tools) com o componente
 `Microsoft.VisualStudio.Component.VC.CLI.Support` (C++/CLI v143).
+
+Compilação verificada a 2026-11-06 (ver «Passo C — resultado» em `docs/sandbox.md`): `build-cefsharp.cmd <pasta do
+CefSharp>` depois de aplicar o patch, fixar o SDK 9 no `global.json` e mudar `net6.0` para `net8.0` nos 4 projetos.
+Requer também o componente `Microsoft.NetCore.Component.SDK` das Build Tools.

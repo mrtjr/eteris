@@ -1,0 +1,3 @@
+# Os scripts .cmd só funcionam com quebras de linha do Windows.
+*.cmd text eol=crlf
+*.bat text eol=crlf

@@ -36,13 +36,31 @@ processos correm fechados (sem acesso a ficheiros nem ao sistema).
    Tudo isto pode ser feito pelo DevTools do lado do navegador (`Runtime.evaluate`,
    `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já fazem.
 
+## Passo C — resultado (2026-11-06): dá
+
+O CefSharp 156.0.150 compila a partir do código com a alteração (`build/cefsharp/windows-sandbox-info.patch`,
+36 linhas em 4 ficheiros: `CefSettings.WindowsSandboxInfo`, passada a `CefInitialize`), e o Éteris 0.2.3 corre com
+as bibliotecas próprias no lugar das oficiais: abriu a Wikipédia, o motor arrancou (5 processos) e a execução de
+JavaScript funciona (deteção do modo de leitura). Sem `WindowsSandboxInfo` o comportamento é o de sempre.
+
+O que foi preciso (receita em `build/cefsharp/build-cefsharp.cmd`):
+- Build Tools do Visual Studio 2022 com os componentes **C++/CLI** e **.NET SDK** (instalados nesta máquina).
+- Não usar o `build.ps1` oficial: estraga os caminhos com nomes de utilizador acentuados («Júnior»).
+- SDK 9 (`global.json`) e alvo `net8.0` em vez de `net6.0` (falta o pacote Apphost do .NET 6, de que o C++/CLI precisa).
+- Sem a assinatura de nome forte (`/p:LinkKeyFile=`): assinar precisa do repositório de chaves do Windows, que as
+  ferramentas desta sessão não podem usar; numa linha de comandos normal ou no GitHub Actions assina-se normalmente.
+  O .NET não verifica estas assinaturas ao carregar.
+
+Riscos que ficam: o custo contínuo (recompilar o CefSharp a cada atualização do motor até o oficial aceitar a
+alteração) e os passos B e D, ainda não provados.
+
 ## Plano proposto (por ordem, cada passo verificável)
 
 | Passo | O quê | Custo | Verificação |
 |---|---|---|---|
 | A | Trocar as 19 chamadas e o `OnContextCreated` por DevTools (útil já: menos dependência do processo filho do CefSharp) | 1–2 dias | testes + funcionalidades ao vivo |
 | B | Prova: Éteris a correr com um processo filho nativo mínimo (só CEF, ainda sem sandbox) | 1 dia | tudo funciona sem o `CefSharp.BrowserSubprocess` |
-| C | CefSharp com a informação do sandbox no `Cef.Initialize` (versão própria; propor ao projeto oficial) | 2–3 dias | compila e arranca |
+| C | CefSharp com a informação do sandbox no `Cef.Initialize` (versão própria; propor ao projeto oficial) | ✅ **feito** (2026-11-06) | compila e arranca |
 | D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | 2 dias | `chrome://sandbox` mostra os processos isolados |
 | E | Empacotamento (Velopack, licenças, assinatura) | 1 dia | instalador funciona |
 
