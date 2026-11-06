@@ -4,7 +4,7 @@
     <OutputType>WinExe</OutputType>
     <!-- Marca: gerado por build/brand/make-icon.ps1 (exe, janelas, barra de tarefas, atalhos). -->
     <ApplicationIcon>Assets\eteris.ico</ApplicationIcon>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>

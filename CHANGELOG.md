@@ -19,6 +19,11 @@ Duas rondas de 50 ciclos de melhorias.
 ### Leitura e vídeo
 - **Modo de leitura com o Readability.js do Firefox** (Mozilla, Apache-2.0): extração e deteção de artigos muito mais fiáveis; a heurística própria fica como reserva (p. ex. em sites com Trusted Types).
 - Teste que compila com o Node todos os scripts injetados nas páginas (apanhou um erro de sintaxe no leitor).
+- **Motor de vídeo**: os sites que só têm vídeo em H.264/AAC (o Twitch, por exemplo) já tocam dentro do Éteris. A aba deteta sozinha que o vídeo não arranca e passa a usar o WebView2 — o motor do Edge que vem com o Windows e tem as licenças desses formatos —, sem sair da janela; o site fica lembrado. Selo «Motor de vídeo» na barra de endereço para voltar ao motor principal. Nessas abas: as mesmas listas de bloqueio, prevenção de rastreio estrita, sem SmartScreen nem autopreenchimento, e modo InPrivate nas janelas privadas. O YouTube (AV1/VP9) continua no motor principal.
+- Requer Windows 10 versão 2004 ou mais recente (a app passa a usar a projeção do Windows SDK).
+
+### Bloqueio de anúncios
+- **Anúncios pop-under travados**: alguns sites abriam um anúncio numa aba nova a qualquer clique na página (por formulário escondido ou pelo `window.open` de um iframe, para fugir aos bloqueadores). Agora uma aba de outro site só abre se o clique foi num link (ou formulário) para esse site; janelas de início de sessão e de partilha continuam a abrir. Aviso «Anúncio em nova aba bloqueado».
 
 ### Novo (segunda ronda)
 - **Privacidade**: DNS cifrado (Cloudflare, Quad9, Mullvad), links sem parâmetros de rastreio (ao navegar e ao copiar), modo rigoroso por site (sem scripts/frames de terceiros), pedidos de notificações recusados sem perguntar, apagar cookies e dados ao fechar, histórico interno do Chromium desligado.
