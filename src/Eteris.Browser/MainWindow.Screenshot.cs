@@ -16,14 +16,29 @@ public partial class MainWindow
         try
         {
             using var client = browser.GetDevToolsClient();
-            Viewport? clip = null;
+            // Em OSR o captureBeyondViewport repete a área visível: para a página inteira, a janela de
+            // visualização é emulada com a altura total do conteúdo, captura-se e repõe-se.
+            CaptureScreenshotResponse shot;
             if (fullPage)
             {
                 var metrics = await client.Page.GetLayoutMetricsAsync();
-                var (width, height) = ScreenshotNames.ClampSize(metrics.CssContentSize.Width, metrics.CssContentSize.Height);
-                clip = new Viewport { X = 0, Y = 0, Width = width, Height = height, Scale = 1 };
+                var (width, height) = ScreenshotNames.ClampSize(
+                    (double)metrics.CssLayoutViewport.ClientWidth, Math.Ceiling(metrics.CssContentSize.Height));
+                await client.Emulation.SetDeviceMetricsOverrideAsync((int)width, (int)height, 1, false);
+                try
+                {
+                    await Task.Delay(400);
+                    shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png, null, null, true, false);
+                }
+                finally
+                {
+                    await client.Emulation.ClearDeviceMetricsOverrideAsync();
+                }
             }
-            var shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png, null, clip, true, fullPage);
+            else
+            {
+                shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png);
+            }
 
             Directory.CreateDirectory(ScreenshotNames.Folder);
             var path = Path.Combine(ScreenshotNames.Folder, ScreenshotNames.For(tab.Address, DateTime.Now));
