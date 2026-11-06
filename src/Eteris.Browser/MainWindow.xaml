@@ -335,6 +335,17 @@
                     </Popup>
 
                     <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid x:Name="DownloadsHost" Visibility="Collapsed" Margin="0,0,4,0">
+                            <Button x:Name="DownloadsButton" Style="{StaticResource IconButton}" Click="Downloads_Click"
+                                    ToolTip="Transferências (Ctrl+J)">
+                                <TextBlock Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="15" />
+                            </Button>
+                            <Ellipse Width="30" Height="30" Stroke="#2B3042" StrokeThickness="2" IsHitTestVisible="False"
+                                     x:Name="DownloadsTrack" Visibility="Collapsed" />
+                            <Path x:Name="DownloadsRing" Stroke="{StaticResource IrisBrush}" StrokeThickness="2.5"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False"
+                                  Width="34" Height="34" />
+                        </Grid>
                         <Grid>
                             <Button x:Name="ShieldButton" Style="{StaticResource IconButton}" Click="Shield_Click"
                                     ToolTip="Escudo do Éteris">
@@ -350,6 +361,80 @@
                         <Button x:Name="MenuButton" Content="&#xE712;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Menu_Click"
                                 ToolTip="Comandos (Ctrl+K)" />
                     </StackPanel>
+
+                    <Popup x:Name="DownloadsPopup" PlacementTarget="{Binding ElementName=DownloadsButton}" Placement="Bottom"
+                           HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"
+                           PopupAnimation="Fade">
+                        <Border Margin="14,0,14,24" Width="370" Background="{StaticResource SurfaceRaisedBrush}"
+                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="18" Padding="10,14">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <DockPanel Margin="10,0,6,8">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="12"
+                                            Content="&#xE838;" Click="OpenDownloadsFolder_Click" ToolTip="Abrir a pasta Transferências" />
+                                    <TextBlock Text="Transferências" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <ItemsControl x:Name="DownloadsList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="Row" CornerRadius="12" Padding="10,8" Background="Transparent" Cursor="Hand"
+                                                    MouseLeftButtonUp="DownloadRow_Click" ToolTip="{Binding FullPath}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="36" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Width="30" Height="30" CornerRadius="9" Background="#30354A">
+                                                        <TextBlock x:Name="Glyph" Text="&#xE8A5;" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding FileName}" FontSize="13.5" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding Status}" FontSize="11.5" Foreground="{StaticResource TextFaintBrush}" />
+                                                        <ProgressBar x:Name="Bar" Height="3" Margin="0,5,0,0" Minimum="0" Maximum="100"
+                                                                     Value="{Binding Percent, Mode=OneWay}">
+                                                            <ProgressBar.Template>
+                                                                <ControlTemplate TargetType="ProgressBar">
+                                                                    <Grid>
+                                                                        <Border x:Name="PART_Track" CornerRadius="1.5" Background="#2B3042" />
+                                                                        <Border x:Name="PART_Indicator" CornerRadius="1.5" HorizontalAlignment="Left"
+                                                                                Background="{StaticResource IrisBrush}" />
+                                                                    </Grid>
+                                                                </ControlTemplate>
+                                                            </ProgressBar.Template>
+                                                        </ProgressBar>
+                                                    </StackPanel>
+                                                    <Button x:Name="Cancel" Grid.Column="2" Style="{StaticResource IconButton}" Width="28" Height="28"
+                                                            FontSize="10" Content="&#xE711;" Click="CancelDownload_Click" ToolTip="Cancelar" />
+                                                    <Button x:Name="Folder" Grid.Column="2" Style="{StaticResource IconButton}" Width="28" Height="28"
+                                                            FontSize="12" Content="&#xE838;" Click="ShowDownloadInFolder_Click"
+                                                            ToolTip="Mostrar na pasta" Visibility="Collapsed" />
+                                                </Grid>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                    <Setter TargetName="Bar" Property="Visibility" Value="Collapsed" />
+                                                    <Setter TargetName="Cancel" Property="Visibility" Value="Collapsed" />
+                                                    <Setter TargetName="Folder" Property="Visibility" Value="Visible" />
+                                                    <Setter TargetName="Glyph" Property="Text" Value="&#xE73E;" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsCancelled}" Value="True">
+                                                    <Setter TargetName="Glyph" Property="Text" Value="&#xE711;" />
+                                                    <Setter TargetName="Folder" Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="#14FFFFFF" />
+                                                </Trigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
 
                     <Popup x:Name="ShieldPopup" PlacementTarget="{Binding ElementName=ShieldButton}" Placement="Bottom"
                            HorizontalOffset="-322" VerticalOffset="6" AllowsTransparency="True" StaysOpen="False"

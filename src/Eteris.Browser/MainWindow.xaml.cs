@@ -91,6 +91,7 @@ public partial class MainWindow : Window
                 }),
             DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url))),
             RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
+            DownloadHandler = DownloadHandler,
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
                 AppData.IsShieldOn,
@@ -256,6 +257,7 @@ public partial class MainWindow : Window
         e.Handled = true;
 
         if (ctrl && key == Key.K) TogglePalette();
+        else if (ctrl && key == Key.J) ToggleDownloads();
         else if (key == Key.F11) ToggleFocusMode();
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
         else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);

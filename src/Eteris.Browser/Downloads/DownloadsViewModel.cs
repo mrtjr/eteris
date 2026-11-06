@@ -1,0 +1,73 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace Eteris.Browser.Downloads;
+
+public partial class DownloadEntry(int id, string fullPath, string fileName) : ObservableObject
+{
+    public int Id { get; } = id;
+    public string FullPath { get; } = fullPath;
+    public string FileName { get; } = fileName;
+
+    [ObservableProperty] private long _received;
+    [ObservableProperty] private long _total;
+    [ObservableProperty] private long _speed;
+    [ObservableProperty] private bool _isComplete;
+    [ObservableProperty] private bool _isCancelled;
+
+    public bool IsActive => !IsComplete && !IsCancelled;
+
+    public int Percent => Total > 0 ? (int)Math.Clamp(Received * 100 / Total, 0, 100) : 0;
+
+    public string Status => IsCancelled ? "Cancelada"
+        : IsComplete ? DownloadFormat.Size(Received)
+        : DownloadFormat.Progress(Received, Total, Speed);
+
+    internal void Refresh()
+    {
+        OnPropertyChanged(nameof(Percent));
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(IsActive));
+    }
+}
+
+public partial class DownloadsViewModel : ObservableObject
+{
+    public ObservableCollection<DownloadEntry> Items { get; } = new();
+
+    public bool HasActive => Items.Any(i => i.IsActive);
+
+    public int OverallPercent
+    {
+        get
+        {
+            var active = Items.Where(i => i.IsActive).ToList();
+            return active.Count == 0 ? 0 : (int)active.Average(i => i.Percent);
+        }
+    }
+
+    public void Started(int id, string fullPath, string fileName)
+    {
+        Items.Insert(0, new DownloadEntry(id, fullPath, fileName));
+        Changed();
+    }
+
+    public void Update(int id, long received, long total, long speed, bool complete, bool cancelled)
+    {
+        var entry = Items.FirstOrDefault(i => i.Id == id);
+        if (entry is null) return;
+        entry.Received = received;
+        entry.Total = total;
+        entry.Speed = speed;
+        entry.IsComplete = complete;
+        entry.IsCancelled = cancelled;
+        entry.Refresh();
+        Changed();
+    }
+
+    private void Changed()
+    {
+        OnPropertyChanged(nameof(HasActive));
+        OnPropertyChanged(nameof(OverallPercent));
+    }
+}

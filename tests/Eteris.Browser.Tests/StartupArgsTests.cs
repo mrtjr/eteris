@@ -12,6 +12,18 @@ public class StartupArgsTests
     public void InitialUrl_FirstWebAddress(string args, string expected)
         => Assert.Equal(expected, StartupArgs.InitialUrl(Args(args)));
 
+    [Fact]
+    public void UserDataDir_ReadsFlagValue()
+        => Assert.Equal(@"C:\temp\perfil", StartupArgs.UserDataDir(Args(@"--user-data-dir=C:\temp\perfil|https://x.pt/")));
+
+    [Fact]
+    public void UserDataDir_AbsentIsNull()
+        => Assert.Null(StartupArgs.UserDataDir(Args("https://x.pt/")));
+
+    [Fact]
+    public void InitialUrl_SkipsUserDataDirFlag()
+        => Assert.Equal("https://x.pt/", StartupArgs.InitialUrl(Args(@"--user-data-dir=C:\p|https://x.pt/")));
+
     [Theory]
     [InlineData("")]
     [InlineData("--flag")]
