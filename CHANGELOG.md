@@ -10,6 +10,11 @@ Duas rondas de 50 ciclos de melhorias.
 - Testes que impedem uma dependência de entrar sem o texto da sua licença.
 - O motor deixa de descarregar componentes da Google em segundo plano (num perfil novo: 27 → 0, incluindo o módulo DRM Widevine e os modelos de IA); o Widevine que ficou de versões anteriores é apagado no arranque.
 
+### Leitura e vídeo
+- **Modo de leitura com o Readability.js do Firefox** (Mozilla, Apache-2.0): extração e deteção de artigos muito mais fiáveis; a heurística própria fica como reserva (p. ex. em sites com Trusted Types).
+- **Vídeos em formatos patenteados** (H.264/AAC, que o Éteris não pode incluir por razões de licença): barra «Abrir no navegador do sistema» quando um vídeo não consegue tocar (Twitch, por exemplo). Se o Éteris for o navegador do sistema, abre o Edge.
+- Teste que compila com o Node todos os scripts injetados nas páginas (apanhou um erro de sintaxe no leitor).
+
 ### Novo (segunda ronda)
 - **Privacidade**: DNS cifrado (Cloudflare, Quad9, Mullvad), links sem parâmetros de rastreio (ao navegar e ao copiar), modo rigoroso por site (sem scripts/frames de terceiros), pedidos de notificações recusados sem perguntar, apagar cookies e dados ao fechar, histórico interno do Chromium desligado.
 - **Tema claro** (e «seguir o Windows») em toda a interface e nas páginas internas.
