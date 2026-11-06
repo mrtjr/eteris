@@ -138,9 +138,38 @@
         </Setter>
     </Style>
 
+    <!-- Tooltips escuras em toda a app (incluindo as das páginas web, que o CefSharp mostra como ToolTip do WPF) -->
+    <Style TargetType="ToolTip">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <!-- HasDropShadow=True faz o popup aceitar transparência: a margem da sombra fica invisível -->
+        <Setter Property="HasDropShadow" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Margin="6,2,10,12" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource FieldBorderBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="10,6" MaxWidth="420">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="14" ShadowDepth="4" Direction="270" Opacity="0.45" Color="Black" />
+                        </Border.Effect>
+                        <ContentPresenter>
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="DarkContextMenu" TargetType="ContextMenu">
         <Setter Property="OverridesDefaultStyle" Value="True" />
-        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="HasDropShadow" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContextMenu">
