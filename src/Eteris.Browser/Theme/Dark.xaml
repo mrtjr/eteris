@@ -9,6 +9,7 @@
     <SolidColorBrush x:Key="PressedBrush" Color="#30354A" />
     <SolidColorBrush x:Key="FieldBrush" Color="#0F121A" />
     <SolidColorBrush x:Key="FieldBorderBrush" Color="#2B3042" />
+    <SolidColorBrush x:Key="FieldFocusBrush" Color="#0B0D13" />
     <SolidColorBrush x:Key="TextBrush" Color="#E9EBF2" />
     <SolidColorBrush x:Key="TextMutedBrush" Color="#9097A8" />
     <SolidColorBrush x:Key="TextFaintBrush" Color="#5E6577" />

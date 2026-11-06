@@ -405,7 +405,7 @@
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource Self}}" Value="True">
                     <Setter Property="BorderBrush" Value="{StaticResource IrisBrush}" />
-                    <Setter Property="Background" Value="#0B0D13" />
+                    <Setter Property="Background" Value="{DynamicResource FieldFocusBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
