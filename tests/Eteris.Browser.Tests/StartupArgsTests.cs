@@ -16,6 +16,13 @@ public class StartupArgsTests
     public void UserDataDir_ReadsFlagValue()
         => Assert.Equal(@"C:\temp\perfil", StartupArgs.UserDataDir(Args(@"--user-data-dir=C:\temp\perfil|https://x.pt/")));
 
+    [Theory]
+    [InlineData("--private", true)]
+    [InlineData("--incognito|https://x.pt/", true)]
+    [InlineData("https://x.pt/", false)]
+    public void IsPrivate_RecognisesFlags(string args, bool expected)
+        => Assert.Equal(expected, StartupArgs.IsPrivate(Args(args)));
+
     [Fact]
     public void UserDataDir_AbsentIsNull()
         => Assert.Null(StartupArgs.UserDataDir(Args("https://x.pt/")));

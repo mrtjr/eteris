@@ -28,11 +28,23 @@ public static class NewTabPage
     };
 
     // O JSON vai dentro de <script>: o codificador por omissão escapa < > & e impede fechar a tag.
+    public const string PrivateUrl = "eteris://newtab/?private";
+
+    public static bool IsPrivate(string url) => url.StartsWith(PrivateUrl, StringComparison.OrdinalIgnoreCase);
+
     public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0,
-        IReadOnlyList<Bookmark>? bookmarks = null)
+        IReadOnlyList<Bookmark>? bookmarks = null, bool isPrivate = false)
     {
+        // Numa janela privada não se mostra nada do perfil normal.
+        if (isPrivate)
+        {
+            sites = [];
+            bookmarks = [];
+        }
+
         var data = new
         {
+            @private = isPrivate,
             greeting = Greeting(now.Hour),
             blocked,
             engineName = engine.Name,

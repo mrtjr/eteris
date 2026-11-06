@@ -76,6 +76,9 @@ public partial class MainWindow
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         yield return new("", "Reabrir aba fechada", "Recupera a última aba que fechou", "Ctrl+Shift+T", () => Tabs.ReopenClosed());
+        yield return new("", "Nova janela", "Abrir outra janela do Éteris", "Ctrl+N", () => OpenWindow(isPrivate: false));
+        yield return new("", "Nova janela privada", "Nada fica no histórico, nos cookies nem na cache", "Ctrl+Shift+N",
+            () => OpenWindow(isPrivate: true));
         if (tab is not null)
         {
             yield return new("", "Fechar aba", tab.Title, "Ctrl+W", () => CloseTab(tab));

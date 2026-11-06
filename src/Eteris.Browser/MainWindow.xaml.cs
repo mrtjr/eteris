@@ -25,14 +25,16 @@ public partial class MainWindow : Window
     private readonly Dictionary<BrowserTab, ChromiumWebBrowser> _browsers = new();
     private readonly Dictionary<BrowserTab, ScriptletInjector> _scriptlets = new();
 
-    public MainWindow(string? initialUrl = null)
+    public MainWindow(string? initialUrl = null, bool isPrivate = false)
     {
         InitializeComponent();
+        IsPrivate = isPrivate;
+        if (isPrivate) ConfigurePrivateWindow();
         DataContext = Tabs;
         Tabs.Tabs.CollectionChanged += OnTabsChanged;
         Tabs.PropertyChanged += OnTabsPropertyChanged;
         StateChanged += (_, _) => OnWindowStateChanged();
-        SourceInitialized += (_, _) => WindowEffects.Apply(this, borderColorRef: 0x0042302B);
+        SourceInitialized += (_, _) => WindowEffects.Apply(this, borderColorRef: isPrivate ? 0x00ED3A7Cu : 0x0042302Bu);
         Deactivated += (_, _) => CloseSuggestions();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
@@ -92,6 +94,7 @@ public partial class MainWindow : Window
             RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
             DownloadHandler = DownloadHandler,
             FindHandler = NewFindHandler(),
+            RequestContext = PrivateContext,
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
@@ -126,7 +129,7 @@ public partial class MainWindow : Window
             }
             tab.Title = title;
             var url = tab.Address;
-            AppData.TryWrite(h => h.UpdateTitle(url, title));
+            if (!IsPrivate) AppData.TryWrite(h => h.UpdateTitle(url, title));
         };
         browser.LoadingStateChanged += (_, e) => Dispatcher.InvokeAsync(() =>
         {
@@ -150,7 +153,7 @@ public partial class MainWindow : Window
                 _ = ApplyGenericCosmeticsAsync(browser, url);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
-            Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
+            if (!IsPrivate) Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
         };
         _browsers[tab] = browser;
         BrowserHost.Children.Add(browser);
@@ -225,7 +228,7 @@ public partial class MainWindow : Window
 
     private void OpenNewTab()
     {
-        Tabs.NewTab(NewTabPage.Url);
+        Tabs.NewTab(NewTabUrl);
         _omniboxEdited = false;
         CloseFind();
         SetOmniboxText(string.Empty);
@@ -275,6 +278,8 @@ public partial class MainWindow : Window
         else if (ctrl && key is Key.OemPlus or Key.Add) Zoom(1);
         else if (ctrl && key is Key.OemMinus or Key.Subtract) Zoom(-1);
         else if (ctrl && key is Key.D0 or Key.NumPad0) Zoom(0);
+        else if (ctrl && shift && key == Key.N) OpenWindow(isPrivate: true);
+        else if (ctrl && key == Key.N) OpenWindow(isPrivate: false);
         else if (ctrl && shift && key == Key.T) Tabs.ReopenClosed();
         else if (ctrl && key == Key.T) OpenNewTab();
         else if (ctrl && (key == Key.W || key == Key.F4)) CloseTab(Tabs.Active);

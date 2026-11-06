@@ -9,6 +9,10 @@ public static class StartupArgs
         => args.FirstOrDefault(a => Uri.TryCreate(a, UriKind.Absolute, out var uri)
                                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps));
 
+    public static bool IsPrivate(IEnumerable<string> args)
+        => args.Any(a => a.Equals("--private", StringComparison.OrdinalIgnoreCase)
+                         || a.Equals("--incognito", StringComparison.OrdinalIgnoreCase));
+
     // Perfil alternativo (como no Chrome): dados, cache e instância única separados do perfil normal.
     public static string? UserDataDir(IEnumerable<string> args)
         => args.FirstOrDefault(a => a.StartsWith(UserDataDirFlag, StringComparison.OrdinalIgnoreCase))?[UserDataDirFlag.Length..];

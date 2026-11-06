@@ -253,6 +253,11 @@
                             <Ellipse Width="18" Height="18" Stroke="{StaticResource IrisBrush}" StrokeThickness="3" />
                             <Ellipse Width="5" Height="5" Fill="{StaticResource TextBrush}" />
                         </Grid>
+                        <Border x:Name="PrivateBadge" Visibility="Collapsed" VerticalAlignment="Center" Margin="0,0,8,3"
+                                CornerRadius="10" Padding="10,3" Background="#3B1D6E" BorderBrush="#7C3AED" BorderThickness="1"
+                                ToolTip="Nada desta janela fica no histórico, nos cookies nem na cache">
+                            <TextBlock Text="Privada" FontSize="11.5" FontWeight="SemiBold" Foreground="#E9D5FF" />
+                        </Border>
                         <ListBox x:Name="TabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
                                  ItemContainerStyle="{StaticResource TabItemStyle}"
                                  Background="Transparent" BorderThickness="0" Padding="0"

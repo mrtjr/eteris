@@ -30,9 +30,9 @@ public partial class MainWindow
             var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, source)).Key;
             if (tab is not null && !tab.CanGoBack && string.Equals(tab.Address, url, StringComparison.OrdinalIgnoreCase))
             {
-                tab.Address = NewTabPage.Url;
+                tab.Address = NewTabUrl;
                 tab.Title = "Nova aba";
-                _browsers[tab].Load(NewTabPage.Url);
+                _browsers[tab].Load(NewTabUrl);
             }
         });
     }

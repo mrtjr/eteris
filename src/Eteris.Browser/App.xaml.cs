@@ -13,7 +13,7 @@ public partial class App : Application
         CefConfigurator.Initialize();
         _ = Shields.PrivacyPreferences.ApplyAsync();
         _ = Shields.ShieldEngine.StartAsync(Shields.FilterLists.ForApp());
-        new MainWindow(StartupArgs.InitialUrl(e.Args)).Show();
+        new MainWindow(StartupArgs.InitialUrl(e.Args), StartupArgs.IsPrivate(e.Args)).Show();
         _ = UpdateService.CheckAndDownloadAsync();
     }
 

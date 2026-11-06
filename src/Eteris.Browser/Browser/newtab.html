@@ -92,6 +92,10 @@
     color: var(--faint); font-size: 12.5px; letter-spacing: .02em;
   }
   footer i { width: 8px; height: 8px; border-radius: 50%; background: var(--iris); box-shadow: 0 0 12px #22d3ee; }
+  body.private { --bg: #0e0a18; }
+  body.private .aurora span:nth-child(2), body.private .aurora span:nth-child(3) { background: #6d28d9; }
+  body.private .aurora span:nth-child(4) { background: #312e81; }
+  body.private .hint { display: none; }
   @media (max-height: 640px) { main { margin-top: 6vh; } .clock { font-size: 64px; } }
   @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } .tile { transition: none; } }
 </style>
@@ -118,8 +122,15 @@
   tick(); setInterval(tick, 1000);
 
   const greet = document.getElementById('greet');
-  greet.append(data.greeting + '. O que vamos ');
-  const b = document.createElement('b'); b.textContent = 'descobrir'; greet.append(b, ' hoje?');
+  if (data.private) {
+    document.body.classList.add('private');
+    const b = document.createElement('b'); b.textContent = 'Janela privada';
+    greet.append(b, ' · nada desta janela fica no histórico, nos cookies nem na cache');
+    document.title = 'Nova aba privada';
+  } else {
+    greet.append(data.greeting + '. O que vamos ');
+    const b = document.createElement('b'); b.textContent = 'descobrir'; greet.append(b, ' hoje?');
+  }
 
   const q = document.getElementById('q');
   q.placeholder = 'Pesquisar com ' + data.engineName + ' ou escrever um endereço';

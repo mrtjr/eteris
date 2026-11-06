@@ -35,6 +35,21 @@ public class NewTabPageTests
     }
 
     [Fact]
+    public void Render_Private_HidesSitesAndBookmarksAndSaysSo()
+    {
+        var html = NewTabPage.Render([new TopSite("github.com", "https://github.com/", "GitHub", 3)], SearchEngine.DuckDuckGo,
+            Afternoon, bookmarks: [new Bookmark("https://mdn.dev/", "MDN Docs")], isPrivate: true);
+        Assert.Contains("\"private\":true", html);
+        Assert.DoesNotContain("github.com", html);
+        Assert.DoesNotContain("MDN Docs", html);
+    }
+
+    [Theory]
+    [InlineData("eteris://newtab/?private", true)]
+    [InlineData("eteris://newtab/", false)]
+    public void IsPrivateNewTab(string url, bool expected) => Assert.Equal(expected, NewTabPage.IsPrivate(url));
+
+    [Fact]
     public void Render_IncludesBookmarks()
     {
         var html = NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon, bookmarks: [new Bookmark("https://mdn.dev/", "MDN Docs")]);
