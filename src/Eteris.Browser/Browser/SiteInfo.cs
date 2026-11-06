@@ -21,7 +21,7 @@ public static class SiteInfo
                 "Está a ver um ficheiro guardado neste computador."),
             "https" => new(ConnectionKind.Secure, uri.Host, origin, "Ligação segura",
                 "As informações que envia (palavras-passe, cartões) seguem encriptadas até este site."),
-            "http" when uri.IsLoopback => new(ConnectionKind.Local, uri.Host, origin, "Servidor local",
+            "http" when uri.IsLoopback => new(ConnectionKind.Local, uri.Authority, origin, "Servidor local",
                 "Este site corre no seu próprio computador."),
             "http" => new(ConnectionKind.Insecure, uri.Host, origin, "Ligação não segura",
                 "Não introduza palavras-passe nem dados de pagamento: podem ser lidos por terceiros na rede."),

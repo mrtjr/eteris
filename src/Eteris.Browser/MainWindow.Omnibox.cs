@@ -49,8 +49,16 @@ public partial class MainWindow
             DisplayRest.Text = display.Rest;
         }
 
-        SiteIcon.Text = focused || empty ? "" : UrlDisplay.IsSecure(Omnibox.Text) ? "" : "";
-        SiteIcon.ToolTip = focused || empty ? null : UrlDisplay.IsSecure(Omnibox.Text) ? "Ligação segura" : "Ligação não segura";
+        var site = SiteInfo.Describe(Tabs.Active?.Address ?? Omnibox.Text);
+        SiteIcon.Text = focused || empty ? "" : site.Kind switch
+        {
+            ConnectionKind.Secure => "",
+            ConnectionKind.Insecure => "",
+            ConnectionKind.Internal => "",
+            _ => "",
+        };
+        SiteInfoButton.ToolTip = focused || empty ? null : $"{site.Title} — ver detalhes do site";
+        SiteInfoButton.IsHitTestVisible = !focused && !empty;
     }
 
     private void Go(string input, bool newTab = false)
