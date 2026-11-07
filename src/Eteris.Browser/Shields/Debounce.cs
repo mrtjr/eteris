@@ -3,14 +3,20 @@ using System.Text;
 namespace Eteris.Browser.Shields;
 
 // Saltar redirecionamentos de rastreio («debounce», como o Brave): um link que passa por l.facebook.com/l.php,
-// google.com/url, safelinks do Outlook, bing.com/ck/a… leva o destino no próprio endereço. O Éteris vai direto ao
-// destino e o intermediário nunca chega a saber do clique. Regras próprias (anfitrião, caminho, parâmetro) e, para
-// anfitriões que as listas dão como rastreadores, os parâmetros óbvios (url, u, redirect, destination…).
+// google.com/url, bing.com/ck/a… leva o destino no próprio endereço. O Éteris vai direto ao destino e o
+// intermediário nunca chega a saber do clique. Regras próprias (anfitrião, caminho, parâmetro) e, para anfitriões que
+// as listas dão como rastreadores, os parâmetros óbvios (url, u, redirect, destination…).
 // Só destinos http/https bem formados, sem credenciais no endereço; um destino que é outro salto também é saltado.
+// Nunca se saltam os intermediários que são uma verificação de segurança no momento do clique (Safe Links do
+// Microsoft Defender, linkedin.com/safety/go, o linkfilter do Steam, o away.php do VK): saltá-los tirava o aviso de
+// phishing. E o google.com/url e o youtube.com/redirect só se saltam a partir das páginas do próprio Google/YouTube:
+// vindos de fora (um email de phishing que usa google.com/url para passar nos filtros), sem assinatura válida, o
+// Google mostra o aviso «Redirect Notice» — e esse aviso fica.
 public static class Debounce
 {
-    // Host "google.*" vale para qualquer domínio do Google (google.com, google.pt, google.com.br…).
-    public sealed record Rule(string Host, string PathPrefix, string[] Params, string? Base64Prefix = null);
+    // Host "google.*" vale para qualquer domínio do Google (google.com, google.pt, google.com.br…). «OwnPagesOnly»: só
+    // quando o link vem de uma página do mesmo anfitrião (ver acima).
+    public sealed record Rule(string Host, string PathPrefix, string[] Params, string? Base64Prefix = null, bool OwnPagesOnly = false);
 
     public static readonly IReadOnlyList<Rule> Rules =
     [
@@ -20,15 +26,11 @@ public static class Debounce
         new("l.instagram.com", "/", ["u"]),
         new("l.threads.net", "/", ["u"]),
         new("l.threads.com", "/", ["u"]),
-        new("google.*", "/url", ["q", "url"]),
+        new("google.*", "/url", ["q", "url"], OwnPagesOnly: true),
         new("googleadservices.com", "/pagead/aclk", ["adurl"]),
         new("clickserve.dartsearch.net", "/link/click", ["ds_dest_url"]),
-        new("safelinks.protection.outlook.com", "/", ["url"]),
-        new("youtube.com", "/redirect", ["q"]),
+        new("youtube.com", "/redirect", ["q"], OwnPagesOnly: true),
         new("out.reddit.com", "/", ["url"]),
-        new("steamcommunity.com", "/linkfilter", ["u", "url"]),
-        new("linkedin.com", "/safety/go", ["url"]),
-        new("vk.com", "/away.php", ["to"]),
         new("slack-redir.net", "/link", ["url"]),
         new("duckduckgo.com", "/l/", ["uddg"]),
         new("bing.com", "/ck/a", ["u"], Base64Prefix: "a1"),
@@ -45,6 +47,16 @@ public static class Debounce
         new("deref-web.de", "/", ["redirectUrl"]),
     ];
 
+    // Verificações de segurança no momento do clique: nunca se saltam, nem pelos parâmetros óbvios das listas.
+    public static readonly IReadOnlyList<(string Host, string PathPrefix)> SecurityCheckpoints =
+    [
+        ("safelinks.protection.outlook.com", "/"),
+        ("safelinks.protection.office365.us", "/"),
+        ("linkedin.com", "/safety/go"),
+        ("steamcommunity.com", "/linkfilter"),
+        ("vk.com", "/away.php"),
+    ];
+
     // Parâmetros que, num anfitrião de rastreio das listas, levam o destino. Sem redirect_uri (OAuth: não é um salto).
     public static readonly IReadOnlyList<string> TrackerParams =
         ["url", "u", "redirect", "redirect_url", "redirectUrl", "destination", "dest", "target", "to", "goto", "link"];
@@ -52,31 +64,40 @@ public static class Debounce
     // Saltos encadeados (google.com/url → l.facebook.com/l.php → destino) saltam-se de uma vez, até este limite.
     private const int MaxHops = 3;
 
-    // O destino final do link, ou null quando não há salto a evitar.
-    public static string? Destination(string url, Func<string, bool>? isTrackerHost = null)
+    // O destino final do link, ou null quando não há salto a evitar. «fromUrl»: a página de onde o link partiu (a
+    // aberta na aba, ou o referrer numa aba nova; num redirecionamento do servidor, o endereço que redirecionou).
+    public static string? Destination(string url, Func<string, bool>? isTrackerHost = null, string? fromUrl = null)
     {
         string? result = null;
+        var current = url;
+        var from = fromUrl;
         for (var hop = 0; hop < MaxHops; hop++)
         {
-            if (Step(result ?? url, isTrackerHost) is not { } next) break;
-            result = next;
+            if (Step(current, isTrackerHost, from) is not { } next) break;
+            // Num salto encadeado, quem manda para o seguinte é o salto anterior.
+            from = current;
+            current = result = next;
         }
         return result;
     }
 
     // Anfitrião do salto (para o Escudo), ou null quando o endereço não é um salto conhecido.
-    public static string? RedirectorHost(string url, Func<string, bool>? isTrackerHost = null)
-        => Step(url, isTrackerHost) is not null && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host.ToLowerInvariant() : null;
+    public static string? RedirectorHost(string url, Func<string, bool>? isTrackerHost = null, string? fromUrl = null)
+        => Step(url, isTrackerHost, fromUrl) is not null && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host.ToLowerInvariant() : null;
 
-    private static string? Step(string url, Func<string, bool>? isTrackerHost)
+    private static string? Step(string url, Func<string, bool>? isTrackerHost, string? fromUrl)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !IsWeb(uri) || uri.Query.Length < 2) return null;
         var host = uri.Host.ToLowerInvariant();
         var query = ParseQuery(uri.Query);
+        var fromHost = Uri.TryCreate(fromUrl, UriKind.Absolute, out var from) && IsWeb(from) ? from.Host.ToLowerInvariant() : null;
+        if (SecurityCheckpoints.Any(c => HostMatches(host, c.Host) && uri.AbsolutePath.StartsWith(c.PathPrefix, StringComparison.OrdinalIgnoreCase)))
+            return null;
 
         foreach (var rule in Rules)
         {
             if (!HostMatches(host, rule.Host) || !uri.AbsolutePath.StartsWith(rule.PathPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+            if (rule.OwnPagesOnly && (fromHost is null || !HostMatches(fromHost, rule.Host))) return null;
             foreach (var name in rule.Params)
                 if (query.TryGetValue(name, out var value) && Decode(value, rule.Base64Prefix) is { } target) return target;
         }

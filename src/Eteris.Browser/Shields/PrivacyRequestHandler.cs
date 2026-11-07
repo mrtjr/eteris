@@ -200,12 +200,23 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         public bool TakeRewrite(int browserId, string url)
             => _rewrites.TryGetValue(browserId, out var rewritten) && rewritten == url && _rewrites.TryRemove(browserId, out _);
 
-        private static string? Jump(string url, Func<string, bool> isProtected)
+        // «fromUrl»: de onde o link partiu (ver Debounce.Destination) — o google.com/url só se salta vindo do Google.
+        private static string? Jump(string url, Func<string, bool> isProtected, string? fromUrl)
         {
             if (!Data.Settings.Current.SkipTrackingRedirects) return null;
             // Com o Escudo desligado no site do salto (o utilizador quis), o pedido segue como está.
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var from) || !isProtected(from.Host)) return null;
-            return Debounce.Destination(url, TrackerBlocker.Default.Lists);
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var hop) || !isProtected(hop.Host)) return null;
+            return Debounce.Destination(url, TrackerBlocker.Default.Lists, fromUrl);
+        }
+
+        // A página de onde parte a navegação da página principal: a aberta na aba; numa aba nova (ainda sem página), o
+        // referrer do pedido.
+        private static string? NavigationSource(IBrowser browser, IRequest request)
+        {
+            var current = SafeFrame.MainUrl(browser);
+            if (!string.IsNullOrEmpty(current) && current != "about:blank") return current;
+            try { return string.IsNullOrEmpty(request.ReferrerUrl) ? null : request.ReferrerUrl; }
+            catch (Exception) { return null; }
         }
 
         private void RememberSkip(IBrowser browser, string url)
@@ -232,7 +243,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             try
             {
                 if (request.ResourceType != ResourceType.MainFrame) return;
-                if (Jump(newUrl, isProtected) is { } jump)
+                if (Jump(newUrl, isProtected, request.Url) is { } jump)
                 {
                     RememberSkip(browser, newUrl);
                     newUrl = jump;
@@ -427,7 +438,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         private CefReturnValue DecideMainFrame(IBrowser browser, IRequest request)
         {
             // Salto de rastreio com o destino no endereço (Shields/Debounce.cs): vai-se direto ao destino.
-            if (Jump(request.Url, isProtected) is { } jump)
+            if (Jump(request.Url, isProtected, NavigationSource(browser, request)) is { } jump)
             {
                 RememberSkip(browser, request.Url);
                 Rewrite(browser, request, jump);
