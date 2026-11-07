@@ -242,8 +242,33 @@ public partial class MainWindow
 
     private void GlanceOverlay_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape) { CloseGlance(); e.Handled = true; }
-        else if (e.Key == Key.Enter) { OpenGlanceInTab(); e.Handled = true; }
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var action = LinkPreview.ActionFor(key.ToString(), Keyboard.Modifiers.HasFlag(ModifierKeys.Shift),
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Control), IsPrivate);
+        if (action == GlanceAction.None) return;
+        e.Handled = true;
+        RunGlanceAction(action);
+    }
+
+    private void RunGlanceAction(GlanceAction action)
+    {
+        switch (action)
+        {
+            case GlanceAction.Close: CloseGlance(); break;
+            case GlanceAction.Open: OpenGlanceInTab(); break;
+            case GlanceAction.OpenSideBySide: OpenGlanceSideBySide(); break;
+            case GlanceAction.ReadLater: SaveGlanceForLater(); break;
+        }
+    }
+
+    // O cartão nunca é mais alto do que a área da página (janelas pequenas, modo compacto): o resto rola.
+    private void GlanceOverlay_SizeChanged(object sender, SizeChangedEventArgs e)
+        => GlanceCard.MaxHeight = Math.Max(240, GlanceOverlay.ActualHeight - 48);
+
+    // Mudar de aba fecha o cartão: ele pertence à página de onde veio o link.
+    private void CloseGlanceOnTabChange()
+    {
+        if (GlanceOpen) CloseGlance();
     }
 
     private void GlanceClose_Click(object sender, RoutedEventArgs e) => CloseGlance();
@@ -257,14 +282,18 @@ public partial class MainWindow
         Tabs.NewTab(url);
     }
 
-    private void GlanceSplit_Click(object sender, RoutedEventArgs e)
+    private void GlanceSplit_Click(object sender, RoutedEventArgs e) => OpenGlanceSideBySide();
+
+    private void OpenGlanceSideBySide()
     {
         if (_glanceUrl is not { } url) return;
         CloseGlance();
         OpenSideBySide(Tabs.NewTab(url, activate: false));
     }
 
-    private void GlanceReadLater_Click(object sender, RoutedEventArgs e)
+    private void GlanceReadLater_Click(object sender, RoutedEventArgs e) => SaveGlanceForLater();
+
+    private void SaveGlanceForLater()
     {
         if (_glanceUrl is not { } url || IsPrivate) return;
         AppData.SaveForLater(url, GlanceTitle.Text);

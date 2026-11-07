@@ -12,6 +12,7 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("👁", "Espreitar um link", "Alt+clique num link (ou «Espreitar o link» no menu) mostra o destino num cartão: título, imagem, tempo de leitura e os primeiros parágrafos — sem abrir aba nem deixar rasto no histórico.", "Alt+clique"),
         new("⇆", "Abas que nunca se perdem", "Com muitas abas a faixa rola em vez de as esmagar: roda do rato, setas nas pontas e a lista «▾» de todas as abas, pesquisável."),
         new("▭", "Modo compacto", "Abas e barra de endereço numa só linha — a página ganha uma barra inteira. Em Definições › Aspeto › Densidade."),
         new("◉", "Cor do Éteris", "Escolhe a cor de destaque de toda a interface em Definições › Aspeto: nove cores, a da paisagem da nova aba ou a do Windows."),

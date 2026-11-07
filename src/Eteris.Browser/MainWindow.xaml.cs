@@ -255,6 +255,7 @@ public partial class MainWindow : Window
         if (e.PropertyName != nameof(TabsViewModel.Active)) return;
         OnActiveTabChanging();
         OnSplitActiveChanged();
+        CloseGlanceOnTabChange();
         _omniboxEdited = false;
         CloseFind();
         CloseSuggestions();

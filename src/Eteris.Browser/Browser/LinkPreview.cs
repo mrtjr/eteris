@@ -16,6 +16,9 @@ public sealed record LinkPreviewInfo(string Url, string Title, string Site, stri
     public string ReadingTime => ReadingMinutes == 0 ? string.Empty : $"{ReadingMinutes} min de leitura";
 }
 
+// O que uma tecla faz no cartão «Espreitar».
+public enum GlanceAction { None, Close, Open, OpenSideBySide, ReadLater }
+
 // Metadados tirados do HTML de uma página (etiquetas <meta> Open Graph/Twitter, <title>, <p>): lógica pura, sem motor.
 public sealed record PageMetadata(string? Title, string? Description, string? ImageUrl, string? SiteName, IReadOnlyList<string> Paragraphs);
 
@@ -61,7 +64,18 @@ public static partial class LinkPreview
         })()
         """;
 
-    public const string ReportPrefix = "eteris-glance ";
+    // Teclado no cartão: Esc fecha, Enter abre, Shift+Enter abre ao lado, Ctrl+Enter guarda para ler mais tarde
+    // (na janela privada não há «Ler mais tarde»). Os botões não recebem foco, por isso estas são as únicas teclas.
+    public static GlanceAction ActionFor(string key, bool shift, bool ctrl, bool isPrivate) => key switch
+    {
+        "Escape" => GlanceAction.Close,
+        "Return" or "Enter" when ctrl && !shift => isPrivate ? GlanceAction.None : GlanceAction.ReadLater,
+        "Return" or "Enter" when shift && !ctrl => GlanceAction.OpenSideBySide,
+        "Return" or "Enter" when !shift && !ctrl => GlanceAction.Open,
+        _ => GlanceAction.None,
+    };
+
+    public const string ReportPrefix = "\u0001eteris-glance ";
 
     // Alt+clique num link (botão esquerdo, só Alt): a página não navega nem transfere (é o que o Chromium faria com
     // Alt) e o Éteris recebe o endereço para o espreitar. Corre antes dos scripts da página, em captura na janela,
@@ -76,7 +90,7 @@ public static partial class LinkPreview
               if ((node.tagName === 'A' || node.tagName === 'AREA') && node.href && /^https?:/i.test(node.href)) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                debug('eteris-glance ' + node.href);
+                debug('\u0001eteris-glance ' + node.href);
                 return;
               }
             }

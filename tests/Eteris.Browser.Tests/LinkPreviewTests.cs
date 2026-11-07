@@ -196,6 +196,18 @@ public class LinkPreviewTests
         Assert.Contains("}, true);", LinkPreview.AltClickScript); // em captura: a página não o cala
     }
 
+    [Theory]
+    [InlineData("Escape", false, false, false, GlanceAction.Close)]
+    [InlineData("Return", false, false, false, GlanceAction.Open)]
+    [InlineData("Return", true, false, false, GlanceAction.OpenSideBySide)]
+    [InlineData("Return", false, true, false, GlanceAction.ReadLater)]
+    [InlineData("Return", false, true, true, GlanceAction.None)]
+    [InlineData("Return", true, true, false, GlanceAction.None)]
+    [InlineData("A", false, false, false, GlanceAction.None)]
+    [InlineData("Tab", false, false, false, GlanceAction.None)]
+    public void ActionFor_MapsTheCardKeys(string key, bool shift, bool ctrl, bool isPrivate, GlanceAction expected)
+        => Assert.Equal(expected, LinkPreview.ActionFor(key, shift, ctrl, isPrivate));
+
     [Fact]
     public void Script_CarriesReadabilityAndReturnsJson()
     {

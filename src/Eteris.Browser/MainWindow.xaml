@@ -1299,7 +1299,8 @@
 
             <!-- Espreitar: o destino de um link num cartão por cima da página, sem abrir aba nem deixar rasto -->
             <Grid x:Name="GlanceOverlay" Grid.Row="2" Panel.ZIndex="59" Visibility="Collapsed" Focusable="True"
-                  Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="GlanceOverlay_MouseLeftButtonDown" KeyDown="GlanceOverlay_KeyDown">
+                  Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="GlanceOverlay_MouseLeftButtonDown" KeyDown="GlanceOverlay_KeyDown"
+                  SizeChanged="GlanceOverlay_SizeChanged" AutomationProperties.Name="Espreitar o link">
                 <Border x:Name="GlanceCard" Width="540" MaxHeight="680" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="22"
                         Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1"
                         RenderTransformOrigin="0.5,0.5">
@@ -1313,10 +1314,10 @@
                         <Border DockPanel.Dock="Bottom" Padding="22,12,22,18" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,1,0,0">
                             <DockPanel>
                                 <Button x:Name="GlanceReadLater" DockPanel.Dock="Left" Style="{StaticResource PillButton}" Content="Ler mais tarde"
-                                        Click="GlanceReadLater_Click" ToolTip="Guardar em Favoritos › Para ler" />
+                                        Click="GlanceReadLater_Click" ToolTip="Guardar em Favoritos › Para ler (Ctrl+Enter)" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource PillButton}" Content="Abrir ao lado" Click="GlanceSplit_Click" Margin="0,0,8,0"
-                                            ToolTip="Abrir numa aba ao lado desta (ecrã dividido)" />
+                                            ToolTip="Abrir numa aba ao lado desta — ecrã dividido (Shift+Enter)" />
                                     <Button x:Name="GlanceOpenButton" Style="{StaticResource PrimaryPillButton}" Content="Abrir" Click="GlanceOpen_Click"
                                             ToolTip="Abrir numa nova aba (Enter)" />
                                 </StackPanel>
