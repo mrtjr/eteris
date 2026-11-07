@@ -33,8 +33,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
             IRequest request, IRequestCallback callback)
         {
-            request.SetHeaderByName("DNT", "1", true);
-            request.SetHeaderByName("Sec-GPC", "1", true);
+            foreach (var (name, value) in PrivacySignals.Headers) request.SetHeaderByName(name, value, true);
             if (userAgent is not null)
                 foreach (var (name, value) in MobileHeaders(userAgent)) request.SetHeaderByName(name, value, true);
 

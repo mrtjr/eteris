@@ -23,8 +23,8 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
             && ShieldEngine.Cosmetic is { } engine
             ? ScriptletScripts.Wrap(engine.Scriptlets(url), url)
             : null;
-        var added = extra?.Invoke(url);
-        var script = scriptlets is null ? added : added is null ? scriptlets : scriptlets + "\n;\n" + added;
+        // O GPC visível ao JavaScript vale em todas as páginas, com ou sem escudo (é um sinal, não um bloqueio).
+        var script = PrivacySignals.Compose(PrivacySignals.ScriptFor(url), scriptlets, extra?.Invoke(url));
 
         lock (_gate)
         {

@@ -43,6 +43,8 @@ public static class CefConfigurator
                     "HttpsUpgrades",
                 }
                 .Where(f => !string.IsNullOrEmpty(f)));
+        // Promessas do Éteris na linha de comandos do motor (APIs de anúncios desligadas…): Shields/EngineHardening.cs.
+        Shields.EngineHardening.Apply(settings.CefCommandLineArgs);
         settings.RegisterScheme(new CefCustomScheme
         {
             SchemeName = EterisSchemeHandlerFactory.SchemeName,

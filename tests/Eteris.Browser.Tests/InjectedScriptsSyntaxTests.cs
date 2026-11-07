@@ -31,6 +31,7 @@ public class InjectedScriptsSyntaxTests
         { "escurecer (antes da página)", DarkPages.EarlyScript },
         { "espreitar (extração do artigo)", LinkPreview.Script },
         { "espreitar (Alt+clique)", LinkPreview.AltClickScript },
+        { "Global Privacy Control (navigator)", PrivacySignals.GpcScript },
     };
 
     [Theory]

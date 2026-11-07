@@ -16,6 +16,11 @@ public static class PrivacyPreferences
         ["autofill.credit_card_enabled"] = false,
         ["net.network_prediction_options"] = 2,
         ["search.suggest_enabled"] = false,
+        // As APIs de anúncios do Chromium também desligadas nas definições do perfil (além dos interruptores do motor,
+        // Shields/EngineHardening.cs): nenhuma lista de interesses nem leilão fica ativo por omissão.
+        ["privacy_sandbox.m1.topics_enabled"] = false,
+        ["privacy_sandbox.m1.fledge_enabled"] = false,
+        ["privacy_sandbox.m1.ad_measurement_enabled"] = false,
     };
 
     public static bool ThirdPartyCookiesBlocked { get; private set; }
