@@ -90,7 +90,7 @@ public partial class MainWindow
         var core = view.CoreWebView2;
         ConfigureVideoPrivacy(core);
         WireVideoView(tab, view, core, environment);
-        if (tab.IsMuted) core.IsMuted = true;
+        if (tab.IsMuted || Infrastructure.TestSwitches.Mute) core.IsMuted = true;
         core.Navigate(url);
     }
 

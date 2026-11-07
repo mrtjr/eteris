@@ -9,7 +9,7 @@ public static class CefConfigurator
     // Porta 9 («discard»): nada escuta em 127.0.0.1, por isso o updater do Chrome falha logo, sem sair do PC.
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
-    public static CefSettings Build(string profilePath, bool blockAutoplay = true)
+    public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false)
     {
         var settings = new CefSettings
         {
@@ -18,6 +18,8 @@ public static class CefConfigurator
             LogSeverity = LogSeverity.Disable,
         };
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
+        // Só nos testes ao vivo (TestSwitches.Mute): nenhum som sai do motor.
+        if (muteAudio) settings.CefCommandLineArgs["mute-audio"] = "1";
         // Sem o «component updater» do Chrome nem tráfego de fundo: de outro modo o motor descarrega sozinho, dos
         // servidores da Google, dezenas de componentes (Widevine, modelos de sugestão, Optimization Hints, Variations…).
         // Privacidade, e o módulo Widevine é da Google e tem os seus próprios termos.
@@ -61,6 +63,6 @@ public static class CefConfigurator
         Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.ApplySecureDns(
             System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty)
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
-        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay), performDependencyCheck: true, browserProcessHandler: null);
+        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute), performDependencyCheck: true, browserProcessHandler: null);
     }
 }
