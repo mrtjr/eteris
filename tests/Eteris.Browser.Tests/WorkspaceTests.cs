@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Input;
 using Eteris.Browser.Data;
 using Eteris.Browser.Tabs;
 
@@ -267,5 +268,19 @@ public sealed class WorkspaceTests : IDisposable
 
         store.Save(["eteris://newtab/"], 0, spaces: [new SessionSpace("Geral", 0), new SessionSpace("Trabalho", 1, null, new Session(["eteris://settings/"], 0))]);
         Assert.Null(store.Load());
+    }
+
+    // Ctrl+Alt+1…9 e Ctrl+Alt+←/→, nunca com AltGr (Alt da direita: AltGr+2 escreve «@») nem com Shift.
+    [Fact]
+    public void Shortcuts_DigitsArrowsAndNumPad_ButNeverAltGrOrShift()
+    {
+        Assert.Equal(WorkspaceMove.To(2), WorkspaceShortcut.Resolve(Key.D2, shift: false, leftAltDown: true));
+        Assert.Equal(WorkspaceMove.To(9), WorkspaceShortcut.Resolve(Key.NumPad9, false, true));
+        Assert.Equal(WorkspaceMove.Next, WorkspaceShortcut.Resolve(Key.Right, false, true));
+        Assert.Equal(WorkspaceMove.Previous, WorkspaceShortcut.Resolve(Key.Left, false, true));
+        Assert.Null(WorkspaceShortcut.Resolve(Key.D2, shift: false, leftAltDown: false));
+        Assert.Null(WorkspaceShortcut.Resolve(Key.D2, shift: true, leftAltDown: true));
+        Assert.Null(WorkspaceShortcut.Resolve(Key.D0, false, true));
+        Assert.Null(WorkspaceShortcut.Resolve(Key.W, false, true));
     }
 }

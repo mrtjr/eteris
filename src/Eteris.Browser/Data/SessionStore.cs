@@ -6,7 +6,7 @@ namespace Eteris.Browser.Data;
 public sealed record Session(IReadOnlyList<string> Urls, int ActiveIndex, IReadOnlyList<string>? Titles = null,
     IReadOnlyList<bool>? Pinned = null, IReadOnlyList<int>? GroupIds = null, IReadOnlyList<SessionGroup>? Groups = null,
     SessionSplit? Split = null, IReadOnlyList<SessionTabMeta>? Metas = null, IReadOnlyList<SessionSpace>? Spaces = null,
-    int SpaceIndex = 0);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] int SpaceIndex = 0);
 
 // Espaço (Tabs/Workspace.cs) gravado na sessão: nome, cor e ícone; as abas dos Espaços que não estão à vista vão
 // numa sessão própria (Tabs), e o que está à vista (SpaceIndex) usa as abas do nível de cima, como sempre — assim

@@ -106,6 +106,7 @@ public partial class MainWindow
             yield return new("\uE74F", "Silenciar outras abas", "Fica só o som desta aba", null, MuteOtherTabs);
         yield return new("", "Adormecer abas em segundo plano", "Liberta a memória das abas que não está a usar", null,
             SleepAllBackgroundTabs);
+        foreach (var command in WorkspaceCommands()) yield return command;
         yield return new("", "Nova janela", "Abrir outra janela do Éteris", "Ctrl+N", () => OpenWindow(isPrivate: false));
         yield return new("", "Nova janela privada", "Nada fica no histórico, nos cookies nem na cache", "Ctrl+Shift+N",
             () => OpenWindow(isPrivate: true));
