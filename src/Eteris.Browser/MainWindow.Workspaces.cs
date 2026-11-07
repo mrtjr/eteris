@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Palette;
 using Eteris.Browser.Tabs;
@@ -124,20 +126,38 @@ public partial class MainWindow
             : $"{TabSelection.Count(moved)} foram para o Espaço «{target.Name}»");
     }
 
-    // Apagar fecha as abas do Espaço (ficam nas fechadas recentes); o atual passa primeiro para o vizinho.
+    // Apagar fecha as abas do Espaço (ficam nas fechadas recentes); o atual passa primeiro para o vizinho. As trancadas
+    // não fecham: passam para o Espaço à vista. Mais abas do que cabem nas fechadas recentes ficam também numa sessão
+    // guardada (janela normal), com nome e nota, para nenhuma se perder.
     private void DeleteWorkspace(Workspace workspace)
     {
         if (!Tabs.HasWorkspaces) return;
-        var count = workspace.TabCount;
         if (workspace.IsCurrent)
         {
             var index = Tabs.Workspaces.IndexOf(workspace);
             SwitchWorkspace(Tabs.Workspaces[index > 0 ? index - 1 : index + 1]);
         }
-        if (!Tabs.RemoveWorkspace(workspace)) return;
-        ShowToast(count == 0
-            ? $"Espaço «{workspace.Name}» apagado"
-            : $"Espaço «{workspace.Name}» apagado — {Workspace.CountText(count)} nas fechadas recentes (Ctrl+Shift+T)");
+        var name = workspace.Name;
+        var pages = workspace.TabCount > 0 ? Tabs.TabsOf(workspace).Where(t => !t.IsLocked && !NewTabPage.IsNewTab(t.Address))
+            .Select(t => new SavedTab(t.Address, t.Title, t.CustomTitle, t.Note)).ToList() : [];
+        if (Tabs.RemoveWorkspaceWithTabs(workspace) is not { } removal) return;
+        // Abas acordadas na reserva (com som) ainda tinham motor.
+        foreach (var tab in removal.Closed) ReleaseBrowser(tab);
+        var kept = removal.KeptLocked == 0 ? ""
+            : removal.KeptLocked == 1 ? " — a aba trancada passou para este Espaço" : $" — as {removal.KeptLocked} abas trancadas passaram para este Espaço";
+        if (pages.Count == 0)
+        {
+            ShowToast($"Espaço «{name}» apagado{kept}");
+            return;
+        }
+        if (pages.Count > TabsViewModel.MaxClosed && !IsPrivate && AppData.SaveSession($"Espaço «{name}» (apagado)", pages))
+        {
+            ShowToast($"Espaço «{name}» apagado — {Workspace.CountText(pages.Count)} na sessão guardada «Espaço «{name}» (apagado)» (paleta, Ctrl+K){kept}");
+            return;
+        }
+        ShowToast(pages.Count > TabsViewModel.MaxClosed
+            ? $"Espaço «{name}» apagado — as últimas {TabsViewModel.MaxClosed} de {pages.Count} abas nas fechadas recentes (Ctrl+Shift+T){kept}"
+            : $"Espaço «{name}» apagado — {Workspace.CountText(pages.Count)} nas fechadas recentes (Ctrl+Shift+T){kept}");
     }
 
     private void SpaceChip_Click(object sender, MouseButtonEventArgs e)
@@ -199,7 +219,7 @@ public partial class MainWindow
         {
             var target = spaces[i];
             if (target.IsCurrent) continue;
-            var keys = i < 9 ? $"Ctrl+Alt+{i + 1}" : null;
+            var keys = Workspace.ShortcutFor(i, spaces.Count);
             yield return new("", $"Ir para o Espaço «{target.Name}»", $"{(target.Icon is { } icon ? icon + " · " : "")}{Workspace.CountText(target.TabCount)}",
                 keys, () => SwitchWorkspace(target, announce: true));
         }
@@ -208,6 +228,7 @@ public partial class MainWindow
         var current = Tabs.Current;
         yield return new("", "Mudar o nome do Espaço…", $"Agora «{current.Name}» — nome, emoji e cor do Espaço à vista", null,
             () => EditWorkspace(current, ChipOf(current) ?? Omnibox));
-        yield return new("", $"Apagar o Espaço «{current.Name}»", "As abas dele vão para as fechadas recentes", null, () => DeleteWorkspace(current));
+        yield return new("", $"Apagar o Espaço «{current.Name}»", "As abas dele vão para as fechadas recentes; as trancadas passam para o vizinho", null,
+            () => DeleteWorkspace(current));
     }
 }

@@ -166,15 +166,21 @@ public partial class MainWindow
             AutomationProperties.SetName(button, $"Emoji {emoji}");
             button.MouseEnter += (_, _) => button.Background = Res("HoverOverlayBrush");
             button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+            void Pick()
+            {
+                set(get() == emoji ? null : emoji);
+                Refresh();
+            }
             button.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
-                set(get() == emoji ? null : emoji);
-                Refresh();
+                Pick();
             };
+            MakePickable(button, Pick, 8);
             buttons.Add(button);
             panel.Children.Add(button);
         }
+        MakePickerPanel(panel);
         Refresh();
         return panel;
     }
@@ -202,18 +208,59 @@ public partial class MainWindow
                 dot.Child = new TextBlock { Text = "\uE711", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Res("TextMutedBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             AutomationProperties.SetName(dot, index is { } n ? $"Cor {TabGroup.PaletteNames[n]}" : "Sem cor");
             dot.ToolTip = index is { } t ? TabGroup.PaletteNames[t] : "Sem cor";
+            void Pick()
+            {
+                set(index);
+                Refresh();
+            }
             dot.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
-                set(index);
-                Refresh();
+                Pick();
             };
+            MakePickable(dot, Pick, 13);
             dots.Add(dot);
             panel.Children.Add(dot);
         }
+        MakePickerPanel(panel);
         Refresh();
         return panel;
     }
+
+    // Seletores por teclado: Tab entra no seletor uma só vez (no último escolhido), as setas andam entre os itens
+    // (a dar a volta) e Enter ou Espaço escolhem — como os rádios das cores dos grupos no Chrome e no Firefox.
+    private static void MakePickerPanel(Panel panel)
+    {
+        KeyboardNavigation.SetTabNavigation(panel, KeyboardNavigationMode.Once);
+        KeyboardNavigation.SetDirectionalNavigation(panel, KeyboardNavigationMode.Cycle);
+    }
+
+    private void MakePickable(Border item, Action pick, double radius)
+    {
+        item.Focusable = true;
+        item.FocusVisualStyle = PickerFocusStyle(radius);
+        item.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Space)) return;
+            e.Handled = true;
+            pick();
+        };
+    }
+
+    // Contorno íris à volta do item com o foco do teclado.
+    private static Style PickerFocusStyle(double radius)
+    {
+        var ring = new FrameworkElementFactory(typeof(System.Windows.Shapes.Rectangle));
+        ring.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "IrisBrush");
+        ring.SetValue(System.Windows.Shapes.Shape.StrokeThicknessProperty, 2.0);
+        ring.SetValue(System.Windows.Shapes.Rectangle.RadiusXProperty, radius);
+        ring.SetValue(System.Windows.Shapes.Rectangle.RadiusYProperty, radius);
+        ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-3));
+        var style = new Style(typeof(Control));
+        style.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate { VisualTree = ring }));
+        return style;
+    }
+
 
     private Grid? _renameLayer;
 

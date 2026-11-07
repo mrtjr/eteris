@@ -79,13 +79,25 @@ public partial class MainWindow
         ShowToast($"«{group.Name}» criado com {TabSelection.Count(members.Count)} — botão direito na etiqueta para o nome e a cor");
     }
 
+    // A janela nova é do mesmo tipo (de uma privada sai outra privada: nada passa para o histórico, a sessão ou os
+    // cookies normais) e as abas levam o nome, o emoji, a cor, a nota e a tranca.
     private void MoveSelectedToNewWindow(IReadOnlyList<BrowserTab> selected)
     {
         if (selected.Count >= Tabs.Tabs.Count) return;
-        var saved = selected.Select(t => new Data.SavedTab(t.Address, t.Title, t.CustomTitle, t.Note)).ToList();
-        foreach (var tab in selected) Tabs.CloseQuietly(tab);
-        OpenWindowWith(saved, 0);
+        var moving = selected.ToList();
+        var metas = TabsViewModel.MetaSnapshotOf(moving, null);
+        var addresses = moving.Select(t => t.Address).ToList();
+        var titles = moving.Select(t => t.Title).ToList();
+        foreach (var tab in moving) Tabs.CloseQuietly(tab);
+        if (OpenWindowWith(addresses, titles, 0, IsPrivate) is not { } window) return;
+        for (var i = 0; i < metas.Count && i < window.Tabs.Tabs.Count; i++)
+        {
+            window.Tabs.Tabs[i].SetIdentity(metas[i].Name, metas[i].Emoji, metas[i].Color, metas[i].Note);
+            window.Tabs.Tabs[i].IsLocked = metas[i].Locked;
+        }
+        window.Activate();
     }
+
 
     private void SleepSelected(IReadOnlyList<BrowserTab> selected)
     {

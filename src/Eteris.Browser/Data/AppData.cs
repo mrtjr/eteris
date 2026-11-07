@@ -165,10 +165,16 @@ public static class AppData
         catch (Exception) { return null; }
     });
 
-    public static void MarkDone(string url, string title)
+    // Devolve false quando não ficou gravado (base de dados indisponível): quem fecha a aba a seguir tem de o saber.
+    public static bool MarkDone(string url, string title)
     {
-        try { LazyDone.Value?.Add(url, title, DateTime.UtcNow); }
-        catch (Exception) { }
+        try
+        {
+            if (LazyDone.Value is not { } store) return false;
+            store.Add(url, title, DateTime.UtcNow);
+            return true;
+        }
+        catch (Exception) { return false; }
     }
 
     public static IReadOnlyList<DoneTab> DoneSince(DateTime sinceUtc)
@@ -183,16 +189,28 @@ public static class AppData
         catch (Exception) { return null; }
     });
 
-    public static void SnoozeTab(string url, string title, string? name, string? note, DateTime dueUtc)
+    // Adiar, esquecer a adiada e arquivar devolvem false quando a base de dados não gravou: a aba não pode sair da
+    // faixa (nem voltar outra vez a cada minuto) por causa de uma escrita que falhou em silêncio.
+    public static bool SnoozeTab(string url, string title, string? name, string? note, DateTime dueUtc)
     {
-        try { LazySnoozed.Value?.Add(url, title, name, note, dueUtc); }
-        catch (Exception) { }
+        try
+        {
+            if (LazySnoozed.Value is not { } store) return false;
+            store.Add(url, title, name, note, dueUtc);
+            return true;
+        }
+        catch (Exception) { return false; }
     }
 
-    public static void ForgetSnoozed(long id)
+    public static bool ForgetSnoozed(long id)
     {
-        try { LazySnoozed.Value?.Delete(id); }
-        catch (Exception) { }
+        try
+        {
+            if (LazySnoozed.Value is not { } store) return false;
+            store.Delete(id);
+            return true;
+        }
+        catch (Exception) { return false; }
     }
 
     public static IReadOnlyList<SnoozedTab> SnoozedTabs()
@@ -213,11 +231,17 @@ public static class AppData
         catch (Exception) { return null; }
     });
 
-    public static void ArchiveTab(string url, string title, string? name, DateTime lastActiveUtc, DateTime nowUtc)
+    public static bool ArchiveTab(string url, string title, string? name, DateTime lastActiveUtc, DateTime nowUtc)
     {
-        try { LazyArchived.Value?.Add(url, title, name, lastActiveUtc, nowUtc); }
-        catch (Exception) { }
+        try
+        {
+            if (LazyArchived.Value is not { } store) return false;
+            store.Add(url, title, name, lastActiveUtc, nowUtc);
+            return true;
+        }
+        catch (Exception) { return false; }
     }
+
 
     public static void ForgetArchived(long id)
     {
@@ -237,11 +261,17 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    public static void SaveSession(string name, IReadOnlyList<SavedTab> tabs)
+    public static bool SaveSession(string name, IReadOnlyList<SavedTab> tabs)
     {
-        try { LazySessions.Value?.Save(name, tabs, DateTime.UtcNow); }
-        catch (Exception) { }
+        try
+        {
+            if (LazySessions.Value is not { } store) return false;
+            store.Save(name, tabs, DateTime.UtcNow);
+            return true;
+        }
+        catch (Exception) { return false; }
     }
+
 
     public static bool RenameSession(long id, string name)
     {

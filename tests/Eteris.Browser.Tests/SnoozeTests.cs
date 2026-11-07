@@ -47,9 +47,13 @@ public sealed class SnoozeTests : IDisposable
         var labels = Snooze.Options(sunday).Select(o => o.Label).ToList();
         Assert.Contains("Amanhã de manhã", labels);
         Assert.DoesNotContain("Segunda de manhã", labels);
-        // Numa segunda-feira, «Segunda de manhã» é a próxima, não a de hoje.
+        // Numa segunda-feira, a próxima segunda é «Daqui a uma semana»: não aparece duas vezes com nomes diferentes.
         var monday = new DateTime(2026, 11, 9, 10, 0, 0, DateTimeKind.Local);
-        Assert.Equal(new DateTime(2026, 11, 16, 9, 0, 0), Snooze.Options(monday).Single(o => o.Label == "Segunda de manhã").DueLocal);
+        var options = Snooze.Options(monday);
+        Assert.DoesNotContain(options, o => o.Label == "Segunda de manhã");
+        Assert.Equal(new DateTime(2026, 11, 16, 9, 0, 0), options.Single(o => o.Label == "Daqui a uma semana").DueLocal);
+        Assert.Equal(options.Count, options.Select(o => o.DueLocal).Distinct().Count());
+
     }
 
     [Fact]

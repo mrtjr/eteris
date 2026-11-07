@@ -1,8 +1,9 @@
 namespace Eteris.Browser.Tabs;
 
 // Spaces: os Espaços da janela (como na sessão), com as abas dos que não estavam à vista; null sem Espaços.
+// Metas: nome próprio, emoji, cor, nota e tranca das abas da faixa, pela mesma ordem.
 public sealed record ClosedWindow(IReadOnlyList<string> Addresses, IReadOnlyList<string> Titles, int ActiveIndex,
-    IReadOnlyList<Data.SessionSpace>? Spaces = null, int SpaceIndex = 0)
+    IReadOnlyList<Data.SessionSpace>? Spaces = null, int SpaceIndex = 0, IReadOnlyList<Data.SessionTabMeta>? Metas = null)
 {
     // Há alguma coisa a reabrir: abas na faixa ou nalgum outro Espaço.
     public bool HasTabs => Addresses.Count > 0 || (Spaces?.Any(s => s.Tabs is { Urls.Count: > 0 }) ?? false);

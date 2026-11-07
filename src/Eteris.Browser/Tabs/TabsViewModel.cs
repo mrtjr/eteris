@@ -24,6 +24,15 @@ public partial class TabsViewModel : ObservableObject
     [ObservableProperty]
     private BrowserTab? _active;
 
+    // O endereço de uma aba nova nesta janela (a janela privada tem a sua); usado quando a faixa não pode ficar vazia.
+    public string NewTabAddress { get; set; } = Browser.NewTabPage.Url;
+
+    // Relógio (UTC) das contas de tempo da faixa — substituível nos testes.
+    public Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+
+    // Maior instante que DateTimeOffset aceita em Unix ms (31/12/9999): um «Seen» fora disto vem de um ficheiro estragado.
+    private const long MaxUnixMilliseconds = 253_402_300_799_999;
+
     public BrowserTab NewTab(string address, bool activate = true)
     {
         var tab = new BrowserTab(address);
@@ -76,7 +85,9 @@ public partial class TabsViewModel : ObservableObject
             {
                 tab.SetIdentity(meta.Name, meta.Emoji, meta.Color, meta.Note);
                 tab.IsLocked = meta.Locked;
-                if (meta.Seen is { } seen) tab.LastActiveUtc = DateTimeOffset.FromUnixTimeMilliseconds(seen).UtcDateTime;
+                // Um valor fora do intervalo (ficheiro editado ou estragado) é ignorado: nunca impede o arranque.
+                if (meta.Seen is { } seen && seen is >= 0 and <= MaxUnixMilliseconds)
+                    tab.LastActiveUtc = DateTimeOffset.FromUnixTimeMilliseconds(seen).UtcDateTime;
             }
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
@@ -85,7 +96,8 @@ public partial class TabsViewModel : ObservableObject
         return tabs;
     }
 
-    // Devolve true quando a última aba foi fechada (a janela deve fechar, como no Chrome).
+    // Devolve true quando a última aba foi fechada (a janela deve fechar, como no Chrome). Com outros Espaços na
+    // janela isso nunca acontece: a faixa fica com uma aba nova (fechar a janela levaria os outros Espaços).
     // Uma aba trancada não fecha por aqui: só «Destrancar» ou «Feito» a tiram da faixa.
     public bool Close(BrowserTab tab) => Close(tab, remember: true);
 
@@ -97,13 +109,20 @@ public partial class TabsViewModel : ObservableObject
         Close(tab, remember: false);
     }
 
-    public void CloseDone(BrowserTab tab) => CloseQuietly(tab);
+    // «Feito»: sai mesmo trancada. «remember» quando não fica em «Feitas hoje» (janela privada, ou a base de dados
+    // falhou): vai para as fechadas recentes, para não ser um fecho sem volta.
+    public void CloseDone(BrowserTab tab, bool remember = false)
+    {
+        tab.IsLocked = false;
+        Close(tab, remember);
+    }
 
     private bool Close(BrowserTab tab, bool remember)
     {
         var index = Tabs.IndexOf(tab);
         if (index < 0) return Tabs.Count == 0;
         if (tab.IsLocked) return false;
+        if (Tabs.Count == 1 && HasWorkspaces) NewTab(NewTabAddress, activate: false);
 
         if (remember && !Browser.NewTabPage.IsNewTab(tab.Address))
         {
@@ -180,11 +199,13 @@ public partial class TabsViewModel : ObservableObject
         foreach (var same in Tabs.GroupBy(t => DuplicateKey(t.Address)).Where(g => g.Count() > 1).ToList())
         {
             var keep = same.FirstOrDefault(t => ReferenceEquals(t, Active)) ?? same.FirstOrDefault(t => t.IsPinned) ?? same.First();
-            foreach (var tab in same.Where(t => !ReferenceEquals(t, keep) && !t.IsPinned).ToList())
+            // As trancadas ficam (Close recusa-as) e não contam como fechadas.
+            foreach (var tab in same.Where(t => !ReferenceEquals(t, keep) && !t.IsPinned && !t.IsLocked).ToList())
             {
                 Close(tab);
                 closed++;
             }
+
         }
         return closed;
     }
@@ -261,7 +282,10 @@ public partial class TabsViewModel : ObservableObject
 
     public static List<Data.SessionTabMeta> MetaSnapshotOf(IReadOnlyList<BrowserTab> tabs, BrowserTab? active)
         => tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked,
-            new DateTimeOffset(DateTime.SpecifyKind(ReferenceEquals(t, active) ? DateTime.UtcNow : t.LastActiveUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds())).ToList();
+            UnixMs(ReferenceEquals(t, active) ? DateTime.UtcNow : t.LastActiveUtc))).ToList();
+
+    private static long UnixMs(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+
 
     public void RefreshGroups()
     {

@@ -23,6 +23,7 @@ public partial class TabRadarView : UserControl
     private readonly Action<Data.ArchivedTab> _restore;
     private readonly Action<Workspace, BrowserTab> _goToSpace;
     private readonly bool _privateWindow;
+    private readonly IReadOnlyList<RadarScope> _scopes;
     private readonly HashSet<BrowserTab> _watched = [];
     private bool _watching;
     private DispatcherOperation? _pendingRefresh;
@@ -46,9 +47,8 @@ public partial class TabRadarView : UserControl
         _dismiss = dismiss;
         InitializeComponent();
 
-        Filters.ItemsSource = privateWindow
-            ? new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente" }
-            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje", "Adiadas", "Arquivo", "Noutros Espaços" };
+        _scopes = TabRadar.ScopesFor(privateWindow);
+        Filters.ItemsSource = _scopes.Select(TabRadar.ScopeLabel).ToList();
         Order.ItemsSource = new[] { "Usadas recentemente", "Por site", "Ordem da faixa de abas" };
         Filters.SelectedIndex = (int)RadarScope.All;
         Order.SelectedIndex = (int)RadarSort.Recent;
@@ -170,7 +170,8 @@ public partial class TabRadarView : UserControl
 
         var selection = Results.SelectedItem as RadarRow;
         var previousIndex = Math.Max(0, Results.SelectedIndex);
-        var scope = (RadarScope)Filters.SelectedIndex;
+        var scope = Filters.SelectedIndex >= 0 && Filters.SelectedIndex < _scopes.Count ? _scopes[Filters.SelectedIndex] : RadarScope.All;
+
         var sort = (RadarSort)Order.SelectedIndex;
         var query = QueryBox.Text.Trim();
 

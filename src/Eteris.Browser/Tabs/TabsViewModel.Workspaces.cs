@@ -5,7 +5,8 @@ namespace Eteris.Browser.Tabs;
 // Espaços (Tabs/Workspace.cs): a faixa (Tabs) mostra só as abas do Espaço à vista. Mudar de Espaço guarda as abas
 // atuais na reserva do Espaço (a dormir, com a aba ativa e a ordem) e põe na faixa as do destino; a aba ativa do
 // destino acorda pela janela (OnActiveTabChanging). As abas entram na faixa antes de as antigas saírem, para a
-// janela nunca ficar sem abas (a última aba a sair fechá-la-ia).
+// janela nunca ficar sem abas (a última aba a sair fechá-la-ia). As abas que saem adormecem, menos as trancadas e as
+// que tocam som: essas guardam o motor fora de vista (a janela não o liberta) e voltam como estavam.
 public partial class TabsViewModel
 {
     public ObservableCollection<Workspace> Workspaces { get; } = [new Workspace { IsCurrent = true }];
@@ -37,15 +38,17 @@ public partial class TabsViewModel
         if (ReferenceEquals(target, current) || !Workspaces.Contains(target)) return false;
 
         // 1. A faixa vai para a reserva do Espaço que sai.
+        var now = UtcNow();
         var leaving = Tabs.ToList();
         current.StoredTabs.Clear();
         current.StoredTabs.AddRange(leaving);
         current.StoredActiveIndex = Active is { } active ? Math.Max(0, leaving.IndexOf(active)) : 0;
         current.IsCurrent = false;
+        current.LeftUtc = now;
         foreach (var tab in leaving)
         {
             tab.IsMultiSelected = false;
-            tab.IsSleeping = true;
+            if (!StaysAwakeOutOfView(tab)) tab.IsSleeping = true;
         }
 
         // 2. As abas do destino entram (a dormir) e a sua ativa acorda; um Espaço vazio ganha uma aba nova.
@@ -53,11 +56,16 @@ public partial class TabsViewModel
         var activeIndex = Math.Clamp(target.StoredActiveIndex, 0, Math.Max(0, arriving.Count - 1));
         target.StoredTabs.Clear();
         target.IsCurrent = true;
+        // O tempo em que o Espaço esteve posto de lado não conta para o arquivo automático: voltar a um Espaço
+        // guardado há mais do que o prazo não pode mandar as abas dele para o Arquivo no minuto seguinte.
+        if (target.LeftUtc is { } left && now > left)
+            foreach (var tab in arriving) tab.LastActiveUtc = Min(now, tab.LastActiveUtc + (now - left));
+        target.LeftUtc = null;
         // A ativa entra já acordada (a janela cria-lhe o motor ao entrar na faixa, como no restauro da sessão).
         if (arriving.Count > 0) arriving[activeIndex].IsSleeping = false;
         foreach (var tab in arriving) Tabs.Add(tab);
         if (arriving.Count > 0) Active = arriving[activeIndex];
-        else NewTab(newTabAddress ?? Browser.NewTabPage.Url);
+        else NewTab(newTabAddress ?? NewTabAddress);
 
         // 3. Só agora as abas do Espaço que saiu deixam a faixa (a janela liberta os motores delas).
         foreach (var tab in leaving) Tabs.Remove(tab);
@@ -65,6 +73,15 @@ public partial class TabsViewModel
         RefreshWorkspaceCounts();
         return true;
     }
+
+    private static DateTime Min(DateTime a, DateTime b) => a <= b ? a : b;
+
+    // Uma aba acordada que tranca ou toca som não adormece ao sair de vista (como na política de sono).
+    public static bool StaysAwakeOutOfView(BrowserTab tab) => !tab.IsSleeping && (tab.IsLocked || tab.IsAudible);
+
+    // As abas acordadas fora de vista (reserva de outros Espaços), para a janela as vigiar e adormecer pela política.
+    public IReadOnlyList<BrowserTab> AwakeOutOfView()
+        => Workspaces.Where(w => !w.IsCurrent).SelectMany(w => w.StoredTabs).Where(t => !t.IsSleeping).ToList();
 
     public bool SwitchWorkspaceByNumber(int number, string? newTabAddress = null)
     {
@@ -85,7 +102,7 @@ public partial class TabsViewModel
     public bool MoveToWorkspace(BrowserTab tab, Workspace target, string? newTabAddress = null)
     {
         if (!Tabs.Contains(tab) || target.IsCurrent || !Workspaces.Contains(target)) return false;
-        if (Tabs.Count == 1) NewTab(newTabAddress ?? Browser.NewTabPage.Url, activate: false);
+        if (Tabs.Count == 1) NewTab(newTabAddress ?? NewTabAddress, activate: false);
         var index = Tabs.IndexOf(tab);
         var wasActive = ReferenceEquals(tab, Active);
         tab.Group = null;
@@ -117,17 +134,23 @@ public partial class TabsViewModel
             };
     }
 
-    // Apagar um Espaço fecha as abas dele (vão para as fechadas recentes, para nada se perder); o último não se
-    // apaga. Apagar o Espaço à vista muda primeiro para o vizinho.
-    public bool RemoveWorkspace(Workspace workspace)
+    public bool RemoveWorkspace(Workspace workspace) => RemoveWorkspaceWithTabs(workspace) is not null;
+
+    // Apagar um Espaço fecha as abas dele (vão para as fechadas recentes); o último não se apaga. Apagar o Espaço à
+    // vista muda primeiro para o vizinho. As trancadas não fecham: passam para o fim da faixa do Espaço que fica à
+    // vista. Devolve as abas fechadas (para a janela libertar motores e guardar o que não cabe nas fechadas
+    // recentes) e quantas trancadas ficaram; null se não apagou.
+    public WorkspaceRemoval? RemoveWorkspaceWithTabs(Workspace workspace)
     {
-        if (Workspaces.Count < 2 || !Workspaces.Contains(workspace)) return false;
+        if (Workspaces.Count < 2 || !Workspaces.Contains(workspace)) return null;
         if (workspace.IsCurrent)
         {
             var index = Workspaces.IndexOf(workspace);
             SwitchWorkspace(Workspaces[index > 0 ? index - 1 : index + 1]);
         }
-        foreach (var tab in workspace.StoredTabs)
+        var locked = workspace.StoredTabs.Where(t => t.IsLocked).ToList();
+        var closed = workspace.StoredTabs.Where(t => !t.IsLocked).ToList();
+        foreach (var tab in closed)
         {
             if (Browser.NewTabPage.IsNewTab(tab.Address)) continue;
             _closed.Add(new ClosedTab(Tabs.Count, tab.Address, tab.Title));
@@ -135,8 +158,14 @@ public partial class TabsViewModel
         }
         workspace.StoredTabs.Clear();
         Workspaces.Remove(workspace);
+        foreach (var tab in locked)
+        {
+            tab.Group = null;
+            Tabs.Add(tab);
+        }
+        RefreshGroups();
         RefreshWorkspaceCounts();
-        return true;
+        return new WorkspaceRemoval(closed, locked.Count);
     }
 
     // As abas de um Espaço: as da faixa, se está à vista; senão as da reserva.
@@ -168,7 +197,7 @@ public partial class TabsViewModel
             var active = Math.Clamp(w.StoredActiveIndex, 0, Math.Max(0, tabs.Count - 1));
             return new Data.SessionSpace(w.Name, w.ColorIndex, w.Icon, new Data.Session(tabs.Select(t => t.Address).ToList(), active,
                 tabs.Select(t => t.Title).ToList(), tabs.Select(t => t.IsPinned).ToList(), groupIds, groups, w.StoredSplit,
-                MetaSnapshotOf(tabs, null)));
+                MetaSnapshotOf(tabs, null)), w.LeftUtc is { } left ? UnixMs(left) : null);
         }).ToList();
         return (spaces, Workspaces.IndexOf(Current));
     }
@@ -191,6 +220,11 @@ public partial class TabsViewModel
                     saved.Metas, out _, wakeActive: false));
                 workspace.StoredActiveIndex = saved.ActiveIndex;
                 workspace.StoredSplit = saved.Split;
+                // Desde quando está posto de lado; numa sessão antiga, a última visita a uma aba dele.
+                workspace.LeftUtc = space.Left is { } leftMs && leftMs is >= 0 and <= MaxUnixMilliseconds
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(leftMs).UtcDateTime
+                    : workspace.StoredTabs.Count > 0 ? workspace.StoredTabs.Max(t => t.LastActiveUtc) : null;
+
             }
             Workspaces.Add(workspace);
         }
@@ -198,3 +232,6 @@ public partial class TabsViewModel
         RefreshWorkspaceCounts();
     }
 }
+
+// O resultado de apagar um Espaço: as abas que fecharam e quantas trancadas passaram para o Espaço à vista.
+public sealed record WorkspaceRemoval(IReadOnlyList<BrowserTab> Closed, int KeptLocked);

@@ -241,7 +241,7 @@
           </div>
         </div>
         <div class="item">
-          <div class="label"><b>Arquivar abas esquecidas</b><span>Abas sem visita há este tempo desvanecem-se e vão para o Arquivo (Radar › Arquivo), de onde se repõem com um clique. Abas fixadas, trancadas, com nota ou a tocar som ficam.</span></div>
+          <div class="label"><b>Arquivar abas esquecidas</b><span>Abas sem visita há este tempo desvanecem-se e vão para o Arquivo (Radar › Arquivo), de onde se repõem com um clique. Abas fixadas, trancadas, com nota ou a tocar som ficam. Enquanto não escolher aqui um prazo, as abas esquecidas só se desvanecem e nenhuma sai da faixa.</span></div>
           <div class="seg" data-key="archive">
             <button data-value="3">3 dias</button>
             <button data-value="7">7 dias</button>
@@ -475,7 +475,9 @@
     send('accent', b.dataset.value);
   });
 
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: String(data.archive), tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density };
+  // O arquivo automático só fecha abas depois de o utilizador escolher um prazo: até lá nenhum fica marcado.
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: data.archiveConfirmed ? String(data.archive) : '', tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density };
+
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;
     const paint = () => seg.querySelectorAll('button[data-value]').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));

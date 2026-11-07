@@ -11,7 +11,8 @@ public sealed record Session(IReadOnlyList<string> Urls, int ActiveIndex, IReadO
 // Espaço (Tabs/Workspace.cs) gravado na sessão: nome, cor e ícone; as abas dos Espaços que não estão à vista vão
 // numa sessão própria (Tabs), e o que está à vista (SpaceIndex) usa as abas do nível de cima, como sempre — assim
 // uma sessão sem Espaços lê-se como antes e um Éteris sem esta funcionalidade ignora o campo.
-public sealed record SessionSpace(string Name, int ColorIndex, string? Icon = null, Session? Tabs = null);
+// Left = desde quando está posto de lado (Unix ms), para o arquivo automático não contar esse tempo.
+public sealed record SessionSpace(string Name, int ColorIndex, string? Icon = null, Session? Tabs = null, long? Left = null);
 
 // O que o utilizador deu à aba (Tabs/TabIdentity.cs): nome próprio, emoji e cor do ícone; tudo opcional.
 // Seen = última visita (Unix ms), para o arquivo automático contar o tempo real e não desde o último arranque.
@@ -100,10 +101,13 @@ public sealed class SessionStore(string path)
             if (IsOnlyInternal(main) && (spaces is null || spaces.All(s => s.Tabs is null || IsOnlyInternal(s.Tabs)))) return null;
             return main with { Spaces = spaces, SpaceIndex = spaces is null ? 0 : Math.Clamp(session.SpaceIndex, 0, spaces.Count - 1) };
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        // Um ficheiro de cache nunca impede o arranque: valores fora do intervalo, sem permissão de leitura, etc.
+        catch (Exception ex) when (ex is JsonException or IOException or ArgumentException or UnauthorizedAccessException
+                                       or NotSupportedException or InvalidOperationException)
         {
             return null;
         }
+
     }
 
     private static bool IsOnlyInternal(Session session)

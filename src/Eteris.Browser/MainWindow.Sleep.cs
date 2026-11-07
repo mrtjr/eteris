@@ -40,6 +40,8 @@ public partial class MainWindow
         _sleepTimer.Start();
     }
 
+    private bool HasEngine(BrowserTab tab) => _browsers.ContainsKey(tab) || _videoViews.ContainsKey(tab);
+
     private bool IsTabOnScreen(BrowserTab tab)
         => ReferenceEquals(tab, Tabs.Active) || _split?.PaneOf(tab) is not null;
 
@@ -54,7 +56,16 @@ public partial class MainWindow
             ReleaseBrowser(tab);
             tab.IsSleeping = true;
         }
+        // As que ficaram acordadas noutro Espaço (com som, ou trancadas) seguem a mesma política: acabado o som,
+        // adormecem como as outras; uma trancada fica.
+        foreach (var tab in Tabs.AwakeOutOfView())
+        {
+            if (!SleepPolicy.ShouldSleep(false, false, tab.IsLoading, tab.IsAudible, tab.LastActiveUtc, now, threshold, tab.IsLocked)) continue;
+            ReleaseBrowser(tab);
+            tab.IsSleeping = true;
+        }
     }
+
 
     private void SleepAllBackgroundTabs()
     {

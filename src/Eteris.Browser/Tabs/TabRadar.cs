@@ -20,6 +20,27 @@ public sealed record RadarRow(BrowserTab? Tab, ClosedTab? Closed, string Title, 
 // O UserControl (TabRadarView) só liga estas funções aos controlos.
 public static class TabRadar
 {
+    // Os âmbitos do seletor «Mostrar», pela ordem. A janela privada não mostra os que vivem em disco (Feitas hoje,
+    // Adiadas, Arquivo), mas tem Espaços como qualquer janela: «Noutros Espaços» fica.
+    public static IReadOnlyList<RadarScope> ScopesFor(bool privateWindow) => privateWindow
+        ? [RadarScope.All, RadarScope.Pinned, RadarScope.Audible, RadarScope.Sleeping, RadarScope.Duplicates, RadarScope.Closed, RadarScope.Spaces]
+        : Enum.GetValues<RadarScope>();
+
+    public static string ScopeLabel(RadarScope scope) => scope switch
+    {
+        RadarScope.All => "Todas as abas",
+        RadarScope.Pinned => "Fixadas",
+        RadarScope.Audible => "Com som",
+        RadarScope.Sleeping => "A dormir",
+        RadarScope.Duplicates => "Duplicadas",
+        RadarScope.Closed => "Fechadas recentemente",
+        RadarScope.Done => "Feitas hoje",
+        RadarScope.Snoozed => "Adiadas",
+        RadarScope.Archived => "Arquivo",
+        _ => "Noutros Espaços",
+    };
+
+
     public static IReadOnlyList<RadarRow> Rows(IReadOnlyList<BrowserTab> tabs, BrowserTab? active,
         IReadOnlyList<ClosedTab> closed, RadarScope scope, RadarSort sort, string query, IReadOnlyList<Data.DoneTab>? done = null,
         IReadOnlyList<Data.SnoozedTab>? snoozed = null, DateTime? nowLocal = null, IReadOnlyList<Data.ArchivedTab>? archived = null,

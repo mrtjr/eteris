@@ -16,6 +16,9 @@ public sealed record UserSettings
     public int SleepMinutes { get; init; } = 20;
     // Arquivo automático: abas sem visita há N dias vão para o Arquivo (0 = nunca).
     public int ArchiveDays { get; init; } = Tabs.ArchivePolicy.DefaultDays;
+    // O utilizador escolheu o prazo em Definições › Abas. Até lá as abas esquecidas só desvanecem: o Éteris não
+    // fecha abas sozinho sem o utilizador o ter pedido.
+    public bool ArchiveConfirmed { get; init; }
     public bool HttpsFirst { get; init; } = true;
     public bool BlockThirdPartyCookies { get; init; } = true;
     public bool Mica { get; init; } = true;
@@ -54,7 +57,8 @@ public sealed record UserSettings
         "engine" when Engines.Contains(value) => this with { SearchEngine = value },
         "startup" when value is "restore" or "newtab" => this with { Startup = value },
         "sleep" when int.TryParse(value, out var minutes) && minutes >= 0 && minutes <= 24 * 60 => this with { SleepMinutes = minutes },
-        "archive" when int.TryParse(value, out var days) && days >= 0 && days <= 365 => this with { ArchiveDays = days },
+        "archive" when int.TryParse(value, out var days) && days >= 0 && days <= 365 => this with { ArchiveDays = days, ArchiveConfirmed = true },
+
         "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
         "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
         "mica" when bool.TryParse(value, out var on) => this with { Mica = on },

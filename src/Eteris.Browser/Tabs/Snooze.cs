@@ -28,13 +28,15 @@ public static class Snooze
         var tomorrow = nowLocal.Date.AddDays(1).AddHours(MorningHour);
         options.Add(new("Amanhã de manhã", $"{MorningHour:00}:00", tomorrow));
 
-        // Segunda de manhã: a próxima segunda-feira; se for já amanhã, «Amanhã de manhã» chega.
+        // Segunda de manhã: a próxima segunda-feira; se for já amanhã, «Amanhã de manhã» chega, e numa segunda-feira
+        // é a mesma hora que «Daqui a uma semana».
+        var nextWeek = nowLocal.Date.AddDays(7).AddHours(MorningHour);
         var daysToMonday = ((int)DayOfWeek.Monday - (int)nowLocal.DayOfWeek + 7) % 7;
         if (daysToMonday == 0) daysToMonday = 7;
         var monday = nowLocal.Date.AddDays(daysToMonday).AddHours(MorningHour);
-        if (monday != tomorrow) options.Add(new("Segunda de manhã", $"{MorningHour:00}:00", monday));
+        if (monday != tomorrow && monday != nextWeek) options.Add(new("Segunda de manhã", $"{MorningHour:00}:00", monday));
 
-        var nextWeek = nowLocal.Date.AddDays(7).AddHours(MorningHour);
+
         options.Add(new("Daqui a uma semana", Describe(nextWeek, nowLocal), nextWeek));
         return options;
     }
@@ -52,5 +54,23 @@ public static class Snooze
         if (days == 1) return $"amanhã às {time}";
         if (days is > 1 and < 7) return $"{Pt.DateTimeFormat.GetDayName(dueLocal.DayOfWeek).Replace("-feira", "")} às {time}";
         return $"{dueLocal.ToString("d MMM", Pt).Replace(".", "")} às {time}";
+    }
+}
+
+// Adiadas que já voltaram à faixa mas cuja linha não se conseguiu apagar (base de dados só de leitura, disco cheio):
+// lembradas em memória para não voltarem outra vez a cada minuto nem continuarem na lista «Adiadas».
+public sealed class WokenSnoozes
+{
+    private readonly HashSet<long> _ids = [];
+    private readonly Lock _lock = new();
+
+    public void Remember(long id)
+    {
+        lock (_lock) _ids.Add(id);
+    }
+
+    public IReadOnlyList<T> Pending<T>(IEnumerable<T> snoozed, Func<T, long> id)
+    {
+        lock (_lock) return snoozed.Where(s => !_ids.Contains(id(s))).ToList();
     }
 }

@@ -72,6 +72,9 @@ public sealed partial class Workspace : ObservableObject
     // Ecrã dividido gravado ao sair do Espaço (índices na reserva); a janela repõe-o ao voltar.
     public Data.SessionSplit? StoredSplit { get; set; }
 
+    // Desde quando o Espaço está posto de lado (UTC): esse tempo não conta para o arquivo automático das abas dele.
+    internal DateTime? LeftUtc { get; set; }
+
     public void Rename(string? name, int? colorIndex = null, string? icon = null)
     {
         Name = NormalizeName(name) ?? Name;
@@ -119,4 +122,12 @@ public sealed partial class Workspace : ObservableObject
     // Ctrl+Alt+1…9: o Espaço N (9 = o último, como nas abas).
     public static int IndexForNumber(int number, int count)
         => count == 0 || number < 1 ? -1 : number >= 9 ? count - 1 : Math.Min(number, count) - 1;
+
+    // O atalho que leva ao Espaço da posição «index» (o inverso de IndexForNumber): 1…8 para os primeiros, 9 para o
+    // último; os do meio, a partir do 9.º com dez ou mais Espaços, não têm atalho.
+    public static string? ShortcutFor(int index, int count)
+        => index < 0 || index >= count ? null
+            : index == count - 1 && count > 8 ? "Ctrl+Alt+9"
+            : index < 8 ? $"Ctrl+Alt+{index + 1}" : null;
+
 }

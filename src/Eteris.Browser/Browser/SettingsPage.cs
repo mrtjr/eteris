@@ -52,6 +52,7 @@ public static class SettingsPage
             startup = settings.Startup,
             sleep = settings.SleepMinutes,
             archive = settings.ArchiveDays,
+            archiveConfirmed = settings.ArchiveConfirmed,
             httpsFirst = settings.HttpsFirst,
             cookies = settings.BlockThirdPartyCookies,
             mica = settings.Mica,

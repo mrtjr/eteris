@@ -30,6 +30,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         IsPrivate = isPrivate;
         if (isPrivate) ConfigurePrivateWindow();
+        Tabs.NewTabAddress = NewTabUrl;
         DataContext = Tabs;
         Tabs.Tabs.CollectionChanged += OnTabsChanged;
         Tabs.PropertyChanged += OnTabsPropertyChanged;
@@ -91,15 +92,19 @@ public partial class MainWindow : Window
         foreach (BrowserTab tab in e.NewItems ?? Array.Empty<BrowserTab>())
         {
             tab.PropertyChanged += OnTabPropertyChanged;
-            if (!tab.IsSleeping) CreateBrowser(tab);
+            // Uma aba que volta de outro Espaço acordada (trancada ou com som) ainda tem o motor: não se cria outro.
+            if (!tab.IsSleeping && !HasEngine(tab)) CreateBrowser(tab);
         }
 
         foreach (BrowserTab tab in e.OldItems ?? Array.Empty<BrowserTab>())
         {
             OnSplitTabRemoved(tab);
             tab.PropertyChanged -= OnTabPropertyChanged;
+            // Foi para a reserva de outro Espaço sem adormecer (trancada ou com som): o motor fica, escondido.
+            if (!tab.IsSleeping && Tabs.WorkspaceOf(tab) is { IsCurrent: false }) continue;
             ReleaseBrowser(tab);
         }
+
 
         UpdateTabWidth();
     }
@@ -337,10 +342,17 @@ public partial class MainWindow : Window
     private void MarkTabDone(BrowserTab tab)
     {
         if (!Tabs.Tabs.Contains(tab)) return;
-        var wasLast = Tabs.Tabs.Count == 1;
-        if (!IsPrivate && !NewTabPage.IsNewTab(tab.Address)) AppData.MarkDone(tab.Address, tab.DisplayTitle);
-        Tabs.CloseDone(tab);
-        if (wasLast) Tabs.NewTab(NewTabUrl);
+        var isNew = NewTabPage.IsNewTab(tab.Address);
+        var recorded = !IsPrivate && !isNew && AppData.MarkDone(tab.Address, tab.DisplayTitle);
+        // Sem lugar em «Feitas hoje» (janela privada, ou a base de dados não gravou), a aba vai para as fechadas
+        // recentes: «Feito» nunca pode ser um fecho sem volta, pior do que «Fechar».
+        Tabs.CloseDone(tab, remember: !recorded);
+        if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
+        if (!IsPrivate && !isNew && !recorded)
+        {
+            ShowToast($"Feito: «{tab.DisplayTitle}» — não ficou em «Feitas hoje» (base de dados indisponível); Ctrl+Shift+T reabre-a");
+            return;
+        }
         var today = IsPrivate ? 0 : DoneToday().Count;
         ShowToast(today > 1 ? $"Feito: «{tab.DisplayTitle}» — {today} feitas hoje (ver no Radar)" : $"Feito: «{tab.DisplayTitle}»");
     }
@@ -420,7 +432,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (key == Key.Escape && RenameOpen) CloseRename();
+        if (key == Key.Escape && RenameOpen)
+        {
+            CloseRename();
+            ReturnFocusToPage();
+        }
+
         else if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
         else if (key == Key.Escape && GlanceOpen) CloseGlance();
         else if (Shortcut(key, ctrl, shift, alt) is { } action) action();

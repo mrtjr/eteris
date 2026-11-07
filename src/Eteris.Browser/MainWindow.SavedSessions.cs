@@ -15,7 +15,9 @@ public partial class MainWindow
         var tabs = SessionTabs();
         if (tabs.Count > 0)
             yield return new("", "Guardar abas como sessão",
-                $"{Plural(tabs.Count, "aba", "abas")} desta janela, para reabrir mais tarde pela paleta", null, () => SaveSession(tabs));
+                $"{Plural(tabs.Count, "aba", "abas")} desta janela{(Tabs.HasWorkspaces ? " (todos os Espaços)" : "")}, para reabrir mais tarde pela paleta",
+                null, () => SaveSession(tabs));
+
 
         foreach (var session in saved.Take(8))
         {
@@ -78,8 +80,10 @@ public partial class MainWindow
         }
     }
 
+    // Todas as abas da janela: as da faixa e as dos outros Espaços (a reserva), pela ordem do seletor de Espaços.
     private List<SavedTab> SessionTabs()
-        => Tabs.Tabs.Where(t => !NewTabPage.IsNewTab(t.Address)).Select(t => new SavedTab(t.Address, t.Title, t.CustomTitle, t.Note)).ToList();
+        => Tabs.Workspaces.SelectMany(w => Tabs.TabsOf(w)).Where(t => !NewTabPage.IsNewTab(t.Address))
+            .Select(t => new SavedTab(t.Address, t.Title, t.CustomTitle, t.Note)).ToList();
 
     private void SaveSession(IReadOnlyList<SavedTab> tabs)
     {

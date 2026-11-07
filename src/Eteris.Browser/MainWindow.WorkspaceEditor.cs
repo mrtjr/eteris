@@ -38,7 +38,7 @@ public partial class MainWindow
         var delete = new Button
         {
             Content = "Apagar", Style = (Style)FindResource("PillButton"), IsEnabled = Tabs.HasWorkspaces,
-            ToolTip = Tabs.HasWorkspaces ? "As abas deste Espaço vão para as fechadas recentes" : "O último Espaço não se apaga",
+            ToolTip = Tabs.HasWorkspaces ? "As abas deste Espaço vão para as fechadas recentes; as trancadas passam para o vizinho" : "O último Espaço não se apaga",
         };
         var save = new Button { Content = "Guardar", Style = (Style)FindResource("PrimaryPillButton"), ToolTip = "Enter", Margin = new Thickness(8, 0, 0, 0) };
         var keys = new TextBlock { Text = "Enter guarda · Esc fecha", FontSize = 11, Foreground = Res("TextFaintBrush"), VerticalAlignment = VerticalAlignment.Center };

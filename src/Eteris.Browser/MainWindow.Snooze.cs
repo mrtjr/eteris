@@ -31,10 +31,14 @@ public partial class MainWindow
     private void SnoozeTab(BrowserTab tab, DateTime dueLocal)
     {
         if (IsPrivate || !Tabs.Tabs.Contains(tab) || NewTabPage.IsNewTab(tab.Address)) return;
-        AppData.SnoozeTab(tab.Address, tab.Title, tab.CustomTitle, tab.Note, dueLocal.ToUniversalTime());
-        var wasLast = Tabs.Tabs.Count == 1;
+        // Sem gravar, a aba não sai: senão sumia sem voltar à hora prometida.
+        if (!AppData.SnoozeTab(tab.Address, tab.Title, tab.CustomTitle, tab.Note, dueLocal.ToUniversalTime()))
+        {
+            ShowToast("Não foi possível adiar — a base de dados do perfil não está acessível; a aba fica na faixa");
+            return;
+        }
         Tabs.CloseQuietly(tab);
-        if (wasLast) Tabs.NewTab(NewTabUrl);
+        if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
         ShowToast($"«{tab.DisplayTitle}» volta {Snooze.Describe(dueLocal, DateTime.Now)} — ver em Radar › Adiadas");
     }
 
@@ -49,9 +53,12 @@ public partial class MainWindow
         Closed += (_, _) => _snoozeTimer.Stop();
     }
 
+    // Adiadas já trazidas de volta mas cuja linha a base de dados não deixou apagar: não voltam outra vez.
+    private static readonly WokenSnoozes s_wokenSnoozes = new();
+
     private void WakeDueTabs()
     {
-        var due = AppData.SnoozedDue(DateTime.UtcNow);
+        var due = s_wokenSnoozes.Pending(AppData.SnoozedDue(DateTime.UtcNow), s => s.Id);
         if (due.Count == 0) return;
         foreach (var snoozed in due) WakeSnoozed(snoozed, activate: false);
         ShowToast(due.Count == 1 ? $"«{due[0].Name ?? due[0].Title}» voltou — estava adiada até agora" : $"{due.Count} abas adiadas voltaram");
@@ -60,12 +67,13 @@ public partial class MainWindow
     // A aba volta ao fim da faixa, a dormir, com o nome próprio e a nota que tinha.
     private BrowserTab WakeSnoozed(SnoozedTab snoozed, bool activate)
     {
-        AppData.ForgetSnoozed(snoozed.Id);
+        if (!AppData.ForgetSnoozed(snoozed.Id)) s_wokenSnoozes.Remember(snoozed.Id);
         var tab = Tabs.AppendSleeping(snoozed.Url, snoozed.Title);
         tab.SetIdentity(snoozed.Name, null, null, snoozed.Note);
         if (activate) Tabs.Active = tab;
         return tab;
     }
 
-    private IReadOnlyList<SnoozedTab> SnoozedTabs() => IsPrivate ? [] : AppData.SnoozedTabs();
+    private IReadOnlyList<SnoozedTab> SnoozedTabs() => IsPrivate ? [] : s_wokenSnoozes.Pending(AppData.SnoozedTabs(), s => s.Id);
+
 }
