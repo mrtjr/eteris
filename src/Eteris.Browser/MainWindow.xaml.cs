@@ -44,7 +44,7 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => CloseSuggestions();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
-        AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
+        AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
         StartTabs(initialUrl);
         WatchSnoozed();
         WatchArchive();
@@ -368,12 +368,21 @@ public partial class MainWindow : Window
     private void SyncLoading()
         => AuroraBar.Visibility = Tabs.Active?.IsLoading == true ? Visibility.Visible : Visibility.Collapsed;
 
+    // A 30 fotogramas por segundo chega para um brilho que desliza; parada com a janela minimizada.
+    private bool _auroraRunning;
+
     private void AnimateAurora(bool run)
     {
-        if (AuroraBar.Fill is not LinearGradientBrush { RelativeTransform: TranslateTransform shift }) return;
-        shift.BeginAnimation(TranslateTransform.XProperty, run
-            ? new DoubleAnimation(0, 0.5, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever }
-            : null);
+        if (run == _auroraRunning || AuroraBar.Fill is not LinearGradientBrush { RelativeTransform: TranslateTransform shift }) return;
+        _auroraRunning = run;
+        if (!run)
+        {
+            shift.BeginAnimation(TranslateTransform.XProperty, null);
+            return;
+        }
+        var slide = new DoubleAnimation(0, 0.5, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever };
+        Timeline.SetDesiredFrameRate(slide, 30);
+        shift.BeginAnimation(TranslateTransform.XProperty, slide);
     }
 
     private void OpenNewTab()

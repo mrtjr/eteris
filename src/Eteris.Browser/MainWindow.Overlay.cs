@@ -45,11 +45,6 @@ public partial class MainWindow
             host.Children.Remove(element);
             root.Children.Add(element);
         }
-        // Barra de carregamento no topo da página.
-        BrowserHost.Children.Remove(AuroraBar);
-        Grid.SetRow(AuroraBar, 2);
-        root.Children.Add(AuroraBar);
-
         _overlay = new Window
         {
             Owner = this,
@@ -73,12 +68,40 @@ public partial class MainWindow
         _overlayRoot = root;
 
         foreach (UIElement child in root.Children) WatchOverlayChild(child);
+        PlaceAurora();
+        foreach (var property in new[] { TitleRowHeightProperty, ToolbarRowHeightProperty })
+            DependencyPropertyDescriptor.FromProperty(property, typeof(MainWindow)).AddValueChanged(this, (_, _) => PlaceAurora());
         LocationChanged += (_, _) => SyncOverlayBounds();
         SizeChanged += (_, _) => SyncOverlayBounds();
         RootBorder.SizeChanged += (_, _) => SyncOverlayBounds();
         PageFrame.SizeChanged += (_, _) => SyncOverlayBounds();
         StateChanged += (_, _) => { SyncOverlayBounds(); UpdateOverlayVisibility(); };
         Closed += (_, _) => _overlay?.Close();
+        UpdateOverlayVisibility();
+    }
+
+    // Barra de carregamento: na janela principal, no fundo das barras, logo acima da página (fora dela). Na camada,
+    // uma janela em camadas do tamanho da janela inteira, cada fotograma da animação obrigava a redesenhar e enviar a
+    // camada toda (UpdateLayeredWindow) e o DWM a recompô-la por cima da página: ~18% do processador do Éteris ao
+    // carregar (docs/motor.md, F4). Só com as barras escondidas (sem onde a pôr) volta para a camada, no topo da página.
+    private void PlaceAurora()
+    {
+        if (_overlayRoot is null) return;
+        var main = (Grid)RootBorder.Child;
+        var inChrome = TitleRowHeight + ToolbarRowHeight >= AuroraBar.Height;
+        var target = inChrome ? main : _overlayRoot;
+        if (!ReferenceEquals(AuroraBar.Parent, target))
+        {
+            (AuroraBar.Parent as Panel)?.Children.Remove(AuroraBar);
+            target.Children.Add(AuroraBar);
+            if (!inChrome) WatchOverlayChild(AuroraBar);
+        }
+        Grid.SetColumn(AuroraBar, 0);
+        Grid.SetColumnSpan(AuroraBar, 1);
+        Grid.SetRow(AuroraBar, inChrome ? 0 : 2);
+        Grid.SetRowSpan(AuroraBar, inChrome ? 2 : 1);
+        AuroraBar.VerticalAlignment = inChrome ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+        SyncOverlayBounds();
         UpdateOverlayVisibility();
     }
 
@@ -109,6 +132,7 @@ public partial class MainWindow
         if (_overlay is null || _overlayRoot is null) return;
         var needed = WindowState != WindowState.Minimized
                      && _overlayRoot.Children.OfType<UIElement>().Any(c => c.Visibility == Visibility.Visible && c.Opacity > 0.01);
+        AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
         if (needed && !_overlay.IsVisible)
         {
             SyncOverlayBounds();
