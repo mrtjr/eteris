@@ -30,7 +30,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - Abas fixadas, a dormir (libertam memória), silenciar, arrastar, cartão ao passar o rato.
 - Paleta de comandos (Ctrl+K), folha de atalhos (F1), abas fechadas recentemente.
 - A janela lembra-se do tamanho e posição; links de outras apps abrem na janela aberta; lista de atalhos na barra de tarefas.
-- Grupos de abas com nome e cor; sessões guardadas; fechar duplicadas e ordenar por site; reabrir janela fechada.
+- Grupos de abas com nome e cor (pré-visualização ao pairar na etiqueta); sessões guardadas; fechar duplicadas e ordenar por site; reabrir janela fechada.
 - Centro de multimédia (♫) com tudo o que toca; janela flutuante sempre por cima (Ctrl+Shift+M).
 
 **Ler e ver**

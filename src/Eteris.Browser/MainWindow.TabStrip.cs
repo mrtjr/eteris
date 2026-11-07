@@ -53,7 +53,12 @@ public partial class MainWindow
     private void TabScrollRight_Click(object sender, RoutedEventArgs e)
         => ScrollTabsTo(TabLayout.Step(TabScroll.HorizontalOffset, 1, TabScroll.ViewportWidth, TabScroll.ExtentWidth));
 
-    private void TabScroll_ScrollChanged(object sender, ScrollChangedEventArgs e) => UpdateTabArrows();
+    private void TabScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        UpdateTabArrows();
+        // A etiqueta mudou de sítio: o cartão do grupo deixaria de estar por baixo dela.
+        if (e.HorizontalChange != 0) HideGroupPreview();
+    }
 
     // Setas só quando há abas escondidas; cada uma ativa só para o lado onde há mais, com a sombra a indicá-lo.
     private void UpdateTabArrows()

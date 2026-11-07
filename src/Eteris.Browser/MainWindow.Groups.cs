@@ -19,12 +19,14 @@ public partial class MainWindow
     {
         // Tratado aqui para a aba não ser selecionada nem arrastada.
         e.Handled = true;
+        HideGroupPreview();
         if (GroupOf(sender) is { } group) Tabs.ToggleCollapse(group);
     }
 
     private void GroupPill_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
+        HideGroupPreview();
         if (GroupOf(sender) is not { } group) return;
         var pill = (FrameworkElement)sender;
         new DarkMenu()

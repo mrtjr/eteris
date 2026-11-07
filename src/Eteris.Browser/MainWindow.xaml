@@ -116,9 +116,10 @@
                         <StackPanel x:Name="Outer" Orientation="Horizontal">
                         <Border x:Name="GroupPill" Visibility="Collapsed" Height="24" Margin="4,6,4,6" Padding="10,0" CornerRadius="12"
                                 VerticalAlignment="Center" Background="{Binding Group.ColorBrush}" Cursor="Hand"
-                                ToolTip="Clique para encolher ou expandir · botão direito para o nome e a cor"
+                                AutomationProperties.Name="{Binding Group.Name, StringFormat=Grupo «{0}»: clique para encolher ou expandir}"
                                 PreviewMouseLeftButtonDown="GroupPill_PreviewMouseLeftButtonDown"
-                                PreviewMouseRightButtonUp="GroupPill_PreviewMouseRightButtonUp">
+                                PreviewMouseRightButtonUp="GroupPill_PreviewMouseRightButtonUp"
+                                MouseEnter="GroupPill_MouseEnter" MouseLeave="GroupPill_MouseLeave">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Group.Name}" FontSize="12" FontWeight="SemiBold" Foreground="#0B0D13"
                                            MaxWidth="140" TextTrimming="CharacterEllipsis" />
