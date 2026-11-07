@@ -155,8 +155,11 @@ public partial class MainWindow
         // O Escudo completo, como nas abas: além do bloqueio de rede, os scriptlets e as regras cosméticas do site
         // (registados pelo DevTools antes dos scripts da página) e, no fim de cada carregamento, as genéricas.
         // O Alt+clique espreita como nas abas (sem o script, o Chromium transferia o link para Transferências).
+        var mobile = WebPanels.Find(_webPanels, url)?.Mobile == true;
         var injector = new ScriptletInjector(AppData.IsShieldOn, page => !LinkPreview.WantsAltClick(page) ? null
-            : SiteCosmeticScript(page) is { Length: > 0 } css ? css + "\n;\n" + LinkPreview.AltClickScript : LinkPreview.AltClickScript);
+            : SiteCosmeticScript(page) is { Length: > 0 } css ? css + "\n;\n" + LinkPreview.AltClickScript : LinkPreview.AltClickScript,
+            // Vista móvel também para o JavaScript da página (navigator.*), não só nos cabeçalhos dos pedidos.
+            onSession: mobile ? ApplyMobileUserAgent : null);
         _webPanelInjectors[url] = injector;
         var browser = new ChromiumWebBrowser(url)
         {
@@ -173,8 +176,10 @@ public partial class MainWindow
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn,
                 onNavigate: (cefBrowser, page) => injector.Prepare(cefBrowser, page),
                 onBlocked: _ => ShieldStats.CountBlocked(persist: true),
+                // O processo do site morreu: a página de erro (com «Tentar novamente») em vez de um retângulo vazio.
+                onCrashed: () => Dispatcher.InvokeAsync(() => OnWebPanelCrashed(url)),
                 // Vista móvel: os pedidos deste motor saem com o agente de um telemóvel.
-                userAgent: WebPanels.Find(_webPanels, url)?.Mobile == true ? WebPanels.MobileUserAgent : null),
+                userAgent: mobile ? WebPanels.MobileUserAgent : null),
         };
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
         browser.FrameLoadEnd += (_, e) =>
@@ -214,6 +219,29 @@ public partial class MainWindow
         _webPanelBrowsers[url] = browser;
         SidebarWebHost.Children.Add(browser);
         return browser;
+    }
+
+    private static Task ApplyMobileUserAgent(CefSharp.DevTools.DevToolsClient client)
+        => client.Emulation.SetUserAgentOverrideAsync(WebPanels.MobileUserAgent, null, WebPanels.MobileNavigatorPlatform,
+            new CefSharp.DevTools.Emulation.UserAgentMetadata
+            {
+                Brands =
+                [
+                    new CefSharp.DevTools.Emulation.UserAgentBrandVersion { Brand = "Chromium", Version = WebPanels.MobileMajorVersion },
+                    new CefSharp.DevTools.Emulation.UserAgentBrandVersion { Brand = "Not_A Brand", Version = "24" },
+                ],
+                Platform = WebPanels.MobilePlatform,
+                PlatformVersion = WebPanels.MobilePlatformVersion,
+                Architecture = string.Empty,
+                Model = WebPanels.MobileModel,
+                Mobile = true,
+            });
+
+    private void OnWebPanelCrashed(string url)
+    {
+        if (!_webPanelBrowsers.TryGetValue(url, out var browser) || browser.IsDisposed) return;
+        var address = browser.Address is { Length: > 0 } current && !ErrorPage.IsErrorPage(current) ? current : url;
+        browser.Load(ErrorPage.Url(ErrorPage.RendererCrashed, address));
     }
 
     private void ReleaseWebPanelBrowser(string url)

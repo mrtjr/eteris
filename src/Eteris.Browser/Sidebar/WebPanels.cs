@@ -18,6 +18,16 @@ public static class WebPanels
     public const string MobileUserAgent =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36";
 
+    // O mesmo telemóvel visto pelo JavaScript da página (navigator.userAgent, navigator.platform e
+    // navigator.userAgentData) e pelas dicas de cliente: sem isto o servidor via um Android e o script um Windows,
+    // os sites que decidem a disposição no cliente continuavam de secretária e a combinação era uma impressão
+    // digital rara. Aplicado pelo DevTools (Emulation.setUserAgentOverride) no motor do site fixado.
+    public const string MobilePlatform = "Android";
+    public const string MobilePlatformVersion = "14.0.0";
+    public const string MobileModel = "Pixel 8";
+    public const string MobileNavigatorPlatform = "Linux armv8l";
+    public const string MobileMajorVersion = "156";
+
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,

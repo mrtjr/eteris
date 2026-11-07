@@ -5,7 +5,10 @@ namespace Eteris.Browser.Shields;
 
 // Scriptlets do uBlock registados via DevTools (Page.addScriptToEvaluateOnNewDocument): o Chromium corre-os
 // antes de qualquer script da página, que é quando os anti-bloqueadores se instalam.
-public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<string, string?>? extra = null) : IDisposable
+// onSession corre uma vez, quando a sessão DevTools nasce (antes do primeiro registo): por exemplo, a vista móvel
+// de um site fixado (Emulation.setUserAgentOverride), que tem de valer antes de o primeiro documento nascer.
+public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<string, string?>? extra = null,
+    Func<DevToolsClient, Task>? onSession = null) : IDisposable
 {
     private readonly Lock _gate = new();
     private DevToolsClient? _client;
@@ -25,7 +28,7 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
 
         lock (_gate)
         {
-            if (script is null && _identifier is null && _client is null) return Task.CompletedTask;
+            if (script is null && _identifier is null && _client is null && onSession is null) return Task.CompletedTask;
             if (_client is null)
             {
                 try { _client = browser.GetDevToolsClient(); }
@@ -33,11 +36,18 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
                 // O Chromium só corre os scripts registados se o domínio Page estiver ativo na sessão.
                 var created = _client;
                 _queue = _queue.ContinueWith(_ => created.Page.EnableAsync()).Unwrap();
+                if (onSession is not null) _queue = _queue.ContinueWith(_ => RunSession(created)).Unwrap();
             }
             var client = _client;
             _queue = _queue.ContinueWith(_ => Replace(client, script)).Unwrap();
             return _queue;
         }
+    }
+
+    private async Task RunSession(DevToolsClient client)
+    {
+        try { await onSession!(client); }
+        catch (Exception) { }
     }
 
     private async Task Replace(DevToolsClient client, string? script)
