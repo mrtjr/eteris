@@ -67,6 +67,7 @@ public static class SettingsPage
             cleanUrls = settings.CleanUrls,
             debounce = settings.SkipTrackingRedirects,
             bounceForget = settings.ForgetBounceTrackers,
+            cname = settings.UncloakCname,
             notifications = settings.BlockNotificationPrompts,
             imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
             sites = (sites ?? []).Select(s => new

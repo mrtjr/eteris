@@ -10,7 +10,8 @@ public sealed record MainNavigation(string? CurrentUrl, string Url, bool UserGes
 public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
     Action? onCrashed = null, string? userAgent = null, bool isPrivate = false,
     Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
-    Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null)
+    Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null,
+    Action<string, string>? onCloaked = null)
     : CefSharp.Handler.RequestHandler
 {
     protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
@@ -47,7 +48,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         => onCrashed?.Invoke();
 
     private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate,
-        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped);
+        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
@@ -74,9 +75,55 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
     private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
         string? userAgent, bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string, string>? onLocalNetworkBlocked,
-        Action<IReadOnlyList<string>>? onTrackingSkipped)
+        Action<IReadOnlyList<string>>? onTrackingSkipped, Action<string, string>? onCloaked)
         : CefSharp.Handler.ResourceRequestHandler
     {
+        // Desmascarar CNAME (Shields/CnameUncloak.cs) para um pedido que as listas deixaram passar. Com o nome já na
+        // cache decide-se logo; senão a consulta corre fora da thread de rede e o pedido espera no máximo
+        // CnameUncloak.MaxWait (IRequestCallback) — passado isso segue, e os seguintes já encontram a resposta.
+        private CefReturnValue Uncloak(IBrowser browser, IRequest request, string? pageUrl, string? documentUrl, string type,
+            IRequestCallback callback)
+        {
+            if (!Data.Settings.Current.UncloakCname || !CnameUncloak.IsCandidate(pageUrl, request.Url, request.ResourceType)
+                || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri))
+                return CefReturnValue.Continue;
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            var host = uri.IdnHost.ToLowerInvariant();
+            var url = request.Url;
+            var engine = blocker();
+            if (Cname.Cache.TryGet(host, out var chain))
+            {
+                var target = CnameUncloak.CloakedTracker(url, documentUrl, type, chain, engine.ShouldBlock);
+                CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                if (target is null) return CefReturnValue.Continue;
+                Cloaked(uri.Host, target);
+                return CefReturnValue.Cancel;
+            }
+            if (!Cname.Quota.TryTake(browser.Identifier, pageUrl))
+            {
+                CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                return CefReturnValue.Continue;
+            }
+            var lookup = Cname.Cache.LookupAsync(host);
+            CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
+            Task.WhenAny(lookup, Task.Delay(CnameUncloak.MaxWait)).ContinueWith(_ =>
+            {
+                var answered = lookup.IsCompletedSuccessfully;
+                CnameStats.Waited(System.Diagnostics.Stopwatch.GetTimestamp() - started, timedOut: !answered);
+                var target = answered ? CnameUncloak.CloakedTracker(url, documentUrl, type, lookup.Result, engine.ShouldBlock) : null;
+                if (target is not null) Cloaked(uri.Host, target);
+                using (callback) callback.Continue(target is null);
+            }, TaskScheduler.Default);
+            return CefReturnValue.ContinueAsync;
+        }
+
+        private void Cloaked(string host, string target)
+        {
+            CnameStats.Blocked();
+            if (onCloaked is not null) onCloaked(host, target);
+            else onBlocked(CnameUncloak.Label(host, target));
+        }
+
         // Saltos de rastreio evitados na navegação em curso, por browser: só se contam quando a página de destino
         // começa a carregar (depois do «limpar o Escudo» dessa navegação), senão a contagem perdia-se logo.
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (DateTime At, List<string> Hosts)> _skips = new();
@@ -201,8 +248,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             var documentUrl = frame?.Url is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? frameUrl
                 : pageUrl;
-            if (!blocker().ShouldBlock(request.Url, documentUrl, ResourceTypes.ToAdblock(request.ResourceType)))
-                return CefReturnValue.Continue;
+            var adblockType = ResourceTypes.ToAdblock(request.ResourceType);
+            if (!blocker().ShouldBlock(request.Url, documentUrl, adblockType))
+                return Uncloak(browser, request, pageUrl, documentUrl, adblockType, callback);
 
             onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var blocked) ? blocked.Host : request.Url);
             return CefReturnValue.Cancel;
