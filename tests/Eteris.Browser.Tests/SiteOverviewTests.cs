@@ -65,4 +65,16 @@ public sealed class SiteOverviewTests : IDisposable
         Assert.NotNull(publico.ZoomPercent);
         Assert.Equal(["escurecido"], sites.Single(s => s.Site == "wikipedia.org").Flags);
     }
+
+    // A exceção «Sempre para este site» (host exato) aparece na lista, com a chave desse host: o «Repor» retira-a.
+    [Fact]
+    public void Build_ListsHttpExceptionsByExactHost()
+    {
+        var sites = SiteOverview.Build(new Dictionary<string, double>(), [],
+            new Dictionary<string, IReadOnlyList<(Eteris.Browser.Permissions.SitePermission, bool)>>(), new Dictionary<string, int>(),
+            http: ["velho.exemplo.pt", "www.antigo.pt"]);
+        Assert.Equal(["sempre por http://"], sites.Single(s => s.Site == "velho.exemplo.pt").Flags);
+        Assert.Equal(["sempre por http://"], sites.Single(s => s.Site == "antigo.pt").Flags);
+        Assert.DoesNotContain(sites, s => s.Site == "exemplo.pt");
+    }
 }

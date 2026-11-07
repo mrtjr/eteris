@@ -28,16 +28,76 @@ public class HttpsWarningTests : IDisposable
         Assert.Equal(-200, ErrorPage.Code(page));
     }
 
-    // Já escolheu continuar neste site: voltar atrás até à entrada https:// que falhou abre o http:// sem novo aviso.
+    // Já escolheu continuar neste site e o https:// voltou a falhar: foi o próprio http:// que levou de volta ao https://
+    // (301 do servidor ou HSTS). Página de erro do https://, sem «Continuar» — voltar ao http:// repetia o ciclo.
     [Fact]
-    public void Recovery_SiteAlreadyAllowed_GoesStraightToHttp()
+    public void Recovery_SiteAlreadyAllowed_IsAnOrdinaryHttpsError_NotALoop()
     {
         var https = new HttpsFirst();
-        var upgraded = https.Upgrade("http://velho.pt/a")!;
-        https.Allow("velho.pt", isPrivate: false);
-        Assert.Equal("http://velho.pt/a", ErrorPage.Recovery(-107, upgraded, https.FailedUpgrade, u => https.IsAllowedUrl(u, false)));
+        var upgraded = https.Upgrade("http://loja.pt/")!;
+        Assert.True(ErrorPage.IsInsecureWarning(ErrorPage.Recovery(-101, upgraded, u => https.FailedUpgrade(u, false), u => https.IsAllowedUrl(u, false))!));
+        https.Allow("loja.pt", isPrivate: false);
+        // «Continuar»: o http:// carrega, o servidor manda para https://loja.pt/, que falha outra vez (repetidamente).
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(ErrorPage.Url(-101, upgraded), ErrorPage.Recovery(-101, upgraded, u => https.FailedUpgrade(u, false), u => https.IsAllowedUrl(u, false)));
         // Na janela privada a escolha da normal não conta.
-        Assert.True(ErrorPage.IsInsecureWarning(ErrorPage.Recovery(-107, upgraded, https.FailedUpgrade, u => https.IsAllowedUrl(u, true))!));
+        var inPrivate = https.Upgrade("http://loja.pt/", isPrivate: true)!;
+        Assert.True(ErrorPage.IsInsecureWarning(ErrorPage.Recovery(-101, inPrivate, u => https.FailedUpgrade(u, true), u => https.IsAllowedUrl(u, true))!));
+    }
+
+    // O https:// que redireciona de volta para http:// (que o Éteris voltava a subir) até ERR_TOO_MANY_REDIRECTS: o site
+    // não fala HTTPS — aviso com «Continuar», venha a desistência no endereço https:// ou no http://.
+    [Fact]
+    public void Recovery_RedirectLoopBackToHttp_GetsTheWarning()
+    {
+        var https = new HttpsFirst();
+        var upgraded = https.Upgrade("http://portal.pt/")!;
+        Assert.Equal(ErrorPage.InsecureUrl(-310, "http://portal.pt/"), ErrorPage.Recovery(-310, upgraded, https.FailedUpgrade));
+        var other = new HttpsFirst();
+        other.Upgrade("http://portal.pt/");
+        Assert.Equal(ErrorPage.InsecureUrl(-310, "http://portal.pt/"), ErrorPage.Recovery(-310, "http://portal.pt/", other.FailedUpgrade));
+        // Num http:// que nunca foi subido, é a página de erro de sempre.
+        Assert.Equal(ErrorPage.Url(-310, "http://outro.pt/"), ErrorPage.Recovery(-310, "http://outro.pt/", https.FailedUpgrade));
+        // Resposta vazia do https:// (a porta 443 aceita e não diz nada): também é o aviso.
+        var empty = https.Upgrade("http://vazio.pt/")!;
+        Assert.Equal(ErrorPage.InsecureUrl(-324, "http://vazio.pt/"), ErrorPage.Recovery(-324, empty, https.FailedUpgrade));
+    }
+
+    // Um https:// aberto à mão (um favorito) com o certificado falso, depois de o mesmo endereço ter sido subido e ter
+    // funcionado: é a página de certificado, nunca o aviso com «Continuar sem segurança».
+    [Fact]
+    public void Recovery_HttpsOpenedLaterAfterAWorkingUpgrade_IsTheCertificateError()
+    {
+        var now = new DateTime(2026, 11, 7, 10, 0, 0, DateTimeKind.Utc);
+        var https = new HttpsFirst(clock: () => now);
+        var upgraded = https.Upgrade("http://banco.example/")!;
+        https.Settled(upgraded);
+        Assert.Equal(ErrorPage.Url(-202, upgraded), ErrorPage.Recovery(-202, upgraded, https.FailedUpgrade));
+        // Sem resposta nenhuma, a marca acaba por expirar.
+        https.Upgrade("http://banco.example/");
+        now += HttpsFirst.UpgradeWindow + TimeSpan.FromSeconds(1);
+        Assert.Equal(ErrorPage.Url(-202, upgraded), ErrorPage.Recovery(-202, upgraded, https.FailedUpgrade));
+    }
+
+    // «Voltar» (barra, Alt+←, botão do rato) a partir da página de erro, do aviso, da página «Continuar» ou do http://
+    // aceite: a entrada que falhou é saltada. Ir para a frente, ou chegar ali de outra página, não.
+    [Fact]
+    public void SkipsBack_OnlyWhenStepingBackFromTheErrorOfThatAddress()
+    {
+        const string failed = "https://velho.pt/a";
+        Assert.True(ErrorPage.SkipsBack(true, ErrorPage.InsecureUrl(-102, "http://velho.pt/a"), failed));
+        Assert.True(ErrorPage.SkipsBack(true, ErrorPage.Url(-105, "https://velho.pt/a"), failed));
+        Assert.True(ErrorPage.SkipsBack(true, ErrorPage.ContinueUrl("http://velho.pt/a", always: false), failed));
+        Assert.True(ErrorPage.SkipsBack(true, "http://velho.pt/a", failed));
+        Assert.False(ErrorPage.SkipsBack(false, ErrorPage.Url(-105, failed), failed));
+        Assert.False(ErrorPage.SkipsBack(true, "https://outra.pt/", failed));
+        Assert.False(ErrorPage.SkipsBack(true, ErrorPage.Url(-105, "https://outra.pt/"), failed));
+        Assert.False(ErrorPage.SkipsBack(true, "https://velho.pt/a", failed));
+        Assert.False(ErrorPage.SkipsBack(true, null, failed));
+        // Depois de um salto, a entrada anterior com o mesmo endereço a falhar (o http:// aceite que voltou ao https://)
+        // também se salta; sem esse salto antes, chegar ali vindo do próprio endereço não conta.
+        Assert.True(ErrorPage.SkipsBack(true, "https://velho.pt/a", failed, afterSkip: true));
+        Assert.False(ErrorPage.SkipsBack(true, "https://outra.pt/", failed, afterSkip: true));
     }
 
     // O nome não existe: não é culpa do HTTPS; página de erro com o endereço que a pessoa abriu.

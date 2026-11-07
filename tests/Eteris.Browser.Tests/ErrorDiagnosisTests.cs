@@ -11,7 +11,8 @@ public class ErrorDiagnosisTests
     [InlineData(-137, ErrorKind.NameNotResolved, "O nome não resolve (DNS)")]
     [InlineData(-102, ErrorKind.Refused, "Ligação recusada")]
     [InlineData(-106, ErrorKind.Offline, "Sem rede")]
-    [InlineData(-109, ErrorKind.Offline, "Sem rede")]
+    [InlineData(-109, ErrorKind.Unreachable, "Endereço inalcançável")]
+    [InlineData(-21, ErrorKind.Reset, "A rede mudou")]
     [InlineData(-7, ErrorKind.TimedOut, "Tempo esgotado")]
     [InlineData(-118, ErrorKind.TimedOut, "Tempo esgotado")]
     [InlineData(-101, ErrorKind.Reset, "Ligação interrompida")]
@@ -73,7 +74,9 @@ public class ErrorDiagnosisTests
     public void Render_OfflineKinds_StartTheGameAndRetryWhenBack()
     {
         Assert.True(Data(ErrorPage.Render(-106, "https://x.pt/")).GetProperty("offline").GetBoolean());
-        Assert.True(Data(ErrorPage.Render(-21, "https://x.pt/")).GetProperty("offline").GetBoolean());
+        // Só o -106 é «sem rede»: com o -109 e o -21 a ligação funciona, e o evento «online» nunca chegaria.
+        Assert.False(Data(ErrorPage.Render(-21, "https://x.pt/")).GetProperty("offline").GetBoolean());
+        Assert.False(Data(ErrorPage.Render(-109, "http://10.0.0.50/")).GetProperty("offline").GetBoolean());
         Assert.False(Data(ErrorPage.Render(-105, "https://x.pt/")).GetProperty("offline").GetBoolean());
     }
 

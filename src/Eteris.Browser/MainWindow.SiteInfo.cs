@@ -46,6 +46,10 @@ public partial class MainWindow
             _ => (NeutralBrush, ""),
         };
 
+        SiteInfoRetryHttps.Visibility = info.Kind == ConnectionKind.Insecure && Uri.TryCreate(tab?.Address, UriKind.Absolute, out var page)
+                                         && Shields.ShieldEngine.Https.IsAllowed(page.Host, IsPrivate)
+            ? Visibility.Visible : Visibility.Collapsed;
+
         var isWeb = info.Kind is ConnectionKind.Secure or ConnectionKind.Insecure or ConnectionKind.Local;
         SiteInfoSiteSection.Visibility = isWeb ? Visibility.Visible : Visibility.Collapsed;
         if (!isWeb) return;
@@ -102,6 +106,18 @@ public partial class MainWindow
         catch (Exception) { }
         if (!SiteInfoPopup.IsOpen || !ReferenceEquals(Tabs.Active, tab)) return;
         SiteKnowledgeList.ItemsSource = SiteKnowledge.Describe(Facts(expiries, storage));
+    }
+
+    // Desfaz «Continuar sem segurança» e «Sempre para este site»: o site volta a ser aberto por https:// primeiro (e,
+    // se continuar sem HTTPS, volta o aviso).
+    private void SiteInfoRetryHttps_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tabs.Active is not { } tab || !Uri.TryCreate(tab.Address, UriKind.Absolute, out var page)) return;
+        SiteInfoPopup.IsOpen = false;
+        Data.AppData.SetHttpException(page.Host, false);
+        Shields.ShieldEngine.Https.Forget(page.Host);
+        ShowToast($"{page.Host} volta a abrir por HTTPS primeiro");
+        ReloadActive();
     }
 
     private void SiteInfoObservatory_Click(object sender, RoutedEventArgs e)

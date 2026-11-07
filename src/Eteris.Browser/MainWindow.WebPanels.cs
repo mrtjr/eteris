@@ -163,6 +163,7 @@ public partial class MainWindow
             // Vista móvel também para o JavaScript da página (navigator.*), não só nos cabeçalhos dos pedidos.
             onSession: mobile ? ApplyMobileUserAgent : null);
         _webPanelInjectors[url] = injector;
+        var panelHistory = new MainFrameHistory();
         var browser = new ChromiumWebBrowser(url)
         {
             Visibility = Visibility.Hidden,
@@ -182,7 +183,8 @@ public partial class MainWindow
                 // Vista móvel: os pedidos deste motor saem com o agente de um telemóvel.
                 userAgent: mobile ? WebPanels.MobileUserAgent : null,
                 // Rede local: o que o site já tem autorizado nas abas vale também na barra lateral.
-                localNetworkAllowed: IsLocalNetworkAllowed),
+                localNetworkAllowed: IsLocalNetworkAllowed,
+                onMainNavigation: nav => Volatile.Write(ref panelHistory.Last, nav)),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.
@@ -195,16 +197,7 @@ public partial class MainWindow
         });
         // Como nas abas: o site que não fala HTTPS volta a http:// («HTTPS primeiro»); as outras falhas dão a página
         // de erro (com «Tentar novamente») em vez de um painel em branco.
-        browser.LoadError += (_, e) =>
-        {
-            if (!e.Frame.IsMain) return;
-            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FailedUpgrade,
-                url => ShieldEngine.Https.IsAllowedUrl(url, isPrivate: false));
-            if (target is not null) Dispatcher.InvokeAsync(() =>
-            {
-                if (!browser.IsDisposed) browser.Load(target);
-            });
-        };
+        browser.LoadError += (_, e) => RecoverMainFrame(browser, e, isPrivate: false, panelHistory);
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
         browser.FrameLoadEnd += (_, e) =>
         {

@@ -36,6 +36,12 @@ public partial class MainWindow
                 tab.Title = "Nova aba";
                 _browsers[tab].Load(NewTabUrl);
             }
+            // «Continuar sem segurança» num link http:// que afinal é uma transferência: a aba ficava na página branca
+            // de «Continuar». Volta à página de onde se partiu (o passo pela entrada https:// que falhou é saltado).
+            else if (tab is not null && _browsers.TryGetValue(tab, out var browser) && browser.Address is { } raw
+                     && ErrorPage.IsErrorPage(raw) && ErrorPage.FailedUrl(raw) is { } shown && ErrorPage.SameAddress(shown, url)
+                     && browser.CanGoBack)
+                browser.Back();
         }, DivertAltClickDownload);
     }
 

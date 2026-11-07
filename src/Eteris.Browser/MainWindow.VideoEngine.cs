@@ -91,8 +91,13 @@ public partial class MainWindow
         ConfigureVideoPrivacy(core);
         WireVideoView(tab, view, core, environment);
         if (tab.IsMuted) core.IsMuted = true;
-        core.Navigate(url);
+        core.Navigate(VideoUrl(url));
     }
+
+    // O WebView2 não passa pelo tratador de pedidos do Chromium: o «HTTPS primeiro» aplica-se aqui antes de navegar
+    // (sem o aviso — um site de vídeo lembrado já abriu por https:// no motor principal).
+    private string VideoUrl(string url)
+        => Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Secure(url, IsPrivate) is { } secure ? secure : url;
 
     private static void ConfigureVideoPrivacy(CoreWebView2 core)
     {
@@ -289,6 +294,7 @@ public partial class MainWindow
             SwitchToNormalEngine(tab, url);
             return true;
         }
+        url = VideoUrl(url);
         tab.Address = url;
         if (view.CoreWebView2 is { } core) core.Navigate(url);
         Keyboard.Focus(view);

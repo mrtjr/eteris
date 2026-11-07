@@ -15,7 +15,7 @@ public static class SiteOverview
 
     public static IReadOnlyList<SiteSummary> Build(IReadOnlyDictionary<string, double> zoom, IEnumerable<string> shieldOff,
         IReadOnlyDictionary<string, IReadOnlyList<(SitePermission Kind, bool Allowed)>> permissions, IReadOnlyDictionary<string, int> hidden,
-        IEnumerable<string>? strict = null, IEnumerable<string>? dark = null)
+        IEnumerable<string>? strict = null, IEnumerable<string>? dark = null, IEnumerable<string>? http = null)
     {
         var flags = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         void Flag(string host, string flag)
@@ -25,6 +25,9 @@ public static class SiteOverview
         }
         foreach (var host in strict ?? []) Flag(host, "modo rigoroso");
         foreach (var host in dark ?? []) Flag(host, "escurecido");
+        // «Sempre para este site» do «HTTPS primeiro»: aparece aqui para o «Repor» a poder retirar (a chave é o host
+        // exato, como a exceção — velho.exemplo.pt não se esconde atrás de exemplo.pt).
+        foreach (var host in http ?? []) Flag(host, "sempre por http://");
         var sites = new SortedDictionary<string, (int? Zoom, bool Off, List<string> Perms, int Hidden)>(StringComparer.Ordinal);
         (int? Zoom, bool Off, List<string> Perms, int Hidden) Get(string host)
             => sites.TryGetValue(Key(host), out var s) ? s : (null, false, [], 0);

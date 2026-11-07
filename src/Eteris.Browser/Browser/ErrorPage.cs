@@ -34,18 +34,48 @@ public static class ErrorPage
     // HTTPS, o aviso «Este site não oferece ligação segura» — nunca o recuo silencioso para http://; nas outras
     // falhas desse pedido, a página de erro com o endereço que a pessoa abriu. Null quando não há nada a mostrar
     // (parado, transferência, ou a própria página de erro a falhar).
-    // allowed: a pessoa já escolheu continuar neste site (voltar atrás até à entrada que falhou vai direto ao http://).
+    // allowed: a pessoa já escolheu continuar neste site. Se mesmo assim o https:// falhou, foi o próprio http:// que
+    // levou de volta ao https:// (redirecionamento do servidor ou HSTS): é uma falha de https:// como outra qualquer,
+    // sem «Continuar» — voltar a abrir o http:// repetia o ciclo sem fim.
     public static string? Recovery(int code, string failedUrl, Func<string, string?> failedUpgrade, Func<string, bool>? allowed = null)
     {
         if (IsErrorPage(failedUrl)) return null;
-        if (failedUpgrade(failedUrl) is { } original)
+        var original = failedUpgrade(failedUrl);
+        // Demasiados redirecionamentos (o https:// manda para http://, que volta a ser subido…): o Chromium pode
+        // desistir em qualquer um dos dois endereços.
+        if (original is null && code == -310 && Uri.TryCreate(failedUrl, UriKind.Absolute, out var loop) && loop.Scheme == Uri.UriSchemeHttp)
+            original = failedUpgrade(new UriBuilder(loop) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.ToString());
+        if (original is not null)
         {
-            if (Shields.HttpsFirst.IsUpgradeFailure(code))
-                return allowed?.Invoke(original) == true ? original : InsecureUrl(code, original);
+            if (allowed?.Invoke(original) == true) return ShouldShow(code) ? Url(code, failedUrl) : null;
+            if (Shields.HttpsFirst.IsUpgradeFailure(code)) return InsecureUrl(code, original);
             failedUrl = original;
         }
         return ShouldShow(code) ? Url(code, failedUrl) : null;
     }
+
+    // A navegação que falhou foi um passo do histórico («Voltar», Alt+←, o botão lateral do rato) a partir da página
+    // de erro desse mesmo endereço — ou do aviso, da sua página «Continuar», ou do http:// aceite. A entrada que
+    // falhou só existe por trás dessa página: em vez de voltar a mostrar o erro (e cortar o histórico, prendendo a
+    // pessoa ali), segue-se mais um passo para trás, como no Chrome, no Firefox e no Brave.
+    // afterSkip: este passo já foi um salto destes — a entrada anterior também é uma falha do mesmo endereço (o http://
+    // aceite que voltou ao https://), e salta-se também.
+    public static bool SkipsBack(bool historyNavigation, string? cameFrom, string failedUrl, bool afterSkip = false)
+    {
+        if (!historyNavigation || cameFrom is null || IsErrorPage(failedUrl)) return false;
+        if (IsErrorPage(cameFrom)) return FailedUrl(cameFrom) is { } shown && SameAddress(shown, failedUrl);
+        if (afterSkip) return SameAddress(cameFrom, failedUrl);
+        return cameFrom.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+               && failedUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && SameAddress(cameFrom, failedUrl);
+    }
+
+    // O mesmo endereço, com http:// ou https:// (o aviso mostra o http:// que a pessoa abriu; falhou o https://).
+    public static bool SameAddress(string a, string b)
+        => string.Equals(WithoutScheme(a), WithoutScheme(b), StringComparison.OrdinalIgnoreCase);
+
+    private static string WithoutScheme(string url)
+        => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? url[8..]
+           : url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? url[7..] : url;
 
     public static string Url(int code, string failedUrl) => $"{Prefix}?code={code}&url={Uri.EscapeDataString(failedUrl)}";
 

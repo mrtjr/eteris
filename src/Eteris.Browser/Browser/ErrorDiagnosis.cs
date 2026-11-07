@@ -1,6 +1,6 @@
 namespace Eteris.Browser.Browser;
 
-public enum ErrorKind { NameNotResolved, Offline, Refused, Reset, TimedOut, Certificate, SecureChannel, Redirects, Blocked, Crashed, Other }
+public enum ErrorKind { NameNotResolved, Offline, Refused, Reset, TimedOut, Certificate, SecureChannel, Redirects, Blocked, Crashed, Other, Unreachable }
 
 // O diagnóstico legível de uma falha de carregamento: o que aconteceu (uma frase), porquê é provável e o que fazer.
 // Name é o nome do Chromium (ERR_…), útil para quem copia os detalhes e procura ajuda.
@@ -35,9 +35,12 @@ public static class ErrorDiagnosis
     {
         RendererCrashed => ErrorKind.Crashed,
         -105 or -137 => ErrorKind.NameNotResolved,
-        -106 or -21 or -109 => ErrorKind.Offline,
+        // Só o -106 quer dizer «este computador está sem rede»: com o -109 (a máquina não responde, rede local, só IPv6)
+        // e o -21 (mudou de Wi-Fi ou de VPN a meio) a ligação funciona — dizer «sem Internet» mandava mexer no Wi-Fi.
+        -106 => ErrorKind.Offline,
+        -109 => ErrorKind.Unreachable,
         -102 => ErrorKind.Refused,
-        -100 or -101 or -103 or -104 or -324 or -320 => ErrorKind.Reset,
+        -100 or -101 or -103 or -104 or -324 or -320 or -21 => ErrorKind.Reset,
         -7 or -118 => ErrorKind.TimedOut,
         <= -200 and > -300 => ErrorKind.Certificate,
         -107 or -113 => ErrorKind.SecureChannel,
@@ -68,6 +71,14 @@ public static class ErrorDiagnosis
                 "O servidor existe, mas não aceitou a ligação: pode estar desligado, em manutenção ou a usar outra porta.", "⛔",
                 "Ligação recusada", name,
                 ["Tente de novo daqui a pouco.", "Se o endereço tem uma porta (:8080), confirme-a.", "Uma firewall ou um proxy também podem recusar a ligação."]),
+            ErrorKind.Unreachable => new(ErrorKind.Unreachable, "Não foi possível chegar a este endereço",
+                "A ligação à Internet funciona, mas nenhum caminho leva até esta máquina: pode estar desligada, noutra rede ou só ter IPv6.",
+                "⌁", "Endereço inalcançável", name,
+                ["Se é um aparelho de casa (impressora, NAS, router), confirme que está ligado e na mesma rede.",
+                 "Se usa VPN, ligue-a ou desligue-a e tente de novo.", "Tente de novo daqui a pouco."]),
+            ErrorKind.Reset when code == -21 => new(ErrorKind.Reset, "A rede mudou a meio",
+                "O computador trocou de rede (outro Wi-Fi, uma VPN, o regresso da suspensão) enquanto a página carregava.", "〰",
+                "A rede mudou", name, ["Tente de novo: a ligação nova já deve funcionar."]),
             ErrorKind.Reset => new(ErrorKind.Reset, "A ligação caiu a meio",
                 "O site começou a responder, mas a ligação foi cortada antes de a página chegar.", "〰", "Ligação interrompida", name,
                 ["Tente de novo: costuma ser passageiro.", "Se acontecer em vários sites, reinicie o router ou verifique a VPN."]),

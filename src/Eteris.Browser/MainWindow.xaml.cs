@@ -125,6 +125,7 @@ public partial class MainWindow : Window
                 // Nas páginas internas (nova aba, favoritos, histórico) só o Alt+clique: sem ele o Chromium transferia o link.
                 : LinkPreview.WantsAltClick(url) ? LinkPreview.AltClickScript : null);
         UserActivation? lastActivation = null;
+        var mainHistory = new MainFrameHistory();
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
@@ -165,7 +166,11 @@ public partial class MainWindow : Window
                     tab.RecordTrackingSkips(hosts);
                     if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
                 }),
-                onMainNavigation: nav => OnMainNavigation(tab, nav),
+                onMainNavigation: nav =>
+                {
+                    Volatile.Write(ref mainHistory.Last, nav);
+                    OnMainNavigation(tab, nav);
+                },
                 onCloaked: (host, target) =>
                 {
                     // Conta como rastreador bloqueado (na lista com o nome verdadeiro) e na linha própria do Escudo.
@@ -196,7 +201,9 @@ public partial class MainWindow : Window
             tab.Address = address;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
-            if (IsVideoSite(address)) Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
+            // Nunca a partir da página de erro ou do aviso do «HTTPS primeiro»: o endereço que lá aparece é o que falhou
+            // (o http:// por aceitar), e o motor de vídeo abri-lo-ia sem a pessoa escolher «Continuar».
+            if (IsVideoSite(address) && !ErrorPage.IsErrorPage(browser.Address)) Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
         });
         browser.ConsoleMessage += (_, e) =>
         {
@@ -249,13 +256,7 @@ public partial class MainWindow : Window
             tab.CanGoBack = e.CanGoBack;
             tab.CanGoForward = e.CanGoForward;
         });
-        browser.LoadError += (_, e) =>
-        {
-            if (!e.Frame.IsMain) return;
-            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FailedUpgrade,
-                url => ShieldEngine.Https.IsAllowedUrl(url, IsPrivate));
-            if (target is not null) Dispatcher.InvokeAsync(() => browser.Load(target));
-        };
+        browser.LoadError += (_, e) => RecoverMainFrame(browser, e, IsPrivate, mainHistory);
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;

@@ -366,7 +366,8 @@ public static class AppData
                 LazyPermissions.Value?.AllSites() ?? new Dictionary<string, IReadOnlyList<(Permissions.SitePermission, bool)>>(),
                 LazyHidden.Value?.Hosts() ?? new Dictionary<string, int>(),
                 LazyStrict.Value?.All() ?? [],
-                LazyDark.Value?.All() ?? []);
+                LazyDark.Value?.All() ?? [],
+                LazyHttp.Value?.All() ?? []);
         }
         catch (Exception) { return []; }
     }

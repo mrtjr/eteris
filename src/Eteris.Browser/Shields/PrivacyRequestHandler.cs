@@ -191,6 +191,15 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             newUrl = jump;
         }
 
+        // «HTTPS primeiro»: o https:// subido respondeu (não um redirecionamento): fala HTTPS, a marca da subida sai.
+        protected override bool OnResourceResponse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
+            IResponse response)
+        {
+            if (request.ResourceType == ResourceType.MainFrame && response.StatusCode is > 0 and not (>= 300 and < 400))
+                ShieldEngine.Https.Settled(request.Url, isPrivate);
+            return false;
+        }
+
         protected override ICookieAccessFilter GetCookieAccessFilter(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
             => _cookies;
 

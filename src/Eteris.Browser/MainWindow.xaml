@@ -1102,6 +1102,9 @@
                                 </Grid>
                                 <TextBlock x:Name="SiteInfoDetail" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                            TextWrapping="Wrap" Margin="0,12,0,0" LineHeight="18" />
+                                <!-- Site aceite por http:// («Continuar» ou «Sempre»): desfazer a escolha -->
+                                <Button x:Name="SiteInfoRetryHttps" Content="Voltar a tentar HTTPS neste site" Style="{StaticResource PillButton}"
+                                        HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="Collapsed" Click="SiteInfoRetryHttps_Click" />
 
                                 <StackPanel x:Name="SiteInfoSiteSection">
                                     <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,16,0,12" />

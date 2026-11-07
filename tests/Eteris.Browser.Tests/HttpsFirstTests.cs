@@ -45,6 +45,47 @@ public class HttpsFirstTests
         Assert.Null(https.FailedUpgrade("https://upgraded.example/outra"));
     }
 
+    // A marca recua uma vez: passada a janela das abas irmãs, a mesma falha já não devolve o http:// (sem isto, um
+    // http:// que o servidor manda de volta para o https:// que falha recarregava sem fim).
+    [Fact]
+    public void FailedUpgrade_FallsBackOnlyOncePerUpgrade()
+    {
+        var now = new DateTime(2026, 11, 7, 10, 0, 0, DateTimeKind.Utc);
+        var https = new HttpsFirst(clock: () => now);
+        https.Upgrade("http://loja.example/");
+        Assert.Equal("http://loja.example/", https.FailedUpgrade("https://loja.example/"));
+        now += HttpsFirst.SiblingWindow + TimeSpan.FromSeconds(1);
+        Assert.Null(https.FailedUpgrade("https://loja.example/"));
+        // Uma subida nova volta a ter direito ao aviso.
+        https.Upgrade("http://loja.example/");
+        Assert.Equal("http://loja.example/", https.FailedUpgrade("https://loja.example/"));
+    }
+
+    // As subidas da janela privada ficam à parte e acabam com a sessão privada.
+    [Fact]
+    public void FailedUpgrade_PrivateMarksAreSeparate_AndForgottenWithTheSession()
+    {
+        var https = new HttpsFirst();
+        https.Upgrade("http://segredo.example/a", isPrivate: true);
+        Assert.Null(https.FailedUpgrade("https://segredo.example/a", isPrivate: false));
+        https.ForgetPrivate();
+        Assert.Null(https.FailedUpgrade("https://segredo.example/a", isPrivate: true));
+        https.Upgrade("http://segredo.example/b", isPrivate: true);
+        Assert.Equal("http://segredo.example/b", https.FailedUpgrade("https://segredo.example/b", isPrivate: true));
+    }
+
+    // O motor de vídeo pergunta o https:// sem marcar a subida.
+    [Fact]
+    public void Secure_GivesTheHttpsFormWithoutMarking()
+    {
+        var https = new HttpsFirst();
+        Assert.Equal("https://video.example/canal", https.Secure("http://video.example/canal"));
+        Assert.Null(https.FailedUpgrade("https://video.example/canal"));
+        Assert.Null(https.Secure("https://video.example/"));
+        https.Allow("video.example", isPrivate: false);
+        Assert.Null(https.Secure("http://video.example/canal"));
+    }
+
     [Fact]
     public void Allow_KeepsHttpForTheSession_AndForgetUndoesIt()
     {
@@ -88,6 +129,15 @@ public class HttpsFirstTests
     [InlineData(-106, false)]
     [InlineData(-3, false)]
     [InlineData(-6, false)]
+    // Respostas que só o servidor https:// estraga: o http:// ainda pode funcionar.
+    [InlineData(-310, true)]
+    [InlineData(-320, true)]
+    [InlineData(-324, true)]
+    // Também impediriam o http://: endereço inalcançável e proxy em baixo.
+    [InlineData(-109, false)]
+    [InlineData(-130, false)]
+    [InlineData(-131, false)]
+    [InlineData(-21, false)]
     public void UpgradeFailure_OnlyWhenHttpCouldStillWork(int errorCode, bool expected)
         => Assert.Equal(expected, HttpsFirst.IsUpgradeFailure(errorCode));
 }

@@ -8,32 +8,65 @@ namespace Eteris.Browser.Shields;
 // «Este site não oferece ligação segura» e só segue por http:// depois de o utilizador escolher «Continuar» (até
 // fechar o Éteris) ou «Sempre para este site» (exceção guardada, ver isException).
 // A janela privada tem as suas próprias autorizações: o que se aceitou lá não se nota nas janelas normais.
-public sealed class HttpsFirst(Func<string, bool>? isException = null)
+public sealed class HttpsFirst(Func<string, bool>? isException = null, Func<DateTime>? clock = null)
 {
-    // Endereços https:// que foram subidos pelo Éteris (por endereço, não por host: duas abas do mesmo site a falhar
-    // ao mesmo tempo — uma reposta da sessão e outra nova — têm as duas direito ao aviso).
-    private readonly ConcurrentDictionary<string, byte> _upgraded = new(StringComparer.Ordinal);
+    // Quanto tempo uma subida conta como «esta navegação foi subida pelo Éteris» (o https:// que não responde e cai
+    // pelo tempo esgotado do sistema leva ~21 s; um https:// aberto mais tarde à mão é só um https://).
+    public static readonly TimeSpan UpgradeWindow = TimeSpan.FromMinutes(2);
+
+    // Depois de a falha ser tratada a marca sai, mas outra aba do mesmo endereço a falhar quase ao mesmo tempo (uma
+    // reposta da sessão e outra nova) ainda tem direito ao aviso.
+    public static readonly TimeSpan SiblingWindow = TimeSpan.FromSeconds(15);
+
+    // Endereços https:// que foram subidos pelo Éteris, por contexto (normal/privado) e por endereço (não por host),
+    // com o instante da subida. Saem quando o https:// responde (Settled) ou quando a falha é tratada (FailedUpgrade).
+    private readonly ConcurrentDictionary<string, DateTime> _upgraded = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, DateTime> _fellBack = new(StringComparer.Ordinal);
     private const int MaxUpgraded = 2000;
     private readonly ConcurrentDictionary<string, byte> _allowed = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _allowedPrivate = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Func<DateTime> _clock = clock ?? (() => DateTime.UtcNow);
 
-    public string? Upgrade(string url, bool isPrivate = false)
+    private static string Key(string secureUrl, bool isPrivate) => (isPrivate ? "p " : "n ") + secureUrl;
+
+    // O https:// que o Éteris usaria para este http:// (null se fica como está), sem marcar nada — para o motor de
+    // vídeo, que não passa pelo tratador de pedidos do Chromium.
+    public string? Secure(string url, bool isPrivate = false)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttp) return null;
         if (!uri.IsDefaultPort || IsLocal(uri.Host) || IsAllowed(uri.Host, isPrivate)) return null;
-
-        var secure = new UriBuilder(uri) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri;
-        if (_upgraded.Count >= MaxUpgraded) _upgraded.Clear();
-        _upgraded[secure.AbsoluteUri] = 0;
-        return secure.ToString();
+        return new UriBuilder(uri) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.ToString();
     }
 
-    // O endereço http:// original quando foi o Éteris a subir este pedido para https:// (null se o site foi
-    // aberto em https:// por quem navegou: aí uma falha é só uma falha).
-    public string? FailedUpgrade(string failedUrl)
+    public string? Upgrade(string url, bool isPrivate = false)
+    {
+        if (Secure(url, isPrivate) is not { } secure) return null;
+        if (_upgraded.Count >= MaxUpgraded) _upgraded.Clear();
+        if (_fellBack.Count >= MaxUpgraded) _fellBack.Clear();
+        _upgraded[Key(new Uri(secure).AbsoluteUri, isPrivate)] = _clock();
+        return secure;
+    }
+
+    // O https:// subido respondeu (qualquer resposta que não seja um redirecionamento): o site fala HTTPS e a marca sai
+    // — uma falha posterior desse endereço é uma falha de https:// como outra qualquer.
+    public void Settled(string url, bool isPrivate = false)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+            _upgraded.TryRemove(Key(uri.AbsoluteUri, isPrivate), out _);
+    }
+
+    // O endereço http:// original quando foi o Éteris a subir este pedido para https:// há pouco (null se o site foi
+    // aberto em https:// por quem navegou: aí uma falha é só uma falha). Consome a marca: a mesma subida só recua
+    // uma vez (um http:// aceite que o servidor manda de volta para o mesmo https:// não volta ao aviso).
+    public string? FailedUpgrade(string failedUrl) => FailedUpgrade(failedUrl, isPrivate: false);
+
+    public string? FailedUpgrade(string failedUrl, bool isPrivate)
     {
         if (!Uri.TryCreate(failedUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps) return null;
-        if (!_upgraded.ContainsKey(uri.AbsoluteUri)) return null;
+        var key = Key(uri.AbsoluteUri, isPrivate);
+        var now = _clock();
+        if (_upgraded.TryRemove(key, out var at) && now - at <= UpgradeWindow) _fellBack[key] = now;
+        else if (!(_fellBack.TryGetValue(key, out var fell) && now - fell <= SiblingWindow)) return null;
         return new UriBuilder(uri) { Scheme = Uri.UriSchemeHttp, Port = -1 }.Uri.ToString();
     }
 
@@ -47,21 +80,29 @@ public sealed class HttpsFirst(Func<string, bool>? isException = null)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && IsAllowed(uri.Host, isPrivate);
 
     // A sessão privada acabou (última janela privada fechada, ou «Terminar sessão privada»): as escolhas de http://
-    // feitas lá não sobrevivem a ela.
-    public void ForgetPrivate() => _allowedPrivate.Clear();
+    // feitas lá — e os endereços que lá foram subidos — não sobrevivem a ela.
+    public void ForgetPrivate()
+    {
+        _allowedPrivate.Clear();
+        foreach (var key in _upgraded.Keys.Where(k => k.StartsWith("p ", StringComparison.Ordinal)).ToList()) _upgraded.TryRemove(key, out _);
+        foreach (var key in _fellBack.Keys.Where(k => k.StartsWith("p ", StringComparison.Ordinal)).ToList()) _fellBack.TryRemove(key, out _);
+    }
 
-    // «Esquecer a exceção» no cadeado: a próxima visita volta a tentar https:// primeiro.
+    // «Voltar a tentar HTTPS» no cadeado e «Repor» do site: a próxima visita volta a tentar https:// primeiro.
     public void Forget(string host)
     {
         _allowed.TryRemove(host, out _);
         _allowedPrivate.TryRemove(host, out _);
     }
 
-    // Erros de ligação (-1xx) e de certificado (-2xx) do Chromium: o site não fala HTTPS. Não contam os que
-    // também impediriam o http:// (o nome não existe, o computador está sem rede): esses dão a página de erro.
-    // -7 (tempo esgotado) é o que dá um servidor que deixa a porta 443 sem resposta.
+    // As falhas do https:// subido que querem dizer «este site não fala HTTPS» (o http:// ainda pode funcionar):
+    // ligação (-1xx), certificado (-2xx), tempo esgotado (-7) e respostas que só o servidor https:// estraga
+    // (redireciona de volta para http:// sem fim, responde vazio ou malformado). Não contam as que também impediriam o
+    // http://: o nome não existe ou não resolve, o computador está sem rede, o endereço é inalcançável, o proxy
+    // falhou — essas dão a página de erro com o endereço que a pessoa abriu.
     public static bool IsUpgradeFailure(int errorCode)
-        => errorCode is -7 or (<= -100 and > -300 and not (-105 or -137 or -106));
+        => errorCode is -7 or -310 or -320 or -321 or -324 or -325 or -331 or -337
+           or (<= -100 and > -300 and not (-105 or -137 or -106 or -109 or -115 or -127 or -130 or -131));
 
     private static bool IsLocal(string host)
         => !host.Contains('.') || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
