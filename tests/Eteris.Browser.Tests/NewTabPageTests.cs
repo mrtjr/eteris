@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Omnibox;
@@ -38,16 +39,50 @@ public class NewTabPageTests
     public void Render_Private_HidesSitesAndBookmarksAndSaysSo()
     {
         var html = NewTabPage.Render([new TopSite("github.com", "https://github.com/", "GitHub", 3)], SearchEngine.DuckDuckGo,
-            Afternoon, bookmarks: [new Bookmark("https://mdn.dev/", "MDN Docs")], isPrivate: true);
+            Afternoon, blocked: 42, bookmarks: [new Bookmark("https://mdn.dev/", "MDN Docs")],
+            isPrivate: true, prefs: new UserSettings { NewTabWallpaper = "mountains", NewTabWallpaperMotion = "live-always" });
         Assert.Contains("\"private\":true", html);
+        Assert.Contains("\"blocked\":0", html);
+        Assert.Contains("\"token\":null", html);
+        Assert.Contains("\"wallpaper\":\"none\"", html);
+        Assert.Contains("\"wallpaperMotion\":\"photo\"", html);
         Assert.DoesNotContain("github.com", html);
         Assert.DoesNotContain("MDN Docs", html);
     }
 
-    [Theory]
-    [InlineData("eteris://newtab/?private", true)]
-    [InlineData("eteris://newtab/", false)]
-    public void IsPrivateNewTab(string url, bool expected) => Assert.Equal(expected, NewTabPage.IsPrivate(url));
+    [Fact]
+    public void Render_EmbedsTheWallpaperPreferences()
+    {
+        var html = NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon,
+            prefs: new UserSettings { NewTabWallpaper = "mountains", NewTabWallpaperMotion = "live" });
+        Assert.Contains("\"wallpaper\":\"mountains\"", html);
+        Assert.Contains("\"wallpaperMotion\":\"live\"", html);
+        // Sem preferências guardadas valem as de origem: a costa, em imagem estática.
+        var defaults = NewTabPage.Render([], SearchEngine.DuckDuckGo, Afternoon);
+        Assert.Contains("\"wallpaper\":\"coast\"", defaults);
+        Assert.Contains("\"wallpaperMotion\":\"photo\"", defaults);
+    }
+
+    // Os ícones vêm indexados pela chave do site (esquema + anfitrião, em minúsculas), não pelo URL completo:
+    // atalhos e favoritos têm de os encontrar mesmo com caminho e maiúsculas no endereço.
+    [Fact]
+    public void Render_FindsIconsByTheNormalisedSiteKey()
+    {
+        var sites = new[] { new TopSite("github.com", "https://GitHub.com/eteris/x", "GitHub", 3) };
+        var bookmarks = new[] { new Bookmark("https://GitHub.com/z", "GH") };
+        var icons = new Dictionary<string, string> { ["https://github.com"] = "data:image/png;base64,AAAA" };
+        var html = NewTabPage.Render(sites, SearchEngine.DuckDuckGo, Afternoon, bookmarks: bookmarks, icons: icons);
+        Assert.Equal(2, Regex.Matches(html, Regex.Escape("\"icon\":\"data:image/png;base64,AAAA\"")).Count);
+        Assert.DoesNotContain("\"icon\":null", html);
+
+        var without = NewTabPage.Render(sites, SearchEngine.DuckDuckGo, Afternoon, bookmarks: bookmarks);
+        Assert.Equal(2, Regex.Matches(without, Regex.Escape("\"icon\":null")).Count);
+        // Um ícone guardado para outro site não se cola a este.
+        var other = NewTabPage.Render(sites, SearchEngine.DuckDuckGo, Afternoon,
+            icons: new Dictionary<string, string> { ["https://gitlab.com"] = "data:image/png;base64,BBBB" });
+        Assert.Contains("\"icon\":null", other);
+        Assert.DoesNotContain("BBBB", other);
+    }
 
     [Fact]
     public void Render_IncludesBookmarks()

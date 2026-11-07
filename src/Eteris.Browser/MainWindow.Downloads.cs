@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using CefSharp;
@@ -24,6 +25,7 @@ public partial class MainWindow
         return new DownloadHandler(Downloads, Dispatcher, (source, url) =>
         {
             DownloadsHost.Visibility = Visibility.Visible;
+            DownloadsPopup.SetCurrentValue(Popup.PlacementTargetProperty, DownloadsButton);
             DownloadsPopup.IsOpen = true;
 
             // Aba aberta diretamente num link de transferência: não fica uma página branca (como no Chrome).
@@ -92,7 +94,9 @@ public partial class MainWindow
 
     private void ToggleDownloads()
     {
-        if (Downloads.Items.Count == 0) return;
+        // Sem botão próprio na barra, o painel ancora no MenuButton: nunca por cima do menu aberto.
+        CloseBrowserMenu();
+        DownloadsPopup.SetCurrentValue(Popup.PlacementTargetProperty, DownloadsHost.IsVisible ? DownloadsButton : MenuButton);
         DownloadsPopup.IsOpen = !DownloadsPopup.IsOpen;
     }
 

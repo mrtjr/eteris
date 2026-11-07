@@ -26,6 +26,26 @@ public static class CosmeticScripts
         })({{JsonSerializer.Serialize(css)}});
         """;
 
+    // Regras específicas do site, registadas para correr antes de qualquer script da página (como os scriptlets).
+    // Nesse momento o documento ainda não tem elementos: espera-se pelo primeiro. Só na página principal.
+    public static string InjectEarly(string css) => css.Length == 0 ? string.Empty : $$"""
+        (function (css) {
+          if (window.top !== window) return;
+          var add = function () {
+            var style = document.createElement('style');
+            style.setAttribute('data-eteris-shield', '');
+            style.textContent = css;
+            (document.head || document.documentElement).appendChild(style);
+          };
+          if (document.documentElement) { add(); return; }
+          new MutationObserver(function (_, observer) {
+            if (!document.documentElement) return;
+            observer.disconnect();
+            add();
+          }).observe(document, { childList: true });
+        })({{JsonSerializer.Serialize(css)}});
+        """;
+
     public static (string[] Classes, string[] Ids) ParseClassesAndIds(string raw)
     {
         var lines = raw.Split('\n');

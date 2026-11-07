@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Threading;
 using CefSharp;
 using Eteris.Browser.Tabs;
+using Eteris.Browser.Browser;
 
 namespace Eteris.Browser;
 
@@ -18,7 +19,7 @@ public partial class MainWindow
                 if (!browser.IsBrowserInitialized || browser.IsDisposed) continue;
                 try
                 {
-                    var result = await browser.EvaluateScriptAsync(MediaInfo.Script);
+                    var result = await PageScript.EvaluateAsync(browser, MediaInfo.Script);
                     tab.ApplyMedia(result.Success ? MediaInfo.Parse(result.Result as string) : MediaInfo.Nothing);
                 }
                 catch (Exception) { tab.ApplyMedia(MediaInfo.Nothing); }

@@ -1,4 +1,4 @@
-﻿<Window x:Class="Eteris.Browser.MainWindow"
+<Window x:Class="Eteris.Browser.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -800,8 +800,10 @@
                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                             </Border>
                         </Grid>
+                        <Button Content="&#xE71D;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Radar_Click"
+                                AutomationProperties.Name="Radar de abas" ToolTip="Radar de abas (Ctrl+Shift+A)" />
                         <Button x:Name="MenuButton" Content="&#xE712;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Menu_Click"
-                                ToolTip="Comandos (Ctrl+K)" />
+                                Focusable="True" ToolTip="Menu do Éteris (Alt+F)" />
                     </StackPanel>
 
                     <Popup x:Name="MediaPopup" PlacementTarget="{Binding ElementName=MediaButton}" Placement="Bottom"
@@ -874,6 +876,19 @@
                                             Content="&#xE838;" Click="OpenDownloadsFolder_Click" ToolTip="Abrir a pasta Transferências" />
                                     <TextBlock Text="Transferências" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </DockPanel>
+                                <TextBlock Text="Nenhuma transferência nesta sessão" Margin="10,4,10,9"
+                                           Foreground="{DynamicResource TextMutedBrush}" FontSize="13">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasItems, ElementName=DownloadsList}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <ItemsControl x:Name="DownloadsList">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>

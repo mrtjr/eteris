@@ -17,6 +17,8 @@ public static class HistoryPage
 
     private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-PT");
 
+    private static readonly IReadOnlyDictionary<string, string> NoIcons = new Dictionary<string, string>();
+
     private static readonly Lazy<string> Template = new(() =>
     {
         using var stream = typeof(HistoryPage).Assembly.GetManifestResourceStream("Eteris.Browser.Browser.history.html")!;
@@ -47,7 +49,8 @@ public static class HistoryPage
 
     public static string? Query(Uri uri, string name) => InternalPages.Query(uri, name);
 
-    public static string Render(IReadOnlyList<Visit> visits, DateTime now)
+    public static string Render(IReadOnlyList<Visit> visits, DateTime now,
+        IReadOnlyDictionary<string, string>? icons = null)
     {
         var groups = visits
             .GroupBy(v => v.VisitedUtc.ToLocalTime().Date)
@@ -61,11 +64,13 @@ public static class HistoryPage
                     title = v.Title.Length > 0 ? v.Title : v.Url,
                     host = Uri.TryCreate(v.Url, UriKind.Absolute, out var u) ? u.Host : v.Url,
                     time = v.VisitedUtc.ToLocalTime().ToString("HH:mm", Pt),
+                    iconKey = HistoryStore.SiteIconKey(v.Url),
                     letter = SiteBadge.Letter(v.Url) ?? "?",
                     color = SiteBadge.Palette[SiteBadge.ColorIndex(v.Url)],
                 }),
             });
-        var data = new { token = Token, total = visits.Count, groups };
+        // Sem ícones sai um dicionário vazio, não null: a página indexa icons[iconKey] sem mais verificações.
+        var data = new { token = Token, total = visits.Count, groups, icons = icons ?? NoIcons };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
 }

@@ -65,10 +65,9 @@ public partial class MainWindow
 
     private static async Task<byte[]> CaptureFullPageAsync(ChromiumWebBrowser browser, DevToolsClient client)
     {
-        var frame = browser.GetMainFrame();
         async Task<double> Eval(string script)
         {
-            var response = await frame.EvaluateScriptAsync(script);
+            var response = await PageScript.EvaluateAsync(browser, script);
             return response.Success && response.Result is not null ? Convert.ToDouble(response.Result) : 0;
         }
 
@@ -86,14 +85,14 @@ public partial class MainWindow
                 await Task.Delay(160);
                 var shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png);
                 chunks.Add((top, Decode(shot.Data)));
-                if (chunks.Count == 1) await frame.EvaluateScriptAsync(HideFixedScript);
+                if (chunks.Count == 1) await PageScript.EvaluateAsync(browser, HideFixedScript);
                 if (top + view >= total - 1) break;
             }
         }
         finally
         {
-            await frame.EvaluateScriptAsync(RestoreFixedScript);
-            await frame.EvaluateScriptAsync($"scrollTo({{ top: {start}, behavior: 'instant' }})");
+            await PageScript.EvaluateAsync(browser, RestoreFixedScript);
+            await PageScript.EvaluateAsync(browser, $"scrollTo({{ top: {start}, behavior: 'instant' }})");
         }
 
         var first = chunks[0].Image;

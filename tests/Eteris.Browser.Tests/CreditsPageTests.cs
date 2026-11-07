@@ -34,5 +34,9 @@ public class CreditsPageTests
         Assert.Contains("adblock-rust", html);
         Assert.Contains("GPL-3.0", html);
         Assert.Contains("CefSharp", html);
+        // Os fundos da nova aba (imagens geradas por IA) também constam dos créditos.
+        Assert.Contains("coast.jpg", html);
+        Assert.Contains("coast-live.webm", html);
+        Assert.Contains("geradas por", html);
     }
 }

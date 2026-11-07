@@ -43,10 +43,36 @@ public sealed class PageFocusHandler(Action onGotFocus) : IFocusHandler
     public void OnTakeFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, bool next) { }
 }
 
-public sealed class FaviconHandler(Action<string?> onFavicon, Action<bool>? onFullscreen = null) : CefSharp.Handler.DisplayHandler
+public sealed class FaviconHandler(Action<string?, string?> onFavicon, Action<bool>? onFullscreen = null) : CefSharp.Handler.DisplayHandler
 {
+    // Maior ícone que vale a pena descodificar: os ICO com muitos tamanhos ficam bem abaixo disto.
+    public const int MaxBytes = 1 << 20;
+
+    // Alguns sites anunciam SVG e PNG/ICO. O descodificador nativo só mostra os formatos raster, por isso esses têm
+    // prioridade; sem nenhum, segue o primeiro anunciado (a janela descarta-o se não o conseguir descodificar).
+    public static string? PreferredFavicon(IList<string> urls)
+    {
+        var raster = urls.FirstOrDefault(url => Uri.TryCreate(url, UriKind.Absolute, out var icon)
+            && (icon.AbsolutePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                || icon.AbsolutePath.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)));
+        return raster ?? urls.FirstOrDefault();
+    }
+
+    // Resposta do motor que vale a pena descodificar: sucesso, com conteúdo, dentro do limite e não SVG nem HTML
+    // (um 404 disfarçado de 200) — o descodificador nativo não os desenha e não vale a pena tentar.
+    public static bool AcceptsResponse(int statusCode, string? mimeType, long length)
+    {
+        if (statusCode is < 200 or > 299 || length <= 0 || length > MaxBytes) return false;
+        return mimeType is null
+            || (!mimeType.Contains("svg", StringComparison.OrdinalIgnoreCase)
+                && !mimeType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase));
+    }
+
     protected override void OnFaviconUrlChange(IWebBrowser chromiumWebBrowser, IBrowser browser, IList<string> urls)
-        => onFavicon(urls.Count > 0 ? urls[0] : null);
+    {
+        using var mainFrame = browser.MainFrame;
+        onFavicon(PreferredFavicon(urls), mainFrame?.Url);
+    }
 
     // Ecrã inteiro pedido pela página (vídeos, jogos, apresentações).
     protected override void OnFullscreenModeChange(IWebBrowser chromiumWebBrowser, IBrowser browser, bool fullscreen)

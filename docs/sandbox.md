@@ -28,13 +28,34 @@ processos correm fechados (sem acesso a ficheiros nem ao sistema).
    código C++/CLI chama-o com `nullptr`). É preciso alterar o CefSharp: versão própria compilada a partir do código
    (BSD) ou contribuição aceite no projeto oficial.
 2. **Os processos das páginas não podem carregar o .NET dentro do sandbox.** O processo filho do CefSharp
-   (`CefSharp.BrowserSubprocess`) é .NET; com sandbox, os filhos têm de ser nativos (só CEF). O que o Éteris usa
-   desse processo filho deixa de funcionar:
+   (`CefSharp.BrowserSubprocess`) é .NET; com sandbox, os filhos têm de ser nativos (só CEF). O que o Éteris usava
+   desse processo filho (até ao passo A) deixava de funcionar:
    - 19 chamadas de JavaScript (`EvaluateScriptAsync`, `ExecuteScriptAsync`, `EvaluateScriptAsPromiseAsync`,
      `ExecuteJavaScriptAsync`) em 10 ficheiros;
    - `CosmeticFilterHandler.OnContextCreated` (filtros cosméticos).
-   Tudo isto pode ser feito pelo DevTools do lado do navegador (`Runtime.evaluate`,
-   `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já fazem.
+   Tudo isto passou a ser feito pelo DevTools do lado do navegador (`Runtime.evaluate`,
+   `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já faziam — ver «Passo A — resultado» e «Regras para
+   o código».
+
+## Passo A — resultado (2026-11-07): feito
+
+Toda a execução de JavaScript nas páginas passou para `Browser/PageScript.cs` (DevTools `Runtime.evaluate`, uma
+sessão por página, reutilizada): 18 chamadas em 9 ficheiros (`MainWindow.Audio.cs`, `.Fullscreen.cs`, `.Hide.cs`,
+`.Media.cs`, `.Palette.cs`, `.Reader.cs`, `.Screenshot.cs`, `.Shield.cs`, `Shields/PickerScript.cs`), sem nenhuma
+`EvaluateScriptAsync`/`ExecuteScriptAsync` no código. `Shields/CosmeticFilterHandler.cs` (o `OnContextCreated` do
+processo filho) foi apagado: as regras cosméticas do site passaram a `CosmeticScripts.InjectEarly`, registadas pelo
+`ScriptletInjector` antes dos scripts da página (`MainWindow.Shield.cs`, `SiteCosmeticScript`), como os scriptlets.
+O Éteris corre com o processo filho nativo de `build/sandbox/subprocess` (passo B).
+
+Verificado por teste: `SandboxRulesTests` (nenhuma API do processo filho no código) e `InjectedScriptsSyntaxTests`
+(sintaxe dos scripts). Verificado ao vivo (2026-11-07), com o mesmo build Release em duas cópias — processo filho
+oficial do CefSharp (153 KB, .NET) e processo filho nativo (454 KB, só CEF) — com resultados idênticos: centro de
+multimédia (o som arranca na página e o ícone de som na aba e o botão do centro aparecem), esconder um elemento
+desta página (seletor + CSS; o título escolhido desaparece), escurecer este site ao vivo (Wikipédia fica escura),
+modo de leitura (F9), captura da página inteira (PNG de 275 KB), anúncio em nova aba bloqueado, nova aba
+`eteris://`. Regras cosméticas genéricas: verificadas ao nível do motor (`.ad-slot{display:none!important}` para
+`example.com`, com ou sem porta); não se aplicam a `localhost`, endereços IP nem `*.nip.io` (comportamento
+pré-existente do motor, igual na 0.2.3 publicada), por isso não são testáveis com o servidor local.
 
 ## Passo C — resultado (2026-11-06): dá
 
@@ -62,8 +83,8 @@ motor (páginas, placa gráfica, utilitários) passaram a ser o nativo e o Éter
 (`eteris://newtab`, com relógio, sites frequentes e dicas), bloqueio de anúncio em nova aba, contador do escudo.
 Sem bloqueios nem fechos inesperados.
 
-Deixa de funcionar — tudo o que executa JavaScript pelo processo filho do CefSharp (= passo A): 18 chamadas em 9
-ficheiros, mais `CosmeticFilterHandler.OnContextCreated`:
+Deixava de funcionar — tudo o que executava JavaScript pelo processo filho do CefSharp (resolvido no passo A, em
+cima): 18 chamadas em 9 ficheiros, mais o `CosmeticFilterHandler.OnContextCreated` (entretanto apagado):
 
 | Funcionalidade | Ficheiro |
 |---|---|
@@ -73,7 +94,7 @@ ficheiros, mais `CosmeticFilterHandler.OnContextCreated`:
 | Escurecer este site (ao vivo) e cor do site | `MainWindow.Palette.cs` |
 | Modo de leitura (deteção e abrir) e seguir links pelo teclado | `MainWindow.Reader.cs` |
 | Captura da página inteira | `MainWindow.Screenshot.cs` |
-| Filtros cosméticos genéricos | `MainWindow.Shield.cs`, `Shields/CosmeticFilterHandler.cs` |
+| Filtros cosméticos (genéricos e do site) | `MainWindow.Shield.cs` (`SiteCosmeticScript`), `Shields/CosmeticScripts.cs` (`InjectEarly`); antes em `Shields/CosmeticFilterHandler.cs`, apagado |
 
 Continua a funcionar sem nada mudar: navegação, páginas internas `eteris://`, bloqueador (pedidos), scriptlets e
 scripts injetados pelo DevTools (escuro, deteção de vídeo, último clique), mensagens da consola, transferências,
@@ -83,7 +104,7 @@ pop-ups, abas, ecrã dividido.
 
 | Passo | O quê | Custo | Verificação |
 |---|---|---|---|
-| A | Trocar as 19 chamadas e o `OnContextCreated` por DevTools (útil já: menos dependência do processo filho do CefSharp) | 1–2 dias | testes + funcionalidades ao vivo |
+| A | Trocar as 19 chamadas e o `OnContextCreated` por DevTools (útil já: menos dependência do processo filho do CefSharp) | ✅ **feito** (2026-11-07) | testes (`SandboxRulesTests`) + funcionalidades ao vivo com os dois processos filhos (ver «Passo A — resultado») |
 | B | Prova: Éteris a correr com um processo filho nativo mínimo (só CEF, ainda sem sandbox) | ✅ **feito** (2026-11-06) | tudo funciona sem o `CefSharp.BrowserSubprocess` |
 | C | CefSharp com a informação do sandbox no `Cef.Initialize` (versão própria; propor ao projeto oficial) | ✅ **feito** (2026-11-06) | compila e arranca |
 | D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | 2 dias | `chrome://sandbox` mostra os processos isolados |
@@ -91,6 +112,19 @@ pop-ups, abas, ecrã dividido.
 
 Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo C, cada atualização do motor (ver
 `docs/paridade.md`, #3) obriga a recompilar a versão própria do CefSharp.
+
+## Regras para o código
+
+- **Nunca** usar no código do Éteris `EvaluateScriptAsync`, `ExecuteScriptAsync`, `ExecuteJavaScriptAsync`,
+  `EvaluateScriptAsPromiseAsync`, `IRenderProcessMessageHandler`, `JavascriptObjectRepository`,
+  `JavascriptMessageReceived` nem `RegisterJsObject`. Tudo isso passa pelo processo filho do CefSharp, que é .NET e
+  não corre dentro do sandbox: com o processo filho nativo (passo B) essas chamadas não chegam a lado nenhum e falham
+  em silêncio.
+- JavaScript nas páginas só por `Browser/PageScript.cs` (`PageScript.EvaluateAsync`/`PageScript.Run`, DevTools
+  `Runtime.evaluate`) ou registado antes dos scripts da página pelo `ScriptletInjector`
+  (`Page.addScriptToEvaluateOnNewDocument`). `userGesture: true` só em ações pedidas pelo utilizador.
+- O teste `tests/Eteris.Browser.Tests/SandboxRulesTests.cs` percorre `src/Eteris.Browser/**/*.cs` e falha se algum
+  destes nomes aparecer fora de comentários.
 
 ## Alternativas consideradas
 

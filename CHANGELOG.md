@@ -1,5 +1,28 @@
 # Alterações
 
+## Por publicar
+
+### Novo
+- **Menu do Éteris** (`Alt+F`): as ações por categoria e o zoom no próprio menu.
+- **Radar de abas** (`Ctrl+Shift+A`): todas as abas numa só vista, com pesquisa, âmbitos, ordenações, duplicadas e abas fechadas recentes.
+- **Ícones dos sites** no histórico e nos atalhos da nova aba, guardados no perfil (nunca na janela privada).
+- **Paisagens na nova aba**: duas imagens e um fundo «ao vivo» opcional (vídeo sem som, só quando escolhido), geradas por IA com o ChatGPT pelo autor; origem e termos em `licenses/Wallpapers-NOTICE.txt`.
+
+### Privacidade
+- Os ícones dos sites passam a ser pedidos pelo próprio motor (contexto da aba): passam pelo Escudo, pelo DNS cifrado e pelo HTTPS-first, e a janela privada não partilha sessão com o perfil normal.
+
+### Sandbox (preparação, ver `docs/sandbox.md`)
+- Todo o JavaScript que o Éteris corre nas páginas passou para o DevTools (`Browser/PageScript.cs`): nada depende já do processo filho .NET do CefSharp (passo A), o Éteris funciona com um processo filho nativo só com CEF (passo B) e o CefSharp 156 compila com a informação do sandbox (passo C). O sandbox em si ainda não está ligado.
+- Teste `SandboxRulesTests` impede o regresso das APIs do processo filho.
+
+### Correções
+- Com o menu do Éteris aberto, os atalhos e o `Esc` passam a fechá-lo em vez de agir por trás dele.
+- Sair do ecrã inteiro de um vídeo deixa de desfazer o ecrã inteiro escolhido no menu ou com `F11`.
+- A aba do segundo painel do ecrã dividido já não adormece no minuto seguinte a fechar o ecrã dividido.
+- A miniatura da aba deixa de desaparecer em navegações dentro da mesma página (SPAs, âncoras).
+- Apagar uma visita ou «esquecer desde» deixou de percorrer o histórico inteiro.
+- Licenças: todos os ficheiros de imagem e vídeo embutidos têm de estar registados (teste novo).
+
 ## 0.2.3 — 2026-11-06
 
 Paridade de desempenho com o Chrome e o Brave (ver `docs/paridade.md`).

@@ -103,6 +103,12 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
+    public static IReadOnlyDictionary<string, string> SiteIcons(IEnumerable<string> urls)
+    {
+        try { return History.SiteIcons(urls); }
+        catch (Exception) { return new Dictionary<string, string>(); }
+    }
+
     private static readonly Lazy<BookmarkStore> LazyBookmarks = new(() => new BookmarkStore(AppPaths.Database));
 
     public static IReadOnlyList<Bookmark> Bookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read)

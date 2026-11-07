@@ -14,7 +14,7 @@ public partial class MainWindow
         if (!ReaderScripts.IsCandidate(url)) return;
         try
         {
-            var response = await browser.EvaluateScriptAsync(ReaderScripts.Detect, TimeSpan.FromSeconds(3));
+            var response = await PageScript.EvaluateAsync(browser, ReaderScripts.Detect, TimeSpan.FromSeconds(3));
             if (response.Success && response.Result is true && tab.Address == url) tab.IsReaderable = true;
         }
         catch (Exception) { }
@@ -29,7 +29,7 @@ public partial class MainWindow
         Keyboard.Focus(browser);
         try
         {
-            var response = await browser.EvaluateScriptAsync(LinkHints.Script, TimeSpan.FromSeconds(3));
+            var response = await PageScript.EvaluateAsync(browser, LinkHints.Script, TimeSpan.FromSeconds(3), userGesture: true);
             if (response.Success && response.Result as string == "none") ShowToast("Não há links visíveis nesta página");
         }
         catch (Exception) { }
@@ -41,8 +41,8 @@ public partial class MainWindow
         try
         {
             var prefs = Data.Settings.Current;
-            var response = await browser.EvaluateScriptAsync(ReaderScripts.ToggleWith(prefs.ReaderTheme, prefs.ReaderSize, prefs.ReaderSerif),
-                TimeSpan.FromSeconds(5));
+            var response = await PageScript.EvaluateAsync(browser, ReaderScripts.ToggleWith(prefs.ReaderTheme, prefs.ReaderSize, prefs.ReaderSerif),
+                TimeSpan.FromSeconds(5), userGesture: true);
             if (response.Success && response.Result as string == "none") ShowToast("Não foi possível encontrar o artigo nesta página");
             else if (response.Success) Keyboard.Focus(browser);
         }

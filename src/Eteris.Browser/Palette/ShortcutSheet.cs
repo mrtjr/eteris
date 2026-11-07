@@ -11,6 +11,7 @@ public static class ShortcutSheet
     [
         new("Abas", [
             new("Ctrl+T", "Nova aba"),
+            new("Ctrl+Shift+A", "Radar de abas"),
             new("Ctrl+W", "Fechar aba"),
             new("Ctrl+Shift+T", "Reabrir aba fechada"),
             new("Ctrl+Tab", "Aba seguinte"),
@@ -28,6 +29,7 @@ public static class ShortcutSheet
             new("Esc", "Parar o carregamento"),
         ]),
         new("Ferramentas", [
+            new("Alt+F", "Menu do Éteris"),
             new("Ctrl+K", "Paleta de comandos"),
             new("Ctrl+F · F3", "Procurar na página"),
             new("Ctrl+Shift+L", "Seguir link pelo teclado"),

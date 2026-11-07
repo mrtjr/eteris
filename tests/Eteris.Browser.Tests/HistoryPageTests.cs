@@ -103,4 +103,28 @@ public class HistoryPageTests
         Assert.DoesNotContain("<script>x</script>", html);
         Assert.Contains(HistoryPage.Token, html);
     }
+
+    // A página lê data.icons[item.iconKey]: a chave por visita tem de ser a mesma que indexa o dicionário.
+    [Fact]
+    public void Render_EmitsIconKeysThatIndexTheIconDictionary()
+    {
+        var visits = new[]
+        {
+            new Visit(2, "https://a.pt/docs/", "Docs", Now.AddHours(-1).ToUniversalTime()),
+            new Visit(1, "file:///x", "Local", Now.AddHours(-2).ToUniversalTime()),
+        };
+        var icons = new Dictionary<string, string> { ["https://a.pt"] = "data:image/png;base64,AAAA" };
+        var html = HistoryPage.Render(visits, Now, icons);
+        Assert.Contains("\"iconKey\":\"https://a.pt\"", html);
+        Assert.Contains("\"iconKey\":null", html);
+        Assert.Contains("\"icons\":{\"https://a.pt\":\"data:image/png;base64,AAAA\"}", html);
+    }
+
+    [Fact]
+    public void Render_WithoutIcons_EmitsAnEmptyDictionary()
+    {
+        var html = HistoryPage.Render([new Visit(1, "https://a.pt/", "A", Now.ToUniversalTime())], Now);
+        Assert.Contains("\"icons\":{}", html);
+        Assert.DoesNotContain("\"icons\":null", html);
+    }
 }

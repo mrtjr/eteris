@@ -66,6 +66,9 @@ def main():
 
     # O próprio Éteris e o que é GPL (listas de filtros, scriptlets do uBlock).
     copy(os.path.join(STATIC, "GPL-3.0.txt"), "GPL-3.0.txt", "Éteris; listas de filtros; scriptlets do uBlock Origin", "GPL-3.0")
+    # Fundos da nova aba: imagens geradas por IA pelo autor do Éteris; a ficha de origem e termos vive ao lado delas.
+    copy(os.path.join(ROOT, "src", "Eteris.Browser", "Browser", "Wallpapers", "README.md"),
+         "Wallpapers-NOTICE.txt", "Fundos da nova aba (imagens geradas por IA)", "GPL-3.0-or-later; geradas por IA")
 
     # Motor do navegador.
     cefsharp = package_dir("CefSharp.Common.NETCore", refs["CefSharp.Wpf.NETCore"])

@@ -67,6 +67,15 @@ licenças de patentes do H.264/AAC são, por isso, as do Windows/Edge e não do 
 O `eteris_shields.dll` inclui 59 crates de terceiros, todos sob licenças permissivas: MIT, Apache-2.0,
 Unicode-3.0 e Unlicense (cada um com os seus ficheiros em `licenses/rust/`).
 
+## Imagens e vídeo
+
+Os fundos da nova aba (`Browser/Wallpapers/coast.jpg`, `mountains.jpg` e `coast-live.webm`) são imagens geradas por
+IA com o ChatGPT (OpenAI) pelo autor do Éteris, em 2026-11-06; o vídeo foi codificado com o FFmpeg (VP9, sem som).
+Não são fotografias nem vêm de bancos de imagens. Nos termos de uso da OpenAI o resultado pertence a quem o gerou;
+imagens geradas por IA podem, ainda assim, não ter proteção de direitos de autor em várias jurisdições. Redistribuem-se
+com o Éteris sob a GPL-3.0-or-later, como o resto do projeto. A ficha completa (dimensões, origem e termos) está em
+`src/Eteris.Browser/Browser/Wallpapers/README.md` e acompanha a instalação em `licenses/Wallpapers-NOTICE.txt`.
+
 ## Listas próprias
 
 `Shields/trackers.txt` (domínios de rastreio de reserva) foi escrita para o Éteris e segue a licença do projeto.

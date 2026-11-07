@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-src eteris:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; frame-src eteris:">
 <meta name="color-scheme" content="dark">
 <title>Histórico</title>
 <style>
@@ -80,8 +80,13 @@
   .time { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .badge {
     width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+    position: relative; background: var(--badge-color, var(--row));
     font-size: 12.5px; font-weight: 700; color: #0b0d13;
   }
+  .badge img { position: absolute; opacity: 0; width: 18px; height: 18px; object-fit: contain; }
+  .badge.has-icon { background: var(--row); }
+  .badge.has-icon img { opacity: 1; }
+  .badge.has-icon .monogram { display: none; }
   .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .host { color: var(--faint); font-size: 12.5px; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .del {
@@ -172,7 +177,20 @@
       const card = el('div', 'card');
       for (const it of items) {
         const row = el('a', 'row'); row.href = it.url; row.title = it.url;
-        const badge = el('span', 'badge', it.letter); badge.style.background = it.color;
+        const badge = el('span', 'badge');
+        badge.setAttribute('aria-hidden', 'true');
+        badge.append(el('span', 'monogram', it.letter));
+        badge.style.setProperty('--badge-color', it.color);
+        const icon = data.icons?.[it.iconKey];
+        if (icon?.startsWith('data:image/png;base64,')) {
+          const image = el('img');
+          image.alt = '';
+          image.loading = 'lazy';
+          image.decoding = 'async';
+          image.addEventListener('load', () => badge.classList.add('has-icon'), { once: true });
+          image.src = icon;
+          badge.append(image);
+        }
         const title = el('span', 'title'); highlight(title, it.title, term);
         const host = el('span', 'host'); highlight(host, it.host, term);
         const del = el('button', 'del', '×'); del.title = 'Remover do histórico';

@@ -3,6 +3,7 @@ using System.Windows.Media;
 using CefSharp;
 using Eteris.Browser.Data;
 using Eteris.Browser.Shields;
+using Eteris.Browser.Browser;
 
 namespace Eteris.Browser;
 
@@ -13,6 +14,15 @@ public partial class MainWindow
            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
             ? uri.Host
             : null;
+
+    // Regras cosméticas específicas do site (##… das listas), registadas para correr antes dos scripts da página,
+    // quando os anúncios ainda não apareceram. Vazio sem escudo ou sem regras para o site.
+    private static string SiteCosmeticScript(string url)
+    {
+        if (WebHost(url) is not { } host || !AppData.IsShieldOn(host) || ShieldEngine.Cosmetic is not { } engine) return string.Empty;
+        var script = CosmeticScripts.InjectEarly(engine.UrlCss(url));
+        return script.Length == 0 ? string.Empty : script + "\n;\n";
+    }
 
     private void UpdateShieldButton()
     {
@@ -71,11 +81,11 @@ public partial class MainWindow
         {
             if (delay > 0) await Task.Delay(delay);
             if (browser.IsDisposed || browser.GetMainFrame()?.Url != url) return;
-            var result = await browser.EvaluateScriptAsync(CosmeticScripts.CollectClassesAndIds);
+            var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
             if (!result.Success || result.Result is not string raw) return;
             var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
             var css = engine.GenericCss(url, classes, ids);
-            if (css.Length > 0) browser.ExecuteScriptAsync(CosmeticScripts.Inject(css));
+            if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
         }
     }
 

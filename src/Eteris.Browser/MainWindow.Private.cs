@@ -22,7 +22,7 @@ public partial class MainWindow
     {
         var context = new RequestContext(new RequestContextSettings());
         // As fábricas de esquemas são por contexto: sem isto eteris:// dá ERR_UNKNOWN_URL_SCHEME na janela privada.
-        context.RegisterSchemeHandlerFactory(EterisSchemeHandlerFactory.SchemeName, string.Empty, new EterisSchemeHandlerFactory());
+        context.RegisterSchemeHandlerFactory(EterisSchemeHandlerFactory.SchemeName, string.Empty, new EterisSchemeHandlerFactory(privateContext: true));
         _ = Shields.PrivacyPreferences.ApplyAsync(context);
         return context;
     }

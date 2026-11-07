@@ -24,6 +24,9 @@ public partial class MainWindow
 
     private void OpenShortcuts()
     {
+
+        CloseBrowserMenu();
+        CloseRadar();
         ClosePalette();
         CloseSuggestions();
         _shortcuts ??= BuildShortcuts();

@@ -2,396 +2,1124 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; frame-src eteris:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: eteris://newtab; media-src eteris://newtab; frame-src eteris:">
 <meta name="color-scheme" content="dark">
 <title>Nova aba</title>
 <style>
   :root {
-    --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
-    --glass: rgba(22, 25, 35, .62); --line: rgba(255, 255, 255, .09);
-    --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+    color-scheme: dark;
+    --text: #f7f9ff;
+    --secondary: #d7e0ec;
+    --line: #ffffff31;
+    --surface: #101824ed;
+    --glass: #101824ba;
+    --glass-solid: #101824ee;
+    --accent: #a4eaff;
+    --sky: #315174;
+    --ground: #102022;
+    font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
   }
-  * { box-sizing: border-box; margin: 0; }
-  html, body { height: 100%; }
-  body {
-    background: var(--bg); color: var(--text); overflow: hidden;
-    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-    display: flex; flex-direction: column; align-items: center;
-  }
-  .aurora { position: fixed; inset: -25%; z-index: 0; filter: blur(90px) saturate(150%); opacity: .5; }
-  .aurora span {
-    position: absolute; width: 48vmax; height: 48vmax; border-radius: 50%;
-    mix-blend-mode: screen; animation: drift 28s ease-in-out infinite alternate;
-  }
-  .aurora span:nth-child(1) { background: var(--a1, #8b5cf6); top: 2%; left: 8%; }
-  .aurora span:nth-child(2) { background: var(--a2, #22d3ee); top: 28%; left: 52%; animation-duration: 34s; animation-delay: -7s; }
-  .aurora span:nth-child(3) { background: var(--a3, #34d399); top: 58%; left: 18%; animation-duration: 40s; animation-delay: -14s; opacity: .65; }
-  .aurora span:nth-child(4) { background: var(--a4, #f472b6); top: -12%; left: 62%; animation-duration: 30s; animation-delay: -3s; opacity: .55; }
-  @keyframes drift {
-    0%   { transform: translate(0, 0) scale(1); }
-    50%  { transform: translate(9vmax, -7vmax) scale(1.18); }
-    100% { transform: translate(-7vmax, 6vmax) scale(.88); }
-  }
-  .veil {
-    position: fixed; inset: 0; z-index: 1;
-    background: radial-gradient(ellipse 70% 60% at 50% 38%, rgba(11,13,19,.15) 0%, rgba(11,13,19,.7) 70%, rgba(11,13,19,.95) 100%);
-  }
-  main {
-    position: relative; z-index: 2; width: min(760px, 92vw); margin-top: 14vh;
-    display: flex; flex-direction: column; align-items: center;
-  }
-  .clock {
-    font-size: clamp(72px, 10vw, 128px); font-weight: 200; letter-spacing: -.04em; line-height: 1;
-    font-variant-numeric: tabular-nums; text-shadow: 0 6px 40px rgba(34, 211, 238, .18);
-  }
-  .greet { color: var(--muted); font-size: 20px; margin: 10px 0 36px; font-weight: 400; }
-  .greet b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  form { width: 100%; position: relative; }
-  form svg { position: absolute; z-index: 1; left: 22px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; stroke: var(--muted); pointer-events: none; }
-  input {
-    width: 100%; height: 58px; border-radius: 29px; padding: 0 26px 0 58px;
-    font: inherit; font-size: 17px; color: var(--text); outline: none;
-    border: 1.5px solid var(--line); background: var(--glass); backdrop-filter: blur(28px);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, .35); transition: border-color .2s, box-shadow .2s;
-  }
-  input::placeholder { color: var(--faint); }
-  input:focus {
-    border-color: transparent;
-    background: linear-gradient(var(--glass), var(--glass)) padding-box, var(--iris) border-box;
-    box-shadow: 0 10px 50px rgba(139, 92, 246, .28);
-  }
-  .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; width: 100%; margin-top: 40px; }
-  .tile {
-    width: calc(25% - 10.5px);
-    display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 10px 14px;
-    border-radius: 20px; text-decoration: none; color: var(--text);
-    background: rgba(255, 255, 255, .035); border: 1px solid var(--line); backdrop-filter: blur(18px);
-    transition: transform .18s ease, background .18s ease, border-color .18s ease;
-  }
-  .tile:hover { transform: translateY(-4px); background: rgba(255, 255, 255, .075); border-color: rgba(255, 255, 255, .16); }
-  .tile:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
-  .badge {
-    width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center;
-    font-size: 21px; font-weight: 700; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 6px 18px rgba(0,0,0,.35);
-  }
-  .name { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-  .tile:hover .name { color: var(--text); }
-  /* A dica ocupa o lugar do rodapé (não empurra os sites para baixo). */
-  .tip {
-    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 2; max-width: min(680px, 56vw);
-    display: none; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 999px;
-    color: var(--muted); font-size: 13px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); backdrop-filter: blur(18px);
-  }
-  .tip.show { display: inline-flex; animation: fadein .6s .2s ease-out both; }
-  @keyframes fadein { from { opacity: 0; } }
-  body.has-tip footer { display: none; }
-  .tip b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; flex: none; }
-  .tip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tip button { all: unset; cursor: pointer; width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; color: var(--faint); flex: none; }
-  .tip button:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
-  html.light .tip { background: rgba(255, 255, 255, .6); }
-  body.no-tiles .tip { display: none; }
-  .resume {
-    position: fixed; left: 26px; bottom: 76px; z-index: 2; width: 250px; padding: 14px 10px 10px; border-radius: 20px;
-    background: rgba(22, 25, 35, .62); border: 1px solid var(--line); backdrop-filter: blur(20px); display: none;
-  }
-  .resume.show { display: block; animation: rise .6s ease-out both; }
-  .resume h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin: 0 0 8px 8px; }
-  .resume .cards { display: flex; flex-direction: column; gap: 2px; }
-  .rcard {
-    display: flex; align-items: center; gap: 11px; padding: 8px; border-radius: 12px; cursor: pointer; text-align: left; width: 100%;
-    color: var(--text); text-decoration: none; font: inherit; background: transparent; border: 0;
-    transition: background .15s ease, transform .15s ease; min-width: 0;
-  }
-  .rcard:hover { background: rgba(255, 255, 255, .07); transform: translateX(2px); }
-  @media (max-width: 900px), (max-height: 640px) { .resume { display: none !important; } }
-  .rcard:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
-  .rcard .ico { position: relative; width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 15px; }
-  .rcard .ico i { position: absolute; right: -5px; bottom: -5px; width: 17px; height: 17px; border-radius: 6px; display: grid; place-items: center;
-    font-style: normal; font-size: 10px; background: #161923; border: 1px solid var(--line); color: #c4b5fd; }
-  .rcard .txt { min-width: 0; }
-  .rcard .t { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rcard .s { font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  body.no-tiles .resume { display: none; }
-  .marks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; margin-top: 22px; }
-  .mark {
-    display: flex; align-items: center; gap: 8px; max-width: 200px; padding: 6px 12px 6px 6px; border-radius: 999px;
-    text-decoration: none; color: var(--muted); font-size: 13px;
-    background: rgba(255, 255, 255, .045); border: 1px solid var(--line); backdrop-filter: blur(14px);
-    transition: background .15s ease, color .15s ease;
-  }
-  .mark:hover { background: rgba(255, 255, 255, .09); color: var(--text); }
-  .mark .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; flex: none; }
-  .mark span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hint { width: 100%; text-align: center; color: var(--faint); font-size: 14px; padding: 18px; }
-  footer {
-    position: fixed; bottom: 22px; z-index: 2; display: flex; gap: 10px; align-items: center;
-    color: var(--faint); font-size: 12.5px; letter-spacing: .02em;
-  }
-  footer i { width: 8px; height: 8px; border-radius: 50%; background: var(--iris); box-shadow: 0 0 12px #22d3ee; }
-  .week {
-    position: fixed; right: 26px; bottom: 22px; z-index: 2; width: 250px; padding: 16px 18px 14px; border-radius: 20px;
-    background: rgba(22, 25, 35, .62); border: 1px solid var(--line); backdrop-filter: blur(20px); display: none;
-  }
-  .week.show { display: block; animation: rise .6s ease-out both; }
-  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
-  .week h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
-  .week .num { font-size: 15px; color: var(--muted); margin: 6px 0 2px; }
-  .week .num b { font-size: 30px; font-weight: 600; margin-right: 6px; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .week .saved { color: var(--faint); font-size: 12px; }
-  .bars { display: flex; align-items: flex-end; gap: 7px; height: 52px; margin-top: 12px; }
-  .bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; height: 100%; }
-  .bars i { width: 100%; border-radius: 4px 4px 2px 2px; background: linear-gradient(#22d3ee, #8b5cf6); min-height: 3px; opacity: .7; }
-  .bars div:last-child i { opacity: 1; box-shadow: 0 0 12px rgba(34, 211, 238, .55); }
-  .bars span { font-size: 10px; color: var(--faint); }
-  @media (max-width: 900px), (max-height: 640px) { .week { display: none !important; } }
-  body[data-theme="ocean"]   { --a1: #1d4ed8; --a2: #06b6d4; --a3: #0ea5e9; --a4: #6366f1; }
-  body[data-theme="sunset"]  { --a1: #f97316; --a2: #f43f5e; --a3: #eab308; --a4: #a855f7; }
-  body[data-theme="forest"]  { --a1: #15803d; --a2: #22c55e; --a3: #0d9488; --a4: #65a30d; }
-  body[data-theme="minimal"] .aurora { display: none; }
-  body[data-theme="minimal"] .veil { background: radial-gradient(ellipse 80% 60% at 50% 30%, #141826 0%, var(--bg) 70%); }
-  .aurora span { transition: background 1.2s ease; }
-  body.no-clock .clock { display: none; }
-  body.no-clock .greet { margin-top: 0; }
-  body.no-tiles .tiles, body.no-tiles .marks { display: none; }
-  body.no-week .week { display: none !important; }
-  .gear {
-    position: fixed; left: 22px; bottom: 18px; z-index: 3; width: 38px; height: 38px; border-radius: 19px; cursor: pointer;
-    border: 1px solid var(--line); background: rgba(22, 25, 35, .55); backdrop-filter: blur(14px); color: var(--muted);
-    display: grid; place-items: center; transition: color .15s, transform .4s ease, background .15s;
-  }
-  .gear:hover { color: var(--text); background: rgba(40, 44, 60, .7); transform: rotate(60deg); }
-  .gear svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
-  .custom {
-    position: fixed; left: 22px; bottom: 66px; z-index: 4; width: 290px; padding: 18px; border-radius: 20px; display: none;
-    background: rgba(22, 25, 35, .88); border: 1px solid var(--line); backdrop-filter: blur(24px); box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
-  }
-  .custom.open { display: block; animation: rise .25s ease-out both; }
-  .custom h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-bottom: 10px; }
-  .swatches { display: flex; gap: 10px; margin-bottom: 18px; }
-  .swatch { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s, border-color .15s; }
-  .swatch:hover { transform: scale(1.08); }
-  .swatch.on { border-color: #e9ebf2; }
-  .swatch[data-theme="aurora"]  { background: conic-gradient(#8b5cf6, #22d3ee, #34d399, #f472b6, #8b5cf6); }
-  .swatch[data-theme="ocean"]   { background: conic-gradient(#1d4ed8, #06b6d4, #0ea5e9, #6366f1, #1d4ed8); }
-  .swatch[data-theme="sunset"]  { background: conic-gradient(#f97316, #f43f5e, #eab308, #a855f7, #f97316); }
-  .swatch[data-theme="forest"]  { background: conic-gradient(#15803d, #22c55e, #0d9488, #65a30d, #15803d); }
-  .swatch[data-theme="minimal"] { background: #141826; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
-  .opt { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; font-size: 13.5px; color: var(--muted); cursor: pointer; }
-  .opt input { all: unset; flex: none; appearance: none; width: 38px; height: 22px; border-radius: 11px; background: #2c3042; position: relative; cursor: pointer; transition: background .2s; }
-  .opt input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #e9ebf2; transition: transform .2s; }
-  .opt input:checked { background: linear-gradient(135deg, #8b5cf6, #22d3ee); }
-  .opt input:checked::after { transform: translateX(16px); }
-  body.private .gear, body.private .custom { display: none !important; }
-  body.private { --bg: #0e0a18; }
-  body.private .aurora span:nth-child(2), body.private .aurora span:nth-child(3) { background: #6d28d9; }
-  body.private .aurora span:nth-child(4) { background: #312e81; }
-  body.private .hint { display: none; }
-  @media (max-height: 640px) { main { margin-top: 6vh; } .clock { font-size: 64px; } }
-  @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } .tile { transition: none; } }
 
-  /* Tema claro (o servidor acrescenta class="light" ao <html>) */
   html.light {
-    --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0;
-    --glass: rgba(255, 255, 255, .8); --line: rgba(20, 24, 40, .1); --row: rgba(20, 24, 40, .04); --card: rgba(255, 255, 255, .8);
+    --plain-sky: #ccddf4;
+    --plain-ground: #e7edf5;
   }
-  html.light ::selection { background: rgba(139, 92, 246, .25); }
 
-  html.light .aurora { opacity: .32; }
-  html.light .veil { background: radial-gradient(ellipse 70% 60% at 50% 38%, rgba(243,244,249,.1) 0%, rgba(243,244,249,.65) 70%, rgba(243,244,249,.92) 100%); }
-  html.light .clock { text-shadow: 0 6px 40px rgba(139, 92, 246, .18); }
-  html.light input:focus { background: linear-gradient(#fff, #fff) padding-box, var(--iris) border-box; }
-  html.light .tile, html.light .mark { background: rgba(255, 255, 255, .6); }
-  html.light .resume { background: rgba(255, 255, 255, .7); }
-  html.light .rcard:hover { background: rgba(20, 24, 40, .05); }
-  html.light .rcard .ico i { background: #fff; }
-  html.light .tile:hover, html.light .mark:hover { background: rgba(255, 255, 255, .92); border-color: rgba(20, 24, 40, .15); }
-  html.light .week, html.light .gear { background: rgba(255, 255, 255, .7); }
-  html.light .custom { background: rgba(255, 255, 255, .94); box-shadow: 0 20px 60px rgba(20, 24, 40, .2); }
-  html.light .opt input:not(:checked) { background: #cfd3de; }
-  html.light footer i { box-shadow: 0 0 10px rgba(14, 165, 233, .6); }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    min-height: 100svh;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    isolation: isolate;
+    color: var(--text);
+    background: radial-gradient(ellipse at 40% 0%, var(--sky), transparent 68%), var(--ground);
+  }
+
+  body[data-theme="ocean"] { --sky: #125180; --ground: #101c34; }
+  body[data-theme="sunset"] { --sky: #803d52; --ground: #251831; }
+  body[data-theme="forest"] { --sky: #23594f; --ground: #111f20; }
+  body[data-theme="minimal"] { --sky: #202c3b; --ground: #151a22; }
+  body.private { --sky: #40376f; --ground: #1c1830; }
+  html.light body:not(.private)[data-wallpaper="none"] {
+    --text: #142337;
+    --secondary: #344a65;
+    --line: #173d632b;
+    --surface: #f6f9fffa;
+    --glass: #f2f7ffe0;
+    --glass-solid: #f2f7fff4;
+    --accent: #1d5981;
+    --sky: var(--plain-sky);
+    --ground: var(--plain-ground);
+    color-scheme: light;
+  }
+
+  html.light body:not(.private)[data-wallpaper="none"] .shade { opacity: 0; }
+  html.light body:not(.private)[data-wallpaper="none"] :is(.header-clock, .greet, .search-note, .name, .hint, .quick-action, footer) { text-shadow: none; }
+  html.light body:not(.private)[data-wallpaper="none"] :is(.tool-button, .quick-action, .tile, .mark, .rcard):hover { background: #b9d6f0; }
+  html.light body:not(.private)[data-wallpaper="none"] .suggestion[aria-selected="true"],
+  html.light body:not(.private)[data-wallpaper="none"] .suggestion:hover { background: #173d6315; }
+  [hidden] { display: none !important; }
+  button, select, input { font: inherit; }
+  button, summary { cursor: pointer; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  a { color: inherit; text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .wallpaper, .shade {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -2;
+  }
+
+  .wallpaper { object-fit: cover; object-position: center 53%; }
+  .shade {
+    z-index: -1;
+    background: linear-gradient(180deg, #07111dc9 0%, #08132238 26%, transparent 58%, #07101bd9 100%);
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: clamp(14px, 2.5vw, 32px) clamp(16px, 3vw, 48px) 0;
+  }
+
+  .brand, .top-actions { display: flex; align-items: center; gap: 11px; }
+  .brand { font-size: 18px; font-weight: 650; letter-spacing: -.02em; }
+  .brand-mark {
+    width: 29px;
+    height: 29px;
+    border-radius: 50%;
+    background: conic-gradient(from 40deg, #b9a2ff, #7be2f8, #8cf1c7, #f9a4cc, #b9a2ff);
+    display: grid;
+    place-items: center;
+  }
+
+  .brand-mark::after { content: ""; width: 17px; height: 17px; background: #111b2b; border-radius: inherit; }
+  .header-clock { text-align: right; text-shadow: 0 1px 8px #000; }
+  .clock { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .date { color: var(--secondary); font-size: 11px; text-transform: capitalize; }
+  .top-actions { gap: 8px; }
+
+  .tool-button, .focus-controls button, .focus-controls select, .tip button {
+    border: 1px solid var(--line);
+    background: var(--glass);
+    color: var(--text);
+    border-radius: 12px;
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  .tool-button:hover, .focus-controls button:hover { background: #27364de9; }
+  .gear { display: grid; place-items: center; width: 38px; padding: 0; }
+  .gear svg, .dock-icon svg, .quick-action svg, .search-icon, .search-submit svg {
+    width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  .custom {
+    display: none;
+    position: absolute;
+    right: clamp(12px, 3vw, 48px);
+    top: clamp(62px, 6vw, 83px);
+    width: min(360px, calc(100% - 24px));
+    max-height: calc(100vh - 90px);
+    overflow: auto;
+    z-index: 8;
+    padding: 19px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: 0 18px 58px #0509149e;
+  }
+
+  .custom.open { display: block; }
+  .custom h2 { font-size: 16px; margin: 0 0 16px; }
+  .custom h3 { color: var(--secondary); font-size: 12px; margin: 14px 0 8px; }
+  .wallpaper-options, .swatches { display: flex; gap: 7px; }
+  .wallpaper-option, .swatch {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #202f43;
+    color: var(--text);
+  }
+
+  .wallpaper-option {
+    flex: 1;
+    min-width: 0;
+    min-height: 58px;
+    padding: 7px;
+    background-position: center;
+    background-size: cover;
+    font-size: 12px;
+    font-weight: 650;
+    text-shadow: 0 1px 5px #000;
+  }
+
+  .wallpaper-option[data-wallpaper="coast"] { background-image: linear-gradient(#0c132543, #0c1325c2), url("eteris://newtab/wallpaper/coast.jpg"); }
+  .wallpaper-option[data-wallpaper="mountains"] { background-image: linear-gradient(#0c132543, #0c1325c2), url("eteris://newtab/wallpaper/mountains.jpg"); }
+  .wallpaper-option[aria-pressed="true"], .swatch.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .swatch { width: 28px; height: 28px; border-radius: 50%; }
+  .swatch[data-theme="aurora"] { background: #556796; }
+  .swatch[data-theme="ocean"] { background: #2172a1; }
+  .swatch[data-theme="sunset"] { background: #a65e75; }
+  .swatch[data-theme="forest"] { background: #38877a; }
+  .swatch[data-theme="minimal"] { background: #29303a; }
+  .wallpaper-motion-options { display: flex; gap: 7px; }
+  .wallpaper-motion-button {
+    flex: 1;
+    min-height: 34px;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    color: var(--text);
+    background: var(--glass);
+    font-size: 12px;
+  }
+  .wallpaper-motion-button[aria-pressed="true"] { border-color: var(--accent); }
+  .wallpaper-motion-button:disabled { opacity: .55; cursor: default; }
+  .wallpaper-motion-help { margin: 7px 0 0; color: var(--secondary); font-size: 11px; line-height: 1.4; }
+  .opt { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+  .opt input { accent-color: #90d5ee; }
+
+  main {
+    width: min(1120px, calc(100% - 40px));
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero { width: min(660px, 100%); margin: clamp(40px, 11vh, 116px) auto 24px; }
+  .greet {
+    margin: 0 0 16px;
+    text-align: center;
+    font-size: clamp(22px, 3.2vw, 34px);
+    line-height: 1.1;
+    letter-spacing: -.045em;
+    font-weight: 650;
+    text-shadow: 0 2px 14px #071323;
+  }
+
+  .private-note {
+    display: none;
+    text-align: center;
+    color: var(--secondary);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+
+  .search-area { position: relative; }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-height: 54px;
+    padding: 5px 7px 5px 17px;
+    border: 1px solid #fff8;
+    border-radius: 18px;
+    color: #182338;
+    background: #f5f8ff;
+    box-shadow: 0 8px 26px #03091452;
+  }
+
+  .search:focus-within { box-shadow: 0 0 0 3px #a4eaff90, 0 8px 26px #03091470; }
+  #q { flex: 1; width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: inherit; font-size: 15px; padding: 6px 0; }
+  #q::placeholder { color: #526279; }
+  .search-submit {
+    display: grid;
+    place-items: center;
+    width: 39px;
+    height: 39px;
+    border-radius: 12px;
+    border: 0;
+    color: #f7faff;
+    background: #223f57;
+  }
+
+  .search-submit:hover { background: #305772; }
+  .search-submit:focus-visible { outline-color: #1d5981; outline-offset: 2px; }
+  .search-note { display: flex; justify-content: space-between; gap: 12px; margin: 9px 3px 0; color: var(--secondary); font-size: 11px; text-shadow: 0 1px 8px #000; }
+  kbd { font: inherit; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; }
+  .suggestions {
+    display: none;
+    position: absolute;
+    inset: 62px 0 auto;
+    max-height: min(350px, 55vh);
+    overflow: auto;
+    z-index: 6;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: 0 16px 46px #03091480;
+  }
+
+  .suggestions.open { display: block; }
+  .suggestion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 49px;
+    border: 0;
+    border-radius: 10px;
+    padding: 6px 9px;
+    text-align: left;
+    color: var(--text);
+    background: transparent;
+  }
+
+  .suggestion:hover, .suggestion[aria-selected="true"] { background: #ffffff16; }
+  .suggestion-icon { width: 29px; height: 29px; display: grid; place-items: center; flex: none; border-radius: 8px; color: var(--accent); background: #7695d330; }
+  .suggestion-icon img { width: 18px; height: 18px; object-fit: contain; }
+  .suggestion-text { min-width: 0; }
+  .suggestion-title, .suggestion-meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .suggestion-title { font-size: 13px; }
+  .suggestion-meta, .suggestion-empty { color: var(--secondary); font-size: 11px; }
+  .suggestion-empty { padding: 8px 10px 4px; }
+
+  .site-section { width: min(760px, 100%); margin: 0 auto 22px; }
+  .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+  .tile {
+    width: clamp(67px, 9vw, 84px);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 5px;
+    border-radius: 14px;
+  }
+
+  .tile:hover, .mark:hover { background: #122031aa; }
+  .badge, .dot, .ico {
+    display: grid;
+    place-items: center;
+    flex: none;
+    border: 1px solid var(--line);
+    background: #101824dc;
+    color: #fff;
+    font-weight: 650;
+  }
+
+  .badge { width: 47px; height: 47px; border-radius: 15px; font-size: 17px; box-shadow: 0 3px 12px #01060e55; }
+  .badge img { width: 24px; height: 24px; object-fit: contain; }
+  .name { display: block; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-size: 11px; text-shadow: 0 2px 8px #000; }
+  .marks { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .marks:empty { display: none; }
+  .mark { display: flex; align-items: center; gap: 6px; max-width: 148px; padding: 4px 9px 4px 5px; border-radius: 24px; background: var(--glass); border: 1px solid #ffffff24; font-size: 11px; }
+  .mark span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 21px; height: 21px; border-radius: 7px; font-size: 10px; }
+  .dot img { width: 15px; height: 15px; object-fit: contain; }
+  .hint { color: var(--secondary); font-size: 12px; text-align: center; text-shadow: 0 1px 8px #000; }
+
+  .dock { margin-top: auto; }
+  .dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .panel {
+    position: relative;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--glass);
+    backdrop-filter: blur(15px);
+  }
+
+  /* Com o vídeo «Ao vivo» a tocar, o desfoque seria refeito a cada quadro: fica um fundo quase opaco e sem filtro. */
+  body[data-wallpaper-live] .panel { backdrop-filter: none; background: var(--glass-solid); }
+
+  .panel:not(.show):not(.focus-panel) { display: none; }
+  .panel summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 66px;
+    list-style: none;
+    padding: 11px 14px;
+    border-radius: 15px;
+  }
+
+  .panel summary::-webkit-details-marker { display: none; }
+  .panel summary:hover, .panel[open] summary { background: #ffffff12; }
+  .dock-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #a1cbff22; color: var(--accent); }
+  .dock-label { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+  .dock-label strong { font-size: 13px; }
+  .dock-label small { color: var(--secondary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chevron { color: var(--secondary); transition: transform .16s ease; }
+  .panel[open] .chevron { transform: rotate(180deg); }
+
+  .panel-body {
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 0;
+    width: 100%;
+    max-height: 46vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    padding: 15px;
+    box-shadow: 0 14px 44px #060c18aa;
+    z-index: 2;
+  }
+
+  .week .num { font-size: 12px; color: var(--secondary); }
+  .week .num b { display: inline-block; margin-right: 7px; color: var(--text); font-size: 26px; font-variant-numeric: tabular-nums; }
+  .saved, .focus-status, .focus-hint { margin-top: 6px; color: var(--secondary); font-size: 12px; line-height: 1.4; }
+  .bars { display: flex; gap: 5px; margin-top: 12px; height: 62px; }
+  .bars div { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: end; gap: 4px; }
+  .bars i { width: 50%; min-width: 4px; border-radius: 4px 4px 1px 1px; background: #8bd3f6; }
+  .bars span { font-size: 10px; color: var(--secondary); }
+  .section-link { display: inline-block; color: var(--accent); margin-top: 9px; font-size: 12px; }
+  .cards { display: grid; gap: 5px; }
+  .rcard { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; padding: 7px; border: 0; border-radius: 9px; color: inherit; background: transparent; text-align: left; }
+  .rcard:hover { background: #ffffff13; }
+  .ico { width: 31px; height: 31px; border-radius: 9px; position: relative; }
+  .ico i { position: absolute; bottom: -3px; right: -3px; border-radius: 3px; background: #0f1a28; font-size: 9px; padding: 1px 2px; }
+  .rcard .txt { min-width: 0; }
+  .rcard .t, .rcard .s { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rcard .t { font-size: 12px; }
+  .rcard .s { color: var(--secondary); font-size: 10px; margin-top: 3px; }
+  .timer { font-size: 34px; font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+  .focus-controls { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 11px; }
+  .focus-controls select { padding: 0 7px; }
+  .focus-controls #focusStart { flex: 1; background: #a4eaff; color: #162838; }
+  .focus-controls select:disabled { opacity: .6; }
+  .focus-panel.active .dock-icon { color: #bafbd3; background: #74e1a533; }
+
+  .quick-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px 10px; margin-top: 10px; }
+  .quick-action { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; font-size: 12px; text-shadow: 0 1px 6px #000; }
+  .quick-action svg { width: 15px; height: 15px; }
+  .quick-action:hover { background: #0f182bc7; }
+  footer { width: min(1120px, calc(100% - 40px)); margin: 0 auto; min-height: 38px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 0; color: var(--secondary); font-size: 10px; text-shadow: 0 1px 6px #000; }
+  .tip { display: none; align-items: center; gap: 7px; min-width: 0; flex: 1 1 350px; line-height: 1.4; }
+  .tip.show { display: flex; }
+  .tip button { flex: none; min-height: 22px; padding: 0 6px; border-radius: 6px; }
+  #status { margin-left: auto; }
+  #photoCredit:hover, #photoCredit:focus-visible { text-decoration: underline; }
+
+  body.no-clock .header-clock, body.no-tiles .site-section, body.no-week .week { display: none; }
+  body.private .private-note { display: block; }
+  body.private .gear, body.private .custom, body.private .site-section, body.private .quick-actions, body.private .week, body.private .resume, body.private .tip { display: none !important; }
+  body.private .dashboard-grid, body.focus-mode .dashboard-grid { grid-template-columns: minmax(0, 360px); justify-content: center; }
+  body.focus-mode .site-section, body.focus-mode .quick-actions, body.focus-mode .week, body.focus-mode .resume, body.focus-mode .tip, body.focus-mode .gear { display: none !important; }
+  body.focus-mode .panel-body { position: static; border: 0; border-radius: 0 0 15px 15px; box-shadow: none; max-height: none; }
+  body.focus-mode .focus-toggle { background: #a4eaff; color: #162838; }
+
+  @media (max-width: 700px) {
+    .topbar { align-items: flex-start; }
+    .date { display: none; }
+    .hero { margin-top: clamp(27px, 8vh, 66px); }
+    .dashboard-grid { grid-template-columns: 1fr; gap: 6px; }
+    .panel summary { min-height: 51px; padding: 7px 10px; }
+    .panel-body { position: static; border: 0; border-radius: 0 0 15px 15px; box-shadow: none; }
+    .search-note { font-size: 10px; }
+  }
+
+  @media (max-width: 410px) {
+    main, footer { width: calc(100% - 24px); }
+    .topbar { padding-inline: 12px; }
+    .brand { gap: 6px; }
+    .brand-mark { width: 24px; height: 24px; }
+    .brand-mark::after { width: 14px; height: 14px; }
+    .top-actions { gap: 5px; }
+    .search-note > :last-child { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
+  }
 </style>
 </head>
 <body>
-<div class="aurora" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-<div class="veil" aria-hidden="true"></div>
-<main>
-  <div class="clock" id="clock">--:--</div>
-  <div class="greet" id="greet"></div>
-  <form id="search" autocomplete="off" role="search">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="q" type="text" spellcheck="false" aria-label="Pesquisar ou escrever um endereço">
-  </form>
-  <nav class="marks" id="marks" aria-label="Favoritos"></nav>
-  <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
-</main>
-<aside class="resume" id="resume" aria-label="Continuar"><h4>Continuar</h4><div class="cards" id="cards"></div></aside>
-<aside class="week" id="week" aria-label="Privacidade esta semana">
-  <h4>Esta semana</h4>
-  <div class="num" id="weekNum"></div>
-  <div class="saved" id="weekSaved"></div>
-  <div class="bars" id="weekBars"></div>
-</aside>
-<button class="gear" id="gear" title="Personalizar a nova aba" aria-label="Personalizar a nova aba">
-  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-</button>
-<div class="custom" id="custom" role="dialog" aria-label="Personalizar a nova aba">
-  <h4>Fundo</h4>
-  <div class="swatches" id="swatches">
-    <div class="swatch" data-theme="aurora" title="Aurora"></div>
-    <div class="swatch" data-theme="ocean" title="Oceano"></div>
-    <div class="swatch" data-theme="sunset" title="Pôr do sol"></div>
-    <div class="swatch" data-theme="forest" title="Floresta"></div>
-    <div class="swatch" data-theme="minimal" title="Mínimo (sem animação)"></div>
+<img id="wallpaper" class="wallpaper" alt="" fetchpriority="high" hidden>
+<video id="wallpaperVideo" class="wallpaper" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1" disablepictureinpicture disableremoteplayback hidden></video>
+<div class="shade" aria-hidden="true"></div>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Éteris</span></div>
+  <div class="top-actions">
+    <div class="header-clock"><div class="clock" id="clock">--:--</div><div class="date" id="calendarDate"></div></div>
+    <button class="tool-button focus-toggle" id="focusMode" type="button" aria-pressed="false">Foco</button>
+    <button class="tool-button gear" id="gear" type="button" title="Personalizar" aria-label="Personalizar a nova aba" aria-expanded="false" aria-controls="custom">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4m8 1v4m-6 1v4"/></svg>
+    </button>
   </div>
-  <h4>Mostrar</h4>
-  <label class="opt">Relógio e saudação<input type="checkbox" data-key="ntClock" data-class="no-clock"></label>
-  <label class="opt">Sites e favoritos<input type="checkbox" data-key="ntTiles" data-class="no-tiles"></label>
-  <label class="opt">Painel da semana<input type="checkbox" data-key="ntWeek" data-class="no-week"></label>
-</div>
-<iframe id="sink" title="" style="display:none"></iframe>
-<div class="tip" id="tip" role="note"><b>Sabia que…?</b><span id="tipText"></span><button id="tipClose" title="Não mostrar mais dicas" aria-label="Não mostrar mais dicas">✕</button></div>
-<footer><i></i><span id="status">Éteris · sem rastreio, sem telemetria — tudo fica neste computador</span></footer>
+  <section class="custom" id="custom" aria-label="Personalizar a nova aba">
+    <h2>Personalizar a nova aba</h2>
+    <h3>Fundo</h3>
+    <div class="wallpaper-options">
+      <button class="wallpaper-option" type="button" data-wallpaper="coast">Costa</button>
+      <button class="wallpaper-option" type="button" data-wallpaper="mountains">Serra</button>
+      <button class="wallpaper-option" type="button" data-wallpaper="none">Sem imagem</button>
+    </div>
+    <div id="wallpaperMotion" hidden>
+      <h3 id="wallpaperMotionLabel">Movimento da Costa</h3>
+      <div class="wallpaper-motion-options" role="group" aria-labelledby="wallpaperMotionLabel" aria-describedby="wallpaperMotionHelp">
+        <button class="wallpaper-motion-button" id="wallpaperPhotoMode" type="button" aria-pressed="true">Imagem</button>
+        <button class="wallpaper-motion-button" id="wallpaperLiveMode" type="button" aria-pressed="false">Ao vivo</button>
+      </div>
+      <p class="wallpaper-motion-help" id="wallpaperMotionHelp" role="status"></p>
+    </div>
+    <div id="themeOptions" hidden>
+      <h3>Cor de fundo</h3>
+      <div class="swatches" aria-label="Paleta sem imagem">
+        <button class="swatch" type="button" data-theme="aurora" aria-label="Aurora" title="Aurora"></button>
+        <button class="swatch" type="button" data-theme="ocean" aria-label="Oceano" title="Oceano"></button>
+        <button class="swatch" type="button" data-theme="sunset" aria-label="Pôr do sol" title="Pôr do sol"></button>
+        <button class="swatch" type="button" data-theme="forest" aria-label="Floresta" title="Floresta"></button>
+        <button class="swatch" type="button" data-theme="minimal" aria-label="Mínimo" title="Mínimo"></button>
+      </div>
+    </div>
+    <h3>Mostrar</h3>
+    <label class="opt">Relógio e data<input type="checkbox" data-key="ntClock" data-class="no-clock"></label>
+    <label class="opt">Sites e favoritos<input type="checkbox" data-key="ntTiles" data-class="no-tiles"></label>
+    <label class="opt">Painel da semana<input type="checkbox" data-key="ntWeek" data-class="no-week"></label>
+  </section>
+</header>
+<main>
+  <section class="hero" aria-label="Pesquisa">
+    <h1 class="greet" id="greet">Nova aba</h1>
+    <p class="private-note">O histórico e os dados desta sessão são descartados ao fechar a janela.</p>
+    <div class="search-area">
+      <form class="search" id="search" autocomplete="off" role="search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
+        <input id="q" type="text" spellcheck="false" aria-label="Pesquisar ou escrever um endereço" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="searchSuggestions">
+        <button class="search-submit" type="submit" title="Pesquisar" aria-label="Pesquisar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>
+        </button>
+      </form>
+      <div class="suggestions" id="searchSuggestions" role="listbox" aria-label="Sugestões de pesquisa e navegação"></div>
+      <div class="search-note"><span id="searchPrivacy">Sugestões locais</span><span><kbd>/</kbd> focar pesquisa</span></div>
+    </div>
+  </section>
+
+  <section class="site-section" aria-label="Atalhos de sites">
+    <nav class="tiles" id="tiles" aria-label="Sites mais visitados"></nav>
+    <nav class="marks" id="marks" aria-label="Favoritos"></nav>
+  </section>
+
+  <section class="dock" aria-label="Ferramentas e atalhos">
+    <div class="dashboard-grid">
+      <details class="week panel" id="week">
+        <summary>
+          <span class="dock-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <span class="dock-label"><strong>Escudo</strong><small id="weekSummary">Bloqueios nesta semana</small></span><span class="chevron" aria-hidden="true">⌃</span>
+        </summary>
+        <div class="panel-body">
+          <div class="num" id="weekNum"></div>
+          <div class="saved" id="weekSaved"></div>
+          <div class="bars" id="weekBars" role="img"></div>
+        </div>
+      </details>
+      <details class="resume panel show" id="resume">
+        <summary>
+          <span class="dock-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16m-9 3 4 2.5-4 2.5z"/></svg></span>
+          <span class="dock-label"><strong>Retomar</strong><small id="resumeSummary">Leituras e sessões guardadas</small></span><span class="chevron" aria-hidden="true">⌃</span>
+        </summary>
+        <div class="panel-body">
+          <div class="cards" id="cards"></div>
+          <a class="section-link" href="eteris://bookmarks/#ler">Para ler</a>
+          <span aria-hidden="true"> · </span>
+          <a class="section-link" href="eteris://bookmarks/#sessoes">Sessões</a>
+        </div>
+      </details>
+      <details class="focus-panel panel" id="focusPanel">
+        <summary>
+          <span class="dock-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 9v4l2 2m-4-12h4"/></svg></span>
+          <span class="dock-label"><strong>Tempo de foco</strong><small id="focusSummary">Temporizador local</small></span><span class="chevron" aria-hidden="true">⌃</span>
+        </summary>
+        <div class="panel-body">
+          <div class="timer" id="timer" aria-live="off">25:00</div>
+          <div class="focus-status" id="focusStatus" aria-live="polite">Escolhe uma duração para começar.</div>
+          <div class="focus-controls">
+            <select id="focusDuration" aria-label="Duração"><option value="15">15 min</option><option value="25" selected>25 min</option><option value="50">50 min</option></select>
+            <button id="focusStart" type="button">Iniciar</button>
+            <button id="focusReset" type="button" aria-label="Reiniciar temporizador">↺</button>
+          </div>
+          <div class="focus-hint">Mantém esta aba aberta durante a sessão.</div>
+        </div>
+      </details>
+    </div>
+    <nav class="quick-actions" aria-label="Acesso rápido">
+      <a class="quick-action" href="eteris://history/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 5v5h5m3-3v5l3 2"/></svg>Histórico</a>
+      <a class="quick-action" href="eteris://bookmarks/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 15 9l7 1-5 5 1 6-6-3-6 3 1-6-5-5 7-1Z"/></svg>Favoritos</a>
+      <a class="quick-action" href="eteris://bookmarks/#ler"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Zm0 0v14"/></svg>Para ler</a>
+      <a class="quick-action" href="eteris://bookmarks/#sessoes"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="13" height="12" rx="2"/><path d="M9 4h10a2 2 0 0 1 2 2v9"/></svg>Sessões</a>
+      <a class="quick-action" href="eteris://settings/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16M8 5v4m8 1v4m-6 1v4"/></svg>Definições</a>
+    </nav>
+  </section>
+</main>
+<footer>
+  <a id="photoCredit" href="eteris://credits/" title="Créditos e licenças" hidden></a>
+  <div class="tip" id="tip" role="note"><b>Sabia que…?</b><span id="tipText"></span><button id="tipClose" type="button" aria-label="Não mostrar mais dicas">×</button></div>
+  <span id="status">Éteris</span>
+</footer>
+<iframe id="sink" title="" hidden></iframe>
 <script type="application/json" id="data">{{DATA}}</script>
 <script>
   const data = JSON.parse(document.getElementById('data').textContent);
-  const clock = document.getElementById('clock');
-  const tick = () => clock.textContent = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-  tick(); setInterval(tick, 1000);
-
+  const clock = document.getElementById('clock'), calendarDate = document.getElementById('calendarDate');
+  const tick = () => { const now = new Date(); clock.textContent = now.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); calendarDate.textContent = now.toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}); };
+  tick(); setInterval(tick,1000);
   const greet = document.getElementById('greet');
   if (data.private) {
     document.body.classList.add('private');
-    const b = document.createElement('b'); b.textContent = 'Janela privada';
-    greet.append(b, ' · nada desta janela fica no histórico, nos cookies nem na cache');
+    greet.textContent = 'Janela privada';
     document.title = 'Nova aba privada';
   } else {
-    greet.append(data.greeting + '. O que vamos ');
-    const b = document.createElement('b'); b.textContent = 'descobrir'; greet.append(b, ' hoje?');
+    greet.textContent = data.greeting || 'Nova aba';
   }
 
   const q = document.getElementById('q');
+  const search = document.getElementById('search');
+  const searchArea = search.closest('.search-area');
+  const suggestionBox = document.getElementById('searchSuggestions');
   q.placeholder = 'Pesquisar com ' + data.engineName + ' ou escrever um endereço';
-  document.getElementById('search').addEventListener('submit', e => {
-    e.preventDefault();
-    const text = q.value.trim();
-    if (!text) return;
-    const looksLikeUrl = /^[^\s]+\.[a-zÀ-ɏ]{2,}(:\d+)?([/?#]\S*)?$/i.test(text);
-    if (/^https?:\/\//i.test(text)) location.href = text;
-    else if (looksLikeUrl) location.href = 'https://' + text;
-    else location.href = data.engineTemplate.replace('{q}', encodeURIComponent(text));
+  document.getElementById('searchPrivacy').textContent = data.private
+    ? 'A pesquisa segue para ' + data.engineName + '.'
+    : 'Sugestões locais. A pesquisa segue para ' + data.engineName + '.';
+
+  let suggestionButtons = [];
+  let selectedSuggestion = -1;
+
+  const safeWebUrl = value => {
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const typedAddress = text => {
+    if (/^https?:\/\//i.test(text)) return safeWebUrl(text);
+    const looksLikeHost = /^[^\s]+\.[a-zÀ-ɏ]{2,}(:\d+)?([/?#]\S*)?$/i.test(text);
+    return looksLikeHost ? safeWebUrl('https://' + text) : undefined;
+  };
+
+  const searchUrl = term => data.engineTemplate.replace('{q}', encodeURIComponent(term));
+
+  const closeSuggestions = () => {
+    suggestionBox.classList.remove('open');
+    q.setAttribute('aria-expanded', 'false');
+    q.removeAttribute('aria-activedescendant');
+    suggestionButtons[selectedSuggestion]?.setAttribute('aria-selected', 'false');
+    selectedSuggestion = -1;
+  };
+
+  const makeSuggestion = ({ title, meta, icon, url, favicon }) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'suggestion';
+    button.tabIndex = -1;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', 'false');
+
+    const badge = document.createElement('span');
+    badge.className = 'suggestion-icon';
+    badge.setAttribute('aria-hidden', 'true');
+    paintIcon(badge, icon, favicon);
+
+    const text = document.createElement('span');
+    text.className = 'suggestion-text';
+    const heading = document.createElement('span');
+    heading.className = 'suggestion-title';
+    heading.textContent = title;
+    const sub = document.createElement('span');
+    sub.className = 'suggestion-meta';
+    sub.textContent = meta;
+    text.append(heading, sub);
+    button.append(badge, text);
+
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => {
+      closeSuggestions();
+      location.href = url;
+    });
+    return button;
+  };
+
+  const renderSuggestions = () => {
+    closeSuggestions();
+    suggestionBox.replaceChildren();
+    suggestionButtons = [];
+    const term = q.value.trim();
+    if (!term) return;
+
+    const needle = term.toLocaleLowerCase('pt-PT');
+    const local = [];
+    const seen = new Set();
+    const addLocal = (item, meta, icon) => {
+      const url = safeWebUrl(item.url);
+      if (!url || seen.has(url)) return;
+      const host = new URL(url).hostname;
+      const title = item.title || host;
+      if (!(title + ' ' + host + ' ' + url).toLocaleLowerCase('pt-PT').includes(needle)) return;
+      seen.add(url);
+      local.push({ title, host, url, meta, icon, favicon: item.icon });
+    };
+
+    for (const mark of data.bookmarks || [])
+      addLocal(mark, 'Favorito guardado neste computador', '☆');
+    for (const site of data.sites || [])
+      addLocal(site, 'Site visitado · ' + site.host, '↗');
+
+    const score = item => {
+      const title = item.title.toLocaleLowerCase('pt-PT');
+      const host = item.host.toLocaleLowerCase('pt-PT');
+      if (title === needle || host === needle) return 0;
+      if (title.startsWith(needle) || host.startsWith(needle)) return 1;
+      return 2;
+    };
+
+    local.sort((a, b) => score(a) - score(b));
+    const items = local.slice(0, 5);
+    const address = typedAddress(term);
+    if (address === undefined)
+      items.push({ title: 'Pesquisar «' + term + '»', meta: 'Enviar a pesquisa para ' + data.engineName, icon: '⌕', url: searchUrl(term) });
+    else if (address && !items.some(item => item.url === address))
+      items.unshift({ title: 'Abrir ' + term, meta: 'Endereço Web', icon: '↗', url: address });
+
+    if (!items.length) return;
+    if (!data.private && !local.length && address === undefined) {
+      const empty = document.createElement('div');
+      empty.className = 'suggestion-empty';
+      empty.setAttribute('aria-hidden', 'true');
+      empty.textContent = 'Sem correspondências guardadas neste computador.';
+      suggestionBox.append(empty);
+    }
+
+    suggestionButtons = items.map(makeSuggestion);
+    suggestionButtons.forEach((button, index) => {
+      button.id = 'suggestion-' + index;
+      suggestionBox.append(button);
+    });
+    suggestionBox.classList.add('open');
+    q.setAttribute('aria-expanded', 'true');
+  };
+
+  const selectSuggestion = index => {
+    if (!suggestionButtons.length) return;
+    selectedSuggestion = (index + suggestionButtons.length) % suggestionButtons.length;
+    suggestionButtons.forEach((button, i) => button.setAttribute('aria-selected', String(i === selectedSuggestion)));
+    const selected = suggestionButtons[selectedSuggestion];
+    q.setAttribute('aria-activedescendant', selected.id);
+    selected.scrollIntoView({ block: 'nearest' });
+  };
+
+  q.addEventListener('input', () => {
+    q.setCustomValidity('');
+    renderSuggestions();
   });
+  q.addEventListener('keydown', event => {
+    if (event.isComposing) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!suggestionBox.classList.contains('open')) renderSuggestions();
+      if (!suggestionButtons.length) return;
+      event.preventDefault();
+      const index = event.key === 'ArrowDown' ? selectedSuggestion + 1 : selectedSuggestion - 1;
+      selectSuggestion(event.key === 'ArrowUp' && selectedSuggestion < 0 ? suggestionButtons.length - 1 : index);
+    } else if (event.key === 'Escape' && suggestionBox.classList.contains('open')) {
+      event.preventDefault();
+      closeSuggestions();
+    } else if (event.key === 'Enter' && selectedSuggestion >= 0) {
+      event.preventDefault();
+      suggestionButtons[selectedSuggestion].click();
+    }
+  });
+  search.addEventListener('submit', event => {
+    event.preventDefault();
+    const term = q.value.trim();
+    if (!term) return;
+    const address = typedAddress(term);
+    if (address === null) {
+      q.setCustomValidity('Escreve um endereço Web válido.');
+      q.reportValidity();
+      return;
+    }
+    closeSuggestions();
+    location.href = address === undefined ? searchUrl(term) : address;
+  });
+  searchArea.addEventListener('focusout', event => {
+    if (!searchArea.contains(event.relatedTarget)) closeSuggestions();
+  });
+  document.addEventListener('click', event => {
+    if (!searchArea.contains(event.target)) closeSuggestions();
+  });
+  const numberFormat = new Intl.NumberFormat('pt-PT');
+  const countText = (count, singular, plural) =>
+    numberFormat.format(count) + ' ' + (count === 1 ? singular : plural);
 
-  if (data.blocked > 0) {
-    document.getElementById('status').textContent = 'Éteris · ' + data.blocked.toLocaleString('pt-PT') +
-      (data.blocked === 1 ? ' rastreador bloqueado' : ' rastreadores bloqueados') + ' nesta sessão — tudo fica neste computador';
-  }
+  if (!data.private) {
+    if (data.blocked > 0)
+      document.getElementById('status').textContent = countText(data.blocked, 'bloqueio nesta sessão', 'bloqueios nesta sessão');
 
-  if (!data.private && data.weekTotal > 0) {
-    const b = document.createElement('b'); b.textContent = data.weekTotal.toLocaleString('pt-PT');
-    document.getElementById('weekNum').append(b, data.weekTotal === 1 ? 'rastreador bloqueado' : 'rastreadores bloqueados');
-    document.getElementById('weekSaved').textContent = data.weekSaved;
+    const total = data.weekTotal || 0;
+    document.getElementById('weekSummary').textContent = countText(total, 'bloqueio nesta semana', 'bloqueios nesta semana');
+    const metric = document.createElement('b');
+    metric.textContent = numberFormat.format(total);
+    document.getElementById('weekNum').append(metric, total === 1 ? 'rastreador bloqueado esta semana' : 'rastreadores bloqueados esta semana');
+    document.getElementById('weekSaved').textContent = total ? data.weekSaved : 'Os bloqueios desta semana aparecem aqui.';
+
     const bars = document.getElementById('weekBars');
-    const max = Math.max(...data.week, 1);
-    data.week.forEach((count, i) => {
+    const counts = data.week || [];
+    const max = Math.max(...counts, 1);
+    const descriptions = [];
+    counts.forEach((count, index) => {
       const day = document.createElement('div');
+      const label = document.createElement('span');
       const bar = document.createElement('i');
-      bar.style.height = Math.round(4 + 30 * count / max) + 'px';
-      bar.title = count.toLocaleString('pt-PT');
-      const label = document.createElement('span'); label.textContent = data.days[i];
+      label.textContent = data.days[index];
+      bar.style.height = Math.round(4 + 36 * count / max) + 'px';
+      day.title = label.textContent + ': ' + numberFormat.format(count);
+      day.setAttribute('aria-hidden', 'true');
       day.append(bar, label);
       bars.append(day);
+      descriptions.push(day.title);
     });
+    bars.hidden = counts.length === 0;
+    bars.setAttribute('aria-label', 'Bloqueios por dia: ' + descriptions.join(', '));
     document.getElementById('week').classList.add('show');
   }
 
-  // Personalização (tema e o que se mostra), guardada nas definições do Éteris.
+  const sink = document.getElementById('sink');
   const send = (key, value) => {
-    document.getElementById('sink').src = `eteris://newtab/set?k=${key}&v=${encodeURIComponent(value)}&t=${data.token}&n=${Date.now()}`;
+    if (data.private || !data.token) return;
+    const params = new URLSearchParams({ k: key, v: String(value), t: data.token, n: String(Date.now()) });
+    sink.src = 'eteris://newtab/set?' + params;
   };
+
+  const wallpapers = { coast: 'Costa Atlântica', mountains: 'Serra ao amanhecer' };
+  const wallpaper = document.getElementById('wallpaper');
+  const photoCredit = document.getElementById('photoCredit');
+  const themeOptions = document.getElementById('themeOptions');
+  const choices = [...document.querySelectorAll('.wallpaper-option')];
+
+  const video = document.getElementById('wallpaperVideo');
+  const motionOptions = document.getElementById('wallpaperMotion');
+  const photoButton = document.getElementById('wallpaperPhotoMode');
+  const liveButton = document.getElementById('wallpaperLiveMode');
+  const motionHelp = document.getElementById('wallpaperMotionHelp');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  let motionPreference = ['live', 'live-always'].includes(data.wallpaperMotion)
+    ? data.wallpaperMotion : 'photo';
+  let liveUnavailable = false;
+
+  const coastSelected = () => !data.private && document.body.dataset.wallpaper === 'coast';
+  const liveSelected = () => coastSelected() && !liveUnavailable
+    && (motionPreference === 'live-always' || (motionPreference === 'live' && !reducedMotion.matches));
+
+  function paintMotionOptions() {
+    motionOptions.hidden = !coastSelected();
+
+    const live = liveSelected();
+    photoButton.setAttribute('aria-pressed', String(!live));
+    liveButton.setAttribute('aria-pressed', String(live));
+
+    let description = 'Animação local e sem som. Pausa quando a aba deixa de estar visível.';
+    if (liveUnavailable) {
+      description = 'A animação não iniciou. Seleciona Ao vivo para tentar novamente.';
+    } else if (reducedMotion.matches) {
+      description = live
+        ? 'O fundo está animado por escolha tua. Seleciona Imagem para voltar à versão estática.'
+        : 'O Windows prefere movimento reduzido. Podes escolher Ao vivo só para este fundo.';
+    }
+    if (motionHelp.textContent !== description) motionHelp.textContent = description;
+  }
+
+  // O body marca o vídeo a tocar para o CSS tirar o desfoque dos painéis (ver .panel).
+  const markLive = on => document.body.toggleAttribute('data-wallpaper-live', on);
+
+  function unloadWallpaperVideo() {
+    video.hidden = true;
+    markLive(false);
+    if (!video.hasAttribute('src')) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+
+  function fallbackToPhoto() {
+    liveUnavailable = true;
+    unloadWallpaperVideo();
+    paintMotionOptions();
+  }
+
+  function syncWallpaperMotion() {
+    paintMotionOptions();
+    if (!liveSelected()) {
+      unloadWallpaperVideo();
+      return;
+    }
+    if (document.hidden) {
+      if (video.hasAttribute('src')) video.pause();
+      return;
+    }
+    if (!video.hasAttribute('src')) {
+      if (!video.canPlayType('video/webm')) {
+        fallbackToPhoto();
+        return;
+      }
+      video.src = 'eteris://newtab/wallpaper/coast-live.webm';
+    }
+    video.play().catch(error => {
+      if (error.name !== 'AbortError' && !document.hidden && liveSelected())
+        fallbackToPhoto();
+    });
+  }
+
+  video.addEventListener('playing', () => {
+    if (document.hidden || !liveSelected()) return;
+    video.hidden = false;
+    markLive(true);
+  });
+  video.addEventListener('error', () => {
+    if (video.hasAttribute('src') && liveSelected()) fallbackToPhoto();
+  });
+  document.addEventListener('visibilitychange', syncWallpaperMotion);
+  reducedMotion.addEventListener('change', syncWallpaperMotion);
+
+  function chooseWallpaperMotion(mode) {
+    motionPreference = mode;
+    liveUnavailable = false;
+    syncWallpaperMotion();
+    send('ntWallpaperMotion', mode);
+  }
+
+  photoButton.addEventListener('click', () => chooseWallpaperMotion('photo'));
+  liveButton.addEventListener('click', () => {
+    chooseWallpaperMotion(reducedMotion.matches ? 'live-always' : 'live');
+  });
+
+  const paintWallpaper = preference => {
+    const name = !data.private && Object.hasOwn(wallpapers, preference) ? preference : 'none';
+    document.body.dataset.wallpaper = name;
+    wallpaper.hidden = name === 'none';
+    photoCredit.hidden = wallpaper.hidden;
+    themeOptions.hidden = !wallpaper.hidden;
+    if (wallpaper.hidden) wallpaper.removeAttribute('src');
+    else {
+      wallpaper.src = 'eteris://newtab/wallpaper/' + name + '.jpg';
+      photoCredit.textContent = wallpapers[name] + ' · paisagem gerada por IA';
+    }
+    for (const button of choices) button.setAttribute('aria-pressed', String(button.dataset.wallpaper === name));
+    syncWallpaperMotion();
+  };
+
+  wallpaper.addEventListener('error', () => {
+    wallpaper.hidden = true;
+    photoCredit.hidden = true;
+  });
+
+  paintWallpaper(data.wallpaper);
+  for (const button of choices) {
+    button.addEventListener('click', () => {
+      paintWallpaper(button.dataset.wallpaper);
+      send('ntWallpaper', button.dataset.wallpaper);
+    });
+  }
+
   document.body.dataset.theme = data.theme;
-  const flags = { ntClock: data.showClock, ntTiles: data.showTiles, ntWeek: data.showWeek };
   const swatches = [...document.querySelectorAll('.swatch')];
-  const paintSwatches = () => swatches.forEach(s => s.classList.toggle('on', s.dataset.theme === document.body.dataset.theme));
+  const paintSwatches = () => {
+    for (const button of swatches) {
+      const active = button.dataset.theme === document.body.dataset.theme;
+      button.classList.toggle('on', active);
+      button.setAttribute('aria-pressed', String(active));
+    }
+  };
   paintSwatches();
-  swatches.forEach(s => s.addEventListener('click', () => {
-    document.body.dataset.theme = s.dataset.theme; paintSwatches(); send('ntTheme', s.dataset.theme);
-  }));
-  document.querySelectorAll('.opt input').forEach(input => {
+  for (const button of swatches) {
+    button.addEventListener('click', () => {
+      document.body.dataset.theme = button.dataset.theme;
+      paintSwatches();
+      send('ntTheme', button.dataset.theme);
+    });
+  }
+
+  const flags = { ntClock: data.showClock, ntTiles: data.showTiles, ntWeek: data.showWeek };
+  for (const input of document.querySelectorAll('.opt input')) {
     input.checked = !!flags[input.dataset.key];
     document.body.classList.toggle(input.dataset.class, !input.checked);
-    input.addEventListener('change', () => { document.body.classList.toggle(input.dataset.class, !input.checked); send(input.dataset.key, input.checked); });
-  });
+    input.addEventListener('change', () => {
+      document.body.classList.toggle(input.dataset.class, !input.checked);
+      send(input.dataset.key, input.checked);
+    });
+  }
+
   const custom = document.getElementById('custom');
-  document.getElementById('gear').addEventListener('click', e => { e.stopPropagation(); custom.classList.toggle('open'); });
-  custom.addEventListener('click', e => e.stopPropagation());
-  document.addEventListener('click', () => custom.classList.remove('open'));
+  const gear = document.getElementById('gear');
+  const setCustom = open => {
+    custom.classList.toggle('open', open);
+    gear.setAttribute('aria-expanded', String(open));
+  };
+  gear.addEventListener('click', () => setCustom(!custom.classList.contains('open')));
+  document.addEventListener('click', event => {
+    if (!custom.contains(event.target) && !gear.contains(event.target)) setCustom(false);
+  });
 
   if (data.tip) {
     const tip = document.getElementById('tip');
     document.getElementById('tipText').textContent = data.tip;
-    tip.title = data.tip;
     tip.classList.add('show');
-    document.body.classList.add('has-tip');
     document.getElementById('tipClose').addEventListener('click', () => {
-      tip.classList.remove('show'); document.body.classList.remove('has-tip'); send('ntTips', false);
+      tip.classList.remove('show');
+      send('ntTips', false);
     });
   }
 
-  const marks = document.getElementById('marks');
-  for (const mark of data.bookmarks) {
-    const a = document.createElement('a');
-    a.className = 'mark'; a.href = mark.url; a.title = mark.url;
-    const dot = document.createElement('span');
-    dot.className = 'dot'; dot.textContent = mark.letter; dot.style.background = mark.color;
-    const label = document.createElement('span');
-    label.textContent = mark.title;
-    a.append(dot, label);
-    marks.append(a);
-  }
+  function paintIcon(container, fallback, url, color) {
+    container.textContent = fallback || '•';
+    container.setAttribute('aria-hidden', 'true');
+    if (typeof url !== 'string' || !url.startsWith('data:image/png;base64,')) {
+      if (color) container.style.backgroundColor = color;
+      return;
+    }
 
-  // «Continuar»: sessões guardadas (abrem nesta janela) e artigos da lista de leitura por ler.
-  const cards = document.getElementById('cards');
-  for (const card of data.resume) {
-    const isSession = card.Kind === 'session';
-    const el = document.createElement(isSession ? 'button' : 'a');
-    el.className = 'rcard';
-    if (isSession) {
-      el.type = 'button'; el.title = 'Abrir a sessão nesta janela';
-      el.addEventListener('click', () => {
-        document.getElementById('sink').src = `eteris://newtab/session?id=${card.SessionId}&t=${data.token}&n=${Date.now()}`;
-      });
-    } else { el.href = card.Url; el.title = card.Url; }
-    const ico = document.createElement('span');
-    ico.className = 'ico'; ico.textContent = card.Letter; ico.style.background = card.Color;
-    const mark = document.createElement('i'); mark.textContent = isSession ? '◫' : '☾'; ico.append(mark);
-    const txt = document.createElement('span'); txt.className = 'txt';
-    const t = document.createElement('div'); t.className = 't'; t.textContent = card.Title;
-    const s = document.createElement('div'); s.className = 's'; s.textContent = card.Subtitle;
-    txt.append(t, s);
-    el.append(ico, txt);
-    cards.append(el);
+    const icon = document.createElement('img');
+    icon.alt = '';
+    icon.decoding = 'async';
+    icon.addEventListener('error', () => {
+      container.textContent = fallback || '•';
+      if (color) container.style.backgroundColor = color;
+    }, { once: true });
+    container.replaceChildren(icon);
+    icon.src = url;
   }
-  if (data.resume.length) document.getElementById('resume').classList.add('show');
 
   const tiles = document.getElementById('tiles');
-  if (data.sites.length === 0) {
-    const hint = document.createElement('div');
+  const marks = document.getElementById('marks');
+  const siteAddresses = new Set();
+  for (const site of data.sites || []) {
+    const url = safeWebUrl(site.url);
+    if (!url || siteAddresses.has(url)) continue;
+    siteAddresses.add(url);
+    const link = document.createElement('a');
+    link.className = 'tile';
+    link.href = url;
+    link.title = site.title || site.host;
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    paintIcon(badge, site.letter, site.icon, site.color);
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = site.host;
+    link.append(badge, name);
+    tiles.append(link);
+  }
+
+  for (const mark of data.bookmarks || []) {
+    const url = safeWebUrl(mark.url);
+    if (!url || siteAddresses.has(url)) continue;
+    siteAddresses.add(url);
+    const link = document.createElement('a');
+    link.className = 'mark';
+    link.href = url;
+    link.title = mark.url;
+    const badge = document.createElement('span');
+    badge.className = 'dot';
+    paintIcon(badge, mark.letter, mark.icon, mark.color);
+    const label = document.createElement('span');
+    label.textContent = mark.title;
+    link.append(badge, label);
+    marks.append(link);
+  }
+
+  if (!data.private && !tiles.children.length && !marks.children.length) {
+    const hint = document.createElement('p');
     hint.className = 'hint';
-    hint.textContent = 'Os sites que mais visitas vão aparecer aqui.';
+    hint.textContent = 'Os sites mais visitados aparecem aqui à medida que navegas.';
     tiles.append(hint);
   }
-  for (const site of data.sites) {
-    const a = document.createElement('a');
-    a.className = 'tile'; a.href = site.url; a.title = site.title || site.host;
-    const badge = document.createElement('div');
-    badge.className = 'badge'; badge.textContent = site.letter;
-    badge.style.background = 'linear-gradient(145deg, ' + site.color + ', ' + site.color + 'b3)';
-    const name = document.createElement('div');
-    name.className = 'name'; name.textContent = site.host;
-    a.append(badge, name);
-    tiles.append(a);
+
+  const cards = document.getElementById('cards');
+  for (const card of data.resume || []) {
+    const session = card.Kind === 'session';
+    const item = document.createElement(session ? 'button' : 'a');
+    item.className = 'rcard';
+    if (session) {
+      item.type = 'button';
+      item.addEventListener('click', () => {
+        if (data.private || !data.token) return;
+        const params = new URLSearchParams({ id: String(card.SessionId), t: data.token, n: String(Date.now()) });
+        sink.src = 'eteris://newtab/session?' + params;
+      });
+    } else {
+      const url = safeWebUrl(card.Url);
+      if (!url) continue;
+      item.href = url;
+      item.title = card.Url;
+    }
+    const badge = document.createElement('span');
+    badge.className = 'ico';
+    paintIcon(badge, card.Letter, null, card.Color);
+    const text = document.createElement('span');
+    text.className = 'txt';
+    const title = document.createElement('span');
+    title.className = 't';
+    title.textContent = card.Title;
+    const subtitle = document.createElement('span');
+    subtitle.className = 's';
+    subtitle.textContent = card.Subtitle;
+    text.append(title, subtitle);
+    item.append(badge, text);
+    cards.append(item);
   }
+
+  if (cards.children.length)
+    document.getElementById('resumeSummary').textContent = countText(cards.children.length, 'item para retomar', 'itens para retomar');
+
+  const panels = [...document.querySelectorAll('.panel')];
+  for (const panel of panels) {
+    panel.addEventListener('toggle', () => {
+      if (panel.open) for (const other of panels) if (other !== panel) other.open = false;
+    });
+  }
+
+  // O temporizador só vive nesta página: sem armazenamento, rede, som ou notificações.
+  const duration=document.getElementById('focusDuration'),timer=document.getElementById('timer'),focusStatus=document.getElementById('focusStatus'),focusPanel=document.getElementById('focusPanel'),startButton=document.getElementById('focusStart');
+  let remainingSeconds=Number(duration.value)*60,endAt=0,timerId=0,finished=false;
+  const paintTimer=()=>{timer.textContent=Math.floor(remainingSeconds/60).toString().padStart(2,'0')+':'+Math.max(0,remainingSeconds%60).toString().padStart(2,'0'); document.getElementById('focusSummary').textContent = timerId ? timer.textContent + ' restantes' : 'Temporizador local'; };
+  const stopTimer=()=>{if(timerId)clearInterval(timerId);timerId=0;endAt=0;};
+  const updateTimer=()=>{remainingSeconds=Math.max(0,Math.ceil((endAt-Date.now())/1000));paintTimer();if(remainingSeconds<=0){stopTimer();duration.disabled=false;finished=true;focusPanel.classList.remove('active');focusStatus.textContent='Sessão concluída. Boa pausa!';startButton.textContent='Recomeçar';}};
+  duration.addEventListener('change',()=>{remainingSeconds=Number(duration.value)*60;finished=false;stopTimer();paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Um pequeno espaço para te concentrares.';startButton.textContent='Iniciar';});
+  startButton.addEventListener('click',()=>{
+    if(timerId){remainingSeconds=Math.max(0,Math.ceil((endAt-Date.now())/1000));stopTimer();duration.disabled=false;paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Pausado. Retoma quando estiveres pronto.';startButton.textContent='Continuar';return;}
+    if(finished||remainingSeconds<=0){remainingSeconds=Number(duration.value)*60;finished=false;}
+    duration.disabled=true;endAt=Date.now()+remainingSeconds*1000;timerId=setInterval(updateTimer,250);focusPanel.classList.add('active');focusStatus.textContent='O teu tempo é teu. Respira e começa.';startButton.textContent='Pausar';updateTimer();
+  });
+  document.getElementById('focusReset').addEventListener('click',()=>{stopTimer();duration.disabled=false;remainingSeconds=Number(duration.value)*60;finished=false;paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Um pequeno espaço para te concentrares.';startButton.textContent='Iniciar';});
+  paintTimer();
+  const focusMode=document.getElementById('focusMode'),setFocusMode=active=>{
+    document.body.classList.toggle('focus-mode',active);focusMode.setAttribute('aria-pressed',active?'true':'false');focusMode.textContent=active?'Sair do foco':'Foco';
+    if (active) { setCustom(false); closeSuggestions(); focusPanel.open = true; }
+  };
+  focusMode.addEventListener('click',()=>setFocusMode(!document.body.classList.contains('focus-mode')));
+  document.addEventListener('keydown',event=>{
+    if (event.defaultPrevented || event.isComposing) return;
+    const target=event.target,editing=target instanceof HTMLElement&&(target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target.tagName));
+    if(event.key==='/'&&!editing&&!event.ctrlKey&&!event.altKey&&!event.metaKey){event.preventDefault();q.focus();}
+    if(event.key==='Escape'){
+      if(custom.classList.contains('open')){setCustom(false);gear.focus();}
+      else if(document.body.classList.contains('focus-mode')){setFocusMode(false);focusMode.focus();}
+      else {
+        const expanded = panels.find(panel => panel.open);
+        if (expanded) {
+          expanded.open = false;
+          expanded.querySelector('summary').focus();
+        } else closeSuggestions();
+      }
+    }
+  });
 </script>
 </body>
 </html>

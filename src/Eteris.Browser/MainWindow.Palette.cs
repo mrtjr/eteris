@@ -39,6 +39,9 @@ public partial class MainWindow
 
     private void OpenPalette()
     {
+
+        CloseBrowserMenu();
+        CloseRadar();
         CloseSuggestions();
         ShieldPopup.IsOpen = false;
         PaletteOverlay.Visibility = Visibility.Visible;
@@ -75,6 +78,7 @@ public partial class MainWindow
         var zoom = ZoomSteps.Percent(ActiveBrowser?.ZoomLevel ?? 0);
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
+        yield return new("\uE71D", "Radar de abas", "Encontre, compare ou reabra abas desta janela", "Ctrl+Shift+A", ToggleRadar);
         if (s_closedWindows.Latest is { } closedWindow)
             yield return new("\uE8A7", $"Reabrir janela fechada ({closedWindow.Addresses.Count} abas)",
                 closedWindow.Titles.FirstOrDefault() ?? string.Empty, null, ReopenClosedWindow);
@@ -180,8 +184,11 @@ public partial class MainWindow
         yield return new("", "Repor zoom", "Voltar a 100%", "Ctrl+0", () => Zoom(0));
         yield return new("\uE8A7", _miniMode ? "Sair da janela flutuante" : "Janela flutuante",
             _miniMode ? "Voltar ao tamanho e posição de antes" : "Pequena, num canto e sempre por cima — para ver um vídeo enquanto trabalha", "Ctrl+Shift+M", ToggleMiniWindow);
-        yield return new("", _focusMode ? "Sair do modo foco" : "Modo foco",
-            "Esconde abas e barras para ler sem distrações", "F11", ToggleFocusMode);
+        if (_pageFullscreen)
+            yield return new("", "Sair do ecrã inteiro", "A janela volta ao tamanho normal", "Esc", ExitPageFullscreen);
+        else
+            yield return new("", _focusMode ? "Sair do modo foco" : "Modo foco",
+                "Esconde abas e barras para ler sem distrações", "F11", ToggleFocusMode);
     }
 
     private void RefreshPalette()
@@ -227,7 +234,7 @@ public partial class MainWindow
     private void ToggleDarkSite(string host, bool on)
     {
         AppData.SetDark(host, on);
-        ActiveBrowser?.GetMainFrame()?.ExecuteJavaScriptAsync(Shields.DarkPages.Live(on));
+        if (ActiveBrowser is { } browser) PageScript.Run(browser, Shields.DarkPages.Live(on));
         ShowToast(on ? $"{host} fica escuro — também da próxima vez" : $"{host} volta às cores originais");
     }
 
@@ -281,7 +288,7 @@ public partial class MainWindow
 
     private void PaletteBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => ClosePalette();
 
-    private void Menu_Click(object sender, RoutedEventArgs e) => OpenPalette();
+    private void Menu_Click(object sender, RoutedEventArgs e) => ToggleBrowserMenu();
 
     // ---------- Esquecer ----------
 
@@ -296,6 +303,12 @@ public partial class MainWindow
 
     private void ToggleFocusMode()
     {
+        if (_pageFullscreen)
+        {
+            ExitPageFullscreen();
+            return;
+        }
+
         _focusMode = !_focusMode;
         ApplyChromeLayout();
         CloseSuggestions();
@@ -319,7 +332,7 @@ public partial class MainWindow
             return;
         }
 
-        browser.EvaluateScriptAsync(ThemeColorScript).ContinueWith(task =>
+        PageScript.EvaluateAsync(browser, ThemeColorScript).ContinueWith(task =>
         {
             if (task.IsCompletedSuccessfully && task.Result.Success && task.Result.Result is string css)
                 Dispatcher.InvokeAsync(() => tab.Tint = SiteTint.Parse(css) is { } color ? SiteTint.ForChrome(color) : null);

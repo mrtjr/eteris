@@ -21,6 +21,8 @@ public sealed class UserSettingsTests : IDisposable
         Assert.True(s.HttpsFirst);
         Assert.True(s.BlockThirdPartyCookies);
         Assert.False(s.SearchSuggestions);
+        Assert.Equal("coast", s.NewTabWallpaper);
+        Assert.Equal("photo", s.NewTabWallpaperMotion);
     }
 
     [Fact]
@@ -31,6 +33,31 @@ public sealed class UserSettingsTests : IDisposable
         var loaded = new SettingsStore(_path).Load();
         Assert.Equal("brave", loaded.SearchEngine);
         Assert.Equal(5, loaded.SleepMinutes);
+    }
+
+    [Theory]
+    [InlineData("photo")]
+    [InlineData("live")]
+    [InlineData("live-always")]
+    public void WallpaperMotion_ValidChoiceSurvivesReload(string mode)
+    {
+        var updated = Assert.IsType<UserSettings>(new UserSettings().With("ntWallpaperMotion", mode));
+        var store = new SettingsStore(_path);
+        store.Save(updated);
+        Assert.Equal(mode, store.Load().NewTabWallpaperMotion);
+    }
+
+    [Theory]
+    [InlineData("coast")]
+    [InlineData("mountains")]
+    [InlineData("none")]
+    public void Wallpaper_ValidChoiceSurvivesReload(string wallpaper)
+    {
+        var updated = Assert.IsType<UserSettings>(new UserSettings().With("ntWallpaper", wallpaper));
+        Assert.Equal(wallpaper, updated.NewTabWallpaper);
+        var store = new SettingsStore(_path);
+        store.Save(updated);
+        Assert.Equal(wallpaper, store.Load().NewTabWallpaper);
     }
 
     [Fact]
@@ -56,6 +83,8 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("clearOnExit", "true")]
     [InlineData("cleanUrls", "false")]
     [InlineData("ntTheme", "sunset")]
+    [InlineData("ntWallpaper", "mountains")]
+    [InlineData("ntWallpaper", "none")]
     [InlineData("ntTiles", "false")]
     [InlineData("sidebarCollapsed", "true")]
     public void With_AcceptsValidValues(string key, string value)
@@ -69,6 +98,9 @@ public sealed class UserSettingsTests : IDisposable
     [InlineData("httpsFirst", "talvez")]
     [InlineData("unknown", "x")]
     [InlineData("ntTheme", "neon")]
+    [InlineData("ntWallpaper", "galaxy")]
+    [InlineData("ntWallpaper", "Coast")]
+    [InlineData("ntWallpaperMotion", "auto")]
     public void With_RejectsInvalidValues(string key, string value)
         => Assert.Null(new UserSettings().With(key, value));
 

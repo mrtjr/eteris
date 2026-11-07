@@ -56,6 +56,8 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private ImageSource? _favicon;
 
+    internal string? FaviconSite { get; set; }
+
     [ObservableProperty]
     private Color? _tint;
 
@@ -119,6 +121,12 @@ public partial class BrowserTab : ObservableObject
 
     public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
 
+    // Sobe a cada mudança de endereço: uma captura em curso compara-o antes de atribuir a miniatura (MainWindow.Thumbnails.cs).
+    internal int ThumbnailVersion { get; private set; }
+
+    // Endereço da página a que a miniatura pertence.
+    internal string? ThumbnailAddress { get; set; }
+
     private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<KeyValuePair<string, int>> BlockedHosts
@@ -171,8 +179,17 @@ public partial class BrowserTab : ObservableObject
 
     public bool IsNewTab => Browser.NewTabPage.IsNewTab(Address);
 
-    partial void OnAddressChanged(string value)
+    // Mesmo host (sem distinguir maiúsculas); páginas eteris:// comparam o nome interno (newtab, history…).
+    public static bool SameHost(string a, string b)
+        => Uri.TryCreate(a, UriKind.Absolute, out var ua) && Uri.TryCreate(b, UriKind.Absolute, out var ub)
+           && string.Equals(ua.Host, ub.Host, StringComparison.OrdinalIgnoreCase);
+
+    partial void OnAddressChanged(string? oldValue, string newValue)
     {
+        ThumbnailVersion++;
+        // Só uma página de outro site apaga a miniatura: numa navegação dentro do mesmo site (pushState, #âncora)
+        // o CEF não volta a disparar FrameLoadEnd, logo não haveria recaptura e a aba ficaria sem pré-visualização.
+        if (!SameHost(oldValue ?? string.Empty, newValue)) Thumbnail = null;
         OnPropertyChanged(nameof(Monogram));
         OnPropertyChanged(nameof(MonogramBrush));
         OnPropertyChanged(nameof(IsNewTab));

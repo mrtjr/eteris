@@ -23,11 +23,22 @@ public sealed class HistoryStore
                 visited_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS ix_history_url ON history(url);
             CREATE INDEX IF NOT EXISTS ix_history_visited ON history(visited_at);
+            CREATE TABLE IF NOT EXISTS site_icons(
+                site TEXT PRIMARY KEY NOT NULL,
+                png BLOB NOT NULL);
             """);
     }
 
+    // Credenciais embutidas no endereço (https://utilizador:senha@site/) nunca entram no histórico — e as chaves por
+    // site continuam a bater com as visitas.
+    internal static string WithoutUserInfo(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.UserInfo.Length > 0
+            ? uri.GetComponents(UriComponents.AbsoluteUri & ~UriComponents.UserInfo, UriFormat.UriEscaped)
+            : url;
+
     public void Record(string url, string title, DateTime visitedUtc)
     {
+        url = WithoutUserInfo(url);
         if (!IsWeb(url)) return;
         Execute("INSERT INTO history(url, title, visited_at) VALUES ($u, $t, $v)",
             ("$u", url), ("$t", title), ("$v", new DateTimeOffset(visitedUtc).ToUnixTimeMilliseconds()));
@@ -37,7 +48,7 @@ public sealed class HistoryStore
         => Execute("""
             UPDATE history SET title = $t
             WHERE id = (SELECT id FROM history WHERE url = $u ORDER BY visited_at DESC, id DESC LIMIT 1)
-            """, ("$u", url), ("$t", title));
+            """, ("$u", WithoutUserInfo(url)), ("$t", title));
 
     public IReadOnlyList<HistoryEntry> Search(string text, int limit)
     {
@@ -67,14 +78,93 @@ public sealed class HistoryStore
         return visits;
     }
 
-    public void DeleteVisit(long id) => Execute("DELETE FROM history WHERE id = $i", ("$i", id));
+    // O PNG reencodado e reduzido é guardado só depois de existir uma visita ao endereço.
+    public void SaveSiteIcon(string url, byte[] png)
+    {
+        if (SiteIconKey(url) is not { } site || png.Length > 8192
+            || !png.AsSpan().StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) return;
+        Execute("""
+            INSERT INTO site_icons(site, png)
+            SELECT $s, $p WHERE EXISTS (SELECT 1 FROM history WHERE url = $u)
+            ON CONFLICT(site) DO UPDATE SET png = excluded.png WHERE site_icons.png <> excluded.png
+            """, ("$s", site), ("$p", png), ("$u", url));
+    }
+
+    public IReadOnlyDictionary<string, string> SiteIcons(IEnumerable<string> urls)
+    {
+        var sites = urls.Select(SiteIconKey).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+        var icons = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (sites.Length == 0) return icons;
+
+        using var connection = Open();
+        foreach (var batch in sites.Chunk(250))
+        {
+            using var command = connection.CreateCommand();
+            var placeholders = new string[batch.Length];
+            for (var i = 0; i < batch.Length; i++)
+            {
+                placeholders[i] = "$s" + i;
+                command.Parameters.AddWithValue(placeholders[i], batch[i]);
+            }
+            command.CommandText = "SELECT site, png FROM site_icons WHERE site IN (" + string.Join(",", placeholders) + ")";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                icons.Add(reader.GetString(0), "data:image/png;base64," + Convert.ToBase64String((byte[])reader.GetValue(1)));
+        }
+        return icons;
+    }
+
+    internal static string? SiteIconKey(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http"
+            ? uri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped)
+            : null;
+
+    // Um ícone fica órfão quando não resta nenhuma visita ao seu site. O índice ix_history_url
+    // restringe os candidatos pelo prefixo do endereço (site <= url < site || '0' cobre "https://a.pt"
+    // e "https://a.pt/…"; o motor guarda o host em minúsculas, como a chave) e a função gerida
+    // site_icon_key só corre nessas poucas linhas, nunca no histórico inteiro — estas remoções
+    // correm na thread de I/O do CEF e na de UI. Públicos para os testes verificarem o plano.
+    internal const string DeleteIconOfLastVisitSql = """
+        DELETE FROM site_icons
+        WHERE site = (SELECT site_icon_key(url) FROM history WHERE id = $i)
+          AND NOT EXISTS (SELECT 1 FROM history h
+                          WHERE h.url >= site_icons.site AND h.url < site_icons.site || '0'
+                            AND h.id <> $i AND site_icon_key(h.url) = site_icons.site)
+        """;
+
+    internal const string DeleteOrphanIconsSql = """
+        DELETE FROM site_icons
+        WHERE NOT EXISTS (SELECT 1 FROM history h
+                          WHERE h.url >= site_icons.site AND h.url < site_icons.site || '0'
+                            AND site_icon_key(h.url) = site_icons.site)
+        """;
+
+    public void DeleteVisit(long id)
+        => DeleteHistory(DeleteIconOfLastVisitSql + "; DELETE FROM history WHERE id = $i;", ("$i", id));
 
     // DateTime.MinValue apaga tudo.
     public void DeleteSince(DateTime sinceUtc)
     {
-        if (sinceUtc == DateTime.MinValue) { Execute("DELETE FROM history"); return; }
-        Execute("DELETE FROM history WHERE visited_at >= $v",
+        if (sinceUtc == DateTime.MinValue)
+        {
+            DeleteHistory("DELETE FROM history; DELETE FROM site_icons;");
+            return;
+        }
+        DeleteHistory("DELETE FROM history WHERE visited_at >= $v; " + DeleteOrphanIconsSql + ";",
             ("$v", new DateTimeOffset(DateTime.SpecifyKind(sinceUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds()));
+    }
+
+    private void DeleteHistory(string sql, params (string Name, object Value)[] parameters)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("site_icon_key", SiteIconKey, isDeterministic: true);
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
+        command.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     public IReadOnlyList<TopSite> TopSites(int limit)

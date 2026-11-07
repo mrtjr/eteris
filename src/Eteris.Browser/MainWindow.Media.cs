@@ -1,6 +1,7 @@
 using System.Windows;
 using CefSharp;
 using Eteris.Browser.Tabs;
+using Eteris.Browser.Browser;
 
 namespace Eteris.Browser;
 
@@ -59,7 +60,7 @@ public partial class MainWindow
         if (!_browsers.TryGetValue(tab, out var browser) || !browser.IsBrowserInitialized) return;
         try
         {
-            var result = await browser.EvaluateScriptAsync(MediaInfo.ToggleScript);
+            var result = await PageScript.EvaluateAsync(browser, MediaInfo.ToggleScript, userGesture: true);
             if (result.Success && result.Result is string state && state.Length > 0)
             {
                 // Resposta imediata no painel; a ronda seguinte confirma o estado real.
@@ -75,7 +76,7 @@ public partial class MainWindow
         foreach (var tab in Tabs.Tabs.Where(t => t.Media == MediaState.Playing).ToList())
         {
             if (_browsers.TryGetValue(tab, out var browser) && browser.IsBrowserInitialized)
-                browser.GetMainFrame()?.ExecuteJavaScriptAsync(MediaInfo.PauseScript);
+                PageScript.Run(browser, MediaInfo.PauseScript);
             tab.Media = MediaState.Paused;
         }
         RefreshMediaHub();

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -29,6 +29,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Browser\newtab.html" />
+    <EmbeddedResource Include="Browser\Wallpapers\coast.jpg" />
+    <EmbeddedResource Include="Browser\Wallpapers\mountains.jpg" />
+    <EmbeddedResource Include="Browser\Wallpapers\coast-live.webm" />
     <EmbeddedResource Include="Browser\error.html" />
     <EmbeddedResource Include="Browser\history.html" />
     <EmbeddedResource Include="Browser\settings.html" />
@@ -46,6 +49,10 @@
     <!-- Licença do Éteris e textos completos das licenças de terceiros: vão sempre com a instalação. -->
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <None Include="..\..\licenses\**\*" LinkBase="licenses" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Eteris.Browser.Tests" />
   </ItemGroup>
 
   <ItemGroup>

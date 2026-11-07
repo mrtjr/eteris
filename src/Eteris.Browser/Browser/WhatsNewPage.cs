@@ -12,6 +12,10 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("◈", "Costa Atlântica ao vivo", "Ativa Ao vivo na personalização da nova aba para ver as ondas e as nuvens em movimento, sem som."),
+        new("◈", "Nova aba com paisagens", "Escolhe uma paisagem gerada por IA como fundo nas opções da nova aba. Os atalhos ficam junto da pesquisa, com ferramentas no rodapé."),
+        new("▤", "Menu do Éteris", "Encontra as ações por categoria e controla o zoom no próprio menu.", "Alt+F"),
+        new("◷", "Ícones no histórico", "O histórico e os atalhos mostram os ícones dos sites conforme voltas a visitá-los."),
         new("⚡", "Mais leve, como o Chrome", "As páginas gastam até 4× menos processador e as abas em segundo plano deixam de gastar — mais bateria e rolagem mais suave."),
         new("▶", "Vídeo em todos os sites", "Sites que só têm vídeo em H.264, como o Twitch, passam sozinhos para o motor de vídeo do Windows — dentro do Éteris, com o mesmo bloqueador."),
         new("🚫", "Fim dos anúncios em nova aba", "Um clique na página já não abre anúncios noutra aba: só abrem os links em que clicou."),

@@ -165,14 +165,17 @@ public partial class MainWindow
             tab.CanGoForward = core.CanGoForward;
             var url = core.Source;
             if (e.IsSuccess && e.HttpStatusCode is > 0 and < 400 && !IsPrivate)
+            {
                 AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow));
+                RememberFavicon(tab, url);
+            }
         };
         core.HistoryChanged += (_, _) =>
         {
             tab.CanGoBack = core.CanGoBack;
             tab.CanGoForward = core.CanGoForward;
         };
-        core.FaviconChanged += (_, _) => SetFavicon(tab, core.FaviconUri);
+        core.FaviconChanged += async (_, _) => await SetVideoFaviconAsync(tab, core);
         core.ContainsFullScreenElementChanged += (_, _) => OnPageFullscreen(tab, core.ContainsFullScreenElement);
         core.IsDocumentPlayingAudioChanged += (_, _) => tab.IsAudible = core.IsDocumentPlayingAudio;
         core.StatusBarTextChanged += (_, _) => ShowLinkStatus(tab, Eteris.Browser.Omnibox.LinkStatus.Format(core.StatusBarText));

@@ -33,9 +33,19 @@ public partial class MainWindow
 
     private void CloseSplit()
     {
-        if (_split is null) return;
-        _split = null;
+        if (_split is not { } split) return;
+        EndSplit(split);
         LayoutBrowsers();
+    }
+
+    // As duas abas estiveram no ecrã até agora: contam como vistas, senão a que nunca foi ativa adormece no minuto
+    // seguinte (SleepIdleTabs só a protegia enquanto estava num painel).
+    private void EndSplit(SplitView split)
+    {
+        var now = DateTime.UtcNow;
+        split.Left.LastActiveUtc = now;
+        split.Right.LastActiveUtc = now;
+        _split = null;
     }
 
     // Aba vizinha para a paleta: a da direita, ou a da esquerda se a ativa for a última.
@@ -48,7 +58,7 @@ public partial class MainWindow
 
     private void OnSplitActiveChanged()
     {
-        if (_split is { } split && !split.SurvivesActivation(Tabs.Active)) _split = null;
+        if (_split is { } split && !split.SurvivesActivation(Tabs.Active)) EndSplit(split);
         LayoutBrowsers();
     }
 
@@ -56,7 +66,7 @@ public partial class MainWindow
     {
         if (_split is { } split && !split.SurvivesRemoval(tab))
         {
-            _split = null;
+            EndSplit(split);
             LayoutBrowsers();
         }
     }

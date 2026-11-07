@@ -1,10 +1,9 @@
-﻿using System.Collections.Specialized;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
@@ -94,11 +93,13 @@ public partial class MainWindow : Window
     private void CreateBrowser(BrowserTab tab)
     {
         if (TryCreateVideoView(tab)) return;
-        // Scripts do Éteris que correm antes dos da página: modo escuro (se pedido), deteção de vídeo só em H.264 e
-        // registo do último clique (para distinguir um link aberto pelo utilizador de um anúncio pop-under).
+        // Scripts do Éteris que correm antes dos da página: regras cosméticas do site (escudo ligado), modo escuro (se
+        // pedido), deteção de vídeo só em H.264 e registo do último clique (para distinguir um link aberto pelo
+        // utilizador de um anúncio pop-under). Registados pelo DevTools: não dependem do processo filho do CefSharp.
         var injector = new ScriptletInjector(AppData.IsShieldOn,
             url => VideoEngine.CanHost(url)
-                ? (DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript + "\n;\n" : "")
+                ? SiteCosmeticScript(url)
+                  + (DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript + "\n;\n" : "")
                   + VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript
                 : null);
         UserActivation? lastActivation = null;
@@ -114,9 +115,8 @@ public partial class MainWindow : Window
             FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
-            DisplayHandler = new FaviconHandler(url => Dispatcher.InvokeAsync(() => SetFavicon(tab, url)),
+            DisplayHandler = new FaviconHandler((url, page) => Dispatcher.InvokeAsync(() => SetFavicon(tab, url, page)),
                 fullscreen => Dispatcher.InvokeAsync(() => OnPageFullscreen(tab, fullscreen))),
-            RenderProcessMessageHandler = new CosmeticFilterHandler(AppData.IsShieldOn),
             DownloadHandler = DownloadHandler,
             FindHandler = NewFindHandler(),
             RequestContext = PrivateContext,
@@ -215,7 +215,11 @@ public partial class MainWindow : Window
                 _ = ApplyGenericCosmeticsAsync(browser, url);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
-            if (!IsPrivate) Dispatcher.InvokeAsync(() => AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow)));
+            if (!IsPrivate) Dispatcher.InvokeAsync(() =>
+            {
+                AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow));
+                RememberFavicon(tab, url);
+            });
         };
         browser.StatusMessage += (_, e) =>
         {
@@ -234,36 +238,7 @@ public partial class MainWindow : Window
         if (IsSplit) LayoutBrowsers();
     }
 
-    private static bool SameHost(string a, string b)
-        => Uri.TryCreate(a, UriKind.Absolute, out var ua) && Uri.TryCreate(b, UriKind.Absolute, out var ub)
-           && string.Equals(ua.Host, ub.Host, StringComparison.OrdinalIgnoreCase);
-
-    private static void SetFavicon(BrowserTab tab, string? url)
-    {
-        if (url is null || !Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-        {
-            tab.Favicon = null;
-            return;
-        }
-
-        try
-        {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.UriSource = uri;
-            image.DecodePixelWidth = 32;
-            image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-            image.EndInit();
-            image.DownloadFailed += (_, _) => tab.Favicon = null;
-            image.DecodeFailed += (_, _) => tab.Favicon = null;
-            tab.Favicon = image;
-        }
-        catch
-        {
-            tab.Favicon = null;
-        }
-    }
+    private static bool SameHost(string a, string b) => BrowserTab.SameHost(a, b);
 
     private void OnTabsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -347,7 +322,11 @@ public partial class MainWindow : Window
     {
         foreach (var injector in _scriptlets.Values) injector.Dispose();
         _scriptlets.Clear();
-        foreach (var browser in _browsers.Values) browser.Dispose();
+        foreach (var browser in _browsers.Values)
+        {
+            PageScript.Release(browser);
+            browser.Dispose();
+        }
         _browsers.Clear();
         DisposeVideoViews();
     }
@@ -359,6 +338,19 @@ public partial class MainWindow : Window
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         e.Handled = true;
+
+        if (RadarOpen)
+        {
+            e.Handled = HandleRadarKey(key, ctrl, shift, alt);
+            return;
+        }
+
+        // O menu do Éteris é um Popup sem pai: as suas teclas chegam aqui primeiro, pelo MenuButton.
+        if (BrowserMenuOpen)
+        {
+            e.Handled = HandleBrowserMenuKey(key, ctrl, shift, alt);
+            return;
+        }
 
         if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
         else if (Shortcut(key, ctrl, shift, alt) is { } action) action();
@@ -373,7 +365,9 @@ public partial class MainWindow : Window
     private Action? Shortcut(Key key, bool ctrl, bool shift, bool alt)
     {
         if (ctrl && alt) return null;
+        if (alt && !ctrl && !shift && key == Key.F) return ToggleBrowserMenu;
         if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) return ToggleShortcuts;
+        if (ctrl && shift && key == Key.A) return ToggleRadar;
         if (ctrl && key == Key.K) return TogglePalette;
         if (ctrl && key == Key.J) return ToggleDownloads;
         if (ctrl && key == Key.D) return ToggleBookmark;
@@ -424,7 +418,8 @@ public partial class MainWindow : Window
         if (key == Key.Escape)
             Dispatcher.InvokeAsync(() =>
             {
-                if (ShortcutsOpen) CloseShortcuts();
+                if (RadarOpen) CloseRadar();
+                else if (ShortcutsOpen) CloseShortcuts();
                 else if (_pageFullscreen) ExitPageFullscreen();
                 else if (Tabs.Active?.IsLoading == true) StopActive();
             });

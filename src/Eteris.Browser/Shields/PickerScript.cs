@@ -1,7 +1,7 @@
 namespace Eteris.Browser.Shields;
 
 // «Esconder elemento»: realça o elemento debaixo do rato; um clique esconde-o e devolve um seletor estável.
-// Corre via EvaluateScriptAsPromiseAsync (o corpo é envolvido numa função async, daí o «return»).
+// Corre via PageScript.EvaluateAsync(asyncBody: true): o corpo é envolvido numa função async, daí o «return».
 public static class PickerScript
 {
     public const string Pick = """

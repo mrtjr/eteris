@@ -1,4 +1,5 @@
 using System.Windows.Threading;
+using Eteris.Browser.Browser;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
@@ -19,6 +20,7 @@ public partial class MainWindow
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         if (!_browsers.Remove(tab, out var browser)) return;
         BrowserHost.Children.Remove(browser);
+        PageScript.Release(browser);
         browser.Dispose();
     }
 
@@ -38,13 +40,16 @@ public partial class MainWindow
         _sleepTimer.Start();
     }
 
+    private bool IsTabOnScreen(BrowserTab tab)
+        => ReferenceEquals(tab, Tabs.Active) || _split?.PaneOf(tab) is not null;
+
     private void SleepIdleTabs()
     {
         var now = DateTime.UtcNow;
         var threshold = TimeSpan.FromMinutes(Data.Settings.Current.SleepMinutes);
         foreach (var tab in Tabs.Tabs.ToList())
         {
-            if (!SleepPolicy.ShouldSleep(ReferenceEquals(tab, Tabs.Active), tab.IsSleeping, tab.IsLoading, tab.IsAudible,
+            if (!SleepPolicy.ShouldSleep(IsTabOnScreen(tab), tab.IsSleeping, tab.IsLoading, tab.IsAudible,
                     tab.LastActiveUtc, now, threshold)) continue;
             ReleaseBrowser(tab);
             tab.IsSleeping = true;
@@ -53,7 +58,7 @@ public partial class MainWindow
 
     private void SleepAllBackgroundTabs()
     {
-        foreach (var tab in Tabs.Tabs.Where(t => !ReferenceEquals(t, Tabs.Active) && !t.IsSleeping && !t.IsAudible).ToList())
+        foreach (var tab in Tabs.Tabs.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible).ToList())
         {
             ReleaseBrowser(tab);
             tab.IsSleeping = true;

@@ -6,22 +6,33 @@ using Eteris.Browser.Omnibox;
 
 namespace Eteris.Browser.Browser;
 
-public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
+public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : ISchemeHandlerFactory
 {
     public const string SchemeName = "eteris";
 
     public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request)
     {
         Uri.TryCreate(request.Url, UriKind.Absolute, out var uri);
+        if (uri is { Host: "newtab", AbsolutePath: "/wallpaper/coast.jpg" or "/wallpaper/mountains.jpg" or "/wallpaper/coast-live.webm" })
+        {
+            var file = uri.AbsolutePath["/wallpaper/".Length..];
+            var stream = privateContext ? null : typeof(NewTabPage).Assembly
+                .GetManifestResourceStream("Eteris.Browser.Browser.Wallpapers." + file);
+            if (stream is null) return ResourceHandler.ForErrorMessage("Fundo indisponível", HttpStatusCode.NotFound);
+
+            return file == "coast-live.webm"
+                ? new WallpaperVideoResourceHandler(stream, request.GetHeaderByName("Range"))
+                : ResourceHandler.FromStream(stream, "image/jpeg", autoDisposeStream: true);
+        }
         if (uri is { Host: "newtab", AbsolutePath: "/set" })
         {
-            var ok = InternalPages.IsAuthorized(request.Url) && InternalPages.Query(uri, "k") is { } key && key.StartsWith("nt", StringComparison.Ordinal)
+            var ok = CanChangeNewTab(request.Url) && InternalPages.Query(uri, "k") is { } key && key.StartsWith("nt", StringComparison.Ordinal)
                      && InternalPages.Query(uri, "v") is { } value && Settings.Set(key, value);
             return Text(ok ? "ok" : "recusado");
         }
         if (uri is { Host: "newtab", AbsolutePath: "/session" })
         {
-            if (!InternalPages.IsAuthorized(request.Url) || !long.TryParse(InternalPages.Query(uri, "id"), out var sessionId)
+            if (!CanChangeNewTab(request.Url) || !long.TryParse(InternalPages.Query(uri, "id"), out var sessionId)
                 || AppData.SavedSessions().FirstOrDefault(s => s.Id == sessionId) is not { } session)
                 return Text("recusado");
             var browserId = browser.Identifier;
@@ -30,12 +41,26 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
         }
         if (uri is { Host: "newtab", AbsolutePath: "/" })
         {
-            var html = NewTabPage.Render(AppData.TryRead(h => h.TopSites(8)), SearchEngine.Preferred, DateTime.Now,
-                Shields.ShieldStats.SessionBlocked, AppData.Bookmarks(b => b.All(10)), NewTabPage.IsPrivate(request.Url),
-                NewTabPage.IsPrivate(request.Url) ? null : AppData.ShieldWeek(), Settings.Current,
-                AppData.ReadingList(), AppData.SavedSessions());
-            // A nova aba privada fica sempre escura.
-            return ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme && !NewTabPage.IsPrivate(request.Url)),
+            var isPrivate = privateContext;
+            var now = DateTime.Now;
+            var engine = SearchEngine.Preferred;
+            // A nova aba privada fica sempre escura e não consulta os dados de navegação do perfil normal.
+            string html;
+            if (isPrivate)
+            {
+                html = NewTabPage.Render([], engine, now, isPrivate: true, prefs: Settings.Current);
+            }
+            else
+            {
+                var sites = AppData.TryRead(h => h.TopSites(8));
+                var bookmarks = AppData.Bookmarks(b => b.All(10));
+                html = NewTabPage.Render(sites, engine, now,
+                    blocked: Shields.ShieldStats.SessionBlocked, bookmarks: bookmarks,
+                    week: AppData.ShieldWeek(), prefs: Settings.Current,
+                    reading: AppData.ReadingList(), sessions: AppData.SavedSessions(),
+                    icons: AppData.SiteIcons(sites.Select(s => s.Url).Concat(bookmarks.Select(b => b.Url))));
+            }
+            return ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme && !isPrivate),
                 Encoding.UTF8, false, "text/html");
         }
 
@@ -53,6 +78,8 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
+
+    private bool CanChangeNewTab(string url) => !privateContext && InternalPages.IsAuthorized(url);
 
     private static IResourceHandler SettingsRoute(Uri uri, string url)
     {
@@ -166,8 +193,13 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 
-    private static IResourceHandler History(Uri uri, string url)
+    private IResourceHandler History(Uri uri, string url)
     {
+        if (privateContext)
+            return uri.AbsolutePath == "/"
+                ? Html(HistoryPage.Render([], DateTime.Now))
+                : ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
+
         switch (uri.AbsolutePath)
         {
             case "/delete" when HistoryPage.IsAuthorized(url) && long.TryParse(HistoryPage.Query(uri, "id"), out var id):
@@ -182,6 +214,7 @@ public sealed class EterisSchemeHandlerFactory : ISchemeHandlerFactory
             default:
                 return ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
         }
-        return Html(HistoryPage.Render(AppData.TryRead(h => h.Visits(HistoryPage.MaxVisits)), DateTime.Now));
+        var visits = AppData.TryRead(h => h.Visits(HistoryPage.MaxVisits));
+        return Html(HistoryPage.Render(visits, DateTime.Now, icons: AppData.SiteIcons(visits.Select(v => v.Url))));
     }
 }

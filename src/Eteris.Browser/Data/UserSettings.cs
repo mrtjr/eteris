@@ -27,6 +27,8 @@ public sealed record UserSettings
     public bool BlockNotificationPrompts { get; init; } = true;
     public string LastSeenVersion { get; init; } = string.Empty;
     public string NewTabTheme { get; init; } = "aurora";
+    public string NewTabWallpaper { get; init; } = "coast";
+    public string NewTabWallpaperMotion { get; init; } = "photo";
     public bool NewTabClock { get; init; } = true;
     public bool NewTabTiles { get; init; } = true;
     public bool NewTabWeek { get; init; } = true;
@@ -45,6 +47,8 @@ public sealed record UserSettings
         "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
         "mica" when bool.TryParse(value, out var on) => this with { Mica = on },
         "ntTheme" when NewTabThemes.Contains(value) => this with { NewTabTheme = value },
+        "ntWallpaper" when value is "coast" or "mountains" or "none" => this with { NewTabWallpaper = value },
+        "ntWallpaperMotion" when value is "photo" or "live" or "live-always" => this with { NewTabWallpaperMotion = value },
         "ntClock" when bool.TryParse(value, out var on) => this with { NewTabClock = on },
         "ntTiles" when bool.TryParse(value, out var on) => this with { NewTabTiles = on },
         "ntWeek" when bool.TryParse(value, out var on) => this with { NewTabWeek = on },

@@ -18,4 +18,13 @@ public class WhatsNewTests
         Assert.Contains("\"version\":\"0.2.0\"", html);
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
+
+    // Os fundos são imagens geradas por IA (Browser/Wallpapers/README.md): as novidades não lhes chamam fotografias,
+    // para dizer o mesmo que o crédito no rodapé da nova aba.
+    [Fact]
+    public void Highlights_CallTheWallpapersAiGeneratedImages()
+    {
+        Assert.Contains(WhatsNewPage.Highlights, h => h.Detail.Contains("gerada por IA", StringComparison.Ordinal));
+        Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Detail.Contains("fotografia", StringComparison.OrdinalIgnoreCase));
+    }
 }
