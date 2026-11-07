@@ -21,7 +21,11 @@ public partial class MainWindow
         _ownsSession = !IsPrivate && !s_sessionOwnerTaken;
         if (_ownsSession) s_sessionOwnerTaken = true;
 
-        if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous) Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups);
+        if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous)
+        {
+            Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups);
+            RestoreSplit(previous.Split);
+        }
 
         var version = Browser.SettingsPage.Version;
         if (_ownsSession)
@@ -64,7 +68,7 @@ public partial class MainWindow
             var active = Tabs.Active is { } tab ? Tabs.Tabs.IndexOf(tab) : 0;
             var (groupIds, groups) = Tabs.GroupSnapshot();
             _session.Save(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title), Tabs.Tabs.Select(t => t.IsPinned),
-                groupIds, groups);
+                groupIds, groups, SplitSnapshot());
         }
         catch (IOException) { }
     }

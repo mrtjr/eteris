@@ -18,7 +18,7 @@ public partial class MainWindow
 
     private bool IsSplit => _split is not null;
 
-    private void OpenSideBySide(BrowserTab other, SplitOrientation? orientation = null)
+    private void OpenSideBySide(BrowserTab other, SplitOrientation? orientation = null, bool announce = true)
     {
         if (Tabs.Active is not { } active || ReferenceEquals(active, other)) return;
         if (other.IsSleeping)
@@ -29,8 +29,27 @@ public partial class MainWindow
         _split = new SplitView(active, other, orientation ?? _split?.Orientation ?? SplitOrientation.SideBySide);
         LayoutBrowsers();
         OnSplitChanged();
-        ShowToast(_split.IsStacked ? "Ecrã dividido (empilhado) — clique numa página para a tornar ativa"
-            : "Ecrã dividido — clique numa página para a tornar ativa");
+        if (announce)
+            ShowToast(_split.IsStacked ? "Ecrã dividido (empilhado) — clique numa página para a tornar ativa"
+                : "Ecrã dividido — clique numa página para a tornar ativa");
+    }
+
+    // A divisão gravada na sessão: índices das duas abas e a orientação. null quando não há divisão.
+    private Data.SessionSplit? SplitSnapshot()
+        => _split is { } split && Tabs.Tabs.IndexOf(split.Left) is var left and >= 0 && Tabs.Tabs.IndexOf(split.Right) is var right and >= 0
+            ? new Data.SessionSplit(left, right, SplitView.Name(split.Orientation))
+            : null;
+
+    // Ao arrancar com a sessão anterior: a divisão volta como estava (as duas abas acordam), com a mesma aba ativa.
+    private void RestoreSplit(Data.SessionSplit? saved)
+    {
+        if (saved is null || !saved.IsValid(Tabs.Tabs.Count) || Tabs.Active is not { } active) return;
+        var (left, right) = (Tabs.Tabs[saved.Left], Tabs.Tabs[saved.Right]);
+        if (ReferenceEquals(active, right)) (left, right) = (right, left);
+        else if (!ReferenceEquals(active, left)) Tabs.Active = left;
+        OpenSideBySide(right, SplitView.ParseOrientation(saved.Orientation), announce: false);
+        // A ordem das metades é a gravada, mesmo que a ativa fosse a da direita.
+        if (_split is { } split && !ReferenceEquals(split.Left, Tabs.Tabs[saved.Left])) SwapSplit();
     }
 
     private void CloseSplit()

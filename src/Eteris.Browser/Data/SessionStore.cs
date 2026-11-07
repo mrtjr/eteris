@@ -4,7 +4,14 @@ using System.Text.Json;
 namespace Eteris.Browser.Data;
 
 public sealed record Session(IReadOnlyList<string> Urls, int ActiveIndex, IReadOnlyList<string>? Titles = null,
-    IReadOnlyList<bool>? Pinned = null, IReadOnlyList<int>? GroupIds = null, IReadOnlyList<SessionGroup>? Groups = null);
+    IReadOnlyList<bool>? Pinned = null, IReadOnlyList<int>? GroupIds = null, IReadOnlyList<SessionGroup>? Groups = null,
+    SessionSplit? Split = null);
+
+// Ecrã dividido gravado na sessão: índices das duas abas (na lista gravada) e a orientação («side» / «stacked»).
+public sealed record SessionSplit(int Left, int Right, string Orientation)
+{
+    public bool IsValid(int tabCount) => Left != Right && Left >= 0 && Right >= 0 && Left < tabCount && Right < tabCount;
+}
 
 // Grupo de abas gravado na sessão; cada aba guarda o índice do seu grupo (-1 = nenhum).
 public sealed record SessionGroup(string Name, int ColorIndex, bool Collapsed);
@@ -15,7 +22,7 @@ public sealed class SessionStore(string path)
     private const int MaxTabs = 100;
 
     public void Save(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles = null, IEnumerable<bool>? pinned = null,
-        IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null)
+        IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null, SessionSplit? split = null)
     {
         var allGroupIds = groupIds?.ToList() ?? [];
         var all = urls.ToList();
@@ -27,9 +34,10 @@ public sealed class SessionStore(string path)
         var keptPinned = keptIndices.Select(i => i < allPinned.Count && allPinned[i]).ToList();
         var active = Math.Max(0, keptIndices.IndexOf(activeIndex));
         var keptGroupIds = keptIndices.Select(i => i < allGroupIds.Count ? allGroupIds[i] : -1).ToList();
+        var keptSplit = Remap(split, keptIndices);
 
         var temporary = path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(new Session(kept, active, keptTitles, keptPinned, keptGroupIds, groups ?? [])));
+        File.WriteAllText(temporary, JsonSerializer.Serialize(new Session(kept, active, keptTitles, keptPinned, keptGroupIds, groups ?? [], keptSplit)));
         File.Move(temporary, path, overwrite: true);
     }
 
@@ -47,12 +55,23 @@ public sealed class SessionStore(string path)
             var pinned = indices.Select(i => session.Pinned is { } p && i < p.Count && p[i]).ToList();
             var groupCount = session.Groups?.Count ?? 0;
             var groupIds = indices.Select(i => session.GroupIds is { } g && i < g.Count && g[i] < groupCount ? g[i] : -1).ToList();
-            return new Session(urls, Math.Clamp(session.ActiveIndex, 0, urls.Count - 1), titles, pinned, groupIds, session.Groups ?? []);
+            return new Session(urls, Math.Clamp(session.ActiveIndex, 0, urls.Count - 1), titles, pinned, groupIds, session.Groups ?? [],
+                Remap(session.Split, indices));
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
             return null;
         }
+    }
+
+    // A divisão só sobrevive se as duas abas sobreviverem à filtragem; os índices passam a ser os da lista filtrada.
+    private static SessionSplit? Remap(SessionSplit? split, List<int> keptIndices)
+    {
+        if (split is null) return null;
+        var left = keptIndices.IndexOf(split.Left);
+        var right = keptIndices.IndexOf(split.Right);
+        var remapped = new SessionSplit(left, right, split.Orientation ?? string.Empty);
+        return remapped.IsValid(keptIndices.Count) ? remapped : null;
     }
 
     private static bool IsRestorable(string url)

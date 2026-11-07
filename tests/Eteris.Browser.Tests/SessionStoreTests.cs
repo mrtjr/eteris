@@ -38,6 +38,59 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_KeepsTheSplitWithItsOrientation()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/", "https://b.pt/", "https://c.pt/"], 0, split: new SessionSplit(2, 0, "stacked"));
+        var split = store.Load()!.Split;
+        Assert.NotNull(split);
+        Assert.Equal((2, 0, "stacked"), (split.Left, split.Right, split.Orientation));
+    }
+
+    [Fact]
+    public void Save_RemapsTheSplitWhenTabsAreDropped()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["javascript:x", "https://a.pt/", "about:blank", "https://b.pt/"], 1, split: new SessionSplit(1, 3, "side"));
+        var split = store.Load()!.Split;
+        Assert.Equal((0, 1), (split!.Left, split.Right));
+    }
+
+    [Fact]
+    public void Save_DropsASplitWhoseTabDidNotSurvive()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/", "about:blank"], 0, split: new SessionSplit(0, 1, "side"));
+        Assert.Null(store.Load()!.Split);
+    }
+
+    [Fact]
+    public void Load_RejectsAnInvalidSplit()
+    {
+        File.WriteAllText(_path, """{"Urls":["https://a.pt/","https://b.pt/"],"ActiveIndex":0,"Split":{"Left":0,"Right":7,"Orientation":"side"}}""");
+        Assert.Null(new SessionStore(_path).Load()!.Split);
+        File.WriteAllText(_path, """{"Urls":["https://a.pt/","https://b.pt/"],"ActiveIndex":0,"Split":{"Left":1,"Right":1,"Orientation":null}}""");
+        Assert.Null(new SessionStore(_path).Load()!.Split);
+    }
+
+    [Fact]
+    public void Load_WithoutSplit_IsCompatibleWithOlderSessions()
+    {
+        File.WriteAllText(_path, """{"Urls":["https://a.pt/"],"ActiveIndex":0}""");
+        var session = new SessionStore(_path).Load();
+        Assert.NotNull(session);
+        Assert.Null(session.Split);
+    }
+
+    [Theory]
+    [InlineData(0, 1, 2, true)]
+    [InlineData(1, 1, 2, false)]
+    [InlineData(-1, 0, 2, false)]
+    [InlineData(0, 2, 2, false)]
+    public void SessionSplit_IsValid(int left, int right, int count, bool valid)
+        => Assert.Equal(valid, new SessionSplit(left, right, "side").IsValid(count));
+
+    [Fact]
     public void Load_WithoutFile_IsNull()
         => Assert.Null(new SessionStore(_path).Load());
 
