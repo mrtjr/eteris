@@ -8,18 +8,31 @@ public sealed class AltTap
     // O Alt já está em baixo: a repetição automática da tecla não volta a armar depois de outra tecla.
     private bool _held;
 
+    // Último Alt premido (sozinho) ainda por usar: o Espreitar só abre um cartão por cada Alt verdadeiro, lido do
+    // teclado pela janela ou pelo tratador nativo do Chromium — nunca por uma mensagem que a página possa forjar.
+    public DateTime? PressedAtUtc { get; private set; }
+
+    public bool TakeGesture(DateTime now, TimeSpan window)
+    {
+        if (PressedAtUtc is not { } at || now < at || now - at > window) return false;
+        PressedAtUtc = null;
+        return true;
+    }
+
     // Uma tecla foi premida: o Alt (sem Ctrl nem Shift) arma, qualquer outra desarma.
-    public void KeyDown(bool isAlt, bool otherModifiers)
+    public void KeyDown(bool isAlt, bool otherModifiers, DateTime? now = null)
     {
         if (!isAlt || otherModifiers)
         {
             _armed = false;
             _held |= isAlt;
+            PressedAtUtc = null;
             return;
         }
         if (_held) return;
         _armed = true;
         _held = true;
+        PressedAtUtc = now ?? DateTime.UtcNow;
     }
 
     // Uma tecla foi largada: devolve verdadeiro quando foi o Alt, sozinho.
@@ -33,5 +46,9 @@ public sealed class AltTap
     }
 
     // Clique do rato, perda de foco: o gesto já não é «Alt sozinho».
-    public void Cancel() => _armed = false;
+    public void Cancel()
+    {
+        _armed = false;
+        PressedAtUtc = null;
+    }
 }

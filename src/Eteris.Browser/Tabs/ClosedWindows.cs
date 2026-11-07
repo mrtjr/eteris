@@ -1,6 +1,12 @@
 namespace Eteris.Browser.Tabs;
 
-public sealed record ClosedWindow(IReadOnlyList<string> Addresses, IReadOnlyList<string> Titles, int ActiveIndex);
+// Spaces: os Espaços da janela (como na sessão), com as abas dos que não estavam à vista; null sem Espaços.
+public sealed record ClosedWindow(IReadOnlyList<string> Addresses, IReadOnlyList<string> Titles, int ActiveIndex,
+    IReadOnlyList<Data.SessionSpace>? Spaces = null, int SpaceIndex = 0)
+{
+    // Há alguma coisa a reabrir: abas na faixa ou nalgum outro Espaço.
+    public bool HasTabs => Addresses.Count > 0 || (Spaces?.Any(s => s.Tabs is { Urls.Count: > 0 }) ?? false);
+}
 
 // Janelas normais fechadas nesta sessão (a mais recente no topo). As privadas nunca entram aqui.
 public sealed class ClosedWindows
@@ -22,7 +28,7 @@ public sealed class ClosedWindows
 
     public void Push(ClosedWindow window)
     {
-        if (window.Addresses.Count == 0) return;
+        if (!window.HasTabs) return;
         lock (_lock)
         {
             _windows.Add(window);

@@ -45,9 +45,35 @@ public partial class MainWindow
         }
 
         if (!_ownsSession) return;
+        WatchSessionChanges();
+    }
+
+    private void WatchSessionChanges()
+    {
         Tabs.Tabs.CollectionChanged += (_, _) => ScheduleSessionSave();
         Tabs.PropertyChanged += (_, _) => ScheduleSessionSave();
         Closing += (_, _) => SaveSession();
+        // A dona fecha com outras janelas abertas: a sessão (gravação, posição, abas adiadas) passa à seguinte,
+        // senão as adiadas deixavam de voltar e o que se fizesse nas outras janelas não ficava guardado.
+        Closed += (_, _) => HandSessionOver(this);
+    }
+
+    private static void HandSessionOver(MainWindow leaving)
+    {
+        s_sessionOwnerTaken = false;
+        var heir = System.Windows.Application.Current?.Windows.OfType<MainWindow>()
+            .FirstOrDefault(w => !ReferenceEquals(w, leaving) && !w.IsPrivate && w.IsLoaded);
+        heir?.TakeOverSession();
+    }
+
+    private void TakeOverSession()
+    {
+        if (_ownsSession || IsPrivate || s_sessionOwnerTaken) return;
+        _ownsSession = s_sessionOwnerTaken = true;
+        WatchSessionChanges();
+        Closing += (_, _) => SavePlacement();
+        WatchSnoozed();
+        ScheduleSessionSave();
     }
 
     // Chamado também quando o endereço de uma aba muda (OnTabPropertyChanged).

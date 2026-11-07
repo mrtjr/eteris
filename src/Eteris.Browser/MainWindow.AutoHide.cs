@@ -82,7 +82,7 @@ public partial class MainWindow
         Deactivated += (_, _) => _altTap.Cancel();
     }
 
-    private void AltKeyDown(Key key, bool ctrl, bool shift) => _altTap.KeyDown(key is Key.LeftAlt or Key.RightAlt, ctrl || shift);
+    private void AltKeyDown(Key key, bool ctrl, bool shift) => _altTap.KeyDown(key is Key.LeftAlt or Key.RightAlt, ctrl || shift, DateTime.UtcNow);
 
     private void AltKeyUp(Key key)
     {

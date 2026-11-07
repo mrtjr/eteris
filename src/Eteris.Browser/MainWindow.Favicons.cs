@@ -31,7 +31,8 @@ public partial class MainWindow
         // (BitmapImage.UriSource) não via nada disto e saía em claro pelo resolvedor do sistema.
         var token = new object();
         _faviconRequests[tab] = token;
-        var client = new FaviconRequestClient(bytes => Dispatcher.InvokeAsync(() => ApplyFavicon(tab, token, site, pageUrl!, bytes)));
+        var client = new EngineFetchClient(bytes => Dispatcher.InvokeAsync(() => ApplyFavicon(tab, token, site, pageUrl!, bytes)),
+            FaviconHandler.MaxBytes, FaviconHandler.AcceptsResponse);
         _ = Cef.UIThreadTaskFactory.StartNew(() =>
         {
             try
@@ -82,8 +83,9 @@ public partial class MainWindow
         catch (Exception) { tab.Favicon = null; }
     }
 
-    // Recebe a resposta nas threads do CEF: só junta os bytes (até um limite) e entrega tudo no fim.
-    private sealed class FaviconRequestClient(Action<byte[]?> onDone) : IUrlRequestClient
+    // Pedido feito pelo próprio motor (ícones, imagem do Espreitar). Recebe a resposta nas threads do CEF: só junta
+    // os bytes (até maxBytes) e entrega tudo no fim, se accepts(estado, tipo, tamanho) aceitar a resposta.
+    private sealed class EngineFetchClient(Action<byte[]?> onDone, int maxBytes, Func<int, string?, long, bool> accepts) : IUrlRequestClient
     {
         private readonly MemoryStream _bytes = new();
         private IUrlRequest? _request;
@@ -100,7 +102,7 @@ public partial class MainWindow
 
         bool IUrlRequestClient.GetAuthCredentials(bool isProxy, string host, int port, string realm, string scheme, IAuthCallback callback)
         {
-            // Um ícone nunca justifica pedir credenciais ao utilizador.
+            // Um ícone ou uma imagem nunca justificam pedir credenciais ao utilizador.
             callback.Dispose();
             return false;
         }
@@ -112,7 +114,7 @@ public partial class MainWindow
             int read;
             while ((read = data.Read(chunk, 0, chunk.Length)) > 0)
             {
-                if (_bytes.Length + read > FaviconHandler.MaxBytes)
+                if (_bytes.Length + read > maxBytes)
                 {
                     _tooBig = true;
                     _bytes.SetLength(0);
@@ -130,7 +132,7 @@ public partial class MainWindow
         {
             var response = request.Response;
             var usable = !_tooBig && request.RequestStatus == UrlRequestStatus.Success
-                && FaviconHandler.AcceptsResponse(response?.StatusCode ?? 0, response?.MimeType, _bytes.Length);
+                && accepts(response?.StatusCode ?? 0, response?.MimeType, _bytes.Length);
             onDone(usable ? _bytes.ToArray() : null);
             _bytes.Dispose();
             // Mesma thread do CEF que criou o pedido, como a API exige.

@@ -20,13 +20,59 @@ public partial class MainWindow
 {
     private IReadOnlyList<WebPanel> _webPanels = [];
     private readonly Dictionary<string, ChromiumWebBrowser> _webPanelBrowsers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ScriptletInjector> _webPanelInjectors = new(StringComparer.Ordinal);
 
     private static WebPanelStore WebPanelsFile => new(Path.Combine(AppPaths.Root, "paineis.json"));
+
+    // Uma janela mudou os sites fixados: as outras (todas na mesma thread) voltam a ler o ficheiro.
+    private static event Action<MainWindow>? WebPanelsChanged;
 
     private void LoadWebPanels()
     {
         _webPanels = IsPrivate ? [] : WebPanelsFile.Load();
         Closed += (_, _) => ReleaseWebPanelBrowsers();
+        if (IsPrivate) return;
+        void OnChanged(MainWindow from)
+        {
+            if (!ReferenceEquals(from, this)) ReloadWebPanels();
+        }
+        WebPanelsChanged += OnChanged;
+        Closed += (_, _) => WebPanelsChanged -= OnChanged;
+    }
+
+    // Os sites fixados mudaram noutra janela: a lista, os motores (de sites tirados ou com outra vista) e a coluna.
+    private void ReloadWebPanels()
+    {
+        var fresh = WebPanelsFile.Load();
+        foreach (var url in _webPanelBrowsers.Keys.ToList())
+            if (WebPanels.Find(fresh, url) is not { } now || now.Mobile != (WebPanels.Find(_webPanels, url)?.Mobile == true))
+                ReleaseWebPanelBrowser(url);
+        _webPanels = fresh;
+        BuildSidebarRail();
+        if (!_sidebarOpen || _sidebarPanel?.Url is not { } shown) return;
+        if (WebPanels.Find(fresh, shown) is null)
+        {
+            if (SidebarAvailable.Count > 0) ShowSidebarPanel(SidebarAvailable[0], focus: false);
+            else CloseSidebar();
+        }
+        else if (!_webPanelBrowsers.ContainsKey(shown)) ShowWebPanel(_sidebarPanel, focus: false);
+    }
+
+    // Muda a lista a partir do ficheiro (não da cópia desta janela), grava e avisa as outras janelas.
+    private IReadOnlyList<WebPanel>? UpdateWebPanels(Func<IReadOnlyList<WebPanel>, IReadOnlyList<WebPanel>?> change)
+    {
+        IReadOnlyList<WebPanel>? list;
+        try { list = WebPanelsFile.Update(change); }
+        catch (Exception)
+        {
+            ShowToast("Não foi possível guardar os sites fixados");
+            return null;
+        }
+        if (list is null) return null;
+        _webPanels = list;
+        BuildSidebarRail();
+        WebPanelsChanged?.Invoke(this);
+        return list;
     }
 
     private IEnumerable<SidebarPanel> WebSidebarPanels => _webPanels.Select(WebPanels.ToPanel);
@@ -41,12 +87,14 @@ public partial class MainWindow
             ShowToast(IsPrivate ? "Os sites fixados não ficam na janela privada" : "Só se fixam páginas da web");
             return;
         }
-        if (WebPanels.Add(_webPanels, tab.Address, tab.Title) is not { } list)
+        var current = WebPanelsFile.Load();
+        if (WebPanels.Add(current, tab.Address, tab.Title) is null)
         {
-            ShowToast(IsPinnedSite(tab.Address) ? "Este site já está na barra lateral" : $"A barra lateral já tem {WebPanels.Max} sites fixados");
+            ShowToast(WebPanels.Contains(current, tab.Address) ? "Este site já está na barra lateral" : $"A barra lateral já tem {WebPanels.Max} sites fixados");
             return;
         }
-        SaveWebPanels(list);
+        var (address, title) = (tab.Address, tab.Title);
+        if (UpdateWebPanels(list => WebPanels.Add(list, address, title)) is null) return;
         OpenSidebar(SidebarPanels.WebKey(WebPanels.Normalize(tab.Address)!));
         ShowToast($"«{SidebarLists.HostOf(tab.Address)}» fixado na barra lateral");
     }
@@ -54,7 +102,7 @@ public partial class MainWindow
     private void UnpinSite(string url)
     {
         ReleaseWebPanelBrowser(url);
-        SaveWebPanels(WebPanels.Remove(_webPanels, url));
+        UpdateWebPanels(list => WebPanels.Remove(list, url));
         if (_sidebarPanel?.Url == url)
         {
             if (_sidebarOpen && SidebarAvailable.Count > 0) ShowSidebarPanel(SidebarAvailable[0], focus: false);
@@ -63,23 +111,15 @@ public partial class MainWindow
         ShowToast("Site tirado da barra lateral");
     }
 
-    private void MovePinnedSite(string url, int delta) => SaveWebPanels(WebPanels.Move(_webPanels, url, delta));
+    private void MovePinnedSite(string url, int delta) => UpdateWebPanels(list => WebPanels.Move(list, url, delta));
 
     // «Vista móvel»: o motor nasce de novo com o agente de telemóvel (ou sem ele) e o site volta a carregar.
     private void SetPinnedSiteMobile(string url, bool mobile)
     {
         ReleaseWebPanelBrowser(url);
-        SaveWebPanels(WebPanels.SetMobile(_webPanels, url, mobile));
+        UpdateWebPanels(list => WebPanels.SetMobile(list, url, mobile));
         if (_sidebarOpen && _sidebarPanel?.Url == url) ShowWebPanel(_sidebarPanel, focus: false);
         ShowToast(mobile ? "Vista móvel ligada — o site vê um telemóvel" : "Vista móvel desligada");
-    }
-
-    private void SaveWebPanels(IReadOnlyList<WebPanel> list)
-    {
-        _webPanels = list;
-        try { WebPanelsFile.Save(list); }
-        catch (Exception) { ShowToast("Não foi possível guardar os sites fixados"); }
-        BuildSidebarRail();
     }
 
     // ---------- O motor de cada site ----------
@@ -112,6 +152,10 @@ public partial class MainWindow
     private ChromiumWebBrowser EnsureWebPanelBrowser(string url)
     {
         if (_webPanelBrowsers.TryGetValue(url, out var existing) && !existing.IsDisposed) return existing;
+        // O Escudo completo, como nas abas: além do bloqueio de rede, os scriptlets e as regras cosméticas do site
+        // (registados pelo DevTools antes dos scripts da página) e, no fim de cada carregamento, as genéricas.
+        var injector = new ScriptletInjector(AppData.IsShieldOn, page => SiteCosmeticScript(page) is { Length: > 0 } css ? css : null);
+        _webPanelInjectors[url] = injector;
         var browser = new ChromiumWebBrowser(url)
         {
             Visibility = Visibility.Hidden,
@@ -125,12 +169,23 @@ public partial class MainWindow
             DownloadHandler = DownloadHandler,
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn,
-                onNavigate: (_, _) => Task.CompletedTask,
+                onNavigate: (cefBrowser, page) => injector.Prepare(cefBrowser, page),
                 onBlocked: _ => ShieldStats.CountBlocked(persist: true),
                 // Vista móvel: os pedidos deste motor saem com o agente de um telemóvel.
                 userAgent: WebPanels.Find(_webPanels, url)?.Mobile == true ? WebPanels.MobileUserAgent : null),
         };
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
+        browser.FrameLoadEnd += (_, e) =>
+        {
+            if (!e.Frame.IsMain) return;
+            var loaded = e.Url;
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (browser.IsDisposed) return;
+                ApplyHiddenElements(browser, loaded);
+                _ = ApplyGenericCosmeticsAsync(browser, loaded);
+            });
+        };
         browser.TitleChanged += (_, e) => Dispatcher.InvokeAsync(() =>
         {
             if (_sidebarPanel?.Url == url && e.NewValue is string { Length: > 0 } title) SidebarTitle.Text = title;
@@ -151,6 +206,7 @@ public partial class MainWindow
 
     private void ReleaseWebPanelBrowser(string url)
     {
+        if (_webPanelInjectors.Remove(url, out var injector)) injector.Dispose();
         if (!_webPanelBrowsers.Remove(url, out var browser)) return;
         SidebarWebHost.Children.Remove(browser);
         PageScript.Release(browser);

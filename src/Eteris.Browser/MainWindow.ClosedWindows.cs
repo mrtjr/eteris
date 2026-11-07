@@ -18,23 +18,30 @@ public partial class MainWindow
             if (IsPrivate || others == 0) return;
             var tabs = Tabs.Tabs.Where(t => !NewTabPage.IsNewTab(t.Address)).ToList();
             var active = Tabs.Active is { } a ? Math.Max(0, tabs.IndexOf(a)) : 0;
-            s_closedWindows.Push(new ClosedWindow(tabs.Select(t => t.Address).ToList(), tabs.Select(t => t.Title).ToList(), active));
+            // Os outros Espaços vão junto (a reserva não está na faixa): nada se perde ao fechar a janela.
+            var (spaces, spaceIndex) = Tabs.WorkspaceSnapshot();
+            s_closedWindows.Push(new ClosedWindow(tabs.Select(t => t.Address).ToList(), tabs.Select(t => t.Title).ToList(), active,
+                spaces, spaceIndex));
         };
     }
 
     private static void ReopenClosedWindow()
     {
         if (s_closedWindows.Pop() is not { } closed) return;
-        OpenWindowWith(closed.Addresses, closed.Titles, closed.ActiveIndex);
+        // Só com abas nos outros Espaços, a faixa do Espaço à vista abre com uma aba nova.
+        var addresses = closed.Addresses.Count > 0 ? closed.Addresses : [NewTabPage.Url];
+        var window = OpenWindowWith(addresses, closed.Titles, closed.ActiveIndex);
+        window?.Tabs.RestoreWorkspaces(closed.Spaces, closed.SpaceIndex);
     }
 
-    private static void OpenWindowWith(IReadOnlyList<string> addresses, IReadOnlyList<string> titles, int activeIndex)
+    private static MainWindow? OpenWindowWith(IReadOnlyList<string> addresses, IReadOnlyList<string> titles, int activeIndex)
     {
-        if (addresses.Count == 0) return;
+        if (addresses.Count == 0) return null;
         var window = new MainWindow(addresses[0], isPrivate: false);
         window.Show();
         for (var i = 1; i < addresses.Count; i++) window.Tabs.AppendSleeping(addresses[i], i < titles.Count ? titles[i] : null);
         if (activeIndex < window.Tabs.Tabs.Count) window.Tabs.Active = window.Tabs.Tabs[activeIndex];
+        return window;
     }
 
     // Sessão guardada: cada aba volta com o nome próprio e a nota que tinha.

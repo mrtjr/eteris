@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -26,13 +25,6 @@ public partial class MainWindow
     private int _glanceSerial;
 
     private static readonly TimeSpan GlanceTimeout = TimeSpan.FromSeconds(12);
-
-    // Imagem do cartão (og:image): um pedido único, sem cookies nem referrer, só quando o escudo o deixa passar.
-    private static readonly HttpClient GlanceHttp = new(new SocketsHttpHandler { UseCookies = false, AllowAutoRedirect = true, MaxAutomaticRedirections = 4 })
-    {
-        Timeout = TimeSpan.FromSeconds(8),
-        MaxResponseContentBufferSize = 4 * 1024 * 1024,
-    };
 
     private bool GlanceOpen => GlanceOverlay.Visibility == Visibility.Visible;
 
@@ -171,7 +163,7 @@ public partial class MainWindow
                 return;
             }
             FillGlance(info);
-            if (info.ImageUrl is { } image) _ = LoadGlanceImageAsync(image, url, serial);
+            if (info.ImageUrl is { } image) LoadGlanceImage(browser, image, url, serial);
         }
         catch (Exception)
         {
@@ -202,19 +194,41 @@ public partial class MainWindow
         SetGlanceStatus(info.Paragraphs.Count == 0 && info.Description is null ? "Esta página não tem texto para mostrar" : null, busy: false);
     }
 
-    private async Task LoadGlanceImageAsync(string imageUrl, string pageUrl, int serial)
+    // Imagem do cartão (og:image): pedida pelo próprio Chromium a partir da aba escondida — passa pelo Escudo, pelo
+    // DNS cifrado, pelo proxy e pelo contexto só em memória, sem cookies nem referrer. A pilha de rede do .NET não via
+    // nada disto e resolvia o nome do servidor da imagem em claro (ver MainWindow.Favicons.cs).
+    private void LoadGlanceImage(ChromiumWebBrowser browser, string imageUrl, string pageUrl, int serial)
     {
-        // A imagem passa pelo mesmo escudo que a página: um pixel de rastreio em og:image não é carregado.
+        // Um pixel de rastreio em og:image não é pedido.
         if (AppData.IsShieldOn(LinkPreview.HostOf(pageUrl)) && ShieldEngine.Current.ShouldBlock(imageUrl, pageUrl, "image")) return;
+        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http")) return;
+        if (browser.IsDisposed || !browser.IsBrowserInitialized) return;
+        var client = new EngineFetchClient(bytes => Dispatcher.InvokeAsync(() => ShowGlanceImage(bytes, serial)),
+            LinkPreview.MaxImageBytes, LinkPreview.AcceptsImage);
+        _ = Cef.UIThreadTaskFactory.StartNew(() =>
+        {
+            try
+            {
+                if (browser.IsDisposed) { client.Fail(); return; }
+                using var frame = browser.GetBrowser()?.MainFrame;
+                if (frame is null) { client.Fail(); return; }
+                using var request = Request.Create();
+                request.Url = uri.AbsoluteUri;
+                request.SetReferrer(string.Empty, ReferrerPolicy.NoReferrer);
+                request.SetHeaderByName("Accept", "image/*", true);
+                request.SetHeaderByName("Sec-GPC", "1", true);
+                request.Flags = UrlRequestFlags.SkipCache;
+                client.Start(frame.CreateUrlRequest(request, client));
+            }
+            catch (Exception) { client.Fail(); }
+        });
+    }
+
+    private void ShowGlanceImage(byte[]? bytes, int serial)
+    {
+        if (bytes is null || serial != _glanceSerial || !GlanceOpen || bytes.Length == 0) return;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, imageUrl);
-            request.Headers.TryAddWithoutValidation("Accept", "image/*");
-            request.Headers.TryAddWithoutValidation("Sec-GPC", "1");
-            using var response = await GlanceHttp.SendAsync(request, HttpCompletionOption.ResponseContentRead);
-            if (!response.IsSuccessStatusCode) return;
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (serial != _glanceSerial || !GlanceOpen || bytes.Length == 0) return;
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;

@@ -77,6 +77,16 @@ public static partial class LinkPreview
 
     public const string ReportPrefix = "\u0001eteris-glance ";
 
+    // O aviso do Alt+clique só conta até este tempo depois de o Alt ter sido premido (ver AltTap.TakeGesture).
+    public static readonly TimeSpan GestureWindow = TimeSpan.FromSeconds(3);
+
+    // Imagem do cartão (og:image), pedida pelo motor: só respostas de sucesso, de imagem, até 4 MB.
+    public const int MaxImageBytes = 4 * 1024 * 1024;
+
+    public static bool AcceptsImage(int statusCode, string? mimeType, long length)
+        => statusCode is >= 200 and <= 299 && length > 0 && length <= MaxImageBytes
+           && (mimeType is null || mimeType.Length == 0 || mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase));
+
     // Alt+clique num link (botão esquerdo, só Alt): a página não navega nem transfere (é o que o Chromium faria com
     // Alt) e o Éteris recebe o endereço para o espreitar. Corre antes dos scripts da página, em captura na janela,
     // por isso a página não o consegue calar. Só links http(s) com o clique de verdade (isTrusted).

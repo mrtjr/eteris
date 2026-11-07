@@ -182,10 +182,13 @@ public partial class MainWindow : Window
             }
             if (LinkPreview.IsReport(e.Message, out var glanceUrl))
             {
-                // Alt+clique num link: só da página à vista (a ativa ou uma das metades do ecrã dividido).
+                // Alt+clique num link: só da página à vista (a ativa ou uma das metades do ecrã dividido) e só com um Alt
+                // premido de verdade há pouco, um cartão por Alt — a página (ou um iframe) pode escrever a mesma
+                // mensagem na consola, mas não carregar no teclado.
                 Dispatcher.InvokeAsync(() =>
                 {
-                    if (ReferenceEquals(tab, Tabs.Active) || _split?.PaneOf(tab) is not null) ShowLinkPreview(glanceUrl);
+                    if (!ReferenceEquals(tab, Tabs.Active) && _split?.PaneOf(tab) is null) return;
+                    if (_altTap.TakeGesture(DateTime.UtcNow, LinkPreview.GestureWindow)) ShowLinkPreview(glanceUrl);
                 });
                 return;
             }

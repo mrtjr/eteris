@@ -216,6 +216,21 @@ public partial class MainWindow
                     _ => $"Site fixado · {SidebarLists.HostOf(panel.Url ?? string.Empty)}",
                 }, panel.Key == SidebarPanels.Notes ? "Ctrl+Shift+E" : null, () => OpenSidebar(key));
         }
+        if (SidebarOpen && _sidebarPanel?.Url is { } shownSite && WebPanels.Find(_webPanels, shownSite) is { } pinned)
+        {
+            // O que o menu do separador faz, sem rato: mover o site na coluna e a vista móvel.
+            var siteHost = SidebarLists.HostOf(shownSite);
+            var index = WebPanels.IndexOf(_webPanels, shownSite);
+            if (index > 0)
+                yield return new("\uE74A", $"Mover «{siteHost}» para cima na barra lateral", "Sobe um lugar na coluna dos separadores", null,
+                    () => MovePinnedSite(shownSite, -1));
+            if (index < _webPanels.Count - 1)
+                yield return new("\uE74B", $"Mover «{siteHost}» para baixo na barra lateral", "Desce um lugar na coluna dos separadores", null,
+                    () => MovePinnedSite(shownSite, 1));
+            yield return new(pinned.Mobile ? "\uE73E" : "\uE8EA", pinned.Mobile ? $"Desligar a vista móvel de «{siteHost}»" : $"Vista móvel de «{siteHost}»",
+                pinned.Mobile ? "O site volta a ver um computador" : "O site passa a ver um telemóvel (versão estreita)", null,
+                () => SetPinnedSiteMobile(shownSite, !pinned.Mobile));
+        }
         if (SidebarOpen)
         {
             var onLeft = Settings.Current.SidebarSide == "left";
