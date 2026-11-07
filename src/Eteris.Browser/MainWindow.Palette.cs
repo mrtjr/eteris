@@ -216,6 +216,12 @@ public partial class MainWindow
                     _ => $"Site fixado · {SidebarLists.HostOf(panel.Url ?? string.Empty)}",
                 }, panel.Key == SidebarPanels.Notes ? "Ctrl+Shift+E" : null, () => OpenSidebar(key));
         }
+        if (SidebarOpen)
+        {
+            var onLeft = Settings.Current.SidebarSide == "left";
+            yield return new(onLeft ? "\uE8A0" : "\uE89F", onLeft ? "Barra lateral à direita" : "Barra lateral à esquerda",
+                "Muda a coluna de lado (fica lembrado)", null, () => Settings.Set("sidebarSide", onLeft ? "right" : "left"));
+        }
         if (!IsPrivate && host is not null)
             yield return new(WebPanels.Glyph,
                 IsPinnedSite(address) ? "Tirar este site da barra lateral" : "Fixar este site na barra lateral",

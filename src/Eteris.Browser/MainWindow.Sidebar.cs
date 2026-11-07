@@ -20,7 +20,9 @@ public partial class MainWindow
     private bool _sidebarOpen;
     private SidebarPanel? _sidebarPanel;
     private double _sidebarWidth = SidebarPanels.DefaultWidth;
-    private SidebarSide _sidebarSide;
+
+    // O lado é uma preferência global (todas as janelas acompanham, pelo Settings.Changed → ApplyChromeLayout).
+    private static SidebarSide SidebarSideNow => SidebarPanels.ParseSide(Settings.Current.SidebarSide);
     private readonly Dictionary<string, Button> _railButtons = new(StringComparer.Ordinal);
 
     private bool SidebarOpen => _sidebarOpen;
@@ -34,7 +36,6 @@ public partial class MainWindow
     {
         var settings = Settings.Current;
         _sidebarWidth = settings.SidebarWidth;
-        _sidebarSide = SidebarPanels.ParseSide(settings.SidebarSide);
         LoadWebPanels();
         BuildSidebarRail();
         // Aberta como ficou da última vez (nunca na janela privada: começa fechada, como o resto do que é lembrado).
@@ -101,9 +102,10 @@ public partial class MainWindow
     private void PlaceSidebar()
     {
         var visible = _sidebarOpen && _chrome.Mode != Theme.ChromeMode.Hidden;
-        var left = _sidebarSide == SidebarSide.Left;
+        var side = SidebarSideNow;
+        var left = side == SidebarSide.Left;
         var sideTabs = SideBar.Visibility == Visibility.Visible ? SideBar.Width : 0;
-        var margins = SidebarPanels.PageMargins(sideTabs, visible, _sidebarSide, _sidebarWidth);
+        var margins = SidebarPanels.PageMargins(sideTabs, visible, side, _sidebarWidth);
 
         Sidebar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         Sidebar.Width = _sidebarWidth;
@@ -117,9 +119,12 @@ public partial class MainWindow
         foreach (var button in _railButtons.Values) button.HorizontalContentAlignment = HorizontalAlignment.Center;
 
         PageFrame.Margin = new Thickness(margins.Left, 0, margins.Right, 0);
-        // As barras que flutuam sobre a página (procurar, pedidos de permissão) seguem a moldura da página.
+        // O que flutua sobre a página (procurar, pedidos de permissão, avisos, destino do link) segue a moldura da
+        // página, não a janela: os avisos ficam centrados sobre a página e nunca por cima do painel.
         FindBar.Margin = new Thickness(0, 12, 24 + margins.Right, 0);
         PermissionBar.Margin = new Thickness(20 + margins.Left, 10, 0, 0);
+        Toast.Margin = new Thickness(margins.Left, 0, margins.Right, 28);
+        LinkStatusBubble.Margin = new Thickness(12 + margins.Left, 0, 0, 12);
         SyncOverlayBounds();
     }
 
@@ -299,7 +304,7 @@ public partial class MainWindow
 
     private void SidebarGrip_DragDelta(object sender, DragDeltaEventArgs e)
     {
-        _sidebarWidth = SidebarPanels.Resize(_sidebarWidth, e.HorizontalChange, _sidebarSide, ActualWidth);
+        _sidebarWidth = SidebarPanels.Resize(_sidebarWidth, e.HorizontalChange, SidebarSideNow, ActualWidth);
         PlaceSidebar();
     }
 

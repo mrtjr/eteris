@@ -65,6 +65,15 @@ public partial class MainWindow
 
     private void MovePinnedSite(string url, int delta) => SaveWebPanels(WebPanels.Move(_webPanels, url, delta));
 
+    // «Vista móvel»: o motor nasce de novo com o agente de telemóvel (ou sem ele) e o site volta a carregar.
+    private void SetPinnedSiteMobile(string url, bool mobile)
+    {
+        ReleaseWebPanelBrowser(url);
+        SaveWebPanels(WebPanels.SetMobile(_webPanels, url, mobile));
+        if (_sidebarOpen && _sidebarPanel?.Url == url) ShowWebPanel(_sidebarPanel, focus: false);
+        ShowToast(mobile ? "Vista móvel ligada — o site vê um telemóvel" : "Vista móvel desligada");
+    }
+
     private void SaveWebPanels(IReadOnlyList<WebPanel> list)
     {
         _webPanels = list;
@@ -117,7 +126,9 @@ public partial class MainWindow
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn,
                 onNavigate: (_, _) => Task.CompletedTask,
-                onBlocked: _ => ShieldStats.CountBlocked(persist: true)),
+                onBlocked: _ => ShieldStats.CountBlocked(persist: true),
+                // Vista móvel: os pedidos deste motor saem com o agente de um telemóvel.
+                userAgent: WebPanels.Find(_webPanels, url)?.Mobile == true ? WebPanels.MobileUserAgent : null),
         };
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
         browser.TitleChanged += (_, e) => Dispatcher.InvokeAsync(() =>
@@ -181,7 +192,9 @@ public partial class MainWindow
         if (_sidebarPanel?.Url is { } url)
         {
             if (any) menu.Separator();
+            var mobile = WebPanels.Find(_webPanels, url)?.Mobile == true;
             menu.Item("", "Abrir este site numa aba", () => Tabs.NewTab(browser.Address ?? url))
+                .Item(mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(url, !mobile))
                 .Item("", "Tirar da barra lateral", () => UnpinSite(url));
         }
         menu.Open(browser);
@@ -242,11 +255,12 @@ public partial class MainWindow
             {
                 if (_webPanelBrowsers.TryGetValue(panel.Url, out var browser) && !browser.IsDisposed) browser.Reload();
             }, enabled: _webPanelBrowsers.ContainsKey(panel.Url))
+            .Item(panel.Mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(panel.Url, !panel.Mobile))
             .Separator()
             .Item("", "Mover para cima", () => MovePinnedSite(panel.Url, -1), enabled: index > 0)
             .Item("", "Mover para baixo", () => MovePinnedSite(panel.Url, 1), enabled: index >= 0 && index < _webPanels.Count - 1)
             .Separator()
             .Item("", "Tirar da barra lateral", () => UnpinSite(panel.Url))
-            .OpenBeside(anchor);
+            .OpenBeside(anchor, toLeft: SidebarSideNow == SidebarSide.Right);
     }
 }

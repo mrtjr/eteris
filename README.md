@@ -38,6 +38,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 **Ler e ver**
 - Espreitar um link (Alt+clique): título, imagem, tempo de leitura e primeiros parágrafos num cartão, sem abrir aba nem deixar rasto.
 - Modo de leitura (F9) com temas escuro, sépia e claro, «Ouvir» em voz alta (vozes locais) e lista «Ler mais tarde».
+- Barra lateral (Ctrl+Shift+B) com Notas, Para ler, Favoritos, Histórico e sites fixados que abrem dentro da barra.
 - Notas ao lado da página (Ctrl+Shift+E), código QR da página, escurecer sites, links para um destaque.
 - Zoom memorizado por site, ecrã inteiro para vídeos, captura da página inteira (Ctrl+Shift+S).
 - Tema escuro, claro ou do Windows; material Mica do Windows 11, cor da interface adaptada ao site.

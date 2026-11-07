@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 namespace Eteris.Browser.Sidebar;
 
 // Um site fixado na barra lateral: abre dentro da barra, numa instância própria do motor, e persiste entre sessões.
-public sealed record WebPanel(string Url, string Title);
+// Mobile = «vista móvel»: os pedidos saem com o agente de um telemóvel (sites que servem uma versão estreita por agente).
+public sealed record WebPanel(string Url, string Title, bool Mobile = false);
 
 // Sites fixados: a lista (ordem, limite, duplicados) e a sua forma em ficheiro (paineis.json no perfil).
 // Lógica pura; a janela cria e destrói os motores (MainWindow.WebPanels.cs).
@@ -13,11 +14,15 @@ public static class WebPanels
     public const int Max = 12;
     public const string Glyph = "";
 
+    // Agente da vista móvel: um Android com o Chrome da mesma geração do motor (nada de identificar o Éteris).
+    public const string MobileUserAgent =
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36";
+
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
     };
 
     // Só endereços http(s), sem espaços à volta; o resto fica como o utilizador o tinha (o site decide o caminho).
@@ -53,6 +58,13 @@ public static class WebPanels
         return list;
     }
 
+    // Ligar ou desligar a vista móvel de um site; um site que não existe deixa a lista como está.
+    public static IReadOnlyList<WebPanel> SetMobile(IReadOnlyList<WebPanel> panels, string url, bool mobile)
+        => IndexOf(panels, url) < 0 ? panels : panels.Select(p => p.Url == url ? p with { Mobile = mobile } : p).ToList();
+
+    public static WebPanel? Find(IReadOnlyList<WebPanel> panels, string url)
+        => IndexOf(panels, url) is var index and >= 0 ? panels[index] : null;
+
     public static int IndexOf(IReadOnlyList<WebPanel> panels, string url)
     {
         for (var i = 0; i < panels.Count; i++)
@@ -85,7 +97,7 @@ public static class WebPanels
         foreach (var panel in raw ?? [])
         {
             if (panel is null || Normalize(panel.Url) is not { } clean || result.Any(p => p.Url == clean) || result.Count >= Max) continue;
-            result.Add(new WebPanel(clean, CleanTitle(panel.Title)));
+            result.Add(new WebPanel(clean, CleanTitle(panel.Title), panel.Mobile));
         }
         return result;
     }

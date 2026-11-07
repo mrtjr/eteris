@@ -99,4 +99,44 @@ public sealed class WebPanelsTests : IDisposable
         Assert.False(File.Exists(_path + ".tmp"));
         Assert.Equal(["Á", "B"], new WebPanelStore(_path).Load().Select(p => p.Title));
     }
+
+    // ---------- Vista móvel ----------
+
+    [Fact]
+    public void SetMobile_ChangesOnlyThatSiteAndSurvivesTheFile()
+    {
+        IReadOnlyList<WebPanel> list = [new("https://a.pt/", "A"), new("https://b.pt/", "B")];
+        var mobile = WebPanels.SetMobile(list, "https://b.pt/", true);
+        Assert.Equal([false, true], mobile.Select(p => p.Mobile));
+        Assert.Same(list, WebPanels.SetMobile(list, "https://z.pt/", true));
+        Assert.True(WebPanels.Find(mobile, "https://b.pt/")!.Mobile);
+        Assert.Null(WebPanels.Find(mobile, "https://z.pt/"));
+
+        var json = WebPanels.Serialize(mobile);
+        // Só o site em vista móvel leva o campo; o outro fica como dantes.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "\"mobile\": true"));
+        Assert.DoesNotContain("\"mobile\": false", json);
+        Assert.Equal(mobile, WebPanels.Parse(json));
+        Assert.False(WebPanels.SetMobile(mobile, "https://b.pt/", false)[1].Mobile);
+    }
+
+    [Fact]
+    public void MobileHeaders_SayAndroidPhoneConsistently()
+    {
+        Assert.Contains("Android", WebPanels.MobileUserAgent);
+        Assert.Contains("Mobile", WebPanels.MobileUserAgent);
+        Assert.DoesNotContain("Eteris", WebPanels.MobileUserAgent, StringComparison.OrdinalIgnoreCase);
+        var headers = Eteris.Browser.Shields.PrivacyRequestHandler.MobileHeaders(WebPanels.MobileUserAgent);
+        Assert.Equal(["User-Agent", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform"], headers.Select(h => h.Name));
+        Assert.Equal("?1", headers[1].Value);
+        Assert.Equal("\"Android\"", headers[2].Value);
+    }
+
+    [Fact]
+    public void WhatsNew_AnnouncesTheSidebarWithItsShortcut()
+    {
+        var highlight = Assert.Single(Eteris.Browser.Browser.WhatsNewPage.Highlights, h => h.Title == "Barra lateral");
+        Assert.Equal("Ctrl+Shift+B", highlight.Keys);
+        Assert.Contains("sites", highlight.Detail);
+    }
 }
