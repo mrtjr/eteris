@@ -52,6 +52,8 @@ public class PageMenuTests
         Assert.Contains(PageCommand.PreviewLink, Commands(Ctx(link: "https://a.pt/artigo")));
         Assert.Contains(PageCommand.PreviewLink, Commands(Ctx(link: "https://a.pt/artigo", isPrivate: true)));
         Assert.DoesNotContain(PageCommand.PreviewLink, Commands(Ctx(link: "mailto:a@a.pt")));
+        Assert.Contains(PageCommand.OpenLinkSideBySide, Commands(Ctx(link: "https://a.pt/artigo")));
+        Assert.DoesNotContain(PageCommand.OpenLinkSideBySide, Commands(Ctx(link: "mailto:a@a.pt")));
         Assert.Equal("Alt+clique", PageMenu.Build(Ctx(link: "https://a.pt/artigo"), "DuckDuckGo").First(i => i?.Command == PageCommand.PreviewLink)!.Gesture);
         Assert.DoesNotContain(PageCommand.PreviewLink, Commands(Ctx(link: "javascript:void(0)")));
     }

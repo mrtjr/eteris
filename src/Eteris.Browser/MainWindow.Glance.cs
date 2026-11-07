@@ -144,6 +144,7 @@ public partial class MainWindow
             });
         };
         Grid.SetColumnSpan(browser, 3);
+        Grid.SetRowSpan(browser, 3);
         BrowserHost.Children.Insert(0, browser);
         Closed += (_, _) =>
         {

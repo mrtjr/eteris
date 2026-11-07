@@ -3,7 +3,7 @@ namespace Eteris.Browser.Browser;
 public enum PageCommand
 {
     Back, Forward, Reload, Print, ViewSource, Inspect,
-    OpenLinkNewTab, PreviewLink, OpenLinkPrivate, CopyLink,
+    OpenLinkNewTab, PreviewLink, OpenLinkSideBySide, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
     Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink,
 }
@@ -27,6 +27,7 @@ public static class PageMenu
         {
             items.Add(new(PageCommand.OpenLinkNewTab, "", "Abrir link numa nova aba"));
             if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.PreviewLink, "", "Espreitar o link", "Alt+clique"));
+            if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.OpenLinkSideBySide, "", "Abrir link ao lado (ecrã dividido)"));
             if (!ctx.IsPrivate) items.Add(new(PageCommand.OpenLinkPrivate, "", "Abrir link numa janela privada"));
             items.Add(new(PageCommand.CopyLink, "", "Copiar endereço do link"));
             items.Add(null);

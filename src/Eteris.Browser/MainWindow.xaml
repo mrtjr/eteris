@@ -766,6 +766,29 @@
                                     </Button.Template>
                                     <TextBlock Text="Motor de vídeo" FontSize="11.5" Foreground="{DynamicResource TextBrush}" />
                                 </Button>
+                                <Button x:Name="SplitBadge" Visibility="Collapsed" Click="SplitBadge_Click" Cursor="Hand" Margin="0,0,4,0"
+                                        ToolTip="Ecrã dividido: trocar lados, empilhar ou desfazer">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="{DynamicResource SelectedBrush}"
+                                                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock x:Name="SplitBadgeGlyph" Text="&#xE9A6;" FontFamily="{StaticResource IconFont}" FontSize="10"
+                                                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                                    <ContentPresenter VerticalAlignment="Center" />
+                                                    <TextBlock Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="8"
+                                                               Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="5,1,0,0" />
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Pill" Property="Background" Value="{DynamicResource PressedBrush}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <TextBlock x:Name="SplitBadgeText" Text="Dividido" FontSize="11.5" Foreground="{DynamicResource TextBrush}" />
+                                </Button>
                                 <Button x:Name="ZoomBadge" Visibility="Collapsed" Click="ZoomBadge_Click" Cursor="Hand"
                                         ToolTip="Repor o zoom deste site (Ctrl+0)" Margin="0,0,4,0">
                                     <Button.Template>

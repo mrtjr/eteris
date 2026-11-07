@@ -161,7 +161,11 @@ public partial class MainWindow
         if (Tabs.Active?.IsReaderable == true)
             yield return new("", "Modo de leitura", "Só o artigo, sem anúncios nem distrações", "F9", ToggleReader);
         if (IsSplit)
+        {
+            yield return new("", "Trocar lados", "A página da esquerda passa para a direita (ou a de cima para baixo)", null, SwapSplit);
+            yield return new("", _split!.IsStacked ? "Lado a lado" : "Empilhar", _split.IsStacked ? "As duas páginas lado a lado" : "Uma página em cima da outra", null, ToggleSplitOrientation);
             yield return new("", "Fechar ecrã dividido", "Voltar a uma página de cada vez", null, CloseSplit);
+        }
         else if (SplitCandidate() is { } partner)
             yield return new("", "Dividir ecrã", $"Mostrar «{partner.Title}» ao lado", null, () => OpenSideBySide(partner));
         var light = Theme.ThemeManager.Current == Theme.AppTheme.Light;

@@ -46,6 +46,16 @@ public sealed class DarkMenu
         return this;
     }
 
+    // Menu de um botão (selo, pílula): abre encostado por baixo dele, não no ponto do rato.
+    public void OpenBelow(UIElement target)
+    {
+        _menu.PlacementTarget = target;
+        _menu.Placement = PlacementMode.Bottom;
+        _menu.HorizontalOffset = -8;
+        _menu.VerticalOffset = 6;
+        _menu.IsOpen = true;
+    }
+
     public void Open(UIElement target)
     {
         _menu.PlacementTarget = target;
