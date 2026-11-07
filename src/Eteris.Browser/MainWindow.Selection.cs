@@ -46,6 +46,7 @@ public partial class MainWindow
         menu.Item("", $"Copiar {n} links", () => CopySelectedLinks(selected))
             .Item("", $"Agrupar {count} num novo grupo", () => GroupSelected(selected), enabled: selected.Any(t => !t.IsPinned))
             .Item("", $"Mover {count} para uma nova janela", () => MoveSelectedToNewWindow(selected), enabled: n < Tabs.Tabs.Count)
+            .With(menu => AddWorkspaceItems(menu, selected))
             .Item("", $"Adormecer {count}", () => SleepSelected(selected))
             .Item("", $"Trancar {count}", () => { foreach (var tab in selected) tab.IsLocked = true; })
             .Separator()

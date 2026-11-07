@@ -283,4 +283,33 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Null(WorkspaceShortcut.Resolve(Key.D0, false, true));
         Assert.Null(WorkspaceShortcut.Resolve(Key.W, false, true));
     }
+
+    // «Mover N abas para o Espaço…»: saem pela ordem da faixa, a ativa passa para a vizinha de cada vez.
+    [Fact]
+    public void MoveToWorkspace_SeveralIncludingTheActive_KeepsTheirOrderInTheTarget()
+    {
+        var vm = WithTabs("https://a.pt/", "https://b.pt/", "https://c.pt/", "https://d.pt/");
+        var work = vm.NewWorkspace("Trabalho", activate: false);
+        var (b, c) = (vm.Tabs[1], vm.Tabs[2]);
+        vm.Active = b;
+        Assert.Equal(2, new[] { b, c }.Count(t => vm.MoveToWorkspace(t, work)));
+        Assert.Equal(["https://a.pt/", "https://d.pt/"], vm.Tabs.Select(t => t.Address));
+        Assert.Equal("https://d.pt/", vm.Active!.Address);
+        Assert.Equal([b, c], vm.TabsOf(work));
+        vm.SwitchWorkspace(work);
+        Assert.Same(b, vm.Active);
+    }
+
+    // O editor: um nome vazio mantém o anterior; o emoji sai quando não vem nenhum; a cor fica se não vier.
+    [Fact]
+    public void Rename_EmptyNameKeepsTheOld_IconIsReplacedOrCleared_ColorOptional()
+    {
+        var space = new Workspace("Trabalho", 2, "💼");
+        space.Rename("   ", icon: "💼");
+        Assert.Equal(("Trabalho", 2, "💼"), (space.Name, space.ColorIndex, space.Icon));
+        space.Rename("Escritório", 5, null);
+        Assert.Equal(("Escritório", 5, (string?)null), (space.Name, space.ColorIndex, space.Icon));
+        Assert.Equal("E", space.ChipText);
+        Assert.Equal("Escritório · 0 abas", space.Summary);
+    }
 }

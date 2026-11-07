@@ -45,6 +45,8 @@ public partial class MainWindow
             .Separator()
             .With(menu => AddGroupItems(menu, tab))
             .Separator()
+            .With(menu => AddWorkspaceItems(menu, tab))
+            .Separator()
             .Item("", "Mudar o nome…", () => RenameTab(tab, (UIElement)sender))
             .Item("", tab.HasNote ? "Editar a nota…" : "Escrever nota…", () => RenameTab(tab, (UIElement)sender, focusNote: true))
             .Item(tab.IsLocked ? "" : "", tab.IsLocked ? "Destrancar" : "Trancar", () => tab.IsLocked = !tab.IsLocked)

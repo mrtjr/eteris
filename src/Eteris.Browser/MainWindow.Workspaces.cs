@@ -51,11 +51,42 @@ public partial class MainWindow
         if (announce) ShowToast($"{(target.Icon is { } icon ? icon + " " : "")}Espaço «{target.Name}» · {Workspace.CountText(target.TabCount)}");
     }
 
+    // Cria, muda para ele e abre logo o editor (nome, emoji, cor) por baixo do chip novo.
     private void NewWorkspaceFromUi()
     {
         var workspace = Tabs.NewWorkspace(activate: false);
         SwitchWorkspace(workspace);
-        ShowToast($"Espaço «{workspace.Name}» criado — botão direito no chip para o nome, a cor ou o ícone");
+        Dispatcher.InvokeAsync(() => EditWorkspace(workspace, ChipOf(workspace) ?? Omnibox, isNew: true), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private FrameworkElement? ChipOf(Workspace workspace)
+        => SpaceStrip.Visibility == Visibility.Visible ? SpaceStrip.ItemContainerGenerator.ContainerFromItem(workspace) as FrameworkElement : null;
+
+    // «Mover para o Espaço…» no menu da aba (e das abas selecionadas): um item por Espaço e «um novo Espaço».
+    private void AddWorkspaceItems(DarkMenu menu, BrowserTab tab) => AddWorkspaceItems(menu, [tab]);
+
+    private void AddWorkspaceItems(DarkMenu menu, IReadOnlyList<BrowserTab> tabs)
+    {
+        var what = tabs.Count == 1 ? "Mover" : $"Mover {TabSelection.Count(tabs.Count)}";
+        foreach (var workspace in Tabs.Workspaces.Where(w => !w.IsCurrent))
+        {
+            var target = workspace;
+            menu.Item("", $"{what} para o Espaço «{target.Name}»", () => MoveToWorkspace(tabs, target));
+        }
+        menu.Item("", $"{what} para um novo Espaço", () => MoveToWorkspace(tabs, null));
+    }
+
+    // As abas saem a dormir para a reserva do destino (um Espaço novo, se «target» for null) e a janela fica aqui.
+    private void MoveToWorkspace(IReadOnlyList<BrowserTab> tabs, Workspace? target)
+    {
+        target ??= Tabs.NewWorkspace(activate: false);
+        var moved = tabs.Count(tab => Tabs.MoveToWorkspace(tab, target, NewTabUrl));
+        ClearSelection();
+        ScheduleSessionSave();
+        if (moved == 0) return;
+        ShowToast(moved == 1
+            ? $"«{tabs[0].DisplayTitle}» foi para o Espaço «{target.Name}»"
+            : $"{TabSelection.Count(moved)} foram para o Espaço «{target.Name}»");
     }
 
     // Apagar fecha as abas do Espaço (ficam nas fechadas recentes); o atual passa primeiro para o vizinho.
@@ -88,6 +119,7 @@ public partial class MainWindow
         e.Handled = true;
         new DarkMenu()
             .Item("", "Ir para este Espaço", () => SwitchWorkspace(workspace), enabled: !workspace.IsCurrent)
+            .Item("", "Mudar o nome, o emoji ou a cor…", () => EditWorkspace(workspace, (UIElement)sender))
             .Item("", "Novo Espaço", NewWorkspaceFromUi)
             .Separator()
             .Item("", $"Apagar «{workspace.Name}»", () => DeleteWorkspace(workspace), enabled: Tabs.HasWorkspaces)
@@ -139,6 +171,8 @@ public partial class MainWindow
         yield return new("", "Espaço seguinte", "Dá a volta pelos Espaços desta janela", "Ctrl+Alt+→", () => RunWorkspaceShortcut(WorkspaceMove.Next));
         yield return new("", "Espaço anterior", "Dá a volta pelos Espaços desta janela", "Ctrl+Alt+←", () => RunWorkspaceShortcut(WorkspaceMove.Previous));
         var current = Tabs.Current;
+        yield return new("", "Mudar o nome do Espaço…", $"Agora «{current.Name}» — nome, emoji e cor do Espaço à vista", null,
+            () => EditWorkspace(current, ChipOf(current) ?? Omnibox));
         yield return new("", $"Apagar o Espaço «{current.Name}»", "As abas dele vão para as fechadas recentes", null, () => DeleteWorkspace(current));
     }
 }

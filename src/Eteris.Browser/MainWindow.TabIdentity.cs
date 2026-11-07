@@ -42,71 +42,9 @@ public partial class MainWindow
         };
         AutomationProperties.SetName(noteBox, "Nota da aba");
 
-        // Emojis: um botão por emoji; o escolhido fica com o contorno íris.
-        var emojis = new WrapPanel { Margin = new Thickness(0, 10, 0, 0), MaxWidth = 310 };
-        var emojiButtons = new List<Border>();
-        void RefreshEmojis()
-        {
-            foreach (var button in emojiButtons)
-                button.BorderBrush = (string?)button.Tag == tab.Emoji ? Res("IrisBrush") : Brushes.Transparent;
-        }
-        foreach (var emoji in TabIdentity.Emojis)
-        {
-            var button = new Border
-            {
-                Width = 32, Height = 32, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1.5), Margin = new Thickness(2),
-                Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = emoji,
-                Child = new TextBlock
-                {
-                    Text = emoji, FontSize = 16, FontFamily = EmojiFont, Foreground = Res("TextBrush"),
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                },
-            };
-            AutomationProperties.SetName(button, $"Emoji {emoji}");
-            button.MouseEnter += (_, _) => button.Background = Res("HoverOverlayBrush");
-            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-            button.MouseLeftButtonUp += (_, e) =>
-            {
-                e.Handled = true;
-                // Clicar no emoji já escolhido tira-o.
-                tab.Emoji = tab.Emoji == emoji ? null : emoji;
-                RefreshEmojis();
-            };
-            emojiButtons.Add(button);
-            emojis.Children.Add(button);
-        }
-
-        // Cores: as da paleta dos grupos, mais «sem cor».
-        var colors = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
-        var colorDots = new List<Border>();
-        void RefreshColors()
-        {
-            foreach (var dot in colorDots)
-                dot.BorderBrush = Equals(dot.Tag, tab.ColorIndex) ? Res("TextBrush") : Brushes.Transparent;
-        }
-        for (var i = -1; i < TabGroup.Palette.Length; i++)
-        {
-            int? index = i < 0 ? null : i;
-            var dot = new Border
-            {
-                Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Margin = new Thickness(4, 2, 4, 2), BorderThickness = new Thickness(2),
-                Background = index is { } c ? TabGroup.BrushAt(c) : Res("FieldBorderBrush"), Cursor = Cursors.Hand, Tag = index,
-            };
-            if (index is null)
-                dot.Child = new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Res("TextMutedBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            AutomationProperties.SetName(dot, index is { } n ? $"Cor {TabGroup.PaletteNames[n]}" : "Sem cor");
-            dot.ToolTip = index is { } t ? TabGroup.PaletteNames[t] : "Sem cor";
-            dot.MouseLeftButtonUp += (_, e) =>
-            {
-                e.Handled = true;
-                tab.ColorIndex = index;
-                RefreshColors();
-            };
-            colorDots.Add(dot);
-            colors.Children.Add(dot);
-        }
-        RefreshEmojis();
-        RefreshColors();
+        // Emoji e cor aplicam-se logo ao clicar (vê-se na faixa); os seletores são os mesmos do editor de Espaços.
+        var emojis = BuildEmojiPicker(() => tab.Emoji, emoji => tab.Emoji = emoji);
+        var colors = BuildColorPicker(() => tab.ColorIndex, color => tab.ColorIndex = color, allowNone: true);
 
         var footer = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
         var reset = new Button { Content = "Repor", Style = (Style)FindResource("PillButton"), ToolTip = "Volta ao título da página, sem emoji nem cor" };
@@ -199,6 +137,82 @@ public partial class MainWindow
             FocusInOverlay(first);
             first.SelectAll();
         };
+    }
+
+    // Seletor de emoji: um botão por emoji do seletor (Tabs/TabIdentity.cs); o escolhido fica com o contorno íris e
+    // clicar nele outra vez tira-o. «set» corre logo ao clicar.
+    private WrapPanel BuildEmojiPicker(Func<string?> get, Action<string?> set)
+    {
+        Brush Res(string key) => (Brush)FindResource(key);
+        var panel = new WrapPanel { Margin = new Thickness(0, 10, 0, 0), MaxWidth = 310 };
+        var buttons = new List<Border>();
+        void Refresh()
+        {
+            foreach (var button in buttons)
+                button.BorderBrush = (string?)button.Tag == get() ? Res("IrisBrush") : Brushes.Transparent;
+        }
+        foreach (var emoji in TabIdentity.Emojis)
+        {
+            var button = new Border
+            {
+                Width = 32, Height = 32, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1.5), Margin = new Thickness(2),
+                Background = Brushes.Transparent, Cursor = Cursors.Hand, Tag = emoji,
+                Child = new TextBlock
+                {
+                    Text = emoji, FontSize = 16, FontFamily = EmojiFont, Foreground = Res("TextBrush"),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+            AutomationProperties.SetName(button, $"Emoji {emoji}");
+            button.MouseEnter += (_, _) => button.Background = Res("HoverOverlayBrush");
+            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+            button.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                set(get() == emoji ? null : emoji);
+                Refresh();
+            };
+            buttons.Add(button);
+            panel.Children.Add(button);
+        }
+        Refresh();
+        return panel;
+    }
+
+    // Seletor de cor: as da paleta dos grupos e, se «allowNone», «sem cor» à frente. «set» corre logo ao clicar.
+    private WrapPanel BuildColorPicker(Func<int?> get, Action<int?> set, bool allowNone)
+    {
+        Brush Res(string key) => (Brush)FindResource(key);
+        var panel = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var dots = new List<Border>();
+        void Refresh()
+        {
+            foreach (var dot in dots)
+                dot.BorderBrush = Equals(dot.Tag, get()) ? Res("TextBrush") : Brushes.Transparent;
+        }
+        for (var i = allowNone ? -1 : 0; i < TabGroup.Palette.Length; i++)
+        {
+            int? index = i < 0 ? null : i;
+            var dot = new Border
+            {
+                Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Margin = new Thickness(4, 2, 4, 2), BorderThickness = new Thickness(2),
+                Background = index is { } c ? TabGroup.BrushAt(c) : Res("FieldBorderBrush"), Cursor = Cursors.Hand, Tag = index,
+            };
+            if (index is null)
+                dot.Child = new TextBlock { Text = "\uE711", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Foreground = Res("TextMutedBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            AutomationProperties.SetName(dot, index is { } n ? $"Cor {TabGroup.PaletteNames[n]}" : "Sem cor");
+            dot.ToolTip = index is { } t ? TabGroup.PaletteNames[t] : "Sem cor";
+            dot.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                set(index);
+                Refresh();
+            };
+            dots.Add(dot);
+            panel.Children.Add(dot);
+        }
+        Refresh();
+        return panel;
     }
 
     private Grid? _renameLayer;
