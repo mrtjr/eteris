@@ -23,6 +23,7 @@ public partial class MainWindow
     private IRequestContext? _glanceContext;
     private string? _glanceUrl;
     private int _glanceSerial;
+    private readonly GlanceLoads _glanceLoads = new();
 
     private static readonly TimeSpan GlanceTimeout = TimeSpan.FromSeconds(12);
 
@@ -43,9 +44,27 @@ public partial class MainWindow
         FocusInOverlay(GlanceOverlay);
 
         var browser = EnsureGlanceBrowser(url);
-        if (browser.IsBrowserInitialized) browser.Load(url);
+        if (browser.IsBrowserInitialized) _ = LoadGlanceAsync(browser, url, serial);
         else browser.Address = url;
         _ = GlanceWatchdog(serial);
+    }
+
+    // Cada espreitadela começa sem os cookies das anteriores: o contexto é só em memória, mas dura a janela inteira,
+    // e um cookie de sessão devolvido pelo servidor ligava as espreitadelas ao mesmo site umas às outras.
+    private async Task LoadGlanceAsync(ChromiumWebBrowser browser, string url, int serial)
+    {
+        await ClearGlanceCookiesAsync();
+        if (serial != _glanceSerial || browser.IsDisposed) return;
+        browser.Load(url);
+    }
+
+    private async Task ClearGlanceCookiesAsync()
+    {
+        try
+        {
+            if (_glanceContext?.GetCookieManager(null) is { } cookies) await cookies.DeleteCookiesAsync(string.Empty, string.Empty);
+        }
+        catch (Exception) { }
     }
 
     private void CloseGlance()
@@ -57,6 +76,7 @@ public partial class MainWindow
         GlanceImage.ImageSource = null;
         // A página pré-visualizada é largada: a aba escondida não fica a ocupar memória com ela.
         if (_glanceBrowser is { IsDisposed: false, IsBrowserInitialized: true } browser) browser.Load("about:blank");
+        _ = ClearGlanceCookiesAsync();
         ReturnFocusToPage();
     }
 
@@ -70,6 +90,7 @@ public partial class MainWindow
         GlanceImageHost.Visibility = Visibility.Collapsed;
         GlanceImage.ImageSource = null;
         GlanceParagraphs.Children.Clear();
+        GlanceScrollViewer.ScrollToTop();
         GlanceUrl.Text = UrlCleaner.Clean(url);
         SetGlanceStatus("A espreitar…", busy: true);
     }
@@ -112,17 +133,30 @@ public partial class MainWindow
             // Nunca rouba o teclado à página nem abre o que quer que seja: pop-ups, transferências e menus ficam mudos.
             FocusHandler = new SilentFocusHandler(),
             LifeSpanHandler = new PopupToTabHandler(_ => { }),
-            DownloadHandler = new SilentDownloadHandler(),
+            // Um link para um ficheiro (zip, pdf, exe) vira transferência: é recusada e o cartão diz logo porquê, em vez
+            // de ficar a girar até ao limite de tempo.
+            DownloadHandler = new SilentDownloadHandler(() =>
+            {
+                var serial = Volatile.Read(ref _glanceSerial);
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (serial == _glanceSerial && GlanceOpen) SetGlanceStatus(LinkPreview.FileStatus, busy: false);
+                });
+            }),
             MenuHandler = new SilentMenuHandler(),
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn,
                 onNavigate: (_, _) => Task.CompletedTask, onBlocked: _ => { }),
         };
+        // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
+        browser.FrameLoadStart += (_, e) =>
+        {
+            if (e.Frame.IsMain) _glanceLoads.Committed(Volatile.Read(ref _glanceSerial));
+        };
         browser.FrameLoadEnd += (_, e) =>
         {
-            if (!e.Frame.IsMain) return;
+            if (!e.Frame.IsMain || _glanceLoads.Finished() is not { } serial) return;
             var loaded = e.Url;
-            var serial = _glanceSerial;
             Dispatcher.InvokeAsync(() => _ = ExtractGlanceAsync(browser, loaded, serial));
         };
         browser.LoadError += (_, e) =>
@@ -258,11 +292,29 @@ public partial class MainWindow
     private void GlanceOverlay_KeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        var action = LinkPreview.ActionFor(key.ToString(), Keyboard.Modifiers.HasFlag(ModifierKeys.Shift),
-            Keyboard.Modifiers.HasFlag(ModifierKeys.Control), IsPrivate);
-        if (action == GlanceAction.None) return;
+        var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        var action = LinkPreview.ActionFor(key.ToString(), shift, Keyboard.Modifiers.HasFlag(ModifierKeys.Control), IsPrivate);
+        if (action != GlanceAction.None)
+        {
+            e.Handled = true;
+            RunGlanceAction(action);
+            return;
+        }
+        // O foco fica na camada (para o Esc e o Enter): as teclas de rolagem passam ao cartão, senão o que fica
+        // abaixo da dobra em janelas pequenas só se via com o rato.
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) || Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) return;
+        var scroll = LinkPreview.ScrollFor(key.ToString(), shift);
+        if (scroll == GlanceScroll.None) return;
         e.Handled = true;
-        RunGlanceAction(action);
+        switch (scroll)
+        {
+            case GlanceScroll.LineUp: GlanceScrollViewer.LineUp(); break;
+            case GlanceScroll.LineDown: GlanceScrollViewer.LineDown(); break;
+            case GlanceScroll.PageUp: GlanceScrollViewer.PageUp(); break;
+            case GlanceScroll.PageDown: GlanceScrollViewer.PageDown(); break;
+            case GlanceScroll.Top: GlanceScrollViewer.ScrollToTop(); break;
+            case GlanceScroll.Bottom: GlanceScrollViewer.ScrollToBottom(); break;
+        }
     }
 
     private void RunGlanceAction(GlanceAction action)
@@ -323,9 +375,13 @@ public partial class MainWindow
         public void OnTakeFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, bool next) { }
     }
 
-    private sealed class SilentDownloadHandler : CefSharp.Handler.DownloadHandler
+    private sealed class SilentDownloadHandler(Action onRefused) : CefSharp.Handler.DownloadHandler
     {
-        protected override bool CanDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, string url, string requestMethod) => false;
+        protected override bool CanDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, string url, string requestMethod)
+        {
+            onRefused();
+            return false;
+        }
     }
 
     private sealed class SilentMenuHandler : IContextMenuHandler

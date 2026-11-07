@@ -154,7 +154,9 @@ public partial class MainWindow
         if (_webPanelBrowsers.TryGetValue(url, out var existing) && !existing.IsDisposed) return existing;
         // O Escudo completo, como nas abas: além do bloqueio de rede, os scriptlets e as regras cosméticas do site
         // (registados pelo DevTools antes dos scripts da página) e, no fim de cada carregamento, as genéricas.
-        var injector = new ScriptletInjector(AppData.IsShieldOn, page => SiteCosmeticScript(page) is { Length: > 0 } css ? css : null);
+        // O Alt+clique espreita como nas abas (sem o script, o Chromium transferia o link para Transferências).
+        var injector = new ScriptletInjector(AppData.IsShieldOn, page => !LinkPreview.WantsAltClick(page) ? null
+            : SiteCosmeticScript(page) is { Length: > 0 } css ? css + "\n;\n" + LinkPreview.AltClickScript : LinkPreview.AltClickScript);
         _webPanelInjectors[url] = injector;
         var browser = new ChromiumWebBrowser(url)
         {
@@ -184,6 +186,16 @@ public partial class MainWindow
                 if (browser.IsDisposed) return;
                 ApplyHiddenElements(browser, loaded);
                 _ = ApplyGenericCosmeticsAsync(browser, loaded);
+            });
+        };
+        browser.ConsoleMessage += (_, e) =>
+        {
+            if (!LinkPreview.IsReport(e.Message, out var glanceUrl)) return;
+            // Como nas abas: só do site à vista na barra e só com um Alt verdadeiro, um cartão por Alt.
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (browser.IsDisposed || !browser.IsVisible) return;
+                if (_altTap.TakeGesture(DateTime.UtcNow, LinkPreview.GestureWindow)) ShowLinkPreview(glanceUrl);
             });
         };
         browser.TitleChanged += (_, e) => Dispatcher.InvokeAsync(() =>

@@ -113,7 +113,8 @@ public partial class MainWindow : Window
                 ? SiteCosmeticScript(url)
                   + (DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript + "\n;\n" : "")
                   + VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript + "\n;\n" + LinkPreview.AltClickScript
-                : null);
+                // Nas páginas internas (nova aba, favoritos, histórico) só o Alt+clique: sem ele o Chromium transferia o link.
+                : LinkPreview.WantsAltClick(url) ? LinkPreview.AltClickScript : null);
         UserActivation? lastActivation = null;
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)

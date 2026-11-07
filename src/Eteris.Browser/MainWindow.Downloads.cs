@@ -36,8 +36,28 @@ public partial class MainWindow
                 tab.Title = "Nova aba";
                 _browsers[tab].Load(NewTabUrl);
             }
-        });
+        }, DivertAltClickDownload);
     }
+
+    // Alt+clique num link que o script do Éteris não apanhou (num iframe de outra origem, que vive noutro processo):
+    // o Chromium transforma-o numa transferência, que é recusada e vira um cartão «Espreitar» — com o mesmo Alt
+    // verdadeiro que as abas exigem. Corre na thread do CEF: o Alt é lido do teclado nesse instante.
+    private bool DivertAltClickDownload(CefSharp.IWebBrowser source, string url)
+    {
+        var altOnly = KeyHeld(VirtualKeyAlt) && !KeyHeld(VirtualKeyControl) && !KeyHeld(VirtualKeyShift);
+        if (!LinkPreview.DivertsDownload(altOnly, url)) return false;
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (source is not UIElement { IsVisible: true }) return;
+            if (_altTap.TakeGesture(DateTime.UtcNow, LinkPreview.GestureWindow)) ShowLinkPreview(url);
+        });
+        return true;
+    }
+
+    private const int VirtualKeyShift = 0x10, VirtualKeyControl = 0x11, VirtualKeyAlt = 0x12;
+
+    // GetAsyncKeyState está declarado em MainWindow.Workspaces.cs.
+    private static bool KeyHeld(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
 
     private void OnDownloadsChanged(object? sender, PropertyChangedEventArgs e)
     {

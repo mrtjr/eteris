@@ -1663,7 +1663,7 @@
                                 </StackPanel>
                             </DockPanel>
                         </Border>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ScrollViewer x:Name="GlanceScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
                             <StackPanel>
                                 <Border x:Name="GlanceImageHost" Height="210" CornerRadius="21,21,0,0" Visibility="Collapsed">
                                     <Border.Background>
@@ -1683,6 +1683,7 @@
                                         </StackPanel>
                                     </DockPanel>
                                     <TextBlock x:Name="GlanceTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="25"
+                                               LineStackingStrategy="BlockLineHeight" MaxHeight="75" TextTrimming="WordEllipsis"
                                                Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
                                     <TextBlock x:Name="GlanceByline" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"
                                                TextTrimming="CharacterEllipsis" Visibility="Collapsed" />

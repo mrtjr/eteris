@@ -19,6 +19,9 @@ public sealed record LinkPreviewInfo(string Url, string Title, string Site, stri
 // O que uma tecla faz no cartão «Espreitar».
 public enum GlanceAction { None, Close, Open, OpenSideBySide, ReadLater }
 
+// Rolagem do cartão pelo teclado (o foco está na camada, não no ScrollViewer).
+public enum GlanceScroll { None, LineUp, LineDown, PageUp, PageDown, Top, Bottom }
+
 // Metadados tirados do HTML de uma página (etiquetas <meta> Open Graph/Twitter, <title>, <p>): lógica pura, sem motor.
 public sealed record PageMetadata(string? Title, string? Description, string? ImageUrl, string? SiteName, IReadOnlyList<string> Paragraphs);
 
@@ -30,6 +33,8 @@ public static partial class LinkPreview
     public const int MaxParagraphs = 3;
     public const int MaxExcerptChars = 700;
     public const int MinParagraphChars = 40;
+    // A descrição (og:description) há sites que lá metem o artigo inteiro: o cartão mostra só o princípio.
+    public const int MaxDescriptionChars = 300;
 
     // Resultado do script na aba escondida: cabeçalho (meta) + artigo (Readability) + texto de recurso.
     public static string Script => ReaderScripts.WithReadability(ScriptTemplate);
@@ -75,7 +80,33 @@ public static partial class LinkPreview
         _ => GlanceAction.None,
     };
 
-    public const string ReportPrefix = "\u0001eteris-glance ";
+    // Teclas de rolagem do cartão: setas, Page Up/Down, Espaço (Shift+Espaço sobe), Home e End.
+    public static GlanceScroll ScrollFor(string key, bool shift) => key switch
+    {
+        "Up" => GlanceScroll.LineUp,
+        "Down" => GlanceScroll.LineDown,
+        "PageUp" or "Prior" => GlanceScroll.PageUp,
+        "PageDown" or "Next" => GlanceScroll.PageDown,
+        "Space" => shift ? GlanceScroll.PageUp : GlanceScroll.PageDown,
+        "Home" => GlanceScroll.Top,
+        "End" => GlanceScroll.Bottom,
+        _ => GlanceScroll.None,
+    };
+
+    // A aba escondida recusou uma transferência: o link é um ficheiro, não uma página.
+    public const string FileStatus = "Este link é um ficheiro, não uma página — «Abrir» transfere-o";
+
+    // Páginas onde o Alt+clique espreita: as da web e as internas (nova aba, favoritos, histórico), que têm links
+    // web e onde, sem o script, o Chromium transferia o destino.
+    public static bool WantsAltClick(string? url)
+        => url is not null && (IsWeb(url) || url.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
+
+    // Uma transferência que começa só com o Alt premido é o Alt+clique nativo do Chromium num link que o script não
+    // apanhou (um iframe de outra origem vive noutro processo e não recebe os scripts do Éteris): não transfere,
+    // espreita. Só links web.
+    public static bool DivertsDownload(bool altOnlyHeld, string? url) => altOnlyHeld && url is not null && IsWeb(url);
+
+    public const string ReportPrefix ="\u0001eteris-glance ";
 
     // O aviso do Alt+clique só conta até este tempo depois de o Alt ter sido premido (ver AltTap.TakeGesture).
     public static readonly TimeSpan GestureWindow = TimeSpan.FromSeconds(3);
@@ -138,7 +169,9 @@ public static partial class LinkPreview
             if (paragraphs.Count == 0) paragraphs = meta.Paragraphs;
             var words = root.TryGetProperty("words", out var w) && w.ValueKind == JsonValueKind.Number ? (int)w.GetDouble() : 0;
             if (words == 0) words = CountWords(text);
-            var description = meta.Description;
+            var description = meta.Description is { Length: > MaxDescriptionChars } longDescription
+                ? Truncate(longDescription, MaxDescriptionChars)
+                : meta.Description;
             // Uma descrição igual ao início do artigo repete-se: fica só o artigo.
             if (description is not null && paragraphs.Count > 0 && paragraphs[0].StartsWith(description.TrimEnd('…', '.', ' '), StringComparison.Ordinal))
                 description = null;
