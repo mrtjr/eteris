@@ -106,6 +106,10 @@ public static class LocalNetworkGrants
 
 public static class LocalNetworkText
 {
+    // Detalhe do cartão: para onde a página tentou ir e quando faz sentido deixar.
+    public static string CardDetail(string label)
+        => $"Tentou chegar a {label}. Só permita se confiar neste site — por exemplo, o Discord, uma impressora ou o painel do router.";
+
     // Linha do Escudo: o que foi travado nesta página (ou que a proteção está ativa).
     public static string ShieldLine(IReadOnlyList<KeyValuePair<string, int>> blocked)
     {

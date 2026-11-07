@@ -12,6 +12,8 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("✔", "Promessas verificáveis", "eteris://privacy/ mostra o que o Éteris garante, cada promessa com ✔ ou ✘ lido do estado real: GPC visível aos sites, APIs de anúncios do Chromium desligadas, cada site com o seu frasco, referrer só com a origem, uma só língua, cookies de terceiros fora também dos pedidos à rede. E, se quiser, o Éteris esconde-se do Recall e das capturas (Definições › Privacidade ou o selo «Privada»)."),
+        new("🏠", "A rede local é sua", "Um site da Internet já não fala com este computador nem com o router, a impressora ou o NAS sem perguntar: o Escudo mostra o que foi travado e um cartão deixa permitir só desta vez ou sempre."),
         new("🔒", "HTTPS primeiro, com aviso", "Os sites abertos por http:// vão por ligação cifrada; quando o site não a tem, o Éteris diz-lho em vez de recuar às escondidas — «Continuar sem segurança» só desta vez ou sempre para esse site. As páginas de erro dizem o que aconteceu (DNS, ligação recusada, certificado…) e copiam os detalhes."),
         new("↶", "Anular", "Feito, Adiar, Arquivo, abas fechadas em bloco e favoritos removidos têm «Anular» no aviso; Ctrl+Z fora da página anula a última ação do Éteris. PDF e capturas guardados abrem-se ou mostram-se na pasta a partir do aviso.", "Ctrl+Z"),
         new("🔥", "Esquecer e triturar", "No cadeado: «Esquecer este site ao fechar» apaga cookies, armazenamento, histórico e permissões quando fecha a última aba do site; «Triturar agora…» mostra o que vai apagar e apaga já. «Terminar sessão privada» no menu fecha todas as janelas privadas de uma vez."),

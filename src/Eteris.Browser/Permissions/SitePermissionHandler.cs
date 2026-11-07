@@ -48,7 +48,7 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
         }
     }
 
-    private static List<SitePermission> FromPrompt(PermissionRequestType types)
+    public static List<SitePermission> FromPrompt(PermissionRequestType types)
     {
         var kinds = new List<SitePermission>();
         if (types.HasFlag(PermissionRequestType.CameraStream)) kinds.Add(SitePermission.Camera);
@@ -57,6 +57,8 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
         if (types.HasFlag(PermissionRequestType.Notifications)) kinds.Add(SitePermission.Notifications);
         if (types.HasFlag(PermissionRequestType.Clipboard)) kinds.Add(SitePermission.Clipboard);
         if (types.HasFlag(PermissionRequestType.MultipleDownloads)) kinds.Add(SitePermission.MultipleDownloads);
+        if ((types & (PermissionRequestType.LocalNetworkAccess | PermissionRequestType.LocalNetwork | PermissionRequestType.LoopbackNetwork)) != 0)
+            kinds.Add(SitePermission.LocalNetwork);
         return kinds;
     }
 }

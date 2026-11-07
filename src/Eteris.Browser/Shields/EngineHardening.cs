@@ -35,6 +35,14 @@ public static class EngineHardening
         ("PartitionConnectionsByNetworkIsolationKey", "ligações à rede separadas por site de topo"),
     ];
 
+    // A verificação do próprio Chromium antes de uma página pública chegar à rede local: cobre o que o tratador de
+    // pedidos do Éteris não vê (WebSockets, nomes públicos que apontam para endereços locais). O pedido chega como
+    // permissão «Rede local» (Permissions/SitePermissionHandler.cs).
+    public static readonly IReadOnlyList<(string Feature, string What)> LocalNetworkChecks =
+    [
+        ("LocalNetworkAccessChecks", "o Chromium pede autorização antes de uma página pública chegar à rede local"),
+    ];
+
     // Uma só língua no cabeçalho Accept-Language: sem isto o Chromium junta a língua-base com peso («pt-PT,pt;q=0.9»).
     public static readonly IReadOnlyList<(string Feature, string What)> Identity =
     [
@@ -57,7 +65,7 @@ public static class EngineHardening
     // Junta as listas do Éteris às que já estão na linha de comandos (sem repetir nomes).
     public static void Apply(IDictionary<string, string> args)
     {
-        Merge(args, "enable-features", Partitioning.Select(p => p.Feature).Concat(Identity.Select(i => i.Feature)));
+        Merge(args, "enable-features", Partitioning.Concat(Identity).Concat(LocalNetworkChecks).Select(f => f.Feature));
         Merge(args, "disable-features", AdApis.Select(a => a.Feature));
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         Applied = new Dictionary<string, string>(args);

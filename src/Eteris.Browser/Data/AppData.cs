@@ -337,6 +337,7 @@ public static class AppData
             catch (Exception) { }
             SetHttpException(host, false);
             Shields.ShieldEngine.Https.Forget(host);
+            Shields.LocalNetworkGrants.Forget(host);
         }
         SetForgetOnClose(site, false);
         SetShield(site, true);

@@ -1774,13 +1774,18 @@
                         <TextBlock x:Name="PermissionText" TextWrapping="Wrap" MaxWidth="360" Margin="12,0,0,0"
                                    VerticalAlignment="Center" FontSize="14" />
                     </StackPanel>
+                    <!-- Rede local: para onde a página tentou ir e quando faz sentido permitir -->
+                    <TextBlock x:Name="PermissionDetail" TextWrapping="Wrap" MaxWidth="410" Margin="50,8,0,0" FontSize="12.5"
+                               Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
                     <DockPanel Margin="0,14,0,0" LastChildFill="False">
                         <CheckBox x:Name="PermissionRemember" Style="{StaticResource ToggleSwitch}" IsChecked="True"
                                   VerticalAlignment="Center" />
-                        <TextBlock Text="Lembrar neste site" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
+                        <TextBlock x:Name="PermissionRememberLabel" Text="Lembrar neste site" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                    VerticalAlignment="Center" Margin="8,0,0,0" />
                         <Button x:Name="PermissionAllowButton" DockPanel.Dock="Right" Content="Permitir"
                                 Style="{StaticResource PrimaryPillButton}" Click="PermissionAllow_Click" Margin="8,0,0,0" />
+                        <Button x:Name="PermissionOnceButton" DockPanel.Dock="Right" Content="Só desta vez" Visibility="Collapsed"
+                                Style="{StaticResource PillButton}" Click="PermissionOnce_Click" Margin="8,0,0,0" />
                         <Button x:Name="PermissionDenyButton" DockPanel.Dock="Right" Content="Bloquear"
                                 Style="{StaticResource PillButton}" Click="PermissionDeny_Click" />
                     </DockPanel>

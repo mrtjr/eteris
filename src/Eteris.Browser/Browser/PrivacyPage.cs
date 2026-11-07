@@ -60,6 +60,11 @@ public static class PrivacyPage
         var oneLanguage = s.Language.Length > 0 && !s.Language.Contains(',') && EngineHardening.Identity.All(i => enabled.Contains(i.Feature));
         // As dicas são decididas pela mesma função que o tratador de pedidos usa.
         var hintsCut = IdentifyingHints.All(RequestIdentity.IsIdentifyingHint) && !RequestIdentity.LowEntropyHints.Any(RequestIdentity.IsIdentifyingHint);
+        // A decisão da rede local é a mesma função que o tratador de pedidos usa.
+        var lanKept = LocalNetwork.Decide("https://www.exemplo.pt/", "http://192.168.1.1/", CefSharp.ResourceType.Xhr, false) == LocalNetwork.Decision.Block
+                      && LocalNetwork.Decide("https://www.exemplo.pt/", "http://127.0.0.1:6463/", CefSharp.ResourceType.Xhr, false) == LocalNetwork.Decision.Block
+                      && LocalNetwork.Decide("https://www.exemplo.pt/", "http://192.168.1.1/", CefSharp.ResourceType.MainFrame, false) == LocalNetwork.Decision.Allow
+                      && EngineHardening.LocalNetworkChecks.All(c => enabled.Contains(c.Feature));
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
 
         return
@@ -105,6 +110,11 @@ public static class PrivacyPage
                     ? "Os sites recebem só a marca do navegador, se é telemóvel e a plataforma; versão completa, arquitetura, modelo, versão do Windows, memória e ecrã nunca saem, mesmo que os peçam."
                     : "Há dicas do cliente que identificam o computador a sair nos pedidos.",
                 hintsCut),
+            new("lan", "Os sites não falam com a sua rede local",
+                lanKept
+                    ? "Uma página da Internet não chega a este computador (127.0.0.1, localhost) nem ao router, à impressora ou ao NAS sem o deixar; escrever um endereço local na barra continua livre."
+                    : "Os pedidos de páginas públicas para a rede local não estão a ser travados.",
+                lanKept),
             new("webrtc", "O WebRTC não revela o seu IP local",
                 s.WebRtcProtected ? "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede." : "A política de IP do WebRTC não foi aplicada.",
                 s.WebRtcProtected),
