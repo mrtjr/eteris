@@ -1297,6 +1297,69 @@
                 </Border>
             </Grid>
 
+            <!-- Espreitar: o destino de um link num cartão por cima da página, sem abrir aba nem deixar rasto -->
+            <Grid x:Name="GlanceOverlay" Grid.Row="2" Panel.ZIndex="59" Visibility="Collapsed" Focusable="True"
+                  Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="GlanceOverlay_MouseLeftButtonDown" KeyDown="GlanceOverlay_KeyDown">
+                <Border x:Name="GlanceCard" Width="540" MaxHeight="680" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="22"
+                        Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform />
+                    </Border.RenderTransform>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="40" ShadowDepth="10" Direction="270" Opacity="0.5" Color="Black" />
+                    </Border.Effect>
+                    <DockPanel>
+                        <Border DockPanel.Dock="Bottom" Padding="22,12,22,18" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,1,0,0">
+                            <DockPanel>
+                                <Button x:Name="GlanceReadLater" DockPanel.Dock="Left" Style="{StaticResource PillButton}" Content="Ler mais tarde"
+                                        Click="GlanceReadLater_Click" ToolTip="Guardar em Favoritos › Para ler" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Style="{StaticResource PillButton}" Content="Abrir ao lado" Click="GlanceSplit_Click" Margin="0,0,8,0"
+                                            ToolTip="Abrir numa aba ao lado desta (ecrã dividido)" />
+                                    <Button x:Name="GlanceOpenButton" Style="{StaticResource PrimaryPillButton}" Content="Abrir" Click="GlanceOpen_Click"
+                                            ToolTip="Abrir numa nova aba (Enter)" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <Border x:Name="GlanceImageHost" Height="210" CornerRadius="21,21,0,0" Visibility="Collapsed">
+                                    <Border.Background>
+                                        <ImageBrush x:Name="GlanceImage" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Margin="22,16,22,16">
+                                    <DockPanel Margin="0,0,0,6">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
+                                                Content="&#xE8BB;" Click="GlanceClose_Click" ToolTip="Fechar (Esc)" Margin="8,-4,-6,0" />
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE7B3;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{StaticResource IrisBrush}"
+                                                       VerticalAlignment="Center" Margin="0,1,6,0" />
+                                            <TextBlock x:Name="GlanceSite" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300" />
+                                            <TextBlock x:Name="GlanceReading" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <TextBlock x:Name="GlanceTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="25"
+                                               Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
+                                    <TextBlock x:Name="GlanceByline" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"
+                                               TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
+                                    <StackPanel x:Name="GlanceStatus" Orientation="Horizontal" Margin="0,4,0,8">
+                                        <Path x:Name="GlanceSpinner" Style="{StaticResource SpinnerArc}" Width="16" Height="16" Margin="0,0,10,0" />
+                                        <TextBlock x:Name="GlanceStatusText" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="GlanceDescription" FontSize="13.5" TextWrapping="Wrap" LineHeight="21" FontStyle="Italic"
+                                               Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,10" Visibility="Collapsed" />
+                                    <StackPanel x:Name="GlanceParagraphs" />
+                                    <TextBlock x:Name="GlanceUrl" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
             <!-- Notas: bloco de notas por cima da página, à direita -->
             <Border x:Name="NotesPanel" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Right" Width="340" Margin="0,8,16,16"
                     Visibility="Collapsed" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"

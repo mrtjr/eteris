@@ -3,7 +3,7 @@ namespace Eteris.Browser.Browser;
 public enum PageCommand
 {
     Back, Forward, Reload, Print, ViewSource, Inspect,
-    OpenLinkNewTab, OpenLinkPrivate, CopyLink,
+    OpenLinkNewTab, PreviewLink, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
     Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink,
 }
@@ -26,6 +26,7 @@ public static class PageMenu
         if (ctx.LinkUrl is { Length: > 0 })
         {
             items.Add(new(PageCommand.OpenLinkNewTab, "", "Abrir link numa nova aba"));
+            if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.PreviewLink, "", "Espreitar o link"));
             if (!ctx.IsPrivate) items.Add(new(PageCommand.OpenLinkPrivate, "", "Abrir link numa janela privada"));
             items.Add(new(PageCommand.CopyLink, "", "Copiar endereço do link"));
             items.Add(null);
@@ -75,6 +76,10 @@ public static class PageMenu
         items.Add(new(PageCommand.Inspect, "", "Inspecionar", "F12"));
         return Tidy(items);
     }
+
+    // Só se espreita o que vem da web: mailto:, javascript: e afins não têm página para mostrar.
+    public static bool IsWebLink(string? url)
+        => url is not null && (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase));
 
     private static string Quote(string selection)
     {

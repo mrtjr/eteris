@@ -47,6 +47,15 @@ public class PageMenuTests
     }
 
     [Fact]
+    public void Link_OffersPreviewOnlyForWebLinks()
+    {
+        Assert.Contains(PageCommand.PreviewLink, Commands(Ctx(link: "https://a.pt/artigo")));
+        Assert.Contains(PageCommand.PreviewLink, Commands(Ctx(link: "https://a.pt/artigo", isPrivate: true)));
+        Assert.DoesNotContain(PageCommand.PreviewLink, Commands(Ctx(link: "mailto:a@a.pt")));
+        Assert.DoesNotContain(PageCommand.PreviewLink, Commands(Ctx(link: "javascript:void(0)")));
+    }
+
+    [Fact]
     public void PrivateWindow_DoesNotOfferPrivateWindowAgain()
         => Assert.DoesNotContain(PageCommand.OpenLinkPrivate, Commands(Ctx(link: "https://a.pt/", isPrivate: true)));
 

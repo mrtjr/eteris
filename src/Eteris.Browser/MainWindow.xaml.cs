@@ -371,6 +371,7 @@ public partial class MainWindow : Window
         }
 
         if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
+        else if (key == Key.Escape && GlanceOpen) CloseGlance();
         else if (Shortcut(key, ctrl, shift, alt) is { } action) action();
         else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();
         else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) StopActive();

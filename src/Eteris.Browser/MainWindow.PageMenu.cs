@@ -38,6 +38,7 @@ public partial class MainWindow
             case PageCommand.ViewSource: Tabs.NewTab("view-source:" + tab.Address); break;
             case PageCommand.Inspect: browser.GetBrowserHost()?.ShowDevTools(null, x, y); break;
             case PageCommand.OpenLinkNewTab: Tabs.NewTab(context.LinkUrl!, activate: false); break;
+            case PageCommand.PreviewLink: ShowLinkPreview(context.LinkUrl!); break;
             case PageCommand.OpenLinkPrivate: OpenWindow(isPrivate: true, context.LinkUrl); break;
             case PageCommand.CopyLink: CopyText(Shields.UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
             case PageCommand.OpenImageNewTab: Tabs.NewTab(context.ImageUrl!, activate: false); break;
