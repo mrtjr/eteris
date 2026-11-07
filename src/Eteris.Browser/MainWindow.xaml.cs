@@ -355,6 +355,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Alt sozinho em modo foco: as barras aparecem por uns segundos (como a barra de menus do Firefox).
+        if (key is Key.LeftAlt or Key.RightAlt && !ctrl && !shift && BarsAutoHide)
+        {
+            RevealBarsForKeyboard();
+            e.Handled = false;
+            return;
+        }
+
         // O menu do Éteris é um Popup sem pai: as suas teclas chegam aqui primeiro, pelo MenuButton.
         if (BrowserMenuOpen)
         {
@@ -425,6 +433,7 @@ public partial class MainWindow : Window
             Dispatcher.InvokeAsync(action);
             return true;
         }
+        if (key is Key.LeftAlt or Key.RightAlt && !ctrl && !shift && BarsAutoHide) Dispatcher.InvokeAsync(RevealBarsForKeyboard);
         if (key == Key.Escape)
             Dispatcher.InvokeAsync(() =>
             {

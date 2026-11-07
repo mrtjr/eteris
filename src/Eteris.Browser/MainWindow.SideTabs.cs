@@ -36,9 +36,57 @@ public partial class MainWindow
 
     private ChromeLayout _chrome = ChromeLayout.Resolve(false, false, false);
 
+    // Alturas das linhas das barras como propriedades animáveis (um GridLength não se anima): as barras deslizam ao
+    // aparecer e ao esconder-se em vez de saltar. A página, em janela própria, acompanha cada quadro.
+    public static readonly DependencyProperty TitleRowHeightProperty = DependencyProperty.Register(
+        nameof(TitleRowHeight), typeof(double), typeof(MainWindow),
+        new PropertyMetadata(ChromeLayout.TitleBarHeight, (d, e) => ((MainWindow)d).TitleRow.Height = new GridLength((double)e.NewValue)));
+
+    public static readonly DependencyProperty ToolbarRowHeightProperty = DependencyProperty.Register(
+        nameof(ToolbarRowHeight), typeof(double), typeof(MainWindow),
+        new PropertyMetadata(ChromeLayout.ToolbarBarHeight, (d, e) => ((MainWindow)d).ToolbarRow.Height = new GridLength((double)e.NewValue)));
+
+    public double TitleRowHeight
+    {
+        get => (double)GetValue(TitleRowHeightProperty);
+        set => SetValue(TitleRowHeightProperty, value);
+    }
+
+    public double ToolbarRowHeight
+    {
+        get => (double)GetValue(ToolbarRowHeightProperty);
+        set => SetValue(ToolbarRowHeightProperty, value);
+    }
+
+    private static readonly TimeSpan BarsSlide = TimeSpan.FromMilliseconds(170);
+
+    // Uma barra que vai desaparecer fica visível até a altura chegar a zero; uma que vai aparecer fica visível já.
+    private void SlideBar(DependencyProperty heightProperty, double current, double target, FrameworkElement bar, bool animate)
+    {
+        if (!animate || !IsLoaded || Math.Abs(current - target) < 0.5)
+        {
+            BeginAnimation(heightProperty, null);
+            SetValue(heightProperty, target);
+            bar.Visibility = target > 0 ? Visibility.Visible : Visibility.Collapsed;
+            return;
+        }
+        bar.Visibility = Visibility.Visible;
+        var slide = new System.Windows.Media.Animation.DoubleAnimation(current, target, BarsSlide)
+        {
+            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+        };
+        if (target <= 0)
+            slide.Completed += (_, _) =>
+            {
+                // Só se, entretanto, nada voltou a pedir a barra.
+                if ((double)GetValue(heightProperty) <= 0.5) bar.Visibility = Visibility.Collapsed;
+            };
+        BeginAnimation(heightProperty, slide);
+    }
+
     // Único sítio que aplica a disposição das barras; a decisão está em Theme/ChromeLayout.cs (abas no topo,
     // verticais, modo compacto, modo foco e ecrã inteiro).
-    private void ApplyChromeLayout()
+    private void ApplyChromeLayout(bool animate = true)
     {
         var layout = _chrome = ChromeLayout.Resolve(VerticalTabs, CompactDensity, _focusMode || _pageFullscreen, peek: _autoHide.Revealed);
         SyncAutoHide();
@@ -48,10 +96,8 @@ public partial class MainWindow
         Compact = layout.TabsInToolbar;
         PlaceTabStrip(layout.TabsInToolbar);
 
-        TitleRow.Height = new GridLength(layout.TitleHeight);
-        ToolbarRow.Height = new GridLength(layout.ToolbarHeight);
-        TitleBar.Visibility = layout.ShowsTitleBar ? Visibility.Visible : Visibility.Collapsed;
-        Toolbar.Visibility = layout.ShowsToolbar ? Visibility.Visible : Visibility.Collapsed;
+        SlideBar(TitleRowHeightProperty, TitleRowHeight, layout.ShowsTitleBar ? layout.TitleHeight : 0, TitleBar, animate);
+        SlideBar(ToolbarRowHeightProperty, ToolbarRowHeight, layout.ShowsToolbar ? layout.ToolbarHeight : 0, Toolbar, animate);
         ToolbarCaption.Visibility = layout.CaptionInToolbar ? Visibility.Visible : Visibility.Collapsed;
         UpdateCompactOmnibox();
         UpdateOmniboxChrome();

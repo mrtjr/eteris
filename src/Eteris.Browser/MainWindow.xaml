@@ -879,7 +879,7 @@
                     <Popup x:Name="SuggestionPopup" PlacementTarget="{Binding ElementName=OmniboxFrame}" Placement="Bottom"
                            HorizontalOffset="0" VerticalOffset="4" AllowsTransparency="True" StaysOpen="True"
                            PopupAnimation="Fade" Focusable="False">
-                        <Border Margin="32,0,32,44" Width="{Binding ActualWidth, ElementName=OmniboxFrame}"
+                        <Border Margin="32,0,32,44" Width="{Binding ActualWidth, ElementName=OmniboxFrame}" MinWidth="600"
                                 Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
                                 BorderThickness="1" CornerRadius="16" Padding="6">
                             <Border.Effect>

@@ -42,7 +42,8 @@ public static class ShortcutSheet
         ]),
         new("Vista", [
             new("F9", "Modo de leitura"),
-            new("F11", "Modo foco"),
+            new("F11", "Modo foco (o rato no topo mostra as barras)"),
+            new("Alt", "Mostrar as barras no modo foco"),
             new("Ctrl+Shift+M", "Janela flutuante"),
             new("Ctrl+Shift+E", "Notas"),
             new("Ctrl + / Ctrl −", "Zoom (memorizado por site)"),

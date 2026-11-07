@@ -70,7 +70,8 @@ public partial class MainWindow
             ResizeMode = _beforeFullscreenResize;
             WindowState = _beforeFullscreenState;
         }
-        ApplyChromeLayout();
+        // A janela muda de estado ao mesmo tempo: as barras não deslizam aqui.
+        ApplyChromeLayout(animate: false);
     }
 
     // Esc ou F11: sai do ecrã inteiro, venha ele da página ou do menu. O exitFullscreen só vai à página que tem mesmo
