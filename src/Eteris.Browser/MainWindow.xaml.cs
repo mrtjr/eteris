@@ -277,6 +277,7 @@ public partial class MainWindow : Window
             var leaving = Volatile.Read(ref committedUrl);
             var arriving = e.Url;
             Volatile.Write(ref committedUrl, arriving);
+            tab.Observatory.Commit(arriving);
             if (requests == mainRequestsAtCommit)
             {
                 var restored = e.TransitionType.HasFlag(TransitionType.ForwardBack);

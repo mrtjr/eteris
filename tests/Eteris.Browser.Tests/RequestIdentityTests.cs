@@ -50,8 +50,28 @@ public class RequestIdentityTests
     [InlineData("Accept-Language", false)]
     [InlineData("Sec-Fetch-Site", false)]
     [InlineData("Sec-GPC", false)]
+    // Preferências que o CSS já mostra a qualquer página: o tema escuro do servidor continua a funcionar.
+    [InlineData("Sec-CH-Prefers-Color-Scheme", false)]
+    [InlineData("Sec-CH-Prefers-Reduced-Motion", false)]
+    [InlineData("sec-ch-prefers-reduced-transparency", false)]
+    [InlineData("Sec-CH-Prefers-Contrast", false)]
     public void Hints_OnlyTheLowEntropyOnesLeave(string header, bool stripped)
         => Assert.Equal(stripped, RequestIdentity.IsIdentifyingHint(header));
+
+    // Revisão aos 50: as navegações levam sempre a língua do motor; num fetch em que a página escolheu a língua, a
+    // dela fica — só a lista com pesos que o motor gera é reduzida.
+    [Theory]
+    [InlineData(null, true, "pt-PT")]
+    [InlineData("en", true, "pt-PT")]
+    [InlineData("pt-PT", true, null)]
+    [InlineData(null, false, "pt-PT")]
+    [InlineData("", false, "pt-PT")]
+    [InlineData("en", false, null)]
+    [InlineData("en-US,en;q=0.9", false, null)]
+    [InlineData("pt-PT", false, null)]
+    [InlineData("pt-PT,pt;q=0.9", false, "pt-PT")]
+    public void AcceptLanguage_KeepsWhatThePageChose(string? current, bool navigation, string? expected)
+        => Assert.Equal(expected, RequestIdentity.AcceptLanguage(current, "pt-PT", navigation));
 
     // A vista móvel de um site fixado continua a dizer «telemóvel Android» (dicas de baixa entropia).
     [Fact]

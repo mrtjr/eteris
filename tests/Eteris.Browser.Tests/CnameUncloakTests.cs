@@ -138,13 +138,39 @@ public class CnameUncloakTests
     public void Quota_LimitsNewQueriesPerPage()
     {
         var quota = new CnameQuota(2);
-        Assert.True(quota.TryTake(1, "https://jornal.pt/a"));
-        Assert.True(quota.TryTake(1, "https://jornal.pt/a"));
-        Assert.False(quota.TryTake(1, "https://jornal.pt/a"));
+        Assert.True(quota.TryTake(1, "https://jornal.pt/a", "img.jornal.pt"));
+        Assert.True(quota.TryTake(1, "https://jornal.pt/a", "metrics.jornal.pt"));
+        Assert.False(quota.TryTake(1, "https://jornal.pt/a", "cdn.jornal.pt"));
         // Outra aba e outra página começam do zero.
-        Assert.True(quota.TryTake(2, "https://jornal.pt/a"));
-        Assert.True(quota.TryTake(1, "https://jornal.pt/b"));
-        Assert.False(new CnameQuota(0).TryTake(1, "https://jornal.pt/"));
+        Assert.True(quota.TryTake(2, "https://jornal.pt/a", "cdn.jornal.pt"));
+        Assert.True(quota.TryTake(1, "https://jornal.pt/b", "cdn.jornal.pt"));
+        Assert.False(new CnameQuota(0).TryTake(1, "https://jornal.pt/", "img.jornal.pt"));
+    }
+
+    // Revisão aos 50: 30 imagens do mesmo alias gastam uma só consulta; o rastreador escondido que vem depois ainda
+    // tem quota.
+    [Fact]
+    public void Quota_CountsDistinctNames_NotRequests()
+    {
+        var quota = new CnameQuota(CnameUncloak.PageQuota);
+        for (var i = 0; i < 30; i++) Assert.True(quota.TryTake(1, "https://www.jornal.pt/", "img.jornal.pt"));
+        Assert.True(quota.TryTake(1, "https://www.jornal.pt/", "metrics.jornal.pt"));
+    }
+
+    // A janela privada tem a sua cache, que só lê a cache do Windows e se esquece no fim da sessão privada.
+    [Fact]
+    public void PrivateWindow_HasItsOwnCache()
+    {
+        Assert.Same(Cname.Cache, Cname.For(false));
+        Assert.Same(Cname.PrivateCache, Cname.For(true));
+        Assert.NotSame(Cname.Cache, Cname.PrivateCache);
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Shields", "CnameUncloak.cs"));
+        Assert.Contains("PrivateCache { get; } = new(host => WindowsDns.QueryCname(host, cacheOnly: true)", source);
+        var handler = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Shields", "PrivacyRequestHandler.cs"));
+        Assert.Contains("var cache = Cname.For(isPrivate);", handler);
+        Assert.DoesNotContain("Cname.Cache.", handler);
+        var ending = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Private.cs"));
+        Assert.Equal(2, ending.Split("Shields.Cname.PrivateCache.Clear();").Length - 1);
     }
 
     [Fact]

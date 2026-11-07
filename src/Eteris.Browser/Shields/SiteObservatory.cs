@@ -77,11 +77,50 @@ public sealed class SiteObservatory
     {
         lock (_lock)
         {
-            _hosts.Clear();
-            _overflow = 0;
-            _pageUrl = pageUrl;
-            _pageHost = HostOf(pageUrl).ToString();
-            _version++;
+            ResetLocked(pageUrl);
+            _navigating = false;
+        }
+    }
+
+    private void ResetLocked(string pageUrl)
+    {
+        _hosts.Clear();
+        _overflow = 0;
+        _pageUrl = pageUrl;
+        _pageHost = HostOf(pageUrl).ToString();
+        _version++;
+    }
+
+    // Saiu um pedido da página principal. Ainda não é uma página nova: uma transferência, uma resposta 204 ou um Esc
+    // deixam a página à vista (e o seu Observatório, e o seu site) como estavam. Só o commit muda de página.
+    private volatile bool _navigating;
+
+    public void Navigating() => _navigating = true;
+
+    // O endereço da página principal que um sub-recurso vê (o documento já em vigor): se a navegação em curso trocou de
+    // documento, recomeça aqui — antes de o FrameLoadStart chegar, para não perder os primeiros pedidos da página nova.
+    // Uma mudança de endereço sem navegação (pushState, #âncora) não recomeça nada.
+    public void Sync(string? committedUrl)
+    {
+        if (!_navigating || committedUrl is null) return;
+        lock (_lock)
+        {
+            if (!_navigating || string.Equals(committedUrl, _pageUrl, StringComparison.Ordinal)) return;
+            ResetLocked(committedUrl);
+            _navigating = false;
+        }
+    }
+
+    // O documento principal mudou (FrameLoadStart): recomeça, se nenhum sub-recurso o fez já (recarregar o mesmo
+    // endereço, uma página sem sub-recursos).
+    public void Commit(string url)
+    {
+        if (!_navigating) return;
+        lock (_lock)
+        {
+            if (!_navigating) return;
+            ResetLocked(url);
+            _navigating = false;
         }
     }
 

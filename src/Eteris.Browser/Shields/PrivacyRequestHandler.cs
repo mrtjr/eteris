@@ -120,7 +120,8 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             var host = uri.IdnHost.ToLowerInvariant();
             var url = request.Url;
             var engine = blocker();
-            if (Cname.Cache.TryGet(host, out var chain))
+            var cache = Cname.For(isPrivate);
+            if (cache.TryGet(host, out var chain))
             {
                 var target = CnameUncloak.CloakedTracker(url, documentUrl, type, chain, engine.ShouldBlock);
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
@@ -129,13 +130,13 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 Cloaked(uri.Host, target);
                 return CefReturnValue.Cancel;
             }
-            if (callback is null || !Cname.Quota.TryTake(browser.Identifier, pageUrl))
+            if (callback is null || !Cname.Quota.TryTake(browser.Identifier, pageUrl, host))
             {
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
                 Observe(url, resourceType, ObservedVerdict.Allowed);
                 return CefReturnValue.Continue;
             }
-            var lookup = Cname.Cache.LookupAsync(host);
+            var lookup = cache.LookupAsync(host);
             CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
             Task.WhenAny(lookup, Task.Delay(CnameUncloak.MaxWait)).ContinueWith(_ =>
             {
@@ -261,7 +262,11 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             foreach (var (name, value) in PrivacySignals.Headers) request.SetHeaderByName(name, value, true);
             // Uma só língua (a com que o motor arrancou) e só as dicas do cliente de baixa entropia, mesmo que o site peça
             // mais (Shields/RequestIdentity.cs). Sem reescrever o cabeçalho, o Chromium juntava a língua-base com peso.
-            if (EngineHardening.StartedWithLanguage is { Length: > 0 } language) request.SetHeaderByName("Accept-Language", language, true);
+            // Num fetch/XHR em que a página escolheu a língua (o seletor de línguas do site), a dela fica.
+            if (EngineHardening.StartedWithLanguage is { Length: > 0 } language
+                && RequestIdentity.AcceptLanguage(request.GetHeaderByName("Accept-Language"), language,
+                    request.ResourceType is ResourceType.MainFrame or ResourceType.SubFrame) is { } accept)
+                request.SetHeaderByName("Accept-Language", accept, true);
             StripIdentifyingHints(request);
             // Referrer entre sites só com a origem (Shields/ReferrerCap.cs), quando o escudo está ligado no site que o envia.
             if (ReferrerCap.Decide(request.ReferrerUrl, request.Url) is { Kind: not ReferrerCap.Kind.Keep } cap
@@ -292,7 +297,8 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 }
                 // O pedido da página segue logo. (Antes esperava aqui pelo registo dos scriptlets, até 1 s; depois de a
                 // navegação começar o DevTools já não entrega esse registo a tempo: ver ScriptletInjector.)
-                observatory?.Reset(request.Url);
+                // O Observatório só recomeça quando a página nova entra em vigor (SiteObservatory.Sync/Commit).
+                observatory?.Navigating();
                 onMainFrameRequest?.Invoke();
                 ReportSkips(browser);
                 return CefReturnValue.Continue;
@@ -302,6 +308,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             if (!IsNetwork(request.Url)) return CefReturnValue.Continue;
 
             var pageUrl = SafeFrame.MainUrl(browser);
+            observatory?.Sync(pageUrl);
             // Rede local (Shields/LocalNetwork.cs): uma página pública não chega a este computador nem à rede de casa sem
             // autorização do utilizador para o site — com ou sem escudo, é uma proteção e não um bloqueio de anúncios.
             if (LocalNetwork.Decide(pageUrl, request.Url, request.ResourceType, allowedForSite: false) == LocalNetwork.Decision.Block

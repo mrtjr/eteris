@@ -125,26 +125,26 @@ public sealed class CnameCache(Func<string, CnameAnswer> resolve, Func<DateTime>
     public void Clear() => _entries.Clear();
 }
 
-// Limite de consultas novas por página (por browser, reposto quando a página muda).
+// Limite de consultas novas por página (por browser, reposto quando a página muda), contado por nome distinto: 30
+// imagens de img.jornal.pt gastam uma consulta (as repetidas juntam-se à que está em voo), e metrics.jornal.pt ainda
+// tem a sua.
 public sealed class CnameQuota(int perPage)
 {
-    private readonly ConcurrentDictionary<int, (string Page, int Used)> _pages = new();
+    private readonly Lock _lock = new();
+    private readonly Dictionary<int, (string Page, HashSet<string> Names)> _pages = new();
 
-    public bool TryTake(int browserId, string? pageUrl)
+    public bool TryTake(int browserId, string? pageUrl, string host)
     {
         var page = pageUrl ?? string.Empty;
-        var taken = false;
-        _pages.AddOrUpdate(browserId, _ =>
+        lock (_lock)
         {
-            taken = perPage > 0;
-            return (page, taken ? 1 : 0);
-        }, (_, old) =>
-        {
-            var used = old.Page == page ? old.Used : 0;
-            taken = used < perPage;
-            return (page, taken ? used + 1 : used);
-        });
-        return taken;
+            if (!_pages.TryGetValue(browserId, out var entry) || entry.Page != page)
+                _pages[browserId] = entry = (page, new HashSet<string>(StringComparer.Ordinal));
+            if (entry.Names.Contains(host)) return true;
+            if (entry.Names.Count >= perPage) return false;
+            entry.Names.Add(host);
+            return true;
+        }
     }
 }
 
@@ -237,11 +237,17 @@ public static partial class WindowsDns
     private static partial void DnsRecordListFree(nint records, int freeType);
 }
 
-// A cache partilhada pelo Éteris: pergunta ao DNS do Windows (só à cache com o DNS cifrado ligado).
+// A cache partilhada pelo Éteris: pergunta ao DNS do Windows (só à cache com o DNS cifrado ligado). A janela privada
+// tem a sua, que só lê a cache do Windows (nunca faz ela própria uma consulta que lá deixasse os nomes visitados) e
+// é esquecida quando a sessão privada acaba.
 public static class Cname
 {
     public static CnameCache Cache { get; } = new(
         host => WindowsDns.QueryCname(host, cacheOnly: PrivacyPreferences.SecureDnsProvider is not null), () => DateTime.UtcNow);
+
+    public static CnameCache PrivateCache { get; } = new(host => WindowsDns.QueryCname(host, cacheOnly: true), () => DateTime.UtcNow);
+
+    public static CnameCache For(bool isPrivate) => isPrivate ? PrivateCache : Cache;
 
     public static CnameQuota Quota { get; } = new(CnameUncloak.PageQuota);
 }
