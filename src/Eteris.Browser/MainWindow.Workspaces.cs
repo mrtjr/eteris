@@ -15,12 +15,23 @@ public partial class MainWindow
 {
     private void WatchWorkspaces()
     {
-        Tabs.Workspaces.CollectionChanged += (_, _) =>
+        foreach (var workspace in Tabs.Workspaces) workspace.PropertyChanged += OnWorkspacePropertyChanged;
+        Tabs.Workspaces.CollectionChanged += (_, e) =>
         {
+            foreach (Workspace workspace in e.OldItems ?? Array.Empty<Workspace>()) workspace.PropertyChanged -= OnWorkspacePropertyChanged;
+            foreach (Workspace workspace in e.NewItems ?? Array.Empty<Workspace>()) workspace.PropertyChanged += OnWorkspacePropertyChanged;
             UpdateSpaceStrip();
+            ApplyTint();
             ScheduleSessionSave();
         };
         UpdateSpaceStrip();
+    }
+
+    // Nome, cor e emoji vão para a sessão; a cor do Espaço à vista tinge a barra na hora.
+    private void OnWorkspacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Workspace.Name) or nameof(Workspace.ColorIndex) or nameof(Workspace.Icon)) ScheduleSessionSave();
+        if (e.PropertyName == nameof(Workspace.ColorIndex) && sender is Workspace { IsCurrent: true }) ApplyTint();
     }
 
     // Os chips só aparecem a partir do segundo Espaço: com um só, a barra fica como sempre foi.
@@ -47,6 +58,7 @@ public partial class MainWindow
         target.StoredSplit = null;
         UpdateTabWidth();
         RevealActiveTab();
+        ApplyTint();
         ScheduleSessionSave();
         if (announce) ShowToast($"{(target.Icon is { } icon ? icon + " " : "")}Espaço «{target.Name}» · {Workspace.CountText(target.TabCount)}");
     }
@@ -61,6 +73,24 @@ public partial class MainWindow
 
     private FrameworkElement? ChipOf(Workspace workspace)
         => SpaceStrip.Visibility == Visibility.Visible ? SpaceStrip.ItemContainerGenerator.ContainerFromItem(workspace) as FrameworkElement : null;
+
+    // O Espaço cujo chip está debaixo do rato durante um arrasto de aba (nunca o atual: a aba já lá está).
+    private Workspace? WorkspaceUnder(MouseEventArgs e)
+    {
+        if (SpaceStrip.Visibility != Visibility.Visible) return null;
+        foreach (var workspace in Tabs.Workspaces)
+        {
+            if (workspace.IsCurrent || ChipOf(workspace) is not { } chip) continue;
+            var position = e.GetPosition(chip);
+            if (position.X >= 0 && position.Y >= 0 && position.X < chip.ActualWidth && position.Y < chip.ActualHeight) return workspace;
+        }
+        return null;
+    }
+
+    private void ShowWorkspaceDropHint(Workspace? target)
+    {
+        foreach (var workspace in Tabs.Workspaces) workspace.IsDropTarget = ReferenceEquals(workspace, target);
+    }
 
     // «Mover para o Espaço…» no menu da aba (e das abas selecionadas): um item por Espaço e «um novo Espaço».
     private void AddWorkspaceItems(DarkMenu menu, BrowserTab tab) => AddWorkspaceItems(menu, [tab]);

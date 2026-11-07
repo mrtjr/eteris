@@ -13,6 +13,10 @@ public static partial class SiteTint
     private const double LightSiteLuminance = 0.6;
     private const double BlendAmount = 0.45;
 
+    // Pitada da cor do Espaço sobre a barra: notória lado a lado, discreta à vista (no tema claro ainda menos).
+    public const double WorkspaceBlend = 0.16;
+    public const double LightWorkspaceBlend = 0.07;
+
     public static Color? Parse(string css)
     {
         var text = css.Trim();
@@ -45,6 +49,18 @@ public static partial class SiteTint
         if (luminance > LightSiteLuminance) return null;
         if (luminance <= MaxChromeLuminance) return site;
         var tint = Blend(Base, site, BlendAmount);
+        while (Luminance(tint) > MaxChromeLuminance)
+            tint = Color.FromRgb((byte)(tint.R * 0.9), (byte)(tint.G * 0.9), (byte)(tint.B * 0.9));
+        return tint;
+    }
+
+    // Tom da barra num Espaço com cor: a cor do Espaço entra um pouco no tom que a barra já tinha (do tema ou do
+    // site), sem tirar contraste ao texto — no escuro a luminância continua abaixo do limite, no claro a barra
+    // continua clara.
+    public static Color WithWorkspace(Color chrome, Color space, bool light)
+    {
+        var tint = Blend(chrome, space, light ? LightWorkspaceBlend : WorkspaceBlend);
+        if (light) return tint;
         while (Luminance(tint) > MaxChromeLuminance)
             tint = Color.FromRgb((byte)(tint.R * 0.9), (byte)(tint.G * 0.9), (byte)(tint.B * 0.9));
         return tint;

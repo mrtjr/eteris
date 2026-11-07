@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows.Input;
 using Eteris.Browser.Data;
 using Eteris.Browser.Tabs;
+using Eteris.Browser.Theme;
+using System.Windows.Media;
 
 namespace Eteris.Browser.Tests;
 
@@ -311,5 +313,50 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("Escritório", 5, (string?)null), (space.Name, space.ColorIndex, space.Icon));
         Assert.Equal("E", space.ChipText);
         Assert.Equal("Escritório · 0 abas", space.Summary);
+    }
+
+    // A cor do Espaço tinge a barra: no escuro fica abaixo do limite de luminância (texto legível), no claro fica clara.
+    [Fact]
+    public void Tint_WithWorkspace_IsSubtleAndKeepsContrast()
+    {
+        var violet = TabGroup.ColorAt(0);
+        Assert.Equal(Color.FromRgb(0x8B, 0x5C, 0xF6), violet);
+        var dark = SiteTint.WithWorkspace(SiteTint.Base, violet, light: false);
+        Assert.NotEqual(SiteTint.Base, dark);
+        Assert.True(SiteTint.Luminance(dark) <= SiteTint.MaxChromeLuminance);
+        Assert.True(dark.B > dark.G, "puxa para o violeta");
+        var lightChrome = Color.FromRgb(0xF6, 0xF7, 0xFB);
+        var light = SiteTint.WithWorkspace(lightChrome, TabGroup.ColorAt(6), light: true);
+        Assert.NotEqual(lightChrome, light);
+        Assert.True(SiteTint.Luminance(light) > 0.8, "continua clara");
+        // Um site muito claro (amarelo) num Espaço: o resultado continua escuro o suficiente para a barra.
+        var loud = SiteTint.WithWorkspace(Color.FromRgb(0x20, 0x20, 0x10), Color.FromRgb(0xFF, 0xFF, 0x00), light: false);
+        Assert.True(SiteTint.Luminance(loud) <= SiteTint.MaxChromeLuminance);
+    }
+
+    // Radar › «Noutros Espaços»: as abas dos outros Espaços, com o nome do Espaço, «Ir para o Espaço» pela linha.
+    [Fact]
+    public void Radar_SpacesScope_ListsTabsOfTheOtherWorkspaces()
+    {
+        var vm = WithTabs("https://a.pt/");
+        var work = vm.NewWorkspace("Trabalho", icon: "💼");
+        vm.NewTab("https://w.pt/");
+        vm.Tabs[1].Title = "Relatório";
+        vm.Close(vm.Tabs[0]);
+        vm.SwitchWorkspace(vm.Workspaces[0]);
+        var others = vm.TabsInOtherWorkspaces();
+        var (space, tab) = Assert.Single(others);
+        Assert.Same(work, space);
+
+        var rows = TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.Spaces, RadarSort.Recent, "", spaces: others);
+        var row = Assert.Single(rows);
+        Assert.Same(tab, row.Tab);
+        Assert.Same(work, row.Space);
+        Assert.Equal("Relatório", row.Title);
+        Assert.Equal("w.pt · 💼 Trabalho", row.Subtitle);
+        Assert.Equal("No Espaço «Trabalho» · A dormir", row.Status);
+        Assert.Empty(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.Spaces, RadarSort.Recent, "xyz", spaces: others));
+        Assert.Contains("Novo Espaço", TabRadar.Status(0, RadarScope.Spaces, ""));
+        Assert.DoesNotContain(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.All, RadarSort.Recent, "", spaces: others), r => r.Space is not null);
     }
 }

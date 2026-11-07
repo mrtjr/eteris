@@ -373,6 +373,8 @@ public partial class MainWindow
     {
         // As cores dos sites estão afinadas para o tema escuro; no claro a superfície fica neutra.
         var tint = UsesLight ? LightChrome : Tabs.Active?.Tint ?? SiteTint.Base;
+        // Com Espaços, a barra ganha uma pitada da cor do Espaço à vista (Íris adaptativa).
+        if (Tabs.HasWorkspaces) tint = SiteTint.WithWorkspace(tint, Tabs.Current.Color, UsesLight);
         // Com Mica, a superfície das barras fica translúcida para o material do sistema transparecer.
         var target = _mica ? Color.FromArgb(ChromeAlpha, tint.R, tint.G, tint.B) : tint;
         var brush = (SolidColorBrush)Resources["ChromeSurfaceBrush"];

@@ -34,5 +34,7 @@ public sealed partial class TabGroup : ObservableObject
     // A mesma paleta serve a cor do ícone de uma aba (Tabs/TabIdentity.cs).
     public static Brush BrushAt(int index) => Brushes[((index % Brushes.Length) + Brushes.Length) % Brushes.Length];
 
+    public static Color ColorAt(int index) => ((SolidColorBrush)BrushAt(index)).Color;
+
     public IEnumerable<BrowserTab> Members(TabsViewModel tabs) => tabs.Tabs.Where(t => ReferenceEquals(t.Group, this));
 }

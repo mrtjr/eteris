@@ -40,12 +40,18 @@ public sealed partial class Workspace : ObservableObject
     [ObservableProperty]
     private bool _isCurrent;
 
+    // Uma aba está a ser arrastada por cima do chip: largá-la move-a para este Espaço (MainWindow.TabDrag.cs).
+    [ObservableProperty]
+    private bool _isDropTarget;
+
     // Quantas abas tem (as do Espaço à vista contam-se na faixa; as dos outros, na reserva).
     [NotifyPropertyChangedFor(nameof(Summary))]
     [ObservableProperty]
     private int _tabCount;
 
     public Brush ColorBrush => TabGroup.BrushAt(ColorIndex);
+
+    public Color Color => TabGroup.ColorAt(ColorIndex);
 
     public string Monogram => MonogramOf(Name);
 

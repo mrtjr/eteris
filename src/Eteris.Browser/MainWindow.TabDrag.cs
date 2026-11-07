@@ -10,6 +10,7 @@ public partial class MainWindow
     private BrowserTab? _dragTab;
     private BrowserTab? _dragPreviousActive;
     private SplitDropTarget _dropTarget;
+    private Workspace? _dropWorkspace;
     private Point _dragStart;
     private bool _dragging;
 
@@ -49,22 +50,36 @@ public partial class MainWindow
             : SplitDropTarget.None;
         if (target != _dropTarget) ShowSplitDropHint(target);
         _dropTarget = target;
+
+        // Sobre o chip de outro Espaço: o chip acende; largar aí move a aba para lá.
+        var workspace = WorkspaceUnder(e);
+        if (!ReferenceEquals(workspace, _dropWorkspace)) ShowWorkspaceDropHint(workspace);
+        _dropWorkspace = workspace;
     }
 
     private void TabList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        var (dragged, previous, target) = (_dragTab, _dragPreviousActive, _dropTarget);
+        var (dragged, previous, target, workspace) = (_dragTab, _dragPreviousActive, _dropTarget, _dropWorkspace);
         if (_dragging)
         {
             TabList.ReleaseMouseCapture();
             e.Handled = true;
             ShowSplitDropHint(SplitDropTarget.None);
+            ShowWorkspaceDropHint(null);
         }
         _dragTab = null;
         _dragPreviousActive = null;
         _dropTarget = SplitDropTarget.None;
+        _dropWorkspace = null;
         var dropped = _dragging;
         _dragging = false;
+        if (dropped && workspace is not null && dragged is not null)
+        {
+            // A aba que estava ativa antes do arrasto volta a ser a ativa (a arrastada vai embora).
+            if (previous is not null && !ReferenceEquals(previous, dragged) && Tabs.Tabs.Contains(previous)) Tabs.Active = previous;
+            MoveToWorkspace([dragged], workspace);
+            return;
+        }
         if (dropped && target != SplitDropTarget.None && SplitDropZone.CanSplit(previous, dragged) && Tabs.Tabs.Contains(previous!))
         {
             Tabs.Active = previous;

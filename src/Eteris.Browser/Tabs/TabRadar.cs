@@ -3,7 +3,7 @@ using System.Windows.Media;
 namespace Eteris.Browser.Tabs;
 
 // Âmbitos do radar de abas, pela ordem do seletor «Mostrar».
-public enum RadarScope { All, Pinned, Audible, Sleeping, Duplicates, Closed, Done, Snoozed, Archived }
+public enum RadarScope { All, Pinned, Audible, Sleeping, Duplicates, Closed, Done, Snoozed, Archived, Spaces }
 
 // Ordenações do radar, pela ordem do seletor «Ordenar». Strip = ordem da faixa de abas (sem reordenar).
 public enum RadarSort { Recent, Site, Strip }
@@ -11,7 +11,7 @@ public enum RadarSort { Recent, Site, Strip }
 // Uma linha da lista do radar: aba aberta (Tab) ou entrada das fechadas recentemente (Closed).
 public sealed record RadarRow(BrowserTab? Tab, ClosedTab? Closed, string Title, string Address,
     string Subtitle, string Badge, Brush BadgeBrush, ImageSource? Image, string Status, string? Note = null, Data.DoneTab? Done = null,
-    Data.SnoozedTab? Snoozed = null, Data.ArchivedTab? Archived = null)
+    Data.SnoozedTab? Snoozed = null, Data.ArchivedTab? Archived = null, Workspace? Space = null)
 {
     public object Identity => (object?)Tab ?? (object?)Closed ?? (object?)Done ?? (object?)Snoozed ?? Archived!;
 }
@@ -22,7 +22,8 @@ public static class TabRadar
 {
     public static IReadOnlyList<RadarRow> Rows(IReadOnlyList<BrowserTab> tabs, BrowserTab? active,
         IReadOnlyList<ClosedTab> closed, RadarScope scope, RadarSort sort, string query, IReadOnlyList<Data.DoneTab>? done = null,
-        IReadOnlyList<Data.SnoozedTab>? snoozed = null, DateTime? nowLocal = null, IReadOnlyList<Data.ArchivedTab>? archived = null)
+        IReadOnlyList<Data.SnoozedTab>? snoozed = null, DateTime? nowLocal = null, IReadOnlyList<Data.ArchivedTab>? archived = null,
+        IReadOnlyList<(Workspace Space, BrowserTab Tab)>? spaces = null)
     {
         query = query.Trim();
         var duplicates = Duplicates(tabs);
@@ -37,6 +38,8 @@ public static class TabRadar
             ? (snoozed ?? []).Select(s => FromSnoozed(s, now))
             : scope == RadarScope.Archived
             ? (archived ?? []).Select(a => FromArchived(a, nowUtc))
+            : scope == RadarScope.Spaces
+            ? (spaces ?? []).Select(pair => FromSpace(pair.Tab, pair.Space))
             : tabs.Where(tab => scope switch
                 {
                     RadarScope.Pinned => tab.IsPinned,
@@ -72,6 +75,7 @@ public static class TabRadar
             0 when scope == RadarScope.Done => "Nada marcado como feito hoje. «Feito» está no menu da aba.",
             0 when scope == RadarScope.Snoozed => "Nenhuma aba adiada. «Adiar até…» está no menu da aba.",
             0 when scope == RadarScope.Archived => "O Arquivo está vazio: abas sem visita há dias vêm para aqui (Definições › Abas).",
+            0 when scope == RadarScope.Spaces => "Nenhuma aba noutros Espaços. «Novo Espaço» está na paleta (Ctrl+K).",
             0 => "Nenhuma aba neste filtro.",
             1 => "1 aba nesta vista",
             _ => $"{count} abas nesta vista",
@@ -109,6 +113,19 @@ public static class TabRadar
         var subtitle = tab.Group is { } group ? $"{site} · {group.Name}" : site;
         return new(tab, null, tab.CustomTitle ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title), tab.Address,
             subtitle, tab.Monogram ?? "É", tab.MonogramBrush, tab.Favicon, string.Join(" · ", status), tab.Note);
+    }
+
+    // Aba de outro Espaço (a dormir na reserva): o Radar diz onde está e «Ir» muda de Espaço e ativa-a.
+    public static RadarRow FromSpace(BrowserTab tab, Workspace space)
+    {
+        var status = new List<string> { $"No Espaço «{space.Name}»" };
+        if (tab.IsPinned) status.Add("Fixada");
+        if (tab.IsLocked) status.Add("Trancada");
+        if (tab.IsSleeping) status.Add("A dormir");
+        var site = Site(tab.Address);
+        var subtitle = $"{site} · {(space.Icon is { } icon ? icon + " " : "")}{space.Name}";
+        return new(tab, null, tab.CustomTitle ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title), tab.Address,
+            subtitle, tab.Monogram ?? "É", tab.MonogramBrush, tab.Favicon, string.Join(" · ", status), tab.Note, Space: space);
     }
 
     public static RadarRow FromDone(Data.DoneTab tab)

@@ -655,6 +655,11 @@
                                             <Setter TargetName="Chip" Property="BorderBrush" Value="{Binding ColorBrush}" />
                                             <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
                                         </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                                            <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                                            <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
                                         <!-- O atual já mostra o nome: a inicial só repetiria a primeira letra (o emoji fica) -->
                                         <MultiDataTrigger>
                                             <MultiDataTrigger.Conditions>

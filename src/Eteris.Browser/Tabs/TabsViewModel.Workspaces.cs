@@ -127,6 +127,10 @@ public partial class TabsViewModel
     // As abas de um Espaço: as da faixa, se está à vista; senão as da reserva.
     public IReadOnlyList<BrowserTab> TabsOf(Workspace workspace) => workspace.IsCurrent ? Tabs : workspace.StoredTabs;
 
+    // Para o Radar: as abas dos Espaços que não estão à vista, pela ordem do seletor e da faixa de cada um.
+    public IReadOnlyList<(Workspace Space, BrowserTab Tab)> TabsInOtherWorkspaces()
+        => Workspaces.Where(w => !w.IsCurrent).SelectMany(w => w.StoredTabs.Select(t => (w, t))).ToList();
+
     public Workspace? WorkspaceOf(BrowserTab tab) => Workspaces.FirstOrDefault(w => TabsOf(w).Contains(tab));
 
     public void RefreshWorkspaceCounts()

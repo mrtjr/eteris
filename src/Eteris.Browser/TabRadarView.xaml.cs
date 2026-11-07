@@ -21,6 +21,7 @@ public partial class TabRadarView : UserControl
     private readonly Action<Data.SnoozedTab> _wake;
     private readonly Func<IReadOnlyList<Data.ArchivedTab>> _archived;
     private readonly Action<Data.ArchivedTab> _restore;
+    private readonly Action<Workspace, BrowserTab> _goToSpace;
     private readonly bool _privateWindow;
     private readonly HashSet<BrowserTab> _watched = [];
     private bool _watching;
@@ -29,7 +30,7 @@ public partial class TabRadarView : UserControl
     internal TabRadarView(TabsViewModel tabs, bool privateWindow, Action<BrowserTab> toggleMute,
         Action<BrowserTab> closeTab, Action<BrowserTab> openSplit, Action dismiss, Func<IReadOnlyList<Data.DoneTab>> doneToday,
         Func<IReadOnlyList<Data.SnoozedTab>> snoozed, Action<Data.SnoozedTab> wake,
-        Func<IReadOnlyList<Data.ArchivedTab>> archived, Action<Data.ArchivedTab> restore)
+        Func<IReadOnlyList<Data.ArchivedTab>> archived, Action<Data.ArchivedTab> restore, Action<Workspace, BrowserTab> goToSpace)
     {
         _tabs = tabs;
         _privateWindow = privateWindow;
@@ -38,6 +39,7 @@ public partial class TabRadarView : UserControl
         _wake = wake;
         _archived = archived;
         _restore = restore;
+        _goToSpace = goToSpace;
         _toggleMute = toggleMute;
         _closeTab = closeTab;
         _openSplit = openSplit;
@@ -46,7 +48,7 @@ public partial class TabRadarView : UserControl
 
         Filters.ItemsSource = privateWindow
             ? new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente" }
-            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje", "Adiadas", "Arquivo" };
+            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje", "Adiadas", "Arquivo", "Noutros Espaços" };
         Order.ItemsSource = new[] { "Usadas recentemente", "Por site", "Ordem da faixa de abas" };
         Filters.SelectedIndex = (int)RadarScope.All;
         Order.SelectedIndex = (int)RadarSort.Recent;
@@ -174,7 +176,8 @@ public partial class TabRadarView : UserControl
 
         var visible = TabRadar.Rows(_tabs.Tabs, _tabs.Active, _tabs.RecentlyClosed, scope, sort, query,
             scope == RadarScope.Done ? _doneToday() : null, scope == RadarScope.Snoozed ? _snoozed() : null,
-            archived: scope == RadarScope.Archived ? _archived() : null);
+            archived: scope == RadarScope.Archived ? _archived() : null,
+            spaces: scope == RadarScope.Spaces ? _tabs.TabsInOtherWorkspaces() : null);
         var retained = selection is null ? null : visible.FirstOrDefault(row => ReferenceEquals(row.Identity, selection.Identity));
         Results.ItemsSource = visible;
         Results.SelectedItem = retained ?? (visible.Count == 0 ? null : visible[Math.Min(previousIndex, visible.Count - 1)]);
@@ -188,7 +191,8 @@ public partial class TabRadarView : UserControl
     private void ShowDetails()
     {
         var row = Results.SelectedItem as RadarRow;
-        var tab = row?.Tab;
+        // Uma aba de outro Espaço não está na faixa: só «Ir para o Espaço» serve.
+        var tab = row?.Space is null ? row?.Tab : null;
         DetailsTitle.Text = row?.Title ?? "Encontre uma aba";
         DetailsAddress.Text = row?.Address ?? string.Empty;
         DetailsState.Text = row is null ? "Use a pesquisa ou mude o filtro para começar."
@@ -200,6 +204,7 @@ public partial class TabRadarView : UserControl
         PreviewPlaceholder.Visibility = PreviewImage.Source is null ? Visibility.Visible : Visibility.Collapsed;
 
         OpenButton.Content = row?.Snoozed is not null ? "Trazer já" : row?.Archived is not null ? "Repor"
+            : row?.Space is not null ? "Ir para o Espaço"
             : row?.Closed is not null || row?.Done is not null ? "Reabrir aba" : "Ir para a aba";
         OpenButton.IsEnabled = row is not null;
         SplitButton.IsEnabled = tab is not null && _tabs.Active is not null && !ReferenceEquals(tab, _tabs.Active);
@@ -238,6 +243,8 @@ public partial class TabRadarView : UserControl
         if (Results.SelectedItem is not RadarRow row) return;
         if (row.Tab is { } tab && _tabs.Tabs.Contains(tab))
             _tabs.Active = tab;
+        else if (row is { Tab: { } away, Space: { } space })
+            _goToSpace(space, away);
         else if (row.Done is { } done)
             _tabs.NewTab(done.Url);
         else if (row.Snoozed is { } snoozed)
