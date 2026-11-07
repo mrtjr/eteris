@@ -42,6 +42,11 @@ public class CefConfiguratorTests
         Assert.Contains("DialMediaRouteProvider", features);
     }
 
+    // O «HTTPS primeiro» do Chromium subia os pedidos antes do Éteris e falhava sem aviso: fica desligado.
+    [Fact]
+    public void Build_LeavesHttpsUpgradesToTheEteris()
+        => Assert.Contains("HttpsUpgrades", CefConfigurator.Build("p").CefCommandLineArgs["disable-features"].Split(','));
+
     [Fact]
     public void Build_DoesNotSetMediaStreamSwitch()
         => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("enable-media-stream"));

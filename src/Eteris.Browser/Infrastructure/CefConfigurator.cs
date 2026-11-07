@@ -38,6 +38,9 @@ public static class CefConfigurator
                     // modelos de IA no dispositivo (Gemini Nano/Gemma) e sugestões de otimização.
                     "OptimizationHints", "OptimizationHintsFetching", "OptimizationGuideModelDownloading",
                     "OptimizationGuideOnDeviceModel", "OnDeviceModelPerformanceParams",
+                    // O «HTTPS primeiro» é do Éteris (Shields/HttpsFirst.cs, com aviso): o do Chromium subia o pedido
+                    // antes de o tratador o ver e, ao falhar, dava «tempo esgotado» (-7) sem aviso nem recuo.
+                    "HttpsUpgrades",
                 }
                 .Where(f => !string.IsNullOrEmpty(f)));
         settings.RegisterScheme(new CefCustomScheme

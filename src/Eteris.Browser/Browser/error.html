@@ -20,6 +20,15 @@
   button { margin-top: 26px; border: 0; border-radius: 999px; padding: 11px 26px; font: inherit; font-weight: 600; font-size: 14px;
            color: #0b0d13; background: var(--iris); cursor: pointer; box-shadow: 0 10px 34px rgba(139,92,246,.3); }
   button:hover { filter: brightness(1.08); }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 26px; }
+  .actions button { margin-top: 0; }
+  button.quiet { color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--line); box-shadow: none; font-weight: 500; }
+  button.quiet:hover { background: rgba(255,255,255,.1); filter: none; }
+  /* Aviso do «HTTPS primeiro»: uma faixa âmbar a dizer o que se perde ao continuar */
+  .warn { display: none; margin: 18px auto 0; padding: 12px 16px; border-radius: 14px; font-size: 13.5px; line-height: 1.5;
+          color: #fcd34d; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); text-align: left; }
+  body.insecure .warn { display: block; }
+  body.insecure .glyph { filter: drop-shadow(0 6px 24px rgba(245,158,11,.35)); }
   canvas { display: none; margin: 26px auto 0; border-radius: 18px; border: 1px solid var(--line);
            background: rgba(255,255,255,.02); cursor: none; }
   .score { display: none; color: var(--faint); font-size: 13px; margin-top: 8px; }
@@ -32,6 +41,8 @@
   }
   html.light ::selection { background: rgba(139, 92, 246, .25); }
 
+  html.light button.quiet { background: #fff; }
+  html.light .warn { color: #92400e; background: rgba(245,158,11,.12); }
   html.light body { background: radial-gradient(ellipse 60% 50% at 50% 35%, #ffffff 0%, var(--bg) 70%); }
 </style>
 </head>
@@ -41,7 +52,13 @@
   <h1 id="title"></h1>
   <p id="detail"></p>
   <div class="url" id="url"></div>
-  <button id="retry" hidden>Tentar novamente</button>
+  <div class="warn" id="warn">Palavras-passe, mensagens e dados de pagamento escritos aqui viajam à vista. Só continue se confia na rede e no site.</div>
+  <div class="actions">
+    <button id="retry" hidden>Tentar novamente</button>
+    <button id="back" hidden>Voltar</button>
+    <button id="once" class="quiet" hidden>Continuar sem segurança (só desta vez)</button>
+    <button id="always" class="quiet" hidden>Sempre para este site</button>
+  </div>
   <canvas id="game" width="560" height="220" aria-label="Jogo: apanhe a luz com o rato"></canvas>
   <div class="score" id="score"></div>
   <div class="code" id="code"></div>
@@ -54,7 +71,21 @@
   document.getElementById('title').textContent = data.title;
   document.getElementById('detail').textContent = data.detail;
   document.getElementById('url').textContent = data.url;
-  document.getElementById('code').textContent = 'código ' + data.code;
+  document.getElementById('code').textContent = (data.insecure ? 'HTTPS falhou · código ' : 'código ') + data.code;
+  if (data.insecure) {
+    // Voltar é a escolha principal; continuar é deliberado (até fechar o Éteris, ou sempre para este site).
+    document.body.classList.add('insecure');
+    const back = document.getElementById('back'), once = document.getElementById('once'), always = document.getElementById('always');
+    back.hidden = false; once.hidden = false;
+    // O aviso fica logo a seguir à entrada do https:// que falhou: voltar uma só vez repetia a falha e o aviso.
+    back.addEventListener('click', () => { if (history.length > 2) history.go(-2); else location.href = 'eteris://newtab/'; });
+    once.addEventListener('click', () => location.replace(data.proceedOnce));
+    if (data.proceedAlways) {
+      always.hidden = false;
+      always.addEventListener('click', () => location.replace(data.proceedAlways));
+    }
+    back.focus();
+  }
   const retry = document.getElementById('retry');
   if (data.retry) {
     retry.hidden = false;

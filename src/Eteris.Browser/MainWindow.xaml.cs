@@ -154,7 +154,8 @@ public partial class MainWindow : Window
                     ShieldStats.CountBlocked(persist: !IsPrivate);
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 },
-                onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab))),
+                onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab)),
+                isPrivate: IsPrivate),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
@@ -228,7 +229,8 @@ public partial class MainWindow : Window
         browser.LoadError += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
-            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FallbackFor);
+            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FailedUpgrade,
+                url => ShieldEngine.Https.IsAllowedUrl(url, IsPrivate));
             if (target is not null) Dispatcher.InvokeAsync(() => browser.Load(target));
         };
         browser.FrameLoadEnd += (_, e) =>

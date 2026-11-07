@@ -73,8 +73,18 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
+        if (uri is { Host: "error", AbsolutePath: "/continue" })
+        {
+            // «Continuar sem segurança»: este host segue por http:// até fechar o Éteris; «Sempre» guarda a exceção
+            // (nunca a partir da janela privada, que não deixa rasto).
+            if (ErrorPage.ParseContinue(request.Url) is not { } choice) return Text("recusado");
+            Shields.ShieldEngine.Https.Allow(choice.Host, privateContext);
+            if (choice.Always && !privateContext) AppData.SetHttpException(choice.Host, true);
+            return Html(ErrorPage.ContinueRedirect(choice.Url));
+        }
         if (ErrorPage.IsErrorPage(request.Url))
-            return Html(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty));
+            return Html(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty,
+                ErrorPage.IsInsecureWarning(request.Url), canRemember: !privateContext));
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }

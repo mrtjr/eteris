@@ -196,7 +196,8 @@ public partial class MainWindow
         browser.LoadError += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
-            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FallbackFor);
+            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FailedUpgrade,
+                url => ShieldEngine.Https.IsAllowedUrl(url, isPrivate: false));
             if (target is not null) Dispatcher.InvokeAsync(() =>
             {
                 if (!browser.IsDisposed) browser.Load(target);

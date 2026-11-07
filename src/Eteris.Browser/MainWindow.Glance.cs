@@ -146,7 +146,7 @@ public partial class MainWindow
             MenuHandler = new SilentMenuHandler(),
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn,
-                onNavigate: (_, _) => Task.CompletedTask, onBlocked: _ => { }),
+                onNavigate: (_, _) => Task.CompletedTask, onBlocked: _ => { }, isPrivate: IsPrivate),
         };
         // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
         browser.FrameLoadStart += (_, e) =>

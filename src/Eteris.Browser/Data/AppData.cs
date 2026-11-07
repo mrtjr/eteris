@@ -324,6 +324,8 @@ public static class AppData
                 LazyHidden.Value?.Clear(host);
             }
             catch (Exception) { }
+            SetHttpException(host, false);
+            Shields.ShieldEngine.Https.Forget(host);
         }
         SetShield(site, true);
         SetDark(site, false);
@@ -363,6 +365,27 @@ public static class AppData
         {
             if (on) LazyDark.Value?.Add(host);
             else LazyDark.Value?.Remove(host);
+        }
+        catch (Exception) { }
+    }
+
+    // «HTTPS primeiro»: hosts que o utilizador aceitou abrir sempre por http:// («Sempre para este site»).
+    private static readonly Lazy<StrictSiteStore?> LazyHttp = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "http_sites", exactHost: true); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsHttpException(string host) => LazyHttp.Value?.Contains(host) == true;
+
+    public static IReadOnlyList<string> HttpExceptions() => LazyHttp.Value?.All() ?? [];
+
+    public static void SetHttpException(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyHttp.Value?.Add(host);
+            else LazyHttp.Value?.Remove(host);
         }
         catch (Exception) { }
     }

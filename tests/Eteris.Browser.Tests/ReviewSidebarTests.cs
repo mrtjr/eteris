@@ -26,23 +26,23 @@ public sealed class ReviewSidebarTests : IDisposable
     // ---------- Página de erro e recuo para http:// (abas e sites fixados) ----------
 
     [Fact]
-    public void Recovery_SiteWithoutHttps_FallsBackToHttp()
+    public void Recovery_SiteWithoutHttps_ShowsTheInsecureWarning()
     {
-        // O site fixado como http://velho.pt foi subido para https:// e a ligação foi recusada: volta a http://.
+        // O site fixado como http://velho.pt foi subido para https:// e a ligação foi recusada: aviso, não recuo.
         var https = new HttpsFirst();
         var upgraded = https.Upgrade("http://velho.pt/forum")!;
-        Assert.Equal("http://velho.pt/forum", ErrorPage.Recovery(-102, upgraded, https.FallbackFor));
+        Assert.Equal(ErrorPage.InsecureUrl(-102, "http://velho.pt/forum"), ErrorPage.Recovery(-102, upgraded, https.FailedUpgrade));
     }
 
     [Fact]
     public void Recovery_OtherFailures_ShowTheErrorPage_AndAbortsShowNothing()
     {
         var https = new HttpsFirst();
-        Assert.Equal(ErrorPage.Url(-105, "https://nao-existe.pt/"), ErrorPage.Recovery(-105, "https://nao-existe.pt/", https.FallbackFor));
+        Assert.Equal(ErrorPage.Url(-105, "https://nao-existe.pt/"), ErrorPage.Recovery(-105, "https://nao-existe.pt/", https.FailedUpgrade));
         // Certificado inválido num site que nunca foi subido: página de erro, não http://.
-        Assert.Equal(ErrorPage.Url(-202, "https://mau.pt/"), ErrorPage.Recovery(-202, "https://mau.pt/", https.FallbackFor));
-        Assert.Null(ErrorPage.Recovery(-3, "https://a.pt/", https.FallbackFor));
-        Assert.Null(ErrorPage.Recovery(-105, ErrorPage.Url(-105, "https://a.pt/"), https.FallbackFor));
+        Assert.Equal(ErrorPage.Url(-202, "https://mau.pt/"), ErrorPage.Recovery(-202, "https://mau.pt/", https.FailedUpgrade));
+        Assert.Null(ErrorPage.Recovery(-3, "https://a.pt/", https.FailedUpgrade));
+        Assert.Null(ErrorPage.Recovery(-105, ErrorPage.Url(-105, "https://a.pt/"), https.FailedUpgrade));
     }
 
     // ---------- Atalhos com o foco num site fixado ----------

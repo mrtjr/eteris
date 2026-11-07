@@ -3,7 +3,7 @@ using CefSharp;
 namespace Eteris.Browser.Shields;
 
 public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-    Action? onCrashed = null, string? userAgent = null)
+    Action? onCrashed = null, string? userAgent = null, bool isPrivate = false)
     : CefSharp.Handler.RequestHandler
 {
     // Cabeçalhos de um pedido feito «como telemóvel» (vista móvel de um site fixado na barra lateral): o agente e
@@ -20,14 +20,14 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         int errorCode, string errorMessage)
         => onCrashed?.Invoke();
 
-    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent);
+    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
         => _resources;
 
     private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-        string? userAgent)
+        string? userAgent, bool isPrivate)
         : CefSharp.Handler.ResourceRequestHandler
     {
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
@@ -46,7 +46,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                     request.Url = clean;
                     return CefReturnValue.Continue;
                 }
-                if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url) is { } secure)
+                if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url, isPrivate) is { } secure)
                 {
                     request.Url = secure;
                     return CefReturnValue.Continue;

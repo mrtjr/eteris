@@ -11,7 +11,8 @@ public static class ShieldEngine
 
     public static AdblockEngine? Cosmetic => Current as AdblockEngine;
 
-    public static HttpsFirst Https { get; } = new();
+    // As exceções «Sempre para este site» (http:// sem aviso) vêm da base de dados, consultadas a cada navegação.
+    public static HttpsFirst Https { get; } = new(Data.AppData.IsHttpException);
 
     private static readonly string ScriptletsPath =
         System.IO.Path.Combine(AppContext.BaseDirectory, "Shields", "resources", "scriptlets.json");
