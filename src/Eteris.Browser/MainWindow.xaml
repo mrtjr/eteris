@@ -1486,6 +1486,9 @@
 
                                 <TextBlock x:Name="ShieldObservatoryLine" FontSize="12.5" Foreground="{DynamicResource TextBrush}" Margin="0,2,0,6"
                                            TextWrapping="Wrap" />
+                                <Button x:Name="ShieldObservatoryButton" Content="Abrir o Observatório  ›" Style="{StaticResource PillButton}"
+                                        HorizontalAlignment="Left" Margin="0,0,0,12" Click="ShieldObservatory_Click"
+                                        ToolTip="Quem está a observar esta página, ao vivo, agrupado por empresa" />
                                 <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />

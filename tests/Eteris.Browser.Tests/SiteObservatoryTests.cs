@@ -68,7 +68,7 @@ public class SiteObservatoryTests
     [Fact]
     public void Summary_NamesTheCompaniesTheShieldShows()
     {
-        Assert.Equal("Esta página contactou 5 domínios de terceiros: Google (3), Meta (1) e mais 1",
+        Assert.Equal("Esta página contactou 5 domínios de terceiros: Google (3), Meta (1)",
             SiteObservatory.Summary(SiteObservatory.ByCompany(Sample().Snapshot().ThirdParties)));
         Assert.Equal("Esta página não contactou outros sites", SiteObservatory.Summary([]));
         var o = new SiteObservatory();

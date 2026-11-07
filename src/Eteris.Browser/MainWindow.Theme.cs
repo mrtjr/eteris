@@ -44,6 +44,7 @@ public partial class MainWindow
         WindowEffects.Apply(this, BorderColor, darkMode: !UsesLight);
         ApplyTint();
         ResetShortcutsForTheme();
+        ResetObservatoryForTheme();
         // As páginas internas abertas são geradas com o tema: recarregam para o acompanhar.
         if (IsPrivate) return;
         foreach (var (tab, browser) in _browsers)

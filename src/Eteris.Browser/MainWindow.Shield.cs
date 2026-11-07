@@ -66,6 +66,7 @@ public partial class MainWindow
         ShieldObservatoryLine.Text = host is null ? string.Empty
             : "◉  " + SiteObservatory.Summary(SiteObservatory.ByCompany(tab?.Observatory.Snapshot().ThirdParties ?? []));
         ShieldObservatoryLine.Visibility = host is null ? Visibility.Collapsed : Visibility.Visible;
+        ShieldObservatoryButton.Visibility = ShieldObservatoryLine.Visibility;
         ShieldCheckHeaders.Text = "✓  Pedido «Não rastrear» e GPC enviados";
         ShieldCheckCookies.Text = PrivacyPreferences.ThirdPartyCookiesBlocked
             ? "✓  Cookies de terceiros bloqueados" : "✗  Cookies de terceiros permitidos";
@@ -106,6 +107,8 @@ public partial class MainWindow
         FillShieldPopup();
         ShieldPopup.IsOpen = !ShieldPopup.IsOpen;
     }
+
+    private void ShieldObservatory_Click(object sender, RoutedEventArgs e) => OpenObservatory();
 
     private void StrictToggle_Click(object sender, RoutedEventArgs e)
     {

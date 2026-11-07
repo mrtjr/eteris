@@ -475,6 +475,7 @@ public partial class MainWindow : Window
         }
 
         else if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
+        else if (key == Key.Escape && ObservatoryOpen) CloseObservatory();
         else if (key == Key.Escape && GlanceOpen) CloseGlance();
         // Ctrl+Z do Éteris: só aqui (teclas da moldura) e fora dos campos de texto — com o foco na página, o Ctrl+Z
         // nem passa por esta janela e a página desfaz o que é seu.
@@ -557,6 +558,7 @@ public partial class MainWindow : Window
             {
                 if (RadarOpen) CloseRadar();
                 else if (ShortcutsOpen) CloseShortcuts();
+                else if (ObservatoryOpen) CloseObservatory();
                 else if (_pageFullscreen) ExitPageFullscreen();
                 else if (Tabs.Active?.IsLoading == true) StopActive();
             });

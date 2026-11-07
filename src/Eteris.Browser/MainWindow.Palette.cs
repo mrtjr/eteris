@@ -168,6 +168,7 @@ public partial class MainWindow
                     ReloadActive();
                     UpdateShieldButton();
                 });
+            yield return new("\uEA18", "Observatório do site", "Quem está a observar esta página, ao vivo, por empresa", null, OpenObservatory);
         }
         yield return new("", "Capturar página inteira", "Guarda em Imagens › Éteris e copia a imagem", "Ctrl+Shift+S", () => CapturePage(true));
         yield return new("", "Guardar como PDF", "Guarda a página na pasta de transferências", null, SaveAsPdf);

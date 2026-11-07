@@ -210,8 +210,8 @@ public sealed class SiteObservatory
         var head = domains == 1 ? "Esta página contactou 1 domínio de terceiros" : $"Esta página contactou {domains} domínios de terceiros";
         if (named.Count == 0) return head;
         var shown = named.Take(2).Select(g => $"{g.Name} ({g.Domains.Count})").ToList();
-        var rest = groups.Count - shown.Count;
-        return head + ": " + string.Join(", ", shown) + (rest > 0 ? $" e mais {rest}" : string.Empty);
+        var rest = named.Count - shown.Count;
+        return head + ": " + string.Join(", ", shown) + (rest switch { 0 => string.Empty, 1 => " e mais 1 empresa", _ => $" e mais {rest} empresas" });
     }
 
     public static string KindLabel(ObservedKind kind) => kind switch
@@ -236,10 +236,14 @@ public sealed class SiteObservatory
         : label == "multimédia" ? label
         : label + "s";
 
+    // «1 de 1 pedido bloqueado», «3 de 5 pedidos bloqueados».
+    public static string BlockedOf(int blocked, int requests)
+        => requests == 1 ? $"{blocked} de 1 pedido bloqueado" : $"{blocked} de {requests} pedidos bloqueados";
+
     // Quem decidiu, em palavras.
     public static string VerdictText(DomainStat d) => d.Verdict switch
     {
-        ObservedVerdict.Blocked => d.Blocked == d.Requests ? "Bloqueado pelas listas do Escudo" : $"{d.Blocked} de {d.Requests} pedidos bloqueados pelas listas do Escudo",
+        ObservedVerdict.Blocked => d.Blocked == d.Requests ? "Bloqueado pelas listas do Escudo" : BlockedOf(d.Blocked, d.Requests) + " pelas listas do Escudo",
         ObservedVerdict.Strict => "Bloqueado pelo modo rigoroso deste site",
         ObservedVerdict.Cloaked => d.Detail is { } target ? $"Rastreador escondido (CNAME → {target}), bloqueado" : "Rastreador escondido (CNAME), bloqueado",
         ObservedVerdict.LocalNetwork => "Travado: a página quis falar com a sua rede local",
