@@ -42,7 +42,8 @@ public partial class MainWindow
         }
         // Depois do plano: uma aba ativada por ele já não desfaz a divisão reposta (ela fica à espera).
         if (restoredSplit is not null) RestoreSplitAtStartup(restoredSplit, planActivated);
-        else if (initialUrl is not null) Tabs.NewTab(initialUrl);
+        // A dona da sessão já abriu o endereço pelo plano de arranque; só as outras janelas o abrem aqui.
+        else if (Browser.StartupPages.OpensInitialUrlSeparately(_ownsSession, initialUrl)) Tabs.NewTab(initialUrl!);
         else if (Tabs.Tabs.Count == 0)
         {
             Tabs.NewTab(NewTabUrl);
