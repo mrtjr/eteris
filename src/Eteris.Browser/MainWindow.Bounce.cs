@@ -139,6 +139,7 @@ public partial class MainWindow
             {
                 await window.ClearSiteStorageAsync(site, open);
                 Bounces.MarkCleared(site);
+                Shields.PrivacyLedger.Count(Shields.PrivacyCategory.Forgotten, site);
                 cleared.Add(site);
             }
             SaveBounces();

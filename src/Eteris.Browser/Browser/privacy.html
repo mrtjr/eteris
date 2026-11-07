@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <meta name="color-scheme" content="dark">
-<title>Promessas de privacidade</title>
+<title>Privacidade</title>
 <style>
   :root {
     --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
@@ -42,6 +42,40 @@
   button { font: inherit; font-size: 13px; color: var(--text); cursor: pointer; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); }
   button:hover { background: rgba(255, 255, 255, .1); }
 
+  /* Relatório */
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin: 34px 0 12px; }
+  .rhead { display: flex; justify-content: space-between; align-items: center; margin: 34px 0 12px; }
+  .rhead h2 { margin: 0; }
+  .seg { display: flex; gap: 4px; padding: 3px; border-radius: 12px; border: 1px solid var(--line); }
+  .seg button { border: 0; padding: 5px 12px; border-radius: 9px; background: transparent; color: var(--muted); }
+  .seg button.on { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); }
+  .summary { font-size: 17px; line-height: 1.45; font-weight: 300; margin-bottom: 16px; }
+  .chart { display: flex; align-items: flex-end; gap: 4px; height: 110px; padding: 14px 16px 0; }
+  .bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+  .bar i { display: block; width: 100%; max-width: 34px; border-radius: 6px 6px 2px 2px; min-height: 3px;
+    background: linear-gradient(180deg, var(--accent-2), var(--accent)); transform-origin: bottom; animation: grow .5s ease-out both; }
+  .bar small { font-size: 10.5px; color: var(--faint); margin: 5px 0 8px; height: 13px; }
+  @keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .bar i { animation: none; } }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin: 12px 0; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+  .tile strong { display: block; font-size: 22px; font-weight: 600; }
+  .tile span { font-size: 12px; color: var(--muted); }
+  .tile.zero strong { color: var(--faint); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+  .cols .card { padding: 14px 18px; }
+  .cols h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .cols ol { list-style: none; padding: 0; }
+  .cols li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 4px 0; }
+  .cols li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cols li em { font-style: normal; color: var(--faint); font-size: 12px; margin-left: 6px; }
+  .cols li b { font-weight: 500; color: var(--muted); }
+  .cols .empty { color: var(--faint); font-size: 12.5px; }
+  .rfoot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; color: var(--faint); font-size: 12.5px; }
+  .rfoot button.danger { border-color: color-mix(in srgb, var(--bad) 50%, transparent); color: var(--bad); }
+  .note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+
   /* Tema claro (o servidor acrescenta class="light" ao <html>) */
   html.light { --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0; --line: rgba(20, 24, 40, .1); --card: rgba(255, 255, 255, .8); --ok: #059669; --bad: #e11d48; }
   html.light .mark.off { background: rgba(20, 24, 40, .06); }
@@ -52,9 +86,29 @@
 <body>
 <div class="glow"></div>
 <main>
-  <h1><b>Promessas</b> de privacidade</h1>
-  <p class="lead">O que o Éteris garante, verificado agora no estado real do motor e desta página — não é uma lista escrita
-    à mão. Uma promessa por cumprir aparece com ✘.</p>
+  <h1><b>Privacidade</b>, à vista</h1>
+  <p class="lead">O que o Escudo fez por si, contado só neste computador, e o que o Éteris garante, verificado agora no
+    estado real do motor e desta página.</p>
+
+  <section id="relatorio" aria-labelledby="r-title">
+    <div class="rhead"><h2 id="r-title">Relatório</h2>
+      <div class="seg" role="tablist" aria-label="Período">
+        <button role="tab" data-range="week" class="on" aria-selected="true">7 dias</button>
+        <button role="tab" data-range="month" aria-selected="false">30 dias</button>
+      </div>
+    </div>
+    <p class="summary" id="r-summary"></p>
+    <div class="card"><div class="chart" id="r-chart" role="img"></div></div>
+    <div class="tiles" id="r-tiles"></div>
+    <div class="cols">
+      <div class="card"><h3>Empresas que mais tentaram</h3><ol id="r-companies"></ol></div>
+      <div class="card"><h3>Rastreadores mais vistos</h3><ol id="r-trackers"></ol></div>
+    </div>
+    <div class="rfoot"><span>Só números agregados, guardados 35 dias neste computador: nenhum site que visitou, nada sai daqui.</span>
+      <button id="r-clear" class="danger">Apagar o relatório…</button></div>
+  </section>
+
+  <h2>Promessas</h2>
   <div class="score" id="score"></div>
   <div class="card" id="list" role="list"></div>
   <footer><span id="when"></span><button id="again">Verificar de novo</button></footer>
@@ -107,6 +161,54 @@
   score.append(strong, tail);
   document.getElementById('when').textContent = 'Verificado às ' + new Date().toLocaleTimeString('pt-PT');
   document.getElementById('again').addEventListener('click', () => location.reload());
+
+  // Relatório: 7 ou 30 dias, só a partir dos agregados que o Éteris mandou na página.
+  const report = data.report;
+  const section = document.getElementById('relatorio');
+  const fmt = n => n.toLocaleString('pt-PT');
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  function showReport(key) {
+    const r = report[key];
+    document.querySelectorAll('.seg button').forEach(b => { const on = b.dataset.range === key; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    document.getElementById('r-summary').textContent = r.summary;
+    const chart = document.getElementById('r-chart'); chart.replaceChildren();
+    const max = Math.max(1, ...r.perDay);
+    const today = new Date(report.today + 'T12:00:00');
+    r.perDay.forEach((n, i) => {
+      const day = new Date(today); day.setDate(today.getDate() - (r.days - 1 - i));
+      const bar = el('div', 'bar'); const fill = el('i'); fill.style.height = (100 * n / max) + '%'; fill.style.animationDelay = (i * 18) + 'ms';
+      const label = day.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' });
+      bar.title = label + ': ' + fmt(n) + (n === 1 ? ' pedido travado' : ' pedidos travados');
+      bar.append(fill, el('small', '', r.days <= 7 ? day.toLocaleDateString('pt-PT', { weekday: 'short' }) : (i % 5 === 4 || i === r.days - 1 ? String(day.getDate()) : '')));
+      chart.append(bar);
+    });
+    chart.setAttribute('aria-label', 'Pedidos travados por dia, ' + r.perDay.map(fmt).join(', '));
+    const tiles = document.getElementById('r-tiles'); tiles.replaceChildren();
+    for (const c of r.categories) { const t = el('div', 'tile' + (c.count ? '' : ' zero')); t.append(el('strong', '', fmt(c.count)), el('span', '', c.label)); tiles.append(t); }
+    const list = (id, items, render, empty) => {
+      const ol = document.getElementById(id); ol.replaceChildren();
+      if (!items.length) { ol.append(el('li', 'empty', empty)); return; }
+      for (const it of items) ol.append(render(it));
+    };
+    list('r-companies', r.companies, c => { const li = el('li'); li.append(el('span', '', c.name), el('b', '', fmt(c.count))); return li; }, 'Ainda nenhuma empresa conhecida.');
+    list('r-trackers', r.trackers, t => {
+      const li = el('li'); const name = el('span', '', t.domain); if (t.company) name.append(el('em', '', t.company));
+      li.append(name, el('b', '', fmt(t.count))); return li;
+    }, 'Ainda nenhum rastreador travado.');
+  }
+  if (!report) {
+    section.replaceChildren(el('h2', '', 'Relatório'), el('p', 'note', 'Na janela privada o relatório não é mostrado nem alimentado: o que acontece aqui acaba com a sessão privada.'));
+  } else {
+    showReport('week');
+    document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => showReport(b.dataset.range)));
+    // Apagar pede confirmação no próprio botão (dois cliques), sem diálogo.
+    const clear = document.getElementById('r-clear');
+    clear.addEventListener('click', () => {
+      if (clear.dataset.armed) { location.replace('eteris://privacy/clear-report?t=' + report.token); return; }
+      clear.dataset.armed = '1'; clear.textContent = 'Apagar mesmo: o relatório e o painel semanal da nova aba';
+      setTimeout(() => { delete clear.dataset.armed; clear.textContent = 'Apagar o relatório…'; }, 5000);
+    });
+  }
 </script>
 </body>
 </html>

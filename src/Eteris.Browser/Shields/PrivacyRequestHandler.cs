@@ -81,7 +81,12 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         // Observatório do site (Shields/SiteObservatory.cs): cada sub-recurso com a decisão que teve. Um incremento num
         // dicionário por pedido — o resto só se calcula quando o painel abre.
         private void Observe(string url, ResourceType type, ObservedVerdict verdict, string? detail = null)
-            => observatory?.Record(url, type, verdict, detail);
+        {
+            observatory?.Record(url, type, verdict, detail);
+            // Relatório de privacidade: só os bloqueios, só o domínio do rastreador (a rede local nem isso).
+            if (isPrivate || PrivacyCategory.Of(verdict) is not { } category) return;
+            PrivacyLedger.Count(category, verdict == ObservedVerdict.LocalNetwork ? null : detail ?? SiteObservatory.HostOf(url).ToString());
+        }
 
         // Desmascarar CNAME (Shields/CnameUncloak.cs) para um pedido que as listas deixaram passar. Com o nome já na
         // cache decide-se logo; senão a consulta corre fora da thread de rede e o pedido espera no máximo
@@ -172,6 +177,8 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         {
             if (!_skips.TryRemove(browser.Identifier, out var pending) || DateTime.UtcNow - pending.At > TimeSpan.FromSeconds(10)) return;
             onTrackingSkipped?.Invoke(pending.Hosts);
+            if (!isPrivate)
+                foreach (var host in pending.Hosts) PrivacyLedger.Count(PrivacyCategory.Debounce, host);
         }
 
         // Um redirecionamento do servidor para um salto conhecido (um encurtador que manda para l.facebook.com/l.php?u=…)

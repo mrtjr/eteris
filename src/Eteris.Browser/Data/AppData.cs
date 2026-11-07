@@ -57,8 +57,55 @@ public static class AppData
     public static void FlushShieldStats()
     {
         var pending = Shields.ShieldStats.TakePending();
-        if (pending == 0) return;
-        try { LazyDaily.Value?.Add(DateTime.Today, pending); }
+        if (pending > 0)
+        {
+            try { LazyDaily.Value?.Add(DateTime.Today, pending); }
+            catch (Exception) { }
+        }
+        FlushPrivacyEvents();
+    }
+
+    // Relatório de privacidade (eteris://privacy/): agregados por dia, categoria e domínio do rastreador.
+    private static readonly Lazy<PrivacyEventsStore?> LazyPrivacyEvents = new(() =>
+    {
+        try { return new PrivacyEventsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    private static DateOnly _privacyPruned;
+
+    private static void FlushPrivacyEvents()
+    {
+        var events = Shields.PrivacyLedger.Take();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        try
+        {
+            if (LazyPrivacyEvents.Value is not { } store) return;
+            store.Add(today, events);
+            if (_privacyPruned == today) return;
+            store.Prune(today);
+            _privacyPruned = today;
+        }
+        catch (Exception) { }
+    }
+
+    public static IReadOnlyList<Shields.PrivacyEvent> PrivacyEvents(int days)
+    {
+        FlushShieldStats();
+        try { return LazyPrivacyEvents.Value?.Since(DateOnly.FromDateTime(DateTime.Today).AddDays(-(days - 1))) ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    // «Apagar o relatório»: os agregados do relatório e o painel semanal da nova aba (os mesmos números).
+    public static void ClearPrivacyReport()
+    {
+        Shields.PrivacyLedger.Take();
+        Shields.ShieldStats.TakePending();
+        try
+        {
+            LazyPrivacyEvents.Value?.Clear();
+            LazyDaily.Value?.Clear();
+        }
         catch (Exception) { }
     }
 

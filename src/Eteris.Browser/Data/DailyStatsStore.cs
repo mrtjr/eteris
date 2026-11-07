@@ -49,6 +49,14 @@ public sealed class DailyStatsStore
         return counts;
     }
 
+    public void Clear()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM shield_daily";
+        command.ExecuteNonQuery();
+    }
+
     private static string Key(DateTime day) => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private SqliteConnection Open()

@@ -176,12 +176,54 @@ public static class PrivacyPage
             settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision);
     }
 
-    public static string Render(State state)
+    // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.
+    public const string ReportClearedRedirect =
+        "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0;url=eteris://privacy/#relatorio\"><title>Relatório apagado</title>";
+
+    public static string CategoryLabel(string category) => category switch
+    {
+        PrivacyCategory.Lists => "Rastreadores e anúncios (listas)",
+        PrivacyCategory.Strict => "Modo rigoroso",
+        PrivacyCategory.Cloaked => "Escondidos por CNAME",
+        PrivacyCategory.User => "Bloqueados por si",
+        PrivacyCategory.LocalNetwork => "Pedidos à rede local",
+        PrivacyCategory.Debounce => "Saltos de rastreio removidos",
+        PrivacyCategory.Forgotten => "Sites de salto esquecidos",
+        _ => category,
+    };
+
+    private static readonly string[] CategoryOrder =
+    [
+        PrivacyCategory.Lists, PrivacyCategory.Cloaked, PrivacyCategory.Strict, PrivacyCategory.User, PrivacyCategory.LocalNetwork,
+        PrivacyCategory.Debounce, PrivacyCategory.Forgotten,
+    ];
+
+    // Os dados do relatório para a página (7 e 30 dias); null na janela privada.
+    public static object? ReportJson(IReadOnlyList<PrivacyEvent>? events, DateOnly today)
+    {
+        if (events is null) return null;
+        object Range(int days)
+        {
+            var r = PrivacyReport.Build(events, today, days);
+            return new
+            {
+                days, blocked = r.Blocked, summary = r.Summary, perDay = r.PerDay,
+                categories = CategoryOrder.Select(c => new { key = c, label = CategoryLabel(c), count = r.ByCategory.GetValueOrDefault(c) }),
+                companies = r.TopCompanies.Select(c => new { name = c.Name, count = c.Count }),
+                trackers = r.TopTrackers.Select(t => new { domain = t.Domain, company = t.Company, count = t.Count }),
+                cloaked = r.CloakedExamples,
+            };
+        }
+        return new { today = today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), token = InternalPages.Token, week = Range(7), month = Range(30) };
+    }
+
+    public static string Render(State state, IReadOnlyList<PrivacyEvent>? events = null, DateOnly? today = null)
     {
         var promises = Promises(state);
         var data = new
         {
             promises = promises.Select(p => new { id = p.Id, title = p.Title, detail = p.Detail, kept = p.Kept, live = p.Live, fix = p.Fix }),
+            report = ReportJson(events, today ?? DateOnly.FromDateTime(DateTime.Today)),
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
