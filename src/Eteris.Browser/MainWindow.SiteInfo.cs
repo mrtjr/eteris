@@ -56,6 +56,8 @@ public partial class MainWindow
         SiteInfoPermissions.ItemsSource = rows;
         SiteInfoNoPermissions.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
+        FillForgetSection(info);
+
         var count = tab?.BlockedCount ?? 0;
         SiteInfoTrackers.Text = count switch
         {

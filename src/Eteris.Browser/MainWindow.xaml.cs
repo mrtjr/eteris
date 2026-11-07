@@ -57,6 +57,7 @@ public partial class MainWindow : Window
         WatchMouseAndDrops();
         TrackActivation();
         RememberWhenClosing();
+        WatchForgetOnClose();
         StartAudioWatch();
         WatchMiniBar();
         WatchOmniboxMenu();

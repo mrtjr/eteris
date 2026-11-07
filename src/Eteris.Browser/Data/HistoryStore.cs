@@ -180,10 +180,40 @@ public sealed class HistoryStore
             ("$v", new DateTimeOffset(DateTime.SpecifyKind(sinceUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds()));
     }
 
+    // «Triturar» e «Esquecer ao fechar»: as visitas a um site (domínio registável, ver SiteScope), em todas as datas.
+    public int CountSite(string site)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM history WHERE eteris_site(url) = $s";
+        command.Parameters.AddWithValue("$s", site);
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    public void DeleteSite(string site)
+        => DeleteHistory("DELETE FROM history WHERE eteris_site(url) = $s; " + DeleteOrphanIconsSql + ";", ("$s", site));
+
+    // Endereços distintos do site no histórico (para saber que origens apagar do armazenamento).
+    public IReadOnlyList<string> SiteUrls(string site, int limit = 500)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT url FROM history WHERE eteris_site(url) = $s LIMIT $l";
+        command.Parameters.AddWithValue("$s", site);
+        command.Parameters.AddWithValue("$l", limit);
+        using var reader = command.ExecuteReader();
+        var urls = new List<string>();
+        while (reader.Read()) urls.Add(reader.GetString(0));
+        return urls;
+    }
+
     private void DeleteHistory(string sql, params (string Name, object Value)[] parameters)
     {
         using var connection = Open();
         connection.CreateFunction<string, string?>("site_icon_key", SiteIconKey, isDeterministic: true);
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
         using var transaction = connection.BeginTransaction();
         using var command = connection.CreateCommand();
         command.Transaction = transaction;

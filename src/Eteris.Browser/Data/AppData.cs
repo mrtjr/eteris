@@ -338,6 +338,7 @@ public static class AppData
             SetHttpException(host, false);
             Shields.ShieldEngine.Https.Forget(host);
         }
+        SetForgetOnClose(site, false);
         SetShield(site, true);
         SetDark(site, false);
         SetStrict(site, false);
@@ -399,6 +400,37 @@ public static class AppData
             else LazyHttp.Value?.Remove(host);
         }
         catch (Exception) { }
+    }
+
+    // «Esquecer este site ao fechar»: sites (domínio registável) cujos dados se apagam ao fechar a última aba.
+    private static readonly Lazy<StrictSiteStore?> LazyForget = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "forget_sites"); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsForgetOnClose(string host) => LazyForget.Value?.Contains(host) == true;
+
+    public static IReadOnlyList<string> ForgetOnCloseSites() => LazyForget.Value?.All() ?? [];
+
+    public static void SetForgetOnClose(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyForget.Value?.Add(host);
+            else LazyForget.Value?.Remove(host);
+        }
+        catch (Exception) { }
+    }
+
+    // As permissões dadas ao site (com e sem www), para «Triturar» e «Esquecer ao fechar».
+    public static void ForgetSitePermissions(string site)
+    {
+        foreach (var host in new[] { site, "www." + site })
+        {
+            try { LazyPermissions.Value?.Forget(host); }
+            catch (Exception) { }
+        }
     }
 
     // Sites que abrem no motor de vídeo (precisam de H.264/AAC).

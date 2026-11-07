@@ -1130,6 +1130,37 @@
                                     <TextBlock x:Name="SiteInfoTrackers" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" />
                                     <Button x:Name="SiteInfoClear" Content="Apagar cookies e dados deste site" Style="{StaticResource PillButton}"
                                             HorizontalAlignment="Left" Margin="0,14,0,0" Click="SiteInfoClear_Click" />
+
+                                    <!-- Esquecer ao fechar e Triturar: o site inteiro (domínio registável), nunca outro -->
+                                    <Grid x:Name="SiteInfoForgetRow" Margin="0,16,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Esquecer este site ao fechar" FontSize="13" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="SiteInfoForgetHint" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}"
+                                                       TextWrapping="Wrap" Margin="0,2,8,0" />
+                                        </StackPanel>
+                                        <CheckBox x:Name="SiteInfoForgetToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                                  VerticalAlignment="Center" Click="SiteInfoForgetToggle_Click" />
+                                    </Grid>
+                                    <Button x:Name="SiteInfoShred" Content="Triturar agora…" Style="{StaticResource PillButton}"
+                                            HorizontalAlignment="Left" Margin="0,12,0,0" Click="SiteInfoShred_Click"
+                                            ToolTip="Fecha as abas do site e apaga já os seus dados (com confirmação)" />
+                                    <Border x:Name="SiteInfoShredConfirm" Visibility="Collapsed" CornerRadius="12" Padding="12" Margin="0,10,0,0"
+                                            Background="{DynamicResource PressedBrush}" BorderBrush="#66FF7A90" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock x:Name="SiteInfoShredText" FontSize="12.5" TextWrapping="Wrap" LineHeight="18"
+                                                       Foreground="{DynamicResource TextBrush}" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                <Button x:Name="SiteInfoShredGo" Content="Triturar" Style="{StaticResource PrimaryPillButton}"
+                                                        Click="SiteInfoShredConfirm_Click" />
+                                                <Button Content="Cancelar" Style="{StaticResource PillButton}" Margin="8,0,0,0"
+                                                        Click="SiteInfoShredCancel_Click" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
