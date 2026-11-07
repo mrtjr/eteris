@@ -1,8 +1,8 @@
 namespace Eteris.Browser.Shields;
 
-// Interruptores de linha de comandos do motor que cumprem promessas do Éteris. Os nomes foram confirmados no
-// libcef.dll do CEF 156 (um nome desconhecido seria ignorado em silêncio, por isso cada um tem teste e aparece em
-// eteris://privacy/ com o que faz).
+// Interruptores de linha de comandos do motor que cumprem promessas do Éteris. Um nome que não existe é ignorado em
+// silêncio pelo Chromium: cada nome destas listas tem de ser uma base::Feature do libcef.dll em uso (o teste
+// EngineFeatureNamesTests procura a estrutura no binário) e aparece em eteris://privacy/ com o que faz.
 public static class EngineHardening
 {
     // As APIs de publicidade do Chromium («Privacy Sandbox»): nenhum site pode pedir ao Éteris um resumo dos
@@ -12,8 +12,6 @@ public static class EngineHardening
         ("BrowsingTopics", "Topics: o navegador resumia os seus interesses para os anunciantes"),
         ("Fledge", "Protected Audience (FLEDGE): leilões de anúncios feitos dentro do navegador"),
         ("ConversionMeasurement", "Attribution Reporting: medir que anúncio levou a uma compra"),
-        ("AttributionReporting", "Attribution Reporting (cabeçalhos e atributos attributionsrc)"),
-        ("SharedStorageAPI", "Shared Storage: memória partilhada entre sites para anúncios"),
         ("FencedFrames", "Fenced Frames: as molduras onde aparecem os anúncios dos leilões"),
         // Estes dois forçariam as APIs ligadas mesmo sem consentimento: ficam explicitamente desligados.
         ("PrivacySandboxAdsAPIsOverride", "nada força as APIs de anúncios a ficar ligadas"),
@@ -21,16 +19,18 @@ public static class EngineHardening
     ];
 
     // As mesmas APIs vistas pelo JavaScript (funcionalidades de execução do Blink): sem elas, document.browsingTopics,
-    // navigator.joinAdInterestGroup, window.sharedStorage e <fencedframe> não existem nas páginas.
+    // navigator.joinAdInterestGroup, window.sharedStorage, attributionsrc e <fencedframe> não existem nas páginas.
+    // (Attribution Reporting e Shared Storage só existem aqui: no CEF 156 não são base::Feature do motor.)
     public static readonly IReadOnlyList<string> AdBlinkFeatures =
         ["TopicsAPI", "AdInterestGroupAPI", "Fledge", "AttributionReporting", "SharedStorageAPI", "FencedFrames"];
 
     // Frascos por site de topo: o que um terceiro guarda ou aprende embutido num site não serve noutro site
-    // (ligados explicitamente, mesmo que a versão do motor já os traga ligados).
+    // (ligados explicitamente, mesmo que a versão do motor já os traga ligados). Os cookies «Partitioned» (CHIPS) já
+    // não têm interruptor no CEF 156 (estão sempre ligados); o filtro de cookies do Éteris deixa-os no frasco do site
+    // de topo (PartitionedCookieJar).
     public static readonly IReadOnlyList<(string Feature, string What)> Partitioning =
     [
         ("ThirdPartyStoragePartitioning", "localStorage, IndexedDB e caches de um terceiro separados por site de topo"),
-        ("PartitionedCookies", "cookies «Partitioned» (CHIPS) guardados num frasco por site de topo"),
         ("SplitCacheByNetworkIsolationKey", "cache HTTP separada por site de topo: a cache não denuncia o que visitou noutro site"),
         ("PartitionConnectionsByNetworkIsolationKey", "ligações à rede separadas por site de topo"),
     ];

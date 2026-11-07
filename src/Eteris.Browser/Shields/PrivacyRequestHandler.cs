@@ -441,6 +441,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             }
             if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url, isPrivate) is { } secure)
             {
+                WatchUpgrade(browser, secure, request.Url);
                 Rewrite(browser, request, secure);
                 return CefReturnValue.Continue;
             }
@@ -451,6 +452,89 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             onMainFrameRequest?.Invoke();
             ReportSkips(browser);
             return CefReturnValue.Continue;
+        }
+
+        // Recuo rápido do «HTTPS primeiro»: se ao fim de HttpsFirst.FallbackAfter o https:// subido ainda não respondeu e
+        // esta continua a ser a navegação do separador, o motor pergunta ao http:// (HEAD, sem cookies, pelo contexto
+        // da aba: DNS cifrado, proxy, janela privada). Se o site responder por http://, a navegação para e aparece logo
+        // o aviso «Este site não oferece ligação segura» (tempo esgotado, -7), em vez de ~21 s em branco.
+        private void WatchUpgrade(IBrowser browser, string secure, string original)
+        {
+            var id = browser.Identifier;
+            bool StillWaiting() => !browser.IsDisposed && ShieldEngine.Https.IsPending(secure, isPrivate)
+                                   && _navigatingTo.TryGetValue(id, out var to) && to == secure;
+            Task.Delay(HttpsFirst.FallbackAfter).ContinueWith(_ =>
+            {
+                try
+                {
+                    if (!StillWaiting()) return;
+                    Cef.UIThreadTaskFactory.StartNew(() =>
+                    {
+                        try
+                        {
+                            if (!StillWaiting()) return;
+                            using var frame = browser.MainFrame;
+                            if (frame is null || !frame.IsValid) return;
+                            using var probe = frame.CreateRequest(false);
+                            probe.Url = original;
+                            probe.Method = "HEAD";
+                            probe.Flags = UrlRequestFlags.StopOnRedirect | UrlRequestFlags.SkipCache;
+                            var client = new HttpProbe((status, location) =>
+                            {
+                                if (!HttpsFirst.ProbeSaysInsecure(status, location, original)) return;
+                                Cef.UIThreadTaskFactory.StartNew(() =>
+                                {
+                                    try
+                                    {
+                                        if (!StillWaiting() || ShieldEngine.Https.FailedUpgrade(secure, isPrivate) is not { } http) return;
+                                        browser.StopLoad();
+                                        using var main = browser.MainFrame;
+                                        main?.LoadUrl(ErrorPage.InsecureUrl(-7, http));
+                                    }
+                                    catch (Exception) { }
+                                });
+                            });
+                            client.Start(frame.CreateUrlRequest(probe, client));
+                        }
+                        catch (Exception) { }
+                    });
+                }
+                catch (Exception) { }
+            }, TaskScheduler.Default);
+        }
+
+        // A sondagem ao http://: só o estado e o Location (o pedido é HEAD; nada a ler do corpo).
+        private sealed class HttpProbe(Action<int, string?> onDone) : IUrlRequestClient
+        {
+            private IUrlRequest? _request;
+            private int _done;
+
+            public void Start(IUrlRequest request) => _request = request;
+
+            public void OnRequestComplete(IUrlRequest request)
+            {
+                if (Interlocked.Exchange(ref _done, 1) == 1) return;
+                var status = 0;
+                string? location = null;
+                try
+                {
+                    var response = request.Response;
+                    status = response?.StatusCode ?? 0;
+                    location = response?.GetHeaderByName("Location");
+                }
+                catch (Exception) { }
+                _request = null;
+                try { onDone(status, location); }
+                catch (Exception) { }
+            }
+
+            public bool GetAuthCredentials(bool isProxy, string host, int port, string realm, string scheme, IAuthCallback callback) => false;
+
+            public void OnDownloadData(IUrlRequest request, System.IO.Stream data) { }
+
+            public void OnDownloadProgress(IUrlRequest request, long current, long total) { }
+
+            public void OnUploadProgress(IUrlRequest request, long current, long total) { }
         }
 
         internal static bool IsNetwork(string url)

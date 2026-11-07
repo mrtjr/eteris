@@ -13,8 +13,6 @@ public class EngineHardeningTests
     [InlineData("BrowsingTopics")]
     [InlineData("Fledge")]
     [InlineData("ConversionMeasurement")]
-    [InlineData("AttributionReporting")]
-    [InlineData("SharedStorageAPI")]
     [InlineData("FencedFrames")]
     [InlineData("PrivacySandboxAdsAPIsOverride")]
     public void Build_DisablesTheChromiumAdApis(string feature) => Assert.Contains(feature, Switch("disable-features"));

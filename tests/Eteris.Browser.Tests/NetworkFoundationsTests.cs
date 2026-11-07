@@ -41,7 +41,6 @@ public class NetworkFoundationsTests
 
     [Theory]
     [InlineData("ThirdPartyStoragePartitioning")]
-    [InlineData("PartitionedCookies")]
     [InlineData("SplitCacheByNetworkIsolationKey")]
     [InlineData("PartitionConnectionsByNetworkIsolationKey")]
     public void Build_PartitionsByTopLevelSite(string feature)

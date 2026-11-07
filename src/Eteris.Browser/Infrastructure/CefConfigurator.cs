@@ -44,7 +44,8 @@ public static class CefConfigurator
                     "OptimizationHints", "OptimizationHintsFetching", "OptimizationGuideModelDownloading",
                     "OptimizationGuideOnDeviceModel", "OnDeviceModelPerformanceParams",
                     // O «HTTPS primeiro» é do Éteris (Shields/HttpsFirst.cs, com aviso): o do Chromium subia o pedido
-                    // antes de o tratador o ver e, ao falhar, dava «tempo esgotado» (-7) sem aviso nem recuo.
+                    // antes de o tratador o ver e recuava em silêncio para http://. O recuo rápido (~3 s) que ele tinha
+                    // é agora do Éteris: PrivacyRequestHandler.WatchUpgrade sonda o http:// e mostra o aviso (-7).
                     "HttpsUpgrades",
                 }
                 .Where(f => !string.IsNullOrEmpty(f)));

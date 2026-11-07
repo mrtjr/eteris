@@ -14,6 +14,11 @@ public sealed class HttpsFirst(Func<string, bool>? isException = null, Func<Date
     // pelo tempo esgotado do sistema leva ~21 s; um https:// aberto mais tarde à mão é só um https://).
     public static readonly TimeSpan UpgradeWindow = TimeSpan.FromMinutes(2);
 
+    // Quanto espera o https:// subido por uma resposta antes de ir ver se o http:// responde (o recuo rápido do Chrome
+    // e do Firefox, ~3 s). Sem isto, um site só http:// com a porta 443 a descartar pacotes deixava a aba ~21 s em
+    // branco (o tempo esgotado do Windows) antes do aviso.
+    public static readonly TimeSpan FallbackAfter = TimeSpan.FromSeconds(3);
+
     // Depois de a falha ser tratada a marca sai, mas outra aba do mesmo endereço a falhar quase ao mesmo tempo (uma
     // reposta da sessão e outra nova) ainda tem direito ao aviso.
     public static readonly TimeSpan SiblingWindow = TimeSpan.FromSeconds(15);
@@ -53,6 +58,25 @@ public sealed class HttpsFirst(Func<string, bool>? isException = null, Func<Date
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
             _upgraded.TryRemove(Key(uri.AbsoluteUri, isPrivate), out _);
+    }
+
+    // O https:// subido ainda não respondeu (nem falhou, nem foi tratado).
+    public bool IsPending(string secureUrl, bool isPrivate = false)
+        => Uri.TryCreate(secureUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+           && _upgraded.TryGetValue(Key(uri.AbsoluteUri, isPrivate), out var at) && _clock() - at <= UpgradeWindow;
+
+    // A resposta da sondagem ao http:// (pedido HEAD sem cookies, pelo próprio motor) quando o https:// subido não
+    // respondeu a tempo: o site responde por http:// — o aviso aparece já, como depois de uma falha. Um
+    // redirecionamento para o https:// do mesmo site quer dizer que o site fala HTTPS e só está lento: continua-se à
+    // espera. Sem resposta (0) também: se o https:// falhar, o aviso chega pela falha.
+    public static bool ProbeSaysInsecure(int status, string? location, string httpUrl)
+    {
+        if (status <= 0) return false;
+        if (status is >= 300 and < 400 && !string.IsNullOrWhiteSpace(location) && Uri.TryCreate(httpUrl, UriKind.Absolute, out var from)
+            && Uri.TryCreate(from, location.Trim(), out var to) && to.Scheme == Uri.UriSchemeHttps
+            && Data.SiteScope.OfHost(to.Host) == Data.SiteScope.OfHost(from.Host))
+            return false;
+        return true;
     }
 
     // O endereço http:// original quando foi o Éteris a subir este pedido para https:// há pouco (null se o site foi
@@ -96,7 +120,7 @@ public sealed class HttpsFirst(Func<string, bool>? isException = null, Func<Date
     }
 
     // As falhas do https:// subido que querem dizer «este site não fala HTTPS» (o http:// ainda pode funcionar):
-    // ligação (-1xx), certificado (-2xx), tempo esgotado (-7) e respostas que só o servidor https:// estraga
+    // ligação (-1xx), certificado (-2xx), tempo esgotado (-7, também o do recuo rápido do Éteris) e respostas que só o servidor https:// estraga
     // (redireciona de volta para http:// sem fim, responde vazio ou malformado). Não contam as que também impediriam o
     // http://: o nome não existe ou não resolve, o computador está sem rede, o endereço é inalcançável, o proxy
     // falhou — essas dão a página de erro com o endereço que a pessoa abriu.
