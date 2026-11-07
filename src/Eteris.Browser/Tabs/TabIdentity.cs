@@ -6,6 +6,7 @@ namespace Eteris.Browser.Tabs;
 public static class TabIdentity
 {
     public const int MaxNameLength = 60;
+    public const int MaxNoteLength = 140;
 
     // Emojis do seletor: um por tipo de tarefa, todos de uma só forma (sem variantes de pele) para caberem no ícone.
     public static readonly string[] Emojis =
@@ -18,6 +19,15 @@ public static class TabIdentity
         var text = string.Join(' ', raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (text.Length == 0) return null;
         return text.Length <= MaxNameLength ? text : text[..MaxNameLength].TrimEnd();
+    }
+
+    // A nota «porque abri isto?»: uma frase curta, numa linha.
+    public static string? NormalizeNote(string? raw)
+    {
+        if (raw is null) return null;
+        var text = string.Join(' ', raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (text.Length == 0) return null;
+        return text.Length <= MaxNoteLength ? text : text[..MaxNoteLength].TrimEnd();
     }
 
     // Só os emojis do seletor: o ícone da aba tem 16 px e qualquer outro texto ficaria ilegível.

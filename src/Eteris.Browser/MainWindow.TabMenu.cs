@@ -39,6 +39,7 @@ public partial class MainWindow
             .With(menu => AddGroupItems(menu, tab))
             .Separator()
             .Item("", "Mudar o nome…", () => RenameTab(tab, (UIElement)sender))
+            .Item("", tab.HasNote ? "Editar a nota…" : "Escrever nota…", () => RenameTab(tab, (UIElement)sender, focusNote: true))
             .Item("", tab.IsPinned ? "Desafixar aba" : "Fixar aba", () => Tabs.TogglePin(tab))
             .Item("", "Duplicar", () => Tabs.NewTab(tab.Address))
             .Item(tab.IsMuted ? "" : "", tab.IsMuted ? "Reativar o som" : "Silenciar aba", () => ToggleMute(tab))

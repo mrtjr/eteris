@@ -8,11 +8,11 @@ public sealed record Session(IReadOnlyList<string> Urls, int ActiveIndex, IReadO
     SessionSplit? Split = null, IReadOnlyList<SessionTabMeta>? Metas = null);
 
 // O que o utilizador deu à aba (Tabs/TabIdentity.cs): nome próprio, emoji e cor do ícone; tudo opcional.
-public sealed record SessionTabMeta(string? Name = null, string? Emoji = null, int? Color = null)
+public sealed record SessionTabMeta(string? Name = null, string? Emoji = null, int? Color = null, string? Note = null)
 {
     public static readonly SessionTabMeta Empty = new();
 
-    public bool IsEmpty => Name is null && Emoji is null && Color is null;
+    public bool IsEmpty => Name is null && Emoji is null && Color is null && Note is null;
 }
 
 // Ecrã dividido gravado na sessão: índices das duas abas (na lista gravada) e a orientação («side» / «stacked»).

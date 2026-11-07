@@ -113,6 +113,8 @@ public partial class MainWindow
         {
             yield return new("", "Mudar o nome da aba…", tab.CustomTitle is null ? "Nome próprio, emoji e cor para esta aba" : $"Agora «{tab.CustomTitle}»", null,
                 () => RenameTab(tab, Omnibox));
+            yield return new("", tab.HasNote ? "Editar a nota da aba…" : "Escrever nota na aba…",
+                tab.Note ?? "«Porque abri isto?» — fica no cartão da aba, no Radar e nas sessões", null, () => RenameTab(tab, Omnibox, focusNote: true));
             yield return new("", "Fechar aba", tab.Title, "Ctrl+W", () => CloseTab(tab));
             yield return new("", "Duplicar aba", tab.Title, null, () => Tabs.NewTab(address));
             yield return new("", "Recarregar página", tab.Title, "F5", () => ReloadActive());

@@ -89,6 +89,8 @@
                                 <TextBlock x:Name="PageTitle" Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0"
                                            TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0" />
+                                <TextBlock x:Name="Note" Text="{Binding Note, StringFormat=✎ {0}}" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                           Margin="0,8,0,0" TextWrapping="Wrap" FontStyle="Italic" />
                                 <TextBlock x:Name="Status" Text="{Binding StatusLine}" FontSize="11.5" Foreground="{StaticResource IrisBrush}"
                                            Margin="0,8,0,0" TextWrapping="Wrap" />
                             </StackPanel>
@@ -103,6 +105,9 @@
                             <!-- O título da página só interessa quando a aba tem nome próprio -->
                             <DataTrigger Binding="{Binding CustomTitle}" Value="{x:Null}">
                                 <Setter TargetName="PageTitle" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Note}" Value="{x:Null}">
+                                <Setter TargetName="Note" Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -170,6 +175,9 @@
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
+                                    <Ellipse x:Name="NoteDot" Width="7" Height="7" Fill="{StaticResource IrisBrush}" Stroke="{DynamicResource FrameBrush}"
+                                             StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3"
+                                             Visibility="Collapsed" IsHitTestVisible="False" />
                                 </Grid>
                                 <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding DisplayTitle}" Margin="8,0,4,0"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5"
@@ -225,6 +233,9 @@
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding HasNote}" Value="True">
+                                <Setter TargetName="NoteDot" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding HasCustomIcon}" Value="True">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
@@ -357,6 +368,9 @@
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
+                                    <Ellipse x:Name="NoteDot" Width="7" Height="7" Fill="{StaticResource IrisBrush}" Stroke="{DynamicResource FrameBrush}"
+                                             StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3"
+                                             Visibility="Collapsed" IsHitTestVisible="False" />
                                 </Grid>
                                 <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding DisplayTitle}" Margin="10,0,4,0" FontSize="13"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -404,6 +418,9 @@
                                 <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="SideGlobe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding HasNote}" Value="True">
+                                <Setter TargetName="NoteDot" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding HasCustomIcon}" Value="True">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />

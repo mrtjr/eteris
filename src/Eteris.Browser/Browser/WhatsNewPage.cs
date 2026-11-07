@@ -12,6 +12,7 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("✎", "Abas com nome, emoji e nota", "«Mudar o nome…» no menu da aba dá-lhe um nome próprio, um emoji e uma cor que ficam na sessão; «Escrever nota…» prende uma frase («porque abri isto?») que aparece no cartão da aba, no Radar e nas sessões guardadas. Pairar na etiqueta de um grupo mostra as abas dele."),
         new("👁", "Espreitar um link", "Alt+clique num link (ou «Espreitar o link» no menu) mostra o destino num cartão: título, imagem, tempo de leitura e os primeiros parágrafos — sem abrir aba nem deixar rasto no histórico.", "Alt+clique"),
         new("◫", "Ecrã dividido 2.0", "«Abrir link ao lado» em qualquer link, arrastar uma aba até à margem direita (lado a lado) ou inferior (empilhado), trocar lados pelo selo na barra de endereço — e a divisão fica na sessão."),
         new("⇆", "Abas que nunca se perdem", "Com muitas abas a faixa rola em vez de as esmagar: roda do rato, setas nas pontas e a lista «▾» de todas as abas, pesquisável."),

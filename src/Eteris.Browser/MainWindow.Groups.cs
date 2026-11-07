@@ -94,7 +94,7 @@ public partial class MainWindow
     private void SaveGroupAsSession(TabGroup group)
     {
         var tabs = group.Members(Tabs).Where(t => !Browser.NewTabPage.IsNewTab(t.Address))
-            .Select(t => new Data.SavedTab(t.Address, t.Title)).ToList();
+            .Select(t => new Data.SavedTab(t.Address, t.Title, t.CustomTitle, t.Note)).ToList();
         if (tabs.Count == 0) return;
         Data.AppData.SaveSession(group.Name, tabs);
         ShowToast($"Grupo «{group.Name}» guardado como sessão ({(tabs.Count == 1 ? "1 aba" : $"{tabs.Count} abas")})");

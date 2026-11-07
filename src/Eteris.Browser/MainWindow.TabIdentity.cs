@@ -15,7 +15,7 @@ public partial class MainWindow
     // O WPF desenha os emojis a uma só cor; a fonte de emoji do Windows garante que todos têm glifo.
     private FontFamily EmojiFont => (FontFamily)FindResource("EmojiFont");
 
-    private void RenameTab(BrowserTab tab, UIElement anchor)
+    private void RenameTab(BrowserTab tab, UIElement anchor, bool focusNote = false)
     {
         if (!Tabs.Tabs.Contains(tab)) return;
         CloseRename();
@@ -33,6 +33,14 @@ public partial class MainWindow
             Text = tab.Title, FontSize = 11, Foreground = Res("TextFaintBrush"), Margin = new Thickness(2, 4, 2, 0),
             TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 300,
         };
+        var noteCaption = new TextBlock { Text = "Porque abri isto?", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Res("TextFaintBrush"), Margin = new Thickness(2, 10, 0, 6) };
+        var noteBox = new TextBox
+        {
+            Text = tab.Note ?? string.Empty, MinWidth = 260, FontSize = 12.5, Padding = new Thickness(8, 5, 8, 5), MaxLength = TabIdentity.MaxNoteLength,
+            Foreground = Res("TextBrush"), Background = Res("SurfaceBrush"), BorderBrush = Res("FieldBorderBrush"),
+            BorderThickness = new Thickness(1), CaretBrush = Res("TextBrush"), ToolTip = "Uma frase curta: aparece no cartão da aba, no Radar e nas sessões guardadas",
+        };
+        AutomationProperties.SetName(noteBox, "Nota da aba");
 
         // Emojis: um botão por emoji; o escolhido fica com o contorno íris.
         var emojis = new WrapPanel { Margin = new Thickness(0, 10, 0, 0), MaxWidth = 310 };
@@ -115,6 +123,8 @@ public partial class MainWindow
         panel.Children.Add(caption);
         panel.Children.Add(box);
         panel.Children.Add(hint);
+        panel.Children.Add(noteCaption);
+        panel.Children.Add(noteBox);
         panel.Children.Add(emojis);
         panel.Children.Add(colors);
         panel.Children.Add(footer);
@@ -125,7 +135,7 @@ public partial class MainWindow
             BorderThickness = new Thickness(1), Child = panel, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
             Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 26, ShadowDepth = 6, Direction = 270, Opacity = 0.45, Color = Colors.Black },
         };
-        AutomationProperties.SetName(card, "Mudar o nome da aba");
+        AutomationProperties.SetName(card, "Nome e nota da aba");
 
         // A caixa vive na camada de sobreposição (uma Popup aberta a partir do menu da aba perdia o teclado para a
         // página). Um véu quase invisível por baixo apanha o clique fora, que fecha sem guardar o nome.
@@ -161,6 +171,7 @@ public partial class MainWindow
         void Commit()
         {
             tab.CustomTitle = TabIdentity.NormalizeName(box.Text);
+            tab.Note = TabIdentity.NormalizeNote(noteBox.Text);
             Close();
         }
         veil.MouseLeftButtonDown += (_, e) =>
@@ -174,17 +185,19 @@ public partial class MainWindow
             tab.SetIdentity(null, null, null);
             Close();
         };
-        box.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter) Commit();
-            else if (e.Key == Key.Escape) Close();
-            else return;
-            e.Handled = true;
-        };
+        foreach (var field in new[] { box, noteBox })
+            field.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter) Commit();
+                else if (e.Key == Key.Escape) Close();
+                else return;
+                e.Handled = true;
+            };
         layer.Loaded += (_, _) =>
         {
-            FocusInOverlay(box);
-            box.SelectAll();
+            var first = focusNote ? noteBox : box;
+            FocusInOverlay(first);
+            first.SelectAll();
         };
     }
 

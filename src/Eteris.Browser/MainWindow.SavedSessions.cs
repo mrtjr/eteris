@@ -40,7 +40,7 @@ public partial class MainWindow
 
     // Aberta a partir de eteris://bookmarks#sessoes.
     internal static void OpenSavedSessionWindow(SavedSession session)
-        => OpenWindowWith(session.Tabs.Select(t => t.Url).ToList(), session.Tabs.Select(t => t.Title).ToList(), 0);
+        => OpenWindowWith(session.Tabs, 0);
 
     // A partir da nova aba: a janela dessa aba abre a sessão (e é reaproveitada se só tiver abas novas).
     internal static void OpenSavedSessionFrom(int browserId, SavedSession session)
@@ -79,7 +79,7 @@ public partial class MainWindow
     }
 
     private List<SavedTab> SessionTabs()
-        => Tabs.Tabs.Where(t => !NewTabPage.IsNewTab(t.Address)).Select(t => new SavedTab(t.Address, t.Title)).ToList();
+        => Tabs.Tabs.Where(t => !NewTabPage.IsNewTab(t.Address)).Select(t => new SavedTab(t.Address, t.Title, t.CustomTitle, t.Note)).ToList();
 
     private void SaveSession(IReadOnlyList<SavedTab> tabs)
     {
@@ -95,11 +95,12 @@ public partial class MainWindow
         if (addresses.Count == 0) return;
         if (IsPrivate || Tabs.Tabs.Any(t => !NewTabPage.IsNewTab(t.Address)))
         {
-            OpenWindowWith(addresses, session.Tabs.Select(t => t.Title).ToList(), 0);
+            OpenWindowWith(session.Tabs, 0);
             return;
         }
         LoadUrl(addresses[0]);
-        foreach (var tab in session.Tabs.Skip(1)) Tabs.AppendSleeping(tab.Url, tab.Title);
+        Tabs.Active?.SetIdentity(session.Tabs[0].Name, null, null, session.Tabs[0].Note);
+        foreach (var tab in session.Tabs.Skip(1)) Tabs.AppendSleeping(tab.Url, tab.Title).SetIdentity(tab.Name, null, null, tab.Note);
     }
 
     private static readonly System.Globalization.CultureInfo PtCulture = new("pt-PT");

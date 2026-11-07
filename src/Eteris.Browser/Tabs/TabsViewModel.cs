@@ -51,7 +51,7 @@ public partial class TabsViewModel : ObservableObject
                 IsPinned = pinned is not null && i < pinned.Count && pinned[i],
             };
             if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
-            if (metas is not null && i < metas.Count && metas[i] is { } meta) tab.SetIdentity(meta.Name, meta.Emoji, meta.Color);
+            if (metas is not null && i < metas.Count && metas[i] is { } meta) tab.SetIdentity(meta.Name, meta.Emoji, meta.Color, meta.Note);
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
             Tabs.Add(tab);
@@ -215,7 +215,7 @@ public partial class TabsViewModel : ObservableObject
 
     // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa.
     public List<Data.SessionTabMeta> MetaSnapshot()
-        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex)).ToList();
+        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note)).ToList();
 
     public void RefreshGroups()
     {

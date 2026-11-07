@@ -3,7 +3,8 @@ using Microsoft.Data.Sqlite;
 
 namespace Eteris.Browser.Data;
 
-public sealed record SavedTab(string Url, string Title);
+// Nome próprio e nota são os da aba na altura de guardar (Tabs/TabIdentity.cs); sessões antigas não os têm.
+public sealed record SavedTab(string Url, string Title, string? Name = null, string? Note = null);
 
 public sealed record SavedSession(long Id, string Name, DateTime CreatedUtc, IReadOnlyList<SavedTab> Tabs);
 

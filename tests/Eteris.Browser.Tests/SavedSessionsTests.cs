@@ -28,6 +28,27 @@ public sealed class SavedSessionsTests : IDisposable
     }
 
     [Fact]
+    public void Save_KeepsTabNamesAndNotes_AndOldRowsStillLoad()
+    {
+        var store = new SavedSessionsStore(_path);
+        store.Save("Compras", [new("https://a.pt/", "A", "Loja", "comparar preços"), new("https://b.pt/", "B")], T0);
+        var tabs = store.All().Single().Tabs;
+        Assert.Equal(("Loja", "comparar preços"), (tabs[0].Name, tabs[0].Note));
+        Assert.Null(tabs[1].Name);
+        Assert.Null(tabs[1].Note);
+        // Uma sessão gravada por uma versão anterior (sem nome nem nota) continua a abrir.
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = _path }.ToString()))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """UPDATE saved_sessions SET tabs = '[{"Url":"https://c.pt/","Title":"C"}]'""";
+            command.ExecuteNonQuery();
+        }
+        var old = store.All().Single().Tabs.Single();
+        Assert.Equal(("https://c.pt/", "C", null, null), (old.Url, old.Title, old.Name, old.Note));
+    }
+
+    [Fact]
     public void Save_SameNameReplaces()
     {
         var store = new SavedSessionsStore(_path);

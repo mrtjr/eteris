@@ -10,7 +10,7 @@ public enum RadarSort { Recent, Site, Strip }
 
 // Uma linha da lista do radar: aba aberta (Tab) ou entrada das fechadas recentemente (Closed).
 public sealed record RadarRow(BrowserTab? Tab, ClosedTab? Closed, string Title, string Address,
-    string Subtitle, string Badge, Brush BadgeBrush, ImageSource? Image, string Status)
+    string Subtitle, string Badge, Brush BadgeBrush, ImageSource? Image, string Status, string? Note = null)
 {
     public object Identity => (object?)Tab ?? Closed!;
 }
@@ -40,7 +40,7 @@ public static class TabRadar
 
         if (query.Length > 0)
             // Uma aba com nome próprio continua a aparecer ao pesquisar pelo título da página.
-            rows = rows.Where(row => TabFilter.Matches($"{row.Title} {row.Subtitle} {row.Tab?.Title}", row.Address, query));
+            rows = rows.Where(row => TabFilter.Matches($"{row.Title} {row.Subtitle} {row.Tab?.Title} {row.Note}", row.Address, query));
 
         if (sort == RadarSort.Site)
             rows = rows.OrderBy(row => Site(row.Address), StringComparer.CurrentCultureIgnoreCase)
@@ -94,7 +94,7 @@ public static class TabRadar
         var site = Site(tab.Address);
         var subtitle = tab.Group is { } group ? $"{site} · {group.Name}" : site;
         return new(tab, null, tab.CustomTitle ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title), tab.Address,
-            subtitle, tab.Monogram ?? "É", tab.MonogramBrush, tab.Favicon, string.Join(" · ", status));
+            subtitle, tab.Monogram ?? "É", tab.MonogramBrush, tab.Favicon, string.Join(" · ", status), tab.Note);
     }
 
     public static RadarRow FromClosed(ClosedTab tab)

@@ -81,6 +81,54 @@ public sealed class TabIdentityTests : IDisposable
     }
 
     [Fact]
+    public void NormalizeNote_OneShortLine()
+    {
+        Assert.Null(TabIdentity.NormalizeNote(" \n "));
+        Assert.Equal("comparar com a outra loja", TabIdentity.NormalizeNote("comparar com\na outra   loja "));
+        Assert.Equal(TabIdentity.MaxNoteLength, TabIdentity.NormalizeNote(new string('x', 500))!.Length);
+    }
+
+    [Fact]
+    public void Tab_Note_FollowsTheSameSiteRule()
+    {
+        var tab = new BrowserTab("https://a.pt/1");
+        tab.Note = TabIdentity.NormalizeNote("porque sim");
+        Assert.True(tab.HasNote);
+        tab.Address = "https://a.pt/2";
+        Assert.Equal("porque sim", tab.Note);
+        tab.Address = "https://b.pt/";
+        Assert.Null(tab.Note);
+        Assert.False(tab.HasNote);
+    }
+
+    [Fact]
+    public void Radar_ShowsTheNote_AndFindsTabsByIt()
+    {
+        var vm = new TabsViewModel();
+        var tab = vm.NewTab("https://a.pt/");
+        tab.Title = "Loja";
+        tab.Note = "comparar preços";
+        vm.NewTab("https://b.pt/");
+        var rows = TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.All, RadarSort.Strip, "");
+        Assert.Equal("comparar preços", rows[0].Note);
+        Assert.Null(rows[1].Note);
+        var found = TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.All, RadarSort.Strip, "precos");
+        Assert.Same(tab, Assert.Single(found).Tab);
+    }
+
+    [Fact]
+    public void Session_RoundTripsTheNote()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/"], 0, metas: [new SessionTabMeta(Note: "ler amanhã")]);
+        Assert.Equal("ler amanhã", store.Load()!.Metas![0].Note);
+        var vm = new TabsViewModel();
+        vm.Restore(["https://a.pt/"], 0, metas: [new SessionTabMeta(Note: "ler amanhã")]);
+        Assert.Equal("ler amanhã", vm.Tabs[0].Note);
+        Assert.Equal("ler amanhã", vm.MetaSnapshot()[0].Note);
+    }
+
+    [Fact]
     public void Tab_SetIdentity_NormalizesEverything()
     {
         var tab = new BrowserTab("https://a.pt/");

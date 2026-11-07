@@ -31,6 +31,13 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private int? _colorIndex;
 
+    // «Porque abri isto?»: uma frase presa à aba, mostrada no cartão e no Radar e guardada nas sessões.
+    [NotifyPropertyChangedFor(nameof(HasNote))]
+    [ObservableProperty]
+    private string? _note;
+
+    public bool HasNote => Note is not null;
+
     // O que a faixa, o cartão, o radar e a paleta mostram: o nome próprio, senão o título da página.
     public string DisplayTitle => TabIdentity.DisplayTitle(CustomTitle, Title, Host);
 
@@ -40,11 +47,12 @@ public partial class BrowserTab : ObservableObject
 
     public Brush IconBrush => ColorIndex is { } index ? TabGroup.BrushAt(index) : MonogramBrush;
 
-    public void SetIdentity(string? name, string? emoji, int? colorIndex)
+    public void SetIdentity(string? name, string? emoji, int? colorIndex, string? note = null)
     {
         CustomTitle = TabIdentity.NormalizeName(name);
         Emoji = TabIdentity.NormalizeEmoji(emoji);
         ColorIndex = TabIdentity.NormalizeColor(colorIndex);
+        Note = TabIdentity.NormalizeNote(note);
     }
 
     [ObservableProperty]

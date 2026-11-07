@@ -121,7 +121,7 @@ public partial class TabRadarView : UserControl
         if (e.PropertyName is nameof(BrowserTab.Title) or nameof(BrowserTab.Address) or nameof(BrowserTab.Favicon)
             or nameof(BrowserTab.Thumbnail) or nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsAudible)
             or nameof(BrowserTab.IsMuted) or nameof(BrowserTab.IsSleeping) or nameof(BrowserTab.Group)
-            or nameof(BrowserTab.CustomTitle) or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex))
+            or nameof(BrowserTab.CustomTitle) or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note))
             QueueRefresh();
     }
 
@@ -177,6 +177,8 @@ public partial class TabRadarView : UserControl
         DetailsAddress.Text = row?.Address ?? string.Empty;
         DetailsState.Text = row is null ? "Use a pesquisa ou mude o filtro para começar."
             : row.Status.Length > 0 ? row.Status : "Aba aberta";
+        DetailsNote.Text = row?.Note is { } note ? "✎ " + note : string.Empty;
+        DetailsNote.Visibility = row?.Note is null ? Visibility.Collapsed : Visibility.Visible;
         PreviewImage.Source = _privateWindow ? null : tab?.Thumbnail;
         PreviewImage.Visibility = PreviewImage.Source is null ? Visibility.Collapsed : Visibility.Visible;
         PreviewPlaceholder.Visibility = PreviewImage.Source is null ? Visibility.Visible : Visibility.Collapsed;

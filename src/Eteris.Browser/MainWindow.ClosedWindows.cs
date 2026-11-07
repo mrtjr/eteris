@@ -36,4 +36,15 @@ public partial class MainWindow
         for (var i = 1; i < addresses.Count; i++) window.Tabs.AppendSleeping(addresses[i], i < titles.Count ? titles[i] : null);
         if (activeIndex < window.Tabs.Tabs.Count) window.Tabs.Active = window.Tabs.Tabs[activeIndex];
     }
+
+    // Sessão guardada: cada aba volta com o nome próprio e a nota que tinha.
+    private static void OpenWindowWith(IReadOnlyList<Data.SavedTab> tabs, int activeIndex)
+    {
+        if (tabs.Count == 0) return;
+        OpenWindowWith(tabs.Select(t => t.Url).ToList(), tabs.Select(t => t.Title).ToList(), activeIndex);
+        var window = System.Windows.Application.Current.Windows.OfType<MainWindow>().LastOrDefault(w => !w.IsPrivate);
+        if (window is null) return;
+        for (var i = 0; i < tabs.Count && i < window.Tabs.Tabs.Count; i++)
+            window.Tabs.Tabs[i].SetIdentity(tabs[i].Name, null, null, tabs[i].Note);
+    }
 }
