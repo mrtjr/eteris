@@ -91,15 +91,30 @@ public partial class TabsViewModel
         tab.Group = null;
         tab.IsMultiSelected = false;
         tab.IsSleeping = true;
-        if (wasActive) Active = Tabs[index == Tabs.Count - 1 ? index - 1 : index + 1];
+        if (wasActive) Active = SuccessorOf(tab) ?? Tabs[index == Tabs.Count - 1 ? index - 1 : index + 1];
         Tabs.RemoveAt(index);
         RefreshGroups();
 
         var stored = target.StoredTabs;
-        if (tab.IsPinned) stored.Insert(stored.Count(t => t.IsPinned), tab);
-        else stored.Add(tab);
+        var at = tab.IsPinned ? stored.Count(t => t.IsPinned) : stored.Count;
+        stored.Insert(at, tab);
+        ShiftStoredIndices(target, at);
         RefreshWorkspaceCounts();
         return true;
+    }
+
+    // Uma aba entrou na reserva na posição «at» (uma fixada vai para junto das fixadas, antes das outras): a aba
+    // ativa e o ecrã dividido guardados por índice continuam a apontar para as mesmas abas.
+    private static void ShiftStoredIndices(Workspace target, int at)
+    {
+        if (at >= target.StoredTabs.Count - 1) return;
+        if (target.StoredActiveIndex >= at) target.StoredActiveIndex++;
+        if (target.StoredSplit is { } split)
+            target.StoredSplit = split with
+            {
+                Left = split.Left >= at ? split.Left + 1 : split.Left,
+                Right = split.Right >= at ? split.Right + 1 : split.Right,
+            };
     }
 
     // Apagar um Espaço fecha as abas dele (vão para as fechadas recentes, para nada se perder); o último não se

@@ -35,14 +35,21 @@ public partial class MainWindow
             Tabs.Active = _dragTab;
             TabList.CaptureMouse();
         }
-        // A posição é relativa à lista (já conta com a rolagem da faixa); junto às pontas a faixa rola sozinha.
-        DragScrollTabs(e.GetPosition(TabScroll));
-        MoveDraggedTabTo(position);
+        // A posição é relativa à lista (já conta com a rolagem da faixa); junto às pontas a faixa rola sozinha. Só
+        // com o rato sobre a faixa: a caminho da margem da página a aba não muda de lugar nem a faixa rola.
+        var inStrip = e.GetPosition(TabScroll);
+        if (TabLayout.ReordersAt(inStrip.Y, TabScroll.ActualHeight))
+        {
+            DragScrollTabs(inStrip);
+            MoveDraggedTabTo(position);
+        }
+        else StopDragScroll();
 
-        // Sobre a margem direita ou inferior da página: a faixa acende; largar aí cria o ecrã dividido.
+        // Sobre a margem direita ou inferior da página (até à orla da janela): a faixa acende; largar aí divide.
         var inPage = e.GetPosition(BrowserHost);
+        var (slackRight, slackBottom) = SplitDropSlack();
         var target = SplitDropZone.CanSplit(_dragPreviousActive, _dragTab)
-            ? SplitDropZone.TargetAt(inPage.X, inPage.Y, BrowserHost.ActualWidth, BrowserHost.ActualHeight)
+            ? SplitDropZone.TargetAt(inPage.X, inPage.Y, BrowserHost.ActualWidth, BrowserHost.ActualHeight, slackRight, slackBottom)
             : SplitDropTarget.None;
         if (target != _dropTarget) ShowSplitDropHint(target);
         _dropTarget = target;
@@ -51,6 +58,18 @@ public partial class MainWindow
         var workspace = WorkspaceUnder(e);
         if (!ReferenceEquals(workspace, _dropWorkspace)) ShowWorkspaceDropHint(workspace);
         _dropWorkspace = workspace;
+    }
+
+    // Entre a página e a orla da janela (moldura de 6 px e, maximizada, a margem que fica fora do ecrã), no máximo a
+    // largura da faixa de largada; com a barra lateral aberta à direita, só a moldura (o resto é a barra).
+    private (double Right, double Bottom) SplitDropSlack()
+    {
+        if (!BrowserHost.IsVisible || !BrowserHost.IsDescendantOf(this)) return (0, 0);
+        var corner = BrowserHost.TranslatePoint(new Point(BrowserHost.ActualWidth, BrowserHost.ActualHeight), this);
+        var right = Math.Clamp(ActualWidth - corner.X, 0, SplitDropZone.Width);
+        var bottom = Math.Clamp(ActualHeight - corner.Y, 0, SplitDropZone.Width);
+        if (_sidebarOpen && SidebarSideNow == Eteris.Browser.Sidebar.SidebarSide.Right) right = Math.Min(right, PageFrame.Padding.Right);
+        return (right, bottom);
     }
 
     // Põe a aba arrastada no índice que fica por baixo da posição (relativa à lista de abas).
@@ -64,23 +83,38 @@ public partial class MainWindow
         Tabs.Move(_dragTab, index);
     }
 
-    private void TabList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    // A captura perdeu-se a meio do arrasto (Alt+Tab, uma janela que rouba a ativação, um menu): o arrasto acaba ali,
+    // sem largada — senão a faixa íris e o chip ficavam acesos e o arrasto «preso» até ao arrasto seguinte.
+    private void TabList_LostMouseCapture(object sender, MouseEventArgs e)
     {
+        if (!_dragging || !ReferenceEquals(e.OriginalSource, TabList)) return;
         StopDragScroll();
-        var (dragged, previous, target, workspace) = (_dragTab, _dragPreviousActive, _dropTarget, _dropWorkspace);
-        if (_dragging)
-        {
-            TabList.ReleaseMouseCapture();
-            e.Handled = true;
-            ShowSplitDropHint(SplitDropTarget.None);
-            ShowWorkspaceDropHint(null);
-        }
+        ResetTabDrag();
+    }
+
+    private void ResetTabDrag()
+    {
+        if (_dropTarget != SplitDropTarget.None) ShowSplitDropHint(SplitDropTarget.None);
+        if (_dropWorkspace is not null) ShowWorkspaceDropHint(null);
         _dragTab = null;
         _dragPreviousActive = null;
         _dropTarget = SplitDropTarget.None;
         _dropWorkspace = null;
-        var dropped = _dragging;
         _dragging = false;
+    }
+
+    private void TabList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        StopDragScroll();
+        var (dragged, previous, target, workspace) = (_dragTab, _dragPreviousActive, _dropTarget, _dropWorkspace);
+        var dropped = _dragging;
+        // O estado limpa-se antes de largar a captura: largá-la dispara LostMouseCapture, que já não tem nada a cancelar.
+        ResetTabDrag();
+        if (dropped)
+        {
+            TabList.ReleaseMouseCapture();
+            e.Handled = true;
+        }
         if (dropped && workspace is not null && dragged is not null)
         {
             // A aba que estava ativa antes do arrasto volta a ser a ativa (a arrastada vai embora).

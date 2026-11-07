@@ -789,7 +789,7 @@
                                           PreviewMouseWheel="TabScroll_PreviewMouseWheel" ScrollChanged="TabScroll_ScrollChanged"
                                           shell:WindowChrome.IsHitTestVisibleInChrome="True">
                                 <ListBox x:Name="TabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
-                                         PreviewMouseMove="TabList_PreviewMouseMove" PreviewMouseLeftButtonUp="TabList_PreviewMouseLeftButtonUp"
+                                         PreviewMouseMove="TabList_PreviewMouseMove" PreviewMouseLeftButtonUp="TabList_PreviewMouseLeftButtonUp" LostMouseCapture="TabList_LostMouseCapture"
                                          ItemContainerStyle="{StaticResource TabItemStyle}"
                                          Background="Transparent" BorderThickness="0" Padding="0"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"

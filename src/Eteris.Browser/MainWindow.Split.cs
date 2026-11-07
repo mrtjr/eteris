@@ -20,6 +20,7 @@ public partial class MainWindow
     private void OpenSideBySide(BrowserTab other, SplitOrientation? orientation = null, bool announce = true)
     {
         if (Tabs.Active is not { } active || ReferenceEquals(active, other)) return;
+        _pendingSplit = null;
         if (other.IsSleeping)
         {
             other.IsSleeping = false;
@@ -33,22 +34,53 @@ public partial class MainWindow
                 : "Ecrã dividido — clique numa página para a tornar ativa");
     }
 
+    // Divisão reposta da sessão que ainda não está no ecrã: o plano de arranque (Novidades, um link vindo de outra
+    // aplicação) ativou outra aba. Fica guardada na sessão e volta quando uma das duas abas for ativada.
+    private PendingSplit? _pendingSplit;
+
+    private sealed record PendingSplit(BrowserTab Left, BrowserTab Right, SplitOrientation? Orientation);
+
     // A divisão gravada na sessão: índices das duas abas e a orientação. null quando não há divisão.
     private Data.SessionSplit? SplitSnapshot()
-        => _split is { } split && Tabs.Tabs.IndexOf(split.Left) is var left and >= 0 && Tabs.Tabs.IndexOf(split.Right) is var right and >= 0
-            ? new Data.SessionSplit(left, right, SplitView.Name(split.Orientation))
+    {
+        var (first, second, orientation) = _split is { } split ? (split.Left, split.Right, split.Orientation)
+            : _pendingSplit is { } pending ? (pending.Left, pending.Right, pending.Orientation ?? SplitOrientation.SideBySide)
+            : ((BrowserTab?)null, (BrowserTab?)null, SplitOrientation.SideBySide);
+        if (first is null || second is null) return null;
+        var (left, right) = (Tabs.Tabs.IndexOf(first), Tabs.Tabs.IndexOf(second));
+        return left >= 0 && right >= 0 ? new Data.SessionSplit(left, right, SplitView.Name(orientation)) : null;
+    }
+
+    private PendingSplit? SplitTabs(Data.SessionSplit? saved)
+        => saved is not null && saved.IsValid(Tabs.Tabs.Count)
+            ? new PendingSplit(Tabs.Tabs[saved.Left], Tabs.Tabs[saved.Right], SplitView.ParseOrientation(saved.Orientation))
             : null;
 
-    // Ao arrancar com a sessão anterior: a divisão volta como estava (as duas abas acordam), com a mesma aba ativa.
+    // Ao voltar a um Espaço: a divisão dele volta como estava.
     private void RestoreSplit(Data.SessionSplit? saved)
     {
-        if (saved is null || !saved.IsValid(Tabs.Tabs.Count) || Tabs.Active is not { } active) return;
-        var (left, right) = (Tabs.Tabs[saved.Left], Tabs.Tabs[saved.Right]);
+        if (SplitTabs(saved) is { } split) RestoreSplit(split);
+    }
+
+    // Ao arrancar com a sessão anterior: a divisão volta como estava (as duas abas acordam), com a mesma aba ativa —
+    // ou fica à espera, se o plano de arranque ativou outra aba (senão desfazia-se logo e perdia-se ao gravar).
+    private void RestoreSplitAtStartup(PendingSplit saved, bool startupActivatedATab)
+    {
+        if (startupActivatedATab && !ReferenceEquals(Tabs.Active, saved.Left) && !ReferenceEquals(Tabs.Active, saved.Right))
+            _pendingSplit = saved;
+        else RestoreSplit(saved);
+    }
+
+    private void RestoreSplit(PendingSplit saved)
+    {
+        _pendingSplit = null;
+        if (Tabs.Active is not { } active || !Tabs.Tabs.Contains(saved.Left) || !Tabs.Tabs.Contains(saved.Right)) return;
+        var (left, right) = (saved.Left, saved.Right);
         if (ReferenceEquals(active, right)) (left, right) = (right, left);
         else if (!ReferenceEquals(active, left)) Tabs.Active = left;
-        OpenSideBySide(right, SplitView.ParseOrientation(saved.Orientation), announce: false);
+        OpenSideBySide(right, saved.Orientation, announce: false);
         // A ordem das metades é a gravada, mesmo que a ativa fosse a da direita.
-        if (_split is { } split && !ReferenceEquals(split.Left, Tabs.Tabs[saved.Left])) SwapSplit();
+        if (_split is { } split && !ReferenceEquals(split.Left, saved.Left)) SwapSplit();
     }
 
     private void CloseSplit()
@@ -106,6 +138,13 @@ public partial class MainWindow
 
     private void OnSplitActiveChanged()
     {
+        // A divisão à espera volta quando uma das suas abas fica ativa.
+        if (_split is null && _pendingSplit is { } pending
+            && (ReferenceEquals(Tabs.Active, pending.Left) || ReferenceEquals(Tabs.Active, pending.Right)))
+        {
+            RestoreSplit(pending);
+            return;
+        }
         var was = IsSplit;
         if (_split is { } split && !split.SurvivesActivation(Tabs.Active)) EndSplit(split);
         LayoutBrowsers();
@@ -114,6 +153,7 @@ public partial class MainWindow
 
     private void OnSplitTabRemoved(BrowserTab tab)
     {
+        if (_pendingSplit is { } pending && (ReferenceEquals(pending.Left, tab) || ReferenceEquals(pending.Right, tab))) _pendingSplit = null;
         if (_split is { } split && !split.SurvivesRemoval(tab))
         {
             EndSplit(split);
@@ -167,7 +207,9 @@ public partial class MainWindow
             PlaceInHost(browser, pane);
         }
 
-        PlaceInHost(AuroraBar, null);
+        // Depois de a camada de sobreposição existir, a barra de carregamento vive lá (linha da página, ver
+        // SetUpOverlayLayer): pô-la na linha 0 da grelha da camada levava-a para o topo da barra de título.
+        if (ReferenceEquals(AuroraBar.Parent, BrowserHost)) PlaceInHost(AuroraBar, null);
         var stacked = _split?.IsStacked == true;
         _splitter!.Visibility = _split is null ? Visibility.Collapsed : Visibility.Visible;
         _splitter.ResizeDirection = stacked ? GridResizeDirection.Rows : GridResizeDirection.Columns;

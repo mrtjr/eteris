@@ -33,6 +33,8 @@ public partial class MainWindow : Window
         DataContext = Tabs;
         Tabs.Tabs.CollectionChanged += OnTabsChanged;
         Tabs.PropertyChanged += OnTabsPropertyChanged;
+        // Fechar (ou tirar da faixa) a metade ativa do ecrã dividido deixa a outra metade no ecrã, não a vizinha na faixa.
+        Tabs.PreferredSuccessor = tab => _split?.PartnerOf(tab);
         StateChanged += (_, _) => OnWindowStateChanged();
         SourceInitialized += (_, _) =>
         {

@@ -21,22 +21,27 @@ public partial class MainWindow
         _ownsSession = !IsPrivate && !s_sessionOwnerTaken;
         if (_ownsSession) s_sessionOwnerTaken = true;
 
+        PendingSplit? restoredSplit = null;
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous)
         {
             Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas);
             // Os outros Espaços ficam na reserva, a dormir, com a sua aba ativa e o seu ecrã dividido.
             Tabs.RestoreWorkspaces(previous.Spaces, previous.SpaceIndex);
-            RestoreSplit(previous.Split);
+            restoredSplit = SplitTabs(previous.Split);
         }
 
         var version = Browser.SettingsPage.Version;
+        var planActivated = false;
         if (_ownsSession)
         {
             var plan = Browser.StartupPages.Plan(Data.Settings.IsFirstRun, Data.Settings.Current.LastSeenVersion, version, initialUrl,
                 hasRestoredTabs: Tabs.Tabs.Count > 0);
             if (plan.Any(t => t.Url == Browser.WelcomePage.Url || t.Url == Browser.WhatsNewPage.Url)) Data.Settings.MarkVersionSeen(version);
             foreach (var tab in plan) Tabs.NewTab(tab.Url, tab.Activate);
+            planActivated = plan.Any(t => t.Activate);
         }
+        // Depois do plano: uma aba ativada por ele já não desfaz a divisão reposta (ela fica à espera).
+        if (restoredSplit is not null) RestoreSplitAtStartup(restoredSplit, planActivated);
         else if (initialUrl is not null) Tabs.NewTab(initialUrl);
         else if (Tabs.Tabs.Count == 0)
         {

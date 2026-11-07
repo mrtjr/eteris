@@ -9,10 +9,13 @@ public static class SplitDropZone
 {
     public const double Width = 24;
 
-    // x, y: posição do rato em relação à área da página (largura w, altura h).
-    public static SplitDropTarget TargetAt(double x, double y, double w, double h)
+    // x, y: posição do rato em relação à área da página (largura w, altura h). slackRight/slackBottom: o que há
+    // entre a página e a orla da janela (moldura e, maximizada, a margem fora do ecrã) — atirar o rato ao bordo do
+    // ecrã, que é onde ele para, continua a contar como margem.
+    public static SplitDropTarget TargetAt(double x, double y, double w, double h, double slackRight = 0, double slackBottom = 0)
     {
-        if (w <= 0 || h <= 0 || x < 0 || y < 0 || x > w || y > h) return SplitDropTarget.None;
+        if (w <= 0 || h <= 0 || x < 0 || y < 0 || x > w + Math.Max(0, slackRight) || y > h + Math.Max(0, slackBottom))
+            return SplitDropTarget.None;
         if (x >= w - Width) return SplitDropTarget.Right;
         if (y >= h - Width) return SplitDropTarget.Bottom;
         return SplitDropTarget.None;

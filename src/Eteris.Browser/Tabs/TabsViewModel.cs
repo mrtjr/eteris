@@ -14,6 +14,13 @@ public partial class TabsViewModel : ObservableObject
 
     public ObservableCollection<BrowserTab> Tabs { get; } = new();
 
+    // Quem fica ativa quando a aba ativa sai da faixa (fechar, feito, adiar, mover): a janela prefere a outra metade
+    // do ecrã dividido, que estava no ecrã ao lado; sem preferência (ou se ela já não estiver na faixa), a vizinha.
+    public Func<BrowserTab, BrowserTab?>? PreferredSuccessor { get; set; }
+
+    private BrowserTab? SuccessorOf(BrowserTab leaving)
+        => PreferredSuccessor?.Invoke(leaving) is { } next && !ReferenceEquals(next, leaving) && Tabs.Contains(next) ? next : null;
+
     [ObservableProperty]
     private BrowserTab? _active;
 
@@ -104,6 +111,8 @@ public partial class TabsViewModel : ObservableObject
             if (_closed.Count > MaxClosed) _closed.RemoveAt(0);
         }
         var wasActive = ReferenceEquals(tab, Active);
+        // Pedida antes de a aba sair (é quando o ecrã dividido acaba).
+        var successor = wasActive ? SuccessorOf(tab) : null;
         Tabs.RemoveAt(index);
         RefreshGroups();
 
@@ -113,7 +122,7 @@ public partial class TabsViewModel : ObservableObject
             return true;
         }
 
-        if (wasActive) Active = Tabs[Math.Min(index, Tabs.Count - 1)];
+        if (wasActive) Active = successor ?? Tabs[Math.Min(index, Tabs.Count - 1)];
         return false;
     }
 

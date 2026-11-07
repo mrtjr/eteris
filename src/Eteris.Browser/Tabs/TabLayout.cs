@@ -14,6 +14,12 @@ public static class TabLayout
     // A arrastar uma aba junto a uma ponta da faixa, a faixa rola sozinha nesta orla.
     public const double DragEdge = 36;
 
+    // A arrastar, a aba só muda de lugar (e a faixa só rola) com o rato sobre a faixa, com esta folga por cima e por
+    // baixo: a caminho da margem da página (ecrã dividido) ou de um chip de Espaço, a aba fica onde estava.
+    public const double ReorderSlack = 12;
+
+    public static bool ReordersAt(double y, double stripHeight) => y >= -ReorderSlack && y <= stripHeight + ReorderSlack;
+
     // Posição horizontal (relativa ao início das abas) → índice onde a aba arrastada deve ficar.
     public static int IndexAt(double x, double tabWidth, int count)
         => count <= 0 ? 0 : Math.Clamp((int)Math.Floor(x / tabWidth), 0, count - 1);
