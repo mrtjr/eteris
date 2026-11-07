@@ -32,7 +32,21 @@ public class InjectedScriptsSyntaxTests
         { "espreitar (extração do artigo)", LinkPreview.Script },
         { "espreitar (Alt+clique)", LinkPreview.AltClickScript },
         { "Global Privacy Control (navigator)", PrivacySignals.GpcScript },
+        { "auto-teste de privacidade (medições)", Eteris.Browser.Browser.PageScript.Expression(SelfTest.MeasureScript, asyncBody: true) },
+        { "auto-teste de privacidade (resultados)", SelfTest.RenderScript([new("gpc", "GPC", true, "a «b» 'c' </script>"), new("canvas", "Canvas", null, "x")]) },
+        { "auto-teste de privacidade (falha)", SelfTest.FailedScript("tempo esgotado") },
     };
+
+    // O script da página eteris://privacy/ (relatório, promessas e auto-teste), como é servido.
+    [Fact]
+    public void PrivacyPageScript_IsValidJavaScript()
+    {
+        var html = PrivacyPage.Render(new PrivacyPage.State(new Dictionary<string, string>(), PrivacySignals.Headers, true, true, true, null,
+            "pt-PT", false, 1, 0), [], new DateOnly(2026, 11, 7));
+        var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);
+        Assert.True(match.Success);
+        CheckSyntax("privacidade", match.Groups[1].Value);
+    }
 
     [Theory]
     [MemberData(nameof(Scripts))]

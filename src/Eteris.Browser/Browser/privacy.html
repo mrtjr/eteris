@@ -75,6 +75,13 @@
   .rfoot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; color: var(--faint); font-size: 12.5px; }
   .rfoot button.danger { border-color: color-mix(in srgb, var(--bad) 50%, transparent); color: var(--bad); }
   .note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .trow { display: flex; gap: 16px; align-items: center; padding: 16px 20px; }
+  .trow .text { flex: 1; }
+  .trow b { display: block; font-weight: 500; font-size: 14.5px; margin-bottom: 3px; }
+  .trow span { color: var(--muted); font-size: 12.8px; line-height: 1.45; }
+  .trow a.go { white-space: nowrap; text-decoration: none; color: var(--text); font-size: 13px; padding: 9px 15px; border-radius: 12px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), color-mix(in srgb, var(--accent-2) 45%, transparent)); }
+  .trow a.go:hover { filter: brightness(1.15); }
 
   /* Tema claro (o servidor acrescenta class="light" ao <html>) */
   html.light { --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0; --line: rgba(20, 24, 40, .1); --card: rgba(255, 255, 255, .8); --ok: #059669; --bad: #e11d48; }
@@ -106,6 +113,16 @@
     </div>
     <div class="rfoot"><span>Só números agregados, guardados 35 dias neste computador: nenhum site que visitou, nada sai daqui.</span>
       <button id="r-clear" class="danger">Apagar o relatório…</button></div>
+  </section>
+
+  <section class="selftest" aria-labelledby="t-title">
+    <h2 id="t-title">Auto-teste</h2>
+    <div class="card trow">
+      <div class="text"><b>Veja o que um site vê do Éteris</b>
+        <span>Uma página de teste mede o pedido para não ser seguido, cookies de terceiros num iframe, o referrer, a língua,
+          o WebRTC, a rede local e a impressão digital do canvas, e diz ✔ ou ✘ com a explicação. Tudo neste computador.</span></div>
+      <a class="go" href="eteris://privacy/teste">Correr o auto-teste →</a>
+    </div>
   </section>
 
   <h2>Promessas</h2>

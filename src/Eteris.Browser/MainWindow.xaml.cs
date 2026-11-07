@@ -268,9 +268,11 @@ public partial class MainWindow : Window
                 CaptureThumbnail(tab, browser, url);
                 _ = ApplyGenericCosmeticsAsync(browser, url);
                 SettleChainLater(tab);
+                if (SelfTest.IsTestPage(url)) _ = RunSelfTestAsync(tab, browser, url);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
-            if (!IsPrivate) Dispatcher.InvokeAsync(() =>
+            // A página do auto-teste é do próprio Éteris: não entra no histórico.
+            if (!IsPrivate && !SelfTest.IsTestPage(url)) Dispatcher.InvokeAsync(() =>
             {
                 AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow));
                 RememberFavicon(tab, url);

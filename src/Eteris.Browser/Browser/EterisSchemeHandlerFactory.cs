@@ -69,6 +69,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (uri is { Host: "credits", AbsolutePath: "/" }) return Html(CreditsPage.Render());
         if (uri is { Host: "privacy", AbsolutePath: "/" })
             return Html(PrivacyPage.Render(PrivacyPage.Current(), privateContext ? null : AppData.PrivacyEvents(30), DateOnly.FromDateTime(DateTime.Today)));
+        // Auto-teste de privacidade: a página de teste é um site a sério (https), servido pelo próprio Éteris.
+        if (uri is { Host: "privacy", AbsolutePath: "/teste" })
+            return Html("<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0;url=" + SelfTest.PageUrl + "\"><title>Auto-teste de privacidade</title>");
         if (uri is { Host: "privacy", AbsolutePath: "/clear-report" })
         {
             // Nunca a partir da janela privada (não lê nem mexe no perfil); depois volta à página sem repetir o pedido.

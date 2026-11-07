@@ -22,6 +22,8 @@ public partial class MainWindow
         var label = LocalNetwork.Label(url);
         tab.RecordLocalNetworkBlocked(label);
         if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
+        // O auto-teste de privacidade tenta de propósito chegar a 127.0.0.1: fica registado, sem perguntar nada.
+        if (Browser.SelfTest.IsTestHost(Uri.TryCreate(site, UriKind.Absolute, out var origin) ? origin.Host : site)) return;
         // Só para a página à vista: uma aba em segundo plano fica registada no Escudo sem interromper.
         if (!ReferenceEquals(tab, Tabs.Active) && _split?.PaneOf(tab) is null) return;
         if (!_localNetworkAsked.Add(site)) return;
