@@ -180,7 +180,9 @@ public partial class MainWindow
                 // O processo do site morreu: a página de erro (com «Tentar novamente») em vez de um retângulo vazio.
                 onCrashed: () => Dispatcher.InvokeAsync(() => OnWebPanelCrashed(url)),
                 // Vista móvel: os pedidos deste motor saem com o agente de um telemóvel.
-                userAgent: mobile ? WebPanels.MobileUserAgent : null),
+                userAgent: mobile ? WebPanels.MobileUserAgent : null,
+                // Rede local: o que o site já tem autorizado nas abas vale também na barra lateral.
+                localNetworkAllowed: IsLocalNetworkAllowed),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.

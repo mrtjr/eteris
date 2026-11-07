@@ -66,6 +66,7 @@ public partial class MainWindow
             ? "✓  WebRTC não expõe o seu IP local" : "✗  WebRTC sem proteção de IP";
         ShieldCheckDns.Text = PrivacyPreferences.SecureDnsProvider is { } dns
             ? $"✓  DNS cifrado ({dns})" : "·  DNS do sistema (pode ativar DNS cifrado nas definições)";
+        ShieldCheckLan.Text = LocalNetworkShieldLine(tab);
         var session = ShieldStats.SessionBlocked;
         ShieldSession.Text = $"{session} {(session == 1 ? "rastreador bloqueado" : "rastreadores bloqueados")} desde que abriu o Éteris";
     }

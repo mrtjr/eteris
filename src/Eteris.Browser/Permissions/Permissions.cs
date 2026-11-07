@@ -2,7 +2,7 @@ using Microsoft.Data.Sqlite;
 
 namespace Eteris.Browser.Permissions;
 
-public enum SitePermission { Camera, Microphone, ScreenShare, Location, Notifications, Clipboard, MultipleDownloads }
+public enum SitePermission { Camera, Microphone, ScreenShare, Location, Notifications, Clipboard, MultipleDownloads, LocalNetwork }
 
 public enum PermissionDecision { Allow, Deny, Ask }
 
@@ -17,6 +17,7 @@ public static class PermissionText
         [SitePermission.Notifications] = "mostrar notificações",
         [SitePermission.Clipboard] = "ler a área de transferência",
         [SitePermission.MultipleDownloads] = "transferir vários ficheiros",
+        [SitePermission.LocalNetwork] = "falar com a sua rede local e com este computador",
     };
 
     public static string Name(SitePermission kind) => kind switch
@@ -28,6 +29,7 @@ public static class PermissionText
         SitePermission.Notifications => "Notificações",
         SitePermission.Clipboard => "Área de transferência",
         SitePermission.MultipleDownloads => "Várias transferências",
+        SitePermission.LocalNetwork => "Rede local",
         _ => kind.ToString(),
     };
 

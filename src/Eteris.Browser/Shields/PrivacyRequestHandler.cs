@@ -3,7 +3,8 @@ using CefSharp;
 namespace Eteris.Browser.Shields;
 
 public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-    Action? onCrashed = null, string? userAgent = null, bool isPrivate = false)
+    Action? onCrashed = null, string? userAgent = null, bool isPrivate = false,
+    Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null)
     : CefSharp.Handler.RequestHandler
 {
     // Cabeçalhos de um pedido feito «como telemóvel» (vista móvel de um site fixado na barra lateral): o agente e
@@ -30,7 +31,8 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         int errorCode, string errorMessage)
         => onCrashed?.Invoke();
 
-    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate);
+    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate,
+        localNetworkAllowed, onLocalNetworkBlocked);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
@@ -56,7 +58,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     }
 
     private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-        string? userAgent, bool isPrivate)
+        string? userAgent, bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string, string>? onLocalNetworkBlocked)
         : CefSharp.Handler.ResourceRequestHandler
     {
         protected override ICookieAccessFilter GetCookieAccessFilter(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
@@ -104,6 +106,14 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             }
 
             var pageUrl = browser.MainFrame?.Url;
+            // Rede local (Shields/LocalNetwork.cs): uma página pública não chega a este computador nem à rede de casa sem
+            // autorização do utilizador para o site — com ou sem escudo, é uma proteção e não um bloqueio de anúncios.
+            if (LocalNetwork.Decide(pageUrl, request.Url, request.ResourceType, allowedForSite: false) == LocalNetwork.Decision.Block
+                && LocalNetwork.SiteOf(pageUrl) is { } site && localNetworkAllowed?.Invoke(site) != true)
+            {
+                onLocalNetworkBlocked?.Invoke(site, request.Url);
+                return CefReturnValue.Cancel;
+            }
             if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var page) && !isProtected(page.Host))
                 return CefReturnValue.Continue;
 

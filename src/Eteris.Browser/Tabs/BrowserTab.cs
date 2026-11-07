@@ -185,6 +185,14 @@ public partial class BrowserTab : ObservableObject
     public IReadOnlyList<KeyValuePair<string, int>> BlockedHosts
         => _blockedHosts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).ToList();
 
+    private readonly Dictionary<string, int> _localNetworkBlocked = new(StringComparer.OrdinalIgnoreCase);
+
+    // Pedidos à rede local travados nesta página (Shields/LocalNetwork.cs), por destino («rede local · 192.168.1.1»).
+    public IReadOnlyList<KeyValuePair<string, int>> LocalNetworkBlocked
+        => _localNetworkBlocked.OrderByDescending(p => p.Value).ThenBy(p => p.Key).ToList();
+
+    public void RecordLocalNetworkBlocked(string label) => _localNetworkBlocked[label] = _localNetworkBlocked.GetValueOrDefault(label) + 1;
+
     public void RecordBlocked(string host)
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
@@ -220,6 +228,7 @@ public partial class BrowserTab : ObservableObject
     public void ResetShield()
     {
         _blockedHosts.Clear();
+        _localNetworkBlocked.Clear();
         BlockedCount = 0;
     }
 

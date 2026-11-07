@@ -156,7 +156,9 @@ public partial class MainWindow : Window
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 },
                 onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab)),
-                isPrivate: IsPrivate),
+                isPrivate: IsPrivate,
+                localNetworkAllowed: IsLocalNetworkAllowed,
+                onLocalNetworkBlocked: (site, url) => OnLocalNetworkBlocked(tab, site, url)),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
