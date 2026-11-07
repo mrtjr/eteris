@@ -65,6 +65,28 @@ public class ChromeLayoutTests
         Assert.False(layout.ShowsSideBar);
     }
 
+    // O rato tocou no topo em modo foco: as barras do modo normal aparecem, mas sem zona de arrastar nem cantos.
+    [Theory]
+    [InlineData(false, false, ChromeMode.Top)]
+    [InlineData(false, true, ChromeMode.Compact)]
+    [InlineData(true, false, ChromeMode.Side)]
+    public void Peek_ShowsTheUsualBars_WithoutCaptionOrRadius(bool verticalTabs, bool compact, ChromeMode expected)
+    {
+        var usual = ChromeLayout.Resolve(verticalTabs, compact, hidden: false);
+        var peek = ChromeLayout.Resolve(verticalTabs, compact, hidden: true, peek: true);
+        Assert.Equal(expected, peek.Mode);
+        Assert.True(peek.Peeking);
+        Assert.Equal(usual.TitleHeight, peek.TitleHeight);
+        Assert.Equal(usual.ToolbarHeight, peek.ToolbarHeight);
+        Assert.Equal(0, peek.CaptionHeight);
+        Assert.Equal(0, peek.PageRadius);
+        Assert.False(usual.Peeking);
+    }
+
+    [Fact]
+    public void Peek_WithoutHidden_ChangesNothing()
+        => Assert.Equal(ChromeLayout.Resolve(false, false, false), ChromeLayout.Resolve(false, false, hidden: false, peek: true));
+
     [Fact]
     public void OmniboxWidth_FixedOnlyInCompact_GrowsWithFocus()
     {

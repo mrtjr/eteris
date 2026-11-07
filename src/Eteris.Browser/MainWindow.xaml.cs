@@ -285,6 +285,7 @@ public partial class MainWindow : Window
 
     private void OpenNewTab()
     {
+        RevealBarsForKeyboard();
         Tabs.NewTab(NewTabUrl);
         _omniboxEdited = false;
         CloseFind();

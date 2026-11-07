@@ -15,7 +15,9 @@ public enum ChromeMode
     Hidden,
 }
 
-public sealed record ChromeLayout(ChromeMode Mode, double TitleHeight, double ToolbarHeight)
+// Peeking: as barras do modo escondido estão à vista por o rato ter tocado no topo (ver AutoHideBars). Ocupam o
+// seu lugar normal, mas a janela continua sem zona de arrastar nem cantos (está em modo foco ou ecrã inteiro).
+public sealed record ChromeLayout(ChromeMode Mode, double TitleHeight, double ToolbarHeight, bool Peeking = false)
 {
     public const double TitleBarHeight = 42;
     public const double ToolbarBarHeight = 48;
@@ -32,12 +34,14 @@ public sealed record ChromeLayout(ChromeMode Mode, double TitleHeight, double To
     public bool CaptionInToolbar => Mode is ChromeMode.Side or ChromeMode.Compact;
     public bool TabsInToolbar => Mode == ChromeMode.Compact;
     // Zona de arrastar a janela: a barra de cima, seja ela qual for.
-    public double CaptionHeight => Mode == ChromeMode.Hidden ? 0 : Mode == ChromeMode.Top ? TitleHeight : ToolbarHeight;
-    public double PageRadius => Mode == ChromeMode.Hidden ? 0 : 10;
+    public double CaptionHeight => Mode == ChromeMode.Hidden || Peeking ? 0 : Mode == ChromeMode.Top ? TitleHeight : ToolbarHeight;
+    public double PageRadius => Mode == ChromeMode.Hidden || Peeking ? 0 : 10;
 
-    // Modo foco e ecrã inteiro ganham a tudo; as abas verticais ganham ao compacto (a lateral já poupa a barra de título).
-    public static ChromeLayout Resolve(bool verticalTabs, bool compact, bool hidden)
+    // Modo foco e ecrã inteiro ganham a tudo (a não ser que o rato tenha chamado as barras: peek); as abas verticais
+    // ganham ao compacto (a lateral já poupa a barra de título).
+    public static ChromeLayout Resolve(bool verticalTabs, bool compact, bool hidden, bool peek = false)
     {
+        if (hidden && peek) return Resolve(verticalTabs, compact, hidden: false) with { Peeking = true };
         if (hidden) return new(ChromeMode.Hidden, 0, 0);
         if (verticalTabs) return new(ChromeMode.Side, 0, ToolbarBarHeight);
         if (compact) return new(ChromeMode.Compact, 0, CompactBarHeight);

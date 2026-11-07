@@ -6,8 +6,10 @@ public sealed record StartupTab(string Url, bool Activate);
 public static class StartupPages
 {
     // Primeiro arranque: boas-vindas (uma vez), mesmo que o Éteris tenha sido aberto com um endereço — esse endereço
-    // abre também e fica à frente. Depois de uma atualização: «Novidades» uma vez por versão.
-    public static IReadOnlyList<StartupTab> Plan(bool firstRun, string lastSeenVersion, string version, string? initialUrl)
+    // abre também e fica à frente. Depois de uma atualização: «Novidades» uma vez por versão. Sem nada para mostrar
+    // nem abas retomadas da sessão (hasRestoredTabs), abre uma nova aba: uma janela nunca arranca vazia.
+    public static IReadOnlyList<StartupTab> Plan(bool firstRun, string lastSeenVersion, string version, string? initialUrl,
+        bool hasRestoredTabs = true)
     {
         var tabs = new List<StartupTab>();
         if (initialUrl is not null) tabs.Add(new StartupTab(initialUrl, Activate: true));
@@ -15,6 +17,7 @@ public static class StartupPages
             tabs.Add(new StartupTab(WelcomePage.Url, Activate: initialUrl is null));
         else if (WhatsNewPage.ShouldShow(lastSeenVersion, version, firstRun: false))
             tabs.Add(new StartupTab(WhatsNewPage.Url, Activate: true));
+        if (tabs.Count == 0 && !hasRestoredTabs) tabs.Add(new StartupTab(NewTabPage.Url, Activate: true));
         return tabs;
     }
 }

@@ -40,7 +40,8 @@ public partial class MainWindow
     // verticais, modo compacto, modo foco e ecrã inteiro).
     private void ApplyChromeLayout()
     {
-        var layout = _chrome = ChromeLayout.Resolve(VerticalTabs, CompactDensity, _focusMode || _pageFullscreen);
+        var layout = _chrome = ChromeLayout.Resolve(VerticalTabs, CompactDensity, _focusMode || _pageFullscreen, peek: _autoHide.Revealed);
+        SyncAutoHide();
         var hidden = layout.Mode == ChromeMode.Hidden;
         var side = layout.ShowsSideBar;
         SideCollapsed = Settings.Current.SidebarCollapsed;

@@ -26,7 +26,8 @@ public partial class MainWindow
         var version = Browser.SettingsPage.Version;
         if (_ownsSession)
         {
-            var plan = Browser.StartupPages.Plan(Data.Settings.IsFirstRun, Data.Settings.Current.LastSeenVersion, version, initialUrl);
+            var plan = Browser.StartupPages.Plan(Data.Settings.IsFirstRun, Data.Settings.Current.LastSeenVersion, version, initialUrl,
+                hasRestoredTabs: Tabs.Tabs.Count > 0);
             if (plan.Any(t => t.Url == Browser.WelcomePage.Url || t.Url == Browser.WhatsNewPage.Url)) Data.Settings.MarkVersionSeen(version);
             foreach (var tab in plan) Tabs.NewTab(tab.Url, tab.Activate);
         }

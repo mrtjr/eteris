@@ -22,4 +22,14 @@ public class StartupPagesTests
         Assert.Equal([new StartupTab(WhatsNewPage.Url, true)], StartupPages.Plan(false, "0.1.0", "0.2.0", null));
         Assert.Empty(StartupPages.Plan(false, "0.2.0", "0.2.0", null));
     }
+
+    // Sessão vazia (ficheiro apagado ou sem abas) e nada para mostrar: a janela abre com uma nova aba, nunca vazia.
+    [Fact]
+    public void NothingToShowAndNoSession_OpensANewTab()
+    {
+        Assert.Equal([new StartupTab(NewTabPage.Url, true)], StartupPages.Plan(false, "0.2.0", "0.2.0", null, hasRestoredTabs: false));
+        Assert.Empty(StartupPages.Plan(false, "0.2.0", "0.2.0", null, hasRestoredTabs: true));
+        // Com um endereço ou uma página a mostrar, não se acrescenta nada.
+        Assert.Equal([new StartupTab("https://a.pt/", true)], StartupPages.Plan(false, "0.2.0", "0.2.0", "https://a.pt/", hasRestoredTabs: false));
+    }
 }

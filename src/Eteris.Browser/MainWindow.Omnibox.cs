@@ -93,6 +93,7 @@ public partial class MainWindow
 
     private void FocusOmnibox()
     {
+        RevealBarsForKeyboard();
         Omnibox.Focus();
         Omnibox.SelectAll();
     }

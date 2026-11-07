@@ -61,7 +61,7 @@ public partial class MainWindow
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
             WindowState = WindowState.Maximized;
-            ShowToast("Ecrã inteiro — prima Esc para sair");
+            ShowToast(_fullscreenByPage ? "Ecrã inteiro — prima Esc para sair" : "Ecrã inteiro — leve o rato ao topo para as barras; Esc para sair");
         }
         else
         {

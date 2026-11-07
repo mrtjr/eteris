@@ -1400,7 +1400,7 @@
                     Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="{DynamicResource ToastBrush}" IsHitTestVisible="False"
                     BorderBrush="{StaticResource IrisBrush}" BorderThickness="1" Opacity="0">
                 <TextBlock FontSize="13" Foreground="{DynamicResource TextBrush}">
-                    Modo foco — prima <Bold>F11</Bold> ou <Bold>Ctrl+K</Bold> para voltar
+                    Modo foco — leve o rato ao topo para as barras; <Bold>F11</Bold> para voltar
                 </TextBlock>
             </Border>
 

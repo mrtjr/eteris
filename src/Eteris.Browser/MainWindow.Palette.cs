@@ -313,9 +313,11 @@ public partial class MainWindow
         }
 
         _focusMode = !_focusMode;
-        ApplyChromeLayout();
         CloseSuggestions();
         ShieldPopup.IsOpen = false;
+        // O teclado vai para a página: com o foco na barra de endereço as barras não se esconderiam (ver BarsInUse).
+        if (_focusMode && Omnibox.IsKeyboardFocusWithin) ReturnFocusToPage();
+        ApplyChromeLayout();
 
         if (!_focusMode) return;
         var toast = new DoubleAnimationUsingKeyFrames();
