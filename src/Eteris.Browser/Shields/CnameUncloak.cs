@@ -60,10 +60,13 @@ public static class CnameUncloak
     // Etiqueta do Escudo: o nome visível e o rastreador que estava por trás.
     public static string Label(string host, string target) => $"{host} → {target}";
 
-    // Linha do Escudo: os rastreadores escondidos desmascarados nesta página (ou que a proteção está ativa).
-    public static string ShieldLine(IReadOnlyList<string> cloaked, bool enabled)
+    // Linha do Escudo: os rastreadores escondidos desmascarados nesta página (ou que a proteção está ativa). Sem
+    // maneira segura de perguntar o nome canónico (proxy no Windows sem DNS cifrado), diz que está em pausa.
+    public static string ShieldLine(IReadOnlyList<string> cloaked, bool enabled, CnameSource source = CnameSource.WindowsDns)
     {
         if (!enabled) return "·  Rastreadores escondidos (CNAME): desligado nas definições";
+        if (source == CnameSource.Off)
+            return "·  Rastreadores escondidos (CNAME): em pausa — com um proxy no Windows, o DNS do sistema revelaria os nomes à rede (ligue o DNS cifrado)";
         if (cloaked.Count == 0) return "✓  Rastreadores escondidos atrás de subdomínios do site são desmascarados";
         var labels = cloaked.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var count = cloaked.Count == 1 ? "1 rastreador escondido desmascarado" : $"{cloaked.Count} rastreadores escondidos desmascarados";
@@ -77,17 +80,36 @@ public sealed record CnameAnswer(IReadOnlyList<string> Chain, TimeSpan Ttl)
     public static readonly CnameAnswer Failed = new([], TimeSpan.FromMinutes(1));
 }
 
-// Cache em memória (nunca em disco) com TTL, e uma só consulta em voo por nome.
-public sealed class CnameCache(Func<string, CnameAnswer> resolve, Func<DateTime> clock)
+// Cache em memória (nunca em disco) com TTL, e uma só consulta em voo por nome. A consulta nunca corre no ThreadPool:
+// um resolvedor bloqueante (o DNS do Windows) corre nas threads próprias de BlockingLookups, e um assíncrono (DoH pelo
+// motor) não ocupa thread nenhuma. Um resolvedor que devolve null não respondeu (fila cheia, sem maneira segura de
+// perguntar): nada fica em cache e o pedido segue. A cache tem tamanho limitado e as entradas vencidas saem.
+public sealed class CnameCache
 {
     public static readonly TimeSpan MinTtl = TimeSpan.FromMinutes(1);
     public static readonly TimeSpan MaxTtl = TimeSpan.FromHours(1);
     // Sem CNAME, o nome volta a ser visto passado este tempo.
     public static readonly TimeSpan NoCnameTtl = TimeSpan.FromMinutes(10);
+    // Nomes guardados no máximo (os subdomínios candidatos de muitos dias de navegação).
+    public const int MaxEntries = 4096;
 
+    private readonly Func<string, Task<CnameAnswer?>> _resolve;
+    private readonly Func<DateTime> _clock;
     private readonly ConcurrentDictionary<string, (IReadOnlyList<string> Chain, DateTime Expires)> _entries = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<string>>>> _inFlight = new(StringComparer.Ordinal);
     private int _lookups;
+
+    private CnameCache(Func<string, Task<CnameAnswer?>> resolve, Func<DateTime> clock)
+    {
+        _resolve = resolve;
+        _clock = clock;
+    }
+
+    // Resolvedor bloqueante: corre nas threads de «workers» (por omissão, as partilhadas do DNS do Windows).
+    public CnameCache(Func<string, CnameAnswer> resolve, Func<DateTime> clock, BlockingLookups? workers = null)
+        : this(host => (workers ?? BlockingLookups.Dns).TryRun(() => resolve(host)), clock) { }
+
+    public static CnameCache FromAsync(Func<string, Task<CnameAnswer?>> resolve, Func<DateTime> clock) => new(resolve, clock);
 
     public int Lookups => Volatile.Read(ref _lookups);
 
@@ -95,10 +117,14 @@ public sealed class CnameCache(Func<string, CnameAnswer> resolve, Func<DateTime>
 
     public bool TryGet(string host, out IReadOnlyList<string> chain)
     {
-        if (_entries.TryGetValue(host, out var entry) && entry.Expires > clock())
+        if (_entries.TryGetValue(host, out var entry))
         {
-            chain = entry.Chain;
-            return true;
+            if (entry.Expires > _clock())
+            {
+                chain = entry.Chain;
+                return true;
+            }
+            _entries.TryRemove(new KeyValuePair<string, (IReadOnlyList<string>, DateTime)>(host, entry));
         }
         chain = [];
         return false;
@@ -107,31 +133,97 @@ public sealed class CnameCache(Func<string, CnameAnswer> resolve, Func<DateTime>
     public Task<IReadOnlyList<string>> LookupAsync(string host)
     {
         if (TryGet(host, out var cached)) return Task.FromResult(cached);
-        var lazy = _inFlight.GetOrAdd(host, h => new Lazy<Task<IReadOnlyList<string>>>(() => Task.Run(() =>
+        return _inFlight.GetOrAdd(host, h => new Lazy<Task<IReadOnlyList<string>>>(() => Start(h))).Value;
+    }
+
+    private Task<IReadOnlyList<string>> Start(string host)
+    {
+        Interlocked.Increment(ref _lookups);
+        Task<CnameAnswer?> pending;
+        try { pending = _resolve(host); }
+        catch (Exception) { pending = Task.FromResult<CnameAnswer?>(CnameAnswer.Failed); }
+        return pending.ContinueWith<IReadOnlyList<string>>(task =>
         {
-            Interlocked.Increment(ref _lookups);
-            CnameAnswer answer;
-            try { answer = resolve(h); }
-            catch (Exception) { answer = CnameAnswer.Failed; }
-            var ttl = answer.Chain.Count == 0 ? (answer.Ttl < NoCnameTtl ? answer.Ttl : NoCnameTtl)
-                : answer.Ttl < MinTtl ? MinTtl : answer.Ttl > MaxTtl ? MaxTtl : answer.Ttl;
-            _entries[h] = (answer.Chain, clock() + ttl);
-            _inFlight.TryRemove(h, out _);
-            return answer.Chain;
-        })));
-        return lazy.Value;
+            var answer = task.IsCompletedSuccessfully ? task.Result : CnameAnswer.Failed;
+            if (answer is not null) Store(host, answer);
+            _inFlight.TryRemove(host, out _);
+            return answer?.Chain ?? [];
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
+    private void Store(string host, CnameAnswer answer)
+    {
+        var ttl = answer.Chain.Count == 0 ? (answer.Ttl < NoCnameTtl ? answer.Ttl : NoCnameTtl)
+            : answer.Ttl < MinTtl ? MinTtl : answer.Ttl > MaxTtl ? MaxTtl : answer.Ttl;
+        var now = _clock();
+        if (_entries.Count >= MaxEntries)
+        {
+            foreach (var (name, entry) in _entries)
+                if (entry.Expires <= now) _entries.TryRemove(name, out _);
+            // Ainda cheia (todos válidos): começa de novo — é só uma cache.
+            if (_entries.Count >= MaxEntries) _entries.Clear();
+        }
+        _entries[host] = (answer.Chain, now + ttl);
     }
 
     public void Clear() => _entries.Clear();
 }
 
+// Chamadas nativas bloqueantes (DnsQuery_W) em threads próprias, nunca no ThreadPool: com um DNS que não responde
+// (VPN caída, router sem resposta) cada consulta fica segundos presa, e no ThreadPool prendia as continuações de que
+// os pedidos dependem (o limite de 150 ms do CNAME, os scriptlets). Poucas em paralelo e uma fila curta: cheia, a
+// consulta nem se faz (null: «sem resposta», o pedido segue sem esperar).
+public sealed class BlockingLookups(int threads, int maxPending)
+{
+    public static BlockingLookups Dns { get; } = new(threads: 3, maxPending: 32);
+
+    private readonly System.Collections.Concurrent.BlockingCollection<Action> _queue = new();
+    private int _pending;
+    private int _started;
+
+    public int Pending => Volatile.Read(ref _pending);
+
+    public Task<T?> TryRun<T>(Func<T> work) where T : class
+    {
+        if (Interlocked.Increment(ref _pending) > maxPending)
+        {
+            Interlocked.Decrement(ref _pending);
+            return Task.FromResult<T?>(null);
+        }
+        if (Interlocked.Exchange(ref _started, 1) == 0)
+            for (var i = 0; i < threads; i++)
+                new Thread(Work) { IsBackground = true, Name = "Éteris DNS " + (i + 1) }.Start();
+        // As continuações nunca correm nestas threads (podiam ficar à espera de outra consulta).
+        var done = new TaskCompletionSource<T?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _queue.Add(() =>
+        {
+            try { done.TrySetResult(work()); }
+            catch (Exception e) { done.TrySetException(e); }
+            finally { Interlocked.Decrement(ref _pending); }
+        });
+        return done.Task;
+    }
+
+    private void Work()
+    {
+        foreach (var job in _queue.GetConsumingEnumerable()) job();
+    }
+}
+
 // Limite de consultas novas por página (por browser, reposto quando a página muda), contado por nome distinto: 30
 // imagens de img.jornal.pt gastam uma consulta (as repetidas juntam-se à que está em voo), e metrics.jornal.pt ainda
-// tem a sua.
+// tem a sua. Uma aba fechada (ou a dormir) leva a sua conta (Forget); e nunca se guardam mais do que MaxBrowsers.
 public sealed class CnameQuota(int perPage)
 {
+    public const int MaxBrowsers = 256;
+
     private readonly Lock _lock = new();
     private readonly Dictionary<int, (string Page, HashSet<string> Names)> _pages = new();
+
+    public int Browsers
+    {
+        get { lock (_lock) return _pages.Count; }
+    }
 
     public bool TryTake(int browserId, string? pageUrl, string host)
     {
@@ -139,12 +231,21 @@ public sealed class CnameQuota(int perPage)
         lock (_lock)
         {
             if (!_pages.TryGetValue(browserId, out var entry) || entry.Page != page)
+            {
+                // Uma conta esquecida a mais só dá a essa aba mais umas consultas.
+                if (!_pages.ContainsKey(browserId) && _pages.Count >= MaxBrowsers) _pages.Clear();
                 _pages[browserId] = entry = (page, new HashSet<string>(StringComparer.Ordinal));
+            }
             if (entry.Names.Contains(host)) return true;
             if (entry.Names.Count >= perPage) return false;
             entry.Names.Add(host);
             return true;
         }
+    }
+
+    public void Forget(int browserId)
+    {
+        lock (_lock) _pages.Remove(browserId);
     }
 }
 
@@ -193,8 +294,9 @@ public static class CnameStats
     }
 }
 
-// Consulta ao DNS do Windows (DnsQuery_W, dnsapi.dll): os nomes CNAME da resposta, pela ordem. Com o DNS cifrado do
-// Éteris ligado, só a cache do Windows é consultada (DNS_QUERY_NO_WIRE_QUERY): nada sai em claro para a rede.
+// Consulta ao DNS do Windows (DnsQuery_W, dnsapi.dll): os nomes CNAME da resposta, pela ordem. «cacheOnly»: só a
+// cache do Windows (DNS_QUERY_NO_WIRE_QUERY), nada sai para a rede. Chamada bloqueante: só nas threads de
+// BlockingLookups.Dns.
 public static partial class WindowsDns
 {
     private const ushort TypeA = 1;
@@ -202,11 +304,13 @@ public static partial class WindowsDns
     private const uint QueryStandard = 0;
     private const uint QueryNoWireQuery = 0x10;
     private const int FreeRecordList = 1;
+    private const int NameError = 9003;
 
     public static CnameAnswer QueryCname(string host, bool cacheOnly)
     {
         var status = DnsQuery(host, TypeA, cacheOnly ? QueryNoWireQuery : QueryStandard, 0, out var results, 0);
-        if (status != 0 || results == 0)
+        // DNS_ERROR_RCODE_NAME_ERROR com registos: o alvo do CNAME não existe, mas a cadeia vem na resposta.
+        if ((status != 0 && status != NameError) || results == 0)
         {
             if (results != 0) DnsRecordListFree(results, FreeRecordList);
             return CnameAnswer.Failed;
@@ -237,15 +341,269 @@ public static partial class WindowsDns
     private static partial void DnsRecordListFree(nint records, int freeType);
 }
 
-// A cache partilhada pelo Éteris: pergunta ao DNS do Windows (só à cache com o DNS cifrado ligado). A janela privada
-// tem a sua, que só lê a cache do Windows (nunca faz ela própria uma consulta que lá deixasse os nomes visitados) e
-// é esquecida quando a sessão privada acaba.
+// Nome canónico por DNS-over-HTTPS (RFC 8484, formato binário), pelo próprio motor. Com o DNS cifrado ligado o
+// Chromium resolve tudo por DoH e a cache do Windows nunca vê esses nomes: perguntar-lhe não desmascarava nada. A
+// pergunta vai ao mesmo fornecedor (que já recebe o nome quando a página o pede), num pedido do motor sem aba
+// (contexto global: DNS cifrado e proxy do motor), sem cookies e sem cache em disco; nunca ocupa uma thread à espera.
+public static class DohCname
+{
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    public const int MaxInFlight = 8;
+    private const ushort TypeA = 1;
+    private const ushort TypeCname = 5;
+    private static int s_inFlight;
+
+    // Pergunta do tipo A (a resposta traz a cadeia CNAME antes dos endereços), com o id 0 (RFC 8484 §4.1) e recursão.
+    public static byte[]? BuildQuery(string host)
+    {
+        host = host.Trim().TrimEnd('.');
+        if (host.Length is 0 or > 253) return null;
+        var bytes = new List<byte> { 0, 0, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0 };
+        foreach (var label in host.Split('.'))
+        {
+            if (label.Length is 0 or > 63 || label.Any(c => c <= ' ' || c > '~')) return null;
+            bytes.Add((byte)label.Length);
+            bytes.AddRange(System.Text.Encoding.ASCII.GetBytes(label));
+        }
+        bytes.AddRange([0, 0, (byte)TypeA, 0, 1]);
+        return bytes.ToArray();
+    }
+
+    // O endereço GET do modelo do fornecedor (…/dns-query?dns=<base64url sem «=»>).
+    public static string? QueryUrl(string template, string host)
+        => BuildQuery(host) is { } query
+            ? template + (template.Contains('?') ? "&" : "?") + "dns=" + Convert.ToBase64String(query).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+            : null;
+
+    // Os nomes CNAME da secção de respostas, pela ordem, e o menor TTL. Um NXDOMAIN também traz a cadeia (o nome que não
+    // existe é o último, o alvo do CNAME): sem respostas, é «sem CNAME». null: resposta estragada ou com outro erro
+    // (conta como falha).
+    public static CnameAnswer? ParseAnswer(byte[] message)
+    {
+        try
+        {
+            if (message.Length < 12 || (message[2] & 0x80) == 0) return null;
+            var rcode = message[3] & 0x0F;
+            if (rcode is not (0 or 3)) return null;
+            int questions = U16(message, 4), answers = U16(message, 6);
+            var pos = 12;
+            for (var i = 0; i < questions; i++) pos = SkipName(message, pos) + 4;
+            var chain = new List<string>();
+            var ttl = uint.MaxValue;
+            for (var i = 0; i < answers; i++)
+            {
+                pos = SkipName(message, pos);
+                if (pos + 10 > message.Length) return null;
+                var type = U16(message, pos);
+                var recordTtl = (uint)(U16(message, pos + 4) << 16 | U16(message, pos + 6));
+                var length = U16(message, pos + 8);
+                pos += 10;
+                if (pos + length > message.Length) return null;
+                if (type == TypeCname)
+                {
+                    chain.Add(ReadName(message, pos));
+                    ttl = Math.Min(ttl, recordTtl);
+                }
+                pos += length;
+            }
+            return new CnameAnswer(chain, chain.Count == 0 || ttl == uint.MaxValue ? CnameCache.NoCnameTtl : TimeSpan.FromSeconds(ttl));
+        }
+        catch (FormatException) { return null; }
+    }
+
+    private static int U16(byte[] m, int at)
+        => at + 1 < m.Length ? m[at] << 8 | m[at + 1] : throw new FormatException();
+
+    private static int SkipName(byte[] m, int pos)
+    {
+        while (true)
+        {
+            if (pos >= m.Length) throw new FormatException();
+            var b = m[pos];
+            if (b == 0) return pos + 1;
+            if ((b & 0xC0) == 0xC0) return pos + 1 < m.Length ? pos + 2 : throw new FormatException();
+            if ((b & 0xC0) != 0) throw new FormatException();
+            pos += 1 + b;
+        }
+    }
+
+    // Um nome com ponteiros de compressão (no máximo 32 saltos, 255 octetos).
+    private static string ReadName(byte[] m, int pos)
+    {
+        var labels = new List<string>();
+        var length = 0;
+        for (var jumps = 0; ;)
+        {
+            if (pos >= m.Length) throw new FormatException();
+            var b = m[pos];
+            if (b == 0) break;
+            if ((b & 0xC0) == 0xC0)
+            {
+                if (pos + 1 >= m.Length || ++jumps > 32) throw new FormatException();
+                pos = (b & 0x3F) << 8 | m[pos + 1];
+                continue;
+            }
+            if ((b & 0xC0) != 0 || pos + 1 + b > m.Length || (length += b + 1) > 255) throw new FormatException();
+            labels.Add(System.Text.Encoding.ASCII.GetString(m, pos + 1, b));
+            pos += 1 + b;
+        }
+        return string.Join('.', labels).ToLowerInvariant();
+    }
+
+    // null: não se perguntou (motor por arrancar, demasiadas perguntas em voo, nome inválido).
+    public static Task<CnameAnswer?> QueryAsync(string host, string template)
+    {
+        if (QueryUrl(template, host) is not { } url || Cef.IsInitialized != true) return Task.FromResult<CnameAnswer?>(null);
+        if (Interlocked.Increment(ref s_inFlight) > MaxInFlight)
+        {
+            Interlocked.Decrement(ref s_inFlight);
+            return Task.FromResult<CnameAnswer?>(null);
+        }
+        var done = new TaskCompletionSource<CnameAnswer?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timeout = new CancellationTokenSource(Timeout);
+        var registration = timeout.Token.Register(() => done.TrySetResult(CnameAnswer.Failed));
+        _ = done.Task.ContinueWith(_ =>
+        {
+            Interlocked.Decrement(ref s_inFlight);
+            registration.Dispose();
+            timeout.Dispose();
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        var client = new Client(bytes => done.TrySetResult(bytes is null ? CnameAnswer.Failed : ParseAnswer(bytes) ?? CnameAnswer.Failed));
+        _ = Cef.UIThreadTaskFactory.StartNew(() =>
+        {
+            try
+            {
+                using var request = CefSharp.Request.Create();
+                request.Url = url;
+                request.Method = "GET";
+                request.SetReferrer(string.Empty, ReferrerPolicy.NoReferrer);
+                request.SetHeaderByName("Accept", "application/dns-message", true);
+                // Sem cookies (sem AllowStoredCredentials) e sem cache: os nomes perguntados não ficam no disco.
+                request.Flags = UrlRequestFlags.DisableCache | UrlRequestFlags.StopOnRedirect | UrlRequestFlags.NoRetryOn5XX;
+                client.Start(new CefSharp.UrlRequest(request, client));
+            }
+            catch (Exception) { client.Fail(); }
+        });
+        return done.Task;
+    }
+
+    // Junta a resposta (no máximo 64 KiB, como uma mensagem DNS) e entrega-a no fim, se for application/dns-message.
+    private sealed class Client(Action<byte[]?> onDone) : IUrlRequestClient
+    {
+        private readonly System.IO.MemoryStream _bytes = new();
+        private IUrlRequest? _request;
+        private bool _tooBig;
+
+        public void Start(IUrlRequest request) => _request = request;
+
+        public void Fail() => onDone(null);
+
+        bool IUrlRequestClient.GetAuthCredentials(bool isProxy, string host, int port, string realm, string scheme, IAuthCallback callback)
+        {
+            callback.Dispose();
+            return false;
+        }
+
+        void IUrlRequestClient.OnDownloadData(IUrlRequest request, System.IO.Stream data)
+        {
+            var chunk = new byte[4096];
+            int read;
+            while ((read = data.Read(chunk, 0, chunk.Length)) > 0)
+            {
+                if (_tooBig || _bytes.Length + read > 65535)
+                {
+                    _tooBig = true;
+                    continue;
+                }
+                _bytes.Write(chunk, 0, read);
+            }
+        }
+
+        void IUrlRequestClient.OnDownloadProgress(IUrlRequest request, long current, long total) { }
+
+        void IUrlRequestClient.OnUploadProgress(IUrlRequest request, long current, long total) { }
+
+        void IUrlRequestClient.OnRequestComplete(IUrlRequest request)
+        {
+            byte[]? body = null;
+            try
+            {
+                var response = request.Response;
+                if (!_tooBig && request.RequestStatus == UrlRequestStatus.Success && response?.StatusCode == 200
+                    && string.Equals(response.MimeType, "application/dns-message", StringComparison.OrdinalIgnoreCase))
+                    body = _bytes.ToArray();
+            }
+            catch (Exception) { }
+            _bytes.Dispose();
+            // Mesma thread do CEF que criou o pedido, como a API exige.
+            _request?.Dispose();
+            _request = null;
+            onDone(body);
+        }
+    }
+}
+
+// Proxy configurado no Windows (o Chromium usa-o): o DNS do sistema revelaria à rede local os nomes que o proxy devia
+// esconder. Lido do registo do utilizador (proxy fixo ou script PAC), no máximo a cada 30 s.
+public static class SystemProxy
+{
+    private static readonly TimeSpan Refresh = TimeSpan.FromSeconds(30);
+    // Lida das threads de rede: uma leitura inteira de cada vez (sem tuplos rasgados).
+    private sealed record Reading(bool Value, DateTime At);
+    private static volatile Reading s_cached = new(false, DateTime.MinValue);
+
+    public static bool From(object? proxyEnable, object? proxyServer, object? autoConfigUrl)
+        => (proxyEnable is int on && on != 0 && proxyServer is string { Length: > 0 } server && !string.IsNullOrWhiteSpace(server))
+           || autoConfigUrl is string { Length: > 0 } pac && !string.IsNullOrWhiteSpace(pac);
+
+    public static bool Configured
+    {
+        get
+        {
+            var cached = s_cached;
+            if (DateTime.UtcNow - cached.At < Refresh) return cached.Value;
+            var value = false;
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings");
+                value = key is not null && From(key.GetValue("ProxyEnable"), key.GetValue("ProxyServer"), key.GetValue("AutoConfigURL"));
+            }
+            catch (Exception) { }
+            s_cached = new Reading(value, DateTime.UtcNow);
+            return value;
+        }
+    }
+}
+
+// De onde vem o nome canónico: o DNS do Windows (rede ou só a cache), o DoH pelo motor, ou de lado nenhum.
+public enum CnameSource { WindowsDns, WindowsCacheOnly, SecureDns, Off }
+
+// As caches do Éteris. Com o DNS cifrado, o nome canónico pergunta-se por DoH pelo motor (DohCname); com um proxy no
+// Windows e sem DNS cifrado, não se pergunta (o Escudo diz que está em pausa); sem nenhum dos dois, ao DNS do Windows.
+// A janela privada tem a sua cache, esquecida quando a sessão privada acaba, e sem DNS cifrado só lê a cache do Windows
+// (nunca faz ela própria uma consulta que lá deixasse os nomes visitados).
 public static class Cname
 {
-    public static CnameCache Cache { get; } = new(
-        host => WindowsDns.QueryCname(host, cacheOnly: PrivacyPreferences.SecureDnsProvider is not null), () => DateTime.UtcNow);
+    public static CnameSource SourceFor(bool secureDns, bool systemProxy, bool isPrivate)
+        => secureDns ? CnameSource.SecureDns
+            : systemProxy ? CnameSource.Off
+            : isPrivate ? CnameSource.WindowsCacheOnly
+            : CnameSource.WindowsDns;
 
-    public static CnameCache PrivateCache { get; } = new(host => WindowsDns.QueryCname(host, cacheOnly: true), () => DateTime.UtcNow);
+    public static CnameSource SourceFor(bool isPrivate)
+        => SourceFor(PrivacyPreferences.SecureDnsTemplate is not null, PrivacyPreferences.SecureDnsTemplate is null && SystemProxy.Configured, isPrivate);
+
+    private static Task<CnameAnswer?> Resolve(string host, bool isPrivate) => SourceFor(isPrivate) switch
+    {
+        CnameSource.SecureDns => DohCname.QueryAsync(host, PrivacyPreferences.SecureDnsTemplate!),
+        CnameSource.WindowsDns => BlockingLookups.Dns.TryRun(() => WindowsDns.QueryCname(host, cacheOnly: false)),
+        CnameSource.WindowsCacheOnly => BlockingLookups.Dns.TryRun(() => WindowsDns.QueryCname(host, cacheOnly: true)),
+        _ => Task.FromResult<CnameAnswer?>(null),
+    };
+
+    public static CnameCache Cache { get; } = CnameCache.FromAsync(host => Resolve(host, isPrivate: false), () => DateTime.UtcNow);
+
+    public static CnameCache PrivateCache { get; } = CnameCache.FromAsync(host => Resolve(host, isPrivate: true), () => DateTime.UtcNow);
 
     public static CnameCache For(bool isPrivate) => isPrivate ? PrivateCache : Cache;
 

@@ -43,6 +43,9 @@ public static class PrivacyPreferences
 
     public static string? SecureDnsProvider => StartedWithSecureDns;
 
+    // O modelo DoH desse fornecedor (https://…/dns-query), para o motor perguntar ele próprio (Shields/CnameUncloak.cs).
+    public static string? SecureDnsTemplate { get; set; }
+
     public static Task ApplyAsync(IRequestContext? context = null) => Cef.UIThreadTaskFactory.StartNew(() =>
     {
         var target = context ?? Cef.GetGlobalRequestContext();

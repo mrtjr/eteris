@@ -127,8 +127,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         private CefReturnValue Uncloak(IBrowser browser, IRequest request, string? pageUrl, string? documentUrl, string type,
             IRequestCallback? callback)
         {
+            // Sem maneira segura de perguntar o nome canónico (proxy no Windows sem DNS cifrado), não se pergunta.
             if (!Data.Settings.Current.UncloakCname || !CnameUncloak.IsCandidate(pageUrl, request.Url, request.ResourceType)
-                || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri))
+                || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri) || Cname.SourceFor(isPrivate) == CnameSource.Off)
             {
                 Observe(request.Url, request.ResourceType, ObservedVerdict.Allowed);
                 return CefReturnValue.Continue;

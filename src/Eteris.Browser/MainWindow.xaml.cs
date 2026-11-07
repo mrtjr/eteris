@@ -520,6 +520,7 @@ public partial class MainWindow : Window
         _scriptlets.Clear();
         foreach (var browser in _browsers.Values)
         {
+            ForgetCnameQuota(browser);
             PageScript.Release(browser);
             browser.Dispose();
         }

@@ -19,9 +19,20 @@ public partial class MainWindow
     {
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         if (!_browsers.Remove(tab, out var browser)) return;
+        ForgetCnameQuota(browser);
         BrowserHost.Children.Remove(browser);
         PageScript.Release(browser);
         browser.Dispose();
+    }
+
+    // A conta das consultas CNAME do browser que sai (Shields/CnameUncloak.cs, CnameQuota).
+    private static void ForgetCnameQuota(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)
+    {
+        try
+        {
+            if (browser.IsBrowserInitialized && browser.GetBrowser() is { } core) Shields.Cname.Quota.Forget(core.Identifier);
+        }
+        catch (Exception) { }
     }
 
     // Chamado antes de mostrar a nova aba ativa: acorda-a se estava a dormir e marca a anterior.

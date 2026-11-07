@@ -42,7 +42,8 @@ public static class PrivacyPage
         bool UncloakCname = true,
         long CnameBlocked = 0,
         long CnameDecisions = 0,
-        double CnameMicros = 0);
+        double CnameMicros = 0,
+        CnameSource CnameSource = CnameSource.WindowsDns);
 
     // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
     public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
@@ -145,11 +146,16 @@ public static class PrivacyPage
             new("cname", "Rastreadores escondidos desmascarados",
                 !s.UncloakCname ? "Opcional · desligado: um rastreador servido por um subdomínio do site (CNAME) passa como se fosse do site."
                     : !uncloaks ? "O desmascarar de CNAME não está a decidir como devia."
+                    : s.CnameSource == CnameSource.Off
+                        ? "Em pausa: há um proxy configurado no Windows e perguntar o nome canónico ao DNS do sistema revelaria à rede os nomes que o proxy esconde. Com o DNS cifrado ligado, o próprio motor pergunta-o cifrado."
                     : $"Um pedido a {new Uri(CnameSample).Host} que no DNS é exemplo.eulerian.net é bloqueado como o rastreador que é. "
                       + $"Nesta sessão: {Count((int)s.CnameBlocked, "bloqueado", "bloqueados")} em {Count((int)s.CnameDecisions, "pedido visto", "pedidos vistos")}"
                       + (s.CnameDecisions > 0 ? FormattableString.Invariant($", {s.CnameMicros:0.0} µs por pedido na thread de rede") : string.Empty)
-                      + (s.SecureDns is null ? "." : "; com o DNS cifrado só se lê a cache do Windows."),
-                !s.UncloakCname ? null : uncloaks, Fix: s.UncloakCname ? null : "eteris://settings/#privacidade"),
+                      + (s.CnameSource == CnameSource.SecureDns && s.SecureDns is { } doh
+                          ? $"; o nome canónico pergunta-se a {doh} pelo próprio motor, cifrado e sem cache."
+                          : "."),
+                !s.UncloakCname ? null : uncloaks && s.CnameSource != CnameSource.Off,
+                Fix: !s.UncloakCname || s.CnameSource == CnameSource.Off ? "eteris://settings/#privacidade" : null),
             new("webrtc", "O WebRTC não revela o seu IP local",
                 !s.WebRtcProtected ? "A política de IP do WebRTC não foi aplicada."
                     : !webRtcFixed ? "A política de IP do WebRTC não está fixada no motor desde o arranque: as primeiras páginas podiam ficar sem ela."
@@ -179,7 +185,7 @@ public static class PrivacyPage
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
-            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision);
+            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false));
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.
