@@ -67,6 +67,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (uri is { Host: "history" }) return History(uri, request.Url);
         if (uri is { Host: "settings" or "about", AbsolutePath: "/clear" }) return ClearData(uri, request.Url, browser);
         if (uri is { Host: "credits", AbsolutePath: "/" }) return Html(CreditsPage.Render());
+        if (uri is { Host: "privacy", AbsolutePath: "/" }) return Html(PrivacyPage.Render(PrivacyPage.Current()));
         if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));

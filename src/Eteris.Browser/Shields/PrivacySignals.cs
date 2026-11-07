@@ -6,8 +6,8 @@ public static class PrivacySignals
 {
     public static readonly IReadOnlyList<(string Name, string Value)> Headers = [("DNT", "1"), ("Sec-GPC", "1")];
 
-    // navigator.globalPrivacyControl === true. Registado pelo ScriptletInjector antes de qualquer script da página
-    // e em todos os frames do processo; se o motor já expuser o valor verdadeiro, não mexe.
+    // navigator.globalPrivacyControl === true. Registado pelo ScriptletInjector uma vez por aba (antes de qualquer
+    // script da página, em todos os frames do processo, nunca retirado); se o motor já expuser o valor, não mexe.
     public const string GpcScript = """
         (() => {
           try {
@@ -27,7 +27,7 @@ public static class PrivacySignals
 
     public static string? ScriptFor(string url) => AppliesTo(url) ? GpcScript : null;
 
-    // O script registado numa navegação: sinais, scriptlets do site e extras da janela, por esta ordem.
+    // Junta partes de script (as vazias ficam de fora), pela ordem dada.
     public static string? Compose(params string?[] parts)
     {
         var present = parts.Where(p => !string.IsNullOrEmpty(p)).ToList();

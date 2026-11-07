@@ -38,6 +38,7 @@
     <EmbeddedResource Include="Browser\bookmarks.html" />
     <EmbeddedResource Include="Browser\welcome.html" />
     <EmbeddedResource Include="Browser\whatsnew.html" />
+    <EmbeddedResource Include="Browser\privacy.html" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="Eteris.Browser.THIRD-PARTY-NOTICES.md" />
     <EmbeddedResource Include="Shields\trackers.txt" />
     <EmbeddedResource Include="Browser\Vendor\readability\Readability.js" LogicalName="Eteris.Browser.Readability.js" />

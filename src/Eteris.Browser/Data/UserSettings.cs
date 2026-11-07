@@ -34,6 +34,9 @@ public sealed record UserSettings
     public string Theme { get; init; } = "dark";
     public bool CleanUrls { get; init; } = true;
     public bool BlockNotificationPrompts { get; init; } = true;
+    // Esconder as janelas das capturas de ecrã e do Recall (Infrastructure/CaptureShield.cs). Desligado por omissão,
+    // também na janela privada: ligado, as capturas, gravações e partilhas de ecrã mostram um vazio.
+    public bool HideFromCapture { get; init; }
     public string LastSeenVersion { get; init; } = string.Empty;
     public string NewTabTheme { get; init; } = "aurora";
     public string NewTabWallpaper { get; init; } = "coast";
@@ -71,6 +74,7 @@ public sealed record UserSettings
         "ntTips" when bool.TryParse(value, out var on) => this with { NewTabTips = on },
         "notifications" when bool.TryParse(value, out var on) => this with { BlockNotificationPrompts = on },
         "cleanUrls" when bool.TryParse(value, out var on) => this with { CleanUrls = on },
+        "hideFromCapture" when bool.TryParse(value, out var on) => this with { HideFromCapture = on },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },
         "clearOnExit" when bool.TryParse(value, out var on) => this with { ClearOnExit = on },
         "dns" when value == "off" || Shields.SecureDns.Providers.ContainsKey(value) => this with { SecureDns = value },

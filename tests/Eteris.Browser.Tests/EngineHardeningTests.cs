@@ -105,4 +105,15 @@ public class EngineHardeningTests
         Assert.True(script.IndexOf("globalPrivacyControl", StringComparison.Ordinal) < script.IndexOf("scriptlets()", StringComparison.Ordinal));
         Assert.EndsWith("extra()", script);
     }
+
+    // Recarregar ou ir a outra página do mesmo site não volta a registar o mesmo script: retirar e registar durante a
+    // navegação só é atendido depois de o documento nascer, e a página (sempre, na janela privada) ficava sem ele.
+    [Theory]
+    [InlineData(null, null, false)]
+    [InlineData(null, "a()", true)]
+    [InlineData("a()", "a()", false)]
+    [InlineData("a()", "b()", true)]
+    [InlineData("a()", null, true)]
+    public void Injector_ReplacesOnlyWhenTheScriptChanges(string? wanted, string? script, bool expected)
+        => Assert.Equal(expected, ScriptletInjector.NeedsReplace(wanted, script));
 }

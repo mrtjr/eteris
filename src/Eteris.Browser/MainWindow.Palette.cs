@@ -208,6 +208,12 @@ public partial class MainWindow
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("\uE789", "Novidades desta versão", "O que mudou no Éteris", null, () => OpenInternal(WhatsNewPage.Url));
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
+        yield return new("\uE72E", "Promessas de privacidade", "O que o Éteris garante, verificado agora (GPC, anúncios, cookies, WebRTC…)", null,
+            () => OpenInternal(PrivacyPage.Url));
+        var hidden = Settings.Current.HideFromCapture;
+        yield return new("\uED1A", hidden ? "Mostrar o Éteris nas capturas de ecrã" : "Esconder o Éteris do Recall e das capturas",
+            hidden ? "As capturas, gravações e partilhas de ecrã voltam a ver as janelas" : "As capturas, gravações e partilhas de ecrã passam a ver um vazio",
+            null, ToggleHideFromCapture);
         yield return new("\uE790", "Cor do Éteris", "Escolher a cor de destaque: paleta, da paisagem ou do Windows", null,
             () => OpenInternal(SettingsPage.Url + "#aspeto"));
         yield return new("\uE8A0", SidebarOpen ? "Fechar a barra lateral" : "Barra lateral",

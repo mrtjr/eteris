@@ -60,6 +60,7 @@ public static class SettingsPage
             suggest = settings.SearchSuggestions,
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
+            hideFromCapture = settings.HideFromCapture,
             theme = settings.Theme,
             cleanUrls = settings.CleanUrls,
             notifications = settings.BlockNotificationPrompts,

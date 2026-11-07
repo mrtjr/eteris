@@ -31,6 +31,10 @@ public partial class MainWindow
     {
         Background = new SolidColorBrush(Color.FromRgb(0x14, 0x0B, 0x24));
         PrivateBadge.Visibility = Visibility.Visible;
+        ShowCaptureState();
+        void OnSettings(Data.UserSettings _) => Dispatcher.InvokeAsync(ShowCaptureState);
+        Data.Settings.Changed += OnSettings;
+        Closed += (_, _) => Data.Settings.Changed -= OnSettings;
         Closed += (_, _) =>
         {
             _privateContext?.Dispose();
@@ -40,6 +44,29 @@ public partial class MainWindow
     }
 
     private bool _endingPrivateSession;
+
+    // O selo diz se as janelas estão escondidas das capturas e do Recall (olho riscado) e explica o clique.
+    private void ShowCaptureState()
+    {
+        var hidden = Data.Settings.Current.HideFromCapture;
+        PrivateCaptureGlyph.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+        PrivateBadge.ToolTip = Infrastructure.CaptureText.BadgeTip(hidden);
+    }
+
+    private void PrivateBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        ToggleHideFromCapture();
+    }
+
+    // Selo «Privada», paleta e Definições › Privacidade: o aviso diz o que mudou e deixa anular.
+    private void ToggleHideFromCapture()
+    {
+        var hide = !Data.Settings.Current.HideFromCapture;
+        Data.Settings.Set("hideFromCapture", hide ? "true" : "false");
+        ShowToast(Infrastructure.CaptureText.Toast(hide),
+            new ToastAction("Anular", () => Data.Settings.Set("hideFromCapture", hide ? "false" : "true")));
+    }
 
     private static IReadOnlyList<MainWindow> PrivateWindows()
         => Application.Current?.Windows.OfType<MainWindow>().Where(w => w.IsPrivate && w.IsLoaded).ToList() ?? [];

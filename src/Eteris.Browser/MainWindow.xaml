@@ -767,10 +767,16 @@
                             <Ellipse Width="18" Height="18" Stroke="{DynamicResource IrisBrush}" StrokeThickness="3" />
                             <Ellipse Width="5" Height="5" Fill="{DynamicResource TextBrush}" />
                         </Grid>
+                        <!-- Selo «Privada»: clique liga/desliga «Esconder das capturas e do Recall» (MainWindow.Private.cs) -->
                         <Border x:Name="PrivateBadge" Visibility="Collapsed" VerticalAlignment="Center" Margin="0,0,8,3"
                                 CornerRadius="10" Padding="10,3" Background="#3B1D6E" BorderBrush="#7C3AED" BorderThickness="1"
-                                ToolTip="Nada desta janela fica no histórico, nos cookies nem na cache">
-                            <TextBlock Text="Privada" FontSize="11.5" FontWeight="SemiBold" Foreground="#E9D5FF" />
+                                Cursor="Hand" shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                                MouseLeftButtonUp="PrivateBadge_Click" AutomationProperties.Name="Janela privada">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="PrivateCaptureGlyph" Text="&#xED1A;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                           Foreground="#E9D5FF" VerticalAlignment="Center" Margin="0,1,6,0" Visibility="Collapsed" />
+                                <TextBlock Text="Privada" FontSize="11.5" FontWeight="SemiBold" Foreground="#E9D5FF" />
+                            </StackPanel>
                         </Border>
                         <!-- Espaços: um chip por Espaço (cor e emoji ou inicial; o atual com o nome), só quando há mais do que um.
                              Clique muda de Espaço, botão direito abre o menu, largar uma aba move-a (MainWindow.Workspaces.cs) -->
