@@ -37,11 +37,7 @@ public partial class MainWindow
         }
         // A posição é relativa à lista (já conta com a rolagem da faixa); junto às pontas a faixa rola sozinha.
         DragScrollTabs(e.GetPosition(TabScroll));
-        var pinned = Tabs.PinnedCount;
-        var index = _dragTab.IsPinned
-            ? TabLayout.IndexAt(position.X, PinnedTabWidth, pinned)
-            : pinned + TabLayout.IndexAt(position.X - pinned * PinnedTabWidth, TabWidth, Tabs.Tabs.Count - pinned);
-        Tabs.Move(_dragTab, index);
+        MoveDraggedTabTo(position);
 
         // Sobre a margem direita ou inferior da página: a faixa acende; largar aí cria o ecrã dividido.
         var inPage = e.GetPosition(BrowserHost);
@@ -57,8 +53,20 @@ public partial class MainWindow
         _dropWorkspace = workspace;
     }
 
+    // Põe a aba arrastada no índice que fica por baixo da posição (relativa à lista de abas).
+    private void MoveDraggedTabTo(Point position)
+    {
+        if (_dragTab is null) return;
+        var pinned = Tabs.PinnedCount;
+        var index = _dragTab.IsPinned
+            ? TabLayout.IndexAt(position.X, PinnedTabWidth, pinned)
+            : pinned + TabLayout.IndexAt(position.X - pinned * PinnedTabWidth, TabWidth, Tabs.Tabs.Count - pinned);
+        Tabs.Move(_dragTab, index);
+    }
+
     private void TabList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        StopDragScroll();
         var (dragged, previous, target, workspace) = (_dragTab, _dragPreviousActive, _dropTarget, _dropWorkspace);
         if (_dragging)
         {

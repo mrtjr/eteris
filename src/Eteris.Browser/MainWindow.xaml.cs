@@ -60,6 +60,7 @@ public partial class MainWindow : Window
         SetUpSideFilter();
         WatchWorkspaces();
         WatchSidebar();
+        WatchAltTap();
         Closing += (_, _) => FlushNotes();
         ContentRendered += (_, _) => SetUpOverlayLayer();
     }
@@ -77,8 +78,14 @@ public partial class MainWindow : Window
 
     private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // Mover não cria nem destrói abas: o item vem em OldItems e NewItems e não se pode recriar o browser.
-        if (e.Action == NotifyCollectionChangedAction.Move) return;
+        // Mover não cria nem destrói abas: o item vem em OldItems e NewItems e não se pode recriar o browser. A aba
+        // ativa pode ter saltado para fora da janela de rolagem (adicionar ao grupo, desagrupar, ordenar por site):
+        // volta a ser trazida à vista, menos durante o arrasto, que rola a faixa por si.
+        if (e.Action == NotifyCollectionChangedAction.Move)
+        {
+            if (!_dragging) RevealActiveTab();
+            return;
+        }
         foreach (BrowserTab tab in e.NewItems ?? Array.Empty<BrowserTab>())
         {
             tab.PropertyChanged += OnTabPropertyChanged;
@@ -116,7 +123,7 @@ public partial class MainWindow : Window
             Visibility = Visibility.Hidden,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
-            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage),
+            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),
             FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
@@ -385,6 +392,7 @@ public partial class MainWindow : Window
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         e.Handled = true;
+        AltKeyDown(key, ctrl, shift);
 
         if (RadarOpen)
         {
@@ -392,10 +400,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Alt sozinho em modo foco: as barras aparecem por uns segundos (como a barra de menus do Firefox).
+        // Alt em modo foco: decide-se ao largar (AltKeyUp) — Alt sozinho mostra as barras, Alt+← não.
         if (key is Key.LeftAlt or Key.RightAlt && !ctrl && !shift && BarsAutoHide)
         {
-            RevealBarsForKeyboard();
             e.Handled = false;
             return;
         }
@@ -465,17 +472,24 @@ public partial class MainWindow : Window
         return null;
     }
 
+    // Tecla largada com o foco na página (thread do CEF): só serve ao «Alt sozinho».
+    private void KeyUpFromPage(int virtualKey)
+    {
+        var key = KeyInterop.KeyFromVirtualKey(virtualKey);
+        Dispatcher.InvokeAsync(() => AltKeyUp(key));
+    }
+
     // Tecla premida com o foco na página (thread do CEF): os atalhos do Éteris são consumidos e corridos na janela;
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
     private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
+        Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
         if (Shortcut(key, ctrl, shift, alt) is { } action)
         {
             Dispatcher.InvokeAsync(action);
             return true;
         }
-        if (key is Key.LeftAlt or Key.RightAlt && !ctrl && !shift && BarsAutoHide) Dispatcher.InvokeAsync(RevealBarsForKeyboard);
         if (key == Key.Escape)
             Dispatcher.InvokeAsync(() =>
             {

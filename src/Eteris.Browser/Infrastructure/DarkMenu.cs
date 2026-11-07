@@ -10,7 +10,16 @@ public sealed class DarkMenu
 {
     private readonly ContextMenu _menu = new();
 
-    public DarkMenu() => _menu.Style = (Style)Application.Current.FindResource("DarkContextMenu");
+    // Menus abertos agora (a interface que desaparece não esconde as barras com um menu pendurado nelas).
+    private static int s_open;
+    public static bool AnyOpen => s_open > 0;
+
+    public DarkMenu()
+    {
+        _menu.Style = (Style)Application.Current.FindResource("DarkContextMenu");
+        _menu.Opened += (_, _) => s_open++;
+        _menu.Closed += (_, _) => s_open = Math.Max(0, s_open - 1);
+    }
 
     public DarkMenu Item(string glyph, string header, Action action, string? gesture = null, bool enabled = true, Brush? iconBrush = null)
     {

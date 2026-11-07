@@ -169,13 +169,43 @@ public partial class MainWindow
         ToggleVerticalTabs();
     }
 
-    // A arrastar uma aba até à orla da faixa, a faixa rola para se chegar às abas escondidas.
+    // A arrastar uma aba até à orla da faixa, a faixa rola para se chegar às abas escondidas — continuamente enquanto
+    // o rato estiver na orla, mesmo parado (como no Chrome e no Firefox), com um temporizador de ~60 passos por segundo.
+    private DispatcherTimer? _dragScrollTimer;
+
     private void DragScrollTabs(Point positionInViewport)
     {
-        if (TabScroll.ScrollableWidth <= 0) return;
+        if (!DragScrollStep(positionInViewport)) return;
+        if (_dragScrollTimer is not null) return;
+        _dragScrollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(16) };
+        _dragScrollTimer.Tick += (_, _) =>
+        {
+            if (!_dragging || _dragTab is null || Mouse.LeftButton != MouseButtonState.Pressed || !DragScrollStep(Mouse.GetPosition(TabScroll)))
+            {
+                StopDragScroll();
+                return;
+            }
+            // A faixa andou por baixo do rato parado: o sítio de largada acompanha.
+            MoveDraggedTabTo(Mouse.GetPosition(TabList));
+        };
+        _dragScrollTimer.Start();
+    }
+
+    // Um passo de rolagem; falso quando o rato não está numa orla (ou não há para onde rolar).
+    private bool DragScrollStep(Point positionInViewport)
+    {
+        if (TabScroll.ScrollableWidth <= 0) return false;
         var direction = TabLayout.DragScrollDirection(positionInViewport.X, TabScroll.ViewportWidth);
-        if (direction == 0) return;
+        if (direction == 0) return false;
         var target = Math.Clamp(TabScroll.HorizontalOffset + direction * 12, 0, TabScroll.ScrollableWidth);
+        if (Math.Abs(target - TabScroll.HorizontalOffset) < 0.5) return false;
         ScrollTabsTo(target, animate: false);
+        return true;
+    }
+
+    private void StopDragScroll()
+    {
+        _dragScrollTimer?.Stop();
+        _dragScrollTimer = null;
     }
 }

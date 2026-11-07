@@ -99,6 +99,22 @@ public class ChromeLayoutTests
     }
 
     [Fact]
+    public void CompactOmnibox_GivesWayToTheTabs_InNarrowWindows()
+    {
+        // Linha larga: a largura própria, maior com o foco.
+        Assert.Equal(ChromeLayout.CompactOmniboxWidth, ChromeLayout.OmniboxWidth(ChromeMode.Compact, false, 1400));
+        Assert.Equal(ChromeLayout.CompactOmniboxFocusedWidth, ChromeLayout.OmniboxWidth(ChromeMode.Compact, true, 1400));
+        // Meia janela num ecrã de 1920 (≈ 560 px para endereço e abas): as abas ficam com lugar para duas legíveis.
+        var idle = ChromeLayout.OmniboxWidth(ChromeMode.Compact, false, 560)!.Value;
+        var typing = ChromeLayout.OmniboxWidth(ChromeMode.Compact, true, 560)!.Value;
+        Assert.True(560 - idle >= ChromeLayout.CompactTabsMinWidth || idle == ChromeLayout.CompactOmniboxMinWidth);
+        Assert.True(560 - typing >= ChromeLayout.CompactTabsMinWidth || typing == ChromeLayout.CompactOmniboxMinWidth);
+        Assert.True(ChromeLayout.CompactTabsMinWidth >= 2 * Eteris.Browser.Tabs.TabLayout.MinTabWidth);
+        // Muito estreita: o endereço nunca desce do mínimo.
+        Assert.Equal(ChromeLayout.CompactOmniboxMinWidth, ChromeLayout.OmniboxWidth(ChromeMode.Compact, true, 100));
+    }
+
+    [Fact]
     public void DensitySetting_DefaultsNormal_AndValidates()
     {
         Assert.Equal("normal", new UserSettings().Density);

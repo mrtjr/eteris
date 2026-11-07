@@ -17,11 +17,20 @@ public partial class MainWindow
 
     private static SearchEngine Engine => SearchEngine.Preferred;
 
-    // Nunca sobrescreve o que o utilizador está a escrever; fora disso a omnibox espelha sempre a aba ativa.
+    // Nunca sobrescreve o que o utilizador está a escrever; fora disso a omnibox espelha sempre a aba ativa — também
+    // com o foco nela sem nada escrito (Ctrl+T e logo Ctrl+1: mostra o endereço da aba para onde se foi, selecionado).
     private void SyncOmnibox()
     {
-        if (!_omniboxEdited && !Omnibox.IsKeyboardFocusWithin)
-            SetOmniboxText(Tabs.Active?.Address is { } a && !NewTabPage.IsNewTab(a) ? a : string.Empty);
+        if (!_omniboxEdited)
+        {
+            var text = Tabs.Active?.Address is { } a && !NewTabPage.IsNewTab(a) ? a : string.Empty;
+            if (!Omnibox.IsKeyboardFocusWithin) SetOmniboxText(text);
+            else if (Omnibox.Text != text)
+            {
+                SetOmniboxText(text);
+                Omnibox.SelectAll();
+            }
+        }
         UpdateOmniboxChrome();
     }
 

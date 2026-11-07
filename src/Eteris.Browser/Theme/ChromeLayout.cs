@@ -26,6 +26,10 @@ public sealed record ChromeLayout(ChromeMode Mode, double TitleHeight, double To
     // Largura da barra de endereço em modo compacto: parada e a escrever (cresce ao receber o foco).
     public const double CompactOmniboxWidth = 360;
     public const double CompactOmniboxFocusedWidth = 560;
+    // Em janelas estreitas o endereço cede primeiro (como no Firefox): nunca abaixo disto…
+    public const double CompactOmniboxMinWidth = 200;
+    // …e só depois de a faixa de abas ter lugar para duas abas legíveis com as setas, o «+» e a lista «▾».
+    public const double CompactTabsMinWidth = 2 * Eteris.Browser.Tabs.TabLayout.MinTabWidth + 36 + 28 + 2 * Eteris.Browser.Tabs.TabLayout.ArrowWidth + 8;
 
     public bool ShowsTitleBar => Mode == ChromeMode.Top;
     public bool ShowsToolbar => Mode != ChromeMode.Hidden;
@@ -48,7 +52,13 @@ public sealed record ChromeLayout(ChromeMode Mode, double TitleHeight, double To
         return new(ChromeMode.Top, TitleBarHeight, ToolbarBarHeight);
     }
 
-    // Largura da barra de endereço: fixa em modo compacto (cresce com o foco), toda a que houver nos outros.
-    public static double? OmniboxWidth(ChromeMode mode, bool focused)
-        => mode == ChromeMode.Compact ? focused ? CompactOmniboxFocusedWidth : CompactOmniboxWidth : null;
+    // Largura da barra de endereço: em modo compacto tem uma largura própria (cresce com o foco) mas cede à faixa de
+    // abas quando a linha não chega para as duas (shared: largura que endereço e abas repartem); toda a que houver nos
+    // outros modos.
+    public static double? OmniboxWidth(ChromeMode mode, bool focused, double shared = double.PositiveInfinity)
+    {
+        if (mode != ChromeMode.Compact) return null;
+        var preferred = focused ? CompactOmniboxFocusedWidth : CompactOmniboxWidth;
+        return Math.Max(CompactOmniboxMinWidth, Math.Min(preferred, shared - CompactTabsMinWidth));
+    }
 }

@@ -13,6 +13,12 @@ public sealed class AutoHideBars
     // Tempo que as barras ficam depois de um atalho de teclado as pedir.
     public static readonly TimeSpan KeyboardHold = TimeSpan.FromSeconds(3);
 
+    // Modos em que as barras se escondem mas podem ser chamadas pelo rato: o modo foco e o ecrã inteiro escolhido
+    // no menu. O ecrã inteiro pedido pela própria página (um vídeo) ganha sempre — mesmo vindo do modo foco o vídeo
+    // ocupa tudo até se sair com Esc, como no Chrome — e a janela flutuante (modo mini) nunca mostra barras.
+    public static bool Enabled(bool focusMode, bool miniMode, bool pageFullscreen, bool fullscreenByPage)
+        => !miniMode && (pageFullscreen ? !fullscreenByPage : focusMode);
+
     private DateTime? _leftAt;
     private DateTime _holdUntil = DateTime.MinValue;
 

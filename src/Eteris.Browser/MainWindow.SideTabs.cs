@@ -88,8 +88,8 @@ public partial class MainWindow
     // verticais, modo compacto, modo foco e ecrã inteiro).
     private void ApplyChromeLayout(bool animate = true)
     {
-        var layout = _chrome = ChromeLayout.Resolve(VerticalTabs, CompactDensity, _focusMode || _pageFullscreen, peek: _autoHide.Revealed);
         SyncAutoHide();
+        var layout = _chrome = ChromeLayout.Resolve(VerticalTabs, CompactDensity, _focusMode || _pageFullscreen, peek: _autoHide.Revealed);
         var hidden = layout.Mode == ChromeMode.Hidden;
         var side = layout.ShowsSideBar;
         SideCollapsed = Settings.Current.SidebarCollapsed;
@@ -144,10 +144,11 @@ public partial class MainWindow
         ToolbarOmniboxColumn.Width = inToolbar ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
     }
 
-    // Em modo compacto a barra de endereço tem largura fixa e cresce ao receber o foco (há mais para ler ao escrever).
-    private void UpdateCompactOmnibox()
+    // Em modo compacto a barra de endereço tem largura própria e cresce ao receber o foco (há mais para ler ao
+    // escrever), mas cede à faixa de abas em janelas estreitas (ver ChromeLayout.OmniboxWidth).
+    private void UpdateCompactOmnibox(bool animate = true)
     {
-        var width = ChromeLayout.OmniboxWidth(_chrome.Mode, Omnibox.IsKeyboardFocusWithin);
+        var width = ChromeLayout.OmniboxWidth(_chrome.Mode, Omnibox.IsKeyboardFocusWithin, CompactSharedWidth());
         if (width is null)
         {
             OmniboxFrame.BeginAnimation(WidthProperty, null);
@@ -155,15 +156,35 @@ public partial class MainWindow
             return;
         }
         var from = double.IsNaN(OmniboxFrame.Width) ? OmniboxFrame.ActualWidth : OmniboxFrame.Width;
-        if (from <= 0) from = width.Value;
+        if (from <= 0 || !animate || Math.Abs(from - width.Value) < 1)
+        {
+            OmniboxFrame.BeginAnimation(WidthProperty, null);
+            OmniboxFrame.Width = width.Value;
+            return;
+        }
         OmniboxFrame.BeginAnimation(WidthProperty, new System.Windows.Media.Animation.DoubleAnimation(from, width.Value, TimeSpan.FromMilliseconds(180))
         {
             EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
         });
     }
 
+    // Largura que o endereço e a faixa de abas repartem na linha única do modo compacto: a barra de ferramentas
+    // sem a navegação, os botões da direita e os da janela.
+    private double CompactSharedWidth()
+    {
+        if (CompactTabHost.Parent is not System.Windows.Controls.Grid row || row.ActualWidth <= 0) return double.PositiveInfinity;
+        var others = 0.0;
+        for (var i = 0; i < row.ColumnDefinitions.Count; i++)
+            if (!ReferenceEquals(row.ColumnDefinitions[i], ToolbarTabsColumn) && !ReferenceEquals(row.ColumnDefinitions[i], ToolbarOmniboxColumn))
+                others += row.ColumnDefinitions[i].ActualWidth;
+        return row.ActualWidth - others - CompactTabHost.Margin.Left - OmniboxFrame.Margin.Left - OmniboxFrame.Margin.Right;
+    }
+
     private void WatchTabLayoutSetting()
     {
+        // Encostar a janela a meio ecrã ou mudar os botões da direita: o endereço compacto volta a repartir a linha.
+        SizeChanged += (_, _) => { if (_chrome.Mode == ChromeMode.Compact) UpdateCompactOmnibox(animate: false); };
+        ToolbarRight.SizeChanged += (_, _) => { if (_chrome.Mode == ChromeMode.Compact) UpdateCompactOmnibox(animate: false); };
         void OnChanged(UserSettings _) => Dispatcher.InvokeAsync(() =>
         {
             ApplyChromeLayout();

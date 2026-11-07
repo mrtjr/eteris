@@ -116,7 +116,7 @@ public partial class MainWindow
         {
             Visibility = Visibility.Hidden,
             // Os atalhos do Éteris chegam do painel como de qualquer página; pop-ups viram abas (só com gesto).
-            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage),
+            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),
             LifeSpanHandler = new PopupToTabHandler(request =>
             {
                 if (request.UserGesture && PageMenu.IsWebLink(request.TargetUrl))

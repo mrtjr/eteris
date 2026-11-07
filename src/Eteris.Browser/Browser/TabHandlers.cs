@@ -22,12 +22,20 @@ public sealed class PopupToTabHandler(Action<Shields.PopupRequest> onPopup) : Ce
 
 // Com a página desenhada numa janela própria, as teclas vão direto para o Chromium. onKeyDown(tecla virtual, Ctrl,
 // Shift, Alt) diz se a tecla é um atalho do Éteris; se for, é consumida antes de chegar à página (como no Chrome).
-public sealed class ShortcutKeyboardHandler(Func<int, bool, bool, bool, bool> onKeyDown) : IKeyboardHandler
+// onKeyUp(tecla virtual) só observa (o «Alt sozinho» decide-se ao largar a tecla): nunca consome.
+public sealed class ShortcutKeyboardHandler(Func<int, bool, bool, bool, bool> onKeyDown, Action<int>? onKeyUp = null) : IKeyboardHandler
 {
     public bool OnPreKeyEvent(IWebBrowser chromiumWebBrowser, IBrowser browser, KeyType type, int windowsKeyCode, int nativeKeyCode,
         CefEventFlags modifiers, bool isSystemKey, ref bool isKeyboardShortcut)
-        => type == KeyType.RawKeyDown && onKeyDown(windowsKeyCode, modifiers.HasFlag(CefEventFlags.ControlDown),
+    {
+        if (type == KeyType.KeyUp)
+        {
+            onKeyUp?.Invoke(windowsKeyCode);
+            return false;
+        }
+        return type == KeyType.RawKeyDown && onKeyDown(windowsKeyCode, modifiers.HasFlag(CefEventFlags.ControlDown),
             modifiers.HasFlag(CefEventFlags.ShiftDown), modifiers.HasFlag(CefEventFlags.AltDown));
+    }
 
     public bool OnKeyEvent(IWebBrowser chromiumWebBrowser, IBrowser browser, KeyType type, int windowsKeyCode, int nativeKeyCode,
         CefEventFlags modifiers, bool isSystemKey) => false;
