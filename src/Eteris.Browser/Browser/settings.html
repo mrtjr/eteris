@@ -272,6 +272,14 @@
           </div>
         </div>
         <div class="item">
+          <div class="label"><b>Língua enviada aos sites</b><span>Os sites recebem uma só língua, sem a lista com pesos que ajuda a distingui-lo de outras pessoas (cabeçalho Accept-Language e navigator.languages). Aplica-se da próxima vez que abrir o Éteris.</span></div>
+          <div class="seg" data-key="siteLanguage">
+            <button data-value="pt-PT">pt-PT</button>
+            <button data-value="system">Do Windows <small id="systemLanguage"></small></button>
+            <button data-value="en-US">en-US</button>
+          </div>
+        </div>
+        <div class="item">
           <div class="label"><b>Bloquear pedidos de notificações</b><span>Os sites deixam de perguntar se podem enviar notificações. Os que já autorizou continuam a poder.</span></div>
           <label class="switch"><input type="checkbox" data-key="notifications"><i></i></label>
         </div>
@@ -486,7 +494,8 @@
   });
 
   // O arquivo automático só fecha abas depois de o utilizador escolher um prazo: até lá nenhum fica marcado.
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: data.archiveConfirmed ? String(data.archive) : '', tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: data.archiveConfirmed ? String(data.archive) : '', tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density, siteLanguage: data.siteLanguage };
+  document.getElementById('systemLanguage').textContent = '(' + data.systemLanguage + ')';
 
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;

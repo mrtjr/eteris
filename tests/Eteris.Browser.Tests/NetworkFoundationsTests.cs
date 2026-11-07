@@ -64,7 +64,7 @@ public class NetworkFoundationsTests
 
     private static PrivacyPage.State State(Dictionary<string, string> args) => new(
         args, PrivacySignals.Headers, GpcScript: true, ThirdPartyCookiesBlocked: true, WebRtcProtected: true,
-        SecureDns: null, HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
+        SecureDns: null, Language: "pt-PT", HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
 
     [Fact]
     public void PrivacyPage_ShowsTheJarsAndTheReferrerFromTheRealCode()

@@ -13,7 +13,7 @@ public class PrivacyPageTests
 
     private static PrivacyPage.State Good(Dictionary<string, string>? args = null) => new(
         args ?? EngineArgs(), PrivacySignals.Headers, GpcScript: true, ThirdPartyCookiesBlocked: true, WebRtcProtected: true,
-        SecureDns: null, HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
+        SecureDns: null, Language: "pt-PT", HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
 
     private static PrivacyPage.Promise Find(PrivacyPage.State state, string id) => Assert.Single(PrivacyPage.Promises(state), p => p.Id == id);
 

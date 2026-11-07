@@ -27,3 +27,16 @@ public static class ReferrerCap
 
     private static bool IsWeb(Uri uri) => uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
 }
+
+// Cookies de terceiros (Definições › «Bloquear cookies de terceiros»): só o site de topo envia e grava cookies.
+// Uma navegação de topo é sempre primeira parte; páginas internas e um site com o escudo desligado ficam de fora.
+public static class ThirdPartyCookies
+{
+    public static bool Allow(string? topUrl, string requestUrl, CefSharp.ResourceType type, bool block, bool shieldOff = false)
+    {
+        if (!block || shieldOff || type == CefSharp.ResourceType.MainFrame) return true;
+        if (!Uri.TryCreate(topUrl, UriKind.Absolute, out var top) || !Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) return true;
+        if (top.Scheme is not ("http" or "https") || request.Scheme is not ("http" or "https")) return true;
+        return ReferrerCap.SameSite(top, request);
+    }
+}

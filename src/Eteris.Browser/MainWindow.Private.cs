@@ -20,7 +20,8 @@ public partial class MainWindow
 
     private static IRequestContext CreatePrivateContext()
     {
-        var context = new RequestContext(new RequestContextSettings());
+        // Uma só língua para os sites também aqui (o contexto privado não herda a lista do perfil).
+        var context = new RequestContext(new RequestContextSettings { AcceptLanguageList = Shields.PrivacyPreferences.SiteLanguage });
         // As fábricas de esquemas são por contexto: sem isto eteris:// dá ERR_UNKNOWN_URL_SCHEME na janela privada.
         context.RegisterSchemeHandlerFactory(EterisSchemeHandlerFactory.SchemeName, string.Empty, new EterisSchemeHandlerFactory(privateContext: true));
         _ = Shields.PrivacyPreferences.ApplyAsync(context);

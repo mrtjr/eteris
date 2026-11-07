@@ -35,10 +35,29 @@ public static class EngineHardening
         ("PartitionConnectionsByNetworkIsolationKey", "ligações à rede separadas por site de topo"),
     ];
 
+    // Uma só língua no cabeçalho Accept-Language: sem isto o Chromium junta a língua-base com peso («pt-PT,pt;q=0.9»).
+    public static readonly IReadOnlyList<(string Feature, string What)> Identity =
+    [
+        ("ReduceAcceptLanguage", "o cabeçalho Accept-Language leva só a língua escolhida"),
+        ("ReduceAcceptLanguageHTTP", "também nos pedidos de sub-recursos"),
+    ];
+
+    // Tudo o que o Éteris acrescenta à configuração do motor: interruptores e uma só língua para os sites (a lista de
+    // línguas fixa-se ao arrancar; o cabeçalho Accept-Language e o navigator.languages seguem-na).
+    public static void Configure(CefSharp.CefSettingsBase settings, string? language = null)
+    {
+        Apply(settings.CefCommandLineArgs);
+        settings.AcceptLanguageList = language ?? PrivacyPreferences.SiteLanguage;
+        StartedWithLanguage = settings.AcceptLanguageList;
+    }
+
+    // A língua com que o motor arrancou (eteris://privacy/ verifica que é uma só).
+    public static string StartedWithLanguage { get; private set; } = string.Empty;
+
     // Junta as listas do Éteris às que já estão na linha de comandos (sem repetir nomes).
     public static void Apply(IDictionary<string, string> args)
     {
-        Merge(args, "enable-features", Partitioning.Select(p => p.Feature));
+        Merge(args, "enable-features", Partitioning.Select(p => p.Feature).Concat(Identity.Select(i => i.Feature)));
         Merge(args, "disable-features", AdApis.Select(a => a.Feature));
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         Applied = new Dictionary<string, string>(args);

@@ -67,6 +67,9 @@
     gpc: () => navigator.globalPrivacyControl === true
       ? 'Confirmado nesta página: navigator.globalPrivacyControl === true'
       : null,
+    language: () => navigator.languages.length === 1
+      ? 'Confirmado nesta página: navigator.languages = [' + navigator.languages.join(', ') + ']'
+      : null,
     ads: () => !('browsingTopics' in document) && !('joinAdInterestGroup' in navigator) && !('runAdAuction' in navigator)
       && !('sharedStorage' in window) && typeof window.HTMLFencedFrameElement === 'undefined'
       ? 'Confirmado nesta página: document.browsingTopics, navigator.joinAdInterestGroup, window.sharedStorage e <fencedframe> não existem'

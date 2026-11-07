@@ -61,6 +61,8 @@ public static class SettingsPage
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
             hideFromCapture = settings.HideFromCapture,
+            siteLanguage = settings.SiteLanguage,
+            systemLanguage = Shields.RequestIdentity.Language("system"),
             theme = settings.Theme,
             cleanUrls = settings.CleanUrls,
             notifications = settings.BlockNotificationPrompts,

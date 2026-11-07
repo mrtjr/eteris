@@ -13,6 +13,14 @@ public static class PrivacyPage
 
     public const string ReferrerSample = "https://www.exemplo.pt/artigo?id=42";
 
+    // Dicas que um site pode pedir (Accept-CH) e que separam este computador dos outros.
+    public static readonly string[] IdentifyingHints =
+    [
+        "Sec-CH-UA-Full-Version-List", "Sec-CH-UA-Full-Version", "Sec-CH-UA-Platform-Version", "Sec-CH-UA-Arch",
+        "Sec-CH-UA-Bitness", "Sec-CH-UA-Model", "Sec-CH-UA-WoW64", "Sec-CH-UA-Form-Factors", "Sec-CH-Device-Memory",
+        "Sec-CH-Viewport-Width", "Sec-CH-DPR", "Device-Memory",
+    ];
+
     // Kept: true = cumprida, false = falhou, null = opcional e desligada (escolha do utilizador).
     public sealed record Promise(string Id, string Title, string Detail, bool? Kept, string? Live = null, string? Fix = null);
 
@@ -23,6 +31,7 @@ public static class PrivacyPage
         bool ThirdPartyCookiesBlocked,
         bool WebRtcProtected,
         string? SecureDns,
+        string Language,
         bool HideFromCapture,
         int VisibleWindows,
         int HiddenWindows);
@@ -48,6 +57,9 @@ public static class PrivacyPage
         // O referrer é decidido pela mesma função que o tratador de pedidos usa, com um exemplo à vista.
         var capped = ReferrerCap.Decide(ReferrerSample, "https://outro-site.example/");
         var sameSite = ReferrerCap.Decide(ReferrerSample, "https://www.exemplo.pt/outra");
+        var oneLanguage = s.Language.Length > 0 && !s.Language.Contains(',') && EngineHardening.Identity.All(i => enabled.Contains(i.Feature));
+        // As dicas são decididas pela mesma função que o tratador de pedidos usa.
+        var hintsCut = IdentifyingHints.All(RequestIdentity.IsIdentifyingHint) && !RequestIdentity.LowEntropyHints.Any(RequestIdentity.IsIdentifyingHint);
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
 
         return
@@ -69,7 +81,9 @@ public static class PrivacyPage
                     : "O motor arrancou sem os interruptores que cortam o tráfego de fundo.",
                 quiet),
             new("cookies", "Cookies de terceiros bloqueados",
-                s.ThirdPartyCookiesBlocked ? "Os anunciantes embutidos nas páginas não guardam nem leem cookies." : "Desligado nas Definições: os terceiros podem guardar cookies.",
+                s.ThirdPartyCookiesBlocked
+                    ? "Os anunciantes embutidos nas páginas não guardam, não leem e não recebem cookies — nem no JavaScript, nem nos pedidos à rede."
+                    : "Desligado nas Definições: os terceiros podem guardar cookies.",
                 s.ThirdPartyCookiesBlocked, Fix: s.ThirdPartyCookiesBlocked ? null : "eteris://settings/#privacidade"),
             new("jars", "Cada site com o seu frasco",
                 missingJars.Count == 0
@@ -81,6 +95,16 @@ public static class PrivacyPage
                     ? $"Um link de {ReferrerSample} para outro site leva só «{capped.Value}», mesmo que a página peça mais; dentro do mesmo site nada muda."
                     : "O referrer entre sites não está a ser reduzido à origem.",
                 referrerKept),
+            new("language", "Uma só língua para os sites",
+                oneLanguage
+                    ? $"Os sites recebem «{s.Language}» e mais nada — sem a lista de línguas com pesos que ajuda a distingui-lo."
+                    : "A língua enviada aos sites não ficou reduzida a uma só.",
+                oneLanguage, Live: "language", Fix: "eteris://settings/#privacidade"),
+            new("hints", "Dicas do cliente mínimas",
+                hintsCut
+                    ? "Os sites recebem só a marca do navegador, se é telemóvel e a plataforma; versão completa, arquitetura, modelo, versão do Windows, memória e ecrã nunca saem, mesmo que os peçam."
+                    : "Há dicas do cliente que identificam o computador a sair nos pedidos.",
+                hintsCut),
             new("webrtc", "O WebRTC não revela o seu IP local",
                 s.WebRtcProtected ? "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede." : "A política de IP do WebRTC não foi aplicada.",
                 s.WebRtcProtected),
@@ -101,7 +125,7 @@ public static class PrivacyPage
         var (visible, hidden) = Infrastructure.CaptureShield.Count();
         return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.ScriptFor("https://example.com/") is not null,
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
-            Data.Settings.Current.HideFromCapture, visible, hidden);
+            EngineHardening.StartedWithLanguage, Data.Settings.Current.HideFromCapture, visible, hidden);
     }
 
     public static string Render(State state)

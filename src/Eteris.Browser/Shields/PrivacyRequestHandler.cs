@@ -15,6 +15,16 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         ("Sec-CH-UA-Platform", "\"Android\""),
     ];
 
+    // Tira os cabeçalhos de dicas do cliente que identificam o computador (pedidas pelo site com Accept-CH).
+    private static void StripIdentifyingHints(IRequest request)
+    {
+        var headers = request.Headers;
+        var names = headers.AllKeys.Where(k => k is not null && RequestIdentity.IsIdentifyingHint(k)).ToList();
+        if (names.Count == 0) return;
+        foreach (var name in names) headers.Remove(name);
+        request.Headers = headers;
+    }
+
     // O processo da página morreu (crash, falta de memória): a janela mostra a página de erro em vez de um ecrã vazio.
     protected override void OnRenderProcessTerminated(IWebBrowser chromiumWebBrowser, IBrowser browser, CefTerminationStatus status,
         int errorCode, string errorMessage)
@@ -26,14 +36,42 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
         => _resources;
 
+    // Com o Éteris a tratar cada pedido, é o CEF que lê e grava os cookies dos pedidos — e o bloqueio de cookies de
+    // terceiros do Chromium não chegava lá: um pixel de outro site embutido numa página levava os cookies desse site.
+    // Este filtro recusa enviar e gravar cookies de outro site que não o de topo (ThirdPartyCookies.Allow).
+    private sealed class ThirdPartyCookieFilter(Func<string, bool> isProtected) : ICookieAccessFilter
+    {
+        public bool CanSendCookie(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, Cookie cookie)
+            => Allow(browser, request);
+
+        public bool CanSaveCookie(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, IResponse response, Cookie cookie)
+            => Allow(browser, request);
+
+        private bool Allow(IBrowser browser, IRequest request)
+        {
+            var top = browser?.MainFrame?.Url;
+            return ThirdPartyCookies.Allow(top, request.Url, request.ResourceType, Data.Settings.Current.BlockThirdPartyCookies,
+                top is not null && Uri.TryCreate(top, UriKind.Absolute, out var page) && !isProtected(page.Host));
+        }
+    }
+
     private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
         string? userAgent, bool isPrivate)
         : CefSharp.Handler.ResourceRequestHandler
     {
+        protected override ICookieAccessFilter GetCookieAccessFilter(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
+            => _cookies;
+
+        private readonly ThirdPartyCookieFilter _cookies = new(isProtected);
+
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
             IRequest request, IRequestCallback callback)
         {
             foreach (var (name, value) in PrivacySignals.Headers) request.SetHeaderByName(name, value, true);
+            // Uma só língua (a com que o motor arrancou) e só as dicas do cliente de baixa entropia, mesmo que o site peça
+            // mais (Shields/RequestIdentity.cs). Sem reescrever o cabeçalho, o Chromium juntava a língua-base com peso.
+            if (EngineHardening.StartedWithLanguage is { Length: > 0 } language) request.SetHeaderByName("Accept-Language", language, true);
+            StripIdentifyingHints(request);
             // Referrer entre sites só com a origem (Shields/ReferrerCap.cs), quando o escudo está ligado no site que o envia.
             if (ReferrerCap.Decide(request.ReferrerUrl, request.Url) is { Kind: not ReferrerCap.Kind.Keep } cap
                 && Uri.TryCreate(request.ReferrerUrl, UriKind.Absolute, out var referrer) && isProtected(referrer.Host))

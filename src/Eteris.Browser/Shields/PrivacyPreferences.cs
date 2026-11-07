@@ -29,6 +29,9 @@ public static class PrivacyPreferences
 
     public static bool WebRtcIpProtected { get; private set; }
 
+    // A língua que os sites recebem, já resolvida («system» → a do Windows).
+    public static string SiteLanguage => RequestIdentity.Language(Data.Settings.Current.SiteLanguage);
+
     // Fornecedor de DNS cifrado em vigor desde o arranque (null = DNS do sistema).
     public static string? StartedWithSecureDns { get; set; }
 
