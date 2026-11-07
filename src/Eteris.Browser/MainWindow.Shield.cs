@@ -35,7 +35,8 @@ public partial class MainWindow
         ShieldCount.Text = count > 99 ? "99+" : count.ToString();
         ShieldGlyph.Foreground = (Brush)FindResource(on ? "TextBrush" : "TextFaintBrush");
         ShieldButton.ToolTip = !on ? "Escudo desligado neste site"
-            : count == 1 ? "1 rastreador bloqueado" : $"{count} rastreadores bloqueados";
+            : (count == 1 ? "1 rastreador bloqueado" : $"{count} rastreadores bloqueados")
+              + DebounceText.Tooltip(tab?.TrackingSkips.Count ?? 0);
 
         if (ShieldPopup.IsOpen) FillShieldPopup();
     }
@@ -67,6 +68,7 @@ public partial class MainWindow
         ShieldCheckDns.Text = PrivacyPreferences.SecureDnsProvider is { } dns
             ? $"✓  DNS cifrado ({dns})" : "·  DNS do sistema (pode ativar DNS cifrado nas definições)";
         ShieldCheckLan.Text = LocalNetworkShieldLine(tab);
+        ShieldCheckBounce.Text = DebounceText.ShieldLine(tab?.TrackingSkips ?? [], Data.Settings.Current.SkipTrackingRedirects);
         var session = ShieldStats.SessionBlocked;
         ShieldSession.Text = $"{session} {(session == 1 ? "rastreador bloqueado" : "rastreadores bloqueados")} desde que abriu o Éteris";
     }

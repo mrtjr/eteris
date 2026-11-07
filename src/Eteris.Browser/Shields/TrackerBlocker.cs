@@ -55,6 +55,9 @@ public sealed class TrackerBlocker : IRequestBlocker
         return string.Join('.', labels[^take..]);
     }
 
+    // O anfitrião (ou um domínio acima dele) está na lista — os saltos de rastreio (Shields/Debounce.cs) usam-no.
+    public bool Lists(string host) => IsListed(host.ToLowerInvariant());
+
     private bool IsListed(string host)
     {
         for (var candidate = host; ; )

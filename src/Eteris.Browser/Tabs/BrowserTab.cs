@@ -193,6 +193,13 @@ public partial class BrowserTab : ObservableObject
 
     public void RecordLocalNetworkBlocked(string label) => _localNetworkBlocked[label] = _localNetworkBlocked.GetValueOrDefault(label) + 1;
 
+    private readonly List<string> _trackingSkips = [];
+
+    // Saltos de rastreio evitados a caminho desta página (Shields/Debounce.cs): o anfitrião de cada salto.
+    public IReadOnlyList<string> TrackingSkips => _trackingSkips.ToList();
+
+    public void RecordTrackingSkips(IEnumerable<string> hosts) => _trackingSkips.AddRange(hosts);
+
     public void RecordBlocked(string host)
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
@@ -229,6 +236,7 @@ public partial class BrowserTab : ObservableObject
     {
         _blockedHosts.Clear();
         _localNetworkBlocked.Clear();
+        _trackingSkips.Clear();
         BlockedCount = 0;
     }
 

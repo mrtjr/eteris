@@ -158,7 +158,12 @@ public partial class MainWindow : Window
                 onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab)),
                 isPrivate: IsPrivate,
                 localNetworkAllowed: IsLocalNetworkAllowed,
-                onLocalNetworkBlocked: (site, url) => OnLocalNetworkBlocked(tab, site, url)),
+                onLocalNetworkBlocked: (site, url) => OnLocalNetworkBlocked(tab, site, url),
+                onTrackingSkipped: hosts => Dispatcher.InvokeAsync(() =>
+                {
+                    tab.RecordTrackingSkips(hosts);
+                    if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
+                })),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>

@@ -4,7 +4,8 @@ namespace Eteris.Browser.Shields;
 
 public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
     Action? onCrashed = null, string? userAgent = null, bool isPrivate = false,
-    Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null)
+    Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
+    Action<IReadOnlyList<string>>? onTrackingSkipped = null)
     : CefSharp.Handler.RequestHandler
 {
     // Cabeçalhos de um pedido feito «como telemóvel» (vista móvel de um site fixado na barra lateral): o agente e
@@ -32,7 +33,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         => onCrashed?.Invoke();
 
     private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate,
-        localNetworkAllowed, onLocalNetworkBlocked);
+        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
@@ -58,9 +59,46 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     }
 
     private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-        string? userAgent, bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string, string>? onLocalNetworkBlocked)
+        string? userAgent, bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string, string>? onLocalNetworkBlocked,
+        Action<IReadOnlyList<string>>? onTrackingSkipped)
         : CefSharp.Handler.ResourceRequestHandler
     {
+        // Saltos de rastreio evitados na navegação em curso, por browser: só se contam quando a página de destino
+        // começa a carregar (depois do «limpar o Escudo» dessa navegação), senão a contagem perdia-se logo.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (DateTime At, List<string> Hosts)> _skips = new();
+
+        private static string? Jump(string url, Func<string, bool> isProtected)
+        {
+            if (!Data.Settings.Current.SkipTrackingRedirects) return null;
+            // Com o Escudo desligado no site do salto (o utilizador quis), o pedido segue como está.
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var from) || !isProtected(from.Host)) return null;
+            return Debounce.Destination(url, TrackerBlocker.Default.Lists);
+        }
+
+        private void RememberSkip(IBrowser browser, string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var from)) return;
+            var host = from.Host.ToLowerInvariant();
+            _skips.AddOrUpdate(browser.Identifier, _ => (DateTime.UtcNow, [host]), (_, old) =>
+                DateTime.UtcNow - old.At > TimeSpan.FromSeconds(10) ? (DateTime.UtcNow, [host]) : (DateTime.UtcNow, [.. old.Hosts, host]));
+        }
+
+        private void ReportSkips(IBrowser browser)
+        {
+            if (!_skips.TryRemove(browser.Identifier, out var pending) || DateTime.UtcNow - pending.At > TimeSpan.FromSeconds(10)) return;
+            onTrackingSkipped?.Invoke(pending.Hosts);
+        }
+
+        // Um redirecionamento do servidor para um salto conhecido (um encurtador que manda para l.facebook.com/l.php?u=…)
+        // também vai direto ao destino.
+        protected override void OnResourceRedirect(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
+            IResponse response, ref string newUrl)
+        {
+            if (request.ResourceType != ResourceType.MainFrame || Jump(newUrl, isProtected) is not { } jump) return;
+            RememberSkip(browser, newUrl);
+            newUrl = jump;
+        }
+
         protected override ICookieAccessFilter GetCookieAccessFilter(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
             => _cookies;
 
@@ -83,6 +121,13 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             if (request.ResourceType == ResourceType.MainFrame)
             {
+                // Salto de rastreio com o destino no endereço (Shields/Debounce.cs): vai-se direto ao destino.
+                if (Jump(request.Url, isProtected) is { } jump)
+                {
+                    RememberSkip(browser, request.Url);
+                    request.Url = jump;
+                    return CefReturnValue.Continue;
+                }
                 // Links sem parâmetros de rastreio (utm_*, fbclid…): o pedido sai já limpo.
                 if (Data.Settings.Current.CleanUrls && UrlCleaner.Clean(request.Url) is var clean && clean != request.Url)
                 {
@@ -97,6 +142,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 // O pedido da página só sai depois de os scriptlets estarem registados (máx. 1 s):
                 // sem isto o documento podia nascer antes do registo e o anti-bloqueador ganhava a corrida.
                 var ready = onNavigate(browser, request.Url);
+                ReportSkips(browser);
                 if (ready.IsCompleted) return CefReturnValue.Continue;
                 Task.WhenAny(ready, Task.Delay(TimeSpan.FromSeconds(1))).ContinueWith(_ =>
                 {

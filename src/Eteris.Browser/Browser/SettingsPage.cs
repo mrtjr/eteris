@@ -65,6 +65,7 @@ public static class SettingsPage
             systemLanguage = Shields.RequestIdentity.Language("system"),
             theme = settings.Theme,
             cleanUrls = settings.CleanUrls,
+            debounce = settings.SkipTrackingRedirects,
             notifications = settings.BlockNotificationPrompts,
             imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
             sites = (sites ?? []).Select(s => new
