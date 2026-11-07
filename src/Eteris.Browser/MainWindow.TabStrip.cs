@@ -84,6 +84,86 @@ public partial class MainWindow
         }, DispatcherPriority.Loaded);
     }
 
+    // ---------- Lista «▾» de todas as abas ----------
+
+    private void TabListButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (TabListPopup.IsOpen)
+        {
+            TabListPopup.IsOpen = false;
+            return;
+        }
+        CloseSuggestions();
+        CloseBrowserMenu();
+        TabListSearch.Text = string.Empty;
+        TabListPopup.IsOpen = true;
+    }
+
+    private void TabListPopup_Opened(object sender, EventArgs e)
+    {
+        RefreshTabListMenu();
+        TabListSearch.Focus();
+    }
+
+    private void RefreshTabListMenu()
+    {
+        var query = TabListSearch.Text;
+        var rows = TabListMenu.Rows(Tabs.Tabs, Tabs.Active, query);
+        TabListMenuList.ItemsSource = rows;
+        TabListMenuList.SelectedIndex = TabListMenu.InitialIndex(rows, Tabs.Active, query);
+        if (TabListMenuList.SelectedItem is { } selected) TabListMenuList.ScrollIntoView(selected);
+        TabListStatus.Text = TabListMenu.Status(rows.Count, Tabs.Tabs.Count, query);
+        TabListSearchHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TabListVertical.Visibility = TabListMenu.SuggestsVerticalTabs(Tabs.Tabs.Count, VerticalTabs) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void TabListSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (TabListPopup.IsOpen) RefreshTabListMenu();
+    }
+
+    private void TabListSearch_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var count = TabListMenuList.Items.Count;
+        switch (e.Key)
+        {
+            case Key.Down or Key.Up when count > 0:
+                TabListMenuList.SelectedIndex = TabListMenu.Move(TabListMenuList.SelectedIndex, e.Key == Key.Down ? 1 : -1, count);
+                TabListMenuList.ScrollIntoView(TabListMenuList.SelectedItem);
+                e.Handled = true;
+                break;
+            case Key.Enter:
+                if (TabListMenuList.SelectedItem is RadarRow { Tab: { } tab }) JumpToTab(tab);
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                TabListPopup.IsOpen = false;
+                ReturnFocusToPage();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void TabListItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is RadarRow { Tab: { } tab }) JumpToTab(tab);
+        e.Handled = true;
+    }
+
+    // Salto para a aba: fica ativa, a faixa rola até ela (RevealActiveTab) e o teclado volta à página.
+    private void JumpToTab(BrowserTab tab)
+    {
+        TabListPopup.IsOpen = false;
+        if (Tabs.Tabs.Contains(tab)) Tabs.Active = tab;
+        ReturnFocusToPage();
+    }
+
+    private void TabListVertical_Click(object sender, RoutedEventArgs e)
+    {
+        TabListPopup.IsOpen = false;
+        ToggleVerticalTabs();
+    }
+
     // A arrastar uma aba até à orla da faixa, a faixa rola para se chegar às abas escondidas.
     private void DragScrollTabs(Point positionInViewport)
     {

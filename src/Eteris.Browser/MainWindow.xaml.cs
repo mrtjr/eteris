@@ -16,8 +16,8 @@ namespace Eteris.Browser;
 
 public partial class MainWindow : Window
 {
-    // Logótipo (40) + botão de nova aba (36) + duas setas de rolagem (2×24) + folga (8).
-    private const double TabStripReserved = 40 + 36 + 2 * TabLayout.ArrowWidth + 8;
+    // Logótipo (40) + botão de nova aba (36) + lista «▾» (28) + duas setas de rolagem (2×24) + folga (8).
+    private const double TabStripReserved = 40 + 36 + 28 + 2 * TabLayout.ArrowWidth + 8;
 
     public static readonly DependencyProperty TabWidthProperty = DependencyProperty.Register(
         nameof(TabWidth), typeof(double), typeof(MainWindow), new PropertyMetadata(TabLayout.MaxTabWidth));

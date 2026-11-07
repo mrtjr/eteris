@@ -253,6 +253,37 @@
             </Setter>
         </Style>
 
+        <!-- Linha da lista «▾» de todas as abas -->
+        <Style x:Key="TabListItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="TabListItem_Click" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bg" CornerRadius="10" Background="Transparent" Padding="8,6,10,6" Cursor="Hand">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,3,6,3" />
+                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SideTabItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
             <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
@@ -553,7 +584,96 @@
                                 Margin="0,0,0,3" Visibility="Collapsed" Click="TabScrollRight_Click" ToolTip="Abas seguintes" />
                         <Button Content="&#xE710;" Style="{StaticResource IconButton}" Width="30" Height="30" FontSize="12"
                                 Margin="6,0,0,3" Click="NewTab_Click" ToolTip="Nova aba (Ctrl+T)" />
+                        <Button x:Name="TabListButton" Content="&#xE70D;" Style="{StaticResource IconButton}" Width="26" Height="30" FontSize="9"
+                                Margin="2,0,0,3" Click="TabListButton_Click" ToolTip="Todas as abas" />
                     </StackPanel>
+
+                    <!-- Lista «▾» de todas as abas: pesquisável, pela ordem da faixa, com a ativa marcada (MainWindow.TabStrip.cs) -->
+                    <Popup x:Name="TabListPopup" PlacementTarget="{Binding ElementName=TabListButton}" Placement="Bottom"
+                           HorizontalOffset="-180" VerticalOffset="2" AllowsTransparency="True" StaysOpen="False"
+                           PopupAnimation="Fade" Opened="TabListPopup_Opened">
+                        <Border Margin="32,0,32,44" Width="360" Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" CornerRadius="16" Padding="8">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="2,2,2,6">
+                                    <Border Height="34" CornerRadius="10" Background="{DynamicResource FieldBrush}"
+                                            BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" />
+                                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="12,0,0,0"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource TextFaintBrush}" IsHitTestVisible="False" />
+                                    <TextBlock x:Name="TabListSearchHint" Text="Procurar nas abas abertas" FontSize="13" Margin="34,0,0,0"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource TextFaintBrush}" IsHitTestVisible="False" />
+                                    <TextBox x:Name="TabListSearch" Style="{StaticResource BareTextBox}" FontSize="13" Margin="32,0,10,0"
+                                             VerticalAlignment="Center" AutomationProperties.Name="Procurar nas abas abertas"
+                                             TextChanged="TabListSearch_TextChanged" PreviewKeyDown="TabListSearch_PreviewKeyDown" />
+                                </Grid>
+                                <ListBox x:Name="TabListMenuList" Grid.Row="1" MaxHeight="420" Background="Transparent" BorderThickness="0"
+                                         Padding="0" ItemContainerStyle="{StaticResource TabListItemStyle}"
+                                         AutomationProperties.Name="Abas abertas"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="26" Height="26" CornerRadius="8" Background="{Binding BadgeBrush}" Margin="0,0,10,0">
+                                                    <Grid>
+                                                        <TextBlock Text="{Binding Badge}" Foreground="White" FontSize="12" FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Image}" Value="{x:Null}">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <Image Width="16" Height="16" Source="{Binding Image}" Stretch="Uniform" />
+                                                    </Grid>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontSize="13" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                                        <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding Status, StringFormat={} · {0}}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                                                                   TextTrimming="CharacterEllipsis">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="TabListStatus" Grid.Row="2" FontSize="11" Margin="10,8,10,4" Foreground="{DynamicResource TextFaintBrush}" />
+                                <Button x:Name="TabListVertical" Grid.Row="3" Style="{StaticResource PillButton}" Margin="6,4,6,2"
+                                        HorizontalAlignment="Left" Visibility="Collapsed" Click="TabListVertical_Click"
+                                        Content="Muitas abas? Passar para abas verticais" ToolTip="A lista lateral mostra os títulos completos e aguenta dezenas de abas" />
+                            </Grid>
+                        </Border>
+                    </Popup>
                 </Grid>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Height="34">
