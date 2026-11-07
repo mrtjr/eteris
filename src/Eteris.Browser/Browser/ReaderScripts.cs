@@ -27,6 +27,9 @@ public static class ReaderScripts
         return reader.ReadToEnd();
     }
 
+    // Outros scripts que precisam do Readability (ex.: o cartão «Espreitar»): o script tem de começar por «(() => {».
+    public static string WithReadability(string script) => InjectReadability(script);
+
     private static string InjectReadability(string script)
     {
         const string opening = "(() => {";
