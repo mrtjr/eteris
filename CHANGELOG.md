@@ -1,6 +1,8 @@
 # Alterações
 
-## Por publicar
+## 0.2.8 — 2026-11-07
+
+(As versões 0.2.4 a 0.2.7 foram pacotes locais de teste, nunca publicados.)
 
 ### Novo
 - **Menu do Éteris** (`Alt+F`): as ações por categoria e o zoom no próprio menu.
