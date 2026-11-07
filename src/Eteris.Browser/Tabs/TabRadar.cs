@@ -39,7 +39,8 @@ public static class TabRadar
                     duplicates.GetValueOrDefault(WebAddress(tab.Address) ?? string.Empty)));
 
         if (query.Length > 0)
-            rows = rows.Where(row => TabFilter.Matches($"{row.Title} {row.Subtitle}", row.Address, query));
+            // Uma aba com nome próprio continua a aparecer ao pesquisar pelo título da página.
+            rows = rows.Where(row => TabFilter.Matches($"{row.Title} {row.Subtitle} {row.Tab?.Title}", row.Address, query));
 
         if (sort == RadarSort.Site)
             rows = rows.OrderBy(row => Site(row.Address), StringComparer.CurrentCultureIgnoreCase)
@@ -92,7 +93,7 @@ public static class TabRadar
         if (duplicates > 1) status.Add($"{duplicates} com o mesmo endereço");
         var site = Site(tab.Address);
         var subtitle = tab.Group is { } group ? $"{site} · {group.Name}" : site;
-        return new(tab, null, string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title, tab.Address,
+        return new(tab, null, tab.CustomTitle ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title), tab.Address,
             subtitle, tab.Monogram ?? "É", tab.MonogramBrush, tab.Favicon, string.Join(" · ", status));
     }
 

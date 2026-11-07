@@ -23,7 +23,7 @@ public partial class MainWindow
 
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous)
         {
-            Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups);
+            Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas);
             RestoreSplit(previous.Split);
         }
 
@@ -68,7 +68,7 @@ public partial class MainWindow
             var active = Tabs.Active is { } tab ? Tabs.Tabs.IndexOf(tab) : 0;
             var (groupIds, groups) = Tabs.GroupSnapshot();
             _session.Save(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title), Tabs.Tabs.Select(t => t.IsPinned),
-                groupIds, groups, SplitSnapshot());
+                groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot());
         }
         catch (IOException) { }
     }

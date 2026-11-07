@@ -12,8 +12,40 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private string _address;
 
+    [NotifyPropertyChangedFor(nameof(DisplayTitle))]
     [ObservableProperty]
     private string _title = "Nova aba";
+
+    // Identidade dada pelo utilizador (Tabs/TabIdentity.cs): nome próprio, emoji e cor do ícone.
+    [NotifyPropertyChangedFor(nameof(DisplayTitle))]
+    [ObservableProperty]
+    private string? _customTitle;
+
+    [NotifyPropertyChangedFor(nameof(HasCustomIcon))]
+    [NotifyPropertyChangedFor(nameof(IconText))]
+    [ObservableProperty]
+    private string? _emoji;
+
+    [NotifyPropertyChangedFor(nameof(HasCustomIcon))]
+    [NotifyPropertyChangedFor(nameof(IconBrush))]
+    [ObservableProperty]
+    private int? _colorIndex;
+
+    // O que a faixa, o cartão, o radar e a paleta mostram: o nome próprio, senão o título da página.
+    public string DisplayTitle => TabIdentity.DisplayTitle(CustomTitle, Title, Host);
+
+    public bool HasCustomIcon => TabIdentity.HasCustomIcon(Emoji, ColorIndex);
+
+    public string IconText => TabIdentity.IconText(Emoji, Monogram);
+
+    public Brush IconBrush => ColorIndex is { } index ? TabGroup.BrushAt(index) : MonogramBrush;
+
+    public void SetIdentity(string? name, string? emoji, int? colorIndex)
+    {
+        CustomTitle = TabIdentity.NormalizeName(name);
+        Emoji = TabIdentity.NormalizeEmoji(emoji);
+        ColorIndex = TabIdentity.NormalizeColor(colorIndex);
+    }
 
     [ObservableProperty]
     private bool _isLoading;
@@ -187,11 +219,16 @@ public partial class BrowserTab : ObservableObject
     partial void OnAddressChanged(string? oldValue, string newValue)
     {
         ThumbnailVersion++;
+        // O nome próprio era desta página/site: ao mudar de site a aba volta a chamar-se pelo título da página.
+        if (!TabIdentity.KeepsIdentity(oldValue ?? string.Empty, newValue)) SetIdentity(null, null, null);
         // Só uma página de outro site apaga a miniatura: numa navegação dentro do mesmo site (pushState, #âncora)
         // o CEF não volta a disparar FrameLoadEnd, logo não haveria recaptura e a aba ficaria sem pré-visualização.
         if (!SameHost(oldValue ?? string.Empty, newValue)) Thumbnail = null;
         OnPropertyChanged(nameof(Monogram));
         OnPropertyChanged(nameof(MonogramBrush));
+        OnPropertyChanged(nameof(IconText));
+        OnPropertyChanged(nameof(IconBrush));
+        OnPropertyChanged(nameof(DisplayTitle));
         OnPropertyChanged(nameof(IsNewTab));
     }
 }

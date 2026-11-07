@@ -84,8 +84,10 @@
                                         <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentY="Top" />
                                     </Border.Background>
                                 </Border>
-                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                                <TextBlock Text="{Binding DisplayTitle}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
                                            TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="PageTitle" Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0"
+                                           TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0" />
                                 <TextBlock x:Name="Status" Text="{Binding StatusLine}" FontSize="11.5" Foreground="{StaticResource IrisBrush}"
                                            Margin="0,8,0,0" TextWrapping="Wrap" />
@@ -97,6 +99,10 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Thumbnail}" Value="{x:Null}">
                                 <Setter TargetName="Thumb" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <!-- O título da página só interessa quando a aba tem nome próprio -->
+                            <DataTrigger Binding="{Binding CustomTitle}" Value="{x:Null}">
+                                <Setter TargetName="PageTitle" Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -156,11 +162,16 @@
                                                    Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
+                                    <Border x:Name="CustomIcon" CornerRadius="5" Background="{Binding IconBrush}" Visibility="Collapsed">
+                                        <TextBlock Text="{Binding IconText}" FontSize="10" FontWeight="Bold" Foreground="White"
+                                                   FontFamily="{StaticResource EmojiFont}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
+                                    </Border>
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
                                 </Grid>
-                                <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0"
+                                <TextBlock x:Name="TabTitle" Grid.Column="1" Text="{Binding DisplayTitle}" Margin="8,0,4,0"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5"
                                            Foreground="{DynamicResource TextMutedBrush}" />
                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
@@ -168,7 +179,7 @@
                                             FontSize="11" Click="TabAudio_Click" ToolTip="Silenciar / reativar o som desta aba"
                                             Visibility="Collapsed" />
                                     <Button x:Name="TabClose" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
-                                            AutomationProperties.Name="{Binding Title, StringFormat=Fechar «{0}»}"
+                                            AutomationProperties.Name="{Binding DisplayTitle, StringFormat=Fechar «{0}»}"
                                             Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" />
                                 </StackPanel>
                             </Grid>
@@ -215,10 +226,17 @@
                                 <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding HasCustomIcon}" Value="True">
+                                <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="CustomIcon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding IsLoading}" Value="True">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Globe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="CustomIcon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsAudible}" Value="True">
@@ -331,18 +349,23 @@
                                     <TextBlock x:Name="SideGlobe" Text="&#xE774;" FontFamily="{StaticResource IconFont}" FontSize="13"
                                                Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Border x:Name="CustomIcon" CornerRadius="5" Background="{Binding IconBrush}" Visibility="Collapsed">
+                                        <TextBlock Text="{Binding IconText}" FontSize="10" FontWeight="Bold" Foreground="White"
+                                                   FontFamily="{StaticResource EmojiFont}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
+                                    </Border>
                                     <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
                                 </Grid>
-                                <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Margin="10,0,4,0" FontSize="13"
+                                <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding DisplayTitle}" Margin="10,0,4,0" FontSize="13"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextMutedBrush}" />
                                 <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal">
                                     <Button x:Name="Audio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" Visibility="Collapsed" />
                                     <Button x:Name="Close" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
-                                            AutomationProperties.Name="{Binding Title, StringFormat=Fechar «{0}»}"
+                                            AutomationProperties.Name="{Binding DisplayTitle, StringFormat=Fechar «{0}»}"
                                             Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" Visibility="Hidden" />
                                 </StackPanel>
                             </Grid>
@@ -382,10 +405,18 @@
                                 <Setter TargetName="SideGlobe" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding HasCustomIcon}" Value="True">
+                                <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="SideGlobe" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="CustomIcon" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding IsLoading}" Value="True">
                                 <Setter TargetName="Favicon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="NewTabIcon" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="CustomIcon" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Spinner" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsAudible}" Value="True">

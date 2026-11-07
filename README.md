@@ -27,7 +27,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 
 **Abas e janelas**
 - Abas verticais (encolhíveis) ou no topo; ecrã dividido lado a lado ou empilhado (abrir um link ao lado, arrastar uma aba até à margem, trocar lados), lembrado na sessão.
-- Abas fixadas, a dormir (libertam memória), silenciar, arrastar, cartão ao passar o rato.
+- Abas fixadas, a dormir (libertam memória), silenciar, arrastar, cartão ao passar o rato; nome próprio, emoji e cor por aba (ficam na sessão).
 - Paleta de comandos (Ctrl+K), folha de atalhos (F1), abas fechadas recentemente.
 - A janela lembra-se do tamanho e posição; links de outras apps abrem na janela aberta; lista de atalhos na barra de tarefas.
 - Grupos de abas com nome e cor (pré-visualização ao pairar na etiqueta); sessões guardadas; fechar duplicadas e ordenar por site; reabrir janela fechada.

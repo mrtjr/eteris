@@ -188,7 +188,7 @@ public partial class MainWindow
         if (_sideView is null) return;
         var query = SideFilter.Text.Trim();
         SideFilterHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        _sideView.Filter = query.Length == 0 ? null : item => item is Eteris.Browser.Tabs.BrowserTab tab && Eteris.Browser.Tabs.TabFilter.Matches(tab.Title, tab.Address, query);
+        _sideView.Filter = query.Length == 0 ? null : item => item is Eteris.Browser.Tabs.BrowserTab tab && Eteris.Browser.Tabs.TabFilter.Matches(tab.DisplayTitle + " " + tab.Title, tab.Address, query);
     }
 
     private void SideFilter_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)

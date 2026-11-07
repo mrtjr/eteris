@@ -29,7 +29,10 @@ public sealed partial class TabGroup : ObservableObject
     [ObservableProperty]
     private bool _isCollapsed;
 
-    public Brush ColorBrush => Brushes[((ColorIndex % Brushes.Length) + Brushes.Length) % Brushes.Length];
+    public Brush ColorBrush => BrushAt(ColorIndex);
+
+    // A mesma paleta serve a cor do ícone de uma aba (Tabs/TabIdentity.cs).
+    public static Brush BrushAt(int index) => Brushes[((index % Brushes.Length) + Brushes.Length) % Brushes.Length];
 
     public IEnumerable<BrowserTab> Members(TabsViewModel tabs) => tabs.Tabs.Where(t => ReferenceEquals(t.Group, this));
 }

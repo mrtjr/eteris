@@ -111,6 +111,8 @@ public partial class MainWindow
             () => OpenWindow(isPrivate: true));
         if (tab is not null)
         {
+            yield return new("", "Mudar o nome da aba…", tab.CustomTitle is null ? "Nome próprio, emoji e cor para esta aba" : $"Agora «{tab.CustomTitle}»", null,
+                () => RenameTab(tab, Omnibox));
             yield return new("", "Fechar aba", tab.Title, "Ctrl+W", () => CloseTab(tab));
             yield return new("", "Duplicar aba", tab.Title, null, () => Tabs.NewTab(address));
             yield return new("", "Recarregar página", tab.Title, "F5", () => ReloadActive());
@@ -207,13 +209,13 @@ public partial class MainWindow
 
         var tabs = Tabs.Tabs
             .Where(t => !ReferenceEquals(t, Tabs.Active))
-            .Select(t => new PaletteCommand("", t.Title, "Mudar para esta aba · " + (WebHost(t.Address) ?? "Éteris"), null,
+            .Select(t => new PaletteCommand("", t.DisplayTitle, "Mudar para esta aba · " + (WebHost(t.Address) ?? "Éteris"), null,
                 () => Tabs.Active = t));
 
         // Ao escrever, também as abas das outras janelas (só do mesmo tipo: privadas com privadas).
         var otherWindows = query.Length == 0 ? [] : Application.Current.Windows.OfType<MainWindow>()
             .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate)
-            .SelectMany(w => w.Tabs.Tabs.Select(t => new PaletteCommand("", t.Title,
+            .SelectMany(w => w.Tabs.Tabs.Select(t => new PaletteCommand("", t.DisplayTitle,
                 "Mudar para esta aba · outra janela · " + (WebHost(t.Address) ?? "Éteris"), null, () => FocusTabIn(w, t))))
             .ToList();
 

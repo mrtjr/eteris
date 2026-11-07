@@ -4,6 +4,7 @@
 
     <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <FontFamily x:Key="EmojiFont">Segoe UI Emoji, Segoe UI Symbol</FontFamily>
 
 
     <!-- Íris: a assinatura cromática do Éteris (violeta → ciano → verde-água → rosa) -->

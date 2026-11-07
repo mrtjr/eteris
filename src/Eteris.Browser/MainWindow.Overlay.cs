@@ -93,6 +93,15 @@ public partial class MainWindow
     {
         OverlayRoot.Children.Add(element);
         if (_overlayRoot is not null) WatchOverlayChild(element);
+        // Um elemento já visível ao entrar não dispara a vigilância: a janela da camada tem de aparecer já.
+        UpdateOverlayVisibility();
+    }
+
+    // Camadas temporárias (ex.: a caixa de mudar o nome da aba) saem da camada quando fecham.
+    private void RemoveFromOverlay(UIElement element)
+    {
+        OverlayRoot.Children.Remove(element);
+        UpdateOverlayVisibility();
     }
 
     private void UpdateOverlayVisibility()

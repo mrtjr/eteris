@@ -272,7 +272,8 @@ public partial class MainWindow : Window
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title) or nameof(BrowserTab.IsPinned)
-            or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup)) ScheduleSessionSave();
+            or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.CustomTitle)
+            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); UpdateZoomBadge(); }
@@ -380,7 +381,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
+        if (key == Key.Escape && RenameOpen) CloseRename();
+        else if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
         else if (key == Key.Escape && GlanceOpen) CloseGlance();
         else if (Shortcut(key, ctrl, shift, alt) is { } action) action();
         else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();

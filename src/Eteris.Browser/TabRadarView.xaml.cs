@@ -120,7 +120,8 @@ public partial class TabRadarView : UserControl
     {
         if (e.PropertyName is nameof(BrowserTab.Title) or nameof(BrowserTab.Address) or nameof(BrowserTab.Favicon)
             or nameof(BrowserTab.Thumbnail) or nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsAudible)
-            or nameof(BrowserTab.IsMuted) or nameof(BrowserTab.IsSleeping) or nameof(BrowserTab.Group))
+            or nameof(BrowserTab.IsMuted) or nameof(BrowserTab.IsSleeping) or nameof(BrowserTab.Group)
+            or nameof(BrowserTab.CustomTitle) or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex))
             QueueRefresh();
     }
 

@@ -38,7 +38,8 @@ public partial class TabsViewModel : ObservableObject
 
     // Abas da sessão anterior, pela ordem original; só a ativa carrega, as outras ficam a dormir até serem abertas.
     public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null,
-        IReadOnlyList<bool>? pinned = null, IReadOnlyList<int>? groupIds = null, IReadOnlyList<Data.SessionGroup>? groups = null)
+        IReadOnlyList<bool>? pinned = null, IReadOnlyList<int>? groupIds = null, IReadOnlyList<Data.SessionGroup>? groups = null,
+        IReadOnlyList<Data.SessionTabMeta>? metas = null)
     {
         var restoredGroups = (groups ?? []).Select(g => new TabGroup(g.Name, g.ColorIndex) { IsCollapsed = g.Collapsed }).ToList();
         _groupsCreated = restoredGroups.Count;
@@ -50,6 +51,7 @@ public partial class TabsViewModel : ObservableObject
                 IsPinned = pinned is not null && i < pinned.Count && pinned[i],
             };
             if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
+            if (metas is not null && i < metas.Count && metas[i] is { } meta) tab.SetIdentity(meta.Name, meta.Emoji, meta.Color);
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
             Tabs.Add(tab);
@@ -210,6 +212,10 @@ public partial class TabsViewModel : ObservableObject
         var ids = Tabs.Select(t => t.Group is { } g ? groups.IndexOf(g) : -1).ToList();
         return (ids, groups.Select(g => new Data.SessionGroup(g.Name, g.ColorIndex, g.IsCollapsed)).ToList());
     }
+
+    // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa.
+    public List<Data.SessionTabMeta> MetaSnapshot()
+        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex)).ToList();
 
     public void RefreshGroups()
     {
