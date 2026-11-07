@@ -137,8 +137,7 @@ public partial class MainWindow
 
         SidebarNotes.Visibility = panel.Key == SidebarPanels.Notes ? Visibility.Visible : Visibility.Collapsed;
         NotesInsertButton.Visibility = SidebarNotes.Visibility;
-        SidebarReading.Visibility = panel.Key == SidebarPanels.Reading ? Visibility.Visible : Visibility.Collapsed;
-        SidebarLinks.Visibility = panel.Key is SidebarPanels.Bookmarks or SidebarPanels.History ? Visibility.Visible : Visibility.Collapsed;
+        SidebarLinks.Visibility = panel.Key is SidebarPanels.Reading or SidebarPanels.Bookmarks or SidebarPanels.History ? Visibility.Visible : Visibility.Collapsed;
         SidebarWebHost.Visibility = panel.IsWeb ? Visibility.Visible : Visibility.Collapsed;
         WebPanelOpenButton.Visibility = WebPanelReloadButton.Visibility = SidebarWebHost.Visibility;
         if (panel.IsWeb)
@@ -155,11 +154,14 @@ public partial class MainWindow
                 if (focus) NotesText.Focus();
                 break;
             case SidebarPanels.Reading:
-                RefreshReadingPanel();
-                break;
             case SidebarPanels.Bookmarks:
             case SidebarPanels.History:
-                SidebarFilterHint.Text = panel.Key == SidebarPanels.Bookmarks ? "Filtrar favoritos" : "Filtrar o histórico";
+                SidebarFilterHint.Text = panel.Key switch
+                {
+                    SidebarPanels.Reading => "Filtrar «Para ler»",
+                    SidebarPanels.Bookmarks => "Filtrar favoritos",
+                    _ => "Filtrar o histórico",
+                };
                 if (SidebarFilter.Text.Length > 0) SidebarFilter.Clear();
                 else RefreshLinksPanel();
                 if (focus) SidebarFilter.Focus();
@@ -167,26 +169,65 @@ public partial class MainWindow
         }
     }
 
-    // ---------- Favoritos e Histórico ----------
+    // ---------- Para ler, Favoritos e Histórico ----------
+
+    // Sem filtro, as mais recentes; com filtro, a procura vai ao histórico e aos favoritos inteiros (não só às
+    // últimas 400 visitas / 500 favoritos, que com uso normal são um ou dois dias de histórico).
+    private const int SidebarHistoryRows = 400;
+    private const int SidebarBookmarkRows = 500;
+
+    // A linha escolhida com as setas (índice em SidebarLinkList; -1 = nenhuma) e, ao tirar uma linha pelo teclado,
+    // manter a escolha no mesmo sítio.
+    private int _sidebarCursor = -1;
+    private bool _keepSidebarCursor;
+
+    private IReadOnlyList<object> SidebarRows => SidebarLinkList.ItemsSource as IReadOnlyList<object> ?? [];
 
     private void RefreshLinksPanel()
     {
         if (_sidebarPanel is not { } panel) return;
         var query = SidebarFilter.Text.Trim();
         SidebarFilterHint.Visibility = SidebarFilter.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var previous = _sidebarCursor;
         IReadOnlyList<object> rows = panel.Key switch
         {
-            SidebarPanels.Bookmarks => SidebarLists.Bookmarks(AppData.Bookmarks(b => b.All(500)), query),
-            SidebarPanels.History => SidebarLists.History(AppData.TryRead(h => h.Visits(400)), DateTime.Now, query),
+            SidebarPanels.Reading => SidebarLists.Reading(AppData.ReadingList(), DateTime.UtcNow, query),
+            SidebarPanels.Bookmarks => SidebarLists.Bookmarks(AppData.Bookmarks(b => b.All(query.Length > 0 ? int.MaxValue : SidebarBookmarkRows)), query),
+            SidebarPanels.History => SidebarLists.History(AppData.TryRead(h => query.Length > 0
+                ? h.VisitsMatching((title, url) => SidebarLists.Matches(title, url, query), SidebarHistoryRows)
+                : h.Visits(SidebarHistoryRows)), DateTime.Now, query),
             _ => [],
         };
         ApplySiteIcons(rows.OfType<SidebarLink>());
         SidebarLinkList.ItemsSource = rows;
+        _sidebarCursor = -1;
+        if (_keepSidebarCursor && previous >= 0 && rows.Count > 0)
+        {
+            var at = Math.Min(previous, rows.Count - 1);
+            SetSidebarCursor(rows[at] is SidebarLink ? at : SidebarLists.MoveCursor(rows, at, 1) is var next && next != at ? next : SidebarLists.MoveCursor(rows, at, -1));
+        }
         SidebarLinksEmpty.Text = query.Length > 0 ? $"Nada encontrado para «{query}»."
-            : panel.Key == SidebarPanels.Bookmarks ? "Ainda não há favoritos. A estrela na barra de endereço (Ctrl+D) guarda a página aberta."
-            : "O histórico está vazio.";
+            : panel.Key switch
+            {
+                SidebarPanels.Reading => "Nada para ler mais tarde. «Ler mais tarde» no menu da página, na paleta ou ao espreitar um link guarda a página aqui.",
+                SidebarPanels.Bookmarks => "Ainda não há favoritos. A estrela na barra de endereço (Ctrl+D) guarda a página aberta.",
+                _ => "O histórico está vazio.",
+            };
         SidebarLinksEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    private void SetSidebarCursor(int index)
+    {
+        var rows = SidebarRows;
+        if (_sidebarCursor >= 0 && _sidebarCursor < rows.Count && rows[_sidebarCursor] is SidebarLink old) old.IsCurrent = false;
+        _sidebarCursor = index >= 0 && index < rows.Count && rows[index] is SidebarLink ? index : -1;
+        if (_sidebarCursor < 0) return;
+        ((SidebarLink)rows[_sidebarCursor]).IsCurrent = true;
+        (SidebarLinkList.ItemContainerGenerator.ContainerFromIndex(_sidebarCursor) as FrameworkElement)?.BringIntoView();
+    }
+
+    private SidebarLink? SidebarCurrentLink
+        => _sidebarCursor >= 0 && _sidebarCursor < SidebarRows.Count ? SidebarRows[_sidebarCursor] as SidebarLink : null;
 
     // Ícones dos sites já guardados pelo histórico (os mesmos de eteris://history): descodificados uma vez por janela.
     private readonly Dictionary<string, ImageSource?> _siteIconCache = new(StringComparer.Ordinal);
@@ -226,9 +267,16 @@ public partial class MainWindow
 
     private void SidebarFilter_TextChanged(object sender, TextChangedEventArgs e) => RefreshLinksPanel();
 
+    // O teclado das listas passa pelo filtro (as linhas não recebem o foco, como na lista de abas e no Radar):
+    // ↑/↓ e Page Up/Down escolhem a linha, Enter abre-a (sem nenhuma escolhida, a primeira), Ctrl+Enter abre-a numa
+    // aba nova por trás, Shift+Delete tira-a da lista e Shift+F10 ou a tecla de menu dão o menu da linha.
     private void SidebarFilter_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        switch (e.Key)
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        var rows = SidebarRows;
+        switch (key)
         {
             case Key.Escape:
                 // Esc limpa o filtro; sem filtro, fecha a barra (como nas notas).
@@ -236,8 +284,28 @@ public partial class MainWindow
                 else CloseSidebar();
                 e.Handled = true;
                 break;
-            case Key.Enter when SidebarLinkList.ItemsSource is IEnumerable<object> rows && rows.OfType<SidebarLink>().FirstOrDefault() is { } first:
-                OpenSidebarLink(first);
+            case Key.Down or Key.Up:
+                SetSidebarCursor(SidebarLists.MoveCursor(rows, _sidebarCursor, key == Key.Down ? 1 : -1));
+                e.Handled = true;
+                break;
+            case Key.PageDown or Key.PageUp:
+                var target = _sidebarCursor;
+                for (var i = 0; i < 8; i++) target = SidebarLists.MoveCursor(rows, target, key == Key.PageDown ? 1 : -1);
+                SetSidebarCursor(target);
+                e.Handled = true;
+                break;
+            case Key.Enter when (SidebarCurrentLink ?? rows.OfType<SidebarLink>().FirstOrDefault()) is { } link:
+                if (ctrl) Tabs.NewTab(link.Url, activate: false);
+                else OpenSidebarLink(link);
+                e.Handled = true;
+                break;
+            case Key.Delete when shift && SidebarCurrentLink is { } link:
+                RemoveSidebarLink(link);
+                e.Handled = true;
+                break;
+            case Key.Apps or Key.F10 when (key == Key.Apps || shift) && SidebarCurrentLink is { } link:
+                var anchor = SidebarLinkList.ItemContainerGenerator.ContainerFromIndex(_sidebarCursor) as FrameworkElement;
+                ShowSidebarLinkMenu(link, anchor ?? SidebarFilter);
                 e.Handled = true;
                 break;
         }
@@ -315,15 +383,6 @@ public partial class MainWindow
 
     private void SidebarClose_Click(object sender, RoutedEventArgs e) => CloseSidebar();
 
-    // ---------- Para ler ----------
-
-    private void RefreshReadingPanel()
-    {
-        var items = SidebarLists.Reading(AppData.ReadingList(), DateTime.UtcNow);
-        ReadingList.ItemsSource = items;
-        ReadingEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     // Clique abre na aba atual; clique do meio ou Ctrl+clique numa aba nova (como nas barras laterais do Firefox).
     private void SidebarLink_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -346,7 +405,7 @@ public partial class MainWindow
         if (SidebarShows(SidebarPanels.Reading) && !IsPrivate && !link.Muted)
         {
             AppData.MarkRead(link.Url, true);
-            RefreshReadingPanel();
+            RefreshLinksPanel();
         }
     }
 
@@ -354,39 +413,56 @@ public partial class MainWindow
     {
         if (sender is not FrameworkElement { DataContext: SidebarLink link } row) return;
         e.Handled = true;
+        ShowSidebarLinkMenu(link, row);
+    }
+
+    private void ShowSidebarLinkMenu(SidebarLink link, FrameworkElement anchor)
+    {
         var menu = new DarkMenu()
-            .Item("", "Abrir numa nova aba", () => Tabs.NewTab(link.Url))
+            .Item("", "Abrir numa nova aba", () => Tabs.NewTab(link.Url), "Ctrl+Enter")
             .Item("", "Abrir ao lado (ecrã dividido)", () => OpenSideBySide(Tabs.NewTab(link.Url, activate: false)))
             .Item("", "Copiar endereço", () => CopyText(Shields.UrlCleaner.Clean(link.Url), "Endereço copiado"));
         if (SidebarShows(SidebarPanels.Bookmarks))
-            menu.Separator()
-                .Item("\uE74D", "Remover dos favoritos", () =>
-                {
-                    AppData.RemoveBookmark(link.Url);
-                    UpdateStar();
-                    RefreshLinksPanel();
-                    ShowToast("Removido dos favoritos");
-                });
+            menu.Separator().Item("\uE74D", "Remover dos favoritos", () => RemoveSidebarLink(link), "Shift+Del");
         if (SidebarShows(SidebarPanels.History))
-            menu.Separator()
-                .Item("\uE74D", "Apagar esta visita do histórico", () =>
-                {
-                    AppData.TryWrite(h => h.DeleteVisit(link.Id));
-                    RefreshLinksPanel();
-                });
+            menu.Separator().Item("\uE74D", "Apagar do histórico deste dia", () => RemoveSidebarLink(link), "Shift+Del");
         if (SidebarShows(SidebarPanels.Reading))
             menu.Separator()
                 .Item(link.Muted ? "" : "", link.Muted ? "Marcar como por ler" : "Marcar como lido", () =>
                 {
                     AppData.MarkRead(link.Url, !link.Muted);
-                    RefreshReadingPanel();
+                    RefreshLinksPanel();
                 }, enabled: !IsPrivate)
-                .Item("", "Remover da lista", () =>
-                {
-                    AppData.RemoveFromReadingList(link.Url);
-                    RefreshReadingPanel();
-                    ShowToast("Removido de «Para ler»");
-                }, enabled: !IsPrivate);
-        menu.Open(row);
+                .Item("", "Remover da lista", () => RemoveSidebarLink(link), "Shift+Del", enabled: !IsPrivate);
+        menu.Open(anchor);
+    }
+
+    // Tirar a linha da lista do painel à vista. No histórico a linha junta as visitas à página nesse dia (as
+    // repetições ficam escondidas), por isso apagam-se todas as desse dia — senão a linha ficava, só com a hora da
+    // visita anterior.
+    private void RemoveSidebarLink(SidebarLink link)
+    {
+        _keepSidebarCursor = _sidebarCursor >= 0;
+        if (SidebarShows(SidebarPanels.Bookmarks))
+        {
+            AppData.RemoveBookmark(link.Url);
+            UpdateStar();
+            RefreshLinksPanel();
+            ShowToast("Removido dos favoritos");
+        }
+        else if (SidebarShows(SidebarPanels.History))
+        {
+            var (from, to) = SidebarLists.DayRangeUtc(link.VisitedUtc);
+            AppData.TryWrite(h => h.DeleteVisits(link.Url, from, to));
+            RefreshLinksPanel();
+            ShowToast("Apagado do histórico deste dia");
+        }
+        else if (SidebarShows(SidebarPanels.Reading) && !IsPrivate)
+        {
+            AppData.RemoveFromReadingList(link.Url);
+            RefreshLinksPanel();
+            ShowToast("Removido de «Para ler»");
+        }
+        _keepSidebarCursor = false;
     }
 }

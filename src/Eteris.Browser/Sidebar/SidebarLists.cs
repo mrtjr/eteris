@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using Eteris.Browser.Data;
 using Eteris.Browser.Tabs;
@@ -6,9 +7,32 @@ namespace Eteris.Browser.Sidebar;
 
 // Uma linha das listas da barra lateral (Para ler, Favoritos, Histórico): título, site, uma linha de detalhe e o
 // monograma do site (letra e cor, como nas abas sem ícone). Muted = já lido / sem destaque. Id = visita do
-// histórico (para apagar só essa); Icon é posto pela janela quando o site tem ícone guardado.
-public sealed record SidebarLink(string Url, string Title, string Host, string Detail, bool Muted, long Id = 0)
+// histórico (a mais recente da linha); VisitedUtc = quando foi (o dia da linha, para apagar as visitas desse dia);
+// Icon é posto pela janela quando o site tem ícone guardado; IsCurrent = a linha escolhida com as setas.
+public sealed record SidebarLink(string Url, string Title, string Host, string Detail, bool Muted, long Id = 0, DateTime VisitedUtc = default)
+    : INotifyPropertyChanged
 {
+    private bool _isCurrent;
+
+    // Cada linha é uma linha (identidade): o estado que muda (IsCurrent, Icon, quem ouve) não mexe na igualdade
+    // que a lista do WPF usa para encontrar o contentor do item.
+    public bool Equals(SidebarLink? other) => ReferenceEquals(this, other);
+
+    public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set
+        {
+            if (_isCurrent == value) return;
+            _isCurrent = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCurrent)));
+        }
+    }
+
     public string Letter => SiteBadge.Letter(Url) ?? "·";
 
     public string Color => SiteBadge.Palette[SiteBadge.ColorIndex(Url)];
@@ -25,9 +49,10 @@ public static class SidebarLists
 {
     private static readonly CultureInfo Portuguese = new("pt-PT");
 
-    // «Para ler»: por ler primeiro (ordem do repositório), com «há 2 dias» ou «lido» no detalhe.
-    public static IReadOnlyList<SidebarLink> Reading(IEnumerable<ReadingItem> items, DateTime nowUtc)
-        => items.Select(item => new SidebarLink(item.Url, TitleOf(item.Title, item.Url), HostOf(item.Url),
+    // «Para ler»: por ler primeiro (ordem do repositório), com «há 2 dias» ou «lido» no detalhe, filtrados pelas
+    // palavras escritas.
+    public static IReadOnlyList<SidebarLink> Reading(IEnumerable<ReadingItem> items, DateTime nowUtc, string query = "")
+        => items.Where(item => Matches(item.Title, item.Url, query)).Select(item => new SidebarLink(item.Url, TitleOf(item.Title, item.Url), HostOf(item.Url),
                 item.Read ? "Lido" : Ago(item.AddedUtc, nowUtc), item.Read))
             .ToList();
 
@@ -57,9 +82,44 @@ public static class SidebarLists
                 rows.Add(new SidebarHeading(DayLabel(day, DateOnly.FromDateTime(nowLocal))));
             }
             if (!seen.Add(visit.Url)) continue;
-            rows.Add(new SidebarLink(visit.Url, TitleOf(visit.Title, visit.Url), HostOf(visit.Url), local.ToString("HH:mm", CultureInfo.InvariantCulture), false, visit.Id));
+            rows.Add(new SidebarLink(visit.Url, TitleOf(visit.Title, visit.Url), HostOf(visit.Url), local.ToString("HH:mm", CultureInfo.InvariantCulture), false, visit.Id,
+                DateTime.SpecifyKind(visit.VisitedUtc, DateTimeKind.Utc)));
         }
         return rows;
+    }
+
+    // O dia local da visita, em UTC [início, fim): o intervalo que a linha do histórico representa.
+    public static (DateTime FromUtc, DateTime ToUtc) DayRangeUtc(DateTime visitedUtc, TimeZoneInfo? zone = null)
+    {
+        zone ??= TimeZoneInfo.Local;
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(visitedUtc, DateTimeKind.Utc), zone);
+        return (StartOfDayUtc(local.Date, zone), StartOfDayUtc(local.Date.AddDays(1), zone));
+    }
+
+    // Meia-noite local em UTC; onde a hora muda à meia-noite (a meia-noite não existe), a primeira hora que existe.
+    private static DateTime StartOfDayUtc(DateTime day, TimeZoneInfo zone)
+    {
+        var start = DateTime.SpecifyKind(day, DateTimeKind.Unspecified);
+        while (zone.IsInvalidTime(start)) start = start.AddMinutes(15);
+        return zone.IsAmbiguousTime(start)
+            ? DateTime.SpecifyKind(start - zone.GetAmbiguousTimeOffsets(start).Max(), DateTimeKind.Utc)
+            : TimeZoneInfo.ConvertTimeToUtc(start, zone);
+    }
+
+    // Setas na lista (a partir do filtro): a linha seguinte/anterior que é um link (os cabeçalhos dos dias saltam-se);
+    // sem nenhuma escolhida, a primeira; nas pontas fica onde está. -1 quando não há links.
+    public static int MoveCursor(IReadOnlyList<object> rows, int current, int delta)
+    {
+        if (current < 0 || current >= rows.Count || rows[current] is not SidebarLink)
+        {
+            for (var i = 0; i < rows.Count; i++)
+                if (rows[i] is SidebarLink) return i;
+            return -1;
+        }
+        var step = Math.Sign(delta);
+        for (var i = current + step; step != 0 && i >= 0 && i < rows.Count; i += step)
+            if (rows[i] is SidebarLink) return i;
+        return current;
     }
 
     public static string DayLabel(DateOnly day, DateOnly today)

@@ -441,6 +441,11 @@
                 <Trigger SourceName="Bg" Property="IsMouseOver" Value="True">
                     <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
                 </Trigger>
+                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                    <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
+                    <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource FieldBorderBrush}" />
+                    <Setter TargetName="Bg" Property="BorderThickness" Value="1" />
+                </DataTrigger>
                 <DataTrigger Binding="{Binding Muted}" Value="True">
                     <Setter TargetName="Content" Property="Opacity" Value="0.55" />
                 </DataTrigger>
@@ -1570,13 +1575,9 @@
                                              AutomationProperties.AutomationId="NotesText" AutomationProperties.Name="Notas"
                                              TextChanged="NotesText_TextChanged" PreviewKeyDown="NotesText_PreviewKeyDown" />
                                 </DockPanel>
-                                <DockPanel x:Name="SidebarReading" Visibility="Collapsed">
-                                    <TextBlock x:Name="ReadingEmpty" DockPanel.Dock="Top" Margin="18,22,18,0" TextWrapping="Wrap" FontSize="13" LineHeight="19"
-                                               Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed"
-                                               Text="Nada para ler mais tarde. «Ler mais tarde» no menu da página, na paleta ou ao espreitar um link guarda a página aqui." />
-                                    <ItemsControl x:Name="ReadingList" Style="{StaticResource SidebarList}" AutomationProperties.Name="Para ler" />
-                                </DockPanel>
-                                <!-- Favoritos e Histórico: um filtro em cima (as mesmas regras do filtro das abas) e a lista -->
+                                <!-- Para ler, Favoritos e Histórico: um filtro em cima (as mesmas regras do filtro das abas) e a lista;
+                                     com o foco no filtro, ↑/↓ escolhem a linha, Enter abre, Ctrl+Enter abre numa aba nova,
+                                     Shift+Delete tira-a e Shift+F10/tecla de menu dá o menu da linha (MainWindow.Sidebar.cs) -->
                                 <DockPanel x:Name="SidebarLinks" Visibility="Collapsed">
                                     <Grid DockPanel.Dock="Top" Margin="14,2,12,6">
                                         <Border Height="32" CornerRadius="9" Background="{DynamicResource FieldBrush}"
@@ -1592,7 +1593,7 @@
                                     </Grid>
                                     <TextBlock x:Name="SidebarLinksEmpty" DockPanel.Dock="Top" Margin="18,16,18,0" TextWrapping="Wrap" FontSize="13" LineHeight="19"
                                                Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
-                                    <ItemsControl x:Name="SidebarLinkList" Style="{StaticResource SidebarList}" />
+                                    <ItemsControl x:Name="SidebarLinkList" Style="{StaticResource SidebarList}" AutomationProperties.Name="Lista" />
                                 </DockPanel>
                                 <!-- Sites fixados: um motor por site, em janela própria (MainWindow.WebPanels.cs) -->
                                 <Grid x:Name="SidebarWebHost" Margin="1,2,1,1" Visibility="Collapsed" />

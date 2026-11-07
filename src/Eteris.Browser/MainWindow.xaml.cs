@@ -227,11 +227,8 @@ public partial class MainWindow : Window
         });
         browser.LoadError += (_, e) =>
         {
-            if (!e.Frame.IsMain || ErrorPage.IsErrorPage(e.FailedUrl)) return;
-            var code = (int)e.ErrorCode;
-            var target = HttpsFirst.IsUpgradeFailure(code) && ShieldEngine.Https.FallbackFor(e.FailedUrl) is { } insecure
-                ? insecure
-                : ErrorPage.ShouldShow(code) ? ErrorPage.Url(code, e.FailedUrl) : null;
+            if (!e.Frame.IsMain) return;
+            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FallbackFor);
             if (target is not null) Dispatcher.InvokeAsync(() => browser.Load(target));
         };
         browser.FrameLoadEnd += (_, e) =>

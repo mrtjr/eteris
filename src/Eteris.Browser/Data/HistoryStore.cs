@@ -78,6 +78,24 @@ public sealed class HistoryStore
         return visits;
     }
 
+    // As visitas mais recentes (até limit) que passam no filtro, procuradas no histórico inteiro — não só nas últimas
+    // N visitas. O filtro corre em código gerido (as regras do filtro das abas: todas as palavras, sem acentos, que o
+    // LIKE do SQLite não sabe) como função do SQLite, linha a linha, parando ao chegar ao limite.
+    public IReadOnlyList<Visit> VisitsMatching(Func<string, string, bool> matches, int limit)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string, bool>("eteris_matches", (title, url) => matches(title ?? string.Empty, url ?? string.Empty));
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, url, title, visited_at FROM history WHERE eteris_matches(title, url) ORDER BY visited_at DESC, id DESC LIMIT $l";
+        command.Parameters.AddWithValue("$l", limit);
+        using var reader = command.ExecuteReader();
+        var visits = new List<Visit>();
+        while (reader.Read())
+            visits.Add(new Visit(reader.GetInt64(0), reader.GetString(1), reader.GetString(2),
+                DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(3)).UtcDateTime));
+        return visits;
+    }
+
     // O PNG reencodado e reduzido é guardado só depois de existir uma visita ao endereço.
     public void SaveSiteIcon(string url, byte[] png)
     {
@@ -141,6 +159,14 @@ public sealed class HistoryStore
 
     public void DeleteVisit(long id)
         => DeleteHistory(DeleteIconOfLastVisitSql + "; DELETE FROM history WHERE id = $i;", ("$i", id));
+
+    // Todas as visitas a um endereço num intervalo [desde, até) — a linha do histórico da barra lateral junta as
+    // visitas repetidas do mesmo dia, e apagá-la tem de as levar todas (não só a mais recente).
+    public void DeleteVisits(string url, DateTime fromUtc, DateTime toUtc)
+        => DeleteHistory("DELETE FROM history WHERE url = $u AND visited_at >= $f AND visited_at < $t; " + DeleteOrphanIconsSql + ";",
+            ("$u", url),
+            ("$f", new DateTimeOffset(DateTime.SpecifyKind(fromUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds()),
+            ("$t", new DateTimeOffset(DateTime.SpecifyKind(toUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds()));
 
     // DateTime.MinValue apaga tudo.
     public void DeleteSince(DateTime sinceUtc)

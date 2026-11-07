@@ -36,6 +36,16 @@ public static class ErrorPage
         _ => new("Não foi possível abrir a página", $"O Chromium devolveu o erro {code}.", "⚠"),
     };
 
+    // O que carregar quando o documento principal falha — nas abas e nos sites fixados da barra lateral: o recuo para
+    // http:// do «HTTPS primeiro» (o site não fala HTTPS), senão a página de erro; null quando não há nada a mostrar
+    // (parado, transferência, ou a própria página de erro a falhar).
+    public static string? Recovery(int code, string failedUrl, Func<string, string?> httpFallback)
+    {
+        if (IsErrorPage(failedUrl)) return null;
+        if (Shields.HttpsFirst.IsUpgradeFailure(code) && httpFallback(failedUrl) is { } insecure) return insecure;
+        return ShouldShow(code) ? Url(code, failedUrl) : null;
+    }
+
     public static string Url(int code, string failedUrl) => $"{Prefix}?code={code}&url={Uri.EscapeDataString(failedUrl)}";
 
     public static bool IsErrorPage(string address) => address.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);

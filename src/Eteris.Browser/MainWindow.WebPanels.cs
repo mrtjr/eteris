@@ -96,7 +96,9 @@ public partial class MainWindow
         var (address, title) = (tab.Address, tab.Title);
         if (UpdateWebPanels(list => WebPanels.Add(list, address, title)) is null) return;
         OpenSidebar(SidebarPanels.WebKey(WebPanels.Normalize(tab.Address)!));
-        ShowToast($"«{SidebarLists.HostOf(tab.Address)}» fixado na barra lateral");
+        ShowToast(WebPanels.HasCredentials(address)
+            ? $"«{SidebarLists.HostOf(tab.Address)}» fixado sem o utilizador e a palavra-passe do endereço"
+            : $"«{SidebarLists.HostOf(tab.Address)}» fixado na barra lateral");
     }
 
     private void UnpinSite(string url)
@@ -164,8 +166,7 @@ public partial class MainWindow
         var browser = new ChromiumWebBrowser(url)
         {
             Visibility = Visibility.Hidden,
-            // Os atalhos do Éteris chegam do painel como de qualquer página; pop-ups viram abas (só com gesto).
-            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),
+            // Pop-ups viram abas (só com gesto).
             LifeSpanHandler = new PopupToTabHandler(request =>
             {
                 if (request.UserGesture && PageMenu.IsWebLink(request.TargetUrl))
@@ -180,6 +181,26 @@ public partial class MainWindow
                 onCrashed: () => Dispatcher.InvokeAsync(() => OnWebPanelCrashed(url)),
                 // Vista móvel: os pedidos deste motor saem com o agente de um telemóvel.
                 userAgent: mobile ? WebPanels.MobileUserAgent : null),
+        };
+        // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
+        // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.
+        browser.FindHandler = NewFindHandler();
+        browser.KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromWebPanel(browser, key, ctrl, shift, alt), KeyUpFromPage);
+        // Ecrã inteiro pedido pelo site (um vídeo): não cabe na barra — sai e diz como o ver numa aba.
+        browser.DisplayHandler = new FaviconHandler((_, _) => { }, fullscreen =>
+        {
+            if (fullscreen) Dispatcher.InvokeAsync(() => OnWebPanelFullscreen(browser));
+        });
+        // Como nas abas: o site que não fala HTTPS volta a http:// («HTTPS primeiro»); as outras falhas dão a página
+        // de erro (com «Tentar novamente») em vez de um painel em branco.
+        browser.LoadError += (_, e) =>
+        {
+            if (!e.Frame.IsMain) return;
+            var target = ErrorPage.Recovery((int)e.ErrorCode, e.FailedUrl, ShieldEngine.Https.FallbackFor);
+            if (target is not null) Dispatcher.InvokeAsync(() =>
+            {
+                if (!browser.IsDisposed) browser.Load(target);
+            });
         };
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
         browser.FrameLoadEnd += (_, e) =>
@@ -237,6 +258,47 @@ public partial class MainWindow
                 Mobile = true,
             });
 
+    // Tecla premida com o foco num site fixado (thread do CEF).
+    private bool ShortcutFromWebPanel(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt)
+    {
+        var key = KeyInterop.KeyFromVirtualKey(virtualKey);
+        if (WebPanelKeys.Resolve(key, ctrl, shift, alt) is not { } command) return ShortcutFromPage(virtualKey, ctrl, shift, alt);
+        Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (browser.IsDisposed) return;
+            switch (command)
+            {
+                case WebPanelKey.Reload: ReloadWebPanel(browser, ignoreCache: false); break;
+                case WebPanelKey.HardReload: ReloadWebPanel(browser, ignoreCache: true); break;
+                case WebPanelKey.Find: OpenFind(browser); break;
+                case WebPanelKey.Print: browser.Print(); break;
+                case WebPanelKey.DevTools: browser.GetBrowserHost()?.ShowDevTools(); break;
+            }
+        });
+        return true;
+    }
+
+    // Numa página de erro, recarregar volta a tentar o endereço que falhou (como nas abas).
+    private static void ReloadWebPanel(ChromiumWebBrowser browser, bool ignoreCache)
+    {
+        if (ErrorPage.FailedUrl(browser.Address ?? string.Empty) is { Length: > 0 } failed) browser.Load(failed);
+        else browser.Reload(ignoreCache);
+    }
+
+    // O endereço do site à vista no painel (o que falhou, quando está na página de erro).
+    private static string WebPanelAddress(ChromiumWebBrowser? browser, string url)
+        => browser?.Address is not { Length: > 0 } address ? url
+            : ErrorPage.IsErrorPage(address) ? ErrorPage.FailedUrl(address) is { Length: > 0 } failed ? failed : url
+            : address;
+
+    private void OnWebPanelFullscreen(ChromiumWebBrowser browser)
+    {
+        if (browser.IsDisposed) return;
+        PageScript.Run(browser, "document.fullscreenElement && document.exitFullscreen()");
+        ShowToast("Ecrã inteiro só nas abas — botão direito › «Abrir este site numa aba»");
+    }
+
     private void OnWebPanelCrashed(string url)
     {
         if (!_webPanelBrowsers.TryGetValue(url, out var browser) || browser.IsDisposed) return;
@@ -248,6 +310,7 @@ public partial class MainWindow
     {
         if (_webPanelInjectors.Remove(url, out var injector)) injector.Dispose();
         if (!_webPanelBrowsers.Remove(url, out var browser)) return;
+        if (ReferenceEquals(_findPanel, browser)) CloseFind();
         SidebarWebHost.Children.Remove(browser);
         PageScript.Release(browser);
         browser.Dispose();
@@ -264,10 +327,13 @@ public partial class MainWindow
     private void WebPanelOpen_Click(object sender, RoutedEventArgs e)
     {
         if (_sidebarPanel?.Url is not { } url) return;
-        Tabs.NewTab(CurrentWebPanelBrowser?.Address is { Length: > 0 } address ? address : url);
+        Tabs.NewTab(WebPanelAddress(CurrentWebPanelBrowser, url));
     }
 
-    private void WebPanelReload_Click(object sender, RoutedEventArgs e) => CurrentWebPanelBrowser?.Reload();
+    private void WebPanelReload_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentWebPanelBrowser is { } browser) ReloadWebPanel(browser, ignoreCache: false);
+    }
 
     // Menu de contexto do painel: o menu escuro do Éteris, só com o que faz sentido dentro da barra.
     private void ShowWebPanelMenu(ChromiumWebBrowser browser, PageContext context)
@@ -289,7 +355,7 @@ public partial class MainWindow
         {
             if (any) menu.Separator();
             var mobile = WebPanels.Find(_webPanels, url)?.Mobile == true;
-            menu.Item("", "Abrir este site numa aba", () => Tabs.NewTab(browser.Address ?? url))
+            menu.Item("", "Abrir este site numa aba", () => Tabs.NewTab(WebPanelAddress(browser, url)))
                 .Item(mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(url, !mobile))
                 .Item("", "Tirar da barra lateral", () => UnpinSite(url));
         }
@@ -308,7 +374,7 @@ public partial class MainWindow
         {
             case PageCommand.Back: browser.Back(); break;
             case PageCommand.Forward: browser.Forward(); break;
-            case PageCommand.Reload: browser.Reload(); break;
+            case PageCommand.Reload: ReloadWebPanel(browser, ignoreCache: false); break;
             case PageCommand.Inspect: browser.GetBrowserHost()?.ShowDevTools(); break;
             case PageCommand.OpenLinkNewTab: Tabs.NewTab(context.LinkUrl!, activate: false); break;
             case PageCommand.CopyLink: CopyText(UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
@@ -349,7 +415,7 @@ public partial class MainWindow
             .Item("", "Abrir numa aba", () => Tabs.NewTab(panel.Url))
             .Item("", "Recarregar", () =>
             {
-                if (_webPanelBrowsers.TryGetValue(panel.Url, out var browser) && !browser.IsDisposed) browser.Reload();
+                if (_webPanelBrowsers.TryGetValue(panel.Url, out var browser) && !browser.IsDisposed) ReloadWebPanel(browser, ignoreCache: false);
             }, enabled: _webPanelBrowsers.ContainsKey(panel.Url))
             .Item(panel.Mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(panel.Url, !panel.Mobile))
             .Separator()

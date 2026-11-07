@@ -35,12 +35,18 @@ public static class WebPanels
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
     };
 
-    // Só endereços http(s), sem espaços à volta; o resto fica como o utilizador o tinha (o site decide o caminho).
+    // Só endereços http(s), sem espaços à volta e sem credenciais embutidas (http://utilizador:senha@site/ ficaria
+    // em claro em paineis.json e em settings.json — como no histórico, nunca são guardadas); o resto fica como o
+    // utilizador o tinha (o site decide o caminho).
     public static string? Normalize(string? url)
     {
         var trimmed = url?.Trim();
-        return SidebarPanels.IsWebUrl(trimmed) ? trimmed : null;
+        return SidebarPanels.IsWebUrl(trimmed) ? Data.HistoryStore.WithoutUserInfo(trimmed!) : null;
     }
+
+    // O endereço traz utilizador/palavra-passe (que o site fixado não guarda).
+    public static bool HasCredentials(string? url)
+        => Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri) && uri.UserInfo.Length > 0;
 
     public static bool Contains(IReadOnlyList<WebPanel> panels, string? url)
         => Normalize(url) is { } clean && panels.Any(p => string.Equals(p.Url, clean, StringComparison.Ordinal));
