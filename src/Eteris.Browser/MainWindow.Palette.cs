@@ -81,8 +81,9 @@ public partial class MainWindow
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         yield return new("\uE71D", "Radar de abas", "Encontre, compare ou reabra abas desta janela", "Ctrl+Shift+A", ToggleRadar);
         if (s_closedWindows.Latest is { } closedWindow)
-            yield return new("\uE8A7", $"Reabrir janela fechada ({closedWindow.Addresses.Count} abas)",
-                closedWindow.Titles.FirstOrDefault() ?? string.Empty, null, ReopenClosedWindow);
+            yield return new("\uE8A7", closedWindow.ReopenLabel,
+                (closedWindow.SpacesWithTabs > 1 ? $"Em {closedWindow.SpacesWithTabs} Espaços · " : string.Empty)
+                + (closedWindow.Titles.FirstOrDefault() ?? string.Empty), null, ReopenClosedWindow);
         if (Tabs.Tabs.Count > 1)
         {
             yield return new("\uE8C8", "Fechar abas duplicadas", "Deixa uma aba por endereço", null, () =>

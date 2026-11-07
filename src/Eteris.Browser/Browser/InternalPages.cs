@@ -16,7 +16,8 @@ public static class InternalPages
            && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(token), Encoding.ASCII.GetBytes(Token));
 
     // As páginas internas seguem o tema da aplicação (o servidor marca <html class="light">) e a Cor do Éteris
-    // (um <style> no <head> redefine a variável --iris, que todas as páginas usam, e --accent com a cor base).
+    // (um <style> no <head> redefine a variável --iris, que todas as páginas usam, --accent com a cor base e --accent-2
+    // com o segundo tom: os controlos ligados — pílulas, interruptores — pintam-se com os dois).
     public static string Themed(string html, bool light) => Themed(html, light, AccentManager.Stops);
 
     public static string Themed(string html, bool light, IReadOnlyList<Color> accentStops)
@@ -33,13 +34,14 @@ public static class InternalPages
     }
 
     public static string AccentStyle(IReadOnlyList<Color> stops)
-        => "<style id=\"eteris-accent\">:root { --iris: " + IrisCss(stops) + "; --accent: " + Accent.Hex(stops[0]) + "; }</style>";
+        => "<style id=\"eteris-accent\">:root { --iris: " + IrisCss(stops) + "; --accent: " + Accent.Hex(stops[0])
+           + "; --accent-2: " + Accent.Hex(stops[1]) + "; }</style>";
 
     // Para as páginas internas já abertas quando a cor muda (corrido pelo DevTools, ver PageScript): só as variáveis.
     public static string AccentScript(IReadOnlyList<Color> stops)
         => stops.SequenceEqual(Accent.IrisStops)
-            ? "document.documentElement.style.removeProperty('--iris'); document.documentElement.style.removeProperty('--accent');"
-            : $"document.documentElement.style.setProperty('--iris', '{IrisCss(stops)}'); document.documentElement.style.setProperty('--accent', '{Accent.Hex(stops[0])}');";
+            ? "document.documentElement.style.removeProperty('--iris'); document.documentElement.style.removeProperty('--accent'); document.documentElement.style.removeProperty('--accent-2');"
+            : $"document.documentElement.style.setProperty('--iris', '{IrisCss(stops)}'); document.documentElement.style.setProperty('--accent', '{Accent.Hex(stops[0])}'); document.documentElement.style.setProperty('--accent-2', '{Accent.Hex(stops[1])}');";
 
     private static string IrisCss(IReadOnlyList<Color> stops) => "linear-gradient(90deg, " + string.Join(", ", stops.Select(Accent.Hex)) + ")";
 

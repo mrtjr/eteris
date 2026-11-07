@@ -7,6 +7,16 @@ public sealed record ClosedWindow(IReadOnlyList<string> Addresses, IReadOnlyList
 {
     // Há alguma coisa a reabrir: abas na faixa ou nalgum outro Espaço.
     public bool HasTabs => Addresses.Count > 0 || (Spaces?.Any(s => s.Tabs is { Urls.Count: > 0 }) ?? false);
+
+    // Todas as abas que voltam ao reabrir: as da faixa e as guardadas nos outros Espaços (o Espaço à vista não leva
+    // cópia, as abas dele são as da faixa).
+    public int TabCount => Addresses.Count + (Spaces?.Where((s, i) => i != SpaceIndex).Sum(s => s.Tabs?.Urls.Count ?? 0) ?? 0);
+
+    // Espaços com abas (o da faixa conta sempre que tem abas): para dizer «em 3 Espaços» na paleta.
+    public int SpacesWithTabs => Spaces is null ? 1
+        : Spaces.Where((s, i) => i == SpaceIndex ? Addresses.Count > 0 : s.Tabs is { Urls.Count: > 0 }).Count();
+
+    public string ReopenLabel => TabCount == 1 ? "Reabrir janela fechada (1 aba)" : $"Reabrir janela fechada ({TabCount} abas)";
 }
 
 // Janelas normais fechadas nesta sessão (a mais recente no topo). As privadas nunca entram aqui.

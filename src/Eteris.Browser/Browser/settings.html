@@ -10,6 +10,8 @@
     --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
     --line: rgba(255, 255, 255, .08); --card: rgba(255, 255, 255, .03);
     --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+    /* Os dois primeiros tons da Cor do Éteris (o servidor redefine-os com a cor escolhida, ver InternalPages) */
+    --accent: #8b5cf6; --accent-2: #22d3ee;
   }
   * { box-sizing: border-box; margin: 0; }
   body {
@@ -31,7 +33,7 @@
     color: var(--muted); text-decoration: none; font-size: 14px; transition: background .15s, color .15s;
   }
   nav a:hover { background: var(--card); color: var(--text); }
-  nav a.on { background: rgba(139, 92, 246, .14); color: var(--text); }
+  nav a.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
   nav svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   section { margin-bottom: 34px; scroll-margin-top: 30px; }
   .find { position: relative; margin: -8px 0 18px; }
@@ -41,7 +43,7 @@
     background: var(--card); border: 1px solid var(--line); outline: none; transition: border-color .15s, box-shadow .15s;
   }
   .find input::placeholder { color: var(--faint); }
-  .find input:focus { border-color: rgba(139, 92, 246, .6); box-shadow: 0 0 0 3px rgba(139, 92, 246, .18); }
+  .find input:focus { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   section.filtered-out, .item.filtered-out, .about.filtered-out { display: none !important; }
   .item.filtered-out + .item { border-top: 0; }
   nav a.dim { opacity: .35; }
@@ -63,7 +65,7 @@
     padding: 8px 14px; border-radius: 10px; transition: background .15s, color .15s; white-space: nowrap;
   }
   .seg button:hover:not(:disabled) { color: var(--text); background: rgba(255, 255, 255, .05); }
-  .seg button.on, .seg button.on:hover:not(:disabled) { color: #0b0d13; background: linear-gradient(135deg, #c4b5fd, #67e8f9); font-weight: 600; }
+  .seg button.on, .seg button.on:hover:not(:disabled) { color: #0b0d13; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 50%, #fff), color-mix(in srgb, var(--accent-2) 60%, #fff)); font-weight: 600; }
   .seg button:disabled { opacity: .45; cursor: default; }
   .seg button small { font-size: 10.5px; opacity: .8; margin-left: 4px; }
   .swatches { display: flex; flex-wrap: wrap; gap: 8px; max-width: 330px; justify-content: flex-end; align-items: center; }
@@ -85,7 +87,7 @@
     content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
     background: #e9ebf2; transition: transform .2s cubic-bezier(.3, 1.4, .6, 1);
   }
-  .switch input:checked + i { background: linear-gradient(135deg, #8b5cf6, #22d3ee); }
+  .switch input:checked + i { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
   .switch input:checked + i::after { transform: translateX(20px); }
   a.link { color: #67e8f9; text-decoration: none; font-size: 13.5px; white-space: nowrap; }
   a.link:hover { text-decoration: underline; }
@@ -103,7 +105,7 @@
   .clearpanel { background: rgba(0, 0, 0, .18); align-items: flex-end; }
   .clearpanel[hidden] { display: none; }
   .check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--fg, #e9ebf2); margin: 6px 0; cursor: pointer; }
-  .check input { accent-color: #8b5cf6; width: 16px; height: 16px; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
   .check small { color: var(--faint); }
   .about b { font-size: 17px; font-weight: 600; }
   .about span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
@@ -125,7 +127,7 @@
   html.light ::selection { background: rgba(139, 92, 246, .25); }
 
   html.light nav a:hover { background: rgba(20, 24, 40, .05); }
-  html.light nav a.on { background: rgba(139, 92, 246, .12); }
+  html.light nav a.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
   html.light .seg { background: rgba(20, 24, 40, .05); }
   html.light .seg button:hover:not(:disabled) { background: rgba(20, 24, 40, .06); }
   html.light .switch input:not(:checked) + i { background: #cfd3de; }
