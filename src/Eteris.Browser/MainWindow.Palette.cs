@@ -88,11 +88,16 @@ public partial class MainWindow
         {
             yield return new("\uE8C8", "Fechar abas duplicadas", "Deixa uma aba por endereço", null, () =>
             {
+                var before = Tabs.RecentlyClosed;
                 var closed = Tabs.CloseDuplicates();
-                ShowToast(closed == 0 ? "Não havia abas duplicadas" : closed == 1 ? "1 aba duplicada fechada" : $"{closed} abas duplicadas fechadas");
+                if (closed == 0) ShowToast("Não havia abas duplicadas");
+                else OfferReopen(before, closed == 1 ? "1 aba duplicada fechada" : $"{closed} abas duplicadas fechadas",
+                    closed == 1 ? "Fechar 1 duplicada" : $"Fechar {closed} duplicadas");
             });
             yield return new("\uE8CB", "Ordenar abas por site", "Junta as abas do mesmo site", null, () => Tabs.SortBySite());
         }
+        if (_undo.Peek is { } undo)
+            yield return new("", $"Anular: {undo.Label}", "A última ação do Éteris nesta janela", "Ctrl+Z", UndoLast);
         yield return new("", "Reabrir aba fechada", Tabs.RecentlyClosed.FirstOrDefault() is { } last ? $"«{last.Title}»" : "Nenhuma aba fechada nesta sessão", "Ctrl+Shift+T", () => Tabs.ReopenClosed());
         foreach (var closed in Tabs.RecentlyClosed.Skip(1).Take(5))
         {

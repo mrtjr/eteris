@@ -448,7 +448,12 @@ public partial class MainWindow
             AppData.RemoveBookmark(link.Url);
             UpdateStar();
             RefreshLinksPanel();
-            ShowToast("Removido dos favoritos");
+            ShowUndoToast("Removido dos favoritos", $"Remover {Eteris.Browser.Tabs.ToastPolicy.Quote(link.Title)} dos favoritos", () =>
+            {
+                if (!AppData.IsBookmarked(link.Url)) AppData.ToggleBookmark(link.Url, link.Title);
+                UpdateStar();
+                RefreshLinksPanel();
+            });
         }
         else if (SidebarShows(SidebarPanels.History))
         {
@@ -461,7 +466,11 @@ public partial class MainWindow
         {
             AppData.RemoveFromReadingList(link.Url);
             RefreshLinksPanel();
-            ShowToast("Removido de «Para ler»");
+            ShowUndoToast("Removido de «Para ler»", $"Remover {Eteris.Browser.Tabs.ToastPolicy.Quote(link.Title)} de «Para ler»", () =>
+            {
+                AppData.SaveForLater(link.Url, link.Title);
+                RefreshLinksPanel();
+            });
         }
         _keepSidebarCursor = false;
     }

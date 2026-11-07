@@ -177,6 +177,17 @@ public static class AppData
         catch (Exception) { return false; }
     }
 
+    // «Anular» de um Feito: a entrada mais recente desse endereço sai de «Feitas hoje».
+    public static void UndoDone(string url)
+    {
+        try
+        {
+            if (LazyDone.Value is not { } store) return;
+            if (store.Since(DateTime.UtcNow.AddDays(-1)).Where(d => d.Url == url).MaxBy(d => d.Id) is { } done) store.Delete(done.Id);
+        }
+        catch (Exception) { }
+    }
+
     public static IReadOnlyList<DoneTab> DoneSince(DateTime sinceUtc)
     {
         try { return LazyDone.Value?.Since(sinceUtc) ?? []; }

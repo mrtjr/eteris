@@ -51,9 +51,11 @@ public partial class MainWindow
         }
         // Só sai da faixa a aba que ficou mesmo gravada no Arquivo; com a base de dados indisponível, fica onde está.
         var moved = new List<BrowserTab>();
+        var snapshots = new List<TabsViewModel.TabSnapshot>();
         foreach (var tab in archived)
         {
             if (!AppData.ArchiveTab(tab.Address, tab.Title, tab.CustomTitle, tab.LastActiveUtc, now)) continue;
+            snapshots.Add(Tabs.Snapshot(tab));
             Tabs.CloseQuietly(tab);
             moved.Add(tab);
         }
@@ -65,9 +67,11 @@ public partial class MainWindow
             return;
         }
         if (moved.Count == 0) return;
-        ShowToast(moved.Count == 1
+        ShowUndoToast(moved.Count == 1
             ? $"«{moved[0].DisplayTitle}» foi para o Arquivo — sem visita há {days} dias (Radar › Arquivo)"
-            : $"{moved.Count} abas sem visita há {days} dias foram para o Arquivo (Radar › Arquivo)");
+            : $"{moved.Count} abas sem visita há {days} dias foram para o Arquivo (Radar › Arquivo)",
+            moved.Count == 1 ? $"Arquivar {ToastPolicy.Quote(moved[0].DisplayTitle)}" : $"Arquivar {moved.Count} abas",
+            () => PutBackArchived(snapshots));
     }
 
 

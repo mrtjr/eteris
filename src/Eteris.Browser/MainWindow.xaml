@@ -1808,7 +1808,10 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,10,0"
                                Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="ToastText" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ToastText" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"
+                               TextWrapping="Wrap" MaxWidth="560" />
+                    <!-- «Anular», «Abrir», «Mostrar na pasta»: preenchidos em ShowToast -->
+                    <StackPanel x:Name="ToastActions" Orientation="Horizontal" Margin="6,0,-8,0" VerticalAlignment="Center" Visibility="Collapsed" />
                 </StackPanel>
             </Border>
 

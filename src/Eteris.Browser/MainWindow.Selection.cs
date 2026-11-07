@@ -115,8 +115,12 @@ public partial class MainWindow
     private void CloseSelected(IReadOnlyList<BrowserTab> selected)
     {
         var locked = selected.Count(t => t.IsLocked);
-        foreach (var tab in selected.Where(t => !t.IsLocked).ToList())
+        var before = Tabs.RecentlyClosed;
+        var closing = selected.Where(t => !t.IsLocked).ToList();
+        foreach (var tab in closing)
             if (Tabs.Close(tab)) { Close(); return; }
-        if (locked > 0) ShowToast(locked == 1 ? "1 aba trancada ficou aberta" : $"{locked} abas trancadas ficaram abertas");
+        var message = $"{TabSelection.Count(closing.Count)} fechadas";
+        if (locked > 0) message += locked == 1 ? " — 1 aba trancada ficou aberta" : $" — {locked} abas trancadas ficaram abertas";
+        OfferReopen(before, message, $"Fechar {TabSelection.Count(closing.Count)}");
     }
 }

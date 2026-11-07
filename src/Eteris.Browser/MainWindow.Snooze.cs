@@ -37,9 +37,11 @@ public partial class MainWindow
             ShowToast("Não foi possível adiar — a base de dados do perfil não está acessível; a aba fica na faixa");
             return;
         }
+        var snapshot = Tabs.Snapshot(tab);
         Tabs.CloseQuietly(tab);
         if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
-        ShowToast($"«{tab.DisplayTitle}» volta {Snooze.Describe(dueLocal, DateTime.Now)} — ver em Radar › Adiadas");
+        ShowUndoToast($"«{tab.DisplayTitle}» volta {Snooze.Describe(dueLocal, DateTime.Now)} — ver em Radar › Adiadas",
+            $"Adiar {ToastPolicy.Quote(tab.DisplayTitle)}", () => PutBackSnoozed(snapshot));
     }
 
     // Só a janela dona da sessão vigia (senão duas janelas traziam a mesma aba); começa logo, para as que venceram

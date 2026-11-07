@@ -51,7 +51,7 @@ public partial class MainWindow
             await File.WriteAllBytesAsync(path, png);
             try { Clipboard.SetImage(Decode(png)); } catch (Exception) { }
             ShowToast(fullPage ? "Página inteira capturada e copiada — guardada em Imagens › Éteris"
-                               : "Captura copiada — guardada em Imagens › Éteris");
+                               : "Captura copiada — guardada em Imagens › Éteris", OpenFileAction(path), ShowInFolderAction(path));
         }
         catch (Exception)
         {

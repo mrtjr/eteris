@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using Eteris.Browser.Tabs;
 
@@ -17,14 +18,69 @@ public partial class MainWindow
         LinkStatusBubble.Visibility = Visibility.Visible;
     }
 
-    // Aviso curto no fundo da janela: aparece, fica ~1,8 s e desvanece.
-    private void ShowToast(string message)
+    private bool _toastWired;
+
+    // Aviso curto no fundo da janela: aparece, fica ~1,9 s e desvanece. Com ações («Anular», «Abrir», «Mostrar na
+    // pasta», até duas) fica 6 s, recebe o rato e não desaparece enquanto o rato estiver por cima.
+    private void ShowToast(string message, params ToastAction[] actions)
     {
+        WireToast();
         ToastText.Text = message;
+        ToastActions.Children.Clear();
+        foreach (var action in actions.Take(ToastPolicy.MaxActions))
+        {
+            var run = action.Run;
+            var button = new Button { Content = action.Label, Style = (Style)FindResource("PillButton"), Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(8, 0, 0, 0) };
+            // Ao premir (não ao largar): a camada não está ativa e o primeiro clique numa janela inativa pode perder
+            // o «largar» para a ativação — o «Anular» não pode falhar à primeira.
+            button.PreviewMouseLeftButtonDown += (_, e) =>
+            {
+                e.Handled = true;
+                HideToastNow();
+                run();
+                // O clique ativou a camada: o teclado volta para a página.
+                ReturnFocusToPage();
+            };
+            ToastActions.Children.Add(button);
+        }
+        ToastActions.Visibility = ToastActions.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Toast.IsHitTestVisible = ToastActions.Children.Count > 0;
+        FadeToast(ToastPolicy.Hold(ToastActions.Children.Count), fadeIn: true);
+    }
+
+    private void FadeToast(TimeSpan hold, bool fadeIn)
+    {
         var fade = new DoubleAnimationUsingKeyFrames();
-        fade.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160))));
-        fade.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1900))));
-        fade.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(2400))));
+        var start = fadeIn ? TimeSpan.FromMilliseconds(160) : TimeSpan.Zero;
+        if (fadeIn) fade.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(start)));
+        fade.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(start + hold)));
+        fade.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(start + hold + TimeSpan.FromMilliseconds(500))));
+        // Invisível, o aviso deixa de apanhar cliques (a camada continua por cima da página com outras coisas).
+        fade.Completed += (_, _) => { if (Toast.Opacity < 0.01) Toast.IsHitTestVisible = false; };
         Toast.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void HideToastNow()
+    {
+        Toast.BeginAnimation(OpacityProperty, null);
+        Toast.Opacity = 0;
+        Toast.IsHitTestVisible = false;
+    }
+
+    // Com o rato por cima o aviso fica; ao sair, ainda dá dois segundos para voltar.
+    private void WireToast()
+    {
+        if (_toastWired) return;
+        _toastWired = true;
+        Toast.MouseEnter += (_, _) =>
+        {
+            if (!Toast.IsHitTestVisible) return;
+            Toast.BeginAnimation(OpacityProperty, null);
+            Toast.Opacity = 1;
+        };
+        Toast.MouseLeave += (_, _) =>
+        {
+            if (Toast.IsHitTestVisible) FadeToast(TimeSpan.FromSeconds(2), fadeIn: false);
+        };
     }
 }

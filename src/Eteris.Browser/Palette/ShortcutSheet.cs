@@ -14,6 +14,7 @@ public static class ShortcutSheet
             new("Ctrl+Shift+A", "Radar de abas"),
             new("Ctrl+W", "Fechar aba"),
             new("Ctrl+Shift+T", "Reabrir aba fechada"),
+            new("Ctrl+Z", "Anular a última ação do Éteris (fechar, Feito, Adiar…) — fora da página e dos campos de texto"),
             new("Ctrl+Tab", "Aba seguinte"),
             new("Ctrl+Shift+Tab", "Aba anterior"),
             new("Ctrl+1 … 9", "Ir para a aba"),

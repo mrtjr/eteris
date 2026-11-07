@@ -158,6 +158,53 @@ public partial class TabsViewModel : ObservableObject
 
     public void ForgetClosed() => _closed.Clear();
 
+    // ---------- Anular ----------
+
+    // O que é preciso para pôr de volta uma aba que saiu da faixa por «Feito», «Adiar» ou o Arquivo: o lugar, o
+    // endereço, o título, a identidade (nome, emoji, cor, nota, tranca), a fixação e o grupo.
+    public sealed record TabSnapshot(int Index, string Address, string Title, Data.SessionTabMeta Meta, bool Pinned, TabGroup? Group);
+
+    public TabSnapshot Snapshot(BrowserTab tab)
+        => new(Tabs.IndexOf(tab), tab.Address, tab.Title, MetaSnapshotOf([tab], null)[0], tab.IsPinned, tab.Group);
+
+    // Repõe a aba no mesmo lugar (ou no fim, se a faixa encolheu), a dormir até ser vista; a aba nova vazia que a
+    // substituiu quando era a última sai (é o que o Chrome faz ao reabrir).
+    public BrowserTab PutBack(TabSnapshot snapshot, bool activate = true)
+    {
+        var tab = new BrowserTab(snapshot.Address) { Title = snapshot.Title, IsPinned = snapshot.Pinned, IsSleeping = !activate };
+        tab.SetIdentity(snapshot.Meta.Name, snapshot.Meta.Emoji, snapshot.Meta.Color, snapshot.Meta.Note);
+        tab.IsLocked = snapshot.Meta.Locked;
+        var placeholder = Tabs.Count == 1 && Browser.NewTabPage.IsNewTab(Tabs[0].Address) ? Tabs[0] : null;
+        var index = Math.Clamp(snapshot.Index, 0, Tabs.Count);
+        Tabs.Insert(index, tab);
+        if (snapshot.Group is { } group && !tab.IsPinned)
+        {
+            // Encostada a uma aba do grupo (ou o grupo ficou vazio), fica onde estava; senão vai para o fim do grupo
+            // (as abas de um grupo ficam sempre seguidas).
+            bool InGroup(int i) => i >= 0 && i < Tabs.Count && ReferenceEquals(Tabs[i].Group, group);
+            if (InGroup(index - 1) || InGroup(index + 1) || !Tabs.Any(t => ReferenceEquals(t.Group, group))) tab.Group = group;
+            else AddToGroup(tab, group);
+        }
+        RefreshGroups();
+        if (activate) Active = tab;
+        if (placeholder is not null && !ReferenceEquals(placeholder, tab)) Close(placeholder, remember: false);
+        return tab;
+    }
+
+    // As entradas das fechadas recentes acrescentadas depois de «before» (ver RecentlyClosed): as que uma ação em
+    // bloco (fechar selecionadas, duplicadas) acabou de fechar, da mais antiga para a mais recente.
+    public IReadOnlyList<ClosedTab> ClosedSince(IReadOnlyList<ClosedTab> before)
+        => _closed.Where(c => !before.Any(b => ReferenceEquals(b, c))).ToList();
+
+    // Reabre-as pela ordem em que fecharam ao contrário, para cada uma voltar ao seu lugar.
+    public int ReopenAll(IReadOnlyList<ClosedTab> entries)
+    {
+        var reopened = 0;
+        foreach (var entry in entries.Reverse())
+            if (ReopenClosed(entry) is not null) reopened++;
+        return reopened;
+    }
+
     // ---------- Grupos de abas ----------
 
     public IReadOnlyList<TabGroup> Groups => Tabs.Select(t => t.Group).OfType<TabGroup>().Distinct().ToList();

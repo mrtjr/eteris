@@ -72,7 +72,8 @@ public partial class MainWindow
             var folder = Eteris.Browser.Downloads.DownloadPaths.DownloadsFolder();
             var path = Eteris.Browser.Downloads.DownloadPaths.Unique(folder, BookmarkExport.FileName(DateTime.Now));
             System.IO.File.WriteAllText(path, BookmarkExport.ToHtml(marks, DateTime.UtcNow), new System.Text.UTF8Encoding(false));
-            ShowToast($"{(marks.Count == 1 ? "1 favorito exportado" : $"{marks.Count} favoritos exportados")} para Transferências › {System.IO.Path.GetFileName(path)}");
+            ShowToast($"{(marks.Count == 1 ? "1 favorito exportado" : $"{marks.Count} favoritos exportados")} para Transferências › {System.IO.Path.GetFileName(path)}",
+                ShowInFolderAction(path));
         }
         catch (Exception)
         {

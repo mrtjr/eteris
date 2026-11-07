@@ -334,7 +334,9 @@ public partial class MainWindow : Window
             ShowToast($"«{tab.DisplayTitle}» está trancada — destranque-a no menu da aba para a fechar");
             return;
         }
+        var before = Tabs.RecentlyClosed;
         if (Tabs.Close(tab)) Close();
+        else RememberClosedTab(tab, before);
     }
 
     // «Feito»: a aba sai da faixa e fica em «Feitas hoje» no Radar (nunca na janela privada).
@@ -343,17 +345,28 @@ public partial class MainWindow : Window
         if (!Tabs.Tabs.Contains(tab)) return;
         var isNew = NewTabPage.IsNewTab(tab.Address);
         var recorded = !IsPrivate && !isNew && AppData.MarkDone(tab.Address, tab.DisplayTitle);
+        var snapshot = Tabs.Snapshot(tab);
+        var before = Tabs.RecentlyClosed;
         // Sem lugar em «Feitas hoje» (janela privada, ou a base de dados não gravou), a aba vai para as fechadas
         // recentes: «Feito» nunca pode ser um fecho sem volta, pior do que «Fechar».
         Tabs.CloseDone(tab, remember: !recorded);
         if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
         if (!IsPrivate && !isNew && !recorded)
         {
-            ShowToast($"Feito: «{tab.DisplayTitle}» — não ficou em «Feitas hoje» (base de dados indisponível); Ctrl+Shift+T reabre-a");
+            OfferReopen(before, $"Feito: «{tab.DisplayTitle}» — não ficou em «Feitas hoje» (base de dados indisponível)",
+                $"Feito {ToastPolicy.Quote(tab.DisplayTitle)}");
             return;
         }
-        var today = IsPrivate ? 0 : DoneToday().Count;
-        ShowToast(today > 1 ? $"Feito: «{tab.DisplayTitle}» — {today} feitas hoje (ver no Radar)" : $"Feito: «{tab.DisplayTitle}»");
+        var label = $"Feito {ToastPolicy.Quote(tab.DisplayTitle)}";
+        if (!recorded)
+        {
+            // Janela privada ou aba nova: nada ficou gravado, a aba volta como estava.
+            if (!isNew) ShowUndoToast($"Feito: «{tab.DisplayTitle}»", label, () => Tabs.PutBack(snapshot));
+            return;
+        }
+        var today = DoneToday().Count;
+        ShowUndoToast(today > 1 ? $"Feito: «{tab.DisplayTitle}» — {today} feitas hoje (ver no Radar)" : $"Feito: «{tab.DisplayTitle}»",
+            label, () => PutBackDone(snapshot));
     }
 
     private IReadOnlyList<DoneTab> DoneToday()
@@ -439,6 +452,9 @@ public partial class MainWindow : Window
 
         else if (key == Key.Escape && ShortcutsOpen) CloseShortcuts();
         else if (key == Key.Escape && GlanceOpen) CloseGlance();
+        // Ctrl+Z do Éteris: só aqui (teclas da moldura) e fora dos campos de texto — com o foco na página, o Ctrl+Z
+        // nem passa por esta janela e a página desfaz o que é seu.
+        else if (ctrl && !shift && !alt && key == Key.Z && !TextInputHasFocus()) UndoLast();
         else if (Shortcut(key, ctrl, shift, alt) is { } action) action();
         else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();
         else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) StopActive();

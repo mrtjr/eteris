@@ -68,7 +68,7 @@ public partial class MainWindow
         {
             var path = Eteris.Browser.Downloads.DownloadPaths.Unique(Eteris.Browser.Downloads.DownloadPaths.DownloadsFolder(), QrCode.FileName(_qrUrl));
             File.WriteAllBytes(path, _qrPng);
-            ShowToast($"Guardado em Transferências › {Path.GetFileName(path)}");
+            ShowToast($"Guardado em Transferências › {Path.GetFileName(path)}", ShowInFolderAction(path));
         }
         catch (Exception) { ShowToast("Não foi possível guardar a imagem"); }
     }

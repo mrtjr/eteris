@@ -15,7 +15,8 @@ public partial class MainWindow
             var folder = DownloadPaths.DownloadsFolder();
             var path = DownloadPaths.Unique(folder, PdfName.For(tab.Title, tab.Address));
             var ok = await browser.PrintToPdfAsync(path, new PdfPrintSettings { PrintBackground = true });
-            ShowToast(ok ? $"PDF guardado em Transferências — {Path.GetFileName(path)}" : "Não foi possível guardar o PDF");
+            if (ok) ShowToast($"PDF guardado em Transferências — {Path.GetFileName(path)}", OpenFileAction(path), ShowInFolderAction(path));
+            else ShowToast("Não foi possível guardar o PDF");
         }
         catch (Exception)
         {
