@@ -24,6 +24,8 @@ public partial class MainWindow
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous)
         {
             Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas);
+            // Os outros Espaços ficam na reserva, a dormir, com a sua aba ativa e o seu ecrã dividido.
+            Tabs.RestoreWorkspaces(previous.Spaces, previous.SpaceIndex);
             RestoreSplit(previous.Split);
         }
 
@@ -67,8 +69,9 @@ public partial class MainWindow
         {
             var active = Tabs.Active is { } tab ? Tabs.Tabs.IndexOf(tab) : 0;
             var (groupIds, groups) = Tabs.GroupSnapshot();
+            var (spaces, spaceIndex) = Tabs.WorkspaceSnapshot();
             _session.Save(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title), Tabs.Tabs.Select(t => t.IsPinned),
-                groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot());
+                groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot(), spaces, spaceIndex);
         }
         catch (IOException) { }
     }

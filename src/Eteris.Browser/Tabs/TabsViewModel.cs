@@ -41,13 +41,27 @@ public partial class TabsViewModel : ObservableObject
         IReadOnlyList<bool>? pinned = null, IReadOnlyList<int>? groupIds = null, IReadOnlyList<Data.SessionGroup>? groups = null,
         IReadOnlyList<Data.SessionTabMeta>? metas = null)
     {
+        var tabs = BuildTabs(addresses, activeIndex, titles, pinned, groupIds, groups, metas, out var groupsCreated);
+        _groupsCreated = groupsCreated;
+        foreach (var tab in tabs) Tabs.Add(tab);
+        RefreshGroups();
+        if (Tabs.Count > 0) Active = Tabs[Math.Clamp(activeIndex, 0, Tabs.Count - 1)];
+    }
+
+    // Constrói as abas de uma sessão gravada (a faixa, ou a reserva de um Espaço): todas a dormir menos a ativa,
+    // quando «wakeActive»; os grupos são recriados com os seus nomes e cores.
+    private static List<BrowserTab> BuildTabs(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles,
+        IReadOnlyList<bool>? pinned, IReadOnlyList<int>? groupIds, IReadOnlyList<Data.SessionGroup>? groups,
+        IReadOnlyList<Data.SessionTabMeta>? metas, out int groupsCreated, bool wakeActive = true)
+    {
         var restoredGroups = (groups ?? []).Select(g => new TabGroup(g.Name, g.ColorIndex) { IsCollapsed = g.Collapsed }).ToList();
-        _groupsCreated = restoredGroups.Count;
+        groupsCreated = restoredGroups.Count;
+        var tabs = new List<BrowserTab>(addresses.Count);
         for (var i = 0; i < addresses.Count; i++)
         {
             var tab = new BrowserTab(addresses[i])
             {
-                IsSleeping = i != activeIndex,
+                IsSleeping = !wakeActive || i != activeIndex,
                 IsPinned = pinned is not null && i < pinned.Count && pinned[i],
             };
             if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
@@ -59,10 +73,9 @@ public partial class TabsViewModel : ObservableObject
             }
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
-            Tabs.Add(tab);
+            tabs.Add(tab);
         }
-        RefreshGroups();
-        if (Tabs.Count > 0) Active = Tabs[Math.Clamp(activeIndex, 0, Tabs.Count - 1)];
+        return tabs;
     }
 
     // Devolve true quando a última aba foi fechada (a janela deve fechar, como no Chrome).
@@ -225,17 +238,21 @@ public partial class TabsViewModel : ObservableObject
     }
 
     // Para gravar a sessão: o índice do grupo de cada aba e a descrição dos grupos.
-    public (List<int> Ids, List<Data.SessionGroup> Groups) GroupSnapshot()
+    public (List<int> Ids, List<Data.SessionGroup> Groups) GroupSnapshot() => GroupSnapshotOf(Tabs);
+
+    public static (List<int> Ids, List<Data.SessionGroup> Groups) GroupSnapshotOf(IReadOnlyList<BrowserTab> tabs)
     {
-        var groups = Groups.ToList();
-        var ids = Tabs.Select(t => t.Group is { } g ? groups.IndexOf(g) : -1).ToList();
+        var groups = tabs.Select(t => t.Group).OfType<TabGroup>().Distinct().ToList();
+        var ids = tabs.Select(t => t.Group is { } g ? groups.IndexOf(g) : -1).ToList();
         return (ids, groups.Select(g => new Data.SessionGroup(g.Name, g.ColorIndex, g.IsCollapsed)).ToList());
     }
 
     // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa.
-    public List<Data.SessionTabMeta> MetaSnapshot()
-        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked,
-            new DateTimeOffset(DateTime.SpecifyKind(ReferenceEquals(t, Active) ? DateTime.UtcNow : t.LastActiveUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds())).ToList();
+    public List<Data.SessionTabMeta> MetaSnapshot() => MetaSnapshotOf(Tabs, Active);
+
+    public static List<Data.SessionTabMeta> MetaSnapshotOf(IReadOnlyList<BrowserTab> tabs, BrowserTab? active)
+        => tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked,
+            new DateTimeOffset(DateTime.SpecifyKind(ReferenceEquals(t, active) ? DateTime.UtcNow : t.LastActiveUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds())).ToList();
 
     public void RefreshGroups()
     {

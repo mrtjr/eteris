@@ -5,7 +5,13 @@ namespace Eteris.Browser.Data;
 
 public sealed record Session(IReadOnlyList<string> Urls, int ActiveIndex, IReadOnlyList<string>? Titles = null,
     IReadOnlyList<bool>? Pinned = null, IReadOnlyList<int>? GroupIds = null, IReadOnlyList<SessionGroup>? Groups = null,
-    SessionSplit? Split = null, IReadOnlyList<SessionTabMeta>? Metas = null);
+    SessionSplit? Split = null, IReadOnlyList<SessionTabMeta>? Metas = null, IReadOnlyList<SessionSpace>? Spaces = null,
+    int SpaceIndex = 0);
+
+// Espaço (Tabs/Workspace.cs) gravado na sessão: nome, cor e ícone; as abas dos Espaços que não estão à vista vão
+// numa sessão própria (Tabs), e o que está à vista (SpaceIndex) usa as abas do nível de cima, como sempre — assim
+// uma sessão sem Espaços lê-se como antes e um Éteris sem esta funcionalidade ignora o campo.
+public sealed record SessionSpace(string Name, int ColorIndex, string? Icon = null, Session? Tabs = null);
 
 // O que o utilizador deu à aba (Tabs/TabIdentity.cs): nome próprio, emoji e cor do ícone; tudo opcional.
 // Seen = última visita (Unix ms), para o arquivo automático contar o tempo real e não desde o último arranque.
@@ -37,7 +43,29 @@ public sealed class SessionStore(string path)
 
     public void Save(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles = null, IEnumerable<bool>? pinned = null,
         IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null, SessionSplit? split = null,
-        IEnumerable<SessionTabMeta?>? metas = null)
+        IEnumerable<SessionTabMeta?>? metas = null, IReadOnlyList<SessionSpace>? spaces = null, int spaceIndex = 0)
+    {
+        var session = Build(urls, activeIndex, titles, pinned, groupIds, groups, split, metas);
+        if (spaces is { Count: > 0 })
+        {
+            // Cada Espaço na reserva leva a sua sessão filtrada pelas mesmas regras; o que está à vista vai sem abas.
+            var kept = spaces.Select((space, i) => space with
+            {
+                Tabs = i == spaceIndex || space.Tabs is null ? null
+                    : Build(space.Tabs.Urls, space.Tabs.ActiveIndex, space.Tabs.Titles, space.Tabs.Pinned, space.Tabs.GroupIds, space.Tabs.Groups,
+                        space.Tabs.Split, space.Tabs.Metas),
+            }).ToList();
+            session = session with { Spaces = kept, SpaceIndex = Math.Clamp(spaceIndex, 0, kept.Count - 1) };
+        }
+
+        var temporary = path + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(session, Options));
+        File.Move(temporary, path, overwrite: true);
+    }
+
+    // Só o que se pode repor (http, https, eteris://), até MaxTabs, com os campos por aba alinhados.
+    private static Session Build(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles, IEnumerable<bool>? pinned,
+        IEnumerable<int>? groupIds, IReadOnlyList<SessionGroup>? groups, SessionSplit? split, IEnumerable<SessionTabMeta?>? metas)
     {
         var allGroupIds = groupIds?.ToList() ?? [];
         var allMetas = metas?.ToList() ?? [];
@@ -54,10 +82,7 @@ public sealed class SessionStore(string path)
         var keptMetas = keptIndices.Select(i => i < allMetas.Count ? allMetas[i] ?? SessionTabMeta.Empty : SessionTabMeta.Empty).ToList();
         // Sem nenhuma aba com nome, emoji ou cor, o campo nem vai para o ficheiro.
         var metasOrNull = keptMetas.All(m => m.IsEmpty) ? null : keptMetas;
-
-        var temporary = path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(new Session(kept, active, keptTitles, keptPinned, keptGroupIds, groups ?? [], keptSplit, metasOrNull), Options));
-        File.Move(temporary, path, overwrite: true);
+        return new Session(kept, active, keptTitles, keptPinned, keptGroupIds, groups ?? [], keptSplit, metasOrNull);
     }
 
     public Session? Load()
@@ -67,21 +92,35 @@ public sealed class SessionStore(string path)
             if (!File.Exists(path)) return null;
             var session = JsonSerializer.Deserialize<Session>(File.ReadAllText(path));
             if (session?.Urls is null) return null;
-            var indices = Enumerable.Range(0, session.Urls.Count).Where(i => IsRestorable(session.Urls[i])).ToList();
-            var urls = indices.Select(i => session.Urls[i]).ToList();
-            if (urls.All(u => u.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase))) return null;
-            var titles = indices.Select(i => session.Titles is { } t && i < t.Count ? t[i] : string.Empty).ToList();
-            var pinned = indices.Select(i => session.Pinned is { } p && i < p.Count && p[i]).ToList();
-            var groupCount = session.Groups?.Count ?? 0;
-            var groupIds = indices.Select(i => session.GroupIds is { } g && i < g.Count && g[i] < groupCount ? g[i] : -1).ToList();
-            var metas = indices.Select(i => session.Metas is { } m && i < m.Count ? m[i] ?? SessionTabMeta.Empty : SessionTabMeta.Empty).ToList();
-            return new Session(urls, Math.Clamp(session.ActiveIndex, 0, urls.Count - 1), titles, pinned, groupIds, session.Groups ?? [],
-                Remap(session.Split, indices), metas);
+            var spaces = session.Spaces?.Where(s => s is { Name.Length: > 0 })
+                .Select(s => s with { Tabs = s.Tabs?.Urls is null ? null : Filter(s.Tabs) }).ToList();
+            if (spaces is { Count: 0 }) spaces = null;
+            var main = Filter(session);
+            // Só páginas internas em todos os Espaços: não vale a pena repor (a janela arranca como nova).
+            if (IsOnlyInternal(main) && (spaces is null || spaces.All(s => s.Tabs is null || IsOnlyInternal(s.Tabs)))) return null;
+            return main with { Spaces = spaces, SpaceIndex = spaces is null ? 0 : Math.Clamp(session.SpaceIndex, 0, spaces.Count - 1) };
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
             return null;
         }
+    }
+
+    private static bool IsOnlyInternal(Session session)
+        => session.Urls.All(u => u.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
+
+    // Uma sessão lida do disco, só com o que se pode repor e com os campos por aba alinhados.
+    private static Session Filter(Session session)
+    {
+        var indices = Enumerable.Range(0, session.Urls.Count).Where(i => IsRestorable(session.Urls[i])).ToList();
+        var urls = indices.Select(i => session.Urls[i]).ToList();
+        var titles = indices.Select(i => session.Titles is { } t && i < t.Count ? t[i] : string.Empty).ToList();
+        var pinned = indices.Select(i => session.Pinned is { } p && i < p.Count && p[i]).ToList();
+        var groupCount = session.Groups?.Count ?? 0;
+        var groupIds = indices.Select(i => session.GroupIds is { } g && i < g.Count && g[i] < groupCount ? g[i] : -1).ToList();
+        var metas = indices.Select(i => session.Metas is { } m && i < m.Count ? m[i] ?? SessionTabMeta.Empty : SessionTabMeta.Empty).ToList();
+        return new Session(urls, Math.Clamp(session.ActiveIndex, 0, Math.Max(0, urls.Count - 1)), titles, pinned, groupIds, session.Groups ?? [],
+            Remap(session.Split, indices), metas);
     }
 
     // A divisão só sobrevive se as duas abas sobreviverem à filtragem; os índices passam a ser os da lista filtrada.
