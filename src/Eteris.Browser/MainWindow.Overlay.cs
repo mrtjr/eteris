@@ -20,7 +20,7 @@ public partial class MainWindow
 
     // Elementos da janela principal que passam para a camada (os nomes continuam a funcionar no código).
     private static readonly string[] OverlayElementNames =
-        ["QrOverlay", "GlanceOverlay", "SplitFocusRing", "SplitDropHint", "NotesPanel", "MiniBar", "PermissionBar", "FindBar", "FocusToast", "LinkStatusBubble", "Toast", "PaletteOverlay"];
+        ["QrOverlay", "GlanceOverlay", "SplitFocusRing", "SplitDropHint", "MiniBar", "PermissionBar", "FindBar", "FocusToast", "LinkStatusBubble", "Toast", "PaletteOverlay"];
 
     // Onde se acrescentam camadas criadas em código (ex.: a folha de atalhos).
     private Grid OverlayRoot => _overlayRoot ?? (Grid)RootBorder.Child;
@@ -129,7 +129,7 @@ public partial class MainWindow
         _overlay.Width = RootBorder.ActualWidth;
         _overlay.Height = RootBorder.ActualHeight;
         // A barra de carregamento acompanha a moldura da página (margem da barra lateral e espaçamento).
-        AuroraBar.Margin = new Thickness(PageFrame.Margin.Left + PageFrame.Padding.Left, 0, PageFrame.Padding.Right, 0);
+        AuroraBar.Margin = new Thickness(PageFrame.Margin.Left + PageFrame.Padding.Left, 0, PageFrame.Margin.Right + PageFrame.Padding.Right, 0);
     }
 
     // Uma caixa de texto da camada só recebe o teclado com a janela da camada ativa.

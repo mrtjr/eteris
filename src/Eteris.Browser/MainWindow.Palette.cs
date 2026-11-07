@@ -200,9 +200,20 @@ public partial class MainWindow
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
         yield return new("\uE790", "Cor do Éteris", "Escolher a cor de destaque: paleta, da paisagem ou do Windows", null,
             () => OpenInternal(SettingsPage.Url + "#aspeto"));
-        if (!IsPrivate)
-            yield return new("", NotesPanel.Visibility == Visibility.Visible ? "Fechar as notas" : "Notas",
-            "Bloco de notas ao lado da página, guardado só neste computador", "Ctrl+Shift+E", ToggleNotes);
+        yield return new("\uE8A0", SidebarOpen ? "Fechar a barra lateral" : "Barra lateral",
+            SidebarOpen ? "A página volta a ter a largura toda" : "Notas, Para ler, Favoritos e Histórico ao lado da página", "Ctrl+Shift+B", () => ToggleSidebar());
+        foreach (var panel in SidebarAvailable)
+        {
+            var key = panel.Key;
+            yield return new(panel.Glyph, panel.Key == global::Eteris.Browser.Sidebar.SidebarPanels.Notes ? "Notas" : $"{panel.Title} na barra lateral",
+                panel.Key switch
+                {
+                    global::Eteris.Browser.Sidebar.SidebarPanels.Notes => "Bloco de notas ao lado da página, guardado só neste computador",
+                    global::Eteris.Browser.Sidebar.SidebarPanels.Reading => "As páginas guardadas para ler mais tarde, ao lado da página",
+                    global::Eteris.Browser.Sidebar.SidebarPanels.Bookmarks => "Os favoritos ao lado da página",
+                    _ => "As páginas visitadas ao lado da página",
+                }, panel.Key == global::Eteris.Browser.Sidebar.SidebarPanels.Notes ? "Ctrl+Shift+E" : null, () => OpenSidebar(key));
+        }
         yield return new("\uE7BC", "Lista de leitura", "Páginas guardadas para ler mais tarde", null, () => OpenInternal(BookmarksPage.Url + "#ler"));
         yield return new("\uEDE1", "Exportar favoritos", "Ficheiro HTML em Transferências, que qualquer navegador importa", null, ExportBookmarks);
         yield return new("", "Favoritos", "Ver, pesquisar, renomear e remover favoritos", "Ctrl+Shift+O", OpenBookmarks);

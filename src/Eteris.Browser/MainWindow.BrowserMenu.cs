@@ -117,6 +117,7 @@ public partial class MainWindow
         Row("\uE734", "Favoritos", OpenBookmarks, "Ctrl+Shift+O");
         Row("\uE896", "Transferências", ToggleDownloads, "Ctrl+J");
         Row("\uE71D", "Radar de abas", ToggleRadar, "Ctrl+Shift+A");
+        Row("\uE8A0", SidebarOpen ? "Fechar a barra lateral" : "Barra lateral", () => ToggleSidebar(), "Ctrl+Shift+B");
 
         Divider();
         items.Children.Add(BuildBrowserMenuZoom(popup, buttons, controlStyle));

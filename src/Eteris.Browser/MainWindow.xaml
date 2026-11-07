@@ -387,6 +387,101 @@
             </Setter>
         </Style>
 
+        <!-- Barra lateral unificada: listas (Para ler, Favoritos, Histórico) com linhas clicáveis -->
+        <Style x:Key="SidebarList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="KeyboardNavigation.TabNavigation" Value="None" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                            <ItemsPresenter Margin="0,2,0,8" />
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <DataTemplate x:Key="SidebarLinkTemplate">
+            <Grid Margin="10,0,8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="30" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Width="22" Height="22" CornerRadius="7" Background="{Binding Color}" VerticalAlignment="Center" HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding Letter}" FontSize="11" FontWeight="Bold" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,0,0">
+                    <TextBlock Text="{Binding Title}" FontSize="13" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock FontSize="11.5" Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0">
+                        <Run Text="{Binding Host, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Detail, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+        <Style x:Key="SidebarLinkItem" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="ToolTip" Value="{Binding Url}" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="700" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <EventSetter Event="PreviewMouseDown" Handler="SidebarLink_PreviewMouseDown" />
+            <EventSetter Event="PreviewMouseRightButtonUp" Handler="SidebarLink_PreviewMouseRightButtonUp" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bg" Height="46" Margin="8,1" CornerRadius="9" Background="Transparent" Cursor="Hand">
+                            <ContentPresenter x:Name="Content" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding Muted}" Value="True">
+                                <Setter TargetName="Content" Property="Opacity" Value="0.55" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Separadores da barra lateral: um botão por painel; Tag «on» marca o que está à vista -->
+        <Style x:Key="SidebarRailButton" TargetType="Button">
+            <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Margin" Value="4,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="10" />
+                            <Border x:Name="Mark" Width="3" Height="18" CornerRadius="1.5" HorizontalAlignment="Right" Margin="0,0,-4,0"
+                                    Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="on">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource PressedBrush}" />
+                                <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="{StaticResource IrisBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="SideTabItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
             <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
@@ -1429,6 +1524,59 @@
                 </Grid>
             </Border>
 
+            <!-- Barra lateral unificada (Ctrl+Shift+B): Notas, Para ler, Favoritos, Histórico e sites fixados, ao lado da página.
+                 Não fica por cima da página (a moldura encolhe): pode viver na janela principal. -->
+            <Border x:Name="Sidebar" Grid.Row="2" Width="360" HorizontalAlignment="Right" Visibility="Collapsed"
+                    Background="{DynamicResource ChromeSurfaceBrush}" AutomationProperties.Name="Barra lateral">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="SidebarStartColumn" Width="6" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="SidebarEndColumn" Width="44" />
+                    </Grid.ColumnDefinitions>
+                    <Thumb x:Name="SidebarGrip" Grid.Column="0" Cursor="SizeWE" ToolTip="Arraste para ajustar a largura da barra lateral"
+                           DragDelta="SidebarGrip_DragDelta" DragCompleted="SidebarGrip_DragCompleted">
+                        <Thumb.Template>
+                            <ControlTemplate TargetType="Thumb">
+                                <Border Background="Transparent" />
+                            </ControlTemplate>
+                        </Thumb.Template>
+                    </Thumb>
+                    <Border x:Name="SidebarCard" Grid.Column="1" Margin="0,0,0,6" CornerRadius="10" Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top" Margin="14,8,8,4">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
+                                        Content="&#xE8BB;" Click="SidebarClose_Click" ToolTip="Fechar a barra lateral (Ctrl+Shift+B)" />
+                                <Button x:Name="NotesInsertButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="13"
+                                        Content="&#xE71B;" Click="NotesInsertPage_Click" ToolTip="Inserir o título e o endereço desta página" />
+                                <TextBlock x:Name="SidebarTitle" Text="Notas" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <Grid x:Name="SidebarBody">
+                                <DockPanel x:Name="SidebarNotes" Margin="14,2,10,10" Visibility="Collapsed">
+                                    <TextBlock x:Name="NotesStatus" DockPanel.Dock="Bottom" FontSize="11" Margin="2,6,0,0"
+                                               Foreground="{DynamicResource TextFaintBrush}" />
+                                    <TextBox x:Name="NotesText" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto" BorderThickness="0" Background="Transparent" Padding="2,4"
+                                             Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}" FontSize="13.5"
+                                             AutomationProperties.AutomationId="NotesText" AutomationProperties.Name="Notas"
+                                             TextChanged="NotesText_TextChanged" PreviewKeyDown="NotesText_PreviewKeyDown" />
+                                </DockPanel>
+                                <DockPanel x:Name="SidebarReading" Visibility="Collapsed">
+                                    <TextBlock x:Name="ReadingEmpty" DockPanel.Dock="Top" Margin="18,22,18,0" TextWrapping="Wrap" FontSize="13" LineHeight="19"
+                                               Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed"
+                                               Text="Nada para ler mais tarde. «Ler mais tarde» no menu da página, na paleta ou ao espreitar um link guarda a página aqui." />
+                                    <ListBox x:Name="ReadingList" Style="{StaticResource SidebarList}" ItemContainerStyle="{StaticResource SidebarLinkItem}"
+                                             ItemTemplate="{StaticResource SidebarLinkTemplate}" AutomationProperties.Name="Para ler" />
+                                </DockPanel>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+                    <StackPanel x:Name="SidebarRail" Grid.Column="2" Margin="0,2,0,0" />
+                </Grid>
+            </Border>
+
             <!-- Código QR da página: cartão ao centro, por cima da página escurecida -->
             <Grid x:Name="QrOverlay" Grid.Row="2" Panel.ZIndex="58" Visibility="Collapsed" Focusable="True"
                   Background="{DynamicResource ScrimBrush}" MouseLeftButtonDown="QrOverlay_MouseLeftButtonDown" KeyDown="QrOverlay_KeyDown">
@@ -1526,31 +1674,6 @@
                     </DockPanel>
                 </Border>
             </Grid>
-
-            <!-- Notas: bloco de notas por cima da página, à direita -->
-            <Border x:Name="NotesPanel" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Right" Width="340" Margin="0,8,16,16"
-                    Visibility="Collapsed" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}"
-                    BorderThickness="1" CornerRadius="16">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="28" ShadowDepth="6" Direction="270" Opacity="0.45" Color="Black" />
-                </Border.Effect>
-                <DockPanel Margin="14,10,10,10">
-                    <DockPanel DockPanel.Dock="Top" Margin="2,0,0,6">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
-                                Content="&#xE8BB;" Click="NotesClose_Click" ToolTip="Fechar as notas (Esc)" />
-                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="13"
-                                Content="&#xE71B;" Click="NotesInsertPage_Click" ToolTip="Inserir o título e o endereço desta página" />
-                        <TextBlock Text="Notas" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    </DockPanel>
-                    <TextBlock x:Name="NotesStatus" DockPanel.Dock="Bottom" FontSize="11" Margin="2,6,0,0"
-                               Foreground="{DynamicResource TextFaintBrush}" />
-                    <TextBox x:Name="NotesText" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
-                             VerticalScrollBarVisibility="Auto" BorderThickness="0" Background="Transparent" Padding="2,4"
-                             Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}" FontSize="13.5"
-                             AutomationProperties.AutomationId="NotesText" AutomationProperties.Name="Notas"
-                             TextChanged="NotesText_TextChanged" PreviewKeyDown="NotesText_PreviewKeyDown" />
-                </DockPanel>
-            </Border>
 
             <!-- Janela flutuante: barra para arrastar e voltar ao tamanho normal (aparece com o rato) -->
             <Border x:Name="MiniBar" Grid.Row="2" Panel.ZIndex="60" VerticalAlignment="Top" Height="34" Visibility="Collapsed"

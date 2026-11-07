@@ -4,10 +4,11 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Sidebar;
 
 namespace Eteris.Browser;
 
-// Painel «Notas»: um bloco de notas por cima da página, que se guarda sozinho (só neste computador).
+// Painel «Notas» da barra lateral: um bloco de notas ao lado da página, que se guarda sozinho (só neste computador).
 public partial class MainWindow
 {
     private static NotesStore Notes => new(Path.Combine(AppPaths.Root, "notas.md"));
@@ -15,27 +16,16 @@ public partial class MainWindow
     private DispatcherTimer? _notesSave;
     private bool _notesLoading;
 
-    private void ToggleNotes()
+    // Ctrl+Shift+E: abre a barra lateral nas notas (ou fecha-a, se já é o que está à vista).
+    private void ToggleNotes() => ToggleSidebar(SidebarPanels.Notes);
+
+    private void LoadNotes()
     {
-        if (NotesPanel.Visibility == Visibility.Visible)
-        {
-            CloseNotes();
-            return;
-        }
         _notesLoading = true;
         NotesText.Text = Notes.Load();
         _notesLoading = false;
         NotesText.CaretIndex = NotesText.Text.Length;
         NotesStatus.Text = "Guardado só neste computador";
-        NotesPanel.Visibility = Visibility.Visible;
-        FocusInOverlay(NotesText);
-    }
-
-    private void CloseNotes()
-    {
-        FlushNotes();
-        NotesPanel.Visibility = Visibility.Collapsed;
-        ReturnFocusToPage();
     }
 
     private void NotesText_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -49,8 +39,10 @@ public partial class MainWindow
 
     private void FlushNotes()
     {
+        // Só há o que gravar com o painel à vista e texto alterado desde a última gravação (o temporizador a contar).
+        var pending = _notesSave is { IsEnabled: true };
         _notesSave?.Stop();
-        if (NotesPanel.Visibility != Visibility.Visible) return;
+        if (!SidebarShows(SidebarPanels.Notes) || !pending) return;
         try
         {
             Notes.Save(NotesText.Text);
@@ -65,15 +57,13 @@ public partial class MainWindow
         var (text, caret) = NotesStore.Insert(NotesText.Text, NotesText.CaretIndex, NotesStore.PageLine(tab.Title, tab.Address));
         NotesText.Text = text;
         NotesText.CaretIndex = caret;
-        FocusInOverlay(NotesText);
+        NotesText.Focus();
     }
-
-    private void NotesClose_Click(object sender, RoutedEventArgs e) => CloseNotes();
 
     private void NotesText_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Escape) return;
         e.Handled = true;
-        CloseNotes();
+        CloseSidebar();
     }
 }

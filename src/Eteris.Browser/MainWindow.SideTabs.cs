@@ -108,7 +108,8 @@ public partial class MainWindow
         SideBar.Width = SideCollapsed ? SideCollapsedWidth : SideWidth;
         SideCollapseButton.Content = SideCollapsed ? "" : "";
         SideCollapseButton.ToolTip = SideCollapsed ? "Expandir a barra de abas" : "Encolher a barra de abas";
-        PageFrame.Margin = new Thickness(side ? SideBar.Width - 6 : 0, 0, 0, 0);
+        // A margem da página (abas verticais e barra lateral) é posta por PlaceSidebar.
+        PlaceSidebar();
         PageFrame.Padding = hidden ? new Thickness(0) : new Thickness(6, 0, 6, 6);
 
         WindowChrome.GetWindowChrome(this).CaptionHeight = layout.CaptionHeight;

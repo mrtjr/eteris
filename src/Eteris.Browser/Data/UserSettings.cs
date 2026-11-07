@@ -40,6 +40,11 @@ public sealed record UserSettings
     public bool NewTabWeek { get; init; } = true;
     public bool NewTabTips { get; init; } = true;
     public bool SidebarCollapsed { get; init; }
+    // Barra lateral unificada (Ctrl+Shift+B): aberta ao arrancar, último painel, largura e lado (Sidebar/SidebarPanels.cs).
+    public bool Sidebar { get; init; }
+    public string SidebarPanel { get; init; } = global::Eteris.Browser.Sidebar.SidebarPanels.Notes;
+    public int SidebarWidth { get; init; } = (int)global::Eteris.Browser.Sidebar.SidebarPanels.DefaultWidth;
+    public string SidebarSide { get; init; } = "right";
     public string ReaderTheme { get; init; } = "dark";
     public int ReaderSize { get; init; } = 20;
     public bool ReaderSerif { get; init; } = true;
@@ -71,6 +76,11 @@ public sealed record UserSettings
         "density" when value is "normal" or "compact" => this with { Density = value },
         "accent" when global::Eteris.Browser.Theme.Accent.IsValidChoice(value) => this with { Accent = value },
         "sidebarCollapsed" when bool.TryParse(value, out var on) => this with { SidebarCollapsed = on },
+        "sidebar" when bool.TryParse(value, out var on) => this with { Sidebar = on },
+        "sidebarPanel" when global::Eteris.Browser.Sidebar.SidebarPanels.IsKnownKey(value) => this with { SidebarPanel = value },
+        "sidebarWidth" when int.TryParse(value, out var px) && px >= global::Eteris.Browser.Sidebar.SidebarPanels.MinWidth
+                             && px <= global::Eteris.Browser.Sidebar.SidebarPanels.MaxWidth => this with { SidebarWidth = px },
+        "sidebarSide" when value is "left" or "right" => this with { SidebarSide = value },
         "readerTheme" when value is "dark" or "sepia" or "light" => this with { ReaderTheme = value },
         "readerSize" when int.TryParse(value, out var px) && px >= 15 && px <= 28 => this with { ReaderSize = px },
         "readerSerif" when bool.TryParse(value, out var on) => this with { ReaderSerif = on },

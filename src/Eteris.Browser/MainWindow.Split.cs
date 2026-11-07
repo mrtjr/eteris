@@ -217,7 +217,7 @@ public partial class MainWindow
         SplitDropHint.VerticalAlignment = right ? VerticalAlignment.Stretch : VerticalAlignment.Bottom;
         SplitDropHint.Width = right ? SplitDropZone.Width : double.NaN;
         SplitDropHint.Height = right ? double.NaN : SplitDropZone.Width;
-        SplitDropHint.Margin = new Thickness(right ? 0 : PageFrame.Margin.Left + padding.Left, 0, padding.Right, padding.Bottom);
+        SplitDropHint.Margin = new Thickness(right ? 0 : PageFrame.Margin.Left + padding.Left, 0, PageFrame.Margin.Right + padding.Right, padding.Bottom);
         SplitDropHint.Visibility = Visibility.Visible;
     }
 

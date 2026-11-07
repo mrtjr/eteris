@@ -59,6 +59,7 @@ public partial class MainWindow : Window
         WatchOmniboxMenu();
         SetUpSideFilter();
         WatchWorkspaces();
+        WatchSidebar();
         Closing += (_, _) => FlushNotes();
         ContentRendered += (_, _) => SetUpOverlayLayer();
     }
@@ -437,6 +438,7 @@ public partial class MainWindow : Window
         if (ctrl && key == Key.H) return OpenHistory;
         if (ctrl && shift && key == Key.L) return ShowLinkHints;
         if (ctrl && shift && key == Key.E && !IsPrivate) return ToggleNotes;
+        if (ctrl && shift && key == Key.B) return () => ToggleSidebar();
         if (ctrl && shift && key == Key.M) return ToggleMiniWindow;
         if (ctrl && shift && key == Key.O) return OpenBookmarks;
         if (ctrl && shift && key == Key.S) return () => CapturePage(fullPage: true);
