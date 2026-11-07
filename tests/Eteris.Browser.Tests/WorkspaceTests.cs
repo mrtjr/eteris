@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Input;
+using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Tabs;
 using Eteris.Browser.Theme;
@@ -358,5 +359,29 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Empty(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.Spaces, RadarSort.Recent, "xyz", spaces: others));
         Assert.Contains("Novo Espaço", TabRadar.Status(0, RadarScope.Spaces, ""));
         Assert.DoesNotContain(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.All, RadarSort.Recent, "", spaces: others), r => r.Space is not null);
+    }
+
+    // Paleta e Radar: as abas dos outros Espaços vêm pela ordem do seletor e, dentro de cada um, pela ordem da faixa.
+    [Fact]
+    public void TabsInOtherWorkspaces_FollowSelectorAndStripOrder()
+    {
+        var vm = WithTabs("https://a.pt/");
+        var two = vm.NewWorkspace("Dois");
+        vm.NewTab("https://d1.pt/");
+        vm.NewTab("https://d2.pt/");
+        var three = vm.NewWorkspace("Três");
+        vm.NewTab("https://t1.pt/");
+        Assert.DoesNotContain(vm.TabsInOtherWorkspaces(), p => ReferenceEquals(p.Space, three));
+        vm.SwitchWorkspace(vm.Workspaces[0]);
+        var others = vm.TabsInOtherWorkspaces();
+        Assert.Equal([two, two, two, three, three], others.Select(p => p.Space));
+        Assert.Equal(["eteris://newtab/", "https://d1.pt/", "https://d2.pt/", "eteris://newtab/", "https://t1.pt/"], others.Select(p => p.Tab.Address));
+    }
+
+    [Fact]
+    public void WhatsNew_AnnouncesSpaces_WithTheShortcut()
+    {
+        var highlight = Assert.Single(WhatsNewPage.Highlights, h => h.Title == "Espaços");
+        Assert.Equal("Ctrl+Alt+1 … 9", highlight.Keys);
     }
 }

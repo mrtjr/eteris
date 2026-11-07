@@ -37,7 +37,7 @@ public partial class MainWindow
     // Os chips só aparecem a partir do segundo Espaço: com um só, a barra fica como sempre foi.
     private void UpdateSpaceStrip()
     {
-        SpaceStrip.Visibility = Tabs.HasWorkspaces ? Visibility.Visible : Visibility.Collapsed;
+        SpaceStrip.Visibility = SideSpaceStrip.Visibility = Tabs.HasWorkspaces ? Visibility.Visible : Visibility.Collapsed;
         UpdateTabWidth();
     }
 
@@ -71,8 +71,13 @@ public partial class MainWindow
         Dispatcher.InvokeAsync(() => EditWorkspace(workspace, ChipOf(workspace) ?? Omnibox, isNew: true), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    // O chip do Espaço na barra que está à vista (título, ou lateral nas abas verticais); null com um só Espaço.
     private FrameworkElement? ChipOf(Workspace workspace)
-        => SpaceStrip.Visibility == Visibility.Visible ? SpaceStrip.ItemContainerGenerator.ContainerFromItem(workspace) as FrameworkElement : null;
+    {
+        if (!Tabs.HasWorkspaces) return null;
+        var strip = SideBar.Visibility == Visibility.Visible ? SideSpaceStrip : SpaceStrip;
+        return strip.ItemContainerGenerator.ContainerFromItem(workspace) as FrameworkElement;
+    }
 
     // O Espaço cujo chip está debaixo do rato durante um arrasto de aba (nunca o atual: a aba já lá está).
     private Workspace? WorkspaceUnder(MouseEventArgs e)

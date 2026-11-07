@@ -12,6 +12,7 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("▣", "Espaços", "Ambientes de abas na mesma janela (Pessoal, Trabalho, Estudo…), cada um com nome, cor e emoji: «Novo Espaço» na paleta cria um, os chips na barra de título mudam entre eles, «Mover para o Espaço…» no menu da aba (ou arrastar a aba até ao chip) leva abas de um para outro. As abas dos outros Espaços dormem e tudo fica na sessão.", "Ctrl+Alt+1 … 9"),
         new("✓", "Abas como tarefas", "No menu da aba: «Feito» fecha e guarda em «Feitas hoje», «Adiar até…» faz a aba voltar à hora escolhida, «Trancar» impede fechar por engano. Abas sem visita há dias desvanecem e vão para o Arquivo do Radar, de onde se repõem (Definições › Abas)."),
         new("✎", "Abas com nome, emoji e nota", "«Mudar o nome…» no menu da aba dá-lhe um nome próprio, um emoji e uma cor que ficam na sessão; «Escrever nota…» prende uma frase («porque abri isto?») que aparece no cartão da aba, no Radar e nas sessões guardadas. Pairar na etiqueta de um grupo mostra as abas dele."),
         new("👁", "Espreitar um link", "Alt+clique num link (ou «Espreitar o link» no menu) mostra o destino num cartão: título, imagem, tempo de leitura e os primeiros parágrafos — sem abrir aba nem deixar rasto no histórico.", "Alt+clique"),

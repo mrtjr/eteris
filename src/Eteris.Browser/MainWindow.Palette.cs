@@ -229,14 +229,24 @@ public partial class MainWindow
             .Select(t => new PaletteCommand("", t.DisplayTitle, "Mudar para esta aba · " + (WebHost(t.Address) ?? "Éteris"), null,
                 () => Tabs.Active = t));
 
-        // Ao escrever, também as abas das outras janelas (só do mesmo tipo: privadas com privadas).
+        // Ao escrever, também as abas dos outros Espaços desta janela («Ir» muda de Espaço e ativa a aba)…
+        var otherSpaces = query.Length == 0 ? [] : Tabs.TabsInOtherWorkspaces()
+            .Select(pair => new PaletteCommand("", pair.Tab.DisplayTitle,
+                $"Mudar para esta aba · Espaço «{pair.Space.Name}» · " + (WebHost(pair.Tab.Address) ?? "Éteris"), null, () =>
+                {
+                    SwitchWorkspace(pair.Space);
+                    if (Tabs.Tabs.Contains(pair.Tab)) Tabs.Active = pair.Tab;
+                }))
+            .ToList();
+
+        // …e as das outras janelas (só do mesmo tipo: privadas com privadas).
         var otherWindows = query.Length == 0 ? [] : Application.Current.Windows.OfType<MainWindow>()
             .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate)
             .SelectMany(w => w.Tabs.Tabs.Select(t => new PaletteCommand("", t.DisplayTitle,
                 "Mudar para esta aba · outra janela · " + (WebHost(t.Address) ?? "Éteris"), null, () => FocusTabIn(w, t))))
             .ToList();
 
-        var items = CommandSearch.RankTitled(query, Actions().Concat(tabs).Concat(otherWindows), c => c.Title, c => c.Subtitle);
+        var items = CommandSearch.RankTitled(query, Actions().Concat(tabs).Concat(otherSpaces).Concat(otherWindows), c => c.Title, c => c.Subtitle);
 
         if (query.Length >= 2)
             items.AddRange(AppData.Bookmarks(b => b.Search(query, 4)).Select(b =>

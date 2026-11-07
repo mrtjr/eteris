@@ -20,6 +20,51 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <SolidColorBrush x:Key="ChromeSurfaceBrush" Color="#1A1D27" />
 
+        <!-- Chip de um Espaço (barra de título e barra lateral): bolinha da cor, emoji ou inicial, o atual com o nome
+             e contorno da sua cor; aceso em íris quando uma aba está a ser arrastada por cima (MainWindow.Workspaces.cs) -->
+        <DataTemplate x:Key="SpaceChipTemplate">
+            <Border x:Name="Chip" Height="26" MinWidth="30" Margin="1,0" Padding="8,0" CornerRadius="13" Cursor="Hand"
+                    Background="Transparent" BorderThickness="1.5" BorderBrush="Transparent"
+                    ToolTip="{Binding Summary}" AutomationProperties.Name="{Binding Summary}"
+                    PreviewMouseLeftButtonUp="SpaceChip_Click" PreviewMouseRightButtonUp="SpaceChip_RightClick">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8" Fill="{Binding ColorBrush}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ChipGlyph" Text="{Binding ChipText}" FontFamily="{StaticResource EmojiFont}" FontSize="11.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}" Margin="5,0,0,1" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ChipName" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Margin="5,0,0,1"
+                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Visibility="Collapsed"
+                               MaxWidth="120" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverBrush}" />
+                    <Setter TargetName="Chip" Property="BorderBrush" Value="{Binding ColorBrush}" />
+                    <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverBrush}" />
+                    <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                    <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <!-- O atual já mostra o nome: a inicial só repetiria a primeira letra (o emoji fica) -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsCurrent}" Value="True" />
+                        <Condition Binding="{Binding Icon}" Value="{x:Null}" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ChipGlyph" Property="Visibility" Value="Collapsed" />
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsCurrent}" Value="False" />
+                        <Condition Binding="{Binding IsMouseOver, ElementName=Chip}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+                </MultiDataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <Style x:Key="PaletteItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
             <EventSetter Event="PreviewMouseLeftButtonUp" Handler="PaletteItem_Click" />
@@ -628,56 +673,13 @@
                              Clique muda de Espaço, botão direito abre o menu, largar uma aba move-a (MainWindow.Workspaces.cs) -->
                         <ItemsControl x:Name="SpaceStrip" ItemsSource="{Binding Workspaces}" VerticalAlignment="Center" Margin="0,0,6,3"
                                       Visibility="Collapsed" Focusable="False" SizeChanged="SpaceStrip_SizeChanged"
-                                      shell:WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Espaços">
+                                      shell:WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Espaços"
+                                      ItemTemplate="{StaticResource SpaceChipTemplate}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Orientation="Horizontal" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border x:Name="Chip" Height="26" MinWidth="30" Margin="1,0" Padding="8,0" CornerRadius="13" Cursor="Hand"
-                                            Background="Transparent" BorderThickness="1.5" BorderBrush="Transparent"
-                                            ToolTip="{Binding Summary}" AutomationProperties.Name="{Binding Summary}"
-                                            PreviewMouseLeftButtonUp="SpaceChip_Click" PreviewMouseRightButtonUp="SpaceChip_RightClick">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Ellipse Width="8" Height="8" Fill="{Binding ColorBrush}" VerticalAlignment="Center" />
-                                            <TextBlock x:Name="ChipGlyph" Text="{Binding ChipText}" FontFamily="{StaticResource EmojiFont}" FontSize="11.5" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextMutedBrush}" Margin="5,0,0,1" VerticalAlignment="Center" />
-                                            <TextBlock x:Name="ChipName" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Margin="5,0,0,1"
-                                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Visibility="Collapsed"
-                                                       MaxWidth="120" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </Border>
-                                    <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                            <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverBrush}" />
-                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{Binding ColorBrush}" />
-                                            <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
-                                            <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverBrush}" />
-                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
-                                            <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                        <!-- O atual já mostra o nome: a inicial só repetiria a primeira letra (o emoji fica) -->
-                                        <MultiDataTrigger>
-                                            <MultiDataTrigger.Conditions>
-                                                <Condition Binding="{Binding IsCurrent}" Value="True" />
-                                                <Condition Binding="{Binding Icon}" Value="{x:Null}" />
-                                            </MultiDataTrigger.Conditions>
-                                            <Setter TargetName="ChipGlyph" Property="Visibility" Value="Collapsed" />
-                                        </MultiDataTrigger>
-                                        <MultiDataTrigger>
-                                            <MultiDataTrigger.Conditions>
-                                                <Condition Binding="{Binding IsCurrent}" Value="False" />
-                                                <Condition Binding="{Binding IsMouseOver, ElementName=Chip}" Value="True" />
-                                            </MultiDataTrigger.Conditions>
-                                            <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-                                        </MultiDataTrigger>
-                                    </DataTemplate.Triggers>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <!-- Setas de rolagem: só aparecem quando há abas escondidas (ver MainWindow.TabStrip.cs) -->
                         <Button x:Name="TabScrollLeft" Content="&#xE76B;" Style="{StaticResource IconButton}" Width="24" Height="30" FontSize="10"
@@ -1381,6 +1383,16 @@
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
+                    <!-- Espaços nas abas verticais: os mesmos chips, em linhas, por cima do filtro -->
+                    <ItemsControl x:Name="SideSpaceStrip" DockPanel.Dock="Top" ItemsSource="{Binding Workspaces}" Margin="8,0,8,6"
+                                  Visibility="Collapsed" Focusable="False" AutomationProperties.Name="Espaços"
+                                  ItemTemplate="{StaticResource SpaceChipTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
                     <Grid x:Name="SideFilterHost" DockPanel.Dock="Top" Margin="10,0,10,6">
                         <Border Height="32" CornerRadius="9" Background="{DynamicResource FieldBrush}"
                                 BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1" />
