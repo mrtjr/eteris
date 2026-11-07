@@ -316,7 +316,11 @@ public partial class MainWindow
     {
         AppData.SetDark(host, on);
         SyncPageBackdrop();
-        if (ActiveBrowser is { } browser) PageScript.Run(browser, Shields.DarkPages.Live(on));
+        if (ActiveBrowser is { } browser)
+        {
+            PageScript.Run(browser, Shields.DarkPages.Live(on));
+            if (Tabs.Active is { } tab) _ = ScriptsReadyFor(tab, browser, tab.Address);
+        }
         ShowToast(on ? $"{host} fica escuro — também da próxima vez" : $"{host} volta às cores originais");
     }
 

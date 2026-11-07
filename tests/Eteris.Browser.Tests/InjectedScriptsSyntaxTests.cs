@@ -31,6 +31,9 @@ public class InjectedScriptsSyntaxTests
         { "escurecer (antes da página)", DarkPages.EarlyScript },
         { "espreitar (extração do artigo)", LinkPreview.Script },
         { "espreitar (Alt+clique)", LinkPreview.AltClickScript },
+        { "scripts de um site (guarda do topo)", HostScriptRegistry.Guard("www.publico.pt",
+            ScriptletScripts.Wrap("testMark(1)", "https://www.publico.pt/") + "\n;\n" + CosmeticScripts.InjectEarly(".a { display: none }") + DarkPages.EarlyScript)! },
+        { "script base (por protocolo)", HostScriptRegistry.ForProtocols(["http:", "https:"], VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript) },
     };
 
     [Theory]

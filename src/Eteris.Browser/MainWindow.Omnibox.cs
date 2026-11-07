@@ -76,7 +76,7 @@ public partial class MainWindow
         if (OmniboxClassifier.Classify(input, Engine) is { } result) LoadUrl(result.Url, newTab);
     }
 
-    private void LoadUrl(string url, bool newTab = false)
+    private async void LoadUrl(string url, bool newTab = false)
     {
         CloseSuggestions();
         _omniboxEdited = false;
@@ -95,9 +95,10 @@ public partial class MainWindow
         if (ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
         tab.Address = url;
         SetOmniboxText(url);
-        browser.Load(url);
         Keyboard.Focus(browser);
         UpdateOmniboxChrome();
+        await ScriptsReadyFor(tab, browser, url);
+        if (!browser.IsDisposed) browser.Load(url);
     }
 
     private void FocusOmnibox()

@@ -3,8 +3,9 @@ using Eteris.Browser.Browser;
 
 namespace Eteris.Browser.Shields;
 
-public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-    Action? onCrashed = null, string? userAgent = null)
+// onMainFrameRequest: começou o pedido de uma página nova neste separador (não espera por nada: o pedido segue logo).
+public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Action<string> onBlocked,
+    Action? onCrashed = null, string? userAgent = null, Action? onMainFrameRequest = null)
     : CefSharp.Handler.RequestHandler
 {
     // Cabeçalhos de um pedido feito «como telemóvel» (vista móvel de um site fixado na barra lateral): o agente e
@@ -21,7 +22,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         int errorCode, string errorMessage)
         => onCrashed?.Invoke();
 
-    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent);
+    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onBlocked, userAgent, onMainFrameRequest);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
@@ -30,15 +31,15 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
 // Decide cada pedido do separador: cabeçalhos de privacidade, limpeza e HTTPS do endereço da página, modo rigoroso e
 // listas de bloqueio. Corre na thread IO do CEF: nenhuma exceção pode sair daqui (fechava o Éteris inteiro).
-internal sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate,
-    Action<string> onBlocked, string? userAgent)
+internal sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Action<string> onBlocked,
+    string? userAgent, Action? onMainFrameRequest = null)
     : CefSharp.Handler.ResourceRequestHandler
 {
     protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
         IRequest request, IRequestCallback callback)
-        => Decide(browser, frame, request, callback);
+        => Decide(browser, frame, request);
 
-    internal CefReturnValue Decide(IBrowser browser, IFrame? frame, IRequest request, IRequestCallback callback)
+    internal CefReturnValue Decide(IBrowser browser, IFrame? frame, IRequest request)
     {
         var blocking = false;
         try
@@ -62,16 +63,10 @@ internal sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func
                     request.Url = secure;
                     return CefReturnValue.Continue;
                 }
-                // O pedido da página só sai depois de os scriptlets estarem registados (máx. 1 s):
-                // sem isto o documento podia nascer antes do registo e o anti-bloqueador ganhava a corrida.
-                var ready = onNavigate(browser, url);
-                if (ready.IsCompleted) return CefReturnValue.Continue;
-                Task.WhenAny(ready, Task.Delay(TimeSpan.FromSeconds(1))).ContinueWith(_ =>
-                {
-                    try { using (callback) callback.Continue(true); }
-                    catch (Exception) { }
-                }, TaskScheduler.Default);
-                return CefReturnValue.ContinueAsync;
+                // O pedido da página segue logo. (Antes esperava aqui pelo registo dos scriptlets, até 1 s; depois de a
+                // navegação começar o DevTools já não entrega esse registo a tempo: ver ScriptletInjector.)
+                onMainFrameRequest?.Invoke();
+                return CefReturnValue.Continue;
             }
 
             // Só pedidos da rede passam pelas listas (eteris://, devtools://, data:, blob: seguem logo).

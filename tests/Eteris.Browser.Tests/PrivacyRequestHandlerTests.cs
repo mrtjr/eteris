@@ -59,17 +59,15 @@ public class PrivacyRequestHandlerTests
         return request;
     }
 
-    private static IRequestCallback Callback() => Fake<IRequestCallback>.Create().Proxy;
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void DetachedFrame_ContinuesInsteadOfThrowing(bool validButThrows)
     {
         var blocker = new Blocker(block: false);
-        var handler = new PrivacyResourceHandler(() => blocker, _ => true, (_, _) => Task.CompletedTask, _ => { }, null);
+        var handler = new PrivacyResourceHandler(() => blocker, _ => true, _ => { }, null);
         var frame = DetachedFrame(validButThrows);
-        var result = handler.Decide(BrowserWithMain(frame), frame, Request("https://ads.example/a.js", ResourceType.Script), Callback());
+        var result = handler.Decide(BrowserWithMain(frame), frame, Request("https://ads.example/a.js", ResourceType.Script));
         Assert.Equal(CefReturnValue.Continue, result);
         Assert.Null(blocker.LastDocument);
     }
@@ -78,9 +76,9 @@ public class PrivacyRequestHandlerTests
     public void DetachedFrame_StillBlocksWhatTheListsBlock()
     {
         var blocked = new List<string>();
-        var handler = new PrivacyResourceHandler(() => new Blocker(block: true), _ => true, (_, _) => Task.CompletedTask, blocked.Add, null);
+        var handler = new PrivacyResourceHandler(() => new Blocker(block: true), _ => true, blocked.Add, null);
         var frame = DetachedFrame();
-        var result = handler.Decide(BrowserWithMain(frame), frame, Request("https://ads.example/a.js", ResourceType.Script), Callback());
+        var result = handler.Decide(BrowserWithMain(frame), frame, Request("https://ads.example/a.js", ResourceType.Script));
         Assert.Equal(CefReturnValue.Cancel, result);
         Assert.Equal(["ads.example"], blocked);
     }
@@ -88,11 +86,11 @@ public class PrivacyRequestHandlerTests
     [Fact]
     public void ExceptionAfterDecidingToBlock_StillCancels()
     {
-        var handler = new PrivacyResourceHandler(() => new Blocker(block: true), _ => true, (_, _) => Task.CompletedTask,
+        var handler = new PrivacyResourceHandler(() => new Blocker(block: true), _ => true,
             _ => throw new InvalidOperationException("janela a fechar"), null);
         var frame = DetachedFrame();
         Assert.Equal(CefReturnValue.Cancel,
-            handler.Decide(BrowserWithMain(frame), frame, Request("https://ads.example/a.js", ResourceType.Script), Callback()));
+            handler.Decide(BrowserWithMain(frame), frame, Request("https://ads.example/a.js", ResourceType.Script)));
     }
 
     [Theory]
@@ -103,9 +101,9 @@ public class PrivacyRequestHandlerTests
     public void NonNetworkRequests_SkipTheLists(string url)
     {
         var blocker = new Blocker(block: true);
-        var handler = new PrivacyResourceHandler(() => blocker, _ => true, (_, _) => Task.CompletedTask, _ => { }, null);
+        var handler = new PrivacyResourceHandler(() => blocker, _ => true, _ => { }, null);
         var frame = DetachedFrame();
-        Assert.Equal(CefReturnValue.Continue, handler.Decide(BrowserWithMain(frame), frame, Request(url, ResourceType.Image), Callback()));
+        Assert.Equal(CefReturnValue.Continue, handler.Decide(BrowserWithMain(frame), frame, Request(url, ResourceType.Image)));
     }
 
     [Fact]

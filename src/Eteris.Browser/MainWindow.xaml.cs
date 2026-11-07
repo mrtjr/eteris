@@ -107,17 +107,14 @@ public partial class MainWindow : Window
     private void CreateBrowser(BrowserTab tab)
     {
         if (TryCreateVideoView(tab)) return;
-        // Scripts do Éteris que correm antes dos da página: regras cosméticas do site (escudo ligado), modo escuro (se
-        // pedido), deteção de vídeo só em H.264 e registo do último clique (para distinguir um link aberto pelo
-        // utilizador de um anúncio pop-under). Registados pelo DevTools: não dependem do processo filho do CefSharp.
-        var injector = new ScriptletInjector(AppData.IsShieldOn,
-            url => VideoEngine.CanHost(url)
-                ? SiteCosmeticScript(url)
-                  + (DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript + "\n;\n" : "")
-                  + VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript + "\n;\n" + LinkPreview.AltClickScript
-                // Nas páginas internas (nova aba, favoritos, histórico) só o Alt+clique: sem ele o Chromium transferia o link.
-                : LinkPreview.WantsAltClick(url) ? LinkPreview.AltClickScript : null);
+        // Scripts do Éteris que correm antes dos da página. Por site: regras cosméticas do site (escudo ligado) e modo
+        // escuro (se pedido). Base, em todas as páginas web: deteção de vídeo só em H.264 e registo do último clique
+        // (para distinguir um link aberto pelo utilizador de um anúncio pop-under); também nas internas, o Alt+clique.
+        // Registados pelo DevTools antes da navegação (ver ScriptletInjector): não dependem do processo filho do CefSharp.
+        var injector = new ScriptletInjector(AppData.IsShieldOn, SiteEarlyScript, TabBaseScript, hostKey: SiteEarlyKey);
         UserActivation? lastActivation = null;
+        var mainRequests = 0;
+        var mainRequestsAtCommit = 0;
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
@@ -139,17 +136,18 @@ public partial class MainWindow : Window
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
                 AppData.IsShieldOn,
-                onNavigate: (cefBrowser, url) =>
-                {
-                    Dispatcher.InvokeAsync(tab.ResetShield);
-                    return injector.Prepare(cefBrowser, url);
-                },
                 onBlocked: host =>
                 {
                     ShieldStats.CountBlocked(persist: !IsPrivate);
                     Dispatcher.InvokeAsync(() => tab.RecordBlocked(host));
                 },
-                onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab))),
+                onCrashed: () => Dispatcher.InvokeAsync(() => OnPageCrashed(tab)),
+                // Página nova: a contagem do Escudo recomeça já no pedido (os bloqueios da página nova vêm depois dele).
+                onMainFrameRequest: () =>
+                {
+                    Interlocked.Increment(ref mainRequests);
+                    Dispatcher.InvokeAsync(tab.ResetShield);
+                }),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
@@ -169,6 +167,9 @@ public partial class MainWindow : Window
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             if (IsVideoSite(address)) Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
+            // Depois do commit (o DevTools volta a entregar mensagens): os scripts do site atual ficam registados, e os
+            // links dentro do mesmo site já os encontram.
+            else if (browser.GetBrowser() is { } cef) _ = Task.Run(() => injector.EnsureHost(cef, address));
         });
         browser.ConsoleMessage += (_, e) =>
         {
@@ -229,10 +230,21 @@ public partial class MainWindow : Window
                 : ErrorPage.ShouldShow(code) ? ErrorPage.Url(code, e.FailedUrl) : null;
             if (target is not null) Dispatcher.InvokeAsync(() => browser.Load(target));
         };
+        browser.FrameLoadStart += (_, e) =>
+        {
+            if (!e.Frame.IsMain) return;
+            // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a
+            // contagem do Escudo recomeça aqui, no commit.
+            var requests = Volatile.Read(ref mainRequests);
+            if (requests == mainRequestsAtCommit) Dispatcher.InvokeAsync(tab.ResetShield);
+            mainRequestsAtCommit = requests;
+        };
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
             var url = e.Url;
+            // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
+            if (!e.Browser.IsLoading) injector.Tidy(url);
             Dispatcher.InvokeAsync(() =>
             {
                 DetectSiteTint(tab, browser, url);
@@ -250,11 +262,14 @@ public partial class MainWindow : Window
         };
         browser.StatusMessage += (_, e) =>
         {
+            // Rato sobre um link: os scripts do site de destino registam-se já, com a aba parada.
+            if (e.Browser is { } hovered && e.Value is { Length: > 0 } link) _ = Task.Run(() => injector.EnsureHostIfMissing(hovered, link));
             var text = Eteris.Browser.Omnibox.LinkStatus.Format(e.Value);
             Dispatcher.InvokeAsync(() => ShowLinkStatus(tab, text));
         };
         browser.IsBrowserInitializedChanged += (_, _) =>
         {
+            if (browser.IsBrowserInitialized && browser.GetBrowser() is { } cef) injector.Start(cef);
             if (browser.IsBrowserInitialized && tab.IsMuted) browser.GetBrowserHost()?.SetAudioMuted(true);
             // Abas abertas em segundo plano: a janela do Chromium fica logo escondida (ver SetPageWindowVisible).
             if (browser.IsBrowserInitialized) Dispatcher.InvokeAsync(LayoutBrowsers);
@@ -266,6 +281,31 @@ public partial class MainWindow : Window
     }
 
     private static bool SameHost(string a, string b) => BrowserTab.SameHost(a, b);
+
+    // Comum a todas as páginas do separador (registado uma vez, antes da 1.ª navegação). Nas páginas internas (nova
+    // aba, favoritos, histórico) só o Alt+clique: sem ele o Chromium transferia o link.
+    private static readonly string TabBaseScript =
+        HostScriptRegistry.ForProtocols(["http:", "https:"], VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript)
+        + "\n;\n" + HostScriptRegistry.ForProtocols(["http:", "https:", "eteris:"], LinkPreview.AltClickScript);
+
+    private static string SiteEarlyKey(string url) => WebHost(url) is { } host && AppData.IsDark(host) ? "escuro" : "";
+
+    // Por site: regras cosméticas (escudo ligado) e modo escuro (se pedido). null quando o site não precisa de nada.
+    private static string? SiteEarlyScript(string url)
+    {
+        var dark = DarkPages.IsCandidate(url) && WebHost(url) is { } host && AppData.IsDark(host);
+        var script = SiteCosmeticScript(url) + (dark ? DarkPages.EarlyScript : "");
+        return script.Length == 0 ? null : script;
+    }
+
+    // Antes de uma navegação pedida pelo Éteris: os scripts do site de destino registam-se com a aba parada e só depois o
+    // pedido sai. Nunca espera mais de 150 ms.
+    private async Task ScriptsReadyFor(BrowserTab tab, ChromiumWebBrowser browser, string url)
+    {
+        if (!_scriptlets.TryGetValue(tab, out var injector) || browser.IsDisposed || browser.GetBrowser() is not { } cef) return;
+        var ready = injector.EnsureHost(cef, url);
+        if (!ready.IsCompleted) await Task.WhenAny(ready, Task.Delay(150));
+    }
 
     private void OnTabsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

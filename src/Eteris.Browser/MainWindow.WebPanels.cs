@@ -156,8 +156,8 @@ public partial class MainWindow
         // (registados pelo DevTools antes dos scripts da página) e, no fim de cada carregamento, as genéricas.
         // O Alt+clique espreita como nas abas (sem o script, o Chromium transferia o link para Transferências).
         var mobile = WebPanels.Find(_webPanels, url)?.Mobile == true;
-        var injector = new ScriptletInjector(AppData.IsShieldOn, page => !LinkPreview.WantsAltClick(page) ? null
-            : SiteCosmeticScript(page) is { Length: > 0 } css ? css + "\n;\n" + LinkPreview.AltClickScript : LinkPreview.AltClickScript,
+        var injector = new ScriptletInjector(AppData.IsShieldOn, page => SiteCosmeticScript(page) is { Length: > 0 } css ? css : null,
+            HostScriptRegistry.ForProtocols(["http:", "https:", "eteris:"], LinkPreview.AltClickScript),
             // Vista móvel também para o JavaScript da página (navigator.*), não só nos cabeçalhos dos pedidos.
             onSession: mobile ? ApplyMobileUserAgent : null);
         _webPanelInjectors[url] = injector;
@@ -174,7 +174,6 @@ public partial class MainWindow
             DownloadHandler = DownloadHandler,
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn,
-                onNavigate: (cefBrowser, page) => injector.Prepare(cefBrowser, page),
                 onBlocked: _ => ShieldStats.CountBlocked(persist: true),
                 // O processo do site morreu: a página de erro (com «Tentar novamente») em vez de um retângulo vazio.
                 onCrashed: () => Dispatcher.InvokeAsync(() => OnWebPanelCrashed(url)),
@@ -182,10 +181,16 @@ public partial class MainWindow
                 userAgent: mobile ? WebPanels.MobileUserAgent : null),
         };
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
+        // Depois de cada commit, os scripts do site atual (os links do mesmo site já os encontram).
+        browser.FrameLoadStart += (_, e) =>
+        {
+            if (e.Frame.IsMain && e.Browser is { } cef && e.Url is { } committed) _ = Task.Run(() => injector.EnsureHost(cef, committed));
+        };
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
             var loaded = e.Url;
+            if (!e.Browser.IsLoading) injector.Tidy(loaded);
             Dispatcher.InvokeAsync(() =>
             {
                 if (browser.IsDisposed) return;
@@ -210,6 +215,7 @@ public partial class MainWindow
         browser.IsBrowserInitializedChanged += (_, _) =>
         {
             if (!browser.IsBrowserInitialized) return;
+            if (browser.GetBrowser() is { } cef) injector.Start(cef);
             Dispatcher.InvokeAsync(() =>
             {
                 if (browser.IsDisposed) return;
