@@ -96,6 +96,12 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _usesVideoEngine;
 
+    // O vídeo desta página não toca no motor principal, mas a troca não foi automática (sinal fraco, DRM, leitor num
+    // iframe, site excluído pelo utilizador): a razão do aviso, e a barra mostra «Tocar no motor de vídeo». Apaga-se
+    // ao mudar de página.
+    [ObservableProperty]
+    private string? _videoOffer;
+
     [ObservableProperty]
     private bool _canGoBack;
 

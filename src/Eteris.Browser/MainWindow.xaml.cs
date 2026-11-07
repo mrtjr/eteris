@@ -164,7 +164,11 @@ public partial class MainWindow : Window
                 tab.Tint = null;
             }
             // O CefSharp pode repetir o mesmo endereço depois do fim do carregamento: só uma página nova apaga a deteção do leitor.
-            if (!string.Equals(tab.Address, address, StringComparison.Ordinal)) tab.IsReaderable = false;
+            if (!string.Equals(tab.Address, address, StringComparison.Ordinal))
+            {
+                tab.IsReaderable = false;
+                tab.VideoOffer = null;
+            }
             tab.Address = address;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
@@ -181,9 +185,9 @@ public partial class MainWindow : Window
                 Volatile.Write(ref lastActivation, new UserActivation(clickedLink, DateTime.UtcNow, interactive));
                 return;
             }
-            if (VideoEngine.IsReport(e.Message))
+            if (VideoEngine.Parse(e.Message) is { } videoReport)
             {
-                Dispatcher.InvokeAsync(() => OnPatentedVideoReport(tab, browser.Address ?? tab.Address));
+                Dispatcher.InvokeAsync(() => OnVideoReport(tab, browser.Address ?? tab.Address, videoReport));
                 return;
             }
             if (LinkPreview.IsReport(e.Message, out var glanceUrl))
@@ -267,6 +271,9 @@ public partial class MainWindow : Window
                 ApplyHiddenElements(browser, url);
                 CaptureThumbnail(tab, browser, url);
                 _ = ApplyGenericCosmeticsAsync(browser, url);
+                // 1.º documento da aba (nasceu sem os scripts precoces) ou qualquer outro: a deteção de vídeo que não
+                // toca corre agora; se o script precoce já corre na página, não faz nada.
+                if (VideoEngine.CanHost(url)) PageScript.Run(browser, VideoEngine.LateWatchScript);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             if (!IsPrivate) Dispatcher.InvokeAsync(() =>
@@ -363,7 +370,7 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
         if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
         if (e.PropertyName == nameof(BrowserTab.Tint)) ApplyTint();
-        if (e.PropertyName == nameof(BrowserTab.UsesVideoEngine)) UpdateVideoEngineBadge();
+        if (e.PropertyName is nameof(BrowserTab.UsesVideoEngine) or nameof(BrowserTab.VideoOffer)) UpdateVideoEngineBadge();
     }
 
     private void SyncLoading()

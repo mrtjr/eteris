@@ -321,6 +321,7 @@ public static class AppData
         SetDark(site, false);
         SetStrict(site, false);
         SetVideoSite(site, false);
+        SetVideoOptOut(site, false);
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>
@@ -374,6 +375,26 @@ public static class AppData
         {
             if (on) LazyVideo.Value?.Add(host);
             else LazyVideo.Value?.Remove(host);
+        }
+        catch (Exception) { }
+    }
+
+    // Sites que o utilizador mandou voltar ao motor principal (botão «Motor de vídeo»): nunca trocam sozinhos, nem os da
+    // lista embutida (VideoEngine.KnownH264Sites).
+    private static readonly Lazy<StrictSiteStore?> LazyVideoOff = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "video_sites_off"); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsVideoOptOut(string host) => LazyVideoOff.Value?.Contains(host) == true;
+
+    public static void SetVideoOptOut(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyVideoOff.Value?.Add(host);
+            else LazyVideoOff.Value?.Remove(host);
         }
         catch (Exception) { }
     }

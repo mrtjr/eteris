@@ -9,59 +9,309 @@ public static class VideoEngine
 {
     public const string ReportPrefix = "\u0001eteris-media ";
 
-    // Corre no início de cada documento do motor principal. Avisa (uma vez) quando:
-    //  - um <video>/<audio> falha por formato não suportado (MediaError 4), ou
-    //  - a página perguntou por um formato patenteado e ouviu «não», nunca ligou vídeo nenhum (addSourceBuffer)
-    //    e, 10 s depois, tem um vídeo visível ainda sem fonte — o leitor do Twitch desiste assim, sem dar erro.
-    // O YouTube liga o vídeo em AV1/VP9 e não é sinalizado.
+    // Corre no início de cada documento do motor principal (também nos iframes do mesmo processo). Avisa uma vez por
+    // documento, com «razão força origem» (ver VideoReport). Os sinais foram medidos site a site (docs/motor.md, V1):
+    //  - MediaError 4 num <video>/<audio>, também dentro de shadow DOM (Reddit, BBC): o evento «error» não atravessa a
+    //    fronteira da shadow root, por isso o ouvinte vai para o próprio elemento (play/load/src) e a verificação desce
+    //    pelas shadow roots;
+    //  - erro no último <source> com tipo ou extensão patenteados e o leitor em NETWORK_NO_SOURCE (MP4 aberto
+    //    diretamente — o documento de multimédia do Chromium usa <source> —, w3schools): o media.error fica null;
+    //  - addSourceBuffer a lançar NotSupportedError para avc1/mp4a (Vimeo, BBC): logo, sem esperar;
+    //  - a página perguntou por H.264/AAC (isTypeSupported, canPlayType) e ouviu «não», e aos 3 s/8 s tem um vídeo
+    //    visível parado sem fonte ou com um MediaSource vazio (blob:) — Twitch, X, g1, hls.js;
+    //  - (sinal secundário, só se perguntou) uma mensagem do leitor de uma lista curta («Player error»…);
+    //  - DRM: requestMediaKeySystemAccess recusado para Widevine/PlayReady → «drm» (a janela pergunta, nunca troca);
+    //  - no topo: um leitor conhecido de outro site num iframe (Vimeo, Dailymotion, Brightcove…) → «frame-player».
+    // HEVC/Dolby Vision (hvc1/hev1/dvh1) não contam: quase todos os leitores sondam-nos sem precisar deles (o Twitch
+    // offline trocava de motor só por isso). O YouTube liga o vídeo em AV1/VP9 e não é sinalizado.
+    // «strong» = vídeo relevante (visível, ≥ 200×110 ou ≥ 30 000 px², não é um fundo mudo em ciclo sem controlos) ou
+    // som pedido com play(); o resto é «weak». O console.debug é guardado logo no arranque (o g1 substitui-o).
     public const string WatchScript = """
         (() => {
-          // Só a página principal: um vídeo incorporado noutro site não muda a aba toda de motor.
-          if (window.top !== window) return;
-          const patented = /avc1|avc3|mp4a|hvc1|hev1|h264|aac/i;
-          let rejected = false, attached = false, reported = false;
-          const report = reason => { if (!reported) { reported = true; console.debug('\u0001eteris-media ' + reason); } };
-          if (window.MediaSource) {
-            const isTypeSupported = MediaSource.isTypeSupported;
-            MediaSource.isTypeSupported = function (type) {
+          const mark = Symbol.for('eteris.media');
+          if (window[mark]) return;
+          try { Object.defineProperty(window, mark, { value: true }); } catch (e) { return; }
+          const late = typeof __eterisLate !== 'undefined';
+          const debug = console.debug.bind(console);
+          const inFrame = window.top !== window;
+          const needed = /avc1|avc3|mp4a|h264|aac/i;
+          const sourceType = /mp4|m4v|m4a|quicktime|aac|mpegurl|avc1|avc3|mp4a/i;
+          const sourceExt = /\.(mp4|m4v|mov|m4a|aac|m3u8)(?:$|[?#])/i;
+          const playerHosts = /^(player\.vimeo\.com|geo\.dailymotion\.com|www\.dailymotion\.com|players\.brightcove\.net|cdn\.jwplayer\.com|content\.jwplatform\.com|player\.twitch\.tv|clips\.twitch\.tv|fast\.wistia\.net)$/i;
+          const messages = ['player error', 'manifestincompatiblecodecs', 'não é possível reproduzir este vídeo', 'navegador não compatível',
+            'navegador não é compatível', 'browser is not supported', 'unsupported browser', 'format is not supported',
+            'format not supported', 'formato não suportado', 'no compatible source'];
+          let rejected = false, drmRejected = false, attached = false, reported = false, timer = 0;
+          const tried = new WeakSet(), played = new WeakSet(), watched = new WeakSet();
+          const report = (reason, strength) => {
+            if (reported) return;
+            if (drmRejected && !rejected && reason !== 'frame-player') reason = 'drm';
+            reported = true;
+            try { debug('\u0001eteris-media ' + reason + ' ' + strength + ' ' + (inFrame ? 'frame' : 'top')); } catch (e) {}
+          };
+          const visible = el => {
+            const b = el.getBoundingClientRect();
+            const big = (b.width >= 200 && b.height >= 110) || b.width * b.height >= 30000;
+            return big && b.bottom > 0 && b.right > 0 && b.top < innerHeight && b.left < innerWidth;
+          };
+          const strength = el => {
+            if (!(el instanceof HTMLVideoElement)) return played.has(el) ? 'strong' : 'weak';
+            if (el.muted && el.loop && !el.controls) return 'weak';
+            return visible(el) || played.has(el) ? 'strong' : 'weak';
+          };
+          const strongest = list => list.some(el => strength(el) === 'strong') ? 'strong' : 'weak';
+          const deepMedia = (root, out) => {
+            for (const el of root.querySelectorAll('*')) {
+              if (el instanceof HTMLMediaElement) out.push(el);
+              if (el.shadowRoot) deepMedia(el.shadowRoot, out);
+            }
+            return out;
+          };
+          const needsPatented = media => [...media.querySelectorAll('source')].some(s =>
+            sourceType.test(s.getAttribute('type') || '') || sourceExt.test(s.getAttribute('src') || ''));
+          const onError = e => {
+            try {
+              const t = e.target;
+              if (t instanceof HTMLMediaElement) {
+                if (t.error && t.error.code === 4) report('format', strength(t));
+              } else if (t instanceof HTMLSourceElement && t.parentElement instanceof HTMLMediaElement) {
+                const media = t.parentElement;
+                setTimeout(() => {
+                  if (media.networkState === 3 && media.readyState === 0 && needsPatented(media)) report('format', strength(media));
+                }, 50);
+              }
+            } catch (x) {}
+          };
+          const watch = el => {
+            if (watched.has(el)) return;
+            watched.add(el);
+            el.addEventListener('error', onError, true);
+          };
+          const stuck = v => v.readyState === 0 && !v.srcObject
+            && (!v.currentSrc || v.currentSrc.startsWith('blob:'))
+            && (v.networkState !== 0 || v.getAttribute('src') || v.autoplay || tried.has(v))
+            && visible(v);
+          const playerMessage = () => {
+            const text = ((document.body && document.body.innerText) || '').toLowerCase();
+            return messages.some(m => text.includes(m));
+          };
+          const check = () => {
+            timer = 0;
+            if (reported) return;
+            try {
+              const media = deepMedia(document, []);
+              for (const m of media) {
+                watch(m);
+                if (m.error && m.error.code === 4) return report('format', strength(m));
+                if (m.networkState === 3 && m.readyState === 0 && !m.getAttribute('src') && needsPatented(m)) return report('format', strength(m));
+              }
+              const videos = media.filter(v => v instanceof HTMLVideoElement);
+              const parked = videos.filter(stuck);
+              if (late && parked.length && !attached && !rejected) return report('patented-only', 'weak');
+              if ((rejected || drmRejected) && !attached && parked.length) return report('patented-only', strongest(parked));
+              if ((rejected || drmRejected) && playerMessage()) {
+                const shown = videos.filter(visible);
+                return report('format', shown.length ? strongest(shown) : 'weak');
+              }
+              if (!inFrame && !videos.some(v => !v.paused && v.readyState > 2)) {
+                const frame = [...document.querySelectorAll('iframe')].some(f => {
+                  try { return playerHosts.test(new URL(f.src, location.href).hostname) && visible(f); } catch (x) { return false; }
+                });
+                if (frame) report('frame-player', 'weak');
+              }
+            } catch (e) {}
+          };
+          const later = ms => { if (!reported && !timer) timer = setTimeout(check, ms); };
+          const seen = e => {
+            const t = e.target;
+            if (t instanceof HTMLMediaElement) { tried.add(t); watch(t); later(3000); }
+          };
+          addEventListener('error', onError, true);
+          addEventListener('loadstart', seen, true);
+          addEventListener('play', seen, true);
+          try {
+            const proto = HTMLMediaElement.prototype;
+            for (const name of ['play', 'load']) {
+              const original = proto[name];
+              proto[name] = function () {
+                try { tried.add(this); if (name === 'play') played.add(this); watch(this); later(3000); } catch (e) {}
+                return original.apply(this, arguments);
+              };
+            }
+            const src = Object.getOwnPropertyDescriptor(proto, 'src');
+            if (src && src.set) Object.defineProperty(proto, 'src', {
+              configurable: true, enumerable: src.enumerable, get: src.get,
+              set(value) { try { tried.add(this); watch(this); } catch (e) {} return src.set.call(this, value); },
+            });
+            const canPlayType = proto.canPlayType;
+            proto.canPlayType = function (type) {
+              const answer = canPlayType.apply(this, arguments);
+              if (answer === '' && typeof type === 'string' && needed.test(type)) rejected = true;
+              return answer;
+            };
+          } catch (e) {}
+          for (const name of ['MediaSource', 'ManagedMediaSource', 'WebKitMediaSource']) {
+            const type = window[name];
+            if (!type || !Object.prototype.hasOwnProperty.call(type, 'isTypeSupported')) continue;
+            const isTypeSupported = type.isTypeSupported;
+            type.isTypeSupported = function (mime) {
               const supported = isTypeSupported.apply(this, arguments);
-              if (!supported && typeof type === 'string' && patented.test(type)) rejected = true;
+              if (!supported && typeof mime === 'string' && needed.test(mime)) rejected = true;
               return supported;
             };
+          }
+          if (window.MediaSource) {
             const addSourceBuffer = MediaSource.prototype.addSourceBuffer;
-            MediaSource.prototype.addSourceBuffer = function () {
-              const buffer = addSourceBuffer.apply(this, arguments);
-              attached = true;
-              return buffer;
+            MediaSource.prototype.addSourceBuffer = function (mime) {
+              try {
+                const buffer = addSourceBuffer.apply(this, arguments);
+                attached = true;
+                return buffer;
+              } catch (e) {
+                if (e && e.name === 'NotSupportedError' && typeof mime === 'string' && needed.test(mime)) {
+                  rejected = true;
+                  setTimeout(() => {
+                    try {
+                      const mse = deepMedia(document, []).filter(v => v instanceof HTMLVideoElement && (v.currentSrc || '').startsWith('blob:'));
+                      report('format', mse.length ? strongest(mse) : 'weak');
+                    } catch (x) {}
+                  }, 0);
+                }
+                throw e;
+              }
             };
           }
-          addEventListener('error', e => {
-            const media = e.target;
-            if (media instanceof HTMLMediaElement && media.error && media.error.code === 4) report('format');
-          }, true);
-          setTimeout(() => {
-            if (!rejected || attached) return;
-            const stuck = [...document.querySelectorAll('video')].some(v => {
-              const box = v.getBoundingClientRect();
-              return box.width >= 320 && box.height >= 180 && v.readyState === 0 && !v.currentSrc && !v.srcObject;
-            });
-            if (stuck) report('patented-only');
-          }, 10000);
+          if (navigator.requestMediaKeySystemAccess) {
+            const request = navigator.requestMediaKeySystemAccess;
+            navigator.requestMediaKeySystemAccess = function (keySystem) {
+              const answer = request.apply(this, arguments);
+              if (typeof keySystem === 'string' && /widevine|playready/i.test(keySystem))
+                answer.catch(() => { drmRejected = true; later(1500); });
+              return answer;
+            };
+          }
+          setTimeout(check, late ? 1500 : 3000);
+          setTimeout(check, 8000);
         })();
         """;
 
-    public static bool IsReport(string? message)
-        => message is not null && message.StartsWith(ReportPrefix, StringComparison.Ordinal)
-           && message[ReportPrefix.Length..] is "format" or "patented-only";
+    // O mesmo script corrido no fim do carregamento, para o 1.º documento de cada aba (nasce sem os scripts precoces:
+    // docs/motor.md, F2). Não houve wrappers a tempo de ouvir as perguntas da página; valem o estado (erros, <source>
+    // falhados) e, só como sinal fraco, um vídeo parado. Se o script precoce correu, não faz nada.
+    public const string LateWatchScript = "(() => { const __eterisLate = true;\n" + WatchScript + "\n})();";
+
+    // Motivo do aviso: format (o formato falhou), patented-only (só pediu H.264/AAC e ficou parado), drm (conteúdo
+    // protegido), frame-player (leitor conhecido de outro site num iframe).
+    public sealed record VideoReport(string Reason, bool Strong, bool FromFrame);
+
+    private static readonly string[] Reasons = ["format", "patented-only", "drm", "frame-player"];
+
+    public static bool IsReport(string? message) => Parse(message) is not null;
+
+    // «razão [força] [origem]». O formato antigo (só a razão) conta como forte, no topo.
+    public static VideoReport? Parse(string? message)
+    {
+        if (message is null || !message.StartsWith(ReportPrefix, StringComparison.Ordinal)) return null;
+        var parts = message[ReportPrefix.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is 0 or > 3 || !Reasons.Contains(parts[0])) return null;
+        var strength = parts.Length > 1 ? parts[1] : "strong";
+        var origin = parts.Length > 2 ? parts[2] : "top";
+        if (strength is not ("strong" or "weak") || origin is not ("top" or "frame")) return null;
+        return new VideoReport(parts[0], strength == "strong", origin == "frame");
+    }
+
+    public enum Decision { None, Offer, Switch }
+
+    // O que a janela faz com um aviso: trocar sozinha só com um sinal forte no próprio documento de topo e nunca com DRM
+    // (o CDM fala com servidores de terceiros: só depois de o utilizador escolher). Um site que o utilizador mandou
+    // voltar ao motor principal nunca troca sozinho — fica só o botão.
+    public static Decision Decide(VideoReport report, bool optedOut, string? site = null)
+    {
+        if (report.Reason is "drm" or "frame-player") return Decision.Offer;
+        if (!report.Strong || report.FromFrame || optedOut) return Decision.Offer;
+        if (site is not null && OfferOnlySites.Contains(site)) return Decision.Offer;
+        return Decision.Switch;
+    }
+
+    // Sites onde o motor de vídeo é pior do que um vídeo parado, a não ser que o utilizador o peça: o Reddit pede
+    // reCAPTCHA no perfil novo do WebView2 («Prove your humanity», diagnóstico de vídeo).
+    public static readonly IReadOnlySet<string> OfferOnlySites = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reddit.com" };
+
+    // Sites sobretudo de vídeo e só em H.264 (medido: docs/motor.md, V2): abrem logo no motor de vídeo, sem passar pelo
+    // motor principal, até haver um motor com codecs. Por domínio registável. Os mistos (X, Reddit, g1, BBC, YouTube)
+    // ficam de fora: perderiam a cosmética do Escudo, e o Reddit pede reCAPTCHA no motor de vídeo.
+    public static readonly IReadOnlySet<string> KnownH264Sites = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "twitch.tv", "kick.com", "vimeo.com", "dailymotion.com", "tiktok.com", "instagram.com",
+    };
+
+    // Abre no motor de vídeo: lembrado pelo utilizador, ou na lista embutida — nunca um site que ele mandou voltar.
+    public static bool OpensInVideoEngine(string site, bool remembered, bool optedOut)
+        => !optedOut && (remembered || KnownH264Sites.Contains(site));
 
     // Argumentos do motor do Edge: sem SmartScreen (enviaria os endereços visitados à Microsoft), sem a interface
-    // do Office nos PDFs, sem tráfego de fundo nem pings de auditoria de links.
-    public const string BrowserArguments =
-        "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings";
+    // do Office nos PDFs, sem tráfego de fundo, sem pings de auditoria de links e sem o «component updater» (no
+    // diagnóstico descarregou componentes sem ação do utilizador). Com «bloquear reprodução automática», a mesma
+    // política do motor principal. Fixos por pasta de dados: aplicam-se ao arrancar, como no motor principal.
+    public const string BaseArguments =
+        "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update";
+
+    public static string BrowserArguments(bool blockAutoplay)
+        => blockAutoplay ? BaseArguments + " --autoplay-policy=document-user-activation-required" : BaseArguments;
 
     // Só os endereços web passam para o motor de vídeo; as páginas internas (eteris://) ficam no motor principal.
     public static bool CanHost(string? url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+
+    // Aberto diretamente, o motor principal transfere estes formatos em vez de os reproduzir (não os conhece sem os
+    // codecs patenteados): HLS (.m3u8) e áudio AAC. MP4/MOV entram pelo tipo.
+    private static readonly string[] PlayableExtensions = [".m3u8", ".m4a", ".aac"];
+
+    private static readonly HashSet<string> PlayableMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "application/vnd.apple.mpegurl", "application/x-mpegurl", "audio/mpegurl", "audio/x-mpegurl",
+        "audio/mp4", "audio/x-m4a", "audio/aac", "audio/aacp", "video/mp4", "video/quicktime", "video/x-m4v",
+    };
+
+    public static bool IsPlayableLink(string? url)
+        => CanHost(url) && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+           && PlayableExtensions.Any(e => uri.AbsolutePath.EndsWith(e, StringComparison.OrdinalIgnoreCase));
+
+    // Uma transferência que é afinal vídeo/áudio para ver: tipo reproduzível (ou extensão .m3u8/.m4a/.aac), endereço
+    // web e sem «attachment» (o site não pediu para guardar o ficheiro).
+    public static bool IsPlayableDownload(string? url, string? mimeType, string? contentDisposition)
+    {
+        if (!CanHost(url)) return false;
+        if (contentDisposition?.TrimStart().StartsWith("attachment", StringComparison.OrdinalIgnoreCase) == true) return false;
+        var mime = mimeType?.Split(';')[0].Trim();
+        return (mime is { Length: > 0 } && PlayableMimeTypes.Contains(mime)) || IsPlayableLink(url);
+    }
+
+    // Onde está o maior vídeo/áudio que já começou (segundos; 0 se nenhum): a troca de motor retoma aí.
+    public const string PositionScript = """
+        (() => {
+          let at = 0, area = -1;
+          document.querySelectorAll('video,audio').forEach(m => {
+            const b = m.getBoundingClientRect(), a = b.width * b.height;
+            if (m.currentTime > 0 && a > area) { at = m.currentTime; area = a; }
+          });
+          return at;
+        })()
+        """;
+
+    // Um ficheiro de vídeo/áudio aberto diretamente (não uma página): retoma-se com o fragmento #t= (Media Fragments).
+    public static bool IsDirectMedia(string? url)
+        => CanHost(url) && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+           && DirectMediaExtensions.Any(e => uri.AbsolutePath.EndsWith(e, StringComparison.OrdinalIgnoreCase));
+
+    private static readonly string[] DirectMediaExtensions = [".mp4", ".m4v", ".mov", ".m4a", ".aac", ".mp3", ".webm", ".ogg", ".m3u8"];
+
+    public static string WithTimeFragment(string url, double seconds)
+    {
+        var hash = url.IndexOf('#');
+        var bare = hash < 0 ? url : url[..hash];
+        return bare + "#t=" + Math.Floor(seconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     // Tipos de pedido do WebView2 com os nomes que as listas de filtros usam ($script, $image…).
     public static string ToAdblock(CoreWebView2WebResourceContext context) => context switch
@@ -77,4 +327,8 @@ public static class VideoEngine
         CoreWebView2WebResourceContext.Websocket => "websocket",
         _ => "other",
     };
+
+    // Os pedidos que o bloqueador do motor de vídeo vê: todos menos os segmentos de vídeo/áudio (cada um passava pela
+    // thread da janela, com uma ida ao motor do Escudo; as listas quase não têm regras $media).
+    public static bool IsFiltered(CoreWebView2WebResourceContext context) => context != CoreWebView2WebResourceContext.Media;
 }

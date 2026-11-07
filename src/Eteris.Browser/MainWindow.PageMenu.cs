@@ -43,7 +43,10 @@ public partial class MainWindow
             case PageCommand.OpenLinkPrivate: OpenWindow(isPrivate: true, context.LinkUrl); break;
             case PageCommand.CopyLink: CopyText(Shields.UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
             case PageCommand.OpenImageNewTab: Tabs.NewTab(context.ImageUrl!, activate: false); break;
-            case PageCommand.SaveImage: browser.GetBrowserHost()?.StartDownload(context.ImageUrl!); break;
+            case PageCommand.SaveImage:
+                DownloadHandler.UserRequested(context.ImageUrl!);
+                browser.GetBrowserHost()?.StartDownload(context.ImageUrl!);
+                break;
             case PageCommand.CopyImageUrl: CopyText(context.ImageUrl!, "Endereço da imagem copiado"); break;
             case PageCommand.Undo: frame?.Undo(); break;
             case PageCommand.Cut: frame?.Cut(); break;
@@ -53,6 +56,7 @@ public partial class MainWindow
             case PageCommand.HideElement: PickElementToHide(); break;
             case PageCommand.SavePdf: SaveAsPdf(); break;
             case PageCommand.ReadLater: SaveForLater(); break;
+            case PageCommand.PlayInVideoEngine: PlayInVideoEngine(tab); break;
             case PageCommand.SearchSelection: Tabs.NewTab(Engine.UrlFor(context.Selection.Trim())); break;
             case PageCommand.CopyHighlightLink:
                 if (TextFragment.Link(tab.Address, context.Selection) is { } highlight)

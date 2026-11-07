@@ -27,6 +27,8 @@ public class InjectedScriptsSyntaxTests
         { "filtros cosméticos (antes da página)", CosmeticScripts.InjectEarly(".anuncio { display: none !important; }") },
         { "corpo async (DevTools)", Eteris.Browser.Browser.PageScript.Expression("return await Promise.resolve(1);", asyncBody: true) },
         { "vídeo só em H.264 (deteção)", VideoEngine.WatchScript },
+        { "vídeo só em H.264 (deteção tardia)", VideoEngine.LateWatchScript },
+        { "vídeo (posição antes da troca)", VideoEngine.PositionScript },
         { "último clique (pop-unders)", PopupPolicy.ActivationScript },
         { "escurecer (antes da página)", DarkPages.EarlyScript },
         { "espreitar (extração do artigo)", LinkPreview.Script },

@@ -202,6 +202,8 @@ public partial class MainWindow
         {
             var pane = _split?.PaneOf(tab);
             var visible = pane is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));
+            // A meio da troca para o motor de vídeo, só a página do motor principal se vê (até o WebView2 pintar).
+            if (browser is Microsoft.Web.WebView2.Wpf.WebView2 && _videoSwitching.Contains(tab)) visible = false;
             browser.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
             if (browser is ChromiumWebBrowser cef && cef.IsBrowserInitialized) SetPageVisible(tab, cef, visible);
             PlaceInHost(browser, pane);
