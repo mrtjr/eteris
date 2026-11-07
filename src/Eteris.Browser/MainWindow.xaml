@@ -1134,6 +1134,32 @@
 
                                     <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,14,0,12" />
                                     <TextBlock x:Name="SiteInfoTrackers" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" />
+
+                                    <!-- O que este site sabe de ti: cookies, armazenamento, terceiros, referrer e rede local -->
+                                    <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,14,0,12" />
+                                    <TextBlock Text="O QUE ESTE SITE SABE DE TI" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextFaintBrush}"
+                                               Margin="0,0,0,6" />
+                                    <ItemsControl x:Name="SiteKnowledgeList" AutomationProperties.Name="O que este site sabe de ti">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="24" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,2,0,0"
+                                                               Foreground="{DynamicResource IrisBrush}" />
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Detail}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}"
+                                                                   TextWrapping="Wrap" LineHeight="16" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Content="Ver no Observatório  ›" Style="{StaticResource PillButton}" HorizontalAlignment="Left"
+                                            Margin="0,8,0,0" Click="SiteInfoObservatory_Click" />
                                     <Button x:Name="SiteInfoClear" Content="Apagar cookies e dados deste site" Style="{StaticResource PillButton}"
                                             HorizontalAlignment="Left" Margin="0,14,0,0" Click="SiteInfoClear_Click" />
 

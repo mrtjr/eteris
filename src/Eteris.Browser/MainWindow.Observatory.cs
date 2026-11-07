@@ -32,6 +32,7 @@ public partial class MainWindow
     private BrowserTab? _obsTab;
     private int _obsVersion = -1;
     private string? _obsSelected;
+    private string? _obsWhyHost;
     private ObservatorySnapshot _obsSnapshot = ObservatorySnapshot.Empty;
     private readonly Dictionary<string, ObservatoryVisual> _obsVisuals = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<UIElement> _obsLabels = [];
@@ -452,6 +453,68 @@ public partial class MainWindow
             Text = SiteObservatory.VerdictText(domain), FontSize = 12.5, Foreground = ObsRes("TextBrush"), TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(18, 6, 0, 0),
         });
+
+        var site = _obsSnapshot.Site;
+        var shieldOn = site is not null && Data.AppData.IsShieldOn(site);
+        var actions = new WrapPanel { Margin = new Thickness(14, 8, 0, 0) };
+        // «Porque é que isto passou?»: só para quem fez pedidos permitidos.
+        if (domain.Allowed > 0)
+        {
+            var why = new TextBlock
+            {
+                Text = SiteObservatory.WhyAllowed(domain, owner, TrackerBlocker.Default.Lists(domain.Host), PrivacyPreferences.ThirdPartyCookiesBlocked),
+                FontSize = 12, Foreground = ObsRes("TextMutedBrush"), TextWrapping = TextWrapping.Wrap, LineHeight = 17,
+                Margin = new Thickness(18, 6, 0, 0),
+                // A explicação aberta sobrevive às atualizações ao vivo do painel.
+                Visibility = string.Equals(_obsWhyHost, domain.Host, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed,
+            };
+            var ask = new Button { Content = "Porque é que isto passou?", Style = (Style)FindResource("PillButton"), Margin = new Thickness(4, 0, 4, 4) };
+            var whyHost = domain.Host;
+            ask.Click += (_, _) =>
+            {
+                var open = why.Visibility != Visibility.Visible;
+                why.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                _obsWhyHost = open ? whyHost : null;
+            };
+            actions.Children.Add(ask);
+            detail.Children.Add(actions);
+            detail.Children.Add(why);
+        }
+        else detail.Children.Add(actions);
+        if (site is null) return;
+        var target = domain.Host;
+        if (domain.Verdict == ObservedVerdict.UserBlocked)
+        {
+            var undo = new Button { Content = "Deixar de bloquear", Style = (Style)FindResource("PillButton"), Margin = new Thickness(4, 0, 4, 4) };
+            undo.Click += (_, _) => SetSiteRule(site, target, block: false);
+            actions.Children.Add(undo);
+        }
+        else if (shieldOn && domain.Allowed > 0)
+        {
+            var block = new Button
+            {
+                Content = "Bloquear neste site", Style = (Style)FindResource("PrimaryPillButton"), Margin = new Thickness(4, 0, 4, 4),
+                ToolTip = IsPrivate ? $"Só em {site} e só até terminar a sessão privada" : $"Só em {site}; nos outros sites nada muda",
+            };
+            block.Click += (_, _) => SetSiteRule(site, target, block: true);
+            actions.Children.Add(block);
+        }
+    }
+
+    // Bloquear (ou deixar de bloquear) um domínio só neste site; a página recarrega para a regra valer já.
+    private void SetSiteRule(string site, string host, bool block)
+    {
+        if (block) SiteRules.Block(site, host, IsPrivate);
+        else SiteRules.Unblock(site, host, IsPrivate);
+        _obsSelected = host;
+        ShowToast(ObservatoryText.RuleToast(site, host, block, IsPrivate),
+            new ToastAction("Anular", () =>
+            {
+                if (block) SiteRules.Unblock(site, host, IsPrivate);
+                else SiteRules.Block(site, host, IsPrivate);
+                ReloadActive();
+            }));
+        ReloadActive();
     }
 }
 
@@ -473,6 +536,11 @@ public static class ObservatoryText
         if (snap.Overflow > 0) parts.Add($"mais {snap.Overflow} só contados");
         return string.Join(" · ", parts);
     }
+
+    public static string RuleToast(string site, string host, bool blocked, bool isPrivate)
+        => blocked
+            ? $"{host} bloqueado em {site}" + (isPrivate ? " (até terminar a sessão privada)" : string.Empty)
+            : $"{host} volta a ser decidido pelas listas em {site}";
 
     public static string GroupHeader(CompanyGroup g)
         => g.Name.ToUpperInvariant() + " · " + (g.Domains.Count == 1 ? "1 domínio" : $"{g.Domains.Count} domínios")

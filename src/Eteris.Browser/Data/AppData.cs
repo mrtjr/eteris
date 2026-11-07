@@ -340,6 +340,7 @@ public static class AppData
             Shields.LocalNetworkGrants.Forget(host);
         }
         SetForgetOnClose(site, false);
+        Shields.SiteRules.Forget(site);
         SetShield(site, true);
         SetDark(site, false);
         SetStrict(site, false);

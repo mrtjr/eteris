@@ -262,6 +262,14 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 return CefReturnValue.Cancel;
             }
 
+            // Domínio que o utilizador bloqueou só neste site, no Observatório (Shields/SiteBlockRules.cs).
+            if (SiteRules.Blocks(pageUrl, request.Url, isPrivate))
+            {
+                onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var ruled) ? ruled.Host : request.Url);
+                Observe(request.Url, request.ResourceType, ObservedVerdict.UserBlocked);
+                return CefReturnValue.Cancel;
+            }
+
             // As opções $domain e $third-party das listas referem-se ao documento que fez o pedido (pode ser um iframe).
             var documentUrl = frame?.Url is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? frameUrl

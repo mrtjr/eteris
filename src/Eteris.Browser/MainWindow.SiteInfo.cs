@@ -4,6 +4,7 @@ using System.Windows.Media;
 using CefSharp;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Permissions;
+using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
 
@@ -65,6 +66,48 @@ public partial class MainWindow
             1 => "1 rastreador bloqueado nesta página pelo escudo.",
             _ => $"{count} rastreadores bloqueados nesta página pelo escudo.",
         };
+        if (tab is not null) _ = FillSiteKnowledgeAsync(tab, info);
+    }
+
+    // «O que este site sabe de ti»: primeiro o que já se sabe sem perguntar ao motor, depois cookies e armazenamento.
+    private async Task FillSiteKnowledgeAsync(BrowserTab tab, SiteInfoResult info)
+    {
+        var snap = tab.Observatory.Snapshot();
+        var groups = Shields.SiteObservatory.ByCompany(snap.ThirdParties);
+        var referrer = Shields.ReferrerCap.Decide(tab.Address, "https://outro-site.example/") is { Kind: not Shields.ReferrerCap.Kind.Strip } cap
+            ? cap.Value ?? info.Origin + "/" : null;
+        SiteKnowledge.Facts Facts(IReadOnlyList<DateTime?> cookies, long? storage) => new(cookies, storage, snap.ThirdParties.Count,
+            groups.Count(g => g.Known), snap.ThirdParties.Count(d => d.Blocked > 0), referrer, tab.LocalNetworkBlocked.Sum(p => p.Value), DateTime.Now);
+        SiteKnowledgeList.ItemsSource = SiteKnowledge.Describe(Facts([], null)).Skip(2).ToList();
+
+        var site = Data.SiteScope.SiteOf(tab.Address);
+        IReadOnlyList<DateTime?> expiries = [];
+        long? storage = null;
+        try
+        {
+            if (site is not null)
+                expiries = (await CookieContext.GetCookieManager(null).VisitAllCookiesAsync())
+                    .Where(c => Data.SiteScope.CookieBelongs(c.Domain, site)).Select(c => c.Expires).ToList();
+        }
+        catch (Exception) { }
+        try
+        {
+            if (ActiveBrowser is { } browser && ReferenceEquals(Tabs.Active, tab))
+            {
+                using var client = browser.GetDevToolsClient();
+                var call = client.Storage.GetUsageAndQuotaAsync(info.Origin);
+                if (await Task.WhenAny(call, Task.Delay(1500)) == call) storage = (long)(await call).Usage;
+            }
+        }
+        catch (Exception) { }
+        if (!SiteInfoPopup.IsOpen || !ReferenceEquals(Tabs.Active, tab)) return;
+        SiteKnowledgeList.ItemsSource = SiteKnowledge.Describe(Facts(expiries, storage));
+    }
+
+    private void SiteInfoObservatory_Click(object sender, RoutedEventArgs e)
+    {
+        SiteInfoPopup.IsOpen = false;
+        OpenObservatory();
     }
 
     private void SiteInfoForget_Click(object sender, RoutedEventArgs e)

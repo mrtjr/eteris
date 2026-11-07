@@ -236,6 +236,29 @@ public sealed class SiteObservatory
         : label == "multimédia" ? label
         : label + "s";
 
+    // «Porque é que isto passou?» — para um domínio que fez pedidos permitidos. listsKnowIt: as listas do Escudo
+    // conhecem o domínio (lista mínima do Éteris), logo foi uma regra de exceção que o deixou passar.
+    public static string WhyAllowed(DomainStat d, string? owner, bool listsKnowIt, bool thirdPartyCookiesBlocked)
+    {
+        if (d.Verdict == ObservedVerdict.ShieldOff)
+            return "Desligou o Escudo neste site: nada é bloqueado aqui. Volte a ligá-lo no Escudo para as listas decidirem.";
+        var who = owner is null ? "Este domínio" : $"Este domínio de {owner}";
+        string reason;
+        if (listsKnowIt)
+            reason = "As listas conhecem-no como rastreador, mas uma regra de exceção deixa-o passar neste caso — sem ele, o site "
+                     + "costuma partir (vídeo, pagamento, início de sessão).";
+        else if (d.Kinds.Any(k => k.Kind is ObservedKind.Frame or ObservedKind.Media))
+            reason = $"{who} serve conteúdo incorporado na página (vídeo, mapa, publicação): nenhuma regra das listas o trata como rastreio.";
+        else if (d.Kinds.All(k => k.Kind is ObservedKind.Font or ObservedKind.Style or ObservedKind.Image))
+            reason = $"{who} só entrega fontes, estilos ou imagens: para as listas é conteúdo de que a página precisa (como um CDN), não rastreio.";
+        else
+            reason = "Nenhuma regra das listas o apanha: para o Escudo é conteúdo de que a página precisa.";
+        var still = thirdPartyCookiesBlocked
+            ? " Mesmo permitido, não recebe nem guarda cookies e, de outro site, só sabe a origem da página — mas vê o seu IP."
+            : " Permitido, vê o seu IP e pode guardar cookies (os cookies de terceiros estão permitidos nas Definições).";
+        return reason + still + " Se não confia nele, bloqueie-o só neste site.";
+    }
+
     // «1 de 1 pedido bloqueado», «3 de 5 pedidos bloqueados».
     public static string BlockedOf(int blocked, int requests)
         => requests == 1 ? $"{blocked} de 1 pedido bloqueado" : $"{blocked} de {requests} pedidos bloqueados";
