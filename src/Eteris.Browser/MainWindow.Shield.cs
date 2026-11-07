@@ -62,6 +62,10 @@ public partial class MainWindow
         ShieldCountLabel.Text = count == 1 ? "rastreador bloqueado nesta página" : "rastreadores bloqueados nesta página";
         ShieldHosts.ItemsSource = tab?.BlockedHosts.Take(6).ToList();
 
+        // Observatório do site: com quem a página falou, agrupado por empresa.
+        ShieldObservatoryLine.Text = host is null ? string.Empty
+            : "◉  " + SiteObservatory.Summary(SiteObservatory.ByCompany(tab?.Observatory.Snapshot().ThirdParties ?? []));
+        ShieldObservatoryLine.Visibility = host is null ? Visibility.Collapsed : Visibility.Visible;
         ShieldCheckHeaders.Text = "✓  Pedido «Não rastrear» e GPC enviados";
         ShieldCheckCookies.Text = PrivacyPreferences.ThirdPartyCookiesBlocked
             ? "✓  Cookies de terceiros bloqueados" : "✗  Cookies de terceiros permitidos";

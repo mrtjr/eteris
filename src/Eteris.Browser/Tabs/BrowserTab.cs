@@ -182,6 +182,9 @@ public partial class BrowserTab : ObservableObject
 
     private readonly Dictionary<string, int> _blockedHosts = new(StringComparer.OrdinalIgnoreCase);
 
+    // Observatório do site: cada domínio que a página contactou e o que o Escudo decidiu (alimentado pela thread de rede).
+    public Shields.SiteObservatory Observatory { get; } = new();
+
     public IReadOnlyList<KeyValuePair<string, int>> BlockedHosts
         => _blockedHosts.OrderByDescending(p => p.Value).ThenBy(p => p.Key).ToList();
 

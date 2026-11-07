@@ -176,7 +176,8 @@ public partial class MainWindow : Window
                         tab.RecordCloaked(label);
                         tab.RecordBlocked(label);
                     });
-                }),
+                },
+                observatory: tab.Observatory),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>

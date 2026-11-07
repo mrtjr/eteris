@@ -1484,6 +1484,8 @@
                                               Click="StrictToggle_Click" ToolTip="Pode partir partes de alguns sites (vídeos e comentários incorporados)" />
                                 </Grid>
 
+                                <TextBlock x:Name="ShieldObservatoryLine" FontSize="12.5" Foreground="{DynamicResource TextBrush}" Margin="0,2,0,6"
+                                           TextWrapping="Wrap" />
                                 <TextBlock x:Name="ShieldCheckHeaders" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckCookies" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />
                                 <TextBlock x:Name="ShieldCheckWebRtc" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2" />

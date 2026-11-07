@@ -11,7 +11,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     Action? onCrashed = null, string? userAgent = null, bool isPrivate = false,
     Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
     Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null,
-    Action<string, string>? onCloaked = null)
+    Action<string, string>? onCloaked = null, SiteObservatory? observatory = null)
     : CefSharp.Handler.RequestHandler
 {
     protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
@@ -48,7 +48,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         => onCrashed?.Invoke();
 
     private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate,
-        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked);
+        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked, observatory);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
@@ -75,9 +75,14 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
     private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
         string? userAgent, bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string, string>? onLocalNetworkBlocked,
-        Action<IReadOnlyList<string>>? onTrackingSkipped, Action<string, string>? onCloaked)
+        Action<IReadOnlyList<string>>? onTrackingSkipped, Action<string, string>? onCloaked, SiteObservatory? observatory)
         : CefSharp.Handler.ResourceRequestHandler
     {
+        // Observatório do site (Shields/SiteObservatory.cs): cada sub-recurso com a decisão que teve. Um incremento num
+        // dicionário por pedido — o resto só se calcula quando o painel abre.
+        private void Observe(string url, ResourceType type, ObservedVerdict verdict, string? detail = null)
+            => observatory?.Record(url, type, verdict, detail);
+
         // Desmascarar CNAME (Shields/CnameUncloak.cs) para um pedido que as listas deixaram passar. Com o nome já na
         // cache decide-se logo; senão a consulta corre fora da thread de rede e o pedido espera no máximo
         // CnameUncloak.MaxWait (IRequestCallback) — passado isso segue, e os seguintes já encontram a resposta.
@@ -86,7 +91,11 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         {
             if (!Data.Settings.Current.UncloakCname || !CnameUncloak.IsCandidate(pageUrl, request.Url, request.ResourceType)
                 || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri))
+            {
+                Observe(request.Url, request.ResourceType, ObservedVerdict.Allowed);
                 return CefReturnValue.Continue;
+            }
+            var resourceType = request.ResourceType;
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var host = uri.IdnHost.ToLowerInvariant();
             var url = request.Url;
@@ -95,6 +104,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             {
                 var target = CnameUncloak.CloakedTracker(url, documentUrl, type, chain, engine.ShouldBlock);
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target);
                 if (target is null) return CefReturnValue.Continue;
                 Cloaked(uri.Host, target);
                 return CefReturnValue.Cancel;
@@ -102,6 +112,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             if (!Cname.Quota.TryTake(browser.Identifier, pageUrl))
             {
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                Observe(url, resourceType, ObservedVerdict.Allowed);
                 return CefReturnValue.Continue;
             }
             var lookup = Cname.Cache.LookupAsync(host);
@@ -111,6 +122,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 var answered = lookup.IsCompletedSuccessfully;
                 CnameStats.Waited(System.Diagnostics.Stopwatch.GetTimestamp() - started, timedOut: !answered);
                 var target = answered ? CnameUncloak.CloakedTracker(url, documentUrl, type, lookup.Result, engine.ShouldBlock) : null;
+                Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target);
                 if (target is not null) Cloaked(uri.Host, target);
                 using (callback) callback.Continue(target is null);
             }, TaskScheduler.Default);
@@ -214,6 +226,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 }
                 // O pedido da página só sai depois de os scriptlets estarem registados (máx. 1 s):
                 // sem isto o documento podia nascer antes do registo e o anti-bloqueador ganhava a corrida.
+                observatory?.Reset(request.Url);
                 var ready = onNavigate(browser, request.Url);
                 ReportSkips(browser);
                 if (ready.IsCompleted) return CefReturnValue.Continue;
@@ -231,16 +244,21 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 && LocalNetwork.SiteOf(pageUrl) is { } site && localNetworkAllowed?.Invoke(site) != true)
             {
                 onLocalNetworkBlocked?.Invoke(site, request.Url);
+                Observe(request.Url, request.ResourceType, ObservedVerdict.LocalNetwork);
                 return CefReturnValue.Cancel;
             }
             if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var page) && !isProtected(page.Host))
+            {
+                Observe(request.Url, request.ResourceType, ObservedVerdict.ShieldOff);
                 return CefReturnValue.Continue;
+            }
 
             // Modo rigoroso neste site: scripts e frames de outros domínios não carregam (além das listas).
             if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var top) && Data.AppData.IsStrict(top.Host)
                 && StrictPolicy.ShouldBlock(pageUrl, request.Url, request.ResourceType))
             {
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var strictBlocked) ? strictBlocked.Host : request.Url);
+                Observe(request.Url, request.ResourceType, ObservedVerdict.Strict);
                 return CefReturnValue.Cancel;
             }
 
@@ -253,6 +271,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 return Uncloak(browser, request, pageUrl, documentUrl, adblockType, callback);
 
             onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var blocked) ? blocked.Host : request.Url);
+            Observe(request.Url, request.ResourceType, ObservedVerdict.Blocked);
             return CefReturnValue.Cancel;
         }
     }
