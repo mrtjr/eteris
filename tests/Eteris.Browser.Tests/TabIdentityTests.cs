@@ -180,7 +180,8 @@ public sealed class TabIdentityTests : IDisposable
         Assert.Equal("Loja", vm.Tabs[0].DisplayTitle);
         Assert.Equal("🛒", vm.Tabs[0].Emoji);
         Assert.Null(vm.Tabs[1].CustomTitle);
-        var snapshot = vm.MetaSnapshot();
+        // A fotografia leva também a última visita (Seen); aqui só interessa a identidade.
+        var snapshot = vm.MetaSnapshot().Select(m => m with { Seen = null }).ToList();
         Assert.Equal(new SessionTabMeta("Loja", "🛒", 4), snapshot[0]);
         Assert.True(snapshot[1].IsEmpty);
     }

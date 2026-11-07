@@ -45,6 +45,7 @@ public partial class MainWindow : Window
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
         StartTabs(initialUrl);
         WatchSnoozed();
+        WatchArchive();
         RestorePlacement();
         WatchUpdates();
         WatchBackdropSetting();

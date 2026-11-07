@@ -207,6 +207,30 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
+    private static readonly Lazy<ArchivedTabsStore?> LazyArchived = new(() =>
+    {
+        try { return new ArchivedTabsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static void ArchiveTab(string url, string title, string? name, DateTime lastActiveUtc, DateTime nowUtc)
+    {
+        try { LazyArchived.Value?.Add(url, title, name, lastActiveUtc, nowUtc); }
+        catch (Exception) { }
+    }
+
+    public static void ForgetArchived(long id)
+    {
+        try { LazyArchived.Value?.Delete(id); }
+        catch (Exception) { }
+    }
+
+    public static IReadOnlyList<ArchivedTab> ArchivedTabs()
+    {
+        try { return LazyArchived.Value?.All() ?? []; }
+        catch (Exception) { return []; }
+    }
+
     public static IReadOnlyList<SavedSession> SavedSessions()
     {
         try { return LazySessions.Value?.All() ?? []; }

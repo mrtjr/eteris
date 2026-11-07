@@ -239,6 +239,16 @@
             <button data-value="0">Nunca</button>
           </div>
         </div>
+        <div class="item">
+          <div class="label"><b>Arquivar abas esquecidas</b><span>Abas sem visita há este tempo desvanecem-se e vão para o Arquivo (Radar › Arquivo), de onde se repõem com um clique. Abas fixadas, trancadas, com nota ou a tocar som ficam.</span></div>
+          <div class="seg" data-key="archive">
+            <button data-value="3">3 dias</button>
+            <button data-value="7">7 dias</button>
+            <button data-value="14">14 dias</button>
+            <button data-value="30">30 dias</button>
+            <button data-value="0">Nunca</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -464,7 +474,7 @@
     send('accent', b.dataset.value);
   });
 
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: String(data.archive), tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density };
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;
     const paint = () => seg.querySelectorAll('button[data-value]').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));

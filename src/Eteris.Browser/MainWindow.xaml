@@ -150,7 +150,7 @@
                                     Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
                             <Border x:Name="GroupLine" Height="2.5" VerticalAlignment="Bottom" Margin="6,0" CornerRadius="1"
                                     Background="{Binding Group.ColorBrush}" />
-                            <Grid x:Name="TabContent" Margin="12,0,8,0">
+                            <Grid x:Name="TabContent" Margin="12,0,8,0" Opacity="{Binding AgeOpacity}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="16" />
                                     <ColumnDefinition Width="*" />
@@ -352,7 +352,7 @@
                                     Background="{StaticResource IrisBrush}" Visibility="Hidden" />
                             <Border x:Name="SideGroup" Width="4" HorizontalAlignment="Right" Margin="0,8,2,8" CornerRadius="2"
                                     Background="{Binding Group.ColorBrush}" />
-                            <Grid Margin="13,0,6,0">
+                            <Grid Margin="13,0,6,0" Opacity="{Binding AgeOpacity}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="18" />
                                     <ColumnDefinition Width="*" />

@@ -55,6 +55,7 @@ public partial class TabsViewModel : ObservableObject
             {
                 tab.SetIdentity(meta.Name, meta.Emoji, meta.Color, meta.Note);
                 tab.IsLocked = meta.Locked;
+                if (meta.Seen is { } seen) tab.LastActiveUtc = DateTimeOffset.FromUnixTimeMilliseconds(seen).UtcDateTime;
             }
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
@@ -233,7 +234,8 @@ public partial class TabsViewModel : ObservableObject
 
     // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa.
     public List<Data.SessionTabMeta> MetaSnapshot()
-        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked)).ToList();
+        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked,
+            new DateTimeOffset(DateTime.SpecifyKind(ReferenceEquals(t, Active) ? DateTime.UtcNow : t.LastActiveUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds())).ToList();
 
     public void RefreshGroups()
     {

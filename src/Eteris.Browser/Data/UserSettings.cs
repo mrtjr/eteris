@@ -14,6 +14,8 @@ public sealed record UserSettings
     public string SearchEngine { get; init; } = "duckduckgo";
     public string Startup { get; init; } = "restore";
     public int SleepMinutes { get; init; } = 20;
+    // Arquivo automático: abas sem visita há N dias vão para o Arquivo (0 = nunca).
+    public int ArchiveDays { get; init; } = Tabs.ArchivePolicy.DefaultDays;
     public bool HttpsFirst { get; init; } = true;
     public bool BlockThirdPartyCookies { get; init; } = true;
     public bool Mica { get; init; } = true;
@@ -47,6 +49,7 @@ public sealed record UserSettings
         "engine" when Engines.Contains(value) => this with { SearchEngine = value },
         "startup" when value is "restore" or "newtab" => this with { Startup = value },
         "sleep" when int.TryParse(value, out var minutes) && minutes >= 0 && minutes <= 24 * 60 => this with { SleepMinutes = minutes },
+        "archive" when int.TryParse(value, out var days) && days >= 0 && days <= 365 => this with { ArchiveDays = days },
         "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
         "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
         "mica" when bool.TryParse(value, out var on) => this with { Mica = on },

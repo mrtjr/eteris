@@ -38,6 +38,10 @@ public partial class BrowserTab : ObservableObject
 
     public bool HasNote => Note is not null;
 
+    // Desvanecimento do arquivo automático (Tabs/ArchivePolicy.cs): 1 = visitada há pouco.
+    [ObservableProperty]
+    private double _ageOpacity = 1;
+
     // Trancada: não fecha por engano (Ctrl+W, «x», clique do meio, «fechar as outras») nem adormece.
     [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]

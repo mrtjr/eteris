@@ -3,7 +3,7 @@ using System.Windows.Media;
 namespace Eteris.Browser.Tabs;
 
 // Âmbitos do radar de abas, pela ordem do seletor «Mostrar».
-public enum RadarScope { All, Pinned, Audible, Sleeping, Duplicates, Closed, Done, Snoozed }
+public enum RadarScope { All, Pinned, Audible, Sleeping, Duplicates, Closed, Done, Snoozed, Archived }
 
 // Ordenações do radar, pela ordem do seletor «Ordenar». Strip = ordem da faixa de abas (sem reordenar).
 public enum RadarSort { Recent, Site, Strip }
@@ -11,9 +11,9 @@ public enum RadarSort { Recent, Site, Strip }
 // Uma linha da lista do radar: aba aberta (Tab) ou entrada das fechadas recentemente (Closed).
 public sealed record RadarRow(BrowserTab? Tab, ClosedTab? Closed, string Title, string Address,
     string Subtitle, string Badge, Brush BadgeBrush, ImageSource? Image, string Status, string? Note = null, Data.DoneTab? Done = null,
-    Data.SnoozedTab? Snoozed = null)
+    Data.SnoozedTab? Snoozed = null, Data.ArchivedTab? Archived = null)
 {
-    public object Identity => (object?)Tab ?? (object?)Closed ?? (object?)Done ?? Snoozed!;
+    public object Identity => (object?)Tab ?? (object?)Closed ?? (object?)Done ?? (object?)Snoozed ?? Archived!;
 }
 
 // Lógica do radar de abas sem interface: filtros, duplicadas, ordenações e texto de estado.
@@ -22,11 +22,12 @@ public static class TabRadar
 {
     public static IReadOnlyList<RadarRow> Rows(IReadOnlyList<BrowserTab> tabs, BrowserTab? active,
         IReadOnlyList<ClosedTab> closed, RadarScope scope, RadarSort sort, string query, IReadOnlyList<Data.DoneTab>? done = null,
-        IReadOnlyList<Data.SnoozedTab>? snoozed = null, DateTime? nowLocal = null)
+        IReadOnlyList<Data.SnoozedTab>? snoozed = null, DateTime? nowLocal = null, IReadOnlyList<Data.ArchivedTab>? archived = null)
     {
         query = query.Trim();
         var duplicates = Duplicates(tabs);
         var now = nowLocal ?? DateTime.Now;
+        var nowUtc = nowLocal?.ToUniversalTime() ?? DateTime.UtcNow;
 
         var rows = scope == RadarScope.Closed
             ? closed.Select(FromClosed)
@@ -34,6 +35,8 @@ public static class TabRadar
             ? (done ?? []).Select(FromDone)
             : scope == RadarScope.Snoozed
             ? (snoozed ?? []).Select(s => FromSnoozed(s, now))
+            : scope == RadarScope.Archived
+            ? (archived ?? []).Select(a => FromArchived(a, nowUtc))
             : tabs.Where(tab => scope switch
                 {
                     RadarScope.Pinned => tab.IsPinned,
@@ -53,7 +56,7 @@ public static class TabRadar
             rows = rows.OrderBy(row => Site(row.Address), StringComparer.CurrentCultureIgnoreCase)
                 .ThenBy(row => row.Title, StringComparer.CurrentCultureIgnoreCase);
         // As fechadas e as feitas já vêm da mais recente para a mais antiga; nas abertas a ativa fica sempre primeiro.
-        else if (sort == RadarSort.Recent && scope is not (RadarScope.Closed or RadarScope.Done or RadarScope.Snoozed))
+        else if (sort == RadarSort.Recent && scope is not (RadarScope.Closed or RadarScope.Done or RadarScope.Snoozed or RadarScope.Archived))
             rows = rows.OrderByDescending(row => ReferenceEquals(row.Tab, active))
                 .ThenByDescending(row => row.Tab?.LastActiveUtc);
 
@@ -68,6 +71,7 @@ public static class TabRadar
             0 when scope == RadarScope.Closed => "Ainda não fechou abas nesta janela.",
             0 when scope == RadarScope.Done => "Nada marcado como feito hoje. «Feito» está no menu da aba.",
             0 when scope == RadarScope.Snoozed => "Nenhuma aba adiada. «Adiar até…» está no menu da aba.",
+            0 when scope == RadarScope.Archived => "O Arquivo está vazio: abas sem visita há dias vêm para aqui (Definições › Abas).",
             0 => "Nenhuma aba neste filtro.",
             1 => "1 aba nesta vista",
             _ => $"{count} abas nesta vista",
@@ -122,6 +126,15 @@ public static class TabRadar
         var title = tab.Name ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title);
         return new(null, null, title, tab.Url, site, SiteBadge.Letter(tab.Url) ?? "É", Brushes.DarkOrange, null,
             "Volta " + Snooze.Describe(tab.DueUtc.ToLocalTime(), nowLocal), tab.Note, null, tab);
+    }
+
+    // Arquivada: quando foi arquivada e desde quando não era visitada; «Repor» traz de volta.
+    public static RadarRow FromArchived(Data.ArchivedTab tab, DateTime nowUtc)
+    {
+        var site = Site(tab.Url);
+        var title = tab.Name ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title);
+        var status = $"Arquivada {ArchivePolicy.Ago(tab.ArchivedUtc, nowUtc)} · última visita {ArchivePolicy.Ago(tab.LastActiveUtc, nowUtc)}";
+        return new(null, null, title, tab.Url, site, SiteBadge.Letter(tab.Url) ?? "É", Brushes.SlateBlue, null, status, null, null, null, tab);
     }
 
     public static RadarRow FromClosed(ClosedTab tab)

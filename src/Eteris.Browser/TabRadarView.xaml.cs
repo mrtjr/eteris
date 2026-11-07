@@ -19,6 +19,8 @@ public partial class TabRadarView : UserControl
     private readonly Func<IReadOnlyList<Data.DoneTab>> _doneToday;
     private readonly Func<IReadOnlyList<Data.SnoozedTab>> _snoozed;
     private readonly Action<Data.SnoozedTab> _wake;
+    private readonly Func<IReadOnlyList<Data.ArchivedTab>> _archived;
+    private readonly Action<Data.ArchivedTab> _restore;
     private readonly bool _privateWindow;
     private readonly HashSet<BrowserTab> _watched = [];
     private bool _watching;
@@ -26,13 +28,16 @@ public partial class TabRadarView : UserControl
 
     internal TabRadarView(TabsViewModel tabs, bool privateWindow, Action<BrowserTab> toggleMute,
         Action<BrowserTab> closeTab, Action<BrowserTab> openSplit, Action dismiss, Func<IReadOnlyList<Data.DoneTab>> doneToday,
-        Func<IReadOnlyList<Data.SnoozedTab>> snoozed, Action<Data.SnoozedTab> wake)
+        Func<IReadOnlyList<Data.SnoozedTab>> snoozed, Action<Data.SnoozedTab> wake,
+        Func<IReadOnlyList<Data.ArchivedTab>> archived, Action<Data.ArchivedTab> restore)
     {
         _tabs = tabs;
         _privateWindow = privateWindow;
         _doneToday = doneToday;
         _snoozed = snoozed;
         _wake = wake;
+        _archived = archived;
+        _restore = restore;
         _toggleMute = toggleMute;
         _closeTab = closeTab;
         _openSplit = openSplit;
@@ -41,7 +46,7 @@ public partial class TabRadarView : UserControl
 
         Filters.ItemsSource = privateWindow
             ? new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente" }
-            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje", "Adiadas" };
+            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje", "Adiadas", "Arquivo" };
         Order.ItemsSource = new[] { "Usadas recentemente", "Por site", "Ordem da faixa de abas" };
         Filters.SelectedIndex = (int)RadarScope.All;
         Order.SelectedIndex = (int)RadarSort.Recent;
@@ -168,7 +173,8 @@ public partial class TabRadarView : UserControl
         var query = QueryBox.Text.Trim();
 
         var visible = TabRadar.Rows(_tabs.Tabs, _tabs.Active, _tabs.RecentlyClosed, scope, sort, query,
-            scope == RadarScope.Done ? _doneToday() : null, scope == RadarScope.Snoozed ? _snoozed() : null);
+            scope == RadarScope.Done ? _doneToday() : null, scope == RadarScope.Snoozed ? _snoozed() : null,
+            archived: scope == RadarScope.Archived ? _archived() : null);
         var retained = selection is null ? null : visible.FirstOrDefault(row => ReferenceEquals(row.Identity, selection.Identity));
         Results.ItemsSource = visible;
         Results.SelectedItem = retained ?? (visible.Count == 0 ? null : visible[Math.Min(previousIndex, visible.Count - 1)]);
@@ -193,7 +199,8 @@ public partial class TabRadarView : UserControl
         PreviewImage.Visibility = PreviewImage.Source is null ? Visibility.Collapsed : Visibility.Visible;
         PreviewPlaceholder.Visibility = PreviewImage.Source is null ? Visibility.Visible : Visibility.Collapsed;
 
-        OpenButton.Content = row?.Snoozed is not null ? "Trazer já" : row?.Closed is not null || row?.Done is not null ? "Reabrir aba" : "Ir para a aba";
+        OpenButton.Content = row?.Snoozed is not null ? "Trazer já" : row?.Archived is not null ? "Repor"
+            : row?.Closed is not null || row?.Done is not null ? "Reabrir aba" : "Ir para a aba";
         OpenButton.IsEnabled = row is not null;
         SplitButton.IsEnabled = tab is not null && _tabs.Active is not null && !ReferenceEquals(tab, _tabs.Active);
         PinButton.Content = tab?.IsPinned == true ? "Desafixar" : "Fixar";
@@ -235,6 +242,8 @@ public partial class TabRadarView : UserControl
             _tabs.NewTab(done.Url);
         else if (row.Snoozed is { } snoozed)
             _wake(snoozed);
+        else if (row.Archived is { } archived)
+            _restore(archived);
         else if (row.Closed is not { } closed || _tabs.ReopenClosed(closed) is null)
             return;
         _dismiss();

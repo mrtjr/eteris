@@ -39,7 +39,7 @@ public partial class MainWindow
         {
             SetUpOverlayLayer();
             var view = new TabRadarView(Tabs, IsPrivate, ToggleMute, CloseTab, tab => OpenSideBySide(tab), CloseRadar, DoneToday,
-                SnoozedTabs, snoozed => WakeSnoozed(snoozed, activate: true));
+                SnoozedTabs, snoozed => WakeSnoozed(snoozed, activate: true), ArchivedTabs, archived => RestoreArchived(archived, activate: true));
             _radarView = view;
             view.Margin = new Thickness(12, 16, 12, 16);
             var scrim = new Rectangle();

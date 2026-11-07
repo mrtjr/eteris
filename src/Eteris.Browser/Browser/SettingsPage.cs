@@ -51,6 +51,7 @@ public static class SettingsPage
             engine = settings.SearchEngine,
             startup = settings.Startup,
             sleep = settings.SleepMinutes,
+            archive = settings.ArchiveDays,
             httpsFirst = settings.HttpsFirst,
             cookies = settings.BlockThirdPartyCookies,
             mica = settings.Mica,
