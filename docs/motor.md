@@ -25,6 +25,27 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
 - `ETERIS_TEST_MUTE=1` (no ambiente do processo que lança o Éteris): nenhum som sai dos dois motores
   (`mute-audio` no Chromium, `CoreWebView2.IsMuted` no motor de vídeo). Ver `Infrastructure/TestSwitches.cs`.
 
+## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
+
+| Medida (mediana) | Antes | Depois | «Puro» (diagnóstico) |
+|---|---|---|---|
+| Espera do pedido principal | 1000–1010 ms em 9/11 | **0** | 0 |
+| TTFB | 1059 ms | **136 ms** | 106 ms |
+| 1.ª pintura desde o clique | 1249 ms | **284 ms** | 319 ms |
+| LCP desde o clique | 1317 ms | **391 ms** | 319 ms |
+| Voltar ×3 | 1280/1335/1342 ms | **6/6/6 ms** | — |
+| CPU do processo principal (11 navegações) | 5453 ms | **3266 ms** | — |
+| Thread da janela em escritas do histórico, por navegação | 3,6 ms | **0,0 ms** | — |
+| Página perturbada pela miniatura | 82–149 ms em 6/6 | **0 em 6/6** | 0 |
+| Falhas do processo (frame destacado) | 4 em ~25 min | **0** em ~35 min de roteiro | — |
+| Nova aba (1.ª pintura) | 128/135 ms | 115/119 ms | — |
+| Rolagem 8000 px | 16,7 ms/fotograma, 0 perdidos | igual | igual |
+
+Linha de base e final medidas com o mesmo roteiro e o mesmo build de medição (instrumentação de
+`scratchpad/diag/diag-fluidez.patch`, nunca no commit), depois do F0 e do F1 (antes deles a linha de base tinha
+duas páginas a carregar ao mesmo tempo e o processo caía). As falhas registadas durante estes testes vieram de
+outro build (`artifacts2`, trabalho paralelo, `libcef.dll` 0xc0000005), nenhuma dos builds deste ramo.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -38,3 +59,5 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
 | F3 | Back/forward cache ligado: o CefSharp.Wpf põe `--disable-back-forward-cache` por omissão (por causa do modo fora da tela, que o Éteris não usa). Numa página reposta não há pedido nem fim de carregamento: a aba guarda a contagem do Escudo e o ícone das últimas 8 páginas deixadas (`BrowserTab.LeavePage`/`ReturnToPage`) e repõe-nos; cor do site, modo de leitura e miniatura atualizam-se no commit (`OnPageRestored`) | Voltar ×3 (wiki→wiki, BBC→wiki, GitHub→wiki): 1280/1335/1342 ms (base) e 205/301/336 ms (depois do F2) → **6/6/6 ms**, sem pedidos; BBC: 15 bloqueados antes de sair → 15 ao voltar; endereço e título certos |
 | F4 | Barra de carregamento («aurora») fora da janela em camadas: passa a viver na janela principal, no fundo das barras, logo acima da página (fora dela); só com as barras todas escondidas volta à camada, no topo da página. A animação corre a 30 fps e para com a janela minimizada. A camada deixa de aparecer durante cada carregamento | A/B no mesmo build, 11 navegações ×2: CPU do processo principal 4077/3642 ms (na camada) → **3422/3032 ms** (−16%); latência máxima mediana da thread da janela por navegação 46/16 → **1/1 ms**; TTFB e 1.ª pintura sem regressão. Captura: barra visível e alinhada com a página |
 | F5 | Histórico fora da thread da janela: `eteris.db` em registo antecipado (WAL, `synchronous=NORMAL`; depois de apagar histórico faz-se logo o checkpoint, para nada apagado ficar no `-wal`); visitas, títulos e ícones vão para uma fila com uma só tarefa (`Data/HistoryWriter.cs`), pela ordem; os títulos juntam-se por endereço (só o último de cada segundo é escrito); quem lê ou apaga despeja a fila primeiro; ao sair, escreve o que falta. Janela privada: nada escrito, como antes | Thread da janela por navegação (2–3 escritas): 3,0–3,6 ms (mediana) → **≤ 0,1 ms**; título que muda a cada segundo: 1 escrita com fsync por mudança → 1 escrita por segundo em segundo plano (teste); histórico certo depois de fechar e voltar a abrir |
+| F6 | Investigado, sem alteração de código: com `--autoplay-policy=document-user-activation-required` o Chromium 156 do Éteris **deixa** tocar vídeo sem som sozinho (`AutoplayPolicy`: vídeo `muted` dispensa o gesto) e bloqueia o som, como o Chrome com a mesma política. Os YouTube Shorts ficam parados porque o leitor do YouTube pede reprodução **com** som e, recusada, não passa a sem som; no Chrome toca porque o índice de envolvimento com média (MEI, lista pré-carregada pelo component updater, que o Éteris desliga por privacidade) autoriza som no YouTube. Com «bloquear reprodução automática» ligado, os Shorts precisam de um clique — decisão do dono | Página local de teste (`scratchpad/autoplay/teste.html`): vídeo `muted autoplay` a tocar sem gesto (t=10,1 s) — **sim**; `play()` sem som sem gesto: ok; com som: parado / `NotAllowedError`. YouTube Shorts: 1.º fotograma sem clique — **não** (botão de play) |
+| D1 | Fecho: suite completa (1374 testes), medição final comparada com a base e o «puro», `CHANGELOG.md` (secção por publicar, sem versão nem tag), `docs/paridade.md` (secção 1b) | Tabela «Resultado» no topo deste ficheiro |

@@ -17,6 +17,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (`--no-sandbox` nos 6 processos); viável em 1–2 semanas, ver `docs/sandbox.md` | **[bloqueia]** |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
+| 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | por medir | alta |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | não (Widevine removido por privacidade) | média |
@@ -70,6 +71,27 @@ Pendentes desta migração:
 - Por cima da paleta e da folha de atalhos a página fica escurecida, mas já não desfocada.
 - Os cantos arredondados da página ficam por baixo da página. (O contorno da metade ativa no ecrã dividido passou
   para a camada de sobreposição no ciclo 14 do programa de UX.)
+
+## 1b. Fluidez da navegação — medido (ramo `motor`, 2026-11-07)
+
+O Chromium do Éteris é o mesmo do Chrome 156: a diferença sentida vinha das camadas do Éteris, não do motor.
+Medição: perfil de teste, 11 navegações reais (Wikipédia, GitHub, BBC, g1, Amazon, duas voltas), tempos lidos
+pela Performance API e alinhados ao clique; «puro» = o mesmo Éteris com todas as camadas desligadas. Detalhe de
+cada passo, causa e método em `docs/motor.md`.
+
+| Medida (mediana) | Antes | Depois | «Puro» |
+|---|---|---|---|
+| Espera do pedido principal | 1000–1010 ms em 9/11 | 0 | 0 |
+| TTFB | 1059 ms | 136 ms | 106 ms |
+| 1.ª pintura desde o clique | 1249 ms | 284 ms | 319 ms |
+| Voltar ×3 | 1280/1335/1342 ms | 6/6/6 ms (back/forward cache) | — |
+| «Piscar» depois de carregar (miniatura) | 50–220 ms em ~90% das navegações | 0 | 0 |
+| CPU do processo principal, 11 navegações | 5453 ms | 3266 ms | — |
+| Thread da janela em escritas do histórico | 3,0–3,6 ms por navegação | ≤ 0,1 ms | — |
+| Falhas do processo (frame destacado) | 4 em ~25 min | 0 | — |
+
+Rolagem: 16,7 ms por fotograma, 0 perdidos, antes e depois (igual ao Chrome). Limite que fica: o 1.º documento
+de cada aba nova nasce sem os scripts precoces do Escudo (o DevTools só responde depois da 1.ª navegação).
 
 ## 2. Sandbox — investigado: viável, 1–2 semanas
 
