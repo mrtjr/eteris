@@ -28,15 +28,24 @@ public class SandboxRulesTests
             .Where(f => !Path.GetRelativePath(Root, f).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Any(part => part is "obj" or "bin" or "publish"));
 
+    // Scripts nas páginas do motor de vídeo (WebView2): só pelo Browser/VideoPageScript.cs. O WebView2 não tem o processo
+    // filho .NET do CefSharp (a razão da regra acima não se aplica), mas o canal fica num só sítio.
+    public static readonly string[] VideoEngineScriptApis =
+    [
+        "CallDevToolsProtocolMethodAsync", "ExecuteScriptAsync", "AddScriptToExecuteOnDocumentCreatedAsync",
+    ];
+
+    public const string VideoScriptChannel = "VideoPageScript.cs";
+
     // Linhas que usam uma das APIs proibidas; os comentários (// ...) podem citá-las, para explicar a regra.
-    public static IEnumerable<(int Line, string Api)> Violations(IEnumerable<string> lines)
+    public static IEnumerable<(int Line, string Api)> Violations(IEnumerable<string> lines, IReadOnlyList<string>? apis = null)
     {
         var number = 0;
         foreach (var line in lines)
         {
             number++;
             if (line.TrimStart().StartsWith("//", StringComparison.Ordinal)) continue;
-            foreach (var api in ForbiddenApis)
+            foreach (var api in apis ?? ForbiddenApis)
                 if (line.Contains(api, StringComparison.Ordinal)) yield return (number, api);
         }
     }
@@ -67,5 +76,31 @@ public class SandboxRulesTests
         Assert.True(offenders.Count == 0,
             "APIs do processo filho do CefSharp no código (docs/sandbox.md, «Regras para o código»; usar Browser/PageScript.cs):\n"
             + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void VideoEngine_InjectsScriptsOnlyThroughItsChannel()
+    {
+        var offenders = SourceFiles()
+            .Where(file => Path.GetFileName(file) != VideoScriptChannel)
+            .SelectMany(file => Violations(File.ReadLines(file), VideoEngineScriptApis)
+                .Select(v => $"{Path.GetRelativePath(Root, file)}:{v.Line}: {v.Api}"))
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "Scripts no motor de vídeo fora do Browser/VideoPageScript.cs:\n" + string.Join("\n", offenders));
+        var channel = SourceFiles().Single(f => Path.GetFileName(f) == VideoScriptChannel);
+        Assert.NotEmpty(Violations(File.ReadLines(channel), VideoEngineScriptApis));
+    }
+
+    [Fact]
+    public void VideoEngineRule_FlagsTheWebView2Calls()
+    {
+        var found = Violations(
+        [
+            "// core.ExecuteScriptAsync(\"1\") só no canal",
+            "await core.CallDevToolsProtocolMethodAsync(\"Page.enable\", \"{}\");",
+            "await core.AddScriptToExecuteOnDocumentCreatedAsync(script);",
+        ], VideoEngineScriptApis).ToList();
+        Assert.Equal([(2, "CallDevToolsProtocolMethodAsync"), (3, "AddScriptToExecuteOnDocumentCreatedAsync")], found);
     }
 }

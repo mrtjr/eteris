@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using CefSharp;
 using System.Windows;
 using System.Windows.Input;
@@ -250,13 +249,13 @@ public partial class MainWindow
     }
 
     // Regras cosméticas do Escudo no motor de vídeo (banners, pop-ups): as mesmas do motor principal, registadas pelo
-    // DevTools para correr antes dos scripts da página, uma vez por site e protegidas pelo hostname da página de topo.
+    // DevTools (Browser/VideoPageScript.cs) para correr antes dos scripts da página, uma vez por site e protegidas pelo hostname da página de topo.
     private static async Task EnsureVideoCosmeticsAsync(CoreWebView2 core, string url, HashSet<string> done)
     {
         if (HostScriptRegistry.HostOf(url) is not { } page || !done.Add(page.IdnHost)) return;
         var css = SiteCosmeticScript(url);
         if (HostScriptRegistry.Guard(page.IdnHost, css.Length == 0 ? null : css) is not { } script) return;
-        await DevToolsQuietly(core, "Page.addScriptToEvaluateOnNewDocument", new { source = script });
+        await VideoPageScript.AddEarlyAsync(core, script);
     }
 
     // Retomar o vídeo onde estava no motor principal: um script de uso único, no primeiro «loadedmetadata».
@@ -266,13 +265,7 @@ public partial class MainWindow
         var script = "(() => { const at = " + at + "; let done = false;"
             + " addEventListener('loadedmetadata', e => { const v = e.target;"
             + " if (done || !(v instanceof HTMLMediaElement) || !(v.duration > at)) return; done = true; v.currentTime = at; }, true); })();";
-        return DevToolsQuietly(core, "Page.addScriptToEvaluateOnNewDocument", new { source = script });
-    }
-
-    private static async Task DevToolsQuietly(CoreWebView2 core, string method, object parameters)
-    {
-        try { await core.CallDevToolsProtocolMethodAsync(method, JsonSerializer.Serialize(parameters)); }
-        catch (Exception) { }
+        return VideoPageScript.AddEarlyAsync(core, script);
     }
 
     // O motor principal avisou que o vídeo desta página não toca nele (Tabs/VideoEngine.cs, VideoReport).
