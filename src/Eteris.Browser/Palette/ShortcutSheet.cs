@@ -44,6 +44,7 @@ public static class ShortcutSheet
             new("Ctrl+Shift+O", "Favoritos"),
             new("Ctrl+J", "Transferências"),
             new("Ctrl+Shift+S", "Capturar página inteira"),
+            new("Ctrl+Shift+U", "Observatório do site (quem está a observar)"),
             new("Ctrl+,", "Definições"),
         ]),
         new("Vista", [

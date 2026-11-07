@@ -17,6 +17,8 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - «Esconder elemento»: clique num anúncio ou caixa e desaparece nesse site para sempre.
 - Janelas privadas com perfil em memória; «Esquecer os últimos 15 min / 1 hora»; apagar histórico, cookies e cache.
 - Painel semanal na nova aba: rastreadores bloqueados por dia e estimativa do que foi poupado.
+- Observatório do site (Ctrl+Shift+U): quem está a observar a página, ao vivo, agrupado por empresa, com «Porque é que isto passou?» e bloquear um domínio só nesse site; no cadeado, «O que este site sabe de ti».
+- `eteris://privacy/`: relatório dos últimos 7 e 30 dias (só números, neste computador, apagáveis), promessas verificadas no estado real e um auto-teste local do que um site vê.
 - DNS cifrado, links sem rastreio, modo rigoroso por site, notificações recusadas sem perguntar, apagar dados ao fechar.
 
 **Barra de endereço**

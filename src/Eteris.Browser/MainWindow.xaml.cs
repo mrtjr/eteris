@@ -506,6 +506,7 @@ public partial class MainWindow : Window
         if (key == Key.F11) return ToggleFocusMode;
         if (key == Key.F9) return ToggleReader;
         if (key == Key.F12 || (ctrl && shift && key == Key.I)) return ShowDevTools;
+        if (ctrl && shift && key == Key.U) return ToggleObservatory;
         if (ctrl && key == Key.U) return ViewSource;
         if (ctrl && key == Key.H) return OpenHistory;
         if (ctrl && shift && key == Key.L) return ShowLinkHints;

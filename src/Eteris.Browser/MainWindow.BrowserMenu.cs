@@ -129,6 +129,7 @@ public partial class MainWindow
         Row("\uE722", "Capturar página inteira", () => CapturePage(true), "Ctrl+Shift+S", ActiveBrowser is not null);
         if (!IsPrivate)
             Row("\uE74D", "Apagar dados de navegação…", () => OpenInternal(SettingsPage.Url + "#clearToggle"));
+        Row("\uE72E", "Privacidade: relatório e auto-teste", () => OpenInternal(PrivacyPage.Url));
 
         Divider();
         Row("\uE713", "Definições", OpenSettings, "Ctrl+,");

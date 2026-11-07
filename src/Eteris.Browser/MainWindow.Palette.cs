@@ -168,7 +168,7 @@ public partial class MainWindow
                     ReloadActive();
                     UpdateShieldButton();
                 });
-            yield return new("\uEA18", "Observatório do site", "Quem está a observar esta página, ao vivo, por empresa", null, OpenObservatory);
+            yield return new("\uEA18", "Observatório do site", "Quem está a observar esta página, ao vivo, por empresa", "Ctrl+Shift+U", OpenObservatory);
         }
         yield return new("", "Capturar página inteira", "Guarda em Imagens › Éteris e copia a imagem", "Ctrl+Shift+S", () => CapturePage(true));
         yield return new("", "Guardar como PDF", "Guarda a página na pasta de transferências", null, SaveAsPdf);
@@ -209,8 +209,12 @@ public partial class MainWindow
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("\uE789", "Novidades desta versão", "O que mudou no Éteris", null, () => OpenInternal(WhatsNewPage.Url));
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
-        yield return new("\uE72E", "Promessas de privacidade", "O que o Éteris garante, verificado agora (GPC, anúncios, cookies, WebRTC…)", null,
+        yield return new("\uE72E", "Relatório de privacidade", IsPrivate
+                ? "As promessas do Éteris verificadas agora (a janela privada não alimenta o relatório)"
+                : "O que o Escudo travou nos últimos 7 e 30 dias e as promessas verificadas agora", null,
             () => OpenInternal(PrivacyPage.Url));
+        yield return new("\uE9D9", "Auto-teste de privacidade", "O que um site vê do Éteris: GPC, cookies de terceiros, referrer, WebRTC, canvas…", null,
+            () => OpenInternal(SelfTest.Url));
         var hidden = Settings.Current.HideFromCapture;
         yield return new("\uED1A", hidden ? "Mostrar o Éteris nas capturas de ecrã" : "Esconder o Éteris do Recall e das capturas",
             hidden ? "As capturas, gravações e partilhas de ecrã voltam a ver as janelas" : "As capturas, gravações e partilhas de ecrã passam a ver um vazio",

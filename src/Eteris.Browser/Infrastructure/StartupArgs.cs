@@ -12,7 +12,7 @@ public static class StartupArgs
         => args.FirstOrDefault(a => Uri.TryCreate(a, UriKind.Absolute, out var uri)
                                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps
                                         || (uri.Scheme == "eteris" && SafeInternalPages.Contains(uri.Host)
-                                            && uri.AbsolutePath == "/" && uri.Query.Length == 0)));
+                                            && (uri.AbsolutePath == "/" || a == Browser.SelfTest.Url) && uri.Query.Length == 0)));
 
     public static bool WantsNewTab(IEnumerable<string> args)
         => args.Any(a => a.Equals("--new-tab", StringComparison.OrdinalIgnoreCase));
