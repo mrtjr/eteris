@@ -273,7 +273,7 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title) or nameof(BrowserTab.IsPinned)
             or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.CustomTitle)
-            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note)) ScheduleSessionSave();
+            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); UpdateZoomBadge(); }
@@ -307,8 +307,29 @@ public partial class MainWindow : Window
 
     private void CloseTab(BrowserTab? tab)
     {
-        if (tab is not null && Tabs.Close(tab)) Close();
+        if (tab is null) return;
+        if (tab.IsLocked)
+        {
+            ShowToast($"«{tab.DisplayTitle}» está trancada — destranque-a no menu da aba para a fechar");
+            return;
+        }
+        if (Tabs.Close(tab)) Close();
     }
+
+    // «Feito»: a aba sai da faixa e fica em «Feitas hoje» no Radar (nunca na janela privada).
+    private void MarkTabDone(BrowserTab tab)
+    {
+        if (!Tabs.Tabs.Contains(tab)) return;
+        var wasLast = Tabs.Tabs.Count == 1;
+        if (!IsPrivate && !NewTabPage.IsNewTab(tab.Address)) AppData.MarkDone(tab.Address, tab.DisplayTitle);
+        Tabs.CloseDone(tab);
+        if (wasLast) Tabs.NewTab(NewTabUrl);
+        var today = IsPrivate ? 0 : DoneToday().Count;
+        ShowToast(today > 1 ? $"Feito: «{tab.DisplayTitle}» — {today} feitas hoje (ver no Radar)" : $"Feito: «{tab.DisplayTitle}»");
+    }
+
+    private IReadOnlyList<DoneTab> DoneToday()
+        => IsPrivate ? [] : AppData.DoneSince(DoneTabsStore.StartOfLocalDayUtc(DateTime.Now));
 
     private const double PinnedTabWidth = 44;
 

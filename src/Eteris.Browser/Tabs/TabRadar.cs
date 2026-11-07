@@ -3,16 +3,16 @@ using System.Windows.Media;
 namespace Eteris.Browser.Tabs;
 
 // Âmbitos do radar de abas, pela ordem do seletor «Mostrar».
-public enum RadarScope { All, Pinned, Audible, Sleeping, Duplicates, Closed }
+public enum RadarScope { All, Pinned, Audible, Sleeping, Duplicates, Closed, Done }
 
 // Ordenações do radar, pela ordem do seletor «Ordenar». Strip = ordem da faixa de abas (sem reordenar).
 public enum RadarSort { Recent, Site, Strip }
 
 // Uma linha da lista do radar: aba aberta (Tab) ou entrada das fechadas recentemente (Closed).
 public sealed record RadarRow(BrowserTab? Tab, ClosedTab? Closed, string Title, string Address,
-    string Subtitle, string Badge, Brush BadgeBrush, ImageSource? Image, string Status, string? Note = null)
+    string Subtitle, string Badge, Brush BadgeBrush, ImageSource? Image, string Status, string? Note = null, Data.DoneTab? Done = null)
 {
-    public object Identity => (object?)Tab ?? Closed!;
+    public object Identity => (object?)Tab ?? (object?)Closed ?? Done!;
 }
 
 // Lógica do radar de abas sem interface: filtros, duplicadas, ordenações e texto de estado.
@@ -20,13 +20,15 @@ public sealed record RadarRow(BrowserTab? Tab, ClosedTab? Closed, string Title, 
 public static class TabRadar
 {
     public static IReadOnlyList<RadarRow> Rows(IReadOnlyList<BrowserTab> tabs, BrowserTab? active,
-        IReadOnlyList<ClosedTab> closed, RadarScope scope, RadarSort sort, string query)
+        IReadOnlyList<ClosedTab> closed, RadarScope scope, RadarSort sort, string query, IReadOnlyList<Data.DoneTab>? done = null)
     {
         query = query.Trim();
         var duplicates = Duplicates(tabs);
 
         var rows = scope == RadarScope.Closed
             ? closed.Select(FromClosed)
+            : scope == RadarScope.Done
+            ? (done ?? []).Select(FromDone)
             : tabs.Where(tab => scope switch
                 {
                     RadarScope.Pinned => tab.IsPinned,
@@ -45,8 +47,8 @@ public static class TabRadar
         if (sort == RadarSort.Site)
             rows = rows.OrderBy(row => Site(row.Address), StringComparer.CurrentCultureIgnoreCase)
                 .ThenBy(row => row.Title, StringComparer.CurrentCultureIgnoreCase);
-        // As fechadas já vêm da mais recente para a mais antiga; nas abertas a ativa fica sempre primeiro.
-        else if (sort == RadarSort.Recent && scope != RadarScope.Closed)
+        // As fechadas e as feitas já vêm da mais recente para a mais antiga; nas abertas a ativa fica sempre primeiro.
+        else if (sort == RadarSort.Recent && scope is not (RadarScope.Closed or RadarScope.Done))
             rows = rows.OrderByDescending(row => ReferenceEquals(row.Tab, active))
                 .ThenByDescending(row => row.Tab?.LastActiveUtc);
 
@@ -59,6 +61,7 @@ public static class TabRadar
         {
             0 when query.Trim().Length > 0 => "Sem resultados. Experimente outro termo ou filtro.",
             0 when scope == RadarScope.Closed => "Ainda não fechou abas nesta janela.",
+            0 when scope == RadarScope.Done => "Nada marcado como feito hoje. «Feito» está no menu da aba.",
             0 => "Nenhuma aba neste filtro.",
             1 => "1 aba nesta vista",
             _ => $"{count} abas nesta vista",
@@ -87,6 +90,7 @@ public static class TabRadar
         var status = new List<string>();
         if (active) status.Add("Em uso");
         if (tab.IsPinned) status.Add("Fixada");
+        if (tab.IsLocked) status.Add("Trancada");
         if (tab.IsSleeping) status.Add("A dormir");
         if (tab.IsMuted) status.Add("Silenciada");
         else if (tab.IsAudible) status.Add("Com som");
@@ -95,6 +99,14 @@ public static class TabRadar
         var subtitle = tab.Group is { } group ? $"{site} · {group.Name}" : site;
         return new(tab, null, tab.CustomTitle ?? (string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title), tab.Address,
             subtitle, tab.Monogram ?? "É", tab.MonogramBrush, tab.Favicon, string.Join(" · ", status), tab.Note);
+    }
+
+    public static RadarRow FromDone(Data.DoneTab tab)
+    {
+        var site = Site(tab.Url);
+        var when = tab.DoneUtc.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        return new(null, null, string.IsNullOrWhiteSpace(tab.Title) ? site : tab.Title, tab.Url,
+            site, SiteBadge.Letter(tab.Url) ?? "É", Brushes.SeaGreen, null, $"Feita às {when}", null, tab);
     }
 
     public static RadarRow FromClosed(ClosedTab tab)

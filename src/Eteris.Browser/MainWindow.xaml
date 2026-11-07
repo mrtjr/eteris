@@ -186,6 +186,9 @@
                                     <Button x:Name="TabAudio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" ToolTip="Silenciar / reativar o som desta aba"
                                             Visibility="Collapsed" />
+                                    <TextBlock x:Name="TabLock" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                               Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="4,0,6,0"
+                                               Visibility="Collapsed" ToolTip="Trancada: não fecha por engano nem adormece (destranque no menu da aba)" />
                                     <Button x:Name="TabClose" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
                                             AutomationProperties.Name="{Binding DisplayTitle, StringFormat=Fechar «{0}»}"
                                             Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" />
@@ -262,6 +265,10 @@
                                 <Setter TargetName="TabTitle" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="TabClose" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Glow" Property="Margin" Value="10,0" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                <Setter TargetName="TabClose" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="TabLock" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsSleeping}" Value="True">
                                 <Setter TargetName="TabTitle" Property="Opacity" Value="0.5" />
@@ -378,6 +385,9 @@
                                 <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal">
                                     <Button x:Name="Audio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" Visibility="Collapsed" />
+                                    <TextBlock x:Name="SideLock" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                               Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="4,0,8,0"
+                                               Visibility="Collapsed" ToolTip="Trancada: não fecha por engano nem adormece (destranque no menu da aba)" />
                                     <Button x:Name="Close" Content="&#xE8BB;" Style="{StaticResource TabCloseButton}"
                                             AutomationProperties.Name="{Binding DisplayTitle, StringFormat=Fechar «{0}»}"
                                             Click="CloseTab_Click" ToolTip="Fechar aba (Ctrl+W)" Visibility="Hidden" />
@@ -458,6 +468,10 @@
                                 <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextBrush}" />
                                 <Setter TargetName="Close" Property="Visibility" Value="Visible" />
                             </Trigger>
+                            <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                <Setter TargetName="Close" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="SideLock" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding SideCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                 <Setter TargetName="Title" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />

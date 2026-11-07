@@ -38,7 +38,7 @@ public partial class MainWindow
         if (_radar is null)
         {
             SetUpOverlayLayer();
-            var view = new TabRadarView(Tabs, IsPrivate, ToggleMute, CloseTab, tab => OpenSideBySide(tab), CloseRadar);
+            var view = new TabRadarView(Tabs, IsPrivate, ToggleMute, CloseTab, tab => OpenSideBySide(tab), CloseRadar, DoneToday);
             _radarView = view;
             view.Margin = new Thickness(12, 16, 12, 16);
             var scrim = new Rectangle();

@@ -115,6 +115,9 @@ public partial class MainWindow
                 () => RenameTab(tab, Omnibox));
             yield return new("", tab.HasNote ? "Editar a nota da aba…" : "Escrever nota na aba…",
                 tab.Note ?? "«Porque abri isto?» — fica no cartão da aba, no Radar e nas sessões", null, () => RenameTab(tab, Omnibox, focusNote: true));
+            yield return new(tab.IsLocked ? "" : "", tab.IsLocked ? "Destrancar aba" : "Trancar aba",
+                tab.IsLocked ? "Volta a poder fechar-se e adormecer" : "Não fecha por engano nem adormece", null, () => tab.IsLocked = !tab.IsLocked);
+            yield return new("", "Feito", IsPrivate ? "Fecha a aba" : "Fecha a aba e guarda-a em «Feitas hoje» (Radar)", null, () => MarkTabDone(tab));
             yield return new("", "Fechar aba", tab.Title, "Ctrl+W", () => CloseTab(tab));
             yield return new("", "Duplicar aba", tab.Title, null, () => Tabs.NewTab(address));
             yield return new("", "Recarregar página", tab.Title, "F5", () => ReloadActive());

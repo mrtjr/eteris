@@ -51,7 +51,11 @@ public partial class TabsViewModel : ObservableObject
                 IsPinned = pinned is not null && i < pinned.Count && pinned[i],
             };
             if (titles is not null && i < titles.Count && titles[i].Length > 0) tab.Title = titles[i];
-            if (metas is not null && i < metas.Count && metas[i] is { } meta) tab.SetIdentity(meta.Name, meta.Emoji, meta.Color, meta.Note);
+            if (metas is not null && i < metas.Count && metas[i] is { } meta)
+            {
+                tab.SetIdentity(meta.Name, meta.Emoji, meta.Color, meta.Note);
+                tab.IsLocked = meta.Locked;
+            }
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
             Tabs.Add(tab);
@@ -61,12 +65,23 @@ public partial class TabsViewModel : ObservableObject
     }
 
     // Devolve true quando a última aba foi fechada (a janela deve fechar, como no Chrome).
-    public bool Close(BrowserTab tab)
+    // Uma aba trancada não fecha por aqui: só «Destrancar» ou «Feito» a tiram da faixa.
+    public bool Close(BrowserTab tab) => Close(tab, remember: true);
+
+    // «Feito»: a aba sai da faixa sem ir para as fechadas recentes (vai para «Feitas hoje»), mesmo trancada.
+    public void CloseDone(BrowserTab tab)
+    {
+        tab.IsLocked = false;
+        Close(tab, remember: false);
+    }
+
+    private bool Close(BrowserTab tab, bool remember)
     {
         var index = Tabs.IndexOf(tab);
         if (index < 0) return Tabs.Count == 0;
+        if (tab.IsLocked) return false;
 
-        if (!Browser.NewTabPage.IsNewTab(tab.Address))
+        if (remember && !Browser.NewTabPage.IsNewTab(tab.Address))
         {
             _closed.Add(new ClosedTab(index, tab.Address, tab.Title));
             if (_closed.Count > MaxClosed) _closed.RemoveAt(0);
@@ -215,7 +230,7 @@ public partial class TabsViewModel : ObservableObject
 
     // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa.
     public List<Data.SessionTabMeta> MetaSnapshot()
-        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note)).ToList();
+        => Tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked)).ToList();
 
     public void RefreshGroups()
     {

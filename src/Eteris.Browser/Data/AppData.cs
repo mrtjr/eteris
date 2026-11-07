@@ -159,6 +159,24 @@ public static class AppData
         catch (Exception) { return null; }
     });
 
+    private static readonly Lazy<DoneTabsStore?> LazyDone = new(() =>
+    {
+        try { return new DoneTabsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static void MarkDone(string url, string title)
+    {
+        try { LazyDone.Value?.Add(url, title, DateTime.UtcNow); }
+        catch (Exception) { }
+    }
+
+    public static IReadOnlyList<DoneTab> DoneSince(DateTime sinceUtc)
+    {
+        try { return LazyDone.Value?.Since(sinceUtc) ?? []; }
+        catch (Exception) { return []; }
+    }
+
     public static IReadOnlyList<SavedSession> SavedSessions()
     {
         try { return LazySessions.Value?.All() ?? []; }

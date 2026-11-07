@@ -50,7 +50,7 @@ public partial class MainWindow
         foreach (var tab in Tabs.Tabs.ToList())
         {
             if (!SleepPolicy.ShouldSleep(IsTabOnScreen(tab), tab.IsSleeping, tab.IsLoading, tab.IsAudible,
-                    tab.LastActiveUtc, now, threshold)) continue;
+                    tab.LastActiveUtc, now, threshold, tab.IsLocked)) continue;
             ReleaseBrowser(tab);
             tab.IsSleeping = true;
         }
@@ -58,7 +58,7 @@ public partial class MainWindow
 
     private void SleepAllBackgroundTabs()
     {
-        foreach (var tab in Tabs.Tabs.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible).ToList())
+        foreach (var tab in Tabs.Tabs.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible && !t.IsLocked).ToList())
         {
             ReleaseBrowser(tab);
             tab.IsSleeping = true;

@@ -38,6 +38,11 @@ public partial class BrowserTab : ObservableObject
 
     public bool HasNote => Note is not null;
 
+    // Trancada: não fecha por engano (Ctrl+W, «x», clique do meio, «fechar as outras») nem adormece.
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
+    [ObservableProperty]
+    private bool _isLocked;
+
     // O que a faixa, o cartão, o radar e a paleta mostram: o nome próprio, senão o título da página.
     public string DisplayTitle => TabIdentity.DisplayTitle(CustomTitle, Title, Host);
 
@@ -195,6 +200,7 @@ public partial class BrowserTab : ObservableObject
         {
             var parts = new List<string>();
             if (IsPinned) parts.Add("Fixada");
+            if (IsLocked) parts.Add("Trancada");
             if (IsSleeping) parts.Add("A dormir (memória libertada)");
             if (IsMuted) parts.Add("Som silenciado");
             else if (IsAudible) parts.Add("A tocar som");
