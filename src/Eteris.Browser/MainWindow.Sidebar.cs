@@ -445,15 +445,18 @@ public partial class MainWindow
         _keepSidebarCursor = _sidebarCursor >= 0;
         if (SidebarShows(SidebarPanels.Bookmarks))
         {
-            AppData.RemoveBookmark(link.Url);
+            // A linha inteira fica guardada: o «Anular» repõe o favorito com a data de criação (no mesmo lugar da lista).
+            var saved = AppData.TakeBookmark(link.Url);
             UpdateStar();
             RefreshLinksPanel();
+            if (saved is null) return;
             ShowUndoToast("Removido dos favoritos", $"Remover {Eteris.Browser.Tabs.ToastPolicy.Quote(link.Title)} dos favoritos", () =>
             {
-                if (!AppData.IsBookmarked(link.Url)) AppData.ToggleBookmark(link.Url, link.Title);
+                var restored = AppData.RestoreBookmark(saved);
                 UpdateStar();
                 RefreshLinksPanel();
-            });
+                return restored;
+            }, [link.Url]);
         }
         else if (SidebarShows(SidebarPanels.History))
         {
@@ -464,13 +467,16 @@ public partial class MainWindow
         }
         else if (SidebarShows(SidebarPanels.Reading) && !IsPrivate)
         {
-            AppData.RemoveFromReadingList(link.Url);
+            // Com a data e o estado lido/por ler: o «Anular» não o devolve ao topo como novo.
+            var item = AppData.TakeFromReadingList(link.Url);
             RefreshLinksPanel();
+            if (item is null) return;
             ShowUndoToast("Removido de «Para ler»", $"Remover {Eteris.Browser.Tabs.ToastPolicy.Quote(link.Title)} de «Para ler»", () =>
             {
-                AppData.SaveForLater(link.Url, link.Title);
+                var restored = AppData.RestoreReadingItem(item);
                 RefreshLinksPanel();
-            });
+                return restored;
+            }, [link.Url]);
         }
         _keepSidebarCursor = false;
     }

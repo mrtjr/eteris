@@ -55,4 +55,22 @@ public sealed class ReadingListTests : IDisposable
         Assert.True(store.Contains("https://a.pt/x"));
         Assert.False(store.Contains("https://a.pt/y"));
     }
+
+    // O «Anular» de remover devolve o item lido como lido e com a data em que foi guardado.
+    [Fact]
+    public void Restore_KeepsDateAndReadState()
+    {
+        var store = new ReadingListStore(_path);
+        store.Add("https://lido.pt/", "Lido", T0);
+        store.Add("https://novo.pt/", "Novo", T0.AddDays(1));
+        store.MarkRead("https://lido.pt/", true);
+        var item = store.Item("https://lido.pt/")!;
+        store.Remove("https://lido.pt/");
+        Assert.True(store.Restore(item));
+        var back = store.Item("https://lido.pt/")!;
+        Assert.True(back.Read);
+        Assert.Equal(T0, back.AddedUtc);
+        Assert.Equal(["Novo", "Lido"], store.All().Select(i => i.Title));
+        Assert.False(store.Restore(item));
+    }
 }

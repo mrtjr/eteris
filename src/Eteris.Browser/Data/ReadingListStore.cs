@@ -26,6 +26,18 @@ public sealed class ReadingListStore
 
     public void Remove(string url) => Execute("DELETE FROM reading_list WHERE url = $u", ("$u", url));
 
+    public ReadingItem? Item(string url) => All().FirstOrDefault(i => i.Url == url);
+
+    // O «Anular» de remover: a mesma data e o mesmo estado lido/por ler (false se já lá estava outra vez).
+    public bool Restore(ReadingItem item)
+    {
+        if (Contains(item.Url)) return false;
+        Execute("INSERT INTO reading_list(url, title, added_at, read) VALUES ($u, $t, $a, $r)",
+            ("$u", item.Url), ("$t", item.Title), ("$a", new DateTimeOffset(DateTime.SpecifyKind(item.AddedUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds()),
+            ("$r", item.Read ? 1 : 0));
+        return true;
+    }
+
     public bool Contains(string url)
     {
         using var connection = Open();

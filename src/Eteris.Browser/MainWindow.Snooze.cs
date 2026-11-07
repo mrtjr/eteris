@@ -41,7 +41,7 @@ public partial class MainWindow
         Tabs.CloseQuietly(tab);
         if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
         ShowUndoToast($"«{tab.DisplayTitle}» volta {Snooze.Describe(dueLocal, DateTime.Now)} — ver em Radar › Adiadas",
-            $"Adiar {ToastPolicy.Quote(tab.DisplayTitle)}", () => PutBackSnoozed(snapshot));
+            $"Adiar {ToastPolicy.Quote(tab.DisplayTitle)}", () => PutBackSnoozed(snapshot), [snapshot.Address]);
     }
 
     // Só a janela dona da sessão vigia (senão duas janelas traziam a mesma aba); começa logo, para as que venceram

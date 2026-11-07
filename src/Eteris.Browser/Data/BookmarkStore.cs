@@ -4,6 +4,10 @@ namespace Eteris.Browser.Data;
 
 public sealed record Bookmark(string Url, string Title);
 
+// A linha guardada de um favorito, com a data em que foi criado: o «Anular» de remover repõe-na tal e qual (no
+// mesmo lugar da lista, que é ordenada pela data).
+public sealed record SavedBookmark(string Url, string Title, long CreatedAt);
+
 public sealed class BookmarkStore
 {
     private readonly string _connectionString;
@@ -35,6 +39,25 @@ public sealed class BookmarkStore
     }
 
     public void Remove(string url) => Execute("DELETE FROM bookmarks WHERE url = $u", ("$u", Key(url)));
+
+    public SavedBookmark? Saved(string url)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT url, title, created_at FROM bookmarks WHERE url = $u";
+        command.Parameters.AddWithValue("$u", Key(url));
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? new SavedBookmark(reader.GetString(0), reader.GetString(1), reader.GetInt64(2)) : null;
+    }
+
+    // Devolve false se o favorito já lá estava (foi marcado outra vez entretanto): nada a repor.
+    public bool Restore(SavedBookmark saved)
+    {
+        if (Contains(saved.Url)) return false;
+        Execute("INSERT INTO bookmarks(url, title, created_at) VALUES ($u, $t, $c)",
+            ("$u", Key(saved.Url)), ("$t", saved.Title), ("$c", saved.CreatedAt));
+        return true;
+    }
 
     public void Rename(string url, string title)
         => Execute("UPDATE bookmarks SET title = $t WHERE url = $u", ("$u", Key(url)), ("$t", title.Trim()));

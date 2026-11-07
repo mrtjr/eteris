@@ -398,6 +398,8 @@ public partial class MainWindow
         AppData.TryWrite(h => h.DeleteSince(DateTime.UtcNow.AddMinutes(-minutes)));
         ForgetBounceVisits(DateTime.UtcNow.AddMinutes(-minutes));
         Tabs.ForgetClosed();
+        // A pilha de anulação também: a paleta mostrava «Anular: Feito «título»» e o Ctrl+Z repunha a aba esquecida.
+        _undo.Clear();
         ShowToast(minutes < 60 ? $"Os últimos {minutes} minutos foram esquecidos" : "A última hora foi esquecida");
     }
 

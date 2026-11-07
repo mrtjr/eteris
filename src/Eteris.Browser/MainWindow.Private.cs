@@ -71,8 +71,8 @@ public partial class MainWindow
     {
         var hide = !Data.Settings.Current.HideFromCapture;
         Data.Settings.Set("hideFromCapture", hide ? "true" : "false");
-        ShowToast(Infrastructure.CaptureText.Toast(hide),
-            new ToastAction("Anular", () => Data.Settings.Set("hideFromCapture", hide ? "false" : "true")));
+        ShowUndoToast(Infrastructure.CaptureText.Toast(hide), hide ? "Esconder das capturas" : "Mostrar nas capturas",
+            () => Data.Settings.Set("hideFromCapture", hide ? "false" : "true"));
     }
 
     private static IReadOnlyList<MainWindow> PrivateWindows()

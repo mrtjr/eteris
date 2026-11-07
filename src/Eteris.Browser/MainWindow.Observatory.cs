@@ -507,13 +507,14 @@ public partial class MainWindow
         if (block) SiteRules.Block(site, host, IsPrivate);
         else SiteRules.Unblock(site, host, IsPrivate);
         _obsSelected = host;
-        ShowToast(ObservatoryText.RuleToast(site, host, block, IsPrivate),
-            new ToastAction("Anular", () =>
+        // Na pilha de anulação, como as outras ações: o Ctrl+Z desfaz a regra, não um fecho de aba antigo.
+        ShowUndoToast(ObservatoryText.RuleToast(site, host, block, IsPrivate),
+            $"{(block ? "Bloquear" : "Deixar de bloquear")} {host} em {site}", () =>
             {
                 if (block) SiteRules.Unblock(site, host, IsPrivate);
                 else SiteRules.Block(site, host, IsPrivate);
                 ReloadActive();
-            }));
+            });
         ReloadActive();
     }
 }

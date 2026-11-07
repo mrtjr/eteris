@@ -158,6 +158,8 @@ public partial class TabsViewModel : ObservableObject
 
     public void ForgetClosed() => _closed.Clear();
 
+    public void ForgetClosed(Func<ClosedTab, bool> match) => _closed.RemoveAll(c => match(c));
+
     // ---------- Anular ----------
 
     // O que é preciso para pôr de volta uma aba que saiu da faixa por «Feito», «Adiar» ou o Arquivo: o lugar, o

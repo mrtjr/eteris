@@ -46,7 +46,7 @@ public partial class MainWindow
             .Item(group.IsCollapsed ? "" : "", group.IsCollapsed ? "Expandir o grupo" : "Encolher o grupo", () => Tabs.ToggleCollapse(group))
             .Item("", "Guardar grupo como sessão", () => SaveGroupAsSession(group), enabled: !IsPrivate)
             .Item("", "Desagrupar", () => Tabs.UngroupAll(group))
-            .Item("", "Fechar o grupo", () => Tabs.CloseGroup(group))
+            .Item("", "Fechar o grupo", () => CloseInBulk(() => Tabs.CloseGroup(group)))
             .Open(pill);
     }
 

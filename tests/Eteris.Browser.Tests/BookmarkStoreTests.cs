@@ -71,4 +71,17 @@ public sealed class BookmarkStoreTests : IDisposable
         Assert.Single(list, s => s.Url == entry.Url);
         Assert.Equal(SuggestionKind.Bookmark, list.Single(s => s.Url == entry.Url).Kind);
     }
+
+    // O «Anular» de remover um favorito repõe-no com a data de criação: volta ao mesmo lugar, não ao topo.
+    [Fact]
+    public void Restore_KeepsTheOriginalDate()
+    {
+        _store.Toggle("https://antigo.pt/", "Antigo", T0);
+        _store.Toggle("https://novo.pt/", "Novo", T0.AddDays(1));
+        var saved = _store.Saved("https://antigo.pt/")!;
+        _store.Remove("https://antigo.pt/");
+        Assert.True(_store.Restore(saved));
+        Assert.Equal(["Novo", "Antigo"], _store.All().Select(b => b.Title));
+        Assert.False(_store.Restore(saved));
+    }
 }

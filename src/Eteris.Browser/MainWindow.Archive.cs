@@ -71,7 +71,7 @@ public partial class MainWindow
             ? $"«{moved[0].DisplayTitle}» foi para o Arquivo — sem visita há {days} dias (Radar › Arquivo)"
             : $"{moved.Count} abas sem visita há {days} dias foram para o Arquivo (Radar › Arquivo)",
             moved.Count == 1 ? $"Arquivar {ToastPolicy.Quote(moved[0].DisplayTitle)}" : $"Arquivar {moved.Count} abas",
-            () => PutBackArchived(snapshots));
+            () => PutBackArchived(snapshots), snapshots.Select(s => s.Address));
     }
 
 

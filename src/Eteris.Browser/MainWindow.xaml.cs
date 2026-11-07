@@ -388,12 +388,12 @@ public partial class MainWindow : Window
         if (!recorded)
         {
             // Janela privada ou aba nova: nada ficou gravado, a aba volta como estava.
-            if (!isNew) ShowUndoToast($"Feito: «{tab.DisplayTitle}»", label, () => Tabs.PutBack(snapshot));
+            if (!isNew) ShowUndoToast($"Feito: «{tab.DisplayTitle}»", label, () => Tabs.PutBack(snapshot) is not null, [snapshot.Address]);
             return;
         }
         var today = DoneToday().Count;
         ShowUndoToast(today > 1 ? $"Feito: «{tab.DisplayTitle}» — {today} feitas hoje (ver no Radar)" : $"Feito: «{tab.DisplayTitle}»",
-            label, () => PutBackDone(snapshot));
+            label, () => PutBackDone(snapshot), [snapshot.Address]);
     }
 
     private IReadOnlyList<DoneTab> DoneToday()

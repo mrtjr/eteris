@@ -93,6 +93,7 @@ public partial class MainWindow
             AppData.ForgetSitePermissions(site);
             Bounces.Forget(site);
         }
+        ForgetSiteInUndo(site);
         var cookies = await ClearSiteStorageAsync(site, seen);
         return new ShredResult(cookies, history);
     }

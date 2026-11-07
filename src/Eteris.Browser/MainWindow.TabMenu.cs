@@ -62,8 +62,8 @@ public partial class MainWindow
             }, "Ctrl+R")
             .Separator()
             .Item("", "Fechar", () => CloseTab(tab), "Ctrl+W")
-            .Item("", "Fechar as outras abas", () => Tabs.CloseOthers(tab), enabled: hasOthers)
-            .Item("", "Fechar as abas à direita", () => Tabs.CloseToRight(tab), enabled: hasRight)
+            .Item("", "Fechar as outras abas", () => CloseInBulk(() => Tabs.CloseOthers(tab)), enabled: hasOthers)
+            .Item("", "Fechar as abas à direita", () => CloseInBulk(() => Tabs.CloseToRight(tab)), enabled: hasRight)
             .Item("", "Reabrir aba fechada", () => Tabs.ReopenClosed(), "Ctrl+Shift+T")
             .Open((UIElement)sender);
         e.Handled = true;

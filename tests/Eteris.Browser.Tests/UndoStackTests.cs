@@ -143,4 +143,54 @@ public class UndoStackTests
     [Fact]
     public void ShortcutSheet_ListsCtrlZ()
         => Assert.Contains(ShortcutSheet.Groups.SelectMany(g => g.Items), s => s.Keys == "Ctrl+Z" && s.Action.Contains("Anular"));
+
+    // Ctrl+Shift+T (ou o Radar) já repôs a aba: essa entrada sai sem gastar o Ctrl+Z, que anula a anterior.
+    [Fact]
+    public void UndoLast_SkipsEntriesWithNothingLeftToUndo()
+    {
+        var stack = new UndoStack();
+        var log = new List<string>();
+        stack.Push("Fechar «A»", () => { log.Add("A"); return true; });
+        stack.Push("Fechar «B»", () => false);
+        Assert.Equal("Fechar «A»", stack.UndoLast()!.Label);
+        Assert.Equal(["A"], log);
+        Assert.Equal(0, stack.Count);
+        stack.Push("Fechar «C»", () => false);
+        Assert.Null(stack.UndoLast());
+    }
+
+    // O «Anular» do aviso numa entrada que já não tem efeito não diz «Anulado».
+    [Fact]
+    public void Undo_FromTheToast_ReportsWhetherSomethingCameBack()
+    {
+        var stack = new UndoStack();
+        var stale = stack.Push("Feito «x»", () => false);
+        Assert.False(stack.Undo(stale));
+        Assert.Equal(0, stack.Count);
+    }
+
+    // «Triturar» um site tira da pilha as entradas que o reabririam; «Esquecer os últimos minutos» esvazia-a.
+    [Fact]
+    public void RemoveWhere_DropsTheEntriesOfASite()
+    {
+        var stack = new UndoStack();
+        stack.Push("Fechar «Banco»", () => true, ["https://www.banco.pt/conta"]);
+        stack.Push("Fechar «Notícias»", () => true, ["https://jornal.pt/"]);
+        stack.Push("Bloquear x em y", () => true);
+        Assert.Equal(1, stack.RemoveWhere(e => e.Addresses.Any(a => Eteris.Browser.Data.SiteScope.Belongs(a, "banco.pt"))));
+        Assert.Equal(["Bloquear x em y", "Fechar «Notícias»"], new[] { stack.UndoLast()!.Label, stack.UndoLast()!.Label });
+    }
+
+    [Fact]
+    public void ForgetClosed_OnlyTheMatchingEntries()
+    {
+        var vm = new TabsViewModel();
+        vm.NewTab("https://banco.pt/");
+        vm.NewTab("https://jornal.pt/");
+        vm.NewTab("https://outro.pt/");
+        vm.Close(vm.Tabs[0]);
+        vm.Close(vm.Tabs[0]);
+        vm.ForgetClosed(c => Eteris.Browser.Data.SiteScope.Belongs(c.Address, "banco.pt"));
+        Assert.Equal(["https://jornal.pt/"], vm.RecentlyClosed.Select(c => c.Address));
+    }
 }

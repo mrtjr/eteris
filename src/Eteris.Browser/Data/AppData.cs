@@ -200,6 +200,24 @@ public static class AppData
         catch (Exception) { }
     }
 
+    // Tira e devolve a linha (para o «Anular» a repor com a data e o estado lido).
+    public static ReadingItem? TakeFromReadingList(string url)
+    {
+        try
+        {
+            if (LazyReading.Value is not { } store || store.Item(url) is not { } item) return null;
+            store.Remove(url);
+            return item;
+        }
+        catch (Exception) { return null; }
+    }
+
+    public static bool RestoreReadingItem(ReadingItem item)
+    {
+        try { return LazyReading.Value?.Restore(item) == true; }
+        catch (Exception) { return false; }
+    }
+
     private static readonly Lazy<SavedSessionsStore?> LazySessions = new(() =>
     {
         try { return new SavedSessionsStore(AppPaths.Database); }
@@ -500,6 +518,24 @@ public static class AppData
             else LazyVideo.Value?.Remove(host);
         }
         catch (Exception) { }
+    }
+
+    // Tira e devolve a linha (para o «Anular» a repor com a data de criação).
+    public static SavedBookmark? TakeBookmark(string url)
+    {
+        try
+        {
+            if (LazyBookmarks.Value.Saved(url) is not { } saved) return null;
+            LazyBookmarks.Value.Remove(url);
+            return saved;
+        }
+        catch (Exception) { return null; }
+    }
+
+    public static bool RestoreBookmark(SavedBookmark saved)
+    {
+        try { return LazyBookmarks.Value.Restore(saved); }
+        catch (Exception) { return false; }
     }
 
     public static void RemoveBookmark(string url)
