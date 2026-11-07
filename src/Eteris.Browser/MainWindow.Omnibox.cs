@@ -38,7 +38,8 @@ public partial class MainWindow
         var empty = Omnibox.Text.Length == 0;
         var showDisplay = !focused && !empty;
 
-        OmniboxPlaceholder.Text = $"Pesquisar com {Engine.Name} ou escrever um endereço";
+        // Em modo compacto a barra é estreita: o convite fica curto.
+        OmniboxPlaceholder.Text = Compact ? "Pesquisar ou escrever um endereço" : $"Pesquisar com {Engine.Name} ou escrever um endereço";
         OmniboxPlaceholder.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         OmniboxDisplay.Visibility = showDisplay ? Visibility.Visible : Visibility.Collapsed;
         Omnibox.Foreground = showDisplay ? Brushes.Transparent : (Brush)FindResource("TextBrush");
@@ -235,6 +236,7 @@ public partial class MainWindow
     {
         Omnibox.SelectAll();
         UpdateOmniboxChrome();
+        UpdateCompactOmnibox();
     }
 
     private void Omnibox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -249,6 +251,7 @@ public partial class MainWindow
         CloseSuggestions();
         if (Omnibox.Text.Length == 0) _omniboxEdited = false;
         SyncOmnibox();
+        UpdateCompactOmnibox();
     }
 
     private void Suggestion_Click(object sender, MouseButtonEventArgs e)

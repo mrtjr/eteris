@@ -185,6 +185,13 @@
             <button data-value="side">Na lateral</button>
           </div>
         </div>
+        <div class="item">
+          <div class="label"><b>Densidade</b><span>Compacta junta as abas e a barra de endereço numa só linha: a página ganha a altura de uma barra. Com abas na lateral já é assim.</span></div>
+          <div class="seg" data-key="density">
+            <button data-value="normal">Normal</button>
+            <button data-value="compact">Compacta</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -421,7 +428,7 @@
     timer = setTimeout(() => saved.classList.remove('show'), 1400);
   }
 
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs, dns: data.dns, theme: data.theme };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density };
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
     const key = seg.dataset.key;
     const paint = () => seg.querySelectorAll('button[data-value]').forEach(b => b.classList.toggle('on', b.dataset.value === current[key]));

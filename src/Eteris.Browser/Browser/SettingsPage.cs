@@ -73,6 +73,7 @@ public static class SettingsPage
                     }.Where(d => d is not null).Concat(s.Flags).Concat(s.Permissions),
             }),
             tabs = settings.VerticalTabs ? "side" : "top",
+            density = settings.Density,
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

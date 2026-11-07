@@ -18,6 +18,8 @@ public sealed record UserSettings
     public bool BlockThirdPartyCookies { get; init; } = true;
     public bool Mica { get; init; } = true;
     public bool VerticalTabs { get; init; }
+    // «normal» (abas numa barra, endereço noutra) ou «compact» (abas e endereço numa só linha).
+    public string Density { get; init; } = "normal";
     public bool BlockAutoplay { get; init; } = true;
     public bool SearchSuggestions { get; init; }
     public string SecureDns { get; init; } = "off";
@@ -61,6 +63,7 @@ public sealed record UserSettings
         "suggest" when bool.TryParse(value, out var on) => this with { SearchSuggestions = on },
         "autoplay" when bool.TryParse(value, out var on) => this with { BlockAutoplay = on },
         "verticalTabs" when bool.TryParse(value, out var on) => this with { VerticalTabs = on },
+        "density" when value is "normal" or "compact" => this with { Density = value },
         "sidebarCollapsed" when bool.TryParse(value, out var on) => this with { SidebarCollapsed = on },
         "readerTheme" when value is "dark" or "sepia" or "light" => this with { ReaderTheme = value },
         "readerSize" when int.TryParse(value, out var px) && px >= 15 && px <= 28 => this with { ReaderSize = px },

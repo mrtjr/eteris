@@ -307,7 +307,7 @@ public partial class MainWindow : Window
         var pinned = Tabs.PinnedCount;
         var (groupsReserved, visible) = GroupLayout();
         var badge = PrivateBadge.Visibility == Visibility.Visible ? PrivateBadge.ActualWidth + PrivateBadge.Margin.Right : 0;
-        var strip = Math.Max(0, TabStripHost.ActualWidth - TabStripReserved - badge);
+        var strip = Math.Max(0, TabStripHost.ActualWidth - TabStripReserved - badge + (Compact ? BrandMark.Width : 0));
         TabScroll.MaxWidth = strip;
         TabWidth = TabLayout.TabWidth(strip - pinned * PinnedTabWidth - groupsReserved, visible);
         UpdateTabArrows();

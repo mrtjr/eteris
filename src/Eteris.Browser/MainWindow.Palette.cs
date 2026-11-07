@@ -169,6 +169,9 @@ public partial class MainWindow
             "Também pode seguir o Windows em Definições › Aspeto", null, () => Data.Settings.Set("theme", light ? "dark" : "light"));
         yield return new("", VerticalTabs ? "Abas no topo" : "Abas verticais",
             VerticalTabs ? "Voltar à faixa de abas clássica" : "Lista de abas na lateral, ideal para muitas abas", null, ToggleVerticalTabs);
+        if (!VerticalTabs)
+            yield return new("", CompactDensity ? "Sair do modo compacto" : "Modo compacto",
+                CompactDensity ? "Abas e endereço voltam a ter cada um a sua barra" : "Abas e endereço numa só linha: a página ganha uma barra inteira", null, ToggleCompactDensity);
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("\uE789", "Novidades desta versão", "O que mudou no Éteris", null, () => OpenInternal(WhatsNewPage.Url));
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);

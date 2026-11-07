@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Shell;
 using Eteris.Browser.Data;
+using Eteris.Browser.Theme;
 
 namespace Eteris.Browser;
 
@@ -20,20 +21,39 @@ public partial class MainWindow
         set => SetValue(SideCollapsedProperty, value);
     }
 
-    private bool VerticalTabs => Settings.Current.VerticalTabs;
+    // Modo compacto em vigor (as abas vivem na barra de ferramentas): lido pelo estilo das abas.
+    public static readonly DependencyProperty CompactProperty = DependencyProperty.Register(
+        nameof(Compact), typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
 
-    // Único sítio que decide a altura das barras: combina abas verticais e modo foco.
+    public bool Compact
+    {
+        get => (bool)GetValue(CompactProperty);
+        set => SetValue(CompactProperty, value);
+    }
+
+    private bool VerticalTabs => Settings.Current.VerticalTabs;
+    private bool CompactDensity => Settings.Current.Density == "compact";
+
+    private ChromeLayout _chrome = ChromeLayout.Resolve(false, false, false);
+
+    // Único sítio que aplica a disposição das barras; a decisão está em Theme/ChromeLayout.cs (abas no topo,
+    // verticais, modo compacto, modo foco e ecrã inteiro).
     private void ApplyChromeLayout()
     {
-        var hidden = _focusMode || _pageFullscreen;
-        var side = VerticalTabs && !hidden;
+        var layout = _chrome = ChromeLayout.Resolve(VerticalTabs, CompactDensity, _focusMode || _pageFullscreen);
+        var hidden = layout.Mode == ChromeMode.Hidden;
+        var side = layout.ShowsSideBar;
         SideCollapsed = Settings.Current.SidebarCollapsed;
+        Compact = layout.TabsInToolbar;
+        PlaceTabStrip(layout.TabsInToolbar);
 
-        TitleRow.Height = new GridLength(hidden || VerticalTabs ? 0 : 42);
-        ToolbarRow.Height = new GridLength(hidden ? 0 : 48);
-        TitleBar.Visibility = hidden || VerticalTabs ? Visibility.Collapsed : Visibility.Visible;
-        Toolbar.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
-        ToolbarCaption.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
+        TitleRow.Height = new GridLength(layout.TitleHeight);
+        ToolbarRow.Height = new GridLength(layout.ToolbarHeight);
+        TitleBar.Visibility = layout.ShowsTitleBar ? Visibility.Visible : Visibility.Collapsed;
+        Toolbar.Visibility = layout.ShowsToolbar ? Visibility.Visible : Visibility.Collapsed;
+        ToolbarCaption.Visibility = layout.CaptionInToolbar ? Visibility.Visible : Visibility.Collapsed;
+        UpdateCompactOmnibox();
+        UpdateOmniboxChrome();
 
         SideBar.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
         SideFilterHost.Visibility = SideCollapsed ? Visibility.Collapsed : Visibility.Visible;
@@ -44,8 +64,8 @@ public partial class MainWindow
         PageFrame.Margin = new Thickness(side ? SideBar.Width - 6 : 0, 0, 0, 0);
         PageFrame.Padding = hidden ? new Thickness(0) : new Thickness(6, 0, 6, 6);
 
-        WindowChrome.GetWindowChrome(this).CaptionHeight = hidden ? 0 : VerticalTabs ? 48 : 42;
-        _pageRadius = hidden ? 0 : 10;
+        WindowChrome.GetWindowChrome(this).CaptionHeight = layout.CaptionHeight;
+        _pageRadius = layout.PageRadius;
         BrowserHost.Clip = new System.Windows.Media.RectangleGeometry(new Rect(BrowserHost.RenderSize), _pageRadius, _pageRadius);
     }
 
@@ -54,6 +74,45 @@ public partial class MainWindow
 
     private void ToggleVerticalTabs()
         => Settings.Set("verticalTabs", (!Settings.Current.VerticalTabs).ToString().ToLowerInvariant());
+
+    private void ToggleCompactDensity()
+        => Settings.Set("density", CompactDensity ? "normal" : "compact");
+
+    // Modo compacto: a faixa de abas inteira (logótipo, abas, setas, «+», «▾») muda-se da barra de título para a
+    // coluna própria da barra de ferramentas, e o endereço passa a ter largura fixa. Os mesmos controlos, sem
+    // duplicar nada; os nomes continuam a funcionar no código.
+    private void PlaceTabStrip(bool inToolbar)
+    {
+        var target = inToolbar ? (System.Windows.Controls.Panel)CompactTabHost : TitleBar;
+        if (!ReferenceEquals(TabStripHost.Parent, target))
+        {
+            ((System.Windows.Controls.Panel)TabStripHost.Parent).Children.Remove(TabStripHost);
+            target.Children.Add(TabStripHost);
+        }
+        TabStripPanel.VerticalAlignment = inToolbar ? VerticalAlignment.Center : VerticalAlignment.Bottom;
+        // Numa só linha cada pixel conta: o logótipo sai (a janela já se reconhece pela faixa íris da barra de endereço).
+        BrandMark.Visibility = inToolbar ? Visibility.Collapsed : Visibility.Visible;
+        ToolbarTabsColumn.Width = inToolbar ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        ToolbarOmniboxColumn.Width = inToolbar ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+    }
+
+    // Em modo compacto a barra de endereço tem largura fixa e cresce ao receber o foco (há mais para ler ao escrever).
+    private void UpdateCompactOmnibox()
+    {
+        var width = ChromeLayout.OmniboxWidth(_chrome.Mode, Omnibox.IsKeyboardFocusWithin);
+        if (width is null)
+        {
+            OmniboxFrame.BeginAnimation(WidthProperty, null);
+            OmniboxFrame.Width = double.NaN;
+            return;
+        }
+        var from = double.IsNaN(OmniboxFrame.Width) ? OmniboxFrame.ActualWidth : OmniboxFrame.Width;
+        if (from <= 0) from = width.Value;
+        OmniboxFrame.BeginAnimation(WidthProperty, new System.Windows.Media.Animation.DoubleAnimation(from, width.Value, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+        });
+    }
 
     private void WatchTabLayoutSetting()
     {
