@@ -7,8 +7,10 @@ namespace Eteris.Browser.Infrastructure;
 // «Esconder o Éteris do Windows Recall e de capturas» (Definições › Privacidade e selo «Privada»): com a afinidade de
 // ecrã WDA_EXCLUDEFROMCAPTURE as janelas do Éteris ficam fora das capturas de ecrã, das gravações, da partilha de ecrã
 // e das imagens do Recall. Desligado por omissão (também na janela privada): ligado, as capturas mostram um vazio.
-// A afinidade só se aplica a janelas de topo; a página (janela filha do Chromium) fica coberta pela da janela principal,
-// e as janelas de topo que o Chromium tenha abertas (listas de <select>) são apanhadas ao percorrer as do processo.
+// A afinidade só se aplica a janelas de topo; a página (janela filha do Chromium) fica coberta pela da janela principal.
+// Cada janela de topo do processo que se cria ou aparece depois — os Popups do WPF (sugestões da barra de endereço,
+// cadeado, lista de abas, menus de contexto, dicas), as listas de <select> e o preenchimento automático do Chromium —
+// é apanhada por um gancho de eventos do Windows (SetWinEventHook, só deste processo) e recebe a mesma afinidade.
 public static class CaptureShield
 {
     public const uint WdaNone = 0x0;
@@ -22,6 +24,15 @@ public static class CaptureShield
 
     private static bool _installed;
 
+    // Testes: a afinidade a usar sem ler as definições do perfil.
+    internal static Func<uint>? WantedOverride;
+
+    private static uint Current => WantedOverride?.Invoke() ?? Wanted;
+
+    // O gancho fica vivo enquanto o processo existir (o delegado não pode ser recolhido).
+    private static WinEventProc? s_hook;
+    private static nint s_hookHandle;
+
     // Cada janela WPF que abre segue a definição; mudar a definição aplica-a a todas as janelas do processo.
     public static void Install()
     {
@@ -31,6 +42,7 @@ public static class CaptureShield
         {
             if (sender is Window window) Apply(new WindowInteropHelper(window).Handle);
         }));
+        HookNewWindows();
         var last = Data.Settings.Current.HideFromCapture;
         Data.Settings.Changed += settings =>
         {
@@ -41,7 +53,43 @@ public static class CaptureShield
         if (last) ApplyAll();
     }
 
-    public static bool Apply(nint hwnd) => hwnd != 0 && SetWindowDisplayAffinity(hwnd, Wanted);
+    public static bool Apply(nint hwnd) => hwnd != 0 && SetWindowDisplayAffinity(hwnd, Current);
+
+    // Uma janela de topo deste processo criada ou mostrada (EVENT_OBJECT_CREATE/SHOW): com a definição ligada, fica já
+    // fora das capturas. O evento chega pela fila de mensagens da thread que instalou o gancho (fora de contexto).
+    public static void HookNewWindows()
+    {
+        if (s_hookHandle != 0) return;
+        s_hook = OnWinEvent;
+        s_hookHandle = SetWinEventHook(EventObjectCreate, EventObjectShow, 0, s_hook, (uint)Environment.ProcessId, 0, WinEventOutOfContext);
+    }
+
+    private static void OnWinEvent(nint hook, uint @event, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (hwnd == 0 || idObject != ObjIdWindow || @event == EventObjectDestroy) return;
+        try
+        {
+            var wanted = Current;
+            if (wanted == WdaNone || GetAncestor(hwnd, GaRoot) != hwnd) return;
+            if (!GetWindowDisplayAffinity(hwnd, out var affinity) || affinity != wanted) SetWindowDisplayAffinity(hwnd, wanted);
+        }
+        catch (Exception) { }
+    }
+
+    private const uint EventObjectCreate = 0x8000;
+    private const uint EventObjectDestroy = 0x8001;
+    private const uint EventObjectShow = 0x8002;
+    private const uint WinEventOutOfContext = 0x0000;
+    private const int ObjIdWindow = 0;
+    private const uint GaRoot = 2;
+
+    private delegate void WinEventProc(nint hook, uint @event, nint hwnd, int idObject, int idChild, uint thread, uint time);
+
+    [DllImport("user32.dll")]
+    private static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint module, WinEventProc callback, uint processId, uint threadId, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetAncestor(nint hwnd, uint flags);
 
     public static void ApplyAll()
     {

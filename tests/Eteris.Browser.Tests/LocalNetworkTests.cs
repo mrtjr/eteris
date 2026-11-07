@@ -6,6 +6,9 @@ using Eteris.Browser.Tabs;
 namespace Eteris.Browser.Tests;
 
 // B6 «Permissão para a rede local»: classificação dos endereços e política por site.
+// As autorizações «só desta vez» são estáticas: as classes que lhes mexem correm em série (ForgetPrivate apagava as do
+// outro teste a meio — falha intermitente vista na bateria da Revisão aos 50).
+[Collection("LocalNetworkGrants")]
 public class LocalNetworkTests
 {
     [Theory]

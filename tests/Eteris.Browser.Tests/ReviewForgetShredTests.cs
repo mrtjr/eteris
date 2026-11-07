@@ -9,6 +9,7 @@ using Eteris.Browser.Tabs;
 namespace Eteris.Browser.Tests;
 
 // Revisão aos 50: «Triturar», «Esquecer ao fechar», a janela privada e o cadeado — o que estava errado não volta.
+[Collection("LocalNetworkGrants")]
 public sealed class ReviewForgetShredTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "eteris-rev50-" + Guid.NewGuid() + ".db");
