@@ -84,7 +84,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
         if (ErrorPage.IsErrorPage(request.Url))
             return Html(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty,
-                ErrorPage.IsInsecureWarning(request.Url), canRemember: !privateContext));
+                ErrorPage.IsInsecureWarning(request.Url), canRemember: !privateContext, secureDns: Settings.Current.SecureDns != "off"));
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }

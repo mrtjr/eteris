@@ -28,6 +28,14 @@
   .warn { display: none; margin: 18px auto 0; padding: 12px 16px; border-radius: 14px; font-size: 13.5px; line-height: 1.5;
           color: #fcd34d; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); text-align: left; }
   body.insecure .warn { display: block; }
+  /* Diagnóstico: a causa provável numa linha, o nome técnico ao lado, e o que fazer */
+  .diag { margin: 20px auto 0; padding: 14px 18px; border-radius: 16px; text-align: left; font-size: 13.5px;
+          background: rgba(255,255,255,.035); border: 1px solid var(--line); }
+  .diag .cause { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .diag .cause b { font-weight: 600; }
+  .diag .cause span { color: var(--faint); font: 11.5px ui-monospace, Consolas, monospace; }
+  .diag ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.55; }
+  .diag ul:empty { display: none; }
   body.insecure .glyph { filter: drop-shadow(0 6px 24px rgba(245,158,11,.35)); }
   canvas { display: none; margin: 26px auto 0; border-radius: 18px; border: 1px solid var(--line);
            background: rgba(255,255,255,.02); cursor: none; }
@@ -42,6 +50,7 @@
   html.light ::selection { background: rgba(139, 92, 246, .25); }
 
   html.light button.quiet { background: #fff; }
+  html.light .diag { background: rgba(255,255,255,.7); }
   html.light .warn { color: #92400e; background: rgba(245,158,11,.12); }
   html.light body { background: radial-gradient(ellipse 60% 50% at 50% 35%, #ffffff 0%, var(--bg) 70%); }
 </style>
@@ -52,12 +61,17 @@
   <h1 id="title"></h1>
   <p id="detail"></p>
   <div class="url" id="url"></div>
+  <div class="diag" id="diag" hidden>
+    <div class="cause"><b id="cause"></b><span id="errname"></span></div>
+    <ul id="tips"></ul>
+  </div>
   <div class="warn" id="warn">Palavras-passe, mensagens e dados de pagamento escritos aqui viajam à vista. Só continue se confia na rede e no site.</div>
   <div class="actions">
-    <button id="retry" hidden>Tentar novamente</button>
+    <button id="retry" hidden>Tentar de novo</button>
     <button id="back" hidden>Voltar</button>
     <button id="once" class="quiet" hidden>Continuar sem segurança (só desta vez)</button>
     <button id="always" class="quiet" hidden>Sempre para este site</button>
+    <button id="copy" class="quiet" hidden>Copiar detalhes</button>
   </div>
   <canvas id="game" width="560" height="220" aria-label="Jogo: apanhe a luz com o rato"></canvas>
   <div class="score" id="score"></div>
@@ -85,6 +99,28 @@
       always.addEventListener('click', () => location.replace(data.proceedAlways));
     }
     back.focus();
+  }
+  if (data.cause) {
+    document.getElementById('diag').hidden = false;
+    document.getElementById('cause').textContent = data.cause;
+    document.getElementById('errname').textContent = data.name;
+    const tips = document.getElementById('tips');
+    for (const tip of data.tips || []) { const li = document.createElement('li'); li.textContent = tip; tips.appendChild(li); }
+  }
+  // Copiar detalhes: endereço, erro, diagnóstico, hora e versão — para pedir ajuda (nada da sessão).
+  if (data.details) {
+    const copy = document.getElementById('copy');
+    copy.hidden = false;
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(data.details); }
+      catch {
+        const area = document.createElement('textarea');
+        area.value = data.details; document.body.appendChild(area); area.select();
+        document.execCommand('copy'); area.remove();
+      }
+      copy.textContent = 'Copiado ✓';
+      setTimeout(() => { copy.textContent = 'Copiar detalhes'; }, 2000);
+    });
   }
   const retry = document.getElementById('retry');
   if (data.retry) {

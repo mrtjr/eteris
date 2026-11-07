@@ -18,23 +18,16 @@ public static class ErrorPage
     });
 
     // Código interno (não é do Chromium) para quando o processo da página termina inesperadamente.
-    public const int RendererCrashed = -9001;
+    public const int RendererCrashed = ErrorDiagnosis.RendererCrashed;
 
     // -3 (ERR_ABORTED) acontece em transferências e ao parar: não é um erro para mostrar.
     public static bool ShouldShow(int code) => code != -3;
 
-    public static ErrorDescription Describe(int code) => code switch
+    public static ErrorDescription Describe(int code)
     {
-        RendererCrashed => new("Esta página foi abaixo",
-            "O processo que a mostrava terminou inesperadamente (falta de memória ou um erro do site). As outras abas não foram afetadas.", "☄"),
-        -105 or -137 => new("Não encontrámos este site", "Verifique se o endereço está bem escrito ou tente pesquisá-lo.", "🔎"),
-        -106 => new("Está sem ligação à Internet", "Verifique o Wi-Fi ou o cabo. Enquanto isso, apanhe a luz.", "✦"),
-        -100 or -101 or -102 or -104 or -109 or -118 or -7 => new("O site não respondeu",
-            "Pode estar em baixo ou a demorar demasiado. Tente de novo daqui a pouco.", "⏳"),
-        <= -200 and > -300 => new("A ligação não é segura",
-            "O certificado deste site não é válido. O Éteris não abriu a página para proteger os seus dados.", "🛡"),
-        _ => new("Não foi possível abrir a página", $"O Chromium devolveu o erro {code}.", "⚠"),
-    };
+        var diagnosis = ErrorDiagnosis.For(code);
+        return new(diagnosis.Title, diagnosis.Detail, diagnosis.Glyph);
+    }
 
     // O que carregar quando o documento principal falha — nas abas e nos sites fixados da barra lateral. Quando foi o
     // «HTTPS primeiro» a subir o pedido para https:// (failedUpgrade devolve o http:// original) e o site não fala
@@ -101,21 +94,27 @@ public static class ErrorPage
             ? code
             : 0;
 
-    public static string Render(int code, string failedUrl, bool insecure = false, bool canRemember = true)
+    // secureDns: o DNS seguro está ligado (o diagnóstico de «nome não resolve» sugere desligá-lo se a rede o bloqueia).
+    public static string Render(int code, string failedUrl, bool insecure = false, bool canRemember = true, bool secureDns = false)
     {
         if (insecure) return RenderInsecure(code, failedUrl, canRemember);
-        var description = Describe(code);
+        var diagnosis = ErrorDiagnosis.For(code, secureDns);
         var retry = failedUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
                     || failedUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
         var data = new
         {
-            title = description.Title,
-            detail = description.Detail,
-            glyph = description.Glyph,
+            title = diagnosis.Title,
+            detail = diagnosis.Detail,
+            glyph = diagnosis.Glyph,
             url = failedUrl,
             retry,
-            offline = code == -106,
+            offline = diagnosis.Kind == ErrorKind.Offline,
             code,
+            // Diagnóstico legível («O nome não resolve (DNS)»), o que fazer, e o texto de «Copiar detalhes».
+            cause = diagnosis.Cause,
+            name = diagnosis.Name,
+            tips = diagnosis.Tips,
+            details = ErrorDiagnosis.Details(code, failedUrl, SettingsPage.Version, DateTime.Now),
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
@@ -137,6 +136,10 @@ public static class ErrorPage
             offline = false,
             code,
             insecure = true,
+            cause = "O site não fala HTTPS",
+            name = ErrorDiagnosis.NameOf(code),
+            tips = Array.Empty<string>(),
+            details = ErrorDiagnosis.Details(code, httpUrl, SettingsPage.Version, DateTime.Now),
             proceedOnce = ContinueUrl(httpUrl, always: false),
             proceedAlways = canRemember ? ContinueUrl(httpUrl, always: true) : null,
         };
