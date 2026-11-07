@@ -15,26 +15,28 @@ public class SelfTestTests
     private static readonly Dictionary<string, string> ThirdPartyClean = H(("Accept", "*/*"));
     private static readonly Dictionary<string, string> ReferrerOrigin = H(("Referer", SelfTest.PageUrl));
 
-    private static SelfTest.Measured Good(string? canvasBefore = "abc", IReadOnlyList<string>? rtc = null) =>
-        new(true, ["pt-PT"], true, false, rtc ?? ["candidate:1 1 udp 2122260223 4f1b2c3d-aaaa.local 54321 typ host"], "abc", canvasBefore, "r1");
+    private const string Policy = "disable_non_proxied_udp";
+
+    private static SelfTest.Measured Good(string? canvasBefore = "abc", bool rtcApi = true) =>
+        new(true, ["pt-PT"], true, false, rtcApi, "abc", canvasBefore, "r1");
 
     private static SelfTest.Check Find(IReadOnlyList<SelfTest.Check> checks, string id) => Assert.Single(checks, c => c.Id == id);
 
     [Fact]
     public void AllProtected_GivesEightLines()
     {
-        var checks = SelfTest.Grade(Good(canvasBefore: "def"), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, lanBlocked: true);
+        var checks = SelfTest.Grade(Good(canvasBefore: "def"), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, lanBlocked: true, Policy);
         Assert.Equal(["gpc", "cookies", "referrer", "language", "webrtc", "lan", "ads", "canvas"], checks.Select(c => c.Id));
         Assert.All(checks, c => Assert.True(c.Passed, c.Id));
         Assert.Contains("«https://autoteste-eteris.invalid/»", Find(checks, "referrer").Detail);
-        Assert.Contains("1 candidato(s), nenhum com o IP da sua rede", Find(checks, "webrtc").Detail);
+        Assert.Contains("«disable_non_proxied_udp»", Find(checks, "webrtc").Detail);
     }
 
     [Fact]
     public void Gpc_NeedsBothTheScriptAndTheHeader()
     {
-        Assert.False(Find(SelfTest.Grade(Good() with { Gpc = false }, Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true), "gpc").Passed);
-        var noHeader = Find(SelfTest.Grade(Good(), H(("Accept-Language", "pt-PT")), FirstParty, ThirdPartyClean, ReferrerOrigin, true), "gpc");
+        Assert.False(Find(SelfTest.Grade(Good() with { Gpc = false }, Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, Policy), "gpc").Passed);
+        var noHeader = Find(SelfTest.Grade(Good(), H(("Accept-Language", "pt-PT")), FirstParty, ThirdPartyClean, ReferrerOrigin, true, Policy), "gpc");
         Assert.False(noHeader.Passed);
         Assert.Contains("Sec-GPC", noHeader.Detail);
     }
@@ -42,10 +44,10 @@ public class SelfTestTests
     [Fact]
     public void ThirdPartyCookie_SentBack_IsExposed_AndAFailedControlIsInconclusive()
     {
-        var leaked = Find(SelfTest.Grade(Good(), Main, FirstParty, H(("Cookie", "eteris_teste=abc")), ReferrerOrigin, true), "cookies");
+        var leaked = Find(SelfTest.Grade(Good(), Main, FirstParty, H(("Cookie", "eteris_teste=abc")), ReferrerOrigin, true, Policy), "cookies");
         Assert.False(leaked.Passed);
         Assert.Contains("segui-lo de site em site", leaked.Detail);
-        var noControl = Find(SelfTest.Grade(Good(), Main, H(), ThirdPartyClean, ReferrerOrigin, true), "cookies");
+        var noControl = Find(SelfTest.Grade(Good(), Main, H(), ThirdPartyClean, ReferrerOrigin, true, Policy), "cookies");
         Assert.Null(noControl.Passed);
         Assert.StartsWith("Inconclusivo", noControl.Detail);
     }
@@ -53,43 +55,65 @@ public class SelfTestTests
     [Fact]
     public void Referrer_FullAddressIsExposed_NothingIsFine_MissingIsInconclusive()
     {
-        Assert.False(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, H(("Referer", SelfTest.PageUrl + "?segredo=1")), true), "referrer").Passed);
-        Assert.True(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, H(), true), "referrer").Passed);
-        Assert.Null(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, null, true), "referrer").Passed);
+        Assert.False(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, H(("Referer", SelfTest.PageUrl + "?segredo=1")), true, Policy), "referrer").Passed);
+        Assert.True(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, H(), true, Policy), "referrer").Passed);
+        Assert.Null(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, null, true, Policy), "referrer").Passed);
     }
 
     [Fact]
     public void Language_ListWithWeightsIsExposed()
     {
         var many = H(("Sec-GPC", "1"), ("Accept-Language", "pt-PT,pt;q=0.9,en;q=0.8"));
-        Assert.False(Find(SelfTest.Grade(Good(), many, FirstParty, ThirdPartyClean, ReferrerOrigin, true), "language").Passed);
-        Assert.False(Find(SelfTest.Grade(Good() with { Languages = ["pt-PT", "en"] }, Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true), "language").Passed);
+        Assert.False(Find(SelfTest.Grade(Good(), many, FirstParty, ThirdPartyClean, ReferrerOrigin, true, Policy), "language").Passed);
+        Assert.False(Find(SelfTest.Grade(Good() with { Languages = ["pt-PT", "en"] }, Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, Policy), "language").Passed);
     }
 
+    // Revisão aos 50: o WebRTC é lido no motor (a política em vigor no perfil da aba), nunca com uma ligação de teste —
+    // recolher candidatos abria UDP 5353 à escuta e o Windows pedia exceção na firewall.
     [Theory]
-    [InlineData("candidate:1 1 udp 2122260223 192.168.1.23 54321 typ host", false)]
-    [InlineData("candidate:1 1 udp 2122260223 10.0.0.5 54321 typ host", false)]
-    [InlineData("candidate:1 1 udp 2122260223 172.20.1.5 54321 typ host", false)]
-    [InlineData("candidate:1 1 udp 2122260223 fe80::1c2:3ff:fe4 54321 typ host", false)]
-    [InlineData("candidate:1 1 udp 2122260223 172.32.1.5 54321 typ host", true)]
-    [InlineData("candidate:1 1 udp 2122260223 4f1b2c3d-aaaa.local 54321 typ host", true)]
-    public void WebRtc_PrivateAddressesAreExposed(string candidate, bool passed)
-        => Assert.Equal(passed, Find(SelfTest.Grade(Good(rtc: [candidate]), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true), "webrtc").Passed);
+    [InlineData("disable_non_proxied_udp", true)]
+    [InlineData("default_public_interface_only", false)]
+    [InlineData("default", false)]
+    [InlineData(null, null)]
+    public void WebRtc_IsTheEffectivePolicy(string? policy, bool? passed)
+        => Assert.Equal(passed, Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, policy), "webrtc").Passed);
+
+    [Fact]
+    public void WebRtc_Unavailable_IsProtected_AndExposedNamesThePolicy()
+    {
+        var none = Find(SelfTest.Grade(Good(rtcApi: false), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, null), "webrtc");
+        Assert.True(none.Passed);
+        Assert.Contains("não está disponível", none.Detail);
+        var exposed = Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, "default"), "webrtc");
+        Assert.False(exposed.Passed);
+        Assert.Contains("«default»", exposed.Detail);
+        Assert.StartsWith("Inconclusivo", Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, null), "webrtc").Detail);
+    }
+
+    // As medições nunca abrem portas: nenhum RTCPeerConnection construído, só a pergunta se existe.
+    [Fact]
+    public void MeasureScript_OpensNoConnections()
+    {
+        Assert.DoesNotContain("new RTCPeerConnection", SelfTest.MeasureScript);
+        Assert.DoesNotContain("createOffer", SelfTest.MeasureScript);
+        Assert.Contains("typeof RTCPeerConnection", SelfTest.MeasureScript);
+        Assert.Contains("GetPreference(Shields.PrivacyPreferences.WebRtcPreference)", Read("src", "Eteris.Browser", "MainWindow.SelfTest.cs"));
+    }
 
     [Fact]
     public void LocalNetwork_MustBeStoppedByEteris()
     {
-        Assert.False(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, lanBlocked: false), "lan").Passed);
-        Assert.False(Find(SelfTest.Grade(Good() with { LanReached = true }, Main, FirstParty, ThirdPartyClean, ReferrerOrigin, false), "lan").Passed);
+        Assert.False(Find(SelfTest.Grade(Good(), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, lanBlocked: false, Policy), "lan").Passed);
+        Assert.False(Find(SelfTest.Grade(Good() with { LanReached = true }, Main, FirstParty, ThirdPartyClean, ReferrerOrigin, false, Policy), "lan").Passed);
     }
 
     [Fact]
     public void Canvas_FirstRunWaits_SameIsExposed_DifferentIsProtected()
     {
-        var first = Find(SelfTest.Grade(Good(canvasBefore: null), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true), "canvas");
+        var first = Find(SelfTest.Grade(Good(canvasBefore: null), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, Policy), "canvas");
         Assert.Null(first.Passed);
         Assert.Contains("Repetir o teste", first.Detail);
-        var same = Find(SelfTest.Grade(Good(canvasBefore: "abc"), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true), "canvas");
+        var same = Find(SelfTest.Grade(Good(canvasBefore: "abc"), Main, FirstParty, ThirdPartyClean, ReferrerOrigin, true, Policy), "canvas");
         Assert.False(same.Passed);
         Assert.Contains("Igual entre recargas", same.Detail);
     }
@@ -97,12 +121,12 @@ public class SelfTestTests
     [Fact]
     public void Parse_ReadsWhatThePageMeasured()
     {
-        var m = SelfTest.Parse("""{"run":"r9","gpc":true,"languages":["pt-PT"],"adApis":true,"lanReached":false,"rtc":["a"],"canvas":"ff","canvasBefore":null}""");
+        var m = SelfTest.Parse("""{"run":"r9","gpc":true,"languages":["pt-PT"],"adApis":true,"lanReached":false,"rtc":true,"canvas":"ff","canvasBefore":null}""");
         Assert.NotNull(m);
         Assert.Equal("r9", m.Run);
         Assert.Null(m.CanvasBefore);
-        Assert.Equal(["a"], m.Rtc!);
-        Assert.Null(SelfTest.Parse("""{"rtc":null,"run":"x","gpc":true,"languages":[],"adApis":true,"lanReached":false,"canvas":"1"}""")!.Rtc);
+        Assert.True(m.RtcApi);
+        Assert.False(SelfTest.Parse("""{"rtc":false,"run":"x","gpc":true,"languages":[],"adApis":true,"lanReached":false,"canvas":"1"}""")!.RtcApi);
         Assert.Null(SelfTest.Parse("não é JSON"));
         Assert.Null(SelfTest.Parse(42.0));
     }

@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Eteris.Browser.Browser;
 
@@ -8,7 +7,7 @@ namespace Eteris.Browser.Browser;
 // A página e o «outro site» são servidos pelo próprio Éteris (SelfTestSchemeHandlerFactory, dois nomes .invalid que
 // nunca existem na Internet): nada sai do computador. As medições correm pelo DevTools (PageScript) depois de a página
 // carregar e o veredicto (✔/✘/○) é decidido aqui, com o que a página viu e o que o «servidor» recebeu.
-public static partial class SelfTest
+public static class SelfTest
 {
     public const string Url = "eteris://privacy/teste";
     public const string Site = "autoteste-eteris.invalid";
@@ -35,7 +34,8 @@ public static partial class SelfTest
 
     public sealed record Check(string Id, string Title, bool? Passed, string Detail);
 
-    public sealed record Measured(bool Gpc, IReadOnlyList<string> Languages, bool AdApis, bool LanReached, IReadOnlyList<string>? Rtc,
+    // RtcApi: a página tem RTCPeerConnection (só se pergunta se existe — ver MeasureScript).
+    public sealed record Measured(bool Gpc, IReadOnlyList<string> Languages, bool AdApis, bool LanReached, bool RtcApi,
         string Canvas, string? CanvasBefore, string Run);
 
     public static Measured? Parse(object? result)
@@ -45,14 +45,12 @@ public static partial class SelfTest
         {
             using var doc = JsonDocument.Parse(json);
             var r = doc.RootElement;
-            IReadOnlyList<string>? rtc = r.TryGetProperty("rtc", out var c) && c.ValueKind == JsonValueKind.Array
-                ? c.EnumerateArray().Select(e => e.GetString() ?? string.Empty).ToList() : null;
             return new Measured(
                 r.GetProperty("gpc").GetBoolean(),
                 r.GetProperty("languages").EnumerateArray().Select(e => e.GetString() ?? string.Empty).ToList(),
                 r.GetProperty("adApis").GetBoolean(),
                 r.GetProperty("lanReached").GetBoolean(),
-                rtc,
+                r.TryGetProperty("rtc", out var rtc) && rtc.ValueKind == JsonValueKind.True,
                 r.GetProperty("canvas").GetString() ?? string.Empty,
                 r.TryGetProperty("canvasBefore", out var b) && b.ValueKind == JsonValueKind.String ? b.GetString() : null,
                 r.GetProperty("run").GetString() ?? string.Empty);
@@ -66,12 +64,10 @@ public static partial class SelfTest
     private static bool HasTestCookie(IReadOnlyDictionary<string, string>? headers)
         => Header(headers, "Cookie") is { } cookie && cookie.Contains(CookieName + "=", StringComparison.Ordinal);
 
-    [GeneratedRegex(@"(^|\s)(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|f[cd][0-9a-f]{2}:[0-9a-f:]+|fe80:[0-9a-f:]+)(\s|$)", RegexOptions.IgnoreCase)]
-    private static partial Regex PrivateAddress();
-
     // O veredicto de cada linha. lanBlocked: o Éteris travou o pedido da página para 127.0.0.1 (registo da aba).
+    // webRtcPolicy: a política de IP do WebRTC em vigor no perfil desta aba (null = não foi possível lê-la).
     public static IReadOnlyList<Check> Grade(Measured m, IReadOnlyDictionary<string, string>? main, IReadOnlyDictionary<string, string>? firstPartyEcho,
-        IReadOnlyDictionary<string, string>? thirdPartyEcho, IReadOnlyDictionary<string, string>? referrerEcho, bool lanBlocked)
+        IReadOnlyDictionary<string, string>? thirdPartyEcho, IReadOnlyDictionary<string, string>? referrerEcho, bool lanBlocked, string? webRtcPolicy)
     {
         var checks = new List<Check>();
 
@@ -100,12 +96,14 @@ public static partial class SelfTest
             oneLanguage ? $"O servidor recebeu «{language}» e a página vê navigator.languages = [{m.Languages[0]}]."
                 : $"O servidor recebeu «{language}» e a página vê [{string.Join(", ", m.Languages)}]: a lista ajuda a distingui-lo."));
 
-        var leaks = m.Rtc?.Where(c => PrivateAddress().IsMatch(c)).ToList() ?? [];
-        checks.Add(new("webrtc", "WebRTC sem o IP da sua rede", leaks.Count == 0,
-            m.Rtc is null ? "O WebRTC não está disponível para esta página."
-                : leaks.Count == 0 ? (m.Rtc.Count == 0 ? "Nenhum candidato com endereço: a página não descobre o IP da sua rede."
-                    : $"{m.Rtc.Count} candidato(s), nenhum com o IP da sua rede (só nomes .local ou públicos).")
-                : "A página viu um endereço da sua rede local num candidato WebRTC."));
+        // Lido no motor, sem criar uma ligação de teste: recolher candidatos abriria portas UDP à escuta e o Windows
+        // pediria uma exceção na firewall — num teste que promete «tudo neste computador».
+        bool? webRtc = !m.RtcApi ? true : webRtcPolicy is null ? null : Shields.PrivacyPreferences.IsWebRtcProtected(webRtcPolicy);
+        checks.Add(new("webrtc", "WebRTC sem o IP da sua rede", webRtc,
+            !m.RtcApi ? "O WebRTC não está disponível para esta página."
+                : webRtcPolicy is null ? "Inconclusivo: não foi possível ler a política de IP do WebRTC no motor."
+                : webRtc == true ? $"A política de IP do WebRTC em vigor é «{webRtcPolicy}»: sem proxy, nenhum candidato com o IP da sua rede chega à página. Lido no motor, sem abrir ligações nem portas."
+                : $"A política de IP do WebRTC em vigor é «{webRtcPolicy}»: uma página pode descobrir o IP da sua rede."));
 
         checks.Add(new("lan", "A página não chega à sua rede local", lanBlocked && !m.LanReached,
             lanBlocked ? "Um pedido da página para 127.0.0.1 foi travado pelo Éteris antes de sair."
@@ -142,17 +140,7 @@ public static partial class SelfTest
         await frame('https://terceiro-eteris.invalid/eco?k=c3&run=' + run);
         try { await fetch('https://terceiro-eteris.invalid/eco?k=ref&run=' + run, { referrerPolicy: 'unsafe-url', mode: 'no-cors' }); } catch (e) {}
         try { await fetch('http://127.0.0.1:9/eteris-autoteste', { mode: 'no-cors' }); out.lanReached = true; } catch (e) { out.lanReached = false; }
-        out.rtc = await new Promise(resolve => {
-          try {
-            const pc = new RTCPeerConnection({ iceServers: [] });
-            const seen = [];
-            const done = () => { try { pc.close(); } catch (e) {} resolve(seen); };
-            pc.createDataChannel('t');
-            pc.onicecandidate = e => { if (e.candidate) seen.push(e.candidate.candidate); else done(); };
-            pc.createOffer().then(o => pc.setLocalDescription(o)).catch(done);
-            setTimeout(done, 2500);
-          } catch (e) { resolve(null); }
-        });
+        out.rtc = typeof RTCPeerConnection === 'function';
         const cv = document.createElement('canvas');
         cv.width = 240; cv.height = 60;
         const g = cv.getContext('2d');

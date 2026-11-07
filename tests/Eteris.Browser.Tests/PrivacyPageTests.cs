@@ -36,6 +36,22 @@ public class PrivacyPageTests
         Assert.Contains("BrowsingTopics", promise.Detail);
     }
 
+    // Revisão aos 50: a política de IP do WebRTC fixada na linha de comandos e sem o mDNS do WebRTC (UDP 5353 à escuta,
+    // aviso da firewall do Windows); faltar qualquer um deixa a linha ✘ a dizer o quê.
+    [Fact]
+    public void WebRtc_NeedsThePolicySwitchAndNoMdns()
+    {
+        var noSwitch = EngineArgs();
+        noSwitch.Remove(EngineHardening.WebRtcPolicySwitch);
+        Assert.False(Find(Good(noSwitch), "webrtc").Kept);
+        Assert.Contains("desde o arranque", Find(Good(noSwitch), "webrtc").Detail);
+        var mdns = EngineArgs();
+        mdns["disable-features"] = string.Join(',', EngineHardening.Switch(mdns, "disable-features").Where(f => f != "WebRtcHideLocalIpsWithMdns"));
+        Assert.False(Find(Good(mdns), "webrtc").Kept);
+        Assert.Contains("firewall", Find(Good(mdns), "webrtc").Detail);
+        Assert.False(Find(Good() with { WebRtcProtected = false }, "webrtc").Kept);
+    }
+
     [Fact]
     public void Quiet_WithoutBackgroundNetworkingSwitch_IsBroken()
     {

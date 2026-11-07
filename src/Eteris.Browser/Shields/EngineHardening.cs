@@ -50,6 +50,20 @@ public static class EngineHardening
         ("ReduceAcceptLanguageHTTP", "também nos pedidos de sub-recursos"),
     ];
 
+    // WebRTC sem o IP da rede e sem portas abertas. A política «disable_non_proxied_udp» vai também na linha de comandos
+    // (o Chromium passa --webrtc-ip-handling-policy à preferência webrtc.ip_handling_policy, que fica fixa): está em vigor
+    // desde o primeiro processo de página, sem esperar por PrivacyPreferences.ApplyAsync, e vale para a janela privada.
+    public const string WebRtcPolicySwitch = "webrtc-ip-handling-policy";
+    public const string WebRtcPolicy = "disable_non_proxied_udp";
+
+    // O «respondedor mDNS» do WebRTC só serve para esconder endereços locais que esta política já nunca dá aos sites,
+    // mas cada página que criava um RTCPeerConnection o arrancava: UDP 5353 à escuta em todas as interfaces do serviço
+    // de rede, e o Windows pedia uma exceção na firewall para o «CefSharp.BrowserSubprocess».
+    public static readonly IReadOnlyList<(string Feature, string What)> NoListeningSockets =
+    [
+        ("WebRtcHideLocalIpsWithMdns", "o WebRTC não deixa a porta mDNS (UDP 5353) à escuta em todas as interfaces — o Windows não pede exceção na firewall"),
+    ];
+
     // Tudo o que o Éteris acrescenta à configuração do motor: interruptores e uma só língua para os sites (a lista de
     // línguas fixa-se ao arrancar; o cabeçalho Accept-Language e o navigator.languages seguem-na).
     public static void Configure(CefSharp.CefSettingsBase settings, string? language = null)
@@ -66,7 +80,8 @@ public static class EngineHardening
     public static void Apply(IDictionary<string, string> args)
     {
         Merge(args, "enable-features", Partitioning.Concat(Identity).Concat(LocalNetworkChecks).Select(f => f.Feature));
-        Merge(args, "disable-features", AdApis.Select(a => a.Feature));
+        Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Select(a => a.Feature));
+        args[WebRtcPolicySwitch] = WebRtcPolicy;
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         Applied = new Dictionary<string, string>(args);
     }

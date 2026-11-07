@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Shields;
 
@@ -35,6 +36,41 @@ public class EngineHardeningTests
         Assert.Contains("OptimizationHints", disabled);
         Assert.Contains("HttpsUpgrades", disabled);
         Assert.Equal(disabled.Count, disabled.Distinct().Count());
+    }
+
+    // Revisão aos 50: a política de IP do WebRTC na linha de comandos (preferência fixa desde o arranque, também na janela
+    // privada) e sem o respondedor mDNS do WebRTC, que abria UDP 5353 em todas as interfaces (aviso da firewall).
+    [Fact]
+    public void Build_FixesTheWebRtcPolicy_AndOpensNoListeningSockets()
+    {
+        var args = CefConfigurator.Build("p").CefCommandLineArgs;
+        Assert.Equal("disable_non_proxied_udp", args["webrtc-ip-handling-policy"]);
+        Assert.Contains("WebRtcHideLocalIpsWithMdns", Switch("disable-features"));
+        Assert.All(EngineHardening.NoListeningSockets, f => Assert.False(string.IsNullOrWhiteSpace(f.What)));
+    }
+
+    // Protegido é o valor em vigor no perfil (lido de volta), não o êxito do SetPreference, que a linha de comandos recusa.
+    [Theory]
+    [InlineData("disable_non_proxied_udp", true)]
+    [InlineData("default_public_interface_only", false)]
+    [InlineData("default", false)]
+    [InlineData(null, false)]
+    [InlineData(1, false)]
+    public void WebRtcProtected_IsTheEffectivePolicy(object? value, bool expected)
+        => Assert.Equal(expected, PrivacyPreferences.IsWebRtcProtected(value));
+
+    [Fact]
+    public void Preferences_ReadTheWebRtcPolicyBack()
+    {
+        var source = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Shields", "PrivacyPreferences.cs"));
+        Assert.Contains("var webRtc = IsWebRtcProtected(target.GetPreference(WebRtcPreference));", source);
+    }
+
+    private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 
     [Fact]

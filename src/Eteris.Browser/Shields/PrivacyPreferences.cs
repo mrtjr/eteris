@@ -29,6 +29,12 @@ public static class PrivacyPreferences
 
     public static bool WebRtcIpProtected { get; private set; }
 
+    public const string WebRtcPreference = "webrtc.ip_handling_policy";
+
+    // Protegido é o valor em vigor no perfil, não o êxito do SetPreference: com a política fixada na linha de comandos
+    // do motor (EngineHardening.WebRtcPolicySwitch) o Chromium recusa mudá-la — e é aí que está mais segura.
+    public static bool IsWebRtcProtected(object? value) => value is string policy && policy == EngineHardening.WebRtcPolicy;
+
     // A língua que os sites recebem, já resolvida («system» → a do Windows).
     public static string SiteLanguage => RequestIdentity.Language(Data.Settings.Current.SiteLanguage);
 
@@ -47,7 +53,8 @@ public static class PrivacyPreferences
         // O interruptor «bloquear todos os cookies de terceiros» das versões novas do Chromium, a par do antigo.
         target.SetPreference("tracking_protection.block_all_3pc_toggle_enabled", block, out _);
         cookies &= block;
-        var webRtc = target.SetPreference("webrtc.ip_handling_policy", "disable_non_proxied_udp", out _);
+        target.SetPreference(WebRtcPreference, EngineHardening.WebRtcPolicy, out _);
+        var webRtc = IsWebRtcProtected(target.GetPreference(WebRtcPreference));
         if (context is not null) return;
         ThirdPartyCookiesBlocked = cookies;
         WebRtcIpProtected = webRtc;

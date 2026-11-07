@@ -81,6 +81,9 @@ public static class PrivacyPage
         var uncloaks = CnameUncloak.IsCandidate("https://www.exemplo.pt/", CnameSample, CefSharp.ResourceType.Script)
                        && CnameUncloak.CloakedTracker(CnameSample, "https://www.exemplo.pt/", "script", ["exemplo.eulerian.net"],
                            (url, _, _) => url.StartsWith("https://exemplo.eulerian.net/", StringComparison.Ordinal)) == "exemplo.eulerian.net";
+        // WebRTC: a política em vigor no perfil, fixada na linha de comandos do motor, e sem o mDNS que abria portas.
+        var webRtcFixed = EngineHardening.Switch(s.EngineArgs, EngineHardening.WebRtcPolicySwitch).SequenceEqual([EngineHardening.WebRtcPolicy]);
+        var webRtcQuiet = EngineHardening.NoListeningSockets.All(f => disabled.Contains(f.Feature));
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
 
         return
@@ -148,8 +151,11 @@ public static class PrivacyPage
                       + (s.SecureDns is null ? "." : "; com o DNS cifrado só se lê a cache do Windows."),
                 !s.UncloakCname ? null : uncloaks, Fix: s.UncloakCname ? null : "eteris://settings/#privacidade"),
             new("webrtc", "O WebRTC não revela o seu IP local",
-                s.WebRtcProtected ? "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede." : "A política de IP do WebRTC não foi aplicada.",
-                s.WebRtcProtected),
+                !s.WebRtcProtected ? "A política de IP do WebRTC não foi aplicada."
+                    : !webRtcFixed ? "A política de IP do WebRTC não está fixada no motor desde o arranque: as primeiras páginas podiam ficar sem ela."
+                    : !webRtcQuiet ? "Os sites não descobrem os endereços da sua rede, mas uma página com WebRTC ainda abre portas à escuta (mDNS) e o Windows pode pedir exceção na firewall."
+                    : "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede — e o WebRTC já não deixa a porta mDNS à escuta neste computador.",
+                s.WebRtcProtected && webRtcFixed && webRtcQuiet),
             new("dns", "DNS cifrado",
                 s.SecureDns is { } dns ? $"Os nomes dos sites vão cifrados para {dns}." : "Opcional · desligado: os nomes dos sites vão para o DNS do sistema.",
                 s.SecureDns is null ? null : true, Fix: s.SecureDns is null ? "eteris://settings/#privacidade" : null),
