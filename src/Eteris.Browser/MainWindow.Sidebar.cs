@@ -2,7 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Sidebar;
@@ -126,6 +128,7 @@ public partial class MainWindow
         SidebarNotes.Visibility = panel.Key == SidebarPanels.Notes ? Visibility.Visible : Visibility.Collapsed;
         NotesInsertButton.Visibility = SidebarNotes.Visibility;
         SidebarReading.Visibility = panel.Key == SidebarPanels.Reading ? Visibility.Visible : Visibility.Collapsed;
+        SidebarLinks.Visibility = panel.Key is SidebarPanels.Bookmarks or SidebarPanels.History ? Visibility.Visible : Visibility.Collapsed;
 
         switch (panel.Key)
         {
@@ -135,6 +138,89 @@ public partial class MainWindow
                 break;
             case SidebarPanels.Reading:
                 RefreshReadingPanel();
+                break;
+            case SidebarPanels.Bookmarks:
+            case SidebarPanels.History:
+                SidebarFilterHint.Text = panel.Key == SidebarPanels.Bookmarks ? "Filtrar favoritos" : "Filtrar o histórico";
+                if (SidebarFilter.Text.Length > 0) SidebarFilter.Clear();
+                else RefreshLinksPanel();
+                if (focus) SidebarFilter.Focus();
+                break;
+        }
+    }
+
+    // ---------- Favoritos e Histórico ----------
+
+    private void RefreshLinksPanel()
+    {
+        if (_sidebarPanel is not { } panel) return;
+        var query = SidebarFilter.Text.Trim();
+        SidebarFilterHint.Visibility = SidebarFilter.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        IReadOnlyList<object> rows = panel.Key switch
+        {
+            SidebarPanels.Bookmarks => SidebarLists.Bookmarks(AppData.Bookmarks(b => b.All(500)), query),
+            SidebarPanels.History => SidebarLists.History(AppData.TryRead(h => h.Visits(400)), DateTime.Now, query),
+            _ => [],
+        };
+        ApplySiteIcons(rows.OfType<SidebarLink>());
+        SidebarLinkList.ItemsSource = rows;
+        SidebarLinksEmpty.Text = query.Length > 0 ? $"Nada encontrado para «{query}»."
+            : panel.Key == SidebarPanels.Bookmarks ? "Ainda não há favoritos. A estrela na barra de endereço (Ctrl+D) guarda a página aberta."
+            : "O histórico está vazio.";
+        SidebarLinksEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Ícones dos sites já guardados pelo histórico (os mesmos de eteris://history): descodificados uma vez por janela.
+    private readonly Dictionary<string, ImageSource?> _siteIconCache = new(StringComparer.Ordinal);
+
+    private void ApplySiteIcons(IEnumerable<SidebarLink> links)
+    {
+        if (IsPrivate) return;
+        var pending = links.Where(link => HistoryStore.SiteIconKey(link.Url) is { } site && !_siteIconCache.ContainsKey(site)).ToList();
+        if (pending.Count > 0)
+        {
+            foreach (var (site, dataUri) in AppData.SiteIcons(pending.Select(l => l.Url)))
+                _siteIconCache[site] = DecodeDataUri(dataUri);
+            foreach (var link in pending)
+                _siteIconCache.TryAdd(HistoryStore.SiteIconKey(link.Url)!, null);
+        }
+        foreach (var link in links)
+            if (HistoryStore.SiteIconKey(link.Url) is { } site && _siteIconCache.TryGetValue(site, out var icon)) link.Icon = icon;
+    }
+
+    private static ImageSource? DecodeDataUri(string dataUri)
+    {
+        try
+        {
+            var comma = dataUri.IndexOf(',');
+            if (comma < 0) return null;
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.StreamSource = new System.IO.MemoryStream(Convert.FromBase64String(dataUri[(comma + 1)..]));
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception) { return null; }
+    }
+
+    private void SidebarFilter_TextChanged(object sender, TextChangedEventArgs e) => RefreshLinksPanel();
+
+    private void SidebarFilter_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Escape:
+                // Esc limpa o filtro; sem filtro, fecha a barra (como nas notas).
+                if (SidebarFilter.Text.Length > 0) SidebarFilter.Clear();
+                else CloseSidebar();
+                e.Handled = true;
+                break;
+            case Key.Enter when SidebarLinkList.ItemsSource is IEnumerable<object> rows && rows.OfType<SidebarLink>().FirstOrDefault() is { } first:
+                OpenSidebarLink(first);
+                e.Handled = true;
                 break;
         }
     }
@@ -213,6 +299,22 @@ public partial class MainWindow
             .Item("", "Abrir numa nova aba", () => Tabs.NewTab(link.Url))
             .Item("", "Abrir ao lado (ecrã dividido)", () => OpenSideBySide(Tabs.NewTab(link.Url, activate: false)))
             .Item("", "Copiar endereço", () => CopyText(Shields.UrlCleaner.Clean(link.Url), "Endereço copiado"));
+        if (SidebarShows(SidebarPanels.Bookmarks))
+            menu.Separator()
+                .Item("\uE74D", "Remover dos favoritos", () =>
+                {
+                    AppData.RemoveBookmark(link.Url);
+                    UpdateStar();
+                    RefreshLinksPanel();
+                    ShowToast("Removido dos favoritos");
+                });
+        if (SidebarShows(SidebarPanels.History))
+            menu.Separator()
+                .Item("\uE74D", "Apagar esta visita do histórico", () =>
+                {
+                    AppData.TryWrite(h => h.DeleteVisit(link.Id));
+                    RefreshLinksPanel();
+                });
         if (SidebarShows(SidebarPanels.Reading))
             menu.Separator()
                 .Item(link.Muted ? "" : "", link.Muted ? "Marcar como por ler" : "Marcar como lido", () =>

@@ -24,6 +24,7 @@ public partial class MainWindow
         if (Tabs.Active is not { } tab || WebHost(tab.Address) is null) return;
         AppData.ToggleBookmark(tab.Address, tab.Title);
         UpdateStar();
+        if (SidebarShows(global::Eteris.Browser.Sidebar.SidebarPanels.Bookmarks)) RefreshLinksPanel();
     }
 
     private void Star_Click(object sender, RoutedEventArgs e) => ToggleBookmark();

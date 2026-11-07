@@ -161,4 +161,71 @@ public class SidebarTests
         Assert.Equal("pt.wikipedia.org/wiki/Fado", SidebarLists.TitleOf(null, "https://pt.wikipedia.org/wiki/Fado/"));
         Assert.Equal("a.pt", SidebarLists.TitleOf("", "https://a.pt/"));
     }
+
+    // ---------- Favoritos e Histórico ----------
+
+    [Fact]
+    public void Bookmarks_FilterByWordsIgnoringAccents()
+    {
+        var marks = new[]
+        {
+            new Bookmark("https://pt.wikipedia.org/wiki/Fado", "Fado – Wikipédia"),
+            new Bookmark("https://exemplo.pt/receitas", "Receitas de família"),
+        };
+        Assert.Equal(2, SidebarLists.Bookmarks(marks, "").Count);
+        var found = SidebarLists.Bookmarks(marks, "wikipedia fado");
+        Assert.Single(found);
+        Assert.Equal("Fado – Wikipédia", found[0].Title);
+        Assert.Equal("pt.wikipedia.org", found[0].Subline);
+        Assert.Empty(SidebarLists.Bookmarks(marks, "bolo"));
+    }
+
+    [Fact]
+    public void History_GroupsByLocalDayAndHidesRepeatsWithinTheDay()
+    {
+        var zone = TimeZoneInfo.Utc;
+        var now = new DateTime(2026, 11, 7, 15, 0, 0); // sábado
+        var rows = SidebarLists.History(
+        [
+            new Visit(5, "https://a.pt/", "A", new DateTime(2026, 11, 7, 14, 30, 0, DateTimeKind.Utc)),
+            new Visit(4, "https://b.pt/x", "B", new DateTime(2026, 11, 7, 9, 5, 0, DateTimeKind.Utc)),
+            new Visit(3, "https://a.pt/", "A", new DateTime(2026, 11, 7, 8, 0, 0, DateTimeKind.Utc)),
+            new Visit(2, "https://a.pt/", "A", new DateTime(2026, 11, 6, 23, 59, 0, DateTimeKind.Utc)),
+            new Visit(1, "https://c.pt/", "C", new DateTime(2026, 11, 3, 10, 0, 0, DateTimeKind.Utc)),
+        ], now, "", zone);
+
+        Assert.Equal(["Hoje", "A", "B", "Ontem", "A", "Terça-feira", "C"],
+            rows.Select(r => r is SidebarHeading h ? h.Title : ((SidebarLink)r).Title));
+        var first = Assert.IsType<SidebarLink>(rows[1]);
+        Assert.Equal("a.pt · 14:30", first.Subline);
+        Assert.Equal(5, first.Id);
+    }
+
+    [Fact]
+    public void History_FilterKeepsOnlyMatchingVisitsAndTheirDays()
+    {
+        var rows = SidebarLists.History(
+        [
+            new Visit(2, "https://a.pt/", "Alfa", new DateTime(2026, 11, 7, 14, 30, 0, DateTimeKind.Utc)),
+            new Visit(1, "https://b.pt/", "Beta", new DateTime(2026, 11, 6, 10, 0, 0, DateTimeKind.Utc)),
+        ], new DateTime(2026, 11, 7, 15, 0, 0), "beta", TimeZoneInfo.Utc);
+        Assert.Equal(["Ontem", "Beta"], rows.Select(r => r is SidebarHeading h ? h.Title : ((SidebarLink)r).Title));
+    }
+
+    [Theory]
+    [InlineData(0, "Hoje")]
+    [InlineData(1, "Ontem")]
+    [InlineData(2, "Quinta-feira")]
+    [InlineData(6, "Domingo")]
+    [InlineData(7, "31 de outubro")]
+    [InlineData(400, "3 de outubro de 2025")]
+    public void DayLabel_ReadsNaturally(int daysAgo, string expected)
+        => Assert.Equal(expected, SidebarLists.DayLabel(new DateOnly(2026, 11, 7).AddDays(-daysAgo), new DateOnly(2026, 11, 7)));
+
+    [Fact]
+    public void Link_SublineOmitsTheDetailWhenEmpty()
+    {
+        Assert.Equal("a.pt", new SidebarLink("https://a.pt/", "A", "a.pt", "", false).Subline);
+        Assert.Equal("a.pt · Lido", new SidebarLink("https://a.pt/", "A", "a.pt", "Lido", true).Subline);
+    }
 }
