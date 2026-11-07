@@ -175,6 +175,8 @@ public partial class MainWindow
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("\uE789", "Novidades desta versão", "O que mudou no Éteris", null, () => OpenInternal(WhatsNewPage.Url));
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
+        yield return new("\uE790", "Cor do Éteris", "Escolher a cor de destaque: paleta, da paisagem ou do Windows", null,
+            () => OpenInternal(SettingsPage.Url + "#aspeto"));
         if (!IsPrivate)
             yield return new("", NotesPanel.Visibility == Visibility.Visible ? "Fechar as notas" : "Notas",
             "Bloco de notas ao lado da página, guardado só neste computador", "Ctrl+Shift+E", ToggleNotes);

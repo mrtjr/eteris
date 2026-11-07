@@ -14,6 +14,10 @@ public partial class App : Application
         Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
         Theme.ThemeManager.FollowSystemChanges(() => Data.Settings.Current.Theme);
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.ThemeManager.Apply(s.Theme));
+        // Cor do Éteris: aplicada já, e de novo quando a escolha ou o tema mudam (os tons dependem da moldura).
+        Theme.AccentManager.Apply(Data.Settings.Current.Accent, Theme.ThemeManager.Current == Theme.AppTheme.Light);
+        Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.AccentManager.Apply(s.Accent, Theme.ThemeManager.Current == Theme.AppTheme.Light));
+        Theme.ThemeManager.Changed += t => Dispatcher.InvokeAsync(() => Theme.AccentManager.Apply(Data.Settings.Current.Accent, t == Theme.AppTheme.Light));
         _ = Shields.PrivacyPreferences.ApplyAsync();
         Data.Settings.Changed += _ => { var __ = Shields.PrivacyPreferences.ApplyAsync(); };
         _ = Shields.ShieldEngine.StartAsync(Shields.FilterLists.ForApp());

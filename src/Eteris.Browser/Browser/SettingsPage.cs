@@ -74,6 +74,8 @@ public static class SettingsPage
             }),
             tabs = settings.VerticalTabs ? "side" : "top",
             density = settings.Density,
+            accent = settings.Accent,
+            accents = Theme.Accent.Palette.Select(c => new { key = c.Key, name = c.Name, color = Theme.Accent.Hex(c.Color) }),
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

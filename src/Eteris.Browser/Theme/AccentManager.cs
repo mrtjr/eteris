@@ -1,0 +1,63 @@
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using Microsoft.Win32;
+
+namespace Eteris.Browser.Theme;
+
+// Aplica a «Cor do Éteris» (ver Accent) à faixa íris partilhada por toda a interface: o pincel IrisBrush dos
+// recursos da aplicação é um só objeto, usado por StaticResource em todo o lado, por isso mudam-se as cores dos
+// seus degraus no sítio (com uma transição suave) em vez de o substituir.
+public static class AccentManager
+{
+    private static readonly TimeSpan Transition = TimeSpan.FromMilliseconds(420);
+
+    // Cor base e degraus em vigor (as páginas internas e a barra aurora lêem daqui).
+    public static Color Current { get; private set; } = Accent.IrisStops[0];
+    public static Color[] Stops { get; private set; } = (Color[])Accent.IrisStops.Clone();
+
+    public static event Action? Changed;
+
+    // Amostra da paisagem da nova aba (ligada pela janela, que tem as imagens); null enquanto não houver.
+    public static Func<Color?>? WallpaperSampler { get; set; }
+
+    public static void Apply(string choice, bool light)
+    {
+        var baseColor = Accent.Resolve(choice, () => WallpaperSampler?.Invoke(), ReadWindowsAccent);
+        var stops = Accent.Gradient(baseColor, light);
+        if (stops.SequenceEqual(Stops) && baseColor == Current) return;
+        Current = baseColor;
+        Stops = stops;
+        Retint(Application.Current?.Resources["IrisBrush"] as LinearGradientBrush, stops);
+        Changed?.Invoke();
+    }
+
+    // Degraus de um pincel íris (o da aplicação ou a barra aurora de uma janela) animados até às cores em vigor.
+    public static void Retint(LinearGradientBrush? brush, IReadOnlyList<Color> stops)
+    {
+        if (brush is null || brush.IsFrozen) return;
+        // Pincéis com mais degraus (a barra aurora repete o primeiro tom nas pontas, transparente) seguem pelo índice.
+        for (var i = 0; i < brush.GradientStops.Count; i++)
+        {
+            var stop = brush.GradientStops[i];
+            var target = stops[Math.Min(i, stops.Count - 1)];
+            if (brush.GradientStops.Count > stops.Count)
+                target = i == 0 || i == brush.GradientStops.Count - 1
+                    ? Color.FromArgb(0, stops[0].R, stops[0].G, stops[0].B)
+                    : stops[Math.Clamp(i - 1, 0, stops.Count - 1)];
+            stop.BeginAnimation(GradientStop.ColorProperty,
+                new ColorAnimation(target, Transition) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } });
+        }
+    }
+
+    // Cor de destaque do Windows (Definições › Personalização › Cores), lida do registo: sem WinRT.
+    public static Color? ReadWindowsAccent()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
+            return key?.GetValue("AccentColor") is int value ? Accent.FromDwmAccent(value) : null;
+        }
+        catch (Exception) { return null; }
+    }
+}
