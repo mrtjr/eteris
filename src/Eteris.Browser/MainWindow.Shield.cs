@@ -34,8 +34,10 @@ public partial class MainWindow
         ShieldBadge.Visibility = count > 0 && on ? Visibility.Visible : Visibility.Collapsed;
         ShieldCount.Text = count > 99 ? "99+" : count.ToString();
         ShieldGlyph.Foreground = (Brush)FindResource(on ? "TextBrush" : "TextFaintBrush");
+        var cloaked = tab?.CloakedTrackers.Count ?? 0;
         ShieldButton.ToolTip = !on ? "Escudo desligado neste site"
             : (count == 1 ? "1 rastreador bloqueado" : $"{count} rastreadores bloqueados")
+              + (cloaked == 0 ? string.Empty : cloaked == 1 ? " (1 escondido)" : $" ({cloaked} escondidos)")
               + DebounceText.Tooltip(tab?.TrackingSkips.Count ?? 0);
 
         if (ShieldPopup.IsOpen) FillShieldPopup();
@@ -69,6 +71,7 @@ public partial class MainWindow
             ? $"✓  DNS cifrado ({dns})" : "·  DNS do sistema (pode ativar DNS cifrado nas definições)";
         ShieldCheckLan.Text = LocalNetworkShieldLine(tab);
         ShieldCheckBounce.Text = DebounceText.ShieldLine(tab?.TrackingSkips ?? [], Data.Settings.Current.SkipTrackingRedirects);
+        ShieldCheckCname.Text = CnameUncloak.ShieldLine(tab?.CloakedTrackers ?? [], Data.Settings.Current.UncloakCname);
         ShieldCheckBounceSites.Text = BounceText.ShieldLine(IsPrivate ? [] : tab?.BounceSites ?? [], Data.Settings.Current.ForgetBounceTrackers);
         ShieldCheckBounceSites.Visibility = ShieldCheckBounceSites.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         var session = ShieldStats.SessionBlocked;

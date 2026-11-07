@@ -122,6 +122,8 @@ public sealed class BounceLedger(Func<DateTime> clock)
         Dirty = true;
     }
 
+    public int PendingCount => _bounces.Count;
+
     public IReadOnlyList<KeyValuePair<string, DateTime>> Pending
         => _bounces.OrderBy(b => b.Value).ThenBy(b => b.Key, StringComparer.Ordinal).ToList();
 

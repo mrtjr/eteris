@@ -214,6 +214,13 @@ public partial class BrowserTab : ObservableObject
 
     public void ClearBounceSites() => _bounceSites.Clear();
 
+    private readonly List<string> _cloaked = [];
+
+    // Rastreadores escondidos atrás de um subdomínio do site (CNAME) bloqueados nesta página: «nome → rastreador».
+    public IReadOnlyList<string> CloakedTrackers => _cloaked.ToList();
+
+    public void RecordCloaked(string label) => _cloaked.Add(label);
+
     public void RecordBlocked(string host)
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
@@ -251,6 +258,7 @@ public partial class BrowserTab : ObservableObject
         _blockedHosts.Clear();
         _localNetworkBlocked.Clear();
         _trackingSkips.Clear();
+        _cloaked.Clear();
         BlockedCount = 0;
     }
 

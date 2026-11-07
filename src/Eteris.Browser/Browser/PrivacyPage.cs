@@ -34,7 +34,19 @@ public static class PrivacyPage
         string Language,
         bool HideFromCapture,
         int VisibleWindows,
-        int HiddenWindows);
+        int HiddenWindows,
+        bool SkipRedirects = true,
+        bool ForgetBounces = true,
+        int BouncesCleared = 0,
+        int BouncesPending = 0,
+        bool UncloakCname = true,
+        long CnameBlocked = 0,
+        long CnameDecisions = 0,
+        double CnameMicros = 0);
+
+    // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
+    public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
+    public const string CnameSample = "https://metrics.exemplo.pt/col.js";
 
     private static readonly Lazy<string> Template = new(() =>
     {
@@ -65,6 +77,10 @@ public static class PrivacyPage
                       && LocalNetwork.Decide("https://www.exemplo.pt/", "http://127.0.0.1:6463/", CefSharp.ResourceType.Xhr, false) == LocalNetwork.Decision.Block
                       && LocalNetwork.Decide("https://www.exemplo.pt/", "http://192.168.1.1/", CefSharp.ResourceType.MainFrame, false) == LocalNetwork.Decision.Allow
                       && EngineHardening.LocalNetworkChecks.All(c => enabled.Contains(c.Feature));
+        var debounced = Debounce.Destination(BounceSample) == "https://www.exemplo.pt/artigo";
+        var uncloaks = CnameUncloak.IsCandidate("https://www.exemplo.pt/", CnameSample, CefSharp.ResourceType.Script)
+                       && CnameUncloak.CloakedTracker(CnameSample, "https://www.exemplo.pt/", "script", ["exemplo.eulerian.net"],
+                           (url, _, _) => url.StartsWith("https://exemplo.eulerian.net/", StringComparison.Ordinal)) == "exemplo.eulerian.net";
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
 
         return
@@ -115,6 +131,22 @@ public static class PrivacyPage
                     ? "Uma página da Internet não chega a este computador (127.0.0.1, localhost) nem ao router, à impressora ou ao NAS sem o deixar; escrever um endereço local na barra continua livre."
                     : "Os pedidos de páginas públicas para a rede local não estão a ser travados.",
                 lanKept),
+            new("bounce", "Links sem saltos de rastreio",
+                !s.SkipRedirects ? "Opcional · desligado: os links passam pelos intermediários (l.facebook.com, google.com/url…) como o site os escreveu."
+                    : !debounced ? "Os saltos de rastreio não estão a ser evitados."
+                    : "Um link por l.facebook.com/l.php?u=… vai direto a «www.exemplo.pt/artigo»: o intermediário nunca sabe do clique. "
+                      + (s.ForgetBounces
+                          ? $"Os sites que só servem de salto perdem cookies e armazenamento 1 hora depois ({Count(s.BouncesCleared, "site esquecido", "sites esquecidos")}, {Count(s.BouncesPending, "à espera", "à espera")})."
+                          : "Esquecer os sites de salto está desligado."),
+                !s.SkipRedirects ? null : debounced, Fix: s.SkipRedirects ? null : "eteris://settings/#privacidade"),
+            new("cname", "Rastreadores escondidos desmascarados",
+                !s.UncloakCname ? "Opcional · desligado: um rastreador servido por um subdomínio do site (CNAME) passa como se fosse do site."
+                    : !uncloaks ? "O desmascarar de CNAME não está a decidir como devia."
+                    : $"Um pedido a {new Uri(CnameSample).Host} que no DNS é exemplo.eulerian.net é bloqueado como o rastreador que é. "
+                      + $"Nesta sessão: {Count((int)s.CnameBlocked, "bloqueado", "bloqueados")} em {Count((int)s.CnameDecisions, "pedido visto", "pedidos vistos")}"
+                      + (s.CnameDecisions > 0 ? FormattableString.Invariant($", {s.CnameMicros:0.0} µs por pedido na thread de rede") : string.Empty)
+                      + (s.SecureDns is null ? "." : "; com o DNS cifrado só se lê a cache do Windows."),
+                !s.UncloakCname ? null : uncloaks, Fix: s.UncloakCname ? null : "eteris://settings/#privacidade"),
             new("webrtc", "O WebRTC não revela o seu IP local",
                 s.WebRtcProtected ? "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede." : "A política de IP do WebRTC não foi aplicada.",
                 s.WebRtcProtected),
@@ -130,12 +162,18 @@ public static class PrivacyPage
         ];
     }
 
+    private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
+
     public static State Current()
     {
         var (visible, hidden) = Infrastructure.CaptureShield.Count();
+        var settings = Data.Settings.Current;
+        var bounces = MainWindow.Bounces;
         return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.ScriptFor("https://example.com/") is not null,
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
-            EngineHardening.StartedWithLanguage, Data.Settings.Current.HideFromCapture, visible, hidden);
+            EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
+            settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
+            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision);
     }
 
     public static string Render(State state)

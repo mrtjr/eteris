@@ -59,6 +59,16 @@ public static class CnameUncloak
 
     // Etiqueta do Escudo: o nome visível e o rastreador que estava por trás.
     public static string Label(string host, string target) => $"{host} → {target}";
+
+    // Linha do Escudo: os rastreadores escondidos desmascarados nesta página (ou que a proteção está ativa).
+    public static string ShieldLine(IReadOnlyList<string> cloaked, bool enabled)
+    {
+        if (!enabled) return "·  Rastreadores escondidos (CNAME): desligado nas definições";
+        if (cloaked.Count == 0) return "✓  Rastreadores escondidos atrás de subdomínios do site são desmascarados";
+        var labels = cloaked.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var count = cloaked.Count == 1 ? "1 rastreador escondido desmascarado" : $"{cloaked.Count} rastreadores escondidos desmascarados";
+        return $"✓  {count}: {labels[0]}" + (labels.Count > 1 ? $" e mais {labels.Count - 1}" : string.Empty);
+    }
 }
 
 // Resposta do DNS: os nomes canónicos por ordem (vazia sem CNAME) e por quanto tempo vale.
@@ -159,6 +169,18 @@ public static class CnameStats
     public static void Blocked() => Interlocked.Increment(ref _blocked);
 
     public static long BlockedCount => Interlocked.Read(ref _blocked);
+
+    public static long DecisionCount => Interlocked.Read(ref _decisions);
+
+    // Tempo médio na thread de rede por pedido candidato, em microssegundos.
+    public static double MicrosPerDecision
+    {
+        get
+        {
+            var decisions = Interlocked.Read(ref _decisions);
+            return decisions == 0 ? 0 : Interlocked.Read(ref _decisionTicks) * 1_000_000.0 / Stopwatch.Frequency / decisions;
+        }
+    }
 
     public static string Summary()
     {

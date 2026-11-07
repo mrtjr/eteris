@@ -12,6 +12,7 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        new("↪", "Rastreio escondido", "Links que passam por l.facebook.com, google.com/url ou safelinks do Outlook vão direto ao destino; os sites que só servem de salto entre dois outros perdem cookies e armazenamento uma hora depois; e os rastreadores escondidos atrás de um subdomínio do próprio site (CNAME) são desmascarados e bloqueados. O Escudo diz o que apanhou em cada página."),
         new("✔", "Promessas verificáveis", "eteris://privacy/ mostra o que o Éteris garante, cada promessa com ✔ ou ✘ lido do estado real: GPC visível aos sites, APIs de anúncios do Chromium desligadas, cada site com o seu frasco, referrer só com a origem, uma só língua, cookies de terceiros fora também dos pedidos à rede. E, se quiser, o Éteris esconde-se do Recall e das capturas (Definições › Privacidade ou o selo «Privada»)."),
         new("🏠", "A rede local é sua", "Um site da Internet já não fala com este computador nem com o router, a impressora ou o NAS sem perguntar: o Escudo mostra o que foi travado e um cartão deixa permitir só desta vez ou sempre."),
         new("🔒", "HTTPS primeiro, com aviso", "Os sites abertos por http:// vão por ligação cifrada; quando o site não a tem, o Éteris diz-lho em vez de recuar às escondidas — «Continuar sem segurança» só desta vez ou sempre para esse site. As páginas de erro dizem o que aconteceu (DNS, ligação recusada, certificado…) e copiam os detalhes."),

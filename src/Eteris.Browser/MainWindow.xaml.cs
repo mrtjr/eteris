@@ -165,7 +165,18 @@ public partial class MainWindow : Window
                     tab.RecordTrackingSkips(hosts);
                     if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
                 }),
-                onMainNavigation: nav => OnMainNavigation(tab, nav)),
+                onMainNavigation: nav => OnMainNavigation(tab, nav),
+                onCloaked: (host, target) =>
+                {
+                    // Conta como rastreador bloqueado (na lista com o nome verdadeiro) e na linha própria do Escudo.
+                    ShieldStats.CountBlocked(persist: !IsPrivate);
+                    var label = CnameUncloak.Label(host, target);
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        tab.RecordCloaked(label);
+                        tab.RecordBlocked(label);
+                    });
+                }),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
