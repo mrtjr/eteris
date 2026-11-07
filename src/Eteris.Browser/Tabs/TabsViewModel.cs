@@ -68,12 +68,15 @@ public partial class TabsViewModel : ObservableObject
     // Uma aba trancada não fecha por aqui: só «Destrancar» ou «Feito» a tiram da faixa.
     public bool Close(BrowserTab tab) => Close(tab, remember: true);
 
-    // «Feito»: a aba sai da faixa sem ir para as fechadas recentes (vai para «Feitas hoje»), mesmo trancada.
-    public void CloseDone(BrowserTab tab)
+    // «Feito» e «Adiar até…»: a aba sai da faixa sem ir para as fechadas recentes (fica em «Feitas hoje» ou em
+    // «Adiadas»), mesmo trancada.
+    public void CloseQuietly(BrowserTab tab)
     {
         tab.IsLocked = false;
         Close(tab, remember: false);
     }
+
+    public void CloseDone(BrowserTab tab) => CloseQuietly(tab);
 
     private bool Close(BrowserTab tab, bool remember)
     {

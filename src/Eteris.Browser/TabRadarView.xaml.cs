@@ -17,17 +17,22 @@ public partial class TabRadarView : UserControl
     private readonly Action<BrowserTab> _openSplit;
     private readonly Action _dismiss;
     private readonly Func<IReadOnlyList<Data.DoneTab>> _doneToday;
+    private readonly Func<IReadOnlyList<Data.SnoozedTab>> _snoozed;
+    private readonly Action<Data.SnoozedTab> _wake;
     private readonly bool _privateWindow;
     private readonly HashSet<BrowserTab> _watched = [];
     private bool _watching;
     private DispatcherOperation? _pendingRefresh;
 
     internal TabRadarView(TabsViewModel tabs, bool privateWindow, Action<BrowserTab> toggleMute,
-        Action<BrowserTab> closeTab, Action<BrowserTab> openSplit, Action dismiss, Func<IReadOnlyList<Data.DoneTab>> doneToday)
+        Action<BrowserTab> closeTab, Action<BrowserTab> openSplit, Action dismiss, Func<IReadOnlyList<Data.DoneTab>> doneToday,
+        Func<IReadOnlyList<Data.SnoozedTab>> snoozed, Action<Data.SnoozedTab> wake)
     {
         _tabs = tabs;
         _privateWindow = privateWindow;
         _doneToday = doneToday;
+        _snoozed = snoozed;
+        _wake = wake;
         _toggleMute = toggleMute;
         _closeTab = closeTab;
         _openSplit = openSplit;
@@ -36,7 +41,7 @@ public partial class TabRadarView : UserControl
 
         Filters.ItemsSource = privateWindow
             ? new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente" }
-            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje" };
+            : new[] { "Todas as abas", "Fixadas", "Com som", "A dormir", "Duplicadas", "Fechadas recentemente", "Feitas hoje", "Adiadas" };
         Order.ItemsSource = new[] { "Usadas recentemente", "Por site", "Ordem da faixa de abas" };
         Filters.SelectedIndex = (int)RadarScope.All;
         Order.SelectedIndex = (int)RadarSort.Recent;
@@ -163,7 +168,7 @@ public partial class TabRadarView : UserControl
         var query = QueryBox.Text.Trim();
 
         var visible = TabRadar.Rows(_tabs.Tabs, _tabs.Active, _tabs.RecentlyClosed, scope, sort, query,
-            scope == RadarScope.Done ? _doneToday() : null);
+            scope == RadarScope.Done ? _doneToday() : null, scope == RadarScope.Snoozed ? _snoozed() : null);
         var retained = selection is null ? null : visible.FirstOrDefault(row => ReferenceEquals(row.Identity, selection.Identity));
         Results.ItemsSource = visible;
         Results.SelectedItem = retained ?? (visible.Count == 0 ? null : visible[Math.Min(previousIndex, visible.Count - 1)]);
@@ -188,7 +193,7 @@ public partial class TabRadarView : UserControl
         PreviewImage.Visibility = PreviewImage.Source is null ? Visibility.Collapsed : Visibility.Visible;
         PreviewPlaceholder.Visibility = PreviewImage.Source is null ? Visibility.Visible : Visibility.Collapsed;
 
-        OpenButton.Content = row?.Closed is not null || row?.Done is not null ? "Reabrir aba" : "Ir para a aba";
+        OpenButton.Content = row?.Snoozed is not null ? "Trazer já" : row?.Closed is not null || row?.Done is not null ? "Reabrir aba" : "Ir para a aba";
         OpenButton.IsEnabled = row is not null;
         SplitButton.IsEnabled = tab is not null && _tabs.Active is not null && !ReferenceEquals(tab, _tabs.Active);
         PinButton.Content = tab?.IsPinned == true ? "Desafixar" : "Fixar";
@@ -228,6 +233,8 @@ public partial class TabRadarView : UserControl
             _tabs.Active = tab;
         else if (row.Done is { } done)
             _tabs.NewTab(done.Url);
+        else if (row.Snoozed is { } snoozed)
+            _wake(snoozed);
         else if (row.Closed is not { } closed || _tabs.ReopenClosed(closed) is null)
             return;
         _dismiss();

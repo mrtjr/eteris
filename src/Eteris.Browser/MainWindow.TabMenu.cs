@@ -42,6 +42,7 @@ public partial class MainWindow
             .Item("", tab.HasNote ? "Editar a nota…" : "Escrever nota…", () => RenameTab(tab, (UIElement)sender, focusNote: true))
             .Item(tab.IsLocked ? "" : "", tab.IsLocked ? "Destrancar" : "Trancar", () => tab.IsLocked = !tab.IsLocked)
             .Item("", "Feito", () => MarkTabDone(tab))
+            .Item("", "Adiar até…", () => OpenSnoozeMenu(tab, (UIElement)sender), enabled: !IsPrivate && !Browser.NewTabPage.IsNewTab(tab.Address))
             .Item("", tab.IsPinned ? "Desafixar aba" : "Fixar aba", () => Tabs.TogglePin(tab))
             .Item("", "Duplicar", () => Tabs.NewTab(tab.Address))
             .Item(tab.IsMuted ? "" : "", tab.IsMuted ? "Reativar o som" : "Silenciar aba", () => ToggleMute(tab))

@@ -118,6 +118,8 @@ public partial class MainWindow
             yield return new(tab.IsLocked ? "" : "", tab.IsLocked ? "Destrancar aba" : "Trancar aba",
                 tab.IsLocked ? "Volta a poder fechar-se e adormecer" : "Não fecha por engano nem adormece", null, () => tab.IsLocked = !tab.IsLocked);
             yield return new("", "Feito", IsPrivate ? "Fecha a aba" : "Fecha a aba e guarda-a em «Feitas hoje» (Radar)", null, () => MarkTabDone(tab));
+            if (!IsPrivate && !NewTabPage.IsNewTab(address))
+                yield return new("", "Adiar aba até…", "A aba sai da faixa e volta à hora que escolher, com aviso", null, () => OpenSnoozeMenu(tab, Omnibox));
             yield return new("", "Fechar aba", tab.Title, "Ctrl+W", () => CloseTab(tab));
             yield return new("", "Duplicar aba", tab.Title, null, () => Tabs.NewTab(address));
             yield return new("", "Recarregar página", tab.Title, "F5", () => ReloadActive());

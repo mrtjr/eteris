@@ -44,6 +44,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible);
         StartTabs(initialUrl);
+        WatchSnoozed();
         RestorePlacement();
         WatchUpdates();
         WatchBackdropSetting();

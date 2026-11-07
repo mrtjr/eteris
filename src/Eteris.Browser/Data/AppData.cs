@@ -177,6 +177,36 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
+    private static readonly Lazy<SnoozedTabsStore?> LazySnoozed = new(() =>
+    {
+        try { return new SnoozedTabsStore(AppPaths.Database); }
+        catch (Exception) { return null; }
+    });
+
+    public static void SnoozeTab(string url, string title, string? name, string? note, DateTime dueUtc)
+    {
+        try { LazySnoozed.Value?.Add(url, title, name, note, dueUtc); }
+        catch (Exception) { }
+    }
+
+    public static void ForgetSnoozed(long id)
+    {
+        try { LazySnoozed.Value?.Delete(id); }
+        catch (Exception) { }
+    }
+
+    public static IReadOnlyList<SnoozedTab> SnoozedTabs()
+    {
+        try { return LazySnoozed.Value?.All() ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    public static IReadOnlyList<SnoozedTab> SnoozedDue(DateTime nowUtc)
+    {
+        try { return LazySnoozed.Value?.Due(nowUtc) ?? []; }
+        catch (Exception) { return []; }
+    }
+
     public static IReadOnlyList<SavedSession> SavedSessions()
     {
         try { return LazySessions.Value?.All() ?? []; }
