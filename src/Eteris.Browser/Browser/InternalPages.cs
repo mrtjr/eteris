@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Windows.Media;
+using Eteris.Browser.Theme;
 
 namespace Eteris.Browser.Browser;
 
@@ -13,12 +15,33 @@ public static class InternalPages
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && Query(uri, "t") is { } token
            && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(token), Encoding.ASCII.GetBytes(Token));
 
-    // As páginas internas seguem o tema da aplicação: o servidor marca <html class="light">.
-    public static string Themed(string html, bool light)
-        => light
-            ? html.Replace("<html lang=\"pt\">", "<html lang=\"pt\" class=\"light\">")
-                  .Replace("<meta name=\"color-scheme\" content=\"dark\">", "<meta name=\"color-scheme\" content=\"light\">")
-            : html;
+    // As páginas internas seguem o tema da aplicação (o servidor marca <html class="light">) e a Cor do Éteris
+    // (um <style> no <head> redefine a variável --iris, que todas as páginas usam, e --accent com a cor base).
+    public static string Themed(string html, bool light) => Themed(html, light, AccentManager.Stops);
+
+    public static string Themed(string html, bool light, IReadOnlyList<Color> accentStops)
+    {
+        if (light)
+            html = html.Replace("<html lang=\"pt\">", "<html lang=\"pt\" class=\"light\">")
+                       .Replace("<meta name=\"color-scheme\" content=\"dark\">", "<meta name=\"color-scheme\" content=\"light\">");
+        if (!accentStops.SequenceEqual(Accent.IrisStops))
+        {
+            var head = html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase);
+            if (head >= 0) html = html.Insert(head, AccentStyle(accentStops));
+        }
+        return html;
+    }
+
+    public static string AccentStyle(IReadOnlyList<Color> stops)
+        => "<style id=\"eteris-accent\">:root { --iris: " + IrisCss(stops) + "; --accent: " + Accent.Hex(stops[0]) + "; }</style>";
+
+    // Para as páginas internas já abertas quando a cor muda (corrido pelo DevTools, ver PageScript): só as variáveis.
+    public static string AccentScript(IReadOnlyList<Color> stops)
+        => stops.SequenceEqual(Accent.IrisStops)
+            ? "document.documentElement.style.removeProperty('--iris'); document.documentElement.style.removeProperty('--accent');"
+            : $"document.documentElement.style.setProperty('--iris', '{IrisCss(stops)}'); document.documentElement.style.setProperty('--accent', '{Accent.Hex(stops[0])}');";
+
+    private static string IrisCss(IReadOnlyList<Color> stops) => "linear-gradient(90deg, " + string.Join(", ", stops.Select(Accent.Hex)) + ")";
 
     public static bool LightTheme => Theme.ThemeManager.Current == Theme.AppTheme.Light;
 

@@ -50,6 +50,20 @@ public static class AccentManager
         }
     }
 
+    private static bool _watching;
+
+    // Com «Do Windows», mudar a cor de destaque no Windows muda o Éteris na hora.
+    public static void FollowWindowsChanges(Func<string> currentChoice, Func<bool> light)
+    {
+        if (_watching) return;
+        _watching = true;
+        SystemEvents.UserPreferenceChanged += (_, e) =>
+        {
+            if (e.Category != UserPreferenceCategory.General || currentChoice() != Accent.FromWindowsKey) return;
+            Application.Current?.Dispatcher.InvokeAsync(() => Apply(Accent.FromWindowsKey, light()));
+        };
+    }
+
     // Cor de destaque do Windows (Definições › Personalização › Cores), lida do registo: sem WinRT.
     public static Color? ReadWindowsAccent()
     {

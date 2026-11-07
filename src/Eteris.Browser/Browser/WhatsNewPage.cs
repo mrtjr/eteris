@@ -14,6 +14,7 @@ public static class WhatsNewPage
     [
         new("⇆", "Abas que nunca se perdem", "Com muitas abas a faixa rola em vez de as esmagar: roda do rato, setas nas pontas e a lista «▾» de todas as abas, pesquisável."),
         new("▭", "Modo compacto", "Abas e barra de endereço numa só linha — a página ganha uma barra inteira. Em Definições › Aspeto › Densidade."),
+        new("◉", "Cor do Éteris", "Escolhe a cor de destaque de toda a interface em Definições › Aspeto: nove cores, a da paisagem da nova aba ou a do Windows."),
         new("◫", "Interface que desaparece", "No modo foco as barras aparecem quando o rato toca no topo e escondem-se quando o deixa.", "F11"),
         new("◈", "Costa Atlântica ao vivo", "Ativa Ao vivo na personalização da nova aba para ver as ondas e as nuvens em movimento, sem som."),
         new("◈", "Nova aba com paisagens", "Escolhe uma paisagem gerada por IA como fundo nas opções da nova aba. Os atalhos ficam junto da pesquisa, com ferramentas no rodapé."),

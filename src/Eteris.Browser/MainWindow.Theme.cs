@@ -23,6 +23,20 @@ public partial class MainWindow
         void OnChanged(AppTheme _) => Dispatcher.InvokeAsync(ApplyWindowTheme);
         ThemeManager.Changed += OnChanged;
         Closed += (_, _) => ThemeManager.Changed -= OnChanged;
+        // Cor do Éteris: a barra aurora desta janela e as páginas internas abertas mudam ao vivo, sem recarregar.
+        void OnAccent() => Dispatcher.InvokeAsync(ApplyAccent);
+        AccentManager.Changed += OnAccent;
+        Closed += (_, _) => AccentManager.Changed -= OnAccent;
+        ApplyAccent();
+    }
+
+    private void ApplyAccent()
+    {
+        AccentManager.Retint(Resources["AuroraBrush"] as LinearGradientBrush, AccentManager.Stops);
+        var script = Browser.InternalPages.AccentScript(AccentManager.Stops);
+        foreach (var (tab, browser) in _browsers)
+            if (tab.Address.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase) && !browser.IsDisposed && browser.IsBrowserInitialized)
+                Browser.PageScript.Run(browser, script);
     }
 
     private void ApplyWindowTheme()
