@@ -34,6 +34,10 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             IRequest request, IRequestCallback callback)
         {
             foreach (var (name, value) in PrivacySignals.Headers) request.SetHeaderByName(name, value, true);
+            // Referrer entre sites só com a origem (Shields/ReferrerCap.cs), quando o escudo está ligado no site que o envia.
+            if (ReferrerCap.Decide(request.ReferrerUrl, request.Url) is { Kind: not ReferrerCap.Kind.Keep } cap
+                && Uri.TryCreate(request.ReferrerUrl, UriKind.Absolute, out var referrer) && isProtected(referrer.Host))
+                request.SetReferrer(cap.Value ?? string.Empty, cap.Value is null ? ReferrerPolicy.NoReferrer : ReferrerPolicy.Origin);
             if (userAgent is not null)
                 foreach (var (name, value) in MobileHeaders(userAgent)) request.SetHeaderByName(name, value, true);
 

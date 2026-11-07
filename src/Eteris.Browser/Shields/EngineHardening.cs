@@ -25,9 +25,20 @@ public static class EngineHardening
     public static readonly IReadOnlyList<string> AdBlinkFeatures =
         ["TopicsAPI", "AdInterestGroupAPI", "Fledge", "AttributionReporting", "SharedStorageAPI", "FencedFrames"];
 
+    // Frascos por site de topo: o que um terceiro guarda ou aprende embutido num site não serve noutro site
+    // (ligados explicitamente, mesmo que a versão do motor já os traga ligados).
+    public static readonly IReadOnlyList<(string Feature, string What)> Partitioning =
+    [
+        ("ThirdPartyStoragePartitioning", "localStorage, IndexedDB e caches de um terceiro separados por site de topo"),
+        ("PartitionedCookies", "cookies «Partitioned» (CHIPS) guardados num frasco por site de topo"),
+        ("SplitCacheByNetworkIsolationKey", "cache HTTP separada por site de topo: a cache não denuncia o que visitou noutro site"),
+        ("PartitionConnectionsByNetworkIsolationKey", "ligações à rede separadas por site de topo"),
+    ];
+
     // Junta as listas do Éteris às que já estão na linha de comandos (sem repetir nomes).
     public static void Apply(IDictionary<string, string> args)
     {
+        Merge(args, "enable-features", Partitioning.Select(p => p.Feature));
         Merge(args, "disable-features", AdApis.Select(a => a.Feature));
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         Applied = new Dictionary<string, string>(args);

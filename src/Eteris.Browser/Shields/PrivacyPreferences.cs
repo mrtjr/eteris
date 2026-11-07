@@ -21,6 +21,8 @@ public static class PrivacyPreferences
         ["privacy_sandbox.m1.topics_enabled"] = false,
         ["privacy_sandbox.m1.fledge_enabled"] = false,
         ["privacy_sandbox.m1.ad_measurement_enabled"] = false,
+        // Sem «conjuntos de sites relacionados»: nenhum grupo de domínios partilha cookies como se fosse um só site.
+        ["privacy_sandbox.first_party_sets_enabled"] = false,
     };
 
     public static bool ThirdPartyCookiesBlocked { get; private set; }
@@ -39,6 +41,8 @@ public static class PrivacyPreferences
         var block = Data.Settings.Current.BlockThirdPartyCookies;
         var cookies = target.SetPreference("profile.block_third_party_cookies", block, out _)
                       | target.SetPreference("profile.cookie_controls_mode", block ? 1 : 0, out _);
+        // O interruptor «bloquear todos os cookies de terceiros» das versões novas do Chromium, a par do antigo.
+        target.SetPreference("tracking_protection.block_all_3pc_toggle_enabled", block, out _);
         cookies &= block;
         var webRtc = target.SetPreference("webrtc.ip_handling_policy", "disable_non_proxied_udp", out _);
         if (context is not null) return;

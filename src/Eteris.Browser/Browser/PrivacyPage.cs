@@ -11,6 +11,8 @@ public static class PrivacyPage
 {
     public const string Url = "eteris://privacy/";
 
+    public const string ReferrerSample = "https://www.exemplo.pt/artigo?id=42";
+
     // Kept: true = cumprida, false = falhou, null = opcional e desligada (escolha do utilizador).
     public sealed record Promise(string Id, string Title, string Detail, bool? Kept, string? Live = null, string? Fix = null);
 
@@ -41,6 +43,12 @@ public static class PrivacyPage
         var quiet = s.EngineArgs.ContainsKey("disable-background-networking") && s.EngineArgs.ContainsKey("disable-component-update")
                     && s.EngineArgs.TryGetValue("component-updater", out var updater) && updater.Contains(Infrastructure.CefConfigurator.NoUpdateServer, StringComparison.Ordinal);
         var gpcHeader = s.Headers.Contains(("Sec-GPC", "1")) && s.Headers.Contains(("DNT", "1"));
+        var enabled = EngineHardening.Switch(s.EngineArgs, "enable-features");
+        var missingJars = EngineHardening.Partitioning.Where(p => !enabled.Contains(p.Feature)).Select(p => p.Feature).ToList();
+        // O referrer é decidido pela mesma função que o tratador de pedidos usa, com um exemplo à vista.
+        var capped = ReferrerCap.Decide(ReferrerSample, "https://outro-site.example/");
+        var sameSite = ReferrerCap.Decide(ReferrerSample, "https://www.exemplo.pt/outra");
+        var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
 
         return
         [
@@ -63,6 +71,16 @@ public static class PrivacyPage
             new("cookies", "Cookies de terceiros bloqueados",
                 s.ThirdPartyCookiesBlocked ? "Os anunciantes embutidos nas páginas não guardam nem leem cookies." : "Desligado nas Definições: os terceiros podem guardar cookies.",
                 s.ThirdPartyCookiesBlocked, Fix: s.ThirdPartyCookiesBlocked ? null : "eteris://settings/#privacidade"),
+            new("jars", "Cada site com o seu frasco",
+                missingJars.Count == 0
+                    ? "O que um terceiro guarda embutido num site (armazenamento, cookies «Partitioned», cache, ligações) não serve noutro site."
+                    : "Por separar no motor: " + string.Join(", ", missingJars) + ".",
+                missingJars.Count == 0),
+            new("referrer", "Para outro site, o referrer leva só a origem",
+                referrerKept
+                    ? $"Um link de {ReferrerSample} para outro site leva só «{capped.Value}», mesmo que a página peça mais; dentro do mesmo site nada muda."
+                    : "O referrer entre sites não está a ser reduzido à origem.",
+                referrerKept),
             new("webrtc", "O WebRTC não revela o seu IP local",
                 s.WebRtcProtected ? "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede." : "A política de IP do WebRTC não foi aplicada.",
                 s.WebRtcProtected),
