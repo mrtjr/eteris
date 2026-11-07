@@ -18,7 +18,17 @@ public partial class MainWindow
     private SitePermissionStore? _sitePermissions;
     private SitePermissionHandler? _permissionHandler;
 
-    private SitePermissionStore SitePermissions => _sitePermissions ??= new SitePermissionStore(AppPaths.Database);
+    // Na janela privada, as decisões («Lembrar neste site» incluído) ficam só em memória e acabam com a janela: nada
+    // vai para as permissões do perfil.
+    private SitePermissionStore SitePermissions => _sitePermissions ??= CreatePermissionStore();
+
+    private SitePermissionStore CreatePermissionStore()
+    {
+        if (!IsPrivate) return new SitePermissionStore(AppPaths.Database);
+        var store = SitePermissionStore.InMemory();
+        Closed += (_, _) => store.Close();
+        return store;
+    }
 
     private SitePermissionHandler PermissionHandler => _permissionHandler ??= new SitePermissionHandler(SitePermissions,
         (site, kinds, respond) =>
@@ -74,6 +84,8 @@ public partial class MainWindow
             _ => "",
         };
         PermissionRemember.IsChecked = true;
+        // Na janela privada a decisão fica só em memória, até a janela fechar.
+        PermissionRememberLabel.Text = IsPrivate ? "Lembrar nesta janela" : "Lembrar neste site";
         PermissionBar.Visibility = Visibility.Visible;
     }
 

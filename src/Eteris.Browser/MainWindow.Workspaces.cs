@@ -143,6 +143,8 @@ public partial class MainWindow
         if (Tabs.RemoveWorkspaceWithTabs(workspace) is not { } removal) return;
         // Abas acordadas na reserva (com som) ainda tinham motor.
         foreach (var tab in removal.Closed) ReleaseBrowser(tab);
+        // As abas da reserva saem sem passar pela faixa: «Esquecer ao fechar» também as conta.
+        if (!IsPrivate) ScheduleForgetFor(removal.Closed.Select(t => t.Address));
         var kept = removal.KeptLocked == 0 ? ""
             : removal.KeptLocked == 1 ? " — a aba trancada passou para este Espaço" : $" — as {removal.KeptLocked} abas trancadas passaram para este Espaço";
         if (pages.Count == 0)

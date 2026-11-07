@@ -74,9 +74,30 @@ public sealed class SitePermissionStore
 {
     private readonly string _connectionString;
 
-    public SitePermissionStore(string path)
+    // Na janela privada nada vai para o perfil: as decisões ficam numa base só em memória, que acaba com a janela.
+    private readonly SqliteConnection? _keepAlive;
+
+    public static SitePermissionStore InMemory() => new(new SqliteConnectionStringBuilder
     {
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString();
+        DataSource = "eteris-permissoes-" + Guid.NewGuid().ToString("N"),
+        Mode = SqliteOpenMode.Memory,
+        Cache = SqliteCacheMode.Shared,
+    }.ToString(), keepAlive: true);
+
+    public SitePermissionStore(string path)
+        : this(new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString(), keepAlive: false)
+    {
+    }
+
+    private SitePermissionStore(string connectionString, bool keepAlive)
+    {
+        _connectionString = connectionString;
+        // Uma base em memória partilhada vive enquanto houver uma ligação aberta.
+        if (keepAlive)
+        {
+            _keepAlive = new SqliteConnection(_connectionString);
+            _keepAlive.Open();
+        }
         Execute("""
             CREATE TABLE IF NOT EXISTS site_permissions(
                 site TEXT NOT NULL, kind TEXT NOT NULL, allowed INTEGER NOT NULL,
@@ -132,6 +153,17 @@ public sealed class SitePermissionStore
         => Execute("DELETE FROM site_permissions WHERE site = $s AND kind = $k", ("$s", site), ("$k", kind.ToString()));
 
     public void Forget(string site) => Execute("DELETE FROM site_permissions WHERE site = $s", ("$s", site));
+
+    // A base em memória (janela privada) acaba aqui.
+    public void Close() => _keepAlive?.Dispose();
+
+    // Todas as chaves (host[:porta]) que pertencem a um site — subdomínios e portas incluídos; devolve quantas saíram.
+    public int ForgetWhere(Func<string, bool> belongs)
+    {
+        var keys = AllSites().Keys.Where(belongs).ToList();
+        foreach (var key in keys) Forget(key);
+        return keys.Count;
+    }
 
     private void Execute(string sql, params (string Name, object Value)[] parameters)
     {

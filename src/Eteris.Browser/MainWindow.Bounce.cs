@@ -137,7 +137,8 @@ public partial class MainWindow
             var cleared = new List<string>();
             foreach (var site in due)
             {
-                await window.ClearSiteStorageAsync(site, open);
+                // Sem motor pronto o armazenamento fica: o site continua à espera da próxima volta.
+                if (!(await window.ClearSiteStorageAsync(site, open)).Storage) continue;
                 Bounces.MarkCleared(site);
                 Shields.PrivacyLedger.Count(Shields.PrivacyCategory.Forgotten, site);
                 cleared.Add(site);

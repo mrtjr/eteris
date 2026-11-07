@@ -87,13 +87,15 @@ public class PopupPolicyTests
     [Fact]
     public void ActivationReport_IsParsed()
     {
-        Assert.True(PopupPolicy.IsActivationReport("\u0001eteris-click ihttps://a.pt/", out var link, out var interactive));
+        Assert.True(PopupPolicy.IsActivationReport(PopupPolicy.ActivationPrefix + "ihttps://a.pt/", out var link, out var interactive));
         Assert.Equal("https://a.pt/", link);
         Assert.True(interactive);
-        Assert.True(PopupPolicy.IsActivationReport("\u0001eteris-click -", out var none, out var content));
+        Assert.True(PopupPolicy.IsActivationReport(PopupPolicy.ActivationPrefix + "-", out var none, out var content));
         Assert.Equal("", none);
         Assert.False(content);
         Assert.False(PopupPolicy.IsActivationReport("eteris-click x", out _, out _));
-        Assert.False(PopupPolicy.IsActivationReport("\u0001eteris-click ", out _, out _));
+        Assert.False(PopupPolicy.IsActivationReport(PopupPolicy.ActivationPrefix, out _, out _));
+        // Sem o segredo do processo (o formato antigo, que qualquer página escrevia) não é um clique.
+        Assert.False(PopupPolicy.IsActivationReport("\u0001eteris-click ihttps://a.pt/", out _, out _));
     }
 }

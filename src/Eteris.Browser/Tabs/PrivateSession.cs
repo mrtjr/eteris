@@ -1,7 +1,8 @@
 namespace Eteris.Browser.Tabs;
 
 // «Terminar sessão privada»: o texto da confirmação e do fim (a ação fecha as janelas privadas, e com cada uma vai o
-// contexto em memória — cookies, cache, armazenamento — e as autorizações de http:// dadas lá).
+// contexto em memória — cookies, cache, armazenamento —, as permissões dadas lá, que também só vivem em memória, e as
+// autorizações de http:// dadas lá).
 public static class PrivateSession
 {
     public static string Confirmation(int windows, int tabs)
@@ -13,7 +14,7 @@ public static class PrivateSession
             1 => " (1 aba)",
             _ => $" ({tabs} abas)",
         };
-        return $"Terminar a sessão privada? Fecha {what}{count} e apaga os cookies, a cache e o armazenamento {(windows == 1 ? "dela" : "delas")}.";
+        return $"Terminar a sessão privada? Fecha {what}{count} e apaga os cookies, a cache, o armazenamento e as permissões {(windows == 1 ? "dela" : "delas")}.";
     }
 
     public static string Done(int windows)

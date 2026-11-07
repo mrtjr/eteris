@@ -4,7 +4,9 @@ namespace Eteris.Browser.Browser;
 // armazenamento pelo DevTools, Observatório e registo da rede local da aba) e passados em palavras aqui.
 public static class SiteKnowledge
 {
-    // Cookie: null em Expires = só até fechar o Éteris (cookie de sessão).
+    // Cookie: null em Expires = só até fechar o Éteris (cookie de sessão). StorageBytes: bases de dados, cache,
+    // trabalhadores e localStorage de todas as origens conhecidas do site. ShieldOff: o Escudo está desligado no site
+    // (o limite do referrer não se aplica).
     public sealed record Facts(
         IReadOnlyList<DateTime?> CookieExpiries,
         long? StorageBytes,
@@ -13,7 +15,8 @@ public static class SiteKnowledge
         int ThirdPartiesBlocked,
         string? ReferrerToOthers,
         int LocalNetworkAttempts,
-        DateTime Now);
+        DateTime Now,
+        bool ShieldOff = false);
 
     public sealed record Line(string Glyph, string Title, string Detail);
 
@@ -32,7 +35,9 @@ public static class SiteKnowledge
                 (f.Companies switch { 0 => "Nenhuma empresa conhecida", 1 => "De 1 empresa conhecida", _ => $"De {f.Companies} empresas conhecidas" })
                 + (f.ThirdPartiesBlocked == 0 ? " · nenhum bloqueado" : f.ThirdPartiesBlocked == 1 ? " · 1 bloqueado" : $" · {f.ThirdPartiesBlocked} bloqueados")
                 + " — veja-os no Observatório."));
-        lines.Add(f.ReferrerToOthers is { } referrer
+        lines.Add(f.ShieldOff
+            ? new Line("", "Referrer: o que a página decidir", "Com o Escudo desligado neste site, o Éteris não o limita: pode seguir o endereço completo desta página.")
+            : f.ReferrerToOthers is { } referrer
             ? new Line("", "Referrer enviado: só a origem", $"Os outros sites recebem «{referrer}» como origem, nunca o endereço completo desta página.")
             : new Line("", "Referrer enviado: nada", "Desta página para outros sites não segue referrer."));
         lines.Add(f.LocalNetworkAttempts == 0

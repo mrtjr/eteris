@@ -20,8 +20,11 @@ public partial class MainWindow
 
     private static IRequestContext CreatePrivateContext()
     {
-        // Uma só língua para os sites também aqui (o contexto privado não herda a lista do perfil).
-        var context = new RequestContext(new RequestContextSettings { AcceptLanguageList = Shields.PrivacyPreferences.SiteLanguage });
+        // Uma só língua para os sites também aqui (o contexto privado não herda a lista do perfil): a mesma com que o
+        // motor arrancou, que é a que vai no Accept-Language de todos os pedidos — a das Definições só vale depois de
+        // reiniciar, e navigator.languages diferente do cabeçalho distinguia quem a mudou.
+        var language = Shields.EngineHardening.StartedWithLanguage is { Length: > 0 } started ? started : Shields.PrivacyPreferences.SiteLanguage;
+        var context = new RequestContext(new RequestContextSettings { AcceptLanguageList = language });
         // As fábricas de esquemas são por contexto: sem isto eteris:// dá ERR_UNKNOWN_URL_SCHEME na janela privada.
         context.RegisterSchemeHandlerFactory(EterisSchemeHandlerFactory.SchemeName, string.Empty, new EterisSchemeHandlerFactory(privateContext: true));
         SelfTestSchemeHandlerFactory.Register(context);

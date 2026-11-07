@@ -8,9 +8,9 @@ namespace Eteris.Browser.Tests;
 public class PrivateSessionTests
 {
     [Theory]
-    [InlineData(1, 0, "Terminar a sessão privada? Fecha a janela privada e apaga os cookies, a cache e o armazenamento dela.")]
-    [InlineData(1, 1, "Terminar a sessão privada? Fecha a janela privada (1 aba) e apaga os cookies, a cache e o armazenamento dela.")]
-    [InlineData(2, 5, "Terminar a sessão privada? Fecha as 2 janelas privadas (5 abas) e apaga os cookies, a cache e o armazenamento delas.")]
+    [InlineData(1, 0, "Terminar a sessão privada? Fecha a janela privada e apaga os cookies, a cache, o armazenamento e as permissões dela.")]
+    [InlineData(1, 1, "Terminar a sessão privada? Fecha a janela privada (1 aba) e apaga os cookies, a cache, o armazenamento e as permissões dela.")]
+    [InlineData(2, 5, "Terminar a sessão privada? Fecha as 2 janelas privadas (5 abas) e apaga os cookies, a cache, o armazenamento e as permissões delas.")]
     public void Confirmation_SaysWhatCloses(int windows, int tabs, string expected)
         => Assert.Equal(expected, PrivateSession.Confirmation(windows, tabs));
 

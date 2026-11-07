@@ -53,19 +53,64 @@ public static class SiteScope
     // «Esquecer ao fechar» apaga.
     public static bool StillOpen(string site, IEnumerable<string> openAddresses) => openAddresses.Any(a => Belongs(a, site));
 
-    // O que a confirmação de «Triturar» diz que vai apagar.
-    public static string ShredSummary(string site, int cookies, int history)
+    // Os sites com «esquecer ao fechar» que ficam sem nenhuma aba quando estas saem (fechar a janela, apagar um Espaço,
+    // navegar para outro site, sair do Éteris): remaining é tudo o que continua aberto.
+    public static IReadOnlyList<string> SitesLeaving(IEnumerable<string?> leaving, IEnumerable<string> remaining, Func<string, bool> isForget)
     {
-        var parts = new List<string>
-        {
-            cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies",
-            history == 0 ? "nenhuma entrada do histórico" : history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico",
-            "o armazenamento do site (local, bases de dados, cache e trabalhadores)",
-            "as permissões dadas",
-        };
-        // Um endereço IP não tem subdomínios.
-        var scope = System.Net.IPAddress.TryParse(site, out _) ? site : $"{site} e dos seus subdomínios";
+        var open = remaining.ToList();
+        return leaving.Select(SiteOf).OfType<string>().Distinct(StringComparer.Ordinal)
+            .Where(site => isForget(site) && !StillOpen(site, open)).ToList();
+    }
+
+    // O que a confirmação de «Triturar» diz que vai apagar. Na janela privada não há histórico, e as permissões são as
+    // dadas nessa janela. closingTabs: as abas do site nesta janela (que fecham); locked/noted: quantas delas estão
+    // trancadas ou têm nota, que se perdem com elas.
+    public static string ShredSummary(string site, int cookies, int history, bool isPrivate = false, int closingTabs = -1, int locked = 0, int noted = 0)
+    {
+        var parts = new List<string> { cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies" };
+        if (!isPrivate)
+            parts.Add(history == 0 ? "nenhuma entrada do histórico" : history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico");
+        parts.Add("o armazenamento do site (local, bases de dados, cache e trabalhadores)");
+        parts.Add(isPrivate ? "as permissões dadas nesta janela" : "as permissões dadas");
+        // Um endereço IP (ou localhost) não tem subdomínios.
+        var bare = System.Net.IPAddress.TryParse(site.Trim('[', ']'), out _) || !site.Contains('.');
+        var scope = bare ? site : $"{site} e dos seus subdomínios";
         return $"Vai apagar de {scope}: {string.Join(", ", parts.Take(parts.Count - 1))} e {parts[^1]}. "
-               + "As abas deste site nesta janela fecham. Não dá para anular.";
+               + TabsLine(closingTabs, locked, noted) + "Não dá para anular.";
+    }
+
+    private static string TabsLine(int tabs, int locked, int noted)
+    {
+        if (tabs < 0) return "As abas deste site nesta janela fecham. ";
+        if (tabs == 0) return string.Empty;
+        var head = tabs == 1 ? "A aba deste site nesta janela fecha" : $"As {tabs} abas deste site nesta janela fecham";
+        var lost = new List<string>();
+        if (locked > 0) lost.Add(locked == 1 ? "1 trancada" : $"{locked} trancadas");
+        if (noted > 0) lost.Add(noted == 1 ? "1 com nota" : $"{noted} com nota");
+        return lost.Count == 0 ? head + ". " : $"{head}, incluindo {string.Join(" e ", lost)} (a nota e o nome perdem-se). ";
+    }
+
+    // Bytes do localStorage numa resposta de DOMStorage.getDOMStorageItems ({"entries":[["chave","valor"],…]}): chave
+    // e valor em UTF-16, como o Chromium os conta.
+    public static long LocalStorageBytes(System.Text.Json.JsonElement response)
+    {
+        if (response.ValueKind != System.Text.Json.JsonValueKind.Object
+            || !response.TryGetProperty("entries", out var entries) || entries.ValueKind != System.Text.Json.JsonValueKind.Array) return 0;
+        long total = 0;
+        foreach (var entry in entries.EnumerateArray())
+            if (entry.ValueKind == System.Text.Json.JsonValueKind.Array)
+                foreach (var text in entry.EnumerateArray())
+                    if (text.ValueKind == System.Text.Json.JsonValueKind.String) total += 2L * (text.GetString()?.Length ?? 0);
+        return total;
+    }
+
+    // O aviso depois de apagar. storage: o armazenamento foi mesmo apagado (precisa de uma página viva do contexto).
+    public static string ShredDone(int cookies, int history, bool storage, bool isPrivate = false)
+    {
+        var cookieText = cookies == 1 ? "1 cookie" : $"{cookies} cookies";
+        var text = isPrivate
+            ? cookieText + (cookies == 1 ? " apagado" : " apagados")
+            : $"{cookieText} e {(history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico")} apagados";
+        return storage ? text : text + " — o armazenamento ficou por apagar (o motor não estava pronto)";
     }
 }

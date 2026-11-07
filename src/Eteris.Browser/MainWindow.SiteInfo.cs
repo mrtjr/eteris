@@ -1,7 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using CefSharp;
+using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Permissions;
 using Eteris.Browser.Tabs;
@@ -28,8 +30,48 @@ public partial class MainWindow
     {
         if (Tabs.Active is null) return;
         FillSiteInfo();
+        if (!SiteInfoPopup.IsOpen) FitSiteInfoToScreen();
         SiteInfoPopup.IsOpen = !SiteInfoPopup.IsOpen;
     }
+
+    // O cartão nunca passa do fundo da área de trabalho do monitor onde está o cadeado: o que não cabe rola por dentro.
+    private void FitSiteInfoToScreen()
+    {
+        SiteInfoScroll.ScrollToTop();
+        if (PresentationSource.FromVisual(SiteInfoButton) is not { CompositionTarget: { } target }) return;
+        var below = SiteInfoButton.PointToScreen(new Point(0, SiteInfoButton.ActualHeight));
+        var monitor = MonitorFromPoint(new NativePoint((int)below.X, (int)below.Y), MonitorDefaultToNearest);
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return;
+        var room = target.TransformFromDevice.Transform(new Vector(0, info.WorkBottom - below.Y)).Y;
+        // Afastamento do Popup (6), moldura e enchimento do cartão (2 + 36), margem da sombra (44) e folga.
+        SiteInfoScroll.MaxHeight = Math.Max(220, room - 6 - 38 - 44 - 10);
+    }
+
+    // A confirmação de «Triturar» fica no fundo do cartão: aparece sempre à vista.
+    private void ShowShredConfirm()
+        => Dispatcher.InvokeAsync(() => SiteInfoShredConfirm.BringIntoView(), System.Windows.Threading.DispatcherPriority.Loaded);
+
+    private const uint MonitorDefaultToNearest = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly record struct NativePoint(int X, int Y);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public int MonitorLeft, MonitorTop, MonitorRight, MonitorBottom;
+        public int WorkLeft, WorkTop, WorkRight, WorkBottom;
+        public uint Flags;
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial nint MonitorFromPoint(NativePoint point, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
 
     private void FillSiteInfo()
     {
@@ -80,32 +122,76 @@ public partial class MainWindow
         var groups = Shields.SiteObservatory.ByCompany(snap.ThirdParties);
         var referrer = Shields.ReferrerCap.Decide(tab.Address, "https://outro-site.example/") is { Kind: not Shields.ReferrerCap.Kind.Strip } cap
             ? cap.Value ?? info.Origin + "/" : null;
+        // O limite do referrer só se aplica com o Escudo ligado no site (PrivacyRequestHandler).
+        var shieldOff = Uri.TryCreate(tab.Address, UriKind.Absolute, out var page) && !Data.AppData.IsShieldOn(page.Host);
         SiteKnowledge.Facts Facts(IReadOnlyList<DateTime?> cookies, long? storage) => new(cookies, storage, snap.ThirdParties.Count,
-            groups.Count(g => g.Known), snap.ThirdParties.Count(d => d.Blocked > 0), referrer, tab.LocalNetworkBlocked.Sum(p => p.Value), DateTime.Now);
+            groups.Count(g => g.Known), snap.ThirdParties.Count(d => d.Blocked > 0), referrer, tab.LocalNetworkBlocked.Sum(p => p.Value), DateTime.Now,
+            shieldOff);
         SiteKnowledgeList.ItemsSource = SiteKnowledge.Describe(Facts([], null)).Skip(2).ToList();
 
         var site = Data.SiteScope.SiteOf(tab.Address);
         IReadOnlyList<DateTime?> expiries = [];
+        var seen = new List<string> { tab.Address };
         long? storage = null;
         try
         {
             if (site is not null)
-                expiries = (await CookieContext.GetCookieManager(null).VisitAllCookiesAsync())
-                    .Where(c => Data.SiteScope.CookieBelongs(c.Domain, site)).Select(c => c.Expires).ToList();
+            {
+                var cookies = (await CookieContext.GetCookieManager(null).VisitAllCookiesAsync())
+                    .Where(c => Data.SiteScope.CookieBelongs(c.Domain, site)).ToList();
+                expiries = cookies.Select(c => c.Expires).ToList();
+                seen.AddRange(cookies.Select(c => "https://" + c.Domain.Trim().TrimStart('.') + "/"));
+            }
         }
         catch (Exception) { }
         try
         {
             if (ActiveBrowser is { } browser && ReferenceEquals(Tabs.Active, tab))
             {
-                using var client = browser.GetDevToolsClient();
-                var call = client.Storage.GetUsageAndQuotaAsync(info.Origin);
-                if (await Task.WhenAny(call, Task.Delay(1500)) == call) storage = (long)(await call).Usage;
+                // Todas as origens do site que se conhecem (a página, com e sem www, e as dos cookies), e o armazenamento
+                // local (localStorage), que a quota do Chromium não conta.
+                var origins = site is null ? [info.Origin] : Data.SiteScope.Origins(site, seen).Take(12).ToList();
+                var call = MeasureStorageAsync(browser, origins);
+                if (await Task.WhenAny(call, Task.Delay(2000)) == call) storage = await call;
             }
         }
         catch (Exception) { }
         if (!SiteInfoPopup.IsOpen || !ReferenceEquals(Tabs.Active, tab)) return;
         SiteKnowledgeList.ItemsSource = SiteKnowledge.Describe(Facts(expiries, storage));
+    }
+
+    // Bases de dados, cache e trabalhadores (quota do Chromium) mais o localStorage, somados por origem; null se o
+    // motor não respondeu a nenhuma.
+    private static async Task<long?> MeasureStorageAsync(ChromiumWebBrowser browser, IReadOnlyList<string> origins)
+    {
+        using var client = browser.GetDevToolsClient();
+        long total = 0;
+        var answered = false;
+        foreach (var origin in origins)
+        {
+            try
+            {
+                total += (long)(await client.Storage.GetUsageAndQuotaAsync(origin)).Usage;
+                answered = true;
+            }
+            catch (Exception) { }
+            try
+            {
+                // Pelo método em bruto: o tipo gerado do CefSharp lê «entries» (pares chave/valor) como uma lista simples.
+                var response = await client.ExecuteDevToolsMethodAsync("DOMStorage.getDOMStorageItems", new Dictionary<string, object>
+                {
+                    ["storageId"] = new Dictionary<string, object> { ["securityOrigin"] = origin, ["isLocalStorage"] = true },
+                });
+                if (response.Success)
+                {
+                    using var json = System.Text.Json.JsonDocument.Parse(response.ResponseAsJsonString);
+                    total += Data.SiteScope.LocalStorageBytes(json.RootElement);
+                    answered = true;
+                }
+            }
+            catch (Exception) { }
+        }
+        return answered ? total : null;
     }
 
     // Desfaz «Continuar sem segurança» e «Sempre para este site»: o site volta a ser aberto por https:// primeiro (e,
@@ -129,7 +215,10 @@ public partial class MainWindow
     private void SiteInfoForget_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: SitePermission kind } || Tabs.Active is not { } tab) return;
-        SitePermissions.Forget(PermissionRules.Site(SiteInfo.Describe(tab.Address).Origin), kind);
+        var origin = SiteInfo.Describe(tab.Address).Origin;
+        SitePermissions.Forget(PermissionRules.Site(origin), kind);
+        // «Rede local» esquecida: também a decisão que o próprio Chromium tenha guardado.
+        if (kind == SitePermission.LocalNetwork) EngineLocalNetwork.Reset(CookieContext, origin);
         FillSiteInfo();
         ShowToast($"{Permissions.PermissionText.Name(kind)}: o site voltará a perguntar");
     }

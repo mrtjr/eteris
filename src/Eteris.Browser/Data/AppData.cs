@@ -514,14 +514,12 @@ public static class AppData
         catch (Exception) { }
     }
 
-    // As permissões dadas ao site (com e sem www), para «Triturar» e «Esquecer ao fechar».
+    // As permissões dadas ao site e aos seus subdomínios, com qualquer porta (meet.google.com em google.com,
+    // app.exemplo.pt:8443 em exemplo.pt), para «Triturar» e «Esquecer ao fechar».
     public static void ForgetSitePermissions(string site)
     {
-        foreach (var host in new[] { site, "www." + site })
-        {
-            try { LazyPermissions.Value?.Forget(host); }
-            catch (Exception) { }
-        }
+        try { LazyPermissions.Value?.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site)); }
+        catch (Exception) { }
     }
 
     // Sites que abrem no motor de vídeo (precisam de H.264/AAC).

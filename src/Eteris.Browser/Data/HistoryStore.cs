@@ -184,18 +184,58 @@ public sealed class HistoryStore
     }
 
     // «Triturar» e «Esquecer ao fechar»: as visitas a um site (domínio registável, ver SiteScope), em todas as datas.
+    // O site tem de aparecer no texto do endereço (instr, em C no SQLite): só essas linhas passam pela função em C#,
+    // em vez do histórico inteiro.
+    private const string SiteWhere = "instr(lower(url), $s) > 0 AND eteris_site(url) = $s";
+
     public int CountSite(string site)
     {
         using var connection = Open();
         connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM history WHERE eteris_site(url) = $s";
+        command.CommandText = $"SELECT COUNT(*) FROM history WHERE {SiteWhere}";
         command.Parameters.AddWithValue("$s", site);
         return Convert.ToInt32(command.ExecuteScalar());
     }
 
-    public void DeleteSite(string site)
-        => DeleteHistory("DELETE FROM history WHERE eteris_site(url) = $s; " + DeleteOrphanIconsSql + ";", ("$s", site));
+    public void DeleteSite(string site) => TakeSite(site);
+
+    // Apaga as visitas do site numa só passagem e devolve quantas eram e os endereços distintos (para saber que
+    // origens apagar do armazenamento).
+    public (int Count, IReadOnlyList<string> Urls) TakeSite(string site, int urlLimit = 500)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("site_icon_key", SiteIconKey, isDeterministic: true);
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
+        var count = 0;
+        var urls = new HashSet<string>(StringComparer.Ordinal);
+        using (var transaction = connection.BeginTransaction())
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.Transaction = transaction;
+                command.CommandText = $"DELETE FROM history WHERE {SiteWhere} RETURNING url";
+                command.Parameters.AddWithValue("$s", site);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    count++;
+                    if (urls.Count < urlLimit) urls.Add(reader.GetString(0));
+                }
+            }
+            using (var icons = connection.CreateCommand())
+            {
+                icons.Transaction = transaction;
+                icons.CommandText = DeleteOrphanIconsSql + ";";
+                icons.ExecuteNonQuery();
+            }
+            transaction.Commit();
+        }
+        using var checkpoint = connection.CreateCommand();
+        checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        checkpoint.ExecuteNonQuery();
+        return (count, urls.ToList());
+    }
 
     // Endereços distintos do site no histórico (para saber que origens apagar do armazenamento).
     public IReadOnlyList<string> SiteUrls(string site, int limit = 500)
@@ -203,7 +243,7 @@ public sealed class HistoryStore
         using var connection = Open();
         connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT DISTINCT url FROM history WHERE eteris_site(url) = $s LIMIT $l";
+        command.CommandText = $"SELECT DISTINCT url FROM history WHERE {SiteWhere} LIMIT $l";
         command.Parameters.AddWithValue("$s", site);
         command.Parameters.AddWithValue("$l", limit);
         using var reader = command.ExecuteReader();

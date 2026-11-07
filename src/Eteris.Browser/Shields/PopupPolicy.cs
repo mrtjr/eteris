@@ -41,9 +41,14 @@ public static class PopupPolicy
     public static bool Allow(PopupRequest request, IRequestBlocker blocker, Func<string, bool> isProtected, UserActivation? activation)
         => Allow(request.UserGesture, request.TargetUrl, request.OpenerUrl, blocker, isProtected, activation, request.IsPopupWindow, request.AtUtc);
 
-    public const string ActivationPrefix = "\u0001eteris-click ";
+    // Segredo deste processo, fechado no script do clique: qualquer página pode escrever na consola, mas só o nosso
+    // ouvinte (que corre antes dela, em funções estritas — sem .caller — e nunca entrega o segredo a código da página)
+    // o conhece. Sem ele, uma mensagem não é um clique: nem para os pop-ups, nem para «visitado a sério» nos saltos.
+    public static readonly string ActivationNonce = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
 
-    // Formato: prefixo + «i» (controlo) ou «-» (conteúdo) + endereço do link/formulário (vazio se não houver).
+    public static string ActivationPrefix { get; } = "\u0001eteris-click " + ActivationNonce + " ";
+
+    // Formato: prefixo (com o segredo) + «i» (controlo) ou «-» (conteúdo) + endereço do link/formulário (vazio se não houver).
     public static bool IsActivationReport(string? message, out string linkUrl, out bool interactive)
     {
         linkUrl = string.Empty;
@@ -57,9 +62,15 @@ public static class PopupPolicy
 
     // Corre antes dos scripts da página, em todos os frames: regista onde o utilizador carregou. O nosso ouvinte, em
     // captura na janela, é o primeiro a ser registado, por isso a página não o consegue calar.
-    public const string ActivationScript = """
+    public static string ActivationScript { get; } = ActivationScriptFor(ActivationNonce);
+
+    internal static string ActivationScriptFor(string nonce) => ActivationTemplate.Replace("__NONCE__", nonce, StringComparison.Ordinal);
+
+    private const string ActivationTemplate = """
         (() => {
+          'use strict';
           const debug = console.debug.bind(console);
+          const prefix = '\u0001eteris-click __NONCE__ ';
           const controls = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'A', 'AREA']);
           const roles = new Set(['button', 'link', 'menuitem', 'tab', 'checkbox', 'switch', 'option']);
           const describe = e => {
@@ -72,7 +83,7 @@ public static class PopupPolicy
             }
             return (interactive ? 'i' : '-') + link;
           };
-          const report = e => { if (e.isTrusted) debug('\u0001eteris-click ' + describe(e)); };
+          const report = e => { if (e.isTrusted) debug(prefix + describe(e)); };
           addEventListener('pointerdown', report, true);
           addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') report(e); }, true);
         })();

@@ -202,6 +202,8 @@ public partial class MainWindow : Window
                 tab.IsReaderable = false;
                 tab.VideoOffer = null;
             }
+            // «Esquecer ao fechar»: ir para outro site também é sair do anterior.
+            if (hostChanged) NoteSiteLeft(tab.Address, address);
             tab.Address = address;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
@@ -666,6 +668,7 @@ public partial class MainWindow : Window
     private void TabItem_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not BrowserTab tab) return;
+        FocusFrame();
         if (e.ChangedButton == MouseButton.Middle)
         {
             CloseTab(tab);
@@ -687,6 +690,21 @@ public partial class MainWindow : Window
             Tabs.Active = tab;
         }
     }
+
+    // Um clique numa aba (ou no «x» dela) leva o teclado para a moldura, como no Chrome: sem isto o foco ficava na
+    // página do Chromium (ou na que acabou de fechar) e o Ctrl+Z, o Ctrl+T e os outros atalhos iam para lá. A página
+    // volta a ter o teclado com um clique nela.
+    private void FocusFrame()
+    {
+        if (RenameOpen) return;
+        if (_overlay is { IsActive: true }) Activate();
+        Keyboard.Focus(this);
+        // O Keyboard.Focus do WPF não tira o foco do Win32 à janela do Chromium (filha, noutra thread): pede-se à mão.
+        SetFocus(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+    }
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    private static partial nint SetFocus(nint window);
 
     private static bool IsInsideTabControl(DependencyObject? node, DependencyObject tabItem)
     {

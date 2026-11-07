@@ -98,6 +98,12 @@ public static class LocalNetworkGrants
         Granted.TryRemove((site, true), out _);
     }
 
+    // As do site (todas as chaves host[:porta] que lhe pertencem), só do contexto indicado (normal ou privado).
+    public static void ForgetWhere(Func<string, bool> belongs, bool isPrivate)
+    {
+        foreach (var key in Granted.Keys.Where(k => k.Private == isPrivate && belongs(k.Site)).ToList()) Granted.TryRemove(key, out _);
+    }
+
     public static void ForgetPrivate()
     {
         foreach (var key in Granted.Keys.Where(k => k.Private).ToList()) Granted.TryRemove(key, out _);
