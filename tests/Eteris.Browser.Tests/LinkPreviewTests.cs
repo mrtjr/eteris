@@ -168,6 +168,34 @@ public class LinkPreviewTests
     [InlineData("[1,2]")]
     public void Parse_RejectsGarbage(string? json) => Assert.Null(LinkPreview.Parse(json, Page));
 
+    [Theory]
+    [InlineData("\u0001eteris-glance https://a.pt/artigo", "https://a.pt/artigo")]
+    [InlineData("\u0001eteris-glance http://a.pt/x?y=1 ", "http://a.pt/x?y=1")]
+    public void IsReport_ReadsTheClickedLink(string message, string expected)
+    {
+        Assert.True(LinkPreview.IsReport(message, out var url));
+        Assert.Equal(expected, url);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("eteris-glance https://a.pt/")]
+    [InlineData("\u0001eteris-glance ")]
+    [InlineData("\u0001eteris-glance javascript:alert(1)")]
+    [InlineData("\u0001eteris-glance mailto:a@a.pt")]
+    [InlineData("\u0001eteris-click -https://a.pt/")]
+    public void IsReport_IgnoresEverythingElse(string? message) => Assert.False(LinkPreview.IsReport(message, out _));
+
+    [Fact]
+    public void AltClickScript_OnlyReactsToAPlainAltClick()
+    {
+        Assert.Contains("e.altKey", LinkPreview.AltClickScript);
+        Assert.Contains("e.preventDefault()", LinkPreview.AltClickScript);
+        Assert.Contains("isTrusted", LinkPreview.AltClickScript);
+        Assert.Contains("}, true);", LinkPreview.AltClickScript); // em captura: a página não o cala
+    }
+
     [Fact]
     public void Script_CarriesReadabilityAndReturnsJson()
     {

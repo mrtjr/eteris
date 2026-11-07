@@ -30,6 +30,7 @@ public class InjectedScriptsSyntaxTests
         { "último clique (pop-unders)", PopupPolicy.ActivationScript },
         { "escurecer (antes da página)", DarkPages.EarlyScript },
         { "espreitar (extração do artigo)", LinkPreview.Script },
+        { "espreitar (Alt+clique)", LinkPreview.AltClickScript },
     };
 
     [Theory]

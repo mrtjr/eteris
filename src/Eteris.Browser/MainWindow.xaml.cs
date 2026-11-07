@@ -101,7 +101,7 @@ public partial class MainWindow : Window
             url => VideoEngine.CanHost(url)
                 ? SiteCosmeticScript(url)
                   + (DarkPages.IsCandidate(url) && WebHost(url) is { } darkHost && AppData.IsDark(darkHost) ? DarkPages.EarlyScript + "\n;\n" : "")
-                  + VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript
+                  + VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript + "\n;\n" + LinkPreview.AltClickScript
                 : null);
         UserActivation? lastActivation = null;
         _scriptlets[tab] = injector;
@@ -167,6 +167,15 @@ public partial class MainWindow : Window
             if (VideoEngine.IsReport(e.Message))
             {
                 Dispatcher.InvokeAsync(() => OnPatentedVideoReport(tab, browser.Address ?? tab.Address));
+                return;
+            }
+            if (LinkPreview.IsReport(e.Message, out var glanceUrl))
+            {
+                // Alt+clique num link: só da página à vista (a ativa ou uma das metades do ecrã dividido).
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (ReferenceEquals(tab, Tabs.Active) || _split?.PaneOf(tab) is not null) ShowLinkPreview(glanceUrl);
+                });
                 return;
             }
             if (ReaderScripts.ParseReport(e.Message) is not { } reader) return;

@@ -61,6 +61,40 @@ public static partial class LinkPreview
         })()
         """;
 
+    public const string ReportPrefix = "eteris-glance ";
+
+    // Alt+clique num link (botão esquerdo, só Alt): a página não navega nem transfere (é o que o Chromium faria com
+    // Alt) e o Éteris recebe o endereço para o espreitar. Corre antes dos scripts da página, em captura na janela,
+    // por isso a página não o consegue calar. Só links http(s) com o clique de verdade (isTrusted).
+    public const string AltClickScript = """
+        (() => {
+          const debug = console.debug.bind(console);
+          addEventListener('click', e => {
+            if (!e.isTrusted || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+            for (const node of (e.composedPath ? e.composedPath() : [e.target])) {
+              if (!(node instanceof Element)) continue;
+              if ((node.tagName === 'A' || node.tagName === 'AREA') && node.href && /^https?:/i.test(node.href)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                debug('eteris-glance ' + node.href);
+                return;
+              }
+            }
+          }, true);
+        })();
+        """;
+
+    // Mensagem de consola do script acima: prefixo + endereço do link. Qualquer outra coisa é ignorada.
+    public static bool IsReport(string? message, out string url)
+    {
+        url = string.Empty;
+        if (message is null || !message.StartsWith(ReportPrefix, StringComparison.Ordinal)) return false;
+        var candidate = message[ReportPrefix.Length..].Trim();
+        if (!IsWeb(candidate) || !Uri.TryCreate(candidate, UriKind.Absolute, out _)) return false;
+        url = candidate;
+        return true;
+    }
+
     // JSON do script → o que o cartão mostra. null quando o JSON não presta.
     public static LinkPreviewInfo? Parse(string? json, string url)
     {

@@ -26,7 +26,7 @@ public static class PageMenu
         if (ctx.LinkUrl is { Length: > 0 })
         {
             items.Add(new(PageCommand.OpenLinkNewTab, "", "Abrir link numa nova aba"));
-            if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.PreviewLink, "", "Espreitar o link"));
+            if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.PreviewLink, "", "Espreitar o link", "Alt+clique"));
             if (!ctx.IsPrivate) items.Add(new(PageCommand.OpenLinkPrivate, "", "Abrir link numa janela privada"));
             items.Add(new(PageCommand.CopyLink, "", "Copiar endereço do link"));
             items.Add(null);

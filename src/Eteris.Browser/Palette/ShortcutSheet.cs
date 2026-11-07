@@ -27,6 +27,7 @@ public static class ShortcutSheet
             new("F5 · Ctrl+R", "Recarregar"),
             new("Ctrl+Shift+R", "Recarregar sem cache"),
             new("Esc", "Parar o carregamento"),
+            new("Alt+clique num link", "Espreitar o link num cartão, sem abrir aba"),
         ]),
         new("Ferramentas", [
             new("Alt+F", "Menu do Éteris"),
