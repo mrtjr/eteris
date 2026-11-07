@@ -3,98 +3,158 @@ using CefSharp.DevTools;
 
 namespace Eteris.Browser.Shields;
 
-// Scriptlets do uBlock registados via DevTools (Page.addScriptToEvaluateOnNewDocument): o Chromium corre-os
-// antes de qualquer script da página, que é quando os anti-bloqueadores se instalam.
-// onSession corre uma vez, quando a sessão DevTools nasce (antes do primeiro registo): por exemplo, a vista móvel
-// de um site fixado (Emulation.setUserAgentOverride), que tem de valer antes de o primeiro documento nascer.
-public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<string, string?>? extra = null,
-    Func<DevToolsClient, Task>? onSession = null) : IDisposable
+// Scripts do Éteris que correm antes dos da página, registados pelo DevTools (Page.addScriptToEvaluateOnNewDocument):
+// scriptlets do uBlock (os anti-bloqueadores instalam-se logo no início), regras cosméticas precoces, modo escuro e os
+// scripts comuns do Éteris (deteção de vídeo, último clique, Alt+clique).
+//
+// Porquê assim (medido, docs/motor.md, F2): quando o Chromium começa uma navegação (DidStartNavigation), a sessão
+// DevTools deixa de entregar mensagens ao renderer até ao fim dessa navegação. Um registo feito a meio só chega depois
+// do commit — tarde para o documento — e quem esperava por ele (antes, o pedido da página) esperava sempre ~1 s. Com a
+// aba parada, o mesmo registo leva 1–5 ms. Por isso:
+//  - o script base (igual em todos os sites) regista-se uma vez, quando a sessão nasce (o browser acabou de nascer);
+//  - o GPC visível ao JavaScript (navigator.globalPrivacyControl, PrivacySignals) também: vale em todas as páginas,
+//    com ou sem escudo, registado à parte e nunca retirado;
+//  - os scripts de cada site vão protegidos pelo hostname da página de topo e acumulam-se (HostScriptRegistry): nunca
+//    é preciso tirá-los a meio de uma navegação. Registam-se com a aba parada: antes de cada navegação pedida pelo
+//    Éteris, depois de cada commit (os links do mesmo site já os encontram) e ao passar o rato num link;
+//  - os mais antigos só saem com a aba parada (Tidy, no fim do carregamento).
+// Limite medido: antes da 1.ª navegação de um browser ainda não há renderer, e o DevTools só responde depois do commit
+// dela (esperar 300 ms antes de navegar não adiantou nada e atrasava a aba nova). O 1.º documento de cada aba nasce
+// por isso sem os scripts precoces, como antes; a partir do 2.º, todos os têm.
+// onSession corre uma vez, quando a sessão DevTools nasce: por exemplo, a vista móvel de um site fixado
+// (Emulation.setUserAgentOverride).
+// hostExtra(url) dá o resto do script do site e hostKey(url) o que o decide (por exemplo, o modo escuro ligado).
+public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<string, string?>? hostExtra = null,
+    string? baseScript = null, Func<DevToolsClient, Task>? onSession = null, Func<string, string>? hostKey = null) : IDisposable
 {
+    public const int MaxHosts = 24;
+
     private readonly Lock _gate = new();
+    private readonly HostScriptRegistry _hosts = new(MaxHosts);
     private DevToolsClient? _client;
-    private string? _identifier;
-    // O último script pedido (registado ou na fila); null = nenhum.
-    private string? _wanted;
     private Task _queue = Task.CompletedTask;
+    private bool _disposed;
 
-    // Chamado no início de cada navegação do frame principal (incluindo redirecionamentos).
-    // A tarefa termina quando o registo está feito: o pedido da página espera por ela.
-    public Task Prepare(IBrowser browser, string url)
+    // A sessão DevTools (Page.enable, onSession) e o script base. Chamar logo que o browser nasce.
+    public Task Start(IBrowser browser)
     {
-        var scriptlets = Uri.TryCreate(url, UriKind.Absolute, out var page) && isProtected(page.Host)
-            && ShieldEngine.Cosmetic is { } engine
-            ? ScriptletScripts.Wrap(engine.Scriptlets(url), url)
-            : null;
-        var script = PrivacySignals.Compose(scriptlets, extra?.Invoke(url));
-        var signals = PrivacySignals.ScriptFor(url) is not null;
+        lock (_gate) return EnsureClient(browser) ? _queue : Task.CompletedTask;
+    }
 
+    // Os scripts do site de url (nenhum, se o site não precisa). A tarefa termina quando o registo está feito.
+    public Task EnsureHost(IBrowser browser, string? url)
+    {
+        if (HostScriptRegistry.HostOf(url) is not { } page) return Task.CompletedTask;
+        var host = page.IdnHost;
+        var key = KeyFor(url!, page);
         lock (_gate)
         {
-            if (script is null && !signals && _identifier is null && _client is null && onSession is null) return Task.CompletedTask;
-            if (_client is null)
-            {
-                try { _client = browser.GetDevToolsClient(); }
-                catch (Exception) { return Task.CompletedTask; }
-                // O Chromium só corre os scripts registados se o domínio Page estiver ativo na sessão.
-                var created = _client;
-                _queue = _queue.ContinueWith(_ => created.Page.EnableAsync()).Unwrap();
-                if (onSession is not null) _queue = _queue.ContinueWith(_ => RunSession(created)).Unwrap();
-                // O GPC visível ao JavaScript (navigator.globalPrivacyControl) vale em todas as páginas, com ou sem
-                // escudo: registado uma vez por sessão e nunca retirado, não depende da corrida de cada navegação.
-                _queue = _queue.ContinueWith(_ => Register(created, PrivacySignals.GpcScript)).Unwrap();
-            }
-            // Mesmo script que o já registado (recarregar, outra página do mesmo site): fica como está. Retirar e
-            // voltar a registar durante uma navegação só é atendido depois de o documento novo nascer (o Chromium
-            // guarda os comandos até lá), e o documento ficava sem scripts — numa janela privada, sempre.
-            if (!NeedsReplace(_wanted, script)) return _queue;
-            _wanted = script;
-            var client = _client;
-            _queue = _queue.ContinueWith(_ => Replace(client, script)).Unwrap();
+            if (_disposed) return Task.CompletedTask;
+            if (_hosts.IsCurrent(host, key)) return _hosts.Pending(host);
+        }
+        var script = HostScriptRegistry.Guard(host, ScriptFor(url!, page));
+        lock (_gate)
+        {
+            if (_disposed) return Task.CompletedTask;
+            if (_hosts.Plan(host, key, script) is not { } change) return _hosts.Pending(host);
+            if (!EnsureClient(browser)) return Task.CompletedTask;
+            var client = _client!;
+            _queue = _queue.ContinueWith(_ => Apply(client, change)).Unwrap();
+            _hosts.SetPending(host, _queue);
             return _queue;
         }
     }
 
-    // Decisão pura (testada): um registo novo só quando o script muda.
+    // Como EnsureHost, mas sem recalcular um site já conhecido (ao passar o rato num link: pode ser muitas vezes).
+    public Task EnsureHostIfMissing(IBrowser browser, string? url)
+    {
+        if (HostScriptRegistry.HostOf(url) is not { } page) return Task.CompletedTask;
+        lock (_gate)
+        {
+            if (_hosts.Contains(page.IdnHost)) return _hosts.Pending(page.IdnHost);
+        }
+        return EnsureHost(browser, url);
+    }
+
+    // Com a aba parada: tira os registos mais antigos além de MaxHosts (nunca o do site à vista).
+    public void Tidy(string? currentUrl)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _client is not { } client) return;
+            foreach (var id in _hosts.Evict(HostScriptRegistry.HostOf(currentUrl)?.IdnHost))
+                _queue = _queue.ContinueWith(_ => Remove(client, id)).Unwrap();
+        }
+    }
+
+    // O que decide o script do site: o escudo ligado nele, as listas carregadas (uma atualização troca o motor) e o resto.
+    private string KeyFor(string url, Uri page)
+        => $"{isProtected(page.Host)}|{(ShieldEngine.Cosmetic is { } engine ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(engine) : 0)}|{hostKey?.Invoke(url)}";
+
+    private string? ScriptFor(string url, Uri page)
+    {
+        var scriptlets = isProtected(page.Host) && ShieldEngine.Cosmetic is { } engine
+            ? ScriptletScripts.Wrap(engine.Scriptlets(url), url)
+            : null;
+        return PrivacySignals.Compose(scriptlets, hostExtra?.Invoke(url));
+    }
+
+    // Decisão pura (testada; HostScriptRegistry.Plan): um registo novo só quando o script muda. Retirar e voltar a
+    // registar durante uma navegação só é atendido depois de o documento novo nascer, e a página ficava sem scripts.
     public static bool NeedsReplace(string? wanted, string? script) => !string.Equals(script, wanted, StringComparison.Ordinal);
 
-    private async Task RunSession(DevToolsClient client)
+    // Dentro do _gate.
+    private bool EnsureClient(IBrowser browser)
     {
-        try { await onSession!(client); }
+        if (_disposed) return false;
+        if (_client is not null) return true;
+        try { _client = browser.GetDevToolsClient(); }
+        catch (Exception) { return false; }
+        // O Chromium só corre os scripts registados se o domínio Page estiver ativo na sessão.
+        var created = _client;
+        _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.EnableAsync())).Unwrap();
+        if (onSession is not null) _queue = _queue.ContinueWith(_ => Quietly(() => onSession(created))).Unwrap();
+        // O GPC visível ao JavaScript vale em todas as páginas, com ou sem escudo: registado uma vez por sessão e nunca
+        // retirado, não depende do script de cada site nem da corrida de cada navegação.
+        _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.GpcScript))).Unwrap();
+        if (!string.IsNullOrEmpty(baseScript))
+            _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(baseScript))).Unwrap();
+        return true;
+    }
+
+    // O separador pode ter fechado entretanto: a página segue sem o script.
+    private static async Task Quietly(Func<Task> call)
+    {
+        try { await call(); }
         catch (Exception) { }
     }
 
-    private static async Task Register(DevToolsClient client, string script)
+    private async Task Apply(DevToolsClient client, HostScriptRegistry.Change change)
     {
-        try { await client.Page.AddScriptToEvaluateOnNewDocumentAsync(script); }
-        catch (Exception) { }
-    }
-
-    private async Task Replace(DevToolsClient client, string? script)
-    {
+        if (change.OldId is not null) await Remove(client, change.OldId);
+        if (change.Script is null) return;
         try
         {
-            string? previous;
-            lock (_gate) { previous = _identifier; _identifier = null; }
-            if (previous is not null)
-            {
-                // Numa navegação que muda de processo o Chromium já descartou o registo: não é erro.
-                try { await client.Page.RemoveScriptToEvaluateOnNewDocumentAsync(previous); }
-                catch (DevToolsClientException) { }
-            }
-            if (script is null) return;
-            var response = await client.Page.AddScriptToEvaluateOnNewDocumentAsync(script);
-            lock (_gate) _identifier = response.Identifier;
+            var response = await client.Page.AddScriptToEvaluateOnNewDocumentAsync(change.Script);
+            string? stale;
+            lock (_gate) stale = _hosts.Registered(change.Host, change.Script, response.Identifier);
+            if (stale is not null) await Remove(client, stale);
         }
-        catch (Exception)
-        {
-            // Sem registo: a próxima navegação volta a tentar.
-            lock (_gate) _wanted = null;
-            // O separador pode ter fechado entretanto; a página simplesmente segue sem scriptlets.
-        }
+        catch (Exception) { }
+    }
+
+    private static async Task Remove(DevToolsClient client, string id)
+    {
+        try { await client.Page.RemoveScriptToEvaluateOnNewDocumentAsync(id); }
+        catch (Exception) { }
     }
 
     public void Dispose()
     {
-        lock (_gate) _client?.Dispose();
+        lock (_gate)
+        {
+            _disposed = true;
+            _client?.Dispose();
+        }
     }
 }

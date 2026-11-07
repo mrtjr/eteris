@@ -27,6 +27,8 @@ public class InjectedScriptsSyntaxTests
         { "filtros cosméticos (antes da página)", CosmeticScripts.InjectEarly(".anuncio { display: none !important; }") },
         { "corpo async (DevTools)", Eteris.Browser.Browser.PageScript.Expression("return await Promise.resolve(1);", asyncBody: true) },
         { "vídeo só em H.264 (deteção)", VideoEngine.WatchScript },
+        { "vídeo só em H.264 (deteção tardia)", VideoEngine.LateWatchScript },
+        { "vídeo (posição antes da troca)", VideoEngine.PositionScript },
         { "último clique (pop-unders)", PopupPolicy.ActivationScript },
         { "escurecer (antes da página)", DarkPages.EarlyScript },
         { "espreitar (extração do artigo)", LinkPreview.Script },
@@ -35,6 +37,9 @@ public class InjectedScriptsSyntaxTests
         { "auto-teste de privacidade (medições)", Eteris.Browser.Browser.PageScript.Expression(SelfTest.MeasureScript, asyncBody: true) },
         { "auto-teste de privacidade (resultados)", SelfTest.RenderScript([new("gpc", "GPC", true, "a «b» 'c' </script>"), new("canvas", "Canvas", null, "x")]) },
         { "auto-teste de privacidade (falha)", SelfTest.FailedScript("tempo esgotado") },
+        { "scripts de um site (guarda do topo)", HostScriptRegistry.Guard("www.publico.pt",
+            ScriptletScripts.Wrap("testMark(1)", "https://www.publico.pt/") + "\n;\n" + CosmeticScripts.InjectEarly(".a { display: none }") + DarkPages.EarlyScript)! },
+        { "script base (por protocolo)", HostScriptRegistry.ForProtocols(["http:", "https:"], VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript) },
     };
 
     // O script da página eteris://privacy/ (relatório, promessas e auto-teste), como é servido.

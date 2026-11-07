@@ -19,6 +19,25 @@ public static class AppData
 
     public static HistoryStore History => LazyHistory.Value;
 
+    private static readonly Lazy<HistoryWriter> LazyWriter = new(() => new HistoryWriter(() => History, TimeSpan.FromSeconds(1)));
+
+    // Visitas e ícones: escritos em segundo plano, pela ordem (Data/HistoryWriter.cs).
+    public static void QueueWrite(Action<HistoryStore> write) => LazyWriter.Value.Enqueue(write);
+
+    // Título de uma visita: só o último de cada segundo é escrito (sites com contadores no título).
+    public static void UpdateTitleLater(string url, string title) => LazyWriter.Value.UpdateTitleLater(url, title);
+
+    // Antes de ler ou apagar, e ao sair: o que está na fila fica escrito.
+    public static void FlushHistory()
+    {
+        if (LazyWriter.IsValueCreated) LazyWriter.Value.Flush(TimeSpan.FromSeconds(2));
+    }
+
+    public static void CloseHistory()
+    {
+        if (LazyWriter.IsValueCreated) LazyWriter.Value.Dispose();
+    }
+
     private static readonly Lazy<HiddenElementsStore?> LazyHidden = new(() =>
     {
         try { return new HiddenElementsStore(AppPaths.Database); }
@@ -140,18 +159,21 @@ public static class AppData
     // O histórico é conveniência: uma falha da base de dados nunca pode interromper a navegação.
     public static void TryWrite(Action<HistoryStore> write)
     {
+        FlushHistory();
         try { write(History); }
         catch (Exception) { }
     }
 
     public static IReadOnlyList<T> TryRead<T>(Func<HistoryStore, IReadOnlyList<T>> read)
     {
+        FlushHistory();
         try { return read(History); }
         catch (Exception) { return []; }
     }
 
     public static IReadOnlyDictionary<string, string> SiteIcons(IEnumerable<string> urls)
     {
+        FlushHistory();
         try { return History.SiteIcons(urls); }
         catch (Exception) { return new Dictionary<string, string>(); }
     }
@@ -411,6 +433,7 @@ public static class AppData
         SetDark(site, false);
         SetStrict(site, false);
         SetVideoSite(site, false);
+        SetVideoOptOut(site, false);
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>
@@ -536,6 +559,26 @@ public static class AppData
     {
         try { return LazyBookmarks.Value.Restore(saved); }
         catch (Exception) { return false; }
+    }
+
+    // Sites que o utilizador mandou voltar ao motor principal (botão «Motor de vídeo»): nunca trocam sozinhos, nem os da
+    // lista embutida (VideoEngine.KnownH264Sites).
+    private static readonly Lazy<StrictSiteStore?> LazyVideoOff = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "video_sites_off"); }
+        catch (Exception) { return null; }
+    });
+
+    public static bool IsVideoOptOut(string host) => LazyVideoOff.Value?.Contains(host) == true;
+
+    public static void SetVideoOptOut(string host, bool on)
+    {
+        try
+        {
+            if (on) LazyVideoOff.Value?.Add(host);
+            else LazyVideoOff.Value?.Remove(host);
+        }
+        catch (Exception) { }
     }
 
     public static void RemoveBookmark(string url)

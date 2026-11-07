@@ -76,7 +76,7 @@ public partial class MainWindow
         if (OmniboxClassifier.Classify(input, Engine) is { } result) LoadUrl(result.Url, newTab);
     }
 
-    private void LoadUrl(string url, bool newTab = false)
+    private async void LoadUrl(string url, bool newTab = false)
     {
         CloseSuggestions();
         _omniboxEdited = false;
@@ -92,12 +92,22 @@ public partial class MainWindow
             UpdateOmniboxChrome();
             return;
         }
+        // Site que abre no motor de vídeo (lembrado ou da lista de sites só H.264): vai logo para lá, sem carregar a
+        // página também no motor principal; a página atual fica à vista até o motor de vídeo a ter carregado.
+        if (Tabs.Active is { UsesVideoEngine: false } known && IsVideoSite(url))
+        {
+            SetOmniboxText(url);
+            UpdateOmniboxChrome();
+            SwitchToVideoEngine(known, url);
+            return;
+        }
         if (ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
         tab.Address = url;
         SetOmniboxText(url);
-        browser.Load(url);
         Keyboard.Focus(browser);
         UpdateOmniboxChrome();
+        await ScriptsReadyFor(tab, browser, url);
+        if (!browser.IsDisposed) browser.Load(url);
     }
 
     private void FocusOmnibox()

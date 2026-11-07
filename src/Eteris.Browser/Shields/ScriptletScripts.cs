@@ -13,7 +13,7 @@ public static class ScriptletScripts
 
         // O uBlock define scriptletGlobals ao injetar e os scriptlets (via safeSelf) contam com ela.
         return $$"""
-            if (window.top === window && location.hostname === {{JsonSerializer.Serialize(uri.Host)}}) {
+            if (window.top === window && location.hostname === {{JsonSerializer.Serialize(uri.IdnHost)}}) {
               try {
                 const scriptletGlobals = {};
             {{script}}

@@ -58,6 +58,35 @@
     <InternalsVisibleTo Include="Eteris.Browser.Tests" />
   </ItemGroup>
 
+  <!-- Motor com codecs da plataforma (docs/motor.md, «Motor com codecs»): quando existe a compilação própria da CEF
+       156.0.15 (mesmo commit da do NuGet, por isso o CefSharp 156.0.150 não muda), o runtime COMPLETO (libcef, paks,
+       icudtl, snapshot V8, chrome_elf, d3dcompiler, dxcompiler, swiftshader, vulkan, locales) substitui o do NuGet na
+       saída, depois de compilar e de publicar. Os avisos de licença dela vão para licenses\cef-codecs. Sem a pasta
+       (build/cef-codecs/out/runtime com libcef.dll e manifest.json), nada muda. -->
+  <PropertyGroup>
+    <EterisCefRuntime>$(MSBuildThisFileDirectory)..\..\build\cef-codecs\out\runtime</EterisCefRuntime>
+    <EterisCefRuntimeOn Condition="Exists('$(EterisCefRuntime)\libcef.dll') And Exists('$(EterisCefRuntime)\manifest.json')">true</EterisCefRuntimeOn>
+  </PropertyGroup>
+
+  <Target Name="EterisCefRuntimeItems" Condition="'$(EterisCefRuntimeOn)' == 'true'">
+    <ItemGroup>
+      <_EterisCefFile Include="$(EterisCefRuntime)\**\*" Exclude="$(EterisCefRuntime)\manifest.json;$(EterisCefRuntime)\licenses\**" />
+      <_EterisCefLicense Include="$(EterisCefRuntime)\licenses\**\*" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="EterisCefRuntimeAfterBuild" AfterTargets="Build" DependsOnTargets="EterisCefRuntimeItems"
+          Condition="'$(EterisCefRuntimeOn)' == 'true' And '$(DesignTimeBuild)' != 'true'">
+    <Copy SourceFiles="@(_EterisCefFile)" DestinationFiles="@(_EterisCefFile->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_EterisCefLicense)" DestinationFiles="@(_EterisCefLicense->'$(OutDir)licenses\cef-codecs\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="EterisCefRuntimeAfterPublish" AfterTargets="Publish" DependsOnTargets="EterisCefRuntimeItems"
+          Condition="'$(EterisCefRuntimeOn)' == 'true'">
+    <Copy SourceFiles="@(_EterisCefFile)" DestinationFiles="@(_EterisCefFile->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(_EterisCefLicense)" DestinationFiles="@(_EterisCefLicense->'$(PublishDir)licenses\cef-codecs\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="CefSharp.Wpf.NETCore" Version="156.0.150" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />

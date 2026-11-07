@@ -5,7 +5,7 @@ public enum PageCommand
     Back, Forward, Reload, Print, ViewSource, Inspect,
     OpenLinkNewTab, PreviewLink, OpenLinkSideBySide, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
-    Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink,
+    Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink, PlayInVideoEngine,
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
@@ -73,6 +73,8 @@ public static class PageMenu
             if (ctx.IsWebPage) items.Add(new(PageCommand.SavePdf, "", "Guardar como PDF"));
             items.Add(new(PageCommand.ViewSource, "", "Ver código-fonte", "Ctrl+U"));
             if (ctx.IsWebPage) items.Add(new(PageCommand.HideElement, "", "Esconder um elemento…"));
+            // O vídeo não toca (H.264/AAC, DRM) e a deteção não o apanhou: forçar o motor de vídeo do Windows.
+            if (ctx.IsWebPage) items.Add(new(PageCommand.PlayInVideoEngine, "", "Tocar no motor de vídeo"));
         }
         items.Add(new(PageCommand.Inspect, "", "Inspecionar", "F12"));
         return Tidy(items);

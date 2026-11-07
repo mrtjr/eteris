@@ -1,0 +1,45 @@
+using System.IO;
+using System.Xml.Linq;
+
+namespace Eteris.Browser.Tests;
+
+// Motor com codecs (docs/motor.md, «Motor com codecs»): o csproj só troca o runtime da CEF quando existe a compilação
+// própria (com manifesto). Sem a pasta, o Éteris tem de continuar a usar o runtime do NuGet, sem nada a mudar.
+public class CefCodecsRuntimeTests
+{
+    private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
+
+    private static XDocument Project() => XDocument.Load(Path.Combine(Root(), "src", "Eteris.Browser", "Eteris.Browser.csproj"));
+
+    [Fact]
+    public void RuntimeSwap_OnlyWithTheOwnBuildAndItsManifest()
+    {
+        var on = Project().Descendants("EterisCefRuntimeOn").Single();
+        var condition = on.Attribute("Condition")!.Value;
+        Assert.Contains(@"Exists('$(EterisCefRuntime)\libcef.dll')", condition);
+        Assert.Contains(@"Exists('$(EterisCefRuntime)\manifest.json')", condition);
+        foreach (var name in new[] { "EterisCefRuntimeAfterBuild", "EterisCefRuntimeAfterPublish" })
+        {
+            var target = Project().Descendants("Target").Single(t => t.Attribute("Name")?.Value == name);
+            Assert.Contains("'$(EterisCefRuntimeOn)' == 'true'", target.Attribute("Condition")!.Value);
+        }
+    }
+
+    [Fact]
+    public void OwnBuild_IsNeverCommitted()
+        => Assert.Contains("build/cef-codecs/out/", File.ReadAllLines(Path.Combine(Root(), ".gitignore")));
+
+    [Fact]
+    public void Publish_RefusesAnythingButPlatformCodecs()
+    {
+        var publish = File.ReadAllText(Path.Combine(Root(), "build", "publish.ps1"));
+        Assert.Contains("platform-codecs", publish);
+        Assert.Contains("156.0.15+gcf671c0+chromium-156.0.8078.80", publish);
+        Assert.Contains("sha256", publish);
+    }
+}

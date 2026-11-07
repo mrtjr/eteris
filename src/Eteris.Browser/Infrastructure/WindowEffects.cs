@@ -47,6 +47,20 @@ public static class WindowEffects
         return true;
     }
 
+    // Sem WS_CLIPCHILDREN, o WPF desenha também por baixo das janelas filhas (a página do Chromium, o motor de vídeo):
+    // o fundo opaco da área da página fica na superfície da janela. Com ele, um fotograma ainda vazio do Chromium (os
+    // dois apresentam com DirectComposition, sem desenho GDI que o WPF pudesse apagar) mostra essa cor e não o Mica ou lixo.
+    public static void PaintUnderChildWindows(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == 0) return;
+        var style = GetWindowLongPtr(hwnd, GWL_STYLE);
+        var wanted = WithoutClipChildren(style);
+        if (wanted != style) SetWindowLongPtr(hwnd, GWL_STYLE, wanted);
+    }
+
+    public static nint WithoutClipChildren(nint style) => style & ~WS_CLIPCHILDREN;
+
     public static void Apply(Window window, uint borderColorRef, bool darkMode = true)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
@@ -61,6 +75,7 @@ public static class WindowEffects
 
     private const int GWL_STYLE = -16;
     private const nint WS_SYSMENU = 0x00080000;
+    private const nint WS_CLIPCHILDREN = 0x02000000;
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static extern nint GetWindowLongPtr(nint hwnd, int index);

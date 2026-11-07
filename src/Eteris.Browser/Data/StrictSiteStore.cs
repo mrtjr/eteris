@@ -14,7 +14,8 @@ public sealed class StrictSiteStore
     private readonly string _table;
     private readonly bool _exactHost;
 
-    // A tabela é uma constante interna (strict_sites, dark_sites, video_sites, http_sites), nunca texto vindo de fora.
+    // A tabela é uma constante interna (strict_sites, dark_sites, video_sites, video_sites_off, http_sites), nunca texto
+    // vindo de fora.
     public StrictSiteStore(string path, string table = "strict_sites", bool exactHost = false)
     {
         _table = table;

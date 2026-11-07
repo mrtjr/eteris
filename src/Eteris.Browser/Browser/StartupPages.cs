@@ -20,4 +20,9 @@ public static class StartupPages
         if (tabs.Count == 0 && !hasRestoredTabs) tabs.Add(new StartupTab(NewTabPage.Url, Activate: true));
         return tabs;
     }
+
+    // O plano só corre na janela dona da sessão e já inclui o endereço passado ao abrir: abri-lo outra vez dava duas
+    // abas iguais (duas páginas a carregar, dois pedidos de tudo). As outras janelas (segunda janela, privada) não têm
+    // plano e abrem o endereço elas mesmas.
+    public static bool OpensInitialUrlSeparately(bool ownsSession, string? initialUrl) => !ownsSession && initialUrl is not null;
 }

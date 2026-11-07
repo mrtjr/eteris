@@ -105,4 +105,28 @@ public class ReviewSplitTests
     [InlineData(-20, 40, false)]
     public void DraggedTab_ReordersOnlyOverTheStrip(double y, double height, bool expected)
         => Assert.Equal(expected, TabLayout.ReordersAt(y, height));
+
+    // Arranque com um endereço (run-test.ps1 -Url, atalho, «Abrir com»): fica exatamente uma aba com ele, seja a
+    // janela dona da sessão (o plano já o abre) ou outra janela (sem plano).
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StartingWithAnAddress_OpensItExactlyOnce(bool ownsSession)
+    {
+        const string initialUrl = "https://pt.wikipedia.org/";
+        var vm = new TabsViewModel();
+        if (ownsSession)
+            foreach (var tab in Eteris.Browser.Browser.StartupPages.Plan(false, "1.0.0", "1.0.0", initialUrl, hasRestoredTabs: false))
+                vm.NewTab(tab.Url, tab.Activate);
+        if (Eteris.Browser.Browser.StartupPages.OpensInitialUrlSeparately(ownsSession, initialUrl)) vm.NewTab(initialUrl);
+        Assert.Single(vm.Tabs, t => t.Address == initialUrl);
+        Assert.Equal(initialUrl, vm.Active!.Address);
+    }
+
+    [Fact]
+    public void StartingWithoutAnAddress_NeverOpensAnExtraTab()
+    {
+        Assert.False(Eteris.Browser.Browser.StartupPages.OpensInitialUrlSeparately(true, null));
+        Assert.False(Eteris.Browser.Browser.StartupPages.OpensInitialUrlSeparately(false, null));
+    }
 }

@@ -22,6 +22,14 @@ public class PageMenuTests
     }
 
     [Fact]
+    public void PlayInVideoEngine_OnlyOnWebPages()
+    {
+        Assert.Contains(PageCommand.PlayInVideoEngine, Commands(Ctx()));
+        var internalPage = PageMenu.Build(new PageContext(null, null, "", false, false, false, false, IsWebPage: false), "DuckDuckGo");
+        Assert.DoesNotContain(internalPage, i => i?.Command == PageCommand.PlayInVideoEngine);
+    }
+
+    [Fact]
     public void HideElement_OnlyOnWebPages()
     {
         Assert.Contains(PageCommand.HideElement, Commands(Ctx()));

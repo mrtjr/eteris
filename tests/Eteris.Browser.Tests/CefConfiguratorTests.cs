@@ -21,6 +21,22 @@ public class CefConfiguratorTests
     }
 
     [Fact]
+    public void Build_MutesAudioOnlyForLiveTests()
+    {
+        Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("mute-audio"));
+        Assert.Equal("1", CefConfigurator.Build("p", muteAudio: true).CefCommandLineArgs["mute-audio"]);
+    }
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData(" 1 ", true)]
+    [InlineData("0", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void TestMuteSwitch_IsOnlyOnForOne(string? value, bool expected)
+        => Assert.Equal(expected, Eteris.Browser.Infrastructure.TestSwitches.IsOn(value));
+
+    [Fact]
     public void Build_DisablesCefLogging()
         => Assert.Equal(LogSeverity.Disable, CefConfigurator.Build("p").LogSeverity);
 
@@ -50,4 +66,9 @@ public class CefConfiguratorTests
     [Fact]
     public void Build_DoesNotSetMediaStreamSwitch()
         => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("enable-media-stream"));
+
+    // Voltar/Avançar pela cache de páginas, como no Chrome: o CefSharp.Wpf desliga-a por omissão (por causa do OSR).
+    [Fact]
+    public void Build_KeepsTheBackForwardCache()
+        => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("disable-back-forward-cache"));
 }

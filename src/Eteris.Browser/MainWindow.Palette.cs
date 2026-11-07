@@ -335,7 +335,12 @@ public partial class MainWindow
     private void ToggleDarkSite(string host, bool on)
     {
         AppData.SetDark(host, on);
-        if (ActiveBrowser is { } browser) PageScript.Run(browser, Shields.DarkPages.Live(on));
+        SyncPageBackdrop();
+        if (ActiveBrowser is { } browser)
+        {
+            PageScript.Run(browser, Shields.DarkPages.Live(on));
+            if (Tabs.Active is { } tab) _ = ScriptsReadyFor(tab, browser, tab.Address);
+        }
         ShowToast(on ? $"{host} fica escuro — também da próxima vez" : $"{host} volta às cores originais");
     }
 
@@ -447,6 +452,7 @@ public partial class MainWindow
 
     private void ApplyTint()
     {
+        SyncPageBackdrop();
         // As cores dos sites estão afinadas para o tema escuro; no claro a superfície fica neutra.
         var tint = UsesLight ? LightChrome : Tabs.Active?.Tint ?? SiteTint.Base;
         // Com Espaços, a barra ganha uma pitada da cor do Espaço à vista (Íris adaptativa).

@@ -11,7 +11,7 @@ public sealed class PopupToTabHandler(Action<Shields.PopupRequest> onPopup) : Ce
         IWindowInfo windowInfo, IBrowserSettings browserSettings, ref bool noJavascriptAccess, out IWebBrowser? newBrowser)
     {
         newBrowser = null;
-        var opener = frame?.Url is { Length: > 0 } frameUrl ? frameUrl : browser.MainFrame?.Url;
+        var opener = SafeFrame.Url(frame) is { Length: > 0 } frameUrl ? frameUrl : SafeFrame.MainUrl(browser);
         onPopup(new Shields.PopupRequest(targetUrl, opener, userGesture,
             IsPopupWindow: targetDisposition == WindowOpenDisposition.NewPopup,
             Foreground: targetDisposition != WindowOpenDisposition.NewBackgroundTab,
@@ -78,8 +78,7 @@ public sealed class FaviconHandler(Action<string?, string?> onFavicon, Action<bo
 
     protected override void OnFaviconUrlChange(IWebBrowser chromiumWebBrowser, IBrowser browser, IList<string> urls)
     {
-        using var mainFrame = browser.MainFrame;
-        onFavicon(PreferredFavicon(urls), mainFrame?.Url);
+        onFavicon(PreferredFavicon(urls), SafeFrame.MainUrl(browser));
     }
 
     // Ecrã inteiro pedido pela página (vídeos, jogos, apresentações).

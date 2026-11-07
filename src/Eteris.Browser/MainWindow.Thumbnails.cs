@@ -1,5 +1,3 @@
-using System.IO;
-using System.Windows.Media.Imaging;
 using CefSharp;
 using CefSharp.DevTools.Page;
 using CefSharp.Wpf.HwndHost;
@@ -27,13 +25,12 @@ public partial class MainWindow
                 return;
             }
             using var client = browser.GetDevToolsClient();
-            var scale = Thumbnails.ScaleFor(browser.ActualWidth);
-            var clip = new Viewport { X = 0, Y = 0, Width = browser.ActualWidth, Height = browser.ActualHeight, Scale = scale };
-            var shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Jpeg, 70, clip, true, false);
+            // SEM clip: com clip (e escala) o Chromium aplica emulação de dispositivo à página à vista enquanto fotografa
+            // (docs/motor.md, P1). Sem clip só lê a superfície já desenhada; reduz-se no .NET.
+            var shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Jpeg, 70, null, true, false, true);
             if (!StillCurrent()) return;
-            using var stream = new MemoryStream(shot.Data);
-            var image = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            image.Freeze();
+            var image = await Task.Run(() => Thumbnails.Decode(shot.Data));
+            if (!StillCurrent()) return;
             tab.Thumbnail = image;
             tab.ThumbnailAddress = url;
         }

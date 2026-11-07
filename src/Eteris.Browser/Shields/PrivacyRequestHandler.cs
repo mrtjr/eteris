@@ -1,4 +1,5 @@
 using CefSharp;
+using Eteris.Browser.Browser;
 
 namespace Eteris.Browser.Shields;
 
@@ -6,9 +7,11 @@ namespace Eteris.Browser.Shields;
 // foi o próprio Éteris a trocar o endereço antes de o pedido sair (salto, limpeza, HTTPS).
 public sealed record MainNavigation(string? CurrentUrl, string Url, bool UserGesture, bool IsRedirect, TransitionType Transition, bool Rewritten);
 
-
-public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-    Action? onCrashed = null, string? userAgent = null, bool isPrivate = false,
+// onMainFrameRequest: começou o pedido de uma página nova neste separador (não espera por nada: o pedido segue logo).
+// Os tratadores correm nas threads do CEF (IO, UI): nenhuma exceção pode sair daqui (fechava o Éteris inteiro), e os
+// endereços dos frames leem-se só pelo SafeFrame (um frame destacado lança ao ler Url).
+public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Action<string> onBlocked,
+    Action? onCrashed = null, string? userAgent = null, Action? onMainFrameRequest = null, bool isPrivate = false,
     Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
     Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null,
     Action<string, string>? onCloaked = null, SiteObservatory? observatory = null)
@@ -17,9 +20,13 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
         bool userGesture, bool isRedirect)
     {
-        if (onMainNavigation is not null && frame.IsMain)
-            onMainNavigation(new MainNavigation(browser.MainFrame?.Url, request.Url, userGesture, isRedirect, request.TransitionType,
-                _resources.TakeRewrite(browser.Identifier, request.Url)));
+        try
+        {
+            if (onMainNavigation is not null && frame.IsMain)
+                onMainNavigation(new MainNavigation(SafeFrame.MainUrl(browser), request.Url, userGesture, isRedirect, request.TransitionType,
+                    _resources.TakeRewrite(browser.Identifier, request.Url)));
+        }
+        catch (Exception) { }
         return false;
     }
 
@@ -35,7 +42,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     // Tira os cabeçalhos de dicas do cliente que identificam o computador (pedidas pelo site com Accept-CH).
     private static void StripIdentifyingHints(IRequest request)
     {
-        var headers = request.Headers;
+        if (request.Headers is not { } headers) return;
         var names = headers.AllKeys.Where(k => k is not null && RequestIdentity.IsIdentifyingHint(k)).ToList();
         if (names.Count == 0) return;
         foreach (var name in names) headers.Remove(name);
@@ -47,7 +54,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         int errorCode, string errorMessage)
         => onCrashed?.Invoke();
 
-    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onNavigate, onBlocked, userAgent, isPrivate,
+    private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onBlocked, userAgent, onMainFrameRequest, isPrivate,
         localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked, observatory);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
@@ -67,15 +74,23 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
         private bool Allow(IBrowser browser, IRequest request)
         {
-            var top = browser?.MainFrame?.Url;
-            return ThirdPartyCookies.Allow(top, request.Url, request.ResourceType, Data.Settings.Current.BlockThirdPartyCookies,
-                top is not null && Uri.TryCreate(top, UriKind.Absolute, out var page) && !isProtected(page.Host));
+            try
+            {
+                var top = SafeFrame.MainUrl(browser);
+                return ThirdPartyCookies.Allow(top, request.Url, request.ResourceType, Data.Settings.Current.BlockThirdPartyCookies,
+                    top is not null && Uri.TryCreate(top, UriKind.Absolute, out var page) && !isProtected(page.Host));
+            }
+            // Separador a fechar: sem decisão possível, o cookie de terceiros não passa.
+            catch (Exception) { return false; }
         }
     }
 
-    private sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
-        string? userAgent, bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string, string>? onLocalNetworkBlocked,
-        Action<IReadOnlyList<string>>? onTrackingSkipped, Action<string, string>? onCloaked, SiteObservatory? observatory)
+    // Decide cada pedido do separador: cabeçalhos de privacidade, saltos, limpeza e HTTPS do endereço da página, rede
+    // local, modo rigoroso, regras do utilizador, listas de bloqueio e CNAME. Corre na thread IO do CEF.
+    internal sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Action<string> onBlocked,
+        string? userAgent, Action? onMainFrameRequest = null, bool isPrivate = false, Func<string, bool>? localNetworkAllowed = null,
+        Action<string, string>? onLocalNetworkBlocked = null, Action<IReadOnlyList<string>>? onTrackingSkipped = null,
+        Action<string, string>? onCloaked = null, SiteObservatory? observatory = null)
         : CefSharp.Handler.ResourceRequestHandler
     {
         // Observatório do site (Shields/SiteObservatory.cs): cada sub-recurso com a decisão que teve. Um incremento num
@@ -92,7 +107,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         // cache decide-se logo; senão a consulta corre fora da thread de rede e o pedido espera no máximo
         // CnameUncloak.MaxWait (IRequestCallback) — passado isso segue, e os seguintes já encontram a resposta.
         private CefReturnValue Uncloak(IBrowser browser, IRequest request, string? pageUrl, string? documentUrl, string type,
-            IRequestCallback callback)
+            IRequestCallback? callback)
         {
             if (!Data.Settings.Current.UncloakCname || !CnameUncloak.IsCandidate(pageUrl, request.Url, request.ResourceType)
                 || !Uri.TryCreate(request.Url, UriKind.Absolute, out var uri))
@@ -114,7 +129,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 Cloaked(uri.Host, target);
                 return CefReturnValue.Cancel;
             }
-            if (!Cname.Quota.TryTake(browser.Identifier, pageUrl))
+            if (callback is null || !Cname.Quota.TryTake(browser.Identifier, pageUrl))
             {
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
                 Observe(url, resourceType, ObservedVerdict.Allowed);
@@ -124,12 +139,21 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
             Task.WhenAny(lookup, Task.Delay(CnameUncloak.MaxWait)).ContinueWith(_ =>
             {
-                var answered = lookup.IsCompletedSuccessfully;
-                CnameStats.Waited(System.Diagnostics.Stopwatch.GetTimestamp() - started, timedOut: !answered);
-                var target = answered ? CnameUncloak.CloakedTracker(url, documentUrl, type, lookup.Result, engine.ShouldBlock) : null;
-                Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target);
-                if (target is not null) Cloaked(uri.Host, target);
-                using (callback) callback.Continue(target is null);
+                string? target = null;
+                try
+                {
+                    var answered = lookup.IsCompletedSuccessfully;
+                    CnameStats.Waited(System.Diagnostics.Stopwatch.GetTimestamp() - started, timedOut: !answered);
+                    target = answered ? CnameUncloak.CloakedTracker(url, documentUrl, type, lookup.Result, engine.ShouldBlock) : null;
+                    Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target);
+                    if (target is not null) Cloaked(uri.Host, target);
+                }
+                catch (Exception) { }
+                try
+                {
+                    using (callback) callback.Continue(target is null);
+                }
+                catch (Exception) { }
             }, TaskScheduler.Default);
             return CefReturnValue.ContinueAsync;
         }
@@ -186,17 +210,25 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         protected override void OnResourceRedirect(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
             IResponse response, ref string newUrl)
         {
-            if (request.ResourceType != ResourceType.MainFrame || Jump(newUrl, isProtected) is not { } jump) return;
-            RememberSkip(browser, newUrl);
-            newUrl = jump;
+            try
+            {
+                if (request.ResourceType != ResourceType.MainFrame || Jump(newUrl, isProtected) is not { } jump) return;
+                RememberSkip(browser, newUrl);
+                newUrl = jump;
+            }
+            catch (Exception) { }
         }
 
         // «HTTPS primeiro»: o https:// subido respondeu (não um redirecionamento): fala HTTPS, a marca da subida sai.
         protected override bool OnResourceResponse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
             IResponse response)
         {
-            if (request.ResourceType == ResourceType.MainFrame && response.StatusCode is > 0 and not (>= 300 and < 400))
-                ShieldEngine.Https.Settled(request.Url, isPrivate);
+            try
+            {
+                if (request.ResourceType == ResourceType.MainFrame && response.StatusCode is > 0 and not (>= 300 and < 400))
+                    ShieldEngine.Https.Settled(request.Url, isPrivate);
+            }
+            catch (Exception) { }
             return false;
         }
 
@@ -207,6 +239,24 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
             IRequest request, IRequestCallback callback)
+            => Decide(browser, frame, request, callback);
+
+        // Sem callback (testes), a consulta de CNAME nunca fica à espera: o pedido segue.
+        internal CefReturnValue Decide(IBrowser browser, IFrame? frame, IRequest request, IRequestCallback? callback = null)
+        {
+            var blocking = false;
+            try
+            {
+                return DecideUnsafe(browser, frame, request, callback, ref blocking);
+            }
+            catch (Exception)
+            {
+                // Frame destacado, separador a fechar…: o pedido segue (ou fica bloqueado, se já se tinha decidido).
+                return blocking ? CefReturnValue.Cancel : CefReturnValue.Continue;
+            }
+        }
+
+        private CefReturnValue DecideUnsafe(IBrowser browser, IFrame? frame, IRequest request, IRequestCallback? callback, ref bool blocking)
         {
             foreach (var (name, value) in PrivacySignals.Headers) request.SetHeaderByName(name, value, true);
             // Uma só língua (a com que o motor arrancou) e só as dicas do cliente de baixa entropia, mesmo que o site peça
@@ -240,25 +290,24 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                     Rewrite(browser, request, secure);
                     return CefReturnValue.Continue;
                 }
-                // O pedido da página só sai depois de os scriptlets estarem registados (máx. 1 s):
-                // sem isto o documento podia nascer antes do registo e o anti-bloqueador ganhava a corrida.
+                // O pedido da página segue logo. (Antes esperava aqui pelo registo dos scriptlets, até 1 s; depois de a
+                // navegação começar o DevTools já não entrega esse registo a tempo: ver ScriptletInjector.)
                 observatory?.Reset(request.Url);
-                var ready = onNavigate(browser, request.Url);
+                onMainFrameRequest?.Invoke();
                 ReportSkips(browser);
-                if (ready.IsCompleted) return CefReturnValue.Continue;
-                Task.WhenAny(ready, Task.Delay(TimeSpan.FromSeconds(1))).ContinueWith(_ =>
-                {
-                    using (callback) callback.Continue(true);
-                }, TaskScheduler.Default);
-                return CefReturnValue.ContinueAsync;
+                return CefReturnValue.Continue;
             }
 
-            var pageUrl = browser.MainFrame?.Url;
+            // Só pedidos da rede passam pelas listas (eteris://, devtools://, data:, blob: seguem logo).
+            if (!IsNetwork(request.Url)) return CefReturnValue.Continue;
+
+            var pageUrl = SafeFrame.MainUrl(browser);
             // Rede local (Shields/LocalNetwork.cs): uma página pública não chega a este computador nem à rede de casa sem
             // autorização do utilizador para o site — com ou sem escudo, é uma proteção e não um bloqueio de anúncios.
             if (LocalNetwork.Decide(pageUrl, request.Url, request.ResourceType, allowedForSite: false) == LocalNetwork.Decision.Block
                 && LocalNetwork.SiteOf(pageUrl) is { } site && localNetworkAllowed?.Invoke(site) != true)
             {
+                blocking = true;
                 onLocalNetworkBlocked?.Invoke(site, request.Url);
                 Observe(request.Url, request.ResourceType, ObservedVerdict.LocalNetwork);
                 return CefReturnValue.Cancel;
@@ -273,6 +322,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var top) && Data.AppData.IsStrict(top.Host)
                 && StrictPolicy.ShouldBlock(pageUrl, request.Url, request.ResourceType))
             {
+                blocking = true;
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var strictBlocked) ? strictBlocked.Host : request.Url);
                 Observe(request.Url, request.ResourceType, ObservedVerdict.Strict);
                 return CefReturnValue.Cancel;
@@ -281,22 +331,28 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             // Domínio que o utilizador bloqueou só neste site, no Observatório (Shields/SiteBlockRules.cs).
             if (SiteRules.Blocks(pageUrl, request.Url, isPrivate))
             {
+                blocking = true;
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var ruled) ? ruled.Host : request.Url);
                 Observe(request.Url, request.ResourceType, ObservedVerdict.UserBlocked);
                 return CefReturnValue.Cancel;
             }
 
             // As opções $domain e $third-party das listas referem-se ao documento que fez o pedido (pode ser um iframe).
-            var documentUrl = frame?.Url is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            var documentUrl = SafeFrame.Url(frame) is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? frameUrl
                 : pageUrl;
             var adblockType = ResourceTypes.ToAdblock(request.ResourceType);
             if (!blocker().ShouldBlock(request.Url, documentUrl, adblockType))
                 return Uncloak(browser, request, pageUrl, documentUrl, adblockType, callback);
 
+            blocking = true;
             onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var blocked) ? blocked.Host : request.Url);
             Observe(request.Url, request.ResourceType, ObservedVerdict.Blocked);
             return CefReturnValue.Cancel;
         }
+
+        internal static bool IsNetwork(string url)
+            => url.StartsWith("http:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https:", StringComparison.OrdinalIgnoreCase)
+               || url.StartsWith("ws:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("wss:", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -96,6 +96,12 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _usesVideoEngine;
 
+    // O vídeo desta página não toca no motor principal, mas a troca não foi automática (sinal fraco, DRM, leitor num
+    // iframe, site excluído pelo utilizador): a razão do aviso, e a barra mostra «Tocar no motor de vídeo». Apaga-se
+    // ao mudar de página.
+    [ObservableProperty]
+    private string? _videoOffer;
+
     [ObservableProperty]
     private bool _canGoBack;
 
@@ -263,6 +269,39 @@ public partial class BrowserTab : ObservableObject
         _trackingSkips.Clear();
         _cloaked.Clear();
         BlockedCount = 0;
+    }
+
+    // As últimas páginas deixadas para trás, com a contagem do Escudo e o ícone: Voltar/Avançar pela cache de páginas
+    // (back/forward cache) repõe a página tal como estava, sem pedidos novos, por isso repõe-se o que ela tinha.
+    public const int RememberedPages = 8;
+
+    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon);
+
+    private readonly List<LeftPage> _leftPages = [];
+
+    // A página url vai ser substituída: guarda o estado dela e começa a contagem da seguinte do zero. Chamado uma vez
+    // por pedido da página nova (um redirecionamento repete-o): uma contagem já recomeçada não apaga a guardada.
+    public void LeavePage(string? url)
+    {
+        if (url is not null && (BlockedCount > 0 || _leftPages.All(p => p.Url != url)))
+        {
+            _leftPages.RemoveAll(p => p.Url == url);
+            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon));
+            if (_leftPages.Count > RememberedPages) _leftPages.RemoveAt(0);
+        }
+        ResetShield();
+    }
+
+    // Voltou a url pela cache de páginas: repõe a contagem e o ícone dela. false se não há nada guardado.
+    public bool ReturnToPage(string url)
+    {
+        var page = _leftPages.FindLast(p => p.Url == url);
+        if (page is null) return false;
+        _blockedHosts.Clear();
+        foreach (var (host, count) in page.Hosts) _blockedHosts[host] = count;
+        BlockedCount = page.Blocked;
+        if (page.Favicon is not null) Favicon = page.Favicon;
+        return true;
     }
 
     private static readonly Brush[] BadgePalette = SiteBadge.Palette

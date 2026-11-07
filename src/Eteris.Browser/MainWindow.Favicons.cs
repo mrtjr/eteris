@@ -182,7 +182,7 @@ public partial class MainWindow
             using var stream = new MemoryStream();
             png.Save(stream);
             var bytes = stream.ToArray();
-            _ = Task.Run(() => AppData.TryWrite(history => history.SaveSiteIcon(pageUrl, bytes)));
+            AppData.QueueWrite(history => history.SaveSiteIcon(pageUrl, bytes));
         }
         catch (Exception) { }
     }

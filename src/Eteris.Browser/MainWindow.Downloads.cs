@@ -42,7 +42,22 @@ public partial class MainWindow
                      && ErrorPage.IsErrorPage(raw) && ErrorPage.FailedUrl(raw) is { } shown && ErrorPage.SameAddress(shown, url)
                      && browser.CanGoBack)
                 browser.Back();
-        }, DivertAltClickDownload);
+        }, DivertAltClickDownload, PlayInsteadOfDownload);
+    }
+
+    // Uma «transferência» que é afinal vídeo/áudio para ver (Tabs/VideoEngine.cs, IsPlayableDownload): abre no motor de
+    // vídeo, na aba que a pediu. Corre na thread do CEF.
+    private bool PlayInsteadOfDownload(CefSharp.IWebBrowser source, string url)
+    {
+        if (source is not CefSharp.Wpf.HwndHost.ChromiumWebBrowser) return false;
+        Dispatcher.InvokeAsync(() =>
+        {
+            var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, source)).Key;
+            // Uma página fora das abas (painel da barra lateral): abre numa aba nova, que faz o mesmo caminho.
+            if (tab is not null) SwitchToVideoEngine(tab, url);
+            else Tabs.NewTab(url);
+        });
+        return true;
     }
 
     // Alt+clique num link que o script do Éteris não apanhou (num iframe de outra origem, que vive noutro processo):
