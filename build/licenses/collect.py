@@ -78,9 +78,15 @@ def main():
     cef = package_dir("chromiumembeddedframework.runtime.win-x64", cef_version)
     copy(os.path.join(cef, "LICENSE.txt"), "CEF-LICENSE.txt", "Chromium Embedded Framework", "BSD-3-Clause")
     pak = os.path.join(cef, "runtimes", "win-x64", "native", "resources.pak")
-    subprocess.run(["node", os.path.join(ROOT, "build", "licenses", "chromium-credits.js"), pak,
+    # Motor com codecs (docs/motor.md): com a compilação própria da CEF, os créditos saem do resources.pak dela, que é o
+    # que vai na instalação (o csproj troca o runtime inteiro).
+    own_pak = os.path.join(ROOT, "build", "cef-codecs", "out", "runtime", "resources.pak")
+    own = os.path.exists(own_pak)
+    subprocess.run(["node", os.path.join(ROOT, "build", "licenses", "chromium-credits.js"), own_pak if own else pak,
                     os.path.join(OUT, "Chromium-credits.html")], check=True)
-    index.append((f"Chromium e os seus componentes (CEF {cef_version})", "BSD-3-Clause e outras (ver o ficheiro)", "Chromium-credits.html"))
+    label = (f"Chromium e os seus componentes (CEF {cef_version}, compilação própria, codecs do Windows)" if own
+             else f"Chromium e os seus componentes (CEF {cef_version})")
+    index.append((label, "BSD-3-Clause e outras (ver o ficheiro)", "Chromium-credits.html"))
 
     # .NET (vai dentro da instalação, que é autónoma).
     for runtime, name in [("microsoft.netcore.app.runtime.win-x64", ".NET"), ("microsoft.windowsdesktop.app.runtime.win-x64", "WPF / Windows Desktop")]:

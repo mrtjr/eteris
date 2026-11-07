@@ -46,6 +46,75 @@ Linha de base e final medidas com o mesmo roteiro e o mesmo build de medição (
 duas páginas a carregar ao mesmo tempo e o processo caía). As falhas registadas durante estes testes vieram de
 outro build (`artifacts2`, trabalho paralelo, `libcef.dll` 0xc0000005), nenhuma dos builds deste ramo.
 
+## Motor com codecs (preparado, por compilar: decisão do dono)
+
+O motor de vídeo (WebView2) é um recurso: troca de árvore de processos, perde funções que só existem no motor
+principal (`docs/paridade.md` #5) e o Escudo só chega lá por rede e cosmética. A causa é a CEF publicada (a que o
+CefSharp usa) ser compilada **sem** `proprietary_codecs`: o `libcef.dll` 156.0.15 não tem H.264/AAC (medido: 0
+ocorrências de `h264_decoder`; o acelerador `d3d_h264_accelerator.cc` está lá, bloqueado acima dele).
+
+**Recomendação: opção (b), «codecs da plataforma».** CEF 156.0.15 compilada no commit exato
+`cf671c072925b27823a61181152f4f288e8e4306` (ramo 8078, Chromium 156.0.8078.80, FFmpeg `9db86ce5`) com
+`is_official_build=true proprietary_codecs=true ffmpeg_branding=Chromium enable_platform_hevc=true
+enable_hevc_parser_and_hw_decoder=true symbol_level=1 blink_symbol_level=0 v8_symbol_level=0` (e `media_use_openh264=false`):
+H.264 e HEVC descodificados pela placa gráfica (`D3D11VideoDecoder`), AAC pelo descodificador do Media Foundation do
+Windows. O `libcef.dll` não leva nenhum descodificador com patentes — o modelo do Firefox e da Vivaldi e a posição do
+mantenedor da CEF (problema #3559). O WebView2 fica para DRM, máquinas sem descodificação por hardware e Windows N.
+
+**Patch próprio (5 pontos)**, `build/cef-codecs/patches/platform-codecs.patch`, gerado sobre a árvore depois do
+checkout: (1) `media/BUILD.gn` — levantar o `assert` de «proprietary codecs + ffmpeg_branding Chromium» quando
+`enable_cef`; (2) `media_foundation_audio_decoder.cc` `GetTypeInfo` — `MFAudioFormat_AAC` para AAC-LC/HE/HEv2, não só
+xHE; (3) `gpu_mojo_media_client_win.cc` — anunciar `kAAC` quando o Media Foundation inicializa; (4) `supported_types.cc`
+(`IsDecoderAACSupported` e `case kH264`) — consultar as caches de descodificadores suplementares, como já se faz para
+VP8/HEVC: sem placa gráfica o `isTypeSupported('avc1…')` diz «não» e a deteção de vídeo (V1) leva a página ao WebView2;
+(5) `ffmpeg_common.cc` — `sample_format` F32 para AAC quando o FFmpeg só desmultiplexa.
+
+**Integração (já no repositório, inativa sem a compilação):**
+- `Eteris.Browser.csproj`: alvos `EterisCefRuntimeAfterBuild`/`AfterPublish` copiam o runtime **completo**
+  (`libcef.dll`, `chrome_elf.dll`, `.pak`, `icudtl.dat`, `v8_context_snapshot.bin`, `d3dcompiler_47.dll`,
+  `dxcompiler.dll`, SwiftShader, Vulkan, `locales\`) de `build/cef-codecs/out/runtime` por cima do do NuGet, só quando
+  lá existem `libcef.dll` e `manifest.json` (testado com um runtime falso: substitui, e sem a pasta nada muda). O
+  CefSharp 156.0.150 não muda: o hash da API vem dos cabeçalhos `include/`, não dos GN args.
+- `build/publish.ps1`: recusa publicar se o manifesto não disser `mode = platform-codecs`, se o commit não for o
+  `cf671c0…`, se o `libcef.dll` não for `156.0.15+gcf671c0+chromium-156.0.8078.80` ou se algum ficheiro não bater com o
+  SHA256 do manifesto (testado: modo `chrome` e versão errada recusados).
+- `build/licenses/collect.py`: os créditos do Chromium saem do `resources.pak` da compilação própria quando existe, e o
+  índice diz «compilação própria, codecs do Windows».
+- `.gitignore`: `build/cef-codecs/out/`.
+- `CefCodecsRuntimeTests`: o alvo nunca pode ficar incondicional.
+
+**Por fazer quando o dono autorizar:** juntar a `build/cef-codecs/` o `build.ps1` (verificações, aplicação idempotente
+do patch, `cef_create_projects`, compilação com prioridade baixa, `make_distrib --minimal`, recolha do runtime e
+`manifest.json` com modo, GN args, commits e SHA256), o `platform-codecs.patch` e o `README.md`. Um trabalho paralelo
+já os tem em rascunho fora do repositório (`scratchpad\cef-codecs`, com um patch extra para o desmultiplexador ADTS
+do FFmpeg) e já existe um checkout em `C:\cef` — não foram feitos por este passo; não se compilou nada aqui. Ao juntar:
+acrescentar a `licenses/INDEX.md` a linha «Chromium Embedded Framework 156.0.15 (compilação própria, codecs do
+Windows)», uma nota em `THIRD-PARTY-NOTICES.md` (H.264/HEVC/AAC descodificados por componentes do Windows; o Éteris não
+inclui descodificadores desses formatos), o script e o patch publicados (fonte correspondente da LGPL-2.1 do FFmpeg) e
+a oferta escrita do código do FFmpeg `9db86ce5`.
+
+**Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem
+ATL/MFC e é aceite pelo `vs_toolchain.py` do 156) ou VC.ATLMFC nas Build Tools 2022; árvore num caminho ASCII com menos
+de 35 caracteres (`C:\cef`); exclusão do Defender para `C:\cef`, opcional (definição de segurança: faz ele).
+**Tempo e disco:** download 1–3 h; 1.ª compilação oficial (ThinLTO + PGO) 5–8 h; total 6–11 h; recompilar depois de
+mexer no patch: minutos + 20–60 min de ligação. 110–150 GB (fonte ~60–80, `out` ~40–60, distribuição ~3); havia
+183,8 GB livres, abaixo dos 200 GB recomendados. 31,2 GB de RAM chegam. Cada versão nova da CEF repete as 6–11 h e o
+patch; não cabe nos runners alojados do GitHub (~14 GB de disco).
+
+**Riscos.** Técnicos de (b): o AAC pelo Media Foundation no pipeline normal não está provado no 156 (no M117 falhou sem
+patch); sem placa gráfica o H.264 não toca no motor principal (fica o WebView2); 5 pontos de patch a manter. Legais de
+(b): baixos (descodificadores do Windows, licenciados pela Microsoft). Opção (a), `ffmpeg_branding=Chrome`
+(H.264/AAC por software no FFmpeg): compila sem patches e serve para validar o pipeline e medir, mas **distribuí-la**
+traz o risco de patentes (pool AVC da Via LA, HE-AAC) e a cláusula «liberty or death» da GPL-3/LGPL-2.1 — só para
+testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídico (isto não é aconselhamento jurídico).
+
+**Verificação depois de compilar** (perfil de teste, `ETERIS_TEST_MUTE=1`): `MediaSource.isTypeSupported` para
+`avc1.640028`, `mp4a.40.2`, `mp4a.40.5` e `hvc1` = true; MP4 com som (samplelib) toca; Twitch toca no motor principal;
+`chrome://media-internals` mostra `D3D11VideoDecoder` + Media Foundation/`MojoAudioDecoder`; com
+`--disable-accelerated-video-decode` o `avc1` dá «não» e o recurso ao WebView2 dispara;
+`--enable-features=MediaFoundationClearPlayback` só como experiência. Com o motor próprio, a lista `KnownH264Sites`
+(V2) deixa de fazer sentido e sai.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -67,4 +136,5 @@ outro build (`artifacts2`, trabalho paralelo, `libcef.dll` 0xc0000005), nenhuma 
 | V6 | DRM: `requestMediaKeySystemAccess` recusado para Widevine/PlayReady → relatório `drm` → só o botão e o aviso «Este site usa DRM (conteúdo protegido)…», nunca troca sozinho; o site só fica lembrado depois do clique. O motor principal continua sem Widevine | Página local que pede Widevine: sem aviso → **botão ~2,4 s, 0 trocas** |
 | V7 | Motor de vídeo: `--disable-component-update` (componentes descarregados sem ação do utilizador no diagnóstico) e, com «bloquear reprodução automática», `--autoplay-policy=document-user-activation-required`; o bloqueador sai logo nos segmentos de vídeo/áudio (contexto Media), guarda o endereço da página na navegação em vez de ler `core.Source` a cada pedido e põe as decisões em cache; regras cosméticas do Escudo também no motor de vídeo (`Page.addScriptToEvaluateOnNewDocument` pelo DevTools do WebView2, protegidas pelo hostname, uma vez por site). `SetVideoMuted` respeita `ETERIS_TEST_MUTE`. Tentado e recusado: um filtro por contexto sem Media — o WebView2 deixava de entregar os pedidos (0 bloqueados) | A/B com a linha de base (mesmo perfil, sem som). Página local com 3 rastreadores no motor de vídeo: **1 → 3 bloqueados** (antes, durante o 1.º carregamento `core.Source` ainda era `about:blank` e os pedidos passavam). Twitch VOD a tocar: 4–5 → **9 bloqueados**. Thread da janela (WM_NULL a cada 10 ms, 30 s de Twitch a tocar): 0 respostas > 50 ms antes e depois (máx. 0,6–7,2 ms → 8,1–13,8 ms); os 221–225 bloqueios do diagnóstico eram do build de diagnóstico, não se reproduzem |
 | V3 | Troca de motor sem intervalo vazio: a página do motor principal fica à vista (pausada pelo PageScript) até o WebView2 acabar de carregar o primeiro documento (recurso aos 5 s); só então o WebView2 aparece e, 200 ms depois, o motor principal sai. O WebView2 nasce com fundo branco opaco (antes transparente: via-se o Mica). Posição: o maior vídeo que já tocava retoma no mesmo segundo (`#t=` num ficheiro direto, script de uso único pelo DevTools nos outros; não medido ao vivo). Mostrar logo no `DOMContentLoaded` foi medido e recusado (220–250 ms de branco e, às vezes, um fotograma preto). Cópia de cookies para o motor de vídeo **não** feita: depende de decisão do dono | Captura a 60 fps da página durante a troca automática (página local com `<video src=mp4>`, A/B com a linha de base): antes, 4–5 mudanças de quadro, **3–4 fotogramas escuros** (Mica, luminância 40, 50–67 ms) e **~570 ms de página em branco**; depois, **2 mudanças** (página → vídeo a tocar), **0 fotogramas escuros, 0 ms em branco** (5/5 execuções) |
+| C1 | Motor com codecs da plataforma preparado no repositório, sem compilar (decisão do dono): alvos MSBuild condicionais que trocam o runtime completo da CEF por `build/cef-codecs/out/runtime`, `publish.ps1` a recusar tudo o que não seja o modo `platform-codecs` do commit `cf671c0` (com SHA256 por ficheiro), `collect.py` com os créditos do runtime que vai de facto, `.gitignore`, testes; secção «Motor com codecs» acima | Sem a pasta: saída igual (nada copiado). Com um runtime falso: `libcef.dll`, `locales\` e avisos (`licenses\cef-codecs`) substituídos, `manifest.json` fora; `publish.ps1`: modo `chrome` → recusado; versão errada → recusada |
 | D1 | Fecho: suite completa (1374 testes), medição final comparada com a base e o «puro», `CHANGELOG.md` (secção por publicar, sem versão nem tag), `docs/paridade.md` (secção 1b) | Tabela «Resultado» no topo deste ficheiro |
