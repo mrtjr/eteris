@@ -109,6 +109,15 @@ public partial class MainWindow
         yield return new("", "Nova janela", "Abrir outra janela do Éteris", "Ctrl+N", () => OpenWindow(isPrivate: false));
         yield return new("", "Nova janela privada", "Nada fica no histórico, nos cookies nem na cache", "Ctrl+Shift+N",
             () => OpenWindow(isPrivate: true));
+        if (SelectedTabs is { Count: >= 2 } selected)
+        {
+            var count = TabSelection.Count(selected.Count);
+            yield return new("", $"Copiar {selected.Count} links", "As abas selecionadas, como texto e HTML", null, () => CopySelectedLinks(selected));
+            yield return new("", $"Agrupar {count} num novo grupo", "As abas selecionadas ficam juntas", null, () => GroupSelected(selected));
+            yield return new("", $"Adormecer {count}", "Liberta a memória das abas selecionadas", null, () => SleepSelected(selected));
+            yield return new("", $"Fechar {count}", "As abas selecionadas (trancadas ficam)", null, () => CloseSelected(selected));
+            yield return new("", "Limpar a seleção", "Ctrl+clique e Shift+clique selecionam abas", null, ClearSelection);
+        }
         if (tab is not null)
         {
             yield return new("", "Mudar o nome da aba…", tab.CustomTitle is null ? "Nome próprio, emoji e cor para esta aba" : $"Agora «{tab.CustomTitle}»", null,

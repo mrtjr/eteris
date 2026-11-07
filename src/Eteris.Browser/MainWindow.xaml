@@ -270,6 +270,13 @@
                                 <Setter TargetName="TabClose" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="TabLock" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <!-- Multi-seleção (Ctrl/Shift+clique): contorno íris e fundo realçado -->
+                            <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Bg" Property="BorderThickness" Value="1.5,1.5,1.5,0" />
+                                <Setter TargetName="TabTitle" Property="Foreground" Value="{DynamicResource TextBrush}" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding IsSleeping}" Value="True">
                                 <Setter TargetName="TabTitle" Property="Opacity" Value="0.5" />
                                 <Setter TargetName="Favicon" Property="Opacity" Value="0.45" />
@@ -471,6 +478,12 @@
                             <DataTrigger Binding="{Binding IsLocked}" Value="True">
                                 <Setter TargetName="Close" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="SideLock" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Bg" Property="BorderThickness" Value="1.5" />
+                                <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding SideCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                 <Setter TargetName="Title" Property="Visibility" Value="Collapsed" />

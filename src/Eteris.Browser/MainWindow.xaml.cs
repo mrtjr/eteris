@@ -506,7 +506,16 @@ public partial class MainWindow : Window
         // seleciona com o clique se conseguir o foco: por isso a aba é ativada aqui, ao carregar no botão, como no Chrome.
         // O «x» e a etiqueta do grupo têm as suas próprias ações.
         if (e.ChangedButton == MouseButton.Left && !IsInsideTabControl(e.OriginalSource as DependencyObject, (DependencyObject)sender))
+        {
+            // Ctrl/Shift+clique selecionam sem mudar de aba (nem começam um arrasto).
+            if (HandleSelectionClick(tab))
+            {
+                _dragTab = null;
+                e.Handled = true;
+                return;
+            }
             Tabs.Active = tab;
+        }
     }
 
     private static bool IsInsideTabControl(DependencyObject? node, DependencyObject tabItem)

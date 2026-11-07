@@ -21,6 +21,13 @@ public partial class MainWindow
             }
         }
         if ((sender as FrameworkElement)?.DataContext is not BrowserTab tab) return;
+        var selected = SelectedTabs;
+        if (TabSelection.OffersBulkActions(selected, tab))
+        {
+            new DarkMenu().With(menu => AddBulkItems(menu, selected)).Open((UIElement)sender);
+            e.Handled = true;
+            return;
+        }
         var index = Tabs.Tabs.IndexOf(tab);
         var hasRight = Tabs.Tabs.Skip(index + 1).Any(t => !t.IsPinned);
         var hasOthers = Tabs.Tabs.Any(t => !ReferenceEquals(t, tab) && !t.IsPinned);

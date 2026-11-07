@@ -38,6 +38,10 @@ public partial class BrowserTab : ObservableObject
 
     public bool HasNote => Note is not null;
 
+    // Faz parte da multi-seleção (Ctrl/Shift+clique) — Tabs/TabSelection.cs.
+    [ObservableProperty]
+    private bool _isMultiSelected;
+
     // Desvanecimento do arquivo automático (Tabs/ArchivePolicy.cs): 1 = visitada há pouco.
     [ObservableProperty]
     private double _ageOpacity = 1;
