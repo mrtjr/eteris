@@ -42,6 +42,10 @@ public static class LocalNetwork
                 172 when b[1] is >= 16 and <= 31 => Space.Private,
                 192 when b[1] == 168 => Space.Private,
                 169 when b[1] == 254 => Space.Private,
+                // 100.64.0.0/10: NAT do operador e redes privadas como a Tailscale (o NAS, o Home Assistant).
+                100 when (b[1] & 0xC0) == 64 => Space.Private,
+                // 198.18.0.0/15: redes de testes e de equipamentos (como na tabela de espaços de endereços do Chromium).
+                198 when b[1] is 18 or 19 => Space.Private,
                 _ => Space.Public,
             };
         }
@@ -51,35 +55,108 @@ public static class LocalNetwork
             var b = ip.GetAddressBytes();
             // fc00::/7 (endereços locais únicos) e fe80::/10 (ligação local).
             if ((b[0] & 0xFE) == 0xFC || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal) return Space.Private;
+            // 64:ff9b::/96 (NAT64): um endereço IPv4 dentro de um IPv6 — conta o IPv4 (64:ff9b::c0a8:101 é 192.168.1.1).
+            if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B && b.AsSpan(4, 8).IndexOfAnyExcept((byte)0) < 0)
+                return Classify(new IPAddress(b.AsSpan(12, 4)));
         }
         return Space.Public;
+    }
+
+    // Os endereços a que um nome resolve: local só se todos o forem (o que tiver um endereço público é público).
+    public static Space Classify(IEnumerable<IPAddress> addresses)
+    {
+        var space = (Space?)null;
+        foreach (var address in addresses)
+        {
+            var one = Classify(address);
+            if (one == Space.Public) return Space.Public;
+            space = space is null || one == Space.Private ? one : space;
+        }
+        return space ?? Space.Public;
     }
 
     public static bool IsLocal(string? host) => Classify(host) != Space.Public;
 
     // Um pedido de uma página (sub-recurso, fetch, XHR, WebSocket, iframe) para um endereço local: só passa se a
-    // página também for local, se o utilizador o deixou para este site, ou se for a navegação de topo.
+    // página também for local, se o utilizador o deixou para este site, ou se for a navegação de topo. A página de um
+    // blob: é a de quem o criou (TopDocument); as páginas do próprio Éteris e um ficheiro local abrem o que é local; um
+    // documento sem origem web (about:blank, data:, um blob: opaco) conta como público — navegar para um deles não
+    // pode servir para chegar ao router.
     public static Decision Decide(string? topUrl, string requestUrl, CefSharp.ResourceType type, bool allowedForSite)
     {
         if (type == CefSharp.ResourceType.MainFrame || allowedForSite) return Decision.Allow;
-        if (!Uri.TryCreate(topUrl, UriKind.Absolute, out var top) || top.Scheme is not ("http" or "https")) return Decision.Allow;
         if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var request) || request.Scheme is not ("http" or "https" or "ws" or "wss"))
             return Decision.Allow;
-        if (IsLocal(top.Host) || !IsLocal(request.Host)) return Decision.Allow;
-        return Decision.Block;
+        if (!IsLocal(request.Host)) return Decision.Allow;
+        if (!Uri.TryCreate(TopDocument.Effective(topUrl), UriKind.Absolute, out var top)) return Decision.Block;
+        if (top.Scheme is "eteris" or "devtools" or "chrome" or "file") return Decision.Allow;
+        if (top.Scheme is not ("http" or "https")) return Decision.Block;
+        return IsLocal(top.Host) ? Decision.Allow : Decision.Block;
     }
 
     // O site que pede (a chave da permissão): o anfitrião da página de topo, com a porta se não for a habitual.
     public static string? SiteOf(string? topUrl)
-        => Uri.TryCreate(topUrl, UriKind.Absolute, out var top) && top.Scheme is "http" or "https"
-            ? Permissions.PermissionRules.Site(topUrl!)
+        => TopDocument.Effective(topUrl) is { } effective && Uri.TryCreate(effective, UriKind.Absolute, out var top) && top.Scheme is "http" or "https"
+            ? Permissions.PermissionRules.Site(effective)
             : null;
+
+    // O nome da página de topo quando a decisão depende do endereço a que ele resolve: um nome público (sem ser um IP
+    // nem um nome local) — o portal intranet.empresa.pt em 10.1.2.3, o ha.minhacasa.pt em 192.168.1.10.
+    public static string? ResolvableTop(string? topUrl)
+        => Uri.TryCreate(TopDocument.Effective(topUrl), UriKind.Absolute, out var top) && top.Scheme is "http" or "https"
+           && top.HostNameType == UriHostNameType.Dns && Classify(top.Host) == Space.Public
+            ? top.IdnHost.ToLowerInvariant()
+            : null;
+
+    // Até onde um pedido local espera pelo endereço da página de topo (não bloqueia a thread de rede: IRequestCallback).
+    public static readonly TimeSpan MaxWait = TimeSpan.FromMilliseconds(300);
+
+    // Os endereços das páginas de topo de nome público que tentaram chegar à rede local (pelo DNS do sistema, como o
+    // Chromium os resolveu). Quando todos são locais, a página é ela própria da rede local e quem decide é a verificação
+    // do Chromium (LocalNetworkAccessChecks), que vê o IP a que a página se ligou de facto — um DNS que respondesse de
+    // outra maneira a esta consulta não abre caminho nenhum.
+    public static AddressCache Addresses { get; } = new(host => Dns.GetHostAddressesAsync(host), () => DateTime.UtcNow);
 
     // Como o Escudo mostra o destino travado.
     public static string Label(string requestUrl)
         => Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri)
             ? (Classify(uri.Host) == Space.Loopback ? "este computador" : "rede local") + " · " + (uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}")
             : requestUrl;
+}
+
+// Cache em memória, com prazo, do espaço de endereços de um nome (uma só consulta em voo por nome).
+public sealed class AddressCache(Func<string, Task<IPAddress[]>> resolve, Func<DateTime> clock)
+{
+    public static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
+    private const int Limit = 512;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (LocalNetwork.Space Space, DateTime Expires)> _entries = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<LocalNetwork.Space>>> _inFlight = new(StringComparer.Ordinal);
+
+    public bool TryGet(string host, out LocalNetwork.Space space)
+    {
+        if (_entries.TryGetValue(host, out var entry) && entry.Expires > clock())
+        {
+            space = entry.Space;
+            return true;
+        }
+        space = LocalNetwork.Space.Public;
+        return false;
+    }
+
+    public Task<LocalNetwork.Space> LookupAsync(string host)
+    {
+        if (TryGet(host, out var known)) return Task.FromResult(known);
+        return _inFlight.GetOrAdd(host, h => new Lazy<Task<LocalNetwork.Space>>(() => Task.Run(async () =>
+        {
+            LocalNetwork.Space space;
+            try { space = LocalNetwork.Classify(await resolve(h).ConfigureAwait(false)); }
+            catch (Exception) { space = LocalNetwork.Space.Public; }
+            if (_entries.Count >= Limit) _entries.Clear();
+            _entries[h] = (space, clock() + Ttl);
+            _inFlight.TryRemove(h, out _);
+            return space;
+        }))).Value;
+    }
 }
 
 // Autorizações «só desta vez» para a rede local: só em memória, até fechar o Éteris (as da janela privada à parte,

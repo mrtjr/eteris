@@ -143,9 +143,19 @@ public class ScriptRegistrationTests
         var page = handler[start..end];
         Assert.DoesNotContain("ContinueAsync", page);
         Assert.DoesNotContain("Task.Delay", page);
+        // O ramo da página principal vive em DecideMainFrame: também aí nada espera.
+        var method = handler.IndexOf("private CefReturnValue DecideMainFrame(", StringComparison.Ordinal);
+        Assert.True(method > 0);
+        var body = handler[method..handler.IndexOf("\n        }\n", method, StringComparison.Ordinal)];
+        Assert.DoesNotContain("ContinueAsync", body);
+        Assert.DoesNotContain("Task.Delay", body);
         Assert.DoesNotContain("onNavigate", handler);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(handler, @"CefReturnValue\.ContinueAsync"));
+        // Só dois sub-recursos podem esperar, e com limite: o CNAME e o endereço de uma página de nome público que tenta
+        // chegar à rede local (Revisão aos 50).
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(handler, @"CefReturnValue\.ContinueAsync").Count);
         Assert.Contains("Task.WhenAny(lookup, Task.Delay(CnameUncloak.MaxWait))", handler);
+        Assert.Contains("Task.WhenAny(lookup, Task.Delay(LocalNetwork.MaxWait))", handler);
+        Assert.True(Eteris.Browser.Shields.LocalNetwork.MaxWait <= TimeSpan.FromMilliseconds(300));
     }
 
     [Fact]

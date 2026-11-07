@@ -53,14 +53,23 @@ public class ReviewRequestsTests
         Assert.Empty(o.Snapshot().ThirdParties);
     }
 
-    // pushState/#âncora mudam o endereço sem navegação: nada recomeça.
+    // pushState/#âncora mudam o endereço sem navegação (sem FrameLoadStart): nada recomeça.
     [Fact]
     public void AddressChangeWithoutNavigation_KeepsEverything()
     {
         var o = Jornal();
         o.Sync("https://www.jornal.pt/outro-artigo");
-        o.Commit("https://www.jornal.pt/outro-artigo");
         Assert.Single(o.Snapshot().ThirdParties);
+    }
+
+    // Um documento novo que entra em vigor sem pedido nosso (cache de Voltar/Avançar) também recomeça.
+    [Fact]
+    public void CommitOfAnotherDocument_StartsANewPage()
+    {
+        var o = Jornal();
+        o.Commit("https://outro.pt/");
+        Assert.Equal("outro.pt", o.Snapshot().Site);
+        Assert.Empty(o.Snapshot().ThirdParties);
     }
 
     // Pelo tratador de pedidos: o pedido da transferência (outro site) não troca o site da página à vista.

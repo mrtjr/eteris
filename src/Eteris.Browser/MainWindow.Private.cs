@@ -50,6 +50,7 @@ public partial class MainWindow
                 Shields.LocalNetworkGrants.ForgetPrivate();
                 Shields.SiteRules.ForgetPrivate();
                 Shields.Cname.PrivateCache.Clear();
+                Shields.PartitionedCookieJar.Private.Clear();
             }
         };
     }
@@ -109,6 +110,7 @@ public partial class MainWindow
         Shields.LocalNetworkGrants.ForgetPrivate();
         Shields.SiteRules.ForgetPrivate();
         Shields.Cname.PrivateCache.Clear();
+        Shields.PartitionedCookieJar.Private.Clear();
         // O aviso do fim aparece numa janela normal que fique.
         var survivor = Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault(w => !w.IsPrivate);
         survivor?.ShowToast(Eteris.Browser.Tabs.PrivateSession.Done(windows.Count));

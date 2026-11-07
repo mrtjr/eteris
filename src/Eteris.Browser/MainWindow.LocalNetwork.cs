@@ -13,27 +13,45 @@ public partial class MainWindow
     private bool IsLocalNetworkAllowed(string site)
         => LocalNetworkGrants.IsAllowed(site, IsPrivate) || SitePermissions.Get(site, SitePermission.LocalNetwork) == true;
 
-    // Sites a quem o cartão já perguntou nesta janela (um «Bloquear» não volta a incomodar).
+    // Sites a quem o cartão já perguntou nesta janela (um «Bloquear» não volta a incomodar até recarregar a página).
     private readonly HashSet<string> _localNetworkAsked = new(StringComparer.OrdinalIgnoreCase);
 
+    // Pedidos travados à espera da thread da janela: uma página que varre a rede local (milhares de pedidos) faz um só
+    // despacho por lote, não um por pedido.
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(BrowserTab Tab, string Site, string Url)> _localNetworkReports = new();
+    private int _localNetworkDraining;
+
     // Chega na thread do CEF.
-    private void OnLocalNetworkBlocked(BrowserTab tab, string site, string url) => Dispatcher.InvokeAsync(() =>
+    private void OnLocalNetworkBlocked(BrowserTab tab, string site, string url)
     {
-        var label = LocalNetwork.Label(url);
-        tab.RecordLocalNetworkBlocked(label);
-        if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
-        // O auto-teste de privacidade tenta de propósito chegar a 127.0.0.1: fica registado, sem perguntar nada.
-        if (Browser.SelfTest.IsTestHost(Uri.TryCreate(site, UriKind.Absolute, out var origin) ? origin.Host : site)) return;
-        // Só para a página à vista: uma aba em segundo plano fica registada no Escudo sem interromper.
-        if (!ReferenceEquals(tab, Tabs.Active) && _split?.PaneOf(tab) is null) return;
-        if (!_localNetworkAsked.Add(site)) return;
-        _permissionQueue.Enqueue(new PendingPermission(site, [SitePermission.LocalNetwork], allowed =>
+        _localNetworkReports.Enqueue((tab, site, url));
+        if (Interlocked.Exchange(ref _localNetworkDraining, 1) == 0) Dispatcher.InvokeAsync(DrainLocalNetworkReports);
+    }
+
+    private void DrainLocalNetworkReports()
+    {
+        Volatile.Write(ref _localNetworkDraining, 0);
+        var active = false;
+        while (_localNetworkReports.TryDequeue(out var report))
         {
-            // Os pedidos travados já falharam: a página volta a carregar para os repetir com autorização.
-            if (allowed && HasEngine(tab) && _browsers.TryGetValue(tab, out var browser)) browser.Reload();
-        }, LocalNetworkText.CardDetail(label)));
-        ShowNextPermission();
-    });
+            var (tab, site, url) = report;
+            var label = LocalNetwork.Label(url);
+            tab.RecordLocalNetworkBlocked(label);
+            active |= ReferenceEquals(tab, Tabs.Active);
+            // O auto-teste de privacidade tenta de propósito chegar a 127.0.0.1: fica registado, sem perguntar nada.
+            if (Browser.SelfTest.IsTestHost(Uri.TryCreate(site, UriKind.Absolute, out var origin) ? origin.Host : site)) continue;
+            // Só para a página à vista: uma aba em segundo plano fica registada no Escudo sem interromper.
+            if (!ReferenceEquals(tab, Tabs.Active) && _split?.PaneOf(tab) is null) continue;
+            if (!_localNetworkAsked.Add(site)) continue;
+            _permissionQueue.Enqueue(new PendingPermission(site, [SitePermission.LocalNetwork], allowed =>
+            {
+                // Os pedidos travados já falharam: a página volta a carregar para os repetir com autorização.
+                if (allowed && HasEngine(tab) && _browsers.TryGetValue(tab, out var browser)) browser.Reload();
+            }, LocalNetworkText.CardDetail(label)));
+            ShowNextPermission();
+        }
+        if (active) UpdateShieldButton();
+    }
 
     private string LocalNetworkShieldLine(BrowserTab? tab)
         => LocalNetworkText.ShieldLine(tab?.LocalNetworkBlocked ?? []);

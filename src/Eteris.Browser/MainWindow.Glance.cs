@@ -145,7 +145,10 @@ public partial class MainWindow
             }),
             MenuHandler = new SilentMenuHandler(),
             PermissionHandler = PermissionHandler,
-            RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn, onBlocked: _ => { }, isPrivate: IsPrivate),
+            // A rede local que o utilizador deixou ao site também chega na pré-visualização (sem cartão: a pré-visualização
+            // não pergunta nada).
+            RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn, onBlocked: _ => { }, isPrivate: IsPrivate,
+                localNetworkAllowed: IsLocalNetworkAllowed),
         };
         // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
         browser.FrameLoadStart += (_, e) =>

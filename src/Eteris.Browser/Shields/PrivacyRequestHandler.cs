@@ -63,26 +63,44 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
     // Com o Éteris a tratar cada pedido, é o CEF que lê e grava os cookies dos pedidos — e o bloqueio de cookies de
     // terceiros do Chromium não chegava lá: um pixel de outro site embutido numa página levava os cookies desse site.
-    // Este filtro recusa enviar e gravar cookies de outro site que não o de topo (ThirdPartyCookies.Allow).
-    private sealed class ThirdPartyCookieFilter(Func<string, bool> isProtected) : ICookieAccessFilter
+    // Este filtro recusa enviar e gravar cookies de outro site que não o de topo (ThirdPartyCookies.Allow), menos os
+    // «Partitioned» (CHIPS) que o terceiro grava no frasco deste site de topo (PartitionedCookieJar), como no Chrome,
+    // no Firefox e no Brave. Só existe com o bloqueio ligado (GetCookieAccessFilter).
+    internal sealed class ThirdPartyCookieFilter(Func<string, bool> isProtected, bool isPrivate, Func<IBrowser, string?>? topOf = null)
+        : ICookieAccessFilter
     {
+        private string? Top(IBrowser browser) => topOf is null ? SafeFrame.MainUrl(browser) : topOf(browser);
+
         public bool CanSendCookie(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, Cookie cookie)
-            => Allow(browser, request);
-
-        public bool CanSaveCookie(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, IResponse response, Cookie cookie)
-            => Allow(browser, request);
-
-        private bool Allow(IBrowser browser, IRequest request)
         {
             try
             {
-                var top = SafeFrame.MainUrl(browser);
-                return ThirdPartyCookies.Allow(top, request.Url, request.ResourceType, Data.Settings.Current.BlockThirdPartyCookies,
-                    top is not null && Uri.TryCreate(top, UriKind.Absolute, out var page) && !isProtected(page.Host));
+                var top = Top(browser);
+                if (Allow(top, request)) return true;
+                return TopDocument.SiteKey(top) is { } site
+                       && PartitionedCookieJar.For(isPrivate).Holds(site, cookie.Domain, cookie.Name, cookie.Path, cookie.Value);
             }
             // Separador a fechar: sem decisão possível, o cookie de terceiros não passa.
             catch (Exception) { return false; }
         }
+
+        public bool CanSaveCookie(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, IResponse response, Cookie cookie)
+        {
+            try
+            {
+                var top = Top(browser);
+                if (Allow(top, request)) return true;
+                if (TopDocument.SiteKey(top) is not { } site
+                    || !ThirdPartyCookies.IsPartitioned(response?.Headers?.GetValues("Set-Cookie"), cookie.Name)) return false;
+                PartitionedCookieJar.For(isPrivate).Remember(site, cookie.Domain, cookie.Name, cookie.Path, cookie.Value);
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
+        private bool Allow(string? top, IRequest request)
+            => ThirdPartyCookies.Allow(top, request.Url, request.ResourceType, block: true,
+                Uri.TryCreate(TopDocument.Effective(top), UriKind.Absolute, out var page) && page.Host.Length > 0 && !isProtected(page.Host));
     }
 
     // Decide cada pedido do separador: cabeçalhos de privacidade, saltos, limpeza e HTTPS do endereço da página, rede
@@ -213,9 +231,13 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         {
             try
             {
-                if (request.ResourceType != ResourceType.MainFrame || Jump(newUrl, isProtected) is not { } jump) return;
-                RememberSkip(browser, newUrl);
-                newUrl = jump;
+                if (request.ResourceType != ResourceType.MainFrame) return;
+                if (Jump(newUrl, isProtected) is { } jump)
+                {
+                    RememberSkip(browser, newUrl);
+                    newUrl = jump;
+                }
+                _navigatingTo[browser.Identifier] = newUrl;
             }
             catch (Exception) { }
         }
@@ -233,10 +255,26 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             return false;
         }
 
-        protected override ICookieAccessFilter GetCookieAccessFilter(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
-            => _cookies;
+        // Com «Bloquear cookies de terceiros» desligado não há filtro: nada a ler por cookie na thread de rede.
+        protected override ICookieAccessFilter? GetCookieAccessFilter(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
+            => Data.Settings.Current.BlockThirdPartyCookies ? _cookies : null;
 
-        private readonly ThirdPartyCookieFilter _cookies = new(isProtected);
+        private ThirdPartyCookieFilter? _cookieFilter;
+
+        private ThirdPartyCookieFilter _cookies => _cookieFilter ??= new(isProtected, isPrivate, TopOf);
+
+        // O documento principal que um pedido vê. Logo depois de uma navegação — um recarregar, sobretudo — o frame
+        // principal novo ainda não tem endereço na thread de rede (""), e os primeiros pedidos da página ficavam sem
+        // site (sem cookies próprios, sem cartão da rede local). Vale então o endereço para onde a navegação foi.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _navigatingTo = new();
+
+        internal string? TopOf(IBrowser browser)
+        {
+            var url = SafeFrame.MainUrl(browser);
+            if (!string.IsNullOrEmpty(url)) return url;
+            try { return _navigatingTo.TryGetValue(browser.Identifier, out var to) ? to : url; }
+            catch (Exception) { return url; }
+        }
 
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
             IRequest request, IRequestCallback callback)
@@ -277,47 +315,24 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             if (request.ResourceType == ResourceType.MainFrame)
             {
-                // Salto de rastreio com o destino no endereço (Shields/Debounce.cs): vai-se direto ao destino.
-                if (Jump(request.Url, isProtected) is { } jump)
-                {
-                    RememberSkip(browser, request.Url);
-                    Rewrite(browser, request, jump);
-                    return CefReturnValue.Continue;
-                }
-                // Links sem parâmetros de rastreio (utm_*, fbclid…): o pedido sai já limpo.
-                if (Data.Settings.Current.CleanUrls && UrlCleaner.Clean(request.Url) is var clean && clean != request.Url)
-                {
-                    Rewrite(browser, request, clean);
-                    return CefReturnValue.Continue;
-                }
-                if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url, isPrivate) is { } secure)
-                {
-                    Rewrite(browser, request, secure);
-                    return CefReturnValue.Continue;
-                }
-                // O pedido da página segue logo. (Antes esperava aqui pelo registo dos scriptlets, até 1 s; depois de a
-                // navegação começar o DevTools já não entrega esse registo a tempo: ver ScriptletInjector.)
-                // O Observatório só recomeça quando a página nova entra em vigor (SiteObservatory.Sync/Commit).
-                observatory?.Navigating();
-                onMainFrameRequest?.Invoke();
-                ReportSkips(browser);
-                return CefReturnValue.Continue;
+                var result = DecideMainFrame(browser, request);
+                _navigatingTo[browser.Identifier] = request.Url;
+                return result;
             }
 
             // Só pedidos da rede passam pelas listas (eteris://, devtools://, data:, blob: seguem logo).
             if (!IsNetwork(request.Url)) return CefReturnValue.Continue;
 
-            var pageUrl = SafeFrame.MainUrl(browser);
-            observatory?.Sync(pageUrl);
+            var committed = TopOf(browser);
+            if (!string.IsNullOrEmpty(committed)) observatory?.Sync(committed);
+            // A página de um blob: é a de quem o criou (Shields/ReferrerCap.cs, TopDocument).
+            var pageUrl = TopDocument.Effective(committed);
             // Rede local (Shields/LocalNetwork.cs): uma página pública não chega a este computador nem à rede de casa sem
             // autorização do utilizador para o site — com ou sem escudo, é uma proteção e não um bloqueio de anúncios.
-            if (LocalNetwork.Decide(pageUrl, request.Url, request.ResourceType, allowedForSite: false) == LocalNetwork.Decision.Block
-                && LocalNetwork.SiteOf(pageUrl) is { } site && localNetworkAllowed?.Invoke(site) != true)
+            if (LocalNetworkGate(pageUrl, request, callback) is { } gate)
             {
-                blocking = true;
-                onLocalNetworkBlocked?.Invoke(site, request.Url);
-                Observe(request.Url, request.ResourceType, ObservedVerdict.LocalNetwork);
-                return CefReturnValue.Cancel;
+                blocking = gate == CefReturnValue.Cancel;
+                return gate;
             }
             if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var page) && !isProtected(page.Host))
             {
@@ -356,6 +371,86 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var blocked) ? blocked.Host : request.Url);
             Observe(request.Url, request.ResourceType, ObservedVerdict.Blocked);
             return CefReturnValue.Cancel;
+        }
+
+        // A decisão da rede local para um sub-recurso (null: segue para as outras decisões). Uma página de nome público
+        // que resolve para a rede local (a intranet, o painel de casa) é ela própria local: aí decide a verificação do
+        // Chromium, que vê o IP a que a página se ligou. Saber o endereço não para a thread de rede: com o nome fora da
+        // cache, o pedido espera no máximo LocalNetwork.MaxWait (IRequestCallback). Na janela privada e com o DNS cifrado
+        // não se pergunta nada ao DNS do sistema: fica o cartão.
+        private CefReturnValue? LocalNetworkGate(string? pageUrl, IRequest request, IRequestCallback? callback)
+        {
+            if (LocalNetwork.Decide(pageUrl, request.Url, request.ResourceType, allowedForSite: false) != LocalNetwork.Decision.Block)
+                return null;
+            var site = LocalNetwork.SiteOf(pageUrl);
+            if (site is not null && localNetworkAllowed?.Invoke(site) == true) return null;
+            if (site is not null && !isPrivate && PrivacyPreferences.SecureDnsProvider is null && LocalNetwork.ResolvableTop(pageUrl) is { } top)
+            {
+                if (LocalNetwork.Addresses.TryGet(top, out var space))
+                {
+                    if (space != LocalNetwork.Space.Public) return null;
+                }
+                else if (callback is not null)
+                {
+                    var url = request.Url;
+                    var type = request.ResourceType;
+                    var lookup = LocalNetwork.Addresses.LookupAsync(top);
+                    Task.WhenAny(lookup, Task.Delay(LocalNetwork.MaxWait)).ContinueWith(_ =>
+                    {
+                        var local = lookup.IsCompletedSuccessfully && lookup.Result != LocalNetwork.Space.Public;
+                        try
+                        {
+                            if (local) Observe(url, type, ObservedVerdict.Allowed);
+                            else BlockLocal(site, url, type);
+                        }
+                        catch (Exception) { }
+                        try
+                        {
+                            using (callback) callback.Continue(local);
+                        }
+                        catch (Exception) { }
+                    }, TaskScheduler.Default);
+                    return CefReturnValue.ContinueAsync;
+                }
+            }
+            BlockLocal(site, request.Url, request.ResourceType);
+            return CefReturnValue.Cancel;
+        }
+
+        // Sem site (um documento sem origem web) não há a quem perguntar: só fica no Observatório.
+        private void BlockLocal(string? site, string url, ResourceType type)
+        {
+            if (site is not null) onLocalNetworkBlocked?.Invoke(site, url);
+            Observe(url, type, ObservedVerdict.LocalNetwork);
+        }
+
+        private CefReturnValue DecideMainFrame(IBrowser browser, IRequest request)
+        {
+            // Salto de rastreio com o destino no endereço (Shields/Debounce.cs): vai-se direto ao destino.
+            if (Jump(request.Url, isProtected) is { } jump)
+            {
+                RememberSkip(browser, request.Url);
+                Rewrite(browser, request, jump);
+                return CefReturnValue.Continue;
+            }
+            // Links sem parâmetros de rastreio (utm_*, fbclid…): o pedido sai já limpo.
+            if (Data.Settings.Current.CleanUrls && UrlCleaner.Clean(request.Url) is var clean && clean != request.Url)
+            {
+                Rewrite(browser, request, clean);
+                return CefReturnValue.Continue;
+            }
+            if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url, isPrivate) is { } secure)
+            {
+                Rewrite(browser, request, secure);
+                return CefReturnValue.Continue;
+            }
+            // O pedido da página segue logo. (Antes esperava aqui pelo registo dos scriptlets, até 1 s; depois de a
+            // navegação começar o DevTools já não entrega esse registo a tempo: ver ScriptletInjector.)
+            // O Observatório só recomeça quando a página nova entra em vigor (SiteObservatory.Sync/Commit).
+            observatory?.Navigating();
+            onMainFrameRequest?.Invoke();
+            ReportSkips(browser);
+            return CefReturnValue.Continue;
         }
 
         internal static bool IsNetwork(string url)

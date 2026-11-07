@@ -60,7 +60,8 @@ public class LocalNetworkTests
     // Internet → Internet, páginas internas e endereços que não são da Web: nada a ver.
     [InlineData("https://www.exemplo.pt/", "https://cdn.exemplo.pt/a.js", ResourceType.Script, false, LocalNetwork.Decision.Allow)]
     [InlineData("eteris://newtab/", "http://127.0.0.1:8765/favicon.ico", ResourceType.Image, false, LocalNetwork.Decision.Allow)]
-    [InlineData(null, "http://127.0.0.1:8765/", ResourceType.Image, false, LocalNetwork.Decision.Allow)]
+    // Revisão aos 50: sem página de topo (separador a fechar) o pedido local não passa (ReviewLocalNetworkCookiesTests).
+    [InlineData(null, "http://127.0.0.1:8765/", ResourceType.Image, false, LocalNetwork.Decision.Block)]
     [InlineData("https://www.exemplo.pt/", "data:image/png;base64,AAAA", ResourceType.Image, false, LocalNetwork.Decision.Allow)]
     public void Decide_PublicPagesNeedPermissionToReachTheLocalNetwork(string? top, string request, ResourceType type, bool allowed, LocalNetwork.Decision expected)
         => Assert.Equal(expected, LocalNetwork.Decide(top, request, type, allowed));

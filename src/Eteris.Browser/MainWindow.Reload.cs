@@ -11,6 +11,8 @@ public partial class MainWindow
     {
         if (ReloadVideo()) return;
         if (Tabs.Active is not { } tab || ActiveBrowser is not { } browser) return;
+        // Recarregar volta a perguntar pela rede local (um «Bloquear» por engano não fica sem saída nesta janela).
+        if (Shields.LocalNetwork.SiteOf(tab.Address) is { } site) _localNetworkAsked.Remove(site);
         await ScriptsReadyFor(tab, browser, tab.Address);
         if (browser.IsDisposed) return;
         if (ErrorPage.IsErrorPage(browser.Address ?? string.Empty))

@@ -111,14 +111,13 @@ public sealed class SiteObservatory
         }
     }
 
-    // O documento principal mudou (FrameLoadStart): recomeça, se nenhum sub-recurso o fez já (recarregar o mesmo
-    // endereço, uma página sem sub-recursos).
+    // O documento principal mudou (FrameLoadStart): recomeça, se nenhum sub-recurso o fez já para este endereço
+    // (recarregar o mesmo endereço, uma página sem sub-recursos, uma página reposta da cache de Voltar/Avançar).
     public void Commit(string url)
     {
-        if (!_navigating) return;
         lock (_lock)
         {
-            if (!_navigating) return;
+            if (!_navigating && string.Equals(url, _pageUrl, StringComparison.Ordinal)) return;
             ResetLocked(url);
             _navigating = false;
         }

@@ -139,8 +139,10 @@ public class RequestIdentityTests
     [InlineData("http://127.0.0.1:8765/rede.html", "http://127.0.0.1:8766/echo", CefSharp.ResourceType.SubFrame, true, false, true)]
     [InlineData("https://www.publico.pt/", "https://ads.tracker.com/p.gif", CefSharp.ResourceType.Image, false, false, true)]
     [InlineData("https://www.publico.pt/", "https://ads.tracker.com/p.gif", CefSharp.ResourceType.Image, true, true, true)]
-    [InlineData("eteris://newtab/", "https://www.publico.pt/favicon.ico", CefSharp.ResourceType.Image, true, false, true)]
-    [InlineData(null, "https://www.publico.pt/", CefSharp.ResourceType.Script, true, false, true)]
+    // Revisão aos 50: um documento sem origem web (página interna, separador a fechar) não é o site de ninguém — os
+    // pedidos http(s) dele são de terceiros (o novo separador não leva os cookies do público.pt ao pedir o ícone).
+    [InlineData("eteris://newtab/", "https://www.publico.pt/favicon.ico", CefSharp.ResourceType.Image, true, false, false)]
+    [InlineData(null, "https://www.publico.pt/", CefSharp.ResourceType.Script, true, false, false)]
     public void ThirdPartyCookies_OnlyTheTopSiteSendsAndSaves(string? top, string request, CefSharp.ResourceType type, bool block, bool shieldOff, bool allowed)
         => Assert.Equal(allowed, ThirdPartyCookies.Allow(top, request, type, block, shieldOff));
 

@@ -105,7 +105,34 @@ public sealed class SitePermissionStore
             """);
     }
 
+    // As respostas de Get em memória, partilhadas pelas lojas da mesma base (cada janela tem a sua, e o AppData outra) e
+    // esquecidas a cada escrita em qualquer delas: a rede local pergunta por cada pedido travado, na thread de rede.
+    // A geração impede que uma leitura feita antes de uma escrita fique guardada depois dela.
+    private sealed class Answers
+    {
+        public readonly System.Collections.Concurrent.ConcurrentDictionary<(string, SitePermission), bool?> Map = new();
+        public int Generation;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Answers> Shared = new(StringComparer.Ordinal);
+
+    private Answers Known => Shared.GetOrAdd(_connectionString, _ => new Answers());
+
     public bool? Get(string site, SitePermission kind)
+    {
+        var known = Known;
+        if (known.Map.TryGetValue((site, kind), out var answer)) return answer;
+        var generation = Volatile.Read(ref known.Generation);
+        var value = Read(site, kind);
+        if (Volatile.Read(ref known.Generation) == generation)
+        {
+            if (known.Map.Count >= 4096) known.Map.Clear();
+            known.Map[(site, kind)] = value;
+        }
+        return value;
+    }
+
+    private bool? Read(string site, SitePermission kind)
     {
         using var connection = Open();
         using var command = connection.CreateCommand();
@@ -155,7 +182,11 @@ public sealed class SitePermissionStore
     public void Forget(string site) => Execute("DELETE FROM site_permissions WHERE site = $s", ("$s", site));
 
     // A base em memória (janela privada) acaba aqui.
-    public void Close() => _keepAlive?.Dispose();
+    public void Close()
+    {
+        _keepAlive?.Dispose();
+        if (_keepAlive is not null) Shared.TryRemove(_connectionString, out _);
+    }
 
     // Todas as chaves (host[:porta]) que pertencem a um site — subdomínios e portas incluídos; devolve quantas saíram.
     public int ForgetWhere(Func<string, bool> belongs)
@@ -167,11 +198,20 @@ public sealed class SitePermissionStore
 
     private void Execute(string sql, params (string Name, object Value)[] parameters)
     {
-        using var connection = Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
-        command.ExecuteNonQuery();
+        try
+        {
+            using var connection = Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
+            command.ExecuteNonQuery();
+        }
+        finally
+        {
+            var known = Known;
+            Interlocked.Increment(ref known.Generation);
+            known.Map.Clear();
+        }
     }
 
     private SqliteConnection Open()
