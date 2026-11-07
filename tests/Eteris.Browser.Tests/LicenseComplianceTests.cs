@@ -77,6 +77,21 @@ public class LicenseComplianceTests
         }
     }
 
+    // A Public Suffix List (dados MPL-2.0) vai compilada no eteris_shields.dll pelo crate psl e decide o «site» de
+    // Triturar e Esquecer ao fechar: o texto da MPL-2.0 e a origem têm de estar registados, para a versão do Cargo.lock.
+    [Fact]
+    public void PublicSuffixList_HasItsLicense()
+    {
+        var lockFile = Read("src", "Eteris.Shields", "Cargo.lock");
+        var version = Regex.Match(lockFile, "name = \"psl\"\r?\nversion = \"([^\"]+)\"").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(version));
+        Assert.Contains($"| Public Suffix List (dados, no crate psl {version} dentro do eteris_shields.dll) | MPL-2.0 | `PublicSuffixList-MPL-2.0.txt` |",
+            Read("licenses", "INDEX.md"));
+        Assert.StartsWith("Mozilla Public License Version 2.0", Read("licenses", "PublicSuffixList-MPL-2.0.txt").TrimStart());
+        Assert.Contains("https://publicsuffix.org", Read("THIRD-PARTY-NOTICES.md"));
+        Assert.Contains("psl = ", Read("src", "Eteris.Shields", "Cargo.toml"));
+    }
+
     [Fact]
     public void IndexPointsOnlyToFilesThatExist()
     {

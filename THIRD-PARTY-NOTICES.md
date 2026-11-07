@@ -13,8 +13,11 @@ a instalação. Essa pasta é gerada a partir dos pacotes exatos usados na compi
 | Componente | Origem | Licença |
 |---|---|---|
 | adblock-rust | https://github.com/brave/adblock-rust | MPL-2.0 |
+| Public Suffix List (dados, pelo crate psl) | https://publicsuffix.org | MPL-2.0 |
 
-Compilado em `eteris_shields.dll` (código em `src/Eteris.Shields`, também MPL-2.0).
+Compilado em `eteris_shields.dll` (código em `src/Eteris.Shields`, também MPL-2.0). A Public Suffix List vai dentro
+dele, sem alterações, e decide o «site» de Triturar, Esquecer ao fechar e do Escudo (texto da MPL-2.0 em
+`licenses/PublicSuffixList-MPL-2.0.txt`).
 
 ## Listas de filtros
 

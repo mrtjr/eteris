@@ -89,6 +89,22 @@ pub unsafe extern "C" fn shields_generic_css(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// Domínio registável (eTLD+1) de um anfitrião pela Public Suffix List, incluindo a secção PRIVATE (alice.github.io,
+/// foo.blogspot.com são sites diferentes de github.io). NULL quando o próprio anfitrião é um sufixo público, não tem
+/// domínio registável ou o texto é inválido. Libertar com `shields_string_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shields_registrable_domain(host: *const c_char) -> *mut c_char {
+    let Some(host) = (unsafe { text(host) }) else { return std::ptr::null_mut() };
+    catch_unwind(|| {
+        let host = host.trim_end_matches('.').to_ascii_lowercase();
+        match psl::domain_str(&host) {
+            Some(domain) => into_c(domain.to_string()),
+            None => std::ptr::null_mut(),
+        }
+    })
+    .unwrap_or(std::ptr::null_mut())
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shields_string_free(value: *mut c_char) {
     if !value.is_null() {
@@ -124,6 +140,30 @@ mod tests {
             shields_string_free(css);
             shields_free(handle);
         }
+    }
+
+    fn registrable(host: &str) -> Option<String> {
+        let host = CString::new(host).unwrap();
+        unsafe {
+            let value = shields_registrable_domain(host.as_ptr());
+            if value.is_null() {
+                return None;
+            }
+            let text = CStr::from_ptr(value).to_str().unwrap().to_string();
+            shields_string_free(value);
+            Some(text)
+        }
+    }
+
+    #[test]
+    fn ffi_registrable_domain_uses_the_public_suffix_list() {
+        assert_eq!(registrable("www.exemplo.pt").as_deref(), Some("exemplo.pt"));
+        assert_eq!(registrable("alice.github.io").as_deref(), Some("alice.github.io"));
+        assert_eq!(registrable("foo.blogspot.com").as_deref(), Some("foo.blogspot.com"));
+        assert_eq!(registrable("www.saopaulo.sp.gov.br").as_deref(), Some("saopaulo.sp.gov.br"));
+        assert_eq!(registrable("loja.bbc.co.uk").as_deref(), Some("bbc.co.uk"));
+        assert_eq!(registrable("github.io"), None);
+        unsafe { assert!(shields_registrable_domain(std::ptr::null()).is_null()) };
     }
 
     #[test]

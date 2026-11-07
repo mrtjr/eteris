@@ -24,6 +24,53 @@ public sealed class ForgetSiteTests : IDisposable
     [InlineData("http://192.168.1.10:8080/", "192.168.1.10")]
     public void SiteOf_IsTheRegistrableDomain(string url, string site) => Assert.Equal(site, SiteScope.SiteOf(url));
 
+    // Pela Public Suffix List, com a secção PRIVATE: vizinhos num sufixo partilhado são sites diferentes.
+    [Theory]
+    [InlineData("https://alice.github.io/x", "alice.github.io")]
+    [InlineData("https://bob.github.io/", "bob.github.io")]
+    [InlineData("https://foo.blogspot.com/", "foo.blogspot.com")]
+    [InlineData("https://app.vercel.app/", "app.vercel.app")]
+    [InlineData("https://www.saopaulo.sp.gov.br/", "saopaulo.sp.gov.br")]
+    [InlineData("https://loja.exemplo.com.pt/", "exemplo.com.pt")]
+    [InlineData("https://github.io/", "github.io")]
+    [InlineData("http://localhost:3000/", "localhost")]
+    [InlineData("http://[::1]:8080/", "[::1]")]
+    public void SiteOf_UsesThePublicSuffixList(string url, string site) => Assert.Equal(site, SiteScope.SiteOf(url));
+
+    [Fact]
+    public void SharedSuffix_NeverReachesTheNeighbour()
+    {
+        Assert.False(SiteScope.Belongs("https://bob.github.io/", "alice.github.io"));
+        Assert.False(SiteScope.CookieBelongs(".bob.github.io", "alice.github.io"));
+        Assert.True(SiteScope.CookieBelongs(".alice.github.io", "alice.github.io"));
+        // Triturar github.io (a página do próprio sufixo) não leva os cookies dos sites por baixo dele.
+        Assert.False(SiteScope.CookieBelongs(".alice.github.io", "github.io"));
+        Assert.False(SiteScope.StillOpen("alice.github.io", ["https://bob.github.io/"]));
+    }
+
+    // As chaves das permissões são host[:porta]: um subdomínio ou outra porta do site também são do site.
+    [Theory]
+    [InlineData("meet.google.com", "google.com", true)]
+    [InlineData("google.com", "google.com", true)]
+    [InlineData("app.exemplo.pt:8443", "exemplo.pt", true)]
+    [InlineData("localhost:3000", "localhost", true)]
+    [InlineData("[::1]:8080", "[::1]", true)]
+    [InlineData("malexemplo.pt", "exemplo.pt", false)]
+    [InlineData("bob.github.io", "alice.github.io", false)]
+    [InlineData("", "exemplo.pt", false)]
+    public void HostKeyBelongs_CoversSubdomainsAndPorts(string key, string site, bool expected)
+        => Assert.Equal(expected, SiteScope.HostKeyBelongs(key, site));
+
+    // Um IP ou localhost não tem «www.» (origem inválida para o motor, que abortava a limpeza das outras).
+    [Fact]
+    public void Origins_HaveNoWwwForAddressesAndLocalhost()
+    {
+        Assert.DoesNotContain(SiteScope.Origins("[::1]", ["http://[::1]:8080/"]), o => o.Contains("www."));
+        Assert.DoesNotContain(SiteScope.Origins("127.0.0.1", ["https://127.0.0.1:5001/"]), o => o.Contains("www."));
+        Assert.Contains("https://127.0.0.1:5001", SiteScope.Origins("127.0.0.1", ["https://127.0.0.1:5001/"]));
+        Assert.DoesNotContain(SiteScope.Origins("localhost", ["http://localhost:3000/"]), o => o.Contains("www."));
+    }
+
     [Theory]
     [InlineData("eteris://newtab/")]
     [InlineData("file:///C:/x.html")]
@@ -112,5 +159,16 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.True(store.Contains("loja.exemplo.pt"));
         Assert.False(store.Contains("malexemplo.pt"));
         Assert.Equal(["exemplo.pt"], store.All());
+    }
+
+    // Com a regra do SiteScope (como a AppData a usa), ligar em alice.github.io não liga em bob.github.io.
+    [Fact]
+    public void ForgetList_UsesThePublicSuffixList()
+    {
+        var store = new StrictSiteStore(_path, "forget_sites", siteOf: SiteScope.OfHost);
+        store.Add("alice.github.io");
+        Assert.True(store.Contains("www.alice.github.io"));
+        Assert.False(store.Contains("bob.github.io"));
+        Assert.Equal(["alice.github.io"], store.All());
     }
 }

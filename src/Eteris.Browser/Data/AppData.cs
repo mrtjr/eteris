@@ -496,7 +496,7 @@ public static class AppData
     // «Esquecer este site ao fechar»: sites (domínio registável) cujos dados se apagam ao fechar a última aba.
     private static readonly Lazy<StrictSiteStore?> LazyForget = new(() =>
     {
-        try { return new StrictSiteStore(AppPaths.Database, "forget_sites"); }
+        try { return new StrictSiteStore(AppPaths.Database, "forget_sites", siteOf: SiteScope.OfHost); }
         catch (Exception) { return null; }
     });
 

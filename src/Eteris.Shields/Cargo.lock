@@ -87,6 +87,7 @@ name = "eteris_shields"
 version = "0.1.0"
 dependencies = [
  "adblock",
+ "psl",
  "serde_json",
 ]
 

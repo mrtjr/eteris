@@ -6,7 +6,7 @@ Corre-se sempre que muda uma dependência (CEF/CefSharp, pacotes NuGet, crates d
 
 Fontes: a cache local do NuGet e do Cargo (os pacotes exatos que entram na compilação), o resources.pak
 do CEF (créditos do Chromium) e build/licenses/static/ (textos que os pacotes não trazem, obtidos uma vez
-das fontes oficiais: gnu.org e os repositórios do Velopack, SQLitePCLRaw e EF Core).
+das fontes oficiais: gnu.org e os repositórios do Velopack, SQLitePCLRaw e EF Core; a MPL-2.0 é a do adblock-rust).
 """
 import glob
 import os
@@ -143,6 +143,14 @@ def main():
         for f in files:
             shutil.copyfile(os.path.join(src, f), os.path.join(target, f))
         index.append((f"{name} {version} (motor de bloqueio)", license, f"rust/{name}-{version}/"))
+
+    # A Public Suffix List (https://publicsuffix.org) vai compilada no eteris_shields.dll pelo crate psl: o código do
+    # crate é MIT/Apache-2.0 (acima), os dados da lista são MPL-2.0. É ela que decide o «site» (Shields/PublicSuffix.cs).
+    psl = next((v for n, v in crates if n == "psl"), None)
+    if psl is None:
+        sys.exit("O crate psl saiu do Cargo.lock: atualize a entrada da Public Suffix List em collect.py")
+    copy(os.path.join(STATIC, "MPL-2.0.txt"), "PublicSuffixList-MPL-2.0.txt",
+         f"Public Suffix List (dados, no crate psl {psl} dentro do eteris_shields.dll)", "MPL-2.0")
 
     with open(os.path.join(OUT, "INDEX.md"), "w", encoding="utf-8") as f:
         f.write("# Licenças\n\nTextos completos das licenças de tudo o que o Éteris distribui. "

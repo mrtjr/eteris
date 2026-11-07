@@ -13,13 +13,16 @@ public sealed class StrictSiteStore
 
     private readonly string _table;
     private readonly bool _exactHost;
+    private readonly Func<string, string>? _siteOf;
 
     // A tabela é uma constante interna (strict_sites, dark_sites, video_sites, video_sites_off, http_sites), nunca texto
     // vindo de fora.
-    public StrictSiteStore(string path, string table = "strict_sites", bool exactHost = false)
+    // siteOf: outra regra para a chave (a lista «esquecer ao fechar» usa o site do SiteScope, pela Public Suffix List).
+    public StrictSiteStore(string path, string table = "strict_sites", bool exactHost = false, Func<string, string>? siteOf = null)
     {
         _table = table;
         _exactHost = exactHost;
+        _siteOf = siteOf;
         _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString();
         using var connection = Open();
         using (var create = connection.CreateCommand())
@@ -57,7 +60,8 @@ public sealed class StrictSiteStore
         Execute($"DELETE FROM {_table} WHERE host = $h", site);
     }
 
-    private string Site(string host) => _exactHost ? host.ToLowerInvariant() : TrackerBlocker.RegistrableDomain(host.ToLowerInvariant());
+    private string Site(string host)
+        => _exactHost ? host.ToLowerInvariant() : _siteOf?.Invoke(host.ToLowerInvariant()) ?? TrackerBlocker.RegistrableDomain(host.ToLowerInvariant());
 
     private void Execute(string sql, string host)
     {
