@@ -503,24 +503,54 @@
                                 ToolTip="Nada desta janela fica no histórico, nos cookies nem na cache">
                             <TextBlock Text="Privada" FontSize="11.5" FontWeight="SemiBold" Foreground="#E9D5FF" />
                         </Border>
-                        <ListBox x:Name="TabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
-                                 PreviewMouseMove="TabList_PreviewMouseMove" PreviewMouseLeftButtonUp="TabList_PreviewMouseLeftButtonUp"
-                                 ItemContainerStyle="{StaticResource TabItemStyle}"
-                                 Background="Transparent" BorderThickness="0" Padding="0"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                            <ListBox.Template>
-                                <ControlTemplate TargetType="ListBox">
-                                    <ItemsPresenter />
-                                </ControlTemplate>
-                            </ListBox.Template>
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                        </ListBox>
+                        <!-- Setas de rolagem: só aparecem quando há abas escondidas (ver MainWindow.TabStrip.cs) -->
+                        <Button x:Name="TabScrollLeft" Content="&#xE76B;" Style="{StaticResource IconButton}" Width="24" Height="30" FontSize="10"
+                                Margin="0,0,0,3" Visibility="Collapsed" Click="TabScrollLeft_Click" ToolTip="Abas anteriores" />
+                        <Grid>
+                            <!-- A faixa rola sem barra visível; as abas mantêm a largura mínima legível (TabLayout.MinTabWidth) -->
+                            <ScrollViewer x:Name="TabScroll" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                          Focusable="False" PanningMode="HorizontalOnly" CanContentScroll="False"
+                                          PreviewMouseWheel="TabScroll_PreviewMouseWheel" ScrollChanged="TabScroll_ScrollChanged"
+                                          shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                                <ListBox x:Name="TabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
+                                         PreviewMouseMove="TabList_PreviewMouseMove" PreviewMouseLeftButtonUp="TabList_PreviewMouseLeftButtonUp"
+                                         ItemContainerStyle="{StaticResource TabItemStyle}"
+                                         Background="Transparent" BorderThickness="0" Padding="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                                    <ListBox.Template>
+                                        <ControlTemplate TargetType="ListBox">
+                                            <ItemsPresenter />
+                                        </ControlTemplate>
+                                    </ListBox.Template>
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                </ListBox>
+                            </ScrollViewer>
+                            <!-- Sombras nas pontas: há mais abas para esse lado -->
+                            <Border x:Name="TabFadeLeft" Width="18" HorizontalAlignment="Left" IsHitTestVisible="False" Visibility="Collapsed">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="{DynamicResource FrameColor}" Offset="0" />
+                                        <GradientStop Color="#00000000" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <Border x:Name="TabFadeRight" Width="18" HorizontalAlignment="Right" IsHitTestVisible="False" Visibility="Collapsed">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#00000000" Offset="0" />
+                                        <GradientStop Color="{DynamicResource FrameColor}" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                        <Button x:Name="TabScrollRight" Content="&#xE76C;" Style="{StaticResource IconButton}" Width="24" Height="30" FontSize="10"
+                                Margin="0,0,0,3" Visibility="Collapsed" Click="TabScrollRight_Click" ToolTip="Abas seguintes" />
                         <Button Content="&#xE710;" Style="{StaticResource IconButton}" Width="30" Height="30" FontSize="12"
                                 Margin="6,0,0,3" Click="NewTab_Click" ToolTip="Nova aba (Ctrl+T)" />
                     </StackPanel>

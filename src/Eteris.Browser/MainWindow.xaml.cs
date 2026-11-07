@@ -16,7 +16,8 @@ namespace Eteris.Browser;
 
 public partial class MainWindow : Window
 {
-    private const double TabStripReserved = 40 + 36 + 56;
+    // Logótipo (40) + botão de nova aba (36) + duas setas de rolagem (2×24) + folga (8).
+    private const double TabStripReserved = 40 + 36 + 2 * TabLayout.ArrowWidth + 8;
 
     public static readonly DependencyProperty TabWidthProperty = DependencyProperty.Register(
         nameof(TabWidth), typeof(double), typeof(MainWindow), new PropertyMetadata(TabLayout.MaxTabWidth));
@@ -255,6 +256,7 @@ public partial class MainWindow : Window
         UpdateZoomBadge();
         UpdateVideoEngineBadge();
         ApplyTint();
+        RevealActiveTab();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -298,11 +300,18 @@ public partial class MainWindow : Window
 
     private const double PinnedTabWidth = 44;
 
+    // Largura de cada aba e da janela de rolagem da faixa. As abas encolhem até à largura mínima legível; a partir
+    // daí a faixa (TabScroll) fica com a largura que sobra e rola — nenhuma aba desaparece nem fica ilegível.
     private void UpdateTabWidth()
     {
         var pinned = Tabs.PinnedCount;
         var (groupsReserved, visible) = GroupLayout();
-        TabWidth = TabLayout.TabWidth(TabStripHost.ActualWidth - TabStripReserved - pinned * PinnedTabWidth - groupsReserved, visible);
+        var badge = PrivateBadge.Visibility == Visibility.Visible ? PrivateBadge.ActualWidth + PrivateBadge.Margin.Right : 0;
+        var strip = Math.Max(0, TabStripHost.ActualWidth - TabStripReserved - badge);
+        TabScroll.MaxWidth = strip;
+        TabWidth = TabLayout.TabWidth(strip - pinned * PinnedTabWidth - groupsReserved, visible);
+        UpdateTabArrows();
+        RevealActiveTab();
     }
 
     private void OnWindowStateChanged()

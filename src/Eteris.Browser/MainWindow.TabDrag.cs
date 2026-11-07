@@ -29,6 +29,8 @@ public partial class MainWindow
             Tabs.Active = _dragTab;
             TabList.CaptureMouse();
         }
+        // A posição é relativa à lista (já conta com a rolagem da faixa); junto às pontas a faixa rola sozinha.
+        DragScrollTabs(e.GetPosition(TabScroll));
         var pinned = Tabs.PinnedCount;
         var index = _dragTab.IsPinned
             ? TabLayout.IndexAt(position.X, PinnedTabWidth, pinned)

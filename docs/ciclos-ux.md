@@ -88,3 +88,4 @@ mas sensível; ver depois do bloco B.
 
 | Ciclo | Alteração | Commit | Verificação |
 |---|---|---|---|
+| 1 | A faixa de abas deixa de encolher as abas até ficarem ilegíveis: a partir de 120 px por aba passa a rolar (roda do rato, setas nas pontas que só aparecem quando há abas escondidas, sombra a indicar «há mais»), a aba ativa é sempre trazida à vista e arrastar uma aba junto à orla rola a faixa. | — | 15 testes `TabLayoutTests`; ao vivo no perfil de teste: 15 abas abertas com Ctrl+T (todas legíveis, seta esquerda ativa, direita inativa no fim), Ctrl+1 rola até à primeira aba (capturas `c1-many-tabs.png`, `c1-first-tab.png`). |
