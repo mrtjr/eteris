@@ -998,7 +998,7 @@
                                     <TextBlock Text="Tocar no motor de vídeo" FontSize="11.5" Foreground="{DynamicResource TextBrush}" />
                                 </Button>
                                 <Button x:Name="VideoEngineBadge" Visibility="Collapsed" Click="VideoEngineBadge_Click" Cursor="Hand"
-                                        Margin="0,0,4,0"
+                                        Margin="0,0,4,0" AutomationProperties.Name="Motor de vídeo: voltar ao motor principal"
                                         ToolTip="Esta aba usa o motor de vídeo do Windows (WebView2) porque o site só tem vídeo em H.264. Clique para voltar ao motor principal.">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
