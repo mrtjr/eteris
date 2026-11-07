@@ -1,3 +1,4 @@
+using System.IO;
 using CefSharp;
 using Eteris.Browser.Data;
 using Eteris.Browser.Shields;
@@ -9,13 +10,15 @@ public class BounceTrackingTests
 {
     private static readonly DateTime T0 = new(2026, 11, 7, 10, 0, 0, DateTimeKind.Utc);
 
+    private static string[] Sites(IReadOnlyList<BounceSite> bounces) => bounces.Select(b => b.Site).ToArray();
+
     [Fact]
     public void ServerBounceBetweenTwoSites_MarksTheMiddleSite()
     {
         var chain = new RedirectChain();
         chain.Begin("https://jornal.pt/artigo", "https://t.rastreador.com/c?id=1", T0);
         chain.Continue(null, "https://loja.pt/promo", T0.AddMilliseconds(200), serverRedirect: true, rewritten: false);
-        Assert.Equal(["rastreador.com"], chain.Close());
+        Assert.Equal(["rastreador.com"], Sites(chain.Close()));
     }
 
     [Fact]
@@ -25,7 +28,7 @@ public class BounceTrackingTests
         chain.Begin("https://jornal.pt/", "https://clk.rastreador.com/x", T0);
         chain.Continue("https://clk.rastreador.com/x", "https://sync.outro-rastreador.net/s", T0.AddSeconds(1), serverRedirect: false, rewritten: false);
         chain.Continue("https://sync.outro-rastreador.net/s", "https://loja.pt/", T0.AddSeconds(2), serverRedirect: false, rewritten: false);
-        Assert.Equal(["rastreador.com", "outro-rastreador.net"], chain.Close());
+        Assert.Equal(["rastreador.com", "outro-rastreador.net"], Sites(chain.Close()));
     }
 
     [Fact]
@@ -77,7 +80,7 @@ public class BounceTrackingTests
         var chain = new RedirectChain();
         chain.Begin("https://a.pt/", "https://t.rastreador.com/", T0);
         chain.Continue(null, "https://b.pt/", T0.AddSeconds(1), serverRedirect: true, rewritten: false);
-        Assert.Equal(["rastreador.com"], chain.Begin("https://b.pt/", "https://c.pt/", T0.AddMinutes(1)));
+        Assert.Equal(["rastreador.com"], Sites(chain.Begin("https://b.pt/", "https://c.pt/", T0.AddMinutes(1))));
     }
 
     [Fact]
@@ -217,5 +220,125 @@ public class BounceTrackingTests
     {
         Assert.True(new UserSettings().ForgetBounceTrackers);
         Assert.False(new UserSettings().With("bounceForget", "false")!.ForgetBounceTrackers);
+    }
+
+    // Revisão aos 50: o armazenamento apaga-se por origem, e um rastreador guarda-o no subdomínio por onde o salto
+    // passou (clk.rastreador.com), não em rastreador.com nem em www.rastreador.com.
+    [Fact]
+    public void Close_KeepsTheOriginsEachBounceWentThrough()
+    {
+        var chain = new RedirectChain();
+        chain.Begin("https://jornal.pt/", "https://clk.rastreador.com/x?id=1", T0);
+        chain.Continue(null, "https://sync.rastreador.com:8443/s", T0.AddSeconds(1), serverRedirect: false, rewritten: false);
+        chain.Continue(null, "http://CLK.rastreador.com/y", T0.AddSeconds(2), serverRedirect: true, rewritten: false);
+        chain.Continue(null, "https://loja.pt/", T0.AddSeconds(3), serverRedirect: true, rewritten: false);
+        var bounce = Assert.Single(chain.Close());
+        Assert.Equal("rastreador.com", bounce.Site);
+        Assert.Equal(["http://clk.rastreador.com", "https://clk.rastreador.com", "https://sync.rastreador.com:8443"], bounce.Origins);
+    }
+
+    [Fact]
+    public void Ledger_RemembersTheOriginsUntilTheSiteIsCleared()
+    {
+        var now = T0;
+        var ledger = new BounceLedger(() => now);
+        ledger.RecordBounce("rastreador.com", ["https://clk.rastreador.com"]);
+        ledger.RecordBounce("rastreador.com", ["https://clk.rastreador.com", "https://sync.rastreador.com"]);
+        Assert.Equal(["https://clk.rastreador.com", "https://sync.rastreador.com"], ledger.OriginsOf("rastreador.com"));
+        // As origens chegam ao apagar do armazenamento ao lado das óbvias.
+        var origins = SiteScope.Origins("rastreador.com", ledger.OriginsOf("rastreador.com"));
+        Assert.Contains("https://clk.rastreador.com", origins);
+        Assert.Contains("https://www.rastreador.com", origins);
+
+        var again = BounceLedger.Load(ledger.Serialize(), () => now);
+        Assert.Equal(["https://clk.rastreador.com", "https://sync.rastreador.com"], again.OriginsOf("rastreador.com"));
+        // Um ficheiro antigo, sem origens, continua a carregar.
+        Assert.Empty(BounceLedger.Load("{\"Bounces\":{\"a.com\":\"2026-11-07T10:00:00Z\"},\"Interactions\":{},\"Cleared\":0}", () => now).OriginsOf("a.com"));
+
+        now += BounceLedger.Grace;
+        ledger.MarkCleared("rastreador.com");
+        Assert.Empty(ledger.OriginsOf("rastreador.com"));
+        for (var i = 0; i < BounceLedger.MaxOriginsPerSite + 10; i++) ledger.RecordBounce("muitos.com", [$"https://s{i}.muitos.com"]);
+        Assert.Equal(BounceLedger.MaxOriginsPerSite, ledger.OriginsOf("muitos.com").Count);
+    }
+
+    // Revisão aos 50: um SSO que começa num favorito, numa aba nova ou num link de outro site volta ao primeiro site da
+    // cadeia, não ao de partida — o fornecedor de identidade não é um salto e não perde a sessão.
+    [Theory]
+    [InlineData("eteris://newtab/")]
+    [InlineData(null)]
+    [InlineData("https://webmail.pt/caixa")]
+    public void SignInRoundTripToTheFirstSite_IsALoginNotABounce(string? initiator)
+    {
+        var chain = new RedirectChain(_ => false);
+        chain.Begin(initiator, "https://outlook.office.com/mail/", T0);
+        chain.Continue(null, "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=1", T0.AddMilliseconds(300),
+            serverRedirect: true, rewritten: false);
+        chain.Continue(null, "https://outlook.office.com/mail/", T0.AddSeconds(1), serverRedirect: false, rewritten: false);
+        Assert.Empty(chain.Close());
+    }
+
+    [Fact]
+    public void RoundTrip_StillMarksAKnownTracker()
+    {
+        var chain = new RedirectChain(host => host.EndsWith("doubleclick.net", StringComparison.Ordinal));
+        chain.Begin("https://jornal.pt/", "https://loja.pt/promo", T0);
+        chain.Continue(null, "https://ad.doubleclick.net/ddm/clk", T0.AddMilliseconds(200), serverRedirect: true, rewritten: false);
+        chain.Continue(null, "https://accounts.google.com/o/oauth2/auth", T0.AddMilliseconds(400), serverRedirect: true, rewritten: false);
+        chain.Continue(null, "https://loja.pt/promo", T0.AddSeconds(1), serverRedirect: true, rewritten: false);
+        Assert.Equal(["doubleclick.net"], Sites(chain.Close()));
+    }
+
+    // Revisão aos 50: o site é o da Public Suffix List — um salto por um alojamento partilhado marca só essa app, e
+    // apagar os cookies dela não toca nas outras apps do mesmo alojamento.
+    [Theory]
+    [InlineData("https://links-x.azurewebsites.net/r?id=1", "links-x.azurewebsites.net", "minha-app.azurewebsites.net")]
+    [InlineData("https://track.herokuapp.com/r", "track.herokuapp.com", "myapp.herokuapp.com")]
+    [InlineData("https://go.exemplo.github.io/x", "exemplo.github.io", "outro.github.io")]
+    public void SharedHosting_MarksOnlyTheAppThatBounced(string hop, string site, string neighbour)
+    {
+        var chain = new RedirectChain();
+        chain.Begin("https://jornal.pt/", hop, T0);
+        chain.Continue(null, "https://loja.pt/", T0.AddMilliseconds(200), serverRedirect: true, rewritten: false);
+        Assert.Equal([site], Sites(chain.Close()));
+        Assert.False(SiteScope.CookieBelongs("." + neighbour, site));
+        Assert.True(SiteScope.CookieBelongs("." + site, site));
+    }
+
+    // Revisão aos 50: com «Esquecer os sites de salto» desligado nada fica registado (nem os sites onde se clicou), e
+    // desligar esquece o que já se sabia; o Escudo continua a ver os saltos.
+    [Fact]
+    public void DisabledLedger_RecordsNothingAndForgetsWhatItKnew()
+    {
+        var ledger = new BounceLedger(() => T0);
+        ledger.RecordBounce("rastreador.com", ["https://clk.rastreador.com"]);
+        ledger.RecordInteraction("loja.pt");
+        ledger.Enabled = false;
+        Assert.Equal(0, ledger.PendingCount);
+        Assert.Empty(ledger.OriginsOf("rastreador.com"));
+        Assert.True(ledger.RecordBounce("loja.pt"));
+        ledger.RecordInteraction("forum.pt");
+        Assert.Equal(0, ledger.PendingCount);
+        Assert.DoesNotContain("loja.pt", ledger.Serialize());
+        Assert.DoesNotContain("forum.pt", ledger.Serialize());
+
+        ledger.Enabled = true;
+        Assert.True(ledger.RecordBounce("forum.pt"));
+        Assert.Equal(1, ledger.PendingCount);
+
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Bounce.cs"));
+        Assert.Contains("ledger.Enabled = Data.Settings.Current.ForgetBounceTrackers;", source);
+        Assert.Contains("Bounces.Enabled = settings.ForgetBounceTrackers;", source);
+        Assert.Contains("File.Delete(BounceFile);", source);
+        Assert.Contains("Bounces.OriginsOf(site)", source);
+        Assert.Contains("AppData.History.SiteUrls(site)", source);
+        Assert.Contains("new RedirectChain(TrackerBlocker.Default.Lists)", source);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 }

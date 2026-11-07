@@ -20,7 +20,9 @@ public partial class MainWindow
         try { if (File.Exists(BounceFile)) json = File.ReadAllText(BounceFile); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
-        return BounceLedger.Load(json, () => DateTime.UtcNow);
+        var ledger = BounceLedger.Load(json, () => DateTime.UtcNow);
+        ledger.Enabled = Data.Settings.Current.ForgetBounceTrackers;
+        return ledger;
     });
 
     internal static BounceLedger Bounces => s_bounceLedger.Value;
@@ -32,7 +34,7 @@ public partial class MainWindow
 
     private RedirectChain ChainOf(BrowserTab tab)
     {
-        if (!_chains.TryGetValue(tab, out var chain)) _chains[tab] = chain = new RedirectChain();
+        if (!_chains.TryGetValue(tab, out var chain)) _chains[tab] = chain = new RedirectChain(TrackerBlocker.Default.Lists);
         return chain;
     }
 
@@ -46,6 +48,13 @@ public partial class MainWindow
         };
         Closed += (_, _) => SaveBounces();
         if (s_bounceTimer is not null) return;
+        // Desligar «Esquecer os sites de salto» esquece o que o Éteris sabia e apaga saltos.json; ligar recomeça do zero.
+        Data.Settings.Changed += settings => System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            if (Bounces.Enabled == settings.ForgetBounceTrackers) return;
+            Bounces.Enabled = settings.ForgetBounceTrackers;
+            SaveBounces();
+        });
         // Um só relógio para todas as janelas: o primeiro passa ao fim de um minuto, depois a cada cinco.
         s_bounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         s_bounceTimer.Tick += async (_, _) =>
@@ -103,10 +112,10 @@ public partial class MainWindow
         MarkBounces(chain.Close(), tab);
     }
 
-    private void MarkBounces(IReadOnlyList<string> sites, BrowserTab? tab)
+    private void MarkBounces(IReadOnlyList<BounceSite> sites, BrowserTab? tab)
     {
         if (sites.Count == 0) return;
-        var marked = sites.Where(Bounces.RecordBounce).ToList();
+        var marked = sites.Where(b => Bounces.RecordBounce(b.Site, b.Origins)).Select(b => b.Site).ToList();
         if (tab is null || marked.Count == 0) return;
         tab.RecordBounceSites(marked);
         if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
@@ -114,7 +123,16 @@ public partial class MainWindow
 
     private static void SaveBounces()
     {
-        if (!s_bounceLedger.IsValueCreated || !Bounces.Dirty) return;
+        if (!s_bounceLedger.IsValueCreated) return;
+        if (!Bounces.Enabled)
+        {
+            // Desligado: nada do que o utilizador visitou fica no perfil.
+            try { File.Delete(BounceFile); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return;
+        }
+        if (!Bounces.Dirty) return;
         try { File.WriteAllText(BounceFile, Bounces.Serialize()); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
@@ -137,8 +155,13 @@ public partial class MainWindow
             var cleared = new List<string>();
             foreach (var site in due)
             {
+                // O armazenamento apaga-se por origem: as que a cadeia visitou (clk.rastreador.com, não só
+                // rastreador.com e www.rastreador.com) e as do histórico, como no Triturar.
+                var seen = new List<string>(Bounces.OriginsOf(site));
+                try { seen.AddRange(await Task.Run(() => AppData.History.SiteUrls(site))); }
+                catch (Exception) { }
                 // Sem motor pronto o armazenamento fica: o site continua à espera da próxima volta.
-                if (!(await window.ClearSiteStorageAsync(site, open)).Storage) continue;
+                if (!(await window.ClearSiteStorageAsync(site, seen)).Storage) continue;
                 Bounces.MarkCleared(site);
                 Shields.PrivacyLedger.Count(Shields.PrivacyCategory.Forgotten, site);
                 cleared.Add(site);

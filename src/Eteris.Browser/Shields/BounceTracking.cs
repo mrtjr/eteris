@@ -10,8 +10,13 @@ namespace Eteris.Browser.Shields;
 // serviram de salto e, passado o prazo, apaga-lhes os cookies e o armazenamento — a não ser que o utilizador tenha
 // visitado o site a sério (clicou ou escreveu nele) nos últimos 45 dias.
 
-// Cadeia de navegações de uma aba, do site onde o utilizador estava até onde a página parou.
-public sealed class RedirectChain
+// Um site que só serviu de salto e as origens (esquema://anfitrião[:porta]) por onde a cadeia lá passou: é por
+// origem que o armazenamento se apaga, e clk.rastreador.com guarda o seu localStorage fora de rastreador.com.
+public sealed record BounceSite(string Site, IReadOnlyList<string> Origins);
+
+// Cadeia de navegações de uma aba, do site onde o utilizador estava até onde a página parou. «isTrackerHost»: as listas
+// de rastreadores, para marcar um rastreador conhecido mesmo numa ida e volta (ver Close).
+public sealed class RedirectChain(Func<string, bool>? isTrackerHost = null)
 {
     // Uma página que navega sozinha depois disto já não foi um salto: o utilizador esteve lá.
     public static readonly TimeSpan DwellLimit = TimeSpan.FromSeconds(10);
@@ -39,7 +44,7 @@ public sealed class RedirectChain
             or TransitionType.Keyword or TransitionType.KeywordGenerated or TransitionType.Generated;
 
     // O utilizador navegou (clique, barra, favorito): fecha a cadeia anterior (devolve os seus saltos) e começa outra.
-    public IReadOnlyList<string> Begin(string? initiatorUrl, string url, DateTime now)
+    public IReadOnlyList<BounceSite> Begin(string? initiatorUrl, string url, DateTime now)
     {
         var closed = Close();
         _initiatorSite = SiteScope.SiteOf(initiatorUrl);
@@ -50,7 +55,7 @@ public sealed class RedirectChain
 
     // A navegação continua sem o utilizador. «rewritten»: foi o próprio Éteris a trocar o endereço (salto de rastreio,
     // limpeza, HTTPS) — o anterior nunca chegou a carregar, por isso não conta como passo.
-    public IReadOnlyList<string> Continue(string? currentUrl, string url, DateTime now, bool serverRedirect, bool rewritten)
+    public IReadOnlyList<BounceSite> Continue(string? currentUrl, string url, DateTime now, bool serverRedirect, bool rewritten)
     {
         if (_hops.Count == 0) return Begin(currentUrl, url, now);
         if (rewritten)
@@ -64,23 +69,43 @@ public sealed class RedirectChain
         return [];
     }
 
-    // Sites que só serviram de salto: os do meio da cadeia, fora o de partida e o de chegada. Uma ida e volta ao
-    // site de partida (entrar com a conta de outro site) não conta: é assim que funcionam os logins.
-    public IReadOnlyList<string> Close()
+    // Sites que só serviram de salto: os do meio da cadeia, fora o de partida e o de chegada, com as origens por onde
+    // passou. Uma ida e volta não conta — é assim que funcionam os logins (entrar com a conta de outro site): volta-se
+    // ao site de onde se partiu, ou ao primeiro da cadeia quando ela começou num favorito, numa aba nova ou num link de
+    // outro site (outlook.office.com → login.microsoftonline.com → outlook.office.com, com a sessão do fornecedor de
+    // identidade a entrar sozinha). Nessa ida e volta só um rastreador das listas é marcado.
+    public IReadOnlyList<BounceSite> Close()
     {
-        var hops = _hops.Select(h => SiteScope.SiteOf(h.Url)).ToList();
+        var urls = _hops.Select(h => h.Url).ToList();
         var initiator = _initiatorSite;
         _hops.Clear();
         _initiatorSite = null;
         Version++;
-        if (hops.Count < 2) return [];
-        var final = hops[^1];
-        if (final is not null && final == initiator) return [];
-        return hops.Take(hops.Count - 1)
-            .Where(s => s is not null && s != initiator && s != final && !LocalNetwork.IsLocal(s))
-            .Select(s => s!)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        if (urls.Count < 2) return [];
+        var sites = urls.Select(SiteScope.SiteOf).ToList();
+        var final = sites[^1];
+        var roundTrip = final is not null && (final == initiator || final == sites[0]);
+        var order = new List<string>();
+        var origins = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        for (var i = 0; i < urls.Count - 1; i++)
+        {
+            if (sites[i] is not { } site || site == initiator || site == final || LocalNetwork.IsLocal(site)) continue;
+            if (!Uri.TryCreate(urls[i], UriKind.Absolute, out var uri)) continue;
+            if (roundTrip && isTrackerHost?.Invoke(uri.Host.ToLowerInvariant()) != true) continue;
+            if (!origins.TryGetValue(site, out var set))
+            {
+                origins[site] = set = new SortedSet<string>(StringComparer.Ordinal);
+                order.Add(site);
+            }
+            set.Add(OriginOf(uri));
+        }
+        return order.Select(s => new BounceSite(s, origins[s].ToList())).ToList();
+    }
+
+    public static string OriginOf(Uri uri)
+    {
+        var host = uri.Host.ToLowerInvariant();
+        return uri.IsDefaultPort ? $"{uri.Scheme}://{host}" : $"{uri.Scheme}://{host}:{uri.Port}";
     }
 }
 
@@ -92,19 +117,44 @@ public sealed class BounceLedger(Func<DateTime> clock)
     public static readonly TimeSpan Grace = TimeSpan.FromHours(1);
     public static readonly TimeSpan InteractionMemory = TimeSpan.FromDays(45);
 
+    // Origens guardadas por site de salto (um rastreador não precisa de mais para ficar apagado).
+    public const int MaxOriginsPerSite = 32;
+
     private readonly Dictionary<string, DateTime> _bounces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> _interactions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SortedSet<string>> _origins = new(StringComparer.Ordinal);
+    private bool _enabled = true;
 
     public bool Dirty { get; private set; }
+
+    // «Esquecer os sites de salto» desligado: o Éteris não guarda nada — nem saltos, nem os sites onde se clicou — e o
+    // que já sabia é esquecido (quem grava apaga o ficheiro do perfil). Os saltos continuam a aparecer no Escudo da
+    // aba, sem ficarem registados.
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value) return;
+            _enabled = value;
+            if (value) return;
+            _bounces.Clear();
+            _interactions.Clear();
+            _origins.Clear();
+            Dirty = true;
+        }
+    }
 
     public int Cleared { get; private set; }
 
     private bool RecentlyVisited(string site, DateTime now)
         => _interactions.TryGetValue(site, out var at) && now - at < InteractionMemory;
 
-    // Devolve true quando o site fica marcado (não foi visitado a sério há pouco).
-    public bool RecordBounce(string site)
+    // Devolve true quando o site fica marcado (não foi visitado a sério há pouco). Desligado, nada fica registado e
+    // o salto só é devolvido para o Escudo.
+    public bool RecordBounce(string site, IEnumerable<string>? origins = null)
     {
+        if (!_enabled) return true;
         var now = clock();
         if (RecentlyVisited(site, now)) return false;
         if (!_bounces.ContainsKey(site))
@@ -112,15 +162,27 @@ public sealed class BounceLedger(Func<DateTime> clock)
             _bounces[site] = now;
             Dirty = true;
         }
+        if (origins is not null)
+        {
+            if (!_origins.TryGetValue(site, out var set)) _origins[site] = set = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var origin in origins)
+                if (set.Count < MaxOriginsPerSite && set.Add(origin)) Dirty = true;
+        }
         return true;
     }
 
     public void RecordInteraction(string site)
     {
+        if (!_enabled) return;
         _interactions[site] = clock();
-        _bounces.Remove(site);
+        Unmark(site);
         Dirty = true;
     }
+
+    private bool Unmark(string site) => _origins.Remove(site) | _bounces.Remove(site);
+
+    // As origens por onde as cadeias passaram neste site (para apagar o armazenamento de cada uma).
+    public IReadOnlyList<string> OriginsOf(string site) => _origins.TryGetValue(site, out var set) ? set.ToList() : [];
 
     public int PendingCount => _bounces.Count;
 
@@ -137,7 +199,7 @@ public sealed class BounceLedger(Func<DateTime> clock)
         var now = clock();
         foreach (var site in _bounces.Keys.Where(s => RecentlyVisited(s, now)).ToList())
         {
-            _bounces.Remove(site);
+            Unmark(site);
             Dirty = true;
         }
         return _bounces.Where(b => now - b.Value >= Grace && keep?.Invoke(b.Key) != true)
@@ -146,14 +208,14 @@ public sealed class BounceLedger(Func<DateTime> clock)
 
     public void MarkCleared(string site)
     {
-        if (_bounces.Remove(site)) Cleared++;
+        if (Unmark(site)) Cleared++;
         Dirty = true;
     }
 
     // «Triturar» e «Esquecer ao fechar» apagam também o que o Éteris sabe do site.
     public void Forget(string site)
     {
-        Dirty |= _bounces.Remove(site) | _interactions.Remove(site);
+        Dirty |= Unmark(site) | _interactions.Remove(site);
     }
 
     // Apagar o histórico desde uma data apaga também as visitas registadas desde então.
@@ -166,7 +228,8 @@ public sealed class BounceLedger(Func<DateTime> clock)
         }
     }
 
-    private sealed record Snapshot(Dictionary<string, DateTime> Bounces, Dictionary<string, DateTime> Interactions, int Cleared);
+    private sealed record Snapshot(Dictionary<string, DateTime> Bounces, Dictionary<string, DateTime> Interactions, int Cleared,
+        Dictionary<string, string[]>? Origins = null);
 
     public string Serialize()
     {
@@ -175,7 +238,8 @@ public sealed class BounceLedger(Func<DateTime> clock)
         return JsonSerializer.Serialize(new Snapshot(
             new Dictionary<string, DateTime>(_bounces),
             _interactions.Where(i => now - i.Value < InteractionMemory).ToDictionary(i => i.Key, i => i.Value),
-            Cleared));
+            Cleared,
+            _origins.Where(o => _bounces.ContainsKey(o.Key)).ToDictionary(o => o.Key, o => o.Value.ToArray())));
     }
 
     public static BounceLedger Load(string? json, Func<DateTime> clock)
@@ -187,6 +251,9 @@ public sealed class BounceLedger(Func<DateTime> clock)
             if (JsonSerializer.Deserialize<Snapshot>(json) is not { } snapshot) return ledger;
             var now = clock();
             foreach (var (site, at) in snapshot.Bounces ?? []) ledger._bounces[site] = at;
+            foreach (var (site, origins) in snapshot.Origins ?? [])
+                if (ledger._bounces.ContainsKey(site) && origins is not null)
+                    ledger._origins[site] = new SortedSet<string>(origins.OfType<string>().Take(MaxOriginsPerSite), StringComparer.Ordinal);
             foreach (var (site, at) in snapshot.Interactions ?? [])
                 if (now - at < InteractionMemory) ledger._interactions[site] = at;
             ledger.Cleared = snapshot.Cleared;
