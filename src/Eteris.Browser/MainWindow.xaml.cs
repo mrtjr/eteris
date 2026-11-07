@@ -215,7 +215,7 @@ public partial class MainWindow : Window
             }
             tab.Title = title;
             var url = tab.Address;
-            if (!IsPrivate) AppData.TryWrite(h => h.UpdateTitle(url, title));
+            if (!IsPrivate) AppData.UpdateTitleLater(url, title);
         };
         browser.LoadingStateChanged += (_, e) => Dispatcher.InvokeAsync(() =>
         {
@@ -271,7 +271,8 @@ public partial class MainWindow : Window
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             if (!IsPrivate) Dispatcher.InvokeAsync(() =>
             {
-                AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow));
+                var title = tab.Title;
+                AppData.QueueWrite(h => h.Record(url, title, DateTime.UtcNow));
                 RememberFavicon(tab, url);
             });
         };

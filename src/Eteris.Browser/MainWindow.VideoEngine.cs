@@ -156,7 +156,7 @@ public partial class MainWindow
             var title = core.DocumentTitle;
             tab.Title = string.IsNullOrEmpty(title) ? tab.Address : title;
             var url = tab.Address;
-            if (!IsPrivate && !string.IsNullOrEmpty(title)) AppData.TryWrite(h => h.UpdateTitle(url, title));
+            if (!IsPrivate && !string.IsNullOrEmpty(title)) AppData.UpdateTitleLater(url, title);
         };
         core.NavigationCompleted += (_, e) =>
         {
@@ -166,7 +166,8 @@ public partial class MainWindow
             var url = core.Source;
             if (e.IsSuccess && e.HttpStatusCode is > 0 and < 400 && !IsPrivate)
             {
-                AppData.TryWrite(h => h.Record(url, tab.Title, DateTime.UtcNow));
+                var title = tab.Title;
+                AppData.QueueWrite(h => h.Record(url, title, DateTime.UtcNow));
                 RememberFavicon(tab, url);
             }
         };
