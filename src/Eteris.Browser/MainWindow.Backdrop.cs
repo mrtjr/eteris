@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Theme;
 
 namespace Eteris.Browser;
 
@@ -27,7 +28,20 @@ public partial class MainWindow
             WindowEffects.DisableMica(this, OpaqueFrame);
             _mica = false;
         }
+        WindowEffects.PaintUnderChildWindows(this);
         ApplyTint();
+    }
+
+    // Cor por baixo da página à vista (Theme/PageBackdrop.cs): é a que aparece num fotograma ainda vazio do Chromium.
+    private void SyncPageBackdrop()
+    {
+        var address = Tabs.Active?.Address;
+        var darkened = !IsPrivate && address is not null && Shields.DarkPages.IsCandidate(address) && WebHost(address) is { } host && AppData.IsDark(host);
+        var color = PageBackdrop.For(address, UsesLight, darkened);
+        if (BrowserHost.Background is SolidColorBrush { Color: var current } && current == color) return;
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        BrowserHost.Background = brush;
     }
 
     private void WatchBackdropSetting()
