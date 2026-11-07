@@ -18,6 +18,9 @@ public static class CefConfigurator
             LogSeverity = LogSeverity.Disable,
         };
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
+        // Voltar/Avançar instantâneos (back/forward cache), como no Chrome: o CefSharp.Wpf desliga-o por omissão por
+        // causa do modo fora da tela (OSR), que o Éteris não usa — a página vive numa janela própria (HwndHost).
+        settings.CefCommandLineArgs.Remove("disable-back-forward-cache");
         // Só nos testes ao vivo (TestSwitches.Mute): nenhum som sai do motor.
         if (muteAudio) settings.CefCommandLineArgs["mute-audio"] = "1";
         // Sem o «component updater» do Chrome nem tráfego de fundo: de outro modo o motor descarrega sozinho, dos

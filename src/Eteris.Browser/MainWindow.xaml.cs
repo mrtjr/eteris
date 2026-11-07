@@ -115,6 +115,7 @@ public partial class MainWindow : Window
         UserActivation? lastActivation = null;
         var mainRequests = 0;
         var mainRequestsAtCommit = 0;
+        string? committedUrl = null;
         _scriptlets[tab] = injector;
         var browser = new ChromiumWebBrowser(tab.Address)
         {
@@ -146,7 +147,8 @@ public partial class MainWindow : Window
                 onMainFrameRequest: () =>
                 {
                     Interlocked.Increment(ref mainRequests);
-                    Dispatcher.InvokeAsync(tab.ResetShield);
+                    var leaving = Volatile.Read(ref committedUrl);
+                    Dispatcher.InvokeAsync(() => tab.LeavePage(leaving));
                 }),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
@@ -235,8 +237,21 @@ public partial class MainWindow : Window
             if (!e.Frame.IsMain) return;
             // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a
             // contagem do Escudo recomeça aqui, no commit.
+            // Voltar/Avançar sem pedido é a página reposta da cache (bfcache): volta a contagem e o ícone que ela tinha, e
+            // o que só se faz no fim de um carregamento (que não volta a acontecer) faz-se aqui.
             var requests = Volatile.Read(ref mainRequests);
-            if (requests == mainRequestsAtCommit) Dispatcher.InvokeAsync(tab.ResetShield);
+            var leaving = Volatile.Read(ref committedUrl);
+            var arriving = e.Url;
+            Volatile.Write(ref committedUrl, arriving);
+            if (requests == mainRequestsAtCommit)
+            {
+                var restored = e.TransitionType.HasFlag(TransitionType.ForwardBack);
+                Dispatcher.InvokeAsync(() =>
+                {
+                    tab.LeavePage(leaving);
+                    if (restored && tab.ReturnToPage(arriving)) OnPageRestored(tab, browser, arriving);
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
             mainRequestsAtCommit = requests;
         };
         browser.FrameLoadEnd += (_, e) =>
@@ -281,6 +296,16 @@ public partial class MainWindow : Window
     }
 
     private static bool SameHost(string a, string b) => BrowserTab.SameHost(a, b);
+
+    // Página reposta da cache de Voltar/Avançar: não há fim de carregamento (FrameLoadEnd), por isso a cor do site, o
+    // modo de leitura e a miniatura atualizam-se aqui. O DOM é o mesmo de antes: as regras cosméticas já lá estão.
+    private void OnPageRestored(BrowserTab tab, ChromiumWebBrowser browser, string url)
+    {
+        if (browser.IsDisposed || tab.Address != url) return;
+        DetectSiteTint(tab, browser, url);
+        DetectReaderable(tab, browser, url);
+        CaptureThumbnail(tab, browser, url);
+    }
 
     // Comum a todas as páginas do separador (registado uma vez, antes da 1.ª navegação). Nas páginas internas (nova
     // aba, favoritos, histórico) só o Alt+clique: sem ele o Chromium transferia o link.

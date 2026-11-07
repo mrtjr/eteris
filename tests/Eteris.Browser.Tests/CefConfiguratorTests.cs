@@ -61,4 +61,9 @@ public class CefConfiguratorTests
     [Fact]
     public void Build_DoesNotSetMediaStreamSwitch()
         => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("enable-media-stream"));
+
+    // Voltar/Avançar pela cache de páginas, como no Chrome: o CefSharp.Wpf desliga-a por omissão (por causa do OSR).
+    [Fact]
+    public void Build_KeepsTheBackForwardCache()
+        => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("disable-back-forward-cache"));
 }
