@@ -1551,6 +1551,10 @@
                             <DockPanel DockPanel.Dock="Top" Margin="14,8,8,4">
                                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
                                         Content="&#xE8BB;" Click="SidebarClose_Click" ToolTip="Fechar a barra lateral (Ctrl+Shift+B)" />
+                                <Button x:Name="WebPanelOpenButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="12"
+                                        Content="&#xE8A7;" Click="WebPanelOpen_Click" ToolTip="Abrir este site numa aba" Visibility="Collapsed" />
+                                <Button x:Name="WebPanelReloadButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="12"
+                                        Content="&#xE72C;" Click="WebPanelReload_Click" ToolTip="Recarregar" Visibility="Collapsed" />
                                 <Button x:Name="NotesInsertButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="13"
                                         Content="&#xE71B;" Click="NotesInsertPage_Click" ToolTip="Inserir o título e o endereço desta página" />
                                 <TextBlock x:Name="SidebarTitle" Text="Notas" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"
@@ -1590,6 +1594,8 @@
                                                Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
                                     <ItemsControl x:Name="SidebarLinkList" Style="{StaticResource SidebarList}" />
                                 </DockPanel>
+                                <!-- Sites fixados: um motor por site, em janela própria (MainWindow.WebPanels.cs) -->
+                                <Grid x:Name="SidebarWebHost" Margin="1,2,1,1" Visibility="Collapsed" />
                             </Grid>
                         </DockPanel>
                     </Border>

@@ -16,7 +16,10 @@ namespace Eteris.Browser;
 public partial class MainWindow
 {
     // Chamado por LayoutBrowsers sempre que uma aba entra ou sai de vista.
-    private static void SetPageVisible(BrowserTab tab, ChromiumWebBrowser browser, bool visible)
+    private static void SetPageVisible(BrowserTab tab, ChromiumWebBrowser browser, bool visible) => SetPageVisible(browser, visible);
+
+    // Também para os motores que não são abas (os sites fixados na barra lateral).
+    private static void SetPageVisible(ChromiumWebBrowser browser, bool visible)
     {
         if (browser.IsDisposed || browser.GetBrowserHost() is not { } host) return;
         // Dentro da janela do CEF (CefBrowserWindow) está a do Chromium (Chrome_WidgetWin_*), que é a que conta.

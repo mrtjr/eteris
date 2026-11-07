@@ -1,0 +1,92 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Eteris.Browser.Sidebar;
+
+// Um site fixado na barra lateral: abre dentro da barra, numa instância própria do motor, e persiste entre sessões.
+public sealed record WebPanel(string Url, string Title);
+
+// Sites fixados: a lista (ordem, limite, duplicados) e a sua forma em ficheiro (paineis.json no perfil).
+// Lógica pura; a janela cria e destrói os motores (MainWindow.WebPanels.cs).
+public static class WebPanels
+{
+    public const int Max = 12;
+    public const string Glyph = "";
+
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    // Só endereços http(s), sem espaços à volta; o resto fica como o utilizador o tinha (o site decide o caminho).
+    public static string? Normalize(string? url)
+    {
+        var trimmed = url?.Trim();
+        return SidebarPanels.IsWebUrl(trimmed) ? trimmed : null;
+    }
+
+    public static bool Contains(IReadOnlyList<WebPanel> panels, string? url)
+        => Normalize(url) is { } clean && panels.Any(p => string.Equals(p.Url, clean, StringComparison.Ordinal));
+
+    // Fixar: null quando o endereço não serve, já está fixado ou a barra está cheia.
+    public static IReadOnlyList<WebPanel>? Add(IReadOnlyList<WebPanel> panels, string? url, string? title)
+    {
+        if (Normalize(url) is not { } clean || Contains(panels, clean) || panels.Count >= Max) return null;
+        return [.. panels, new WebPanel(clean, CleanTitle(title))];
+    }
+
+    public static IReadOnlyList<WebPanel> Remove(IReadOnlyList<WebPanel> panels, string url)
+        => panels.Where(p => !string.Equals(p.Url, url, StringComparison.Ordinal)).ToList();
+
+    // Mover um site para cima (delta -1) ou para baixo (+1) na coluna; nas pontas fica como está.
+    public static IReadOnlyList<WebPanel> Move(IReadOnlyList<WebPanel> panels, string url, int delta)
+    {
+        var index = IndexOf(panels, url);
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= panels.Count || delta == 0) return panels;
+        var list = panels.ToList();
+        var item = list[index];
+        list.RemoveAt(index);
+        list.Insert(target, item);
+        return list;
+    }
+
+    public static int IndexOf(IReadOnlyList<WebPanel> panels, string url)
+    {
+        for (var i = 0; i < panels.Count; i++)
+            if (string.Equals(panels[i].Url, url, StringComparison.Ordinal)) return i;
+        return -1;
+    }
+
+    // O separador da barra lateral que representa o site.
+    public static SidebarPanel ToPanel(WebPanel panel) => new(SidebarPanels.WebKey(panel.Url), TitleOf(panel), Glyph, panel.Url);
+
+    // Nome à vista: o título guardado, senão o site (sem «www.»).
+    public static string TitleOf(WebPanel panel) => panel.Title.Length > 0 ? panel.Title : SidebarLists.HostOf(panel.Url);
+
+    public static string CleanTitle(string? title)
+    {
+        var clean = string.Join(' ', (title ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return clean.Length > 60 ? clean[..60].TrimEnd() + "…" : clean;
+    }
+
+    public static string Serialize(IReadOnlyList<WebPanel> panels) => JsonSerializer.Serialize(panels, Json);
+
+    // Tolerante: ficheiro estragado ou com entradas inválidas dá a lista possível (nunca uma exceção).
+    public static IReadOnlyList<WebPanel> Parse(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        List<WebPanel>? raw;
+        try { raw = JsonSerializer.Deserialize<List<WebPanel>>(json, Json); }
+        catch (JsonException) { return []; }
+        var result = new List<WebPanel>();
+        foreach (var panel in raw ?? [])
+        {
+            if (panel is null || Normalize(panel.Url) is not { } clean || result.Any(p => p.Url == clean) || result.Count >= Max) continue;
+            result.Add(new WebPanel(clean, CleanTitle(panel.Title)));
+        }
+        return result;
+    }
+}

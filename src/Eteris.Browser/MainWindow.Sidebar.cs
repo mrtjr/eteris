@@ -27,19 +27,22 @@ public partial class MainWindow
 
     private bool SidebarShows(string key) => _sidebarOpen && _sidebarPanel?.Key == key;
 
-    // Os painéis desta janela: os embutidos (menos os que não cabem na janela privada).
-    private IReadOnlyList<SidebarPanel> SidebarAvailable => SidebarPanels.Available(IsPrivate);
+    // Os painéis desta janela: os embutidos (menos os que não cabem na janela privada) e os sites fixados.
+    private IReadOnlyList<SidebarPanel> SidebarAvailable => [.. SidebarPanels.Available(IsPrivate), .. WebSidebarPanels];
 
     private void WatchSidebar()
     {
         var settings = Settings.Current;
         _sidebarWidth = settings.SidebarWidth;
         _sidebarSide = SidebarPanels.ParseSide(settings.SidebarSide);
+        LoadWebPanels();
         BuildSidebarRail();
         // Aberta como ficou da última vez (nunca na janela privada: começa fechada, como o resto do que é lembrado).
         if (settings.Sidebar && !IsPrivate && SidebarPanels.Resolve(settings.SidebarPanel, SidebarAvailable) is { } panel)
         {
             _sidebarOpen = true;
+            // A disposição das barras já correu (WatchTabLayoutSetting): a coluna é posta agora no seu lugar.
+            PlaceSidebar();
             ShowSidebarPanel(panel, focus: false);
         }
         SizeChanged += (_, _) =>
@@ -86,6 +89,8 @@ public partial class MainWindow
         if (!_sidebarOpen) return;
         FlushNotes();
         _sidebarOpen = false;
+        // Os sites fixados adormecem com a barra fechada: largam a memória e voltam a carregar ao abrir.
+        ReleaseWebPanelBrowsers();
         if (!IsPrivate) Settings.Set("sidebar", "false");
         PlaceSidebar();
         ReturnFocusToPage();
@@ -129,6 +134,14 @@ public partial class MainWindow
         NotesInsertButton.Visibility = SidebarNotes.Visibility;
         SidebarReading.Visibility = panel.Key == SidebarPanels.Reading ? Visibility.Visible : Visibility.Collapsed;
         SidebarLinks.Visibility = panel.Key is SidebarPanels.Bookmarks or SidebarPanels.History ? Visibility.Visible : Visibility.Collapsed;
+        SidebarWebHost.Visibility = panel.IsWeb ? Visibility.Visible : Visibility.Collapsed;
+        WebPanelOpenButton.Visibility = WebPanelReloadButton.Visibility = SidebarWebHost.Visibility;
+        if (panel.IsWeb)
+        {
+            ShowWebPanel(panel, focus);
+            return;
+        }
+        HideWebPanels();
 
         switch (panel.Key)
         {
@@ -225,13 +238,14 @@ public partial class MainWindow
         }
     }
 
-    // Um botão por painel na coluna de fora; refeita quando a lista muda (sites fixados).
+    // Um botão por painel na coluna de fora — os embutidos, um traço, os sites fixados e, no fim, «fixar a página
+    // aberta»; refeita quando a lista de sites muda.
     private void BuildSidebarRail()
     {
         SidebarRail.Children.Clear();
         _railButtons.Clear();
         var style = (Style)FindResource("SidebarRailButton");
-        foreach (var panel in SidebarAvailable)
+        foreach (var panel in SidebarPanels.Available(IsPrivate))
         {
             var button = new Button { Style = style, Content = panel.Glyph, ToolTip = panel.Title, Tag = _sidebarPanel?.Key == panel.Key ? "on" : null };
             var key = panel.Key;
@@ -239,6 +253,46 @@ public partial class MainWindow
             SidebarRail.Children.Add(button);
             _railButtons[key] = button;
         }
+        if (IsPrivate) return;
+        if (_webPanels.Count > 0)
+        {
+            var divider = new Border { Height = 1, Margin = new Thickness(12, 6, 12, 6) };
+            divider.SetResourceReference(Border.BackgroundProperty, "SubtleBorderBrush");
+            SidebarRail.Children.Add(divider);
+        }
+        foreach (var site in _webPanels)
+        {
+            var panel = WebPanels.ToPanel(site);
+            var button = new Button
+            {
+                Style = style, Content = WebPanelRailContent(site), ToolTip = $"{panel.Title} — site fixado (botão direito para opções)",
+                Tag = _sidebarPanel?.Key == panel.Key ? "on" : null,
+            };
+            var key = panel.Key;
+            button.Click += (_, _) => ToggleSidebar(key);
+            button.PreviewMouseRightButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                ShowWebPanelRailMenu(site, button);
+            };
+            SidebarRail.Children.Add(button);
+            _railButtons[key] = button;
+        }
+        var pin = new Button { Style = style, Content = WebPanels.Glyph, ToolTip = "Fixar a página aberta na barra lateral", Margin = new Thickness(4, 8, 4, 2), Opacity = 0.75 };
+        pin.Click += (_, _) => PinCurrentSite();
+        SidebarRail.Children.Add(pin);
+    }
+
+    // Ícone guardado de um site (o mesmo das listas), ou null.
+    private ImageSource? StoredSiteIcon(string url)
+    {
+        if (IsPrivate || HistoryStore.SiteIconKey(url) is not { } site) return null;
+        if (!_siteIconCache.TryGetValue(site, out var icon))
+        {
+            icon = AppData.SiteIcons([url]).TryGetValue(site, out var dataUri) ? DecodeDataUri(dataUri) : null;
+            _siteIconCache[site] = icon;
+        }
+        return icon;
     }
 
     // ---------- Pega de redimensionar ----------

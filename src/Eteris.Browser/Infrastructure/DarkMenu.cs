@@ -56,6 +56,15 @@ public sealed class DarkMenu
         _menu.IsOpen = true;
     }
 
+    // Menu de um botão encostado à margem direita (os separadores da barra lateral): abre para o lado de dentro.
+    public void OpenBeside(UIElement target)
+    {
+        _menu.PlacementTarget = target;
+        _menu.Placement = PlacementMode.Left;
+        _menu.VerticalOffset = -4;
+        _menu.IsOpen = true;
+    }
+
     public void Open(UIElement target)
     {
         _menu.PlacementTarget = target;

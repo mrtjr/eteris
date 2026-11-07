@@ -11,6 +11,7 @@ using Eteris.Browser.Data;
 using Eteris.Browser.Omnibox;
 using Eteris.Browser.Palette;
 using Eteris.Browser.Shields;
+using Eteris.Browser.Sidebar;
 using Eteris.Browser.Tabs;
 using Eteris.Browser.Theme;
 
@@ -205,15 +206,25 @@ public partial class MainWindow
         foreach (var panel in SidebarAvailable)
         {
             var key = panel.Key;
-            yield return new(panel.Glyph, panel.Key == global::Eteris.Browser.Sidebar.SidebarPanels.Notes ? "Notas" : $"{panel.Title} na barra lateral",
+            yield return new(panel.Glyph, panel.Key == SidebarPanels.Notes ? "Notas" : $"{panel.Title} na barra lateral",
                 panel.Key switch
                 {
-                    global::Eteris.Browser.Sidebar.SidebarPanels.Notes => "Bloco de notas ao lado da página, guardado só neste computador",
-                    global::Eteris.Browser.Sidebar.SidebarPanels.Reading => "As páginas guardadas para ler mais tarde, ao lado da página",
-                    global::Eteris.Browser.Sidebar.SidebarPanels.Bookmarks => "Os favoritos ao lado da página",
-                    _ => "As páginas visitadas ao lado da página",
-                }, panel.Key == global::Eteris.Browser.Sidebar.SidebarPanels.Notes ? "Ctrl+Shift+E" : null, () => OpenSidebar(key));
+                    SidebarPanels.Notes => "Bloco de notas ao lado da página, guardado só neste computador",
+                    SidebarPanels.Reading => "As páginas guardadas para ler mais tarde, ao lado da página",
+                    SidebarPanels.Bookmarks => "Os favoritos ao lado da página",
+                    SidebarPanels.History => "As páginas visitadas ao lado da página",
+                    _ => $"Site fixado · {SidebarLists.HostOf(panel.Url ?? string.Empty)}",
+                }, panel.Key == SidebarPanels.Notes ? "Ctrl+Shift+E" : null, () => OpenSidebar(key));
         }
+        if (!IsPrivate && host is not null)
+            yield return new(WebPanels.Glyph,
+                IsPinnedSite(address) ? "Tirar este site da barra lateral" : "Fixar este site na barra lateral",
+                IsPinnedSite(address) ? $"{host} deixa de abrir dentro da barra" : $"{host} passa a abrir dentro da barra, com os cookies e o Escudo de sempre",
+                null, () =>
+                {
+                    if (IsPinnedSite(address)) UnpinSite(WebPanels.Normalize(address)!);
+                    else PinCurrentSite();
+                });
         yield return new("\uE7BC", "Lista de leitura", "Páginas guardadas para ler mais tarde", null, () => OpenInternal(BookmarksPage.Url + "#ler"));
         yield return new("\uEDE1", "Exportar favoritos", "Ficheiro HTML em Transferências, que qualquer navegador importa", null, ExportBookmarks);
         yield return new("", "Favoritos", "Ver, pesquisar, renomear e remover favoritos", "Ctrl+Shift+O", OpenBookmarks);
