@@ -31,8 +31,47 @@ public partial class MainWindow
     {
         Background = new SolidColorBrush(Color.FromRgb(0x14, 0x0B, 0x24));
         PrivateBadge.Visibility = Visibility.Visible;
-        Closed += (_, _) => _privateContext?.Dispose();
+        Closed += (_, _) =>
+        {
+            _privateContext?.Dispose();
+            // A última janela privada leva consigo as autorizações de http:// dadas na sessão privada.
+            if (!PrivateWindows().Any(w => !ReferenceEquals(w, this))) Shields.ShieldEngine.Https.ForgetPrivate();
+        };
     }
+
+    private bool _endingPrivateSession;
+
+    private static IReadOnlyList<MainWindow> PrivateWindows()
+        => Application.Current?.Windows.OfType<MainWindow>().Where(w => w.IsPrivate && w.IsLoaded).ToList() ?? [];
+
+    // «Terminar sessão privada» (menu do Éteris e paleta): primeiro diz o que vai fechar; «Terminar» fecha todas as
+    // janelas privadas — cada uma descarta o seu contexto em memória — sem perguntar pelas abas trancadas.
+    private void OfferEndPrivateSession()
+    {
+        var windows = PrivateWindows();
+        if (windows.Count == 0)
+        {
+            ShowToast("Não há nenhuma janela privada aberta");
+            return;
+        }
+        var tabs = windows.Sum(w => w.Tabs.Tabs.Count(t => !NewTabPage.IsNewTab(t.Address)));
+        ShowToast(Eteris.Browser.Tabs.PrivateSession.Confirmation(windows.Count, tabs), new ToastAction("Terminar", EndPrivateSession));
+    }
+
+    // Depois do clique (o botão do aviso pode estar numa das janelas que vão fechar).
+    private void EndPrivateSession() => Dispatcher.BeginInvoke(() =>
+    {
+        var windows = PrivateWindows();
+        foreach (var window in windows)
+        {
+            window._endingPrivateSession = true;
+            window.Close();
+        }
+        Shields.ShieldEngine.Https.ForgetPrivate();
+        // O aviso do fim aparece numa janela normal que fique.
+        var survivor = Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault(w => !w.IsPrivate);
+        survivor?.ShowToast(Eteris.Browser.Tabs.PrivateSession.Done(windows.Count));
+    });
 
     internal static void OpenWindow(bool isPrivate, string? url = null)
     {

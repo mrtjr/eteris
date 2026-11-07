@@ -117,6 +117,9 @@ public partial class MainWindow
         yield return new("", "Nova janela", "Abrir outra janela do Éteris", "Ctrl+N", () => OpenWindow(isPrivate: false));
         yield return new("", "Nova janela privada", "Nada fica no histórico, nos cookies nem na cache", "Ctrl+Shift+N",
             () => OpenWindow(isPrivate: true));
+        if (PrivateWindows().Count > 0)
+            yield return new("", "Terminar sessão privada", "Fecha todas as janelas privadas e apaga o que ficou nelas (pede confirmação)",
+                null, OfferEndPrivateSession);
         if (SelectedTabs is { Count: >= 2 } selected)
         {
             var count = TabSelection.Count(selected.Count);

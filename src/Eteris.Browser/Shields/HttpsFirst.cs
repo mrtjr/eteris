@@ -46,6 +46,10 @@ public sealed class HttpsFirst(Func<string, bool>? isException = null)
     public bool IsAllowedUrl(string url, bool isPrivate)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && IsAllowed(uri.Host, isPrivate);
 
+    // A sessão privada acabou (última janela privada fechada, ou «Terminar sessão privada»): as escolhas de http://
+    // feitas lá não sobrevivem a ela.
+    public void ForgetPrivate() => _allowedPrivate.Clear();
+
     // «Esquecer a exceção» no cadeado: a próxima visita volta a tentar https:// primeiro.
     public void Forget(string host)
     {
