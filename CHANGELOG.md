@@ -17,6 +17,14 @@ Fluidez da navegação (ver `docs/motor.md` e `docs/paridade.md`, secção 1b).
 - Abrir o Éteris com um endereço já não abre duas abas iguais.
 - As regras cosméticas e os scriptlets do Escudo passam a valer logo na 1.ª página de cada site, e também nas páginas servidas por service worker (YouTube).
 
+### Vídeo
+- **Vídeo que não toca passa a tocar** (motor de vídeo do Windows): a deteção apanha MP4 abertos diretamente, `<video><source mp4>`, leitores MSE (hls.js, Vimeo, BBC, g1), vídeos dentro de componentes (Reddit) e leitores conhecidos em iframes — em 1–4 s, em vez de nunca ou ~11 s.
+- **Twitch, Kick, Vimeo, Dailymotion, TikTok e Instagram abrem logo no motor de vídeo** (1.º fotograma ~4 s mais cedo na 1.ª visita); o botão «Motor de vídeo» exclui o site de vez.
+- Novo botão **«Tocar no motor de vídeo»** (barra de endereço e menu da página) quando a troca não é automática: vídeo de fundo, leitor noutro site, Reddit e **DRM** (Netflix, Spotify…: sempre com pergunta).
+- Ligações diretas a **HLS (`.m3u8`) e áudio AAC (`.m4a`/`.aac`) tocam** em vez de irem para as Transferências.
+- A troca de motor já não mostra o fundo da janela nem uma página em branco; o vídeo retoma onde estava.
+- Motor de vídeo: sem o «component updater» do Edge, com a política de reprodução automática do Éteris, o bloqueador já vale desde o 1.º pedido da página e as regras cosméticas do Escudo também se aplicam.
+
 ## 0.2.8 — 2026-11-07
 
 (As versões 0.2.4 a 0.2.7 foram pacotes locais de teste, nunca publicados.)
