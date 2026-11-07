@@ -20,7 +20,7 @@ public partial class MainWindow
 
     // Elementos da janela principal que passam para a camada (os nomes continuam a funcionar no código).
     private static readonly string[] OverlayElementNames =
-        ["QrOverlay", "GlanceOverlay", "NotesPanel", "MiniBar", "PermissionBar", "FindBar", "FocusToast", "LinkStatusBubble", "Toast", "PaletteOverlay"];
+        ["QrOverlay", "GlanceOverlay", "SplitFocusRing", "SplitDropHint", "NotesPanel", "MiniBar", "PermissionBar", "FindBar", "FocusToast", "LinkStatusBubble", "Toast", "PaletteOverlay"];
 
     // Onde se acrescentam camadas criadas em código (ex.: a folha de atalhos).
     private Grid OverlayRoot => _overlayRoot ?? (Grid)RootBorder.Child;

@@ -13,7 +13,6 @@ public partial class MainWindow
 {
     private SplitView? _split;
     private GridSplitter? _splitter;
-    private Border? _focusRing;
     private double _splitRatio = 0.5;
 
     private bool IsSplit => _split is not null;
@@ -180,8 +179,46 @@ public partial class MainWindow
         Grid.SetColumnSpan(_splitter, stacked ? 3 : 1);
         Grid.SetRowSpan(_splitter, stacked ? 1 : 3);
 
-        _focusRing!.Visibility = _split is null ? Visibility.Collapsed : Visibility.Visible;
-        if (_split?.PaneOf(Tabs.Active) is { } activePane) PlaceInHost(_focusRing, activePane);
+        // O contorno só se pode medir depois de a grelha ter sido refeita.
+        Dispatcher.InvokeAsync(UpdateFocusRing, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    // Contorno íris à volta da metade ativa, desenhado na camada de sobreposição (a página é uma janela própria e
+    // tapava-o quando vivia na grelha). Medido a partir do elemento da metade, em coordenadas da moldura da janela.
+    private void UpdateFocusRing()
+    {
+        if (_split?.PaneOf(Tabs.Active) is null || PaneElement(Tabs.Active!) is not { IsVisible: true } pane
+            || pane.ActualWidth < 1 || pane.ActualHeight < 1 || !pane.IsDescendantOf(RootBorder))
+        {
+            SplitFocusRing.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var origin = pane.TranslatePoint(new Point(0, 0), RootBorder);
+        SplitFocusRing.Margin = new Thickness(origin.X, origin.Y, 0, 0);
+        SplitFocusRing.Width = pane.ActualWidth;
+        SplitFocusRing.Height = pane.ActualHeight;
+        SplitFocusRing.Visibility = Visibility.Visible;
+    }
+
+    private FrameworkElement? PaneElement(BrowserTab tab)
+        => _browsers.TryGetValue(tab, out var browser) ? browser : _videoViews.TryGetValue(tab, out var view) ? view : null;
+
+    // Faixa à direita ou em baixo que acende enquanto uma aba arrastada está sobre a margem.
+    private void ShowSplitDropHint(SplitDropTarget target)
+    {
+        if (target == SplitDropTarget.None)
+        {
+            SplitDropHint.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var padding = PageFrame.Padding;
+        var right = target == SplitDropTarget.Right;
+        SplitDropHint.HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
+        SplitDropHint.VerticalAlignment = right ? VerticalAlignment.Stretch : VerticalAlignment.Bottom;
+        SplitDropHint.Width = right ? SplitDropZone.Width : double.NaN;
+        SplitDropHint.Height = right ? double.NaN : SplitDropZone.Width;
+        SplitDropHint.Margin = new Thickness(right ? 0 : PageFrame.Margin.Left + padding.Left, 0, padding.Right, padding.Bottom);
+        SplitDropHint.Visibility = Visibility.Visible;
     }
 
     // Posição de um elemento na grelha da página: uma metade (coluna ou linha conforme a orientação) ou a área toda.
@@ -226,19 +263,6 @@ public partial class MainWindow
             RebuildSplitTracks();
         };
         BrowserHost.Children.Add(_splitter);
-
-        // Contorno íris à volta da página ativa.
-        _focusRing = new Border
-        {
-            BorderBrush = (Brush)FindResource("IrisBrush"),
-            BorderThickness = new Thickness(2),
-            CornerRadius = new CornerRadius(4),
-            IsHitTestVisible = false,
-            Opacity = 0.85,
-            Visibility = Visibility.Collapsed,
-        };
-        Panel.SetZIndex(_focusRing, 15);
-        BrowserHost.Children.Add(_focusRing);
     }
 
     // Selo «Dividido» / «Empilhado» na barra de endereço, com o menu das ações do ecrã dividido.
@@ -259,10 +283,13 @@ public partial class MainWindow
             .OpenBelow(SplitBadge);
     }
 
-    // Clicar numa das metades torna-a ativa.
-    private void WatchPaneFocus(BrowserTab tab, UIElement browser)
-        => browser.PreviewMouseDown += (_, _) =>
+    // Clicar numa das metades torna-a ativa; quando a metade muda de tamanho (divisor, janela), o contorno acompanha.
+    private void WatchPaneFocus(BrowserTab tab, FrameworkElement browser)
+    {
+        browser.PreviewMouseDown += (_, _) =>
         {
             if (IsSplit && !ReferenceEquals(Tabs.Active, tab) && _split!.PaneOf(tab) is not null) Tabs.Active = tab;
         };
+        browser.SizeChanged += (_, _) => { if (IsSplit && ReferenceEquals(tab, Tabs.Active)) UpdateFocusRing(); };
+    }
 }

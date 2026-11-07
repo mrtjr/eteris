@@ -68,7 +68,8 @@ Pendentes desta migração:
 - Ctrl+roda do rato: o zoom é feito pelo próprio Chromium (lembrado por site, como no Chrome), mas o selo de zoom
   do Éteris na barra de endereço não o acompanha.
 - Por cima da paleta e da folha de atalhos a página fica escurecida, mas já não desfocada.
-- O contorno da metade ativa no ecrã dividido e os cantos arredondados da página ficam por baixo da página.
+- Os cantos arredondados da página ficam por baixo da página. (O contorno da metade ativa no ecrã dividido passou
+  para a camada de sobreposição no ciclo 14 do programa de UX.)
 
 ## 2. Sandbox — investigado: viável, 1–2 semanas
 

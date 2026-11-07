@@ -1482,6 +1482,15 @@
                 </StackPanel>
             </Border>
 
+            <!-- Ecrã dividido: contorno íris da metade ativa (por cima da página, que é uma janela própria) -->
+            <Border x:Name="SplitFocusRing" Grid.Row="0" Grid.RowSpan="3" Panel.ZIndex="40" HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Visibility="Collapsed" IsHitTestVisible="False" BorderBrush="{StaticResource IrisBrush}" BorderThickness="2"
+                    CornerRadius="4" Opacity="0.85" />
+
+            <!-- Ecrã dividido: faixa que acende ao arrastar uma aba até à margem direita (lado a lado) ou inferior (empilhado) -->
+            <Border x:Name="SplitDropHint" Grid.Row="2" Panel.ZIndex="52" Visibility="Collapsed" IsHitTestVisible="False"
+                    Background="{StaticResource IrisBrush}" Opacity="0.4" CornerRadius="6" />
+
             <!-- Aviso do modo foco -->
             <Border x:Name="FocusToast" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Center" VerticalAlignment="Top"
                     Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="{DynamicResource ToastBrush}" IsHitTestVisible="False"

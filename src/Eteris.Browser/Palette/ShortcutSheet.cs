@@ -18,6 +18,7 @@ public static class ShortcutSheet
             new("Ctrl+Shift+Tab", "Aba anterior"),
             new("Ctrl+1 … 9", "Ir para a aba"),
             new("Clique do meio", "Fechar aba"),
+            new("Arrastar aba à margem", "Ecrã dividido (direita: lado a lado · fundo: empilhado)"),
         ]),
         new("Navegação", [
             new("Ctrl+L · F6", "Barra de endereço"),
