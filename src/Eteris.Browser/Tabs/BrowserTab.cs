@@ -200,6 +200,20 @@ public partial class BrowserTab : ObservableObject
 
     public void RecordTrackingSkips(IEnumerable<string> hosts) => _trackingSkips.AddRange(hosts);
 
+    private readonly List<string> _bounceSites = [];
+
+    // Sites que só serviram de salto a caminho desta página (Shields/BounceTracking.cs). Ao contrário dos bloqueios,
+    // não se limpam quando a página começa a carregar (os saltos são anteriores): só numa navegação nova do utilizador.
+    public IReadOnlyList<string> BounceSites => _bounceSites.ToList();
+
+    public void RecordBounceSites(IEnumerable<string> sites)
+    {
+        foreach (var site in sites)
+            if (!_bounceSites.Contains(site)) _bounceSites.Add(site);
+    }
+
+    public void ClearBounceSites() => _bounceSites.Clear();
+
     public void RecordBlocked(string host)
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;

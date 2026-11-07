@@ -69,6 +69,8 @@ public partial class MainWindow
             ? $"✓  DNS cifrado ({dns})" : "·  DNS do sistema (pode ativar DNS cifrado nas definições)";
         ShieldCheckLan.Text = LocalNetworkShieldLine(tab);
         ShieldCheckBounce.Text = DebounceText.ShieldLine(tab?.TrackingSkips ?? [], Data.Settings.Current.SkipTrackingRedirects);
+        ShieldCheckBounceSites.Text = BounceText.ShieldLine(IsPrivate ? [] : tab?.BounceSites ?? [], Data.Settings.Current.ForgetBounceTrackers);
+        ShieldCheckBounceSites.Visibility = ShieldCheckBounceSites.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         var session = ShieldStats.SessionBlocked;
         ShieldSession.Text = $"{session} {(session == 1 ? "rastreador bloqueado" : "rastreadores bloqueados")} desde que abriu o Éteris";
     }

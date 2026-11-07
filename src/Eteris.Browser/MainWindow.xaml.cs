@@ -58,6 +58,7 @@ public partial class MainWindow : Window
         TrackActivation();
         RememberWhenClosing();
         WatchForgetOnClose();
+        StartBounceWatch();
         StartAudioWatch();
         WatchMiniBar();
         WatchOmniboxMenu();
@@ -163,7 +164,8 @@ public partial class MainWindow : Window
                 {
                     tab.RecordTrackingSkips(hosts);
                     if (ReferenceEquals(tab, Tabs.Active)) UpdateShieldButton();
-                })),
+                }),
+                onMainNavigation: nav => OnMainNavigation(tab, nav)),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
@@ -190,6 +192,7 @@ public partial class MainWindow : Window
             if (PopupPolicy.IsActivationReport(e.Message, out var clickedLink, out var interactive))
             {
                 Volatile.Write(ref lastActivation, new UserActivation(clickedLink, DateTime.UtcNow, interactive));
+                Dispatcher.InvokeAsync(() => OnPageInteraction(tab, browser.Address));
                 return;
             }
             if (VideoEngine.IsReport(e.Message))
@@ -252,6 +255,7 @@ public partial class MainWindow : Window
                 ApplyHiddenElements(browser, url);
                 CaptureThumbnail(tab, browser, url);
                 _ = ApplyGenericCosmeticsAsync(browser, url);
+                SettleChainLater(tab);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             if (!IsPrivate) Dispatcher.InvokeAsync(() =>

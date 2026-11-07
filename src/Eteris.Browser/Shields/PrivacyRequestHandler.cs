@@ -2,12 +2,26 @@ using CefSharp;
 
 namespace Eteris.Browser.Shields;
 
+// Uma navegação da página principal, para seguir as cadeias de saltos (Shields/BounceTracking.cs). «Rewritten»:
+// foi o próprio Éteris a trocar o endereço antes de o pedido sair (salto, limpeza, HTTPS).
+public sealed record MainNavigation(string? CurrentUrl, string Url, bool UserGesture, bool IsRedirect, TransitionType Transition, bool Rewritten);
+
+
 public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Func<IBrowser, string, Task> onNavigate, Action<string> onBlocked,
     Action? onCrashed = null, string? userAgent = null, bool isPrivate = false,
     Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
-    Action<IReadOnlyList<string>>? onTrackingSkipped = null)
+    Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null)
     : CefSharp.Handler.RequestHandler
 {
+    protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
+        bool userGesture, bool isRedirect)
+    {
+        if (onMainNavigation is not null && frame.IsMain)
+            onMainNavigation(new MainNavigation(browser.MainFrame?.Url, request.Url, userGesture, isRedirect, request.TransitionType,
+                _resources.TakeRewrite(browser.Identifier, request.Url)));
+        return false;
+    }
+
     // Cabeçalhos de um pedido feito «como telemóvel» (vista móvel de um site fixado na barra lateral): o agente e
     // as dicas de cliente que o acompanham, para o servidor não ver um Android a dizer-se Windows.
     public static IReadOnlyList<(string Name, string Value)> MobileHeaders(string userAgent) =>
@@ -67,6 +81,18 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         // começa a carregar (depois do «limpar o Escudo» dessa navegação), senão a contagem perdia-se logo.
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (DateTime At, List<string> Hosts)> _skips = new();
 
+        // Último endereço da página principal reescrito antes de sair, por browser (ver MainNavigation.Rewritten).
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _rewrites = new();
+
+        private void Rewrite(IBrowser browser, IRequest request, string url)
+        {
+            _rewrites[browser.Identifier] = url;
+            request.Url = url;
+        }
+
+        public bool TakeRewrite(int browserId, string url)
+            => _rewrites.TryGetValue(browserId, out var rewritten) && rewritten == url && _rewrites.TryRemove(browserId, out _);
+
         private static string? Jump(string url, Func<string, bool> isProtected)
         {
             if (!Data.Settings.Current.SkipTrackingRedirects) return null;
@@ -125,18 +151,18 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 if (Jump(request.Url, isProtected) is { } jump)
                 {
                     RememberSkip(browser, request.Url);
-                    request.Url = jump;
+                    Rewrite(browser, request, jump);
                     return CefReturnValue.Continue;
                 }
                 // Links sem parâmetros de rastreio (utm_*, fbclid…): o pedido sai já limpo.
                 if (Data.Settings.Current.CleanUrls && UrlCleaner.Clean(request.Url) is var clean && clean != request.Url)
                 {
-                    request.Url = clean;
+                    Rewrite(browser, request, clean);
                     return CefReturnValue.Continue;
                 }
                 if (Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Upgrade(request.Url, isPrivate) is { } secure)
                 {
-                    request.Url = secure;
+                    Rewrite(browser, request, secure);
                     return CefReturnValue.Continue;
                 }
                 // O pedido da página só sai depois de os scriptlets estarem registados (máx. 1 s):

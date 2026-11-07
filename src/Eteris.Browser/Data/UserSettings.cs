@@ -35,6 +35,8 @@ public sealed record UserSettings
     public bool CleanUrls { get; init; } = true;
     // Links que passam por um rastreador com o destino no endereço vão direto ao destino (Shields/Debounce.cs).
     public bool SkipTrackingRedirects { get; init; } = true;
+    // Sites que só serviram de salto (sem visita a sério há 45 dias) perdem cookies e armazenamento ao fim de 1 hora.
+    public bool ForgetBounceTrackers { get; init; } = true;
     public bool BlockNotificationPrompts { get; init; } = true;
     // Esconder as janelas das capturas de ecrã e do Recall (Infrastructure/CaptureShield.cs). Desligado por omissão,
     // também na janela privada: ligado, as capturas, gravações e partilhas de ecrã mostram um vazio.
@@ -79,6 +81,7 @@ public sealed record UserSettings
         "notifications" when bool.TryParse(value, out var on) => this with { BlockNotificationPrompts = on },
         "cleanUrls" when bool.TryParse(value, out var on) => this with { CleanUrls = on },
         "debounce" when bool.TryParse(value, out var on) => this with { SkipTrackingRedirects = on },
+        "bounceForget" when bool.TryParse(value, out var on) => this with { ForgetBounceTrackers = on },
         "hideFromCapture" when bool.TryParse(value, out var on) => this with { HideFromCapture = on },
         "siteLanguage" when Shields.RequestIdentity.LanguageChoices.Contains(value) => this with { SiteLanguage = value },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },

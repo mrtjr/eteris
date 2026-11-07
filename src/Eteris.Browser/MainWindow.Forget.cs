@@ -79,15 +79,6 @@ public partial class MainWindow
     // do perfil, fora da janela privada). Só toca no site indicado.
     private async Task<ShredResult> ShredSiteAsync(string site)
     {
-        var cookies = 0;
-        try
-        {
-            var manager = CookieContext.GetCookieManager(null);
-            foreach (var cookie in (await manager.VisitAllCookiesAsync()).Where(c => SiteScope.CookieBelongs(c.Domain, site)))
-                if (await manager.DeleteCookiesAsync(SiteScope.CookieUrl(cookie.Domain, cookie.Path), cookie.Name) > 0) cookies++;
-        }
-        catch (Exception) { }
-
         var history = 0;
         var seen = Tabs.Tabs.Select(t => t.Address).ToList();
         if (!IsPrivate)
@@ -100,7 +91,24 @@ public partial class MainWindow
             }
             catch (Exception) { }
             AppData.ForgetSitePermissions(site);
+            Bounces.Forget(site);
         }
+        var cookies = await ClearSiteStorageAsync(site, seen);
+        return new ShredResult(cookies, history);
+    }
+
+    // Cookies e armazenamento (local, IndexedDB, cache e trabalhadores) do site e dos seus subdomínios, no contexto
+    // desta janela; devolve quantos cookies apagou. Usado por «Triturar», «Esquecer ao fechar» e pelos sites de salto.
+    private async Task<int> ClearSiteStorageAsync(string site, IEnumerable<string> seenUrls)
+    {
+        var cookies = 0;
+        try
+        {
+            var manager = CookieContext.GetCookieManager(null);
+            foreach (var cookie in (await manager.VisitAllCookiesAsync()).Where(c => SiteScope.CookieBelongs(c.Domain, site)))
+                if (await manager.DeleteCookiesAsync(SiteScope.CookieUrl(cookie.Domain, cookie.Path), cookie.Name) > 0) cookies++;
+        }
+        catch (Exception) { }
 
         // O armazenamento apaga-se por origem, pelo DevTools de uma página viva deste contexto.
         if (_browsers.Values.FirstOrDefault(b => b.IsBrowserInitialized) is { } browser)
@@ -108,12 +116,12 @@ public partial class MainWindow
             try
             {
                 using var client = browser.GetDevToolsClient();
-                foreach (var origin in SiteScope.Origins(site, seen))
+                foreach (var origin in SiteScope.Origins(site, seenUrls))
                     await client.Storage.ClearDataForOriginAsync(origin, "all");
             }
             catch (Exception) { }
         }
-        return new ShredResult(cookies, history);
+        return cookies;
     }
 
     // ---------- Painel do cadeado ----------

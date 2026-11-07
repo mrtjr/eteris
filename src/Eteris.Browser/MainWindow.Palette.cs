@@ -391,6 +391,7 @@ public partial class MainWindow
     private void Forget(int minutes)
     {
         AppData.TryWrite(h => h.DeleteSince(DateTime.UtcNow.AddMinutes(-minutes)));
+        ForgetBounceVisits(DateTime.UtcNow.AddMinutes(-minutes));
         Tabs.ForgetClosed();
         ShowToast(minutes < 60 ? $"Os últimos {minutes} minutos foram esquecidos" : "A última hora foi esquecida");
     }

@@ -143,7 +143,11 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             || ClearDataRequest.Parse(InternalPages.Query(uri, "what") ?? "", InternalPages.Query(uri, "range") ?? "", DateTime.Now) is not { } request)
             return Text("recusado");
         if (request.History)
-            AppData.TryWrite(h => h.DeleteSince(request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime()));
+        {
+            var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
+            AppData.TryWrite(h => h.DeleteSince(since));
+            MainWindow.ForgetBounceVisits(since);
+        }
         if (request.Cookies || request.Cache)
         {
             _ = Task.Run(async () =>
@@ -218,7 +222,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 return ResourceHandler.FromString("ok", Encoding.UTF8, false, "text/plain");
             case "/clear" when HistoryPage.IsAuthorized(url)
                                && HistoryPage.RangeStart(HistoryPage.Query(uri, "range") ?? "", DateTime.Now) is { } start:
-                AppData.TryWrite(h => h.DeleteSince(start == DateTime.MinValue ? start : start.ToUniversalTime()));
+                var from = start == DateTime.MinValue ? start : start.ToUniversalTime();
+                AppData.TryWrite(h => h.DeleteSince(from));
+                MainWindow.ForgetBounceVisits(from);
                 break;
             case "/" or "/clear":
                 break;
