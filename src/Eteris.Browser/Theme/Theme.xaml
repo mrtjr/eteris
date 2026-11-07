@@ -14,6 +14,9 @@
         <GradientStop Color="#34D399" Offset="0.65" />
         <GradientStop Color="#F472B6" Offset="1" />
     </LinearGradientBrush>
+    <!-- Tinta do texto por cima da cor do Éteris e cor lisa da seleção: o AccentManager substitui-as com a cor -->
+    <SolidColorBrush x:Key="AccentInkBrush" Color="#0B0D13" />
+    <SolidColorBrush x:Key="AccentSelectionBrush" Color="#8B5CF6" />
 
     <Style x:Key="IconButton" TargetType="Button">
         <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
@@ -116,7 +119,7 @@
     <Style x:Key="BareTextBox" TargetType="TextBox">
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="CaretBrush" Value="#22D3EE" />
-        <Setter Property="SelectionBrush" Value="#8B5CF6" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource AccentSelectionBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -246,12 +249,12 @@
     </Style>
 
     <Style x:Key="PrimaryPillButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
-        <Setter Property="Foreground" Value="#0B0D13" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bg" CornerRadius="16" Background="{StaticResource IrisBrush}" Padding="{TemplateBinding Padding}">
+                    <Border x:Name="Bg" CornerRadius="16" Background="{DynamicResource IrisBrush}" Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -272,7 +275,7 @@
                 <ControlTemplate TargetType="CheckBox">
                     <Grid Width="44" Height="24" Background="Transparent">
                         <Border x:Name="Track" CornerRadius="12" Background="#3A4054" />
-                        <Border x:Name="TrackOn" CornerRadius="12" Background="{StaticResource IrisBrush}" Opacity="0" />
+                        <Border x:Name="TrackOn" CornerRadius="12" Background="{DynamicResource IrisBrush}" Opacity="0" />
                         <Ellipse x:Name="Knob" Width="18" Height="18" Fill="White" HorizontalAlignment="Left" Margin="3,0,0,0">
                             <Ellipse.RenderTransform>
                                 <TranslateTransform x:Name="KnobShift" />
@@ -308,7 +311,7 @@
     </Style>
 
     <Style x:Key="SpinnerArc" TargetType="Path">
-        <Setter Property="Stroke" Value="{StaticResource IrisBrush}" />
+        <Setter Property="Stroke" Value="{DynamicResource IrisBrush}" />
         <Setter Property="StrokeThickness" Value="2" />
         <Setter Property="StrokeStartLineCap" Value="Round" />
         <Setter Property="StrokeEndLineCap" Value="Round" />

@@ -45,7 +45,7 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
                     <Setter TargetName="Chip" Property="Background" Value="{DynamicResource HoverBrush}" />
-                    <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                    <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource IrisBrush}" />
                     <Setter TargetName="ChipName" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <!-- O atual já mostra o nome: a inicial só repetiria a primeira letra (o emoji fica) -->
@@ -80,7 +80,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,3" />
+                                <Border x:Name="Bar" CornerRadius="1.5" Background="{DynamicResource IrisBrush}" Visibility="Hidden" Margin="0,3" />
                                 <Border Grid.Column="1" Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PressedBrush}">
                                     <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14"
                                                Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -137,7 +137,7 @@
                                 <TextBlock Text="{Binding Host}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0" />
                                 <TextBlock x:Name="Note" Text="{Binding Note, StringFormat=✎ {0}}" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                            Margin="0,8,0,0" TextWrapping="Wrap" FontStyle="Italic" />
-                                <TextBlock x:Name="Status" Text="{Binding StatusLine}" FontSize="11.5" Foreground="{StaticResource IrisBrush}"
+                                <TextBlock x:Name="Status" Text="{Binding StatusLine}" FontSize="11.5" Foreground="{DynamicResource IrisBrush}"
                                            Margin="0,8,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
@@ -193,7 +193,7 @@
                             <Grid.RenderTransform><ScaleTransform /></Grid.RenderTransform>
                             <Border x:Name="Bg" CornerRadius="10,10,0,0" Background="Transparent" />
                             <Border x:Name="Glow" Height="2" VerticalAlignment="Top" Margin="14,0" CornerRadius="1"
-                                    Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
+                                    Background="{DynamicResource IrisBrush}" Visibility="Collapsed" />
                             <Border x:Name="GroupLine" Height="2.5" VerticalAlignment="Bottom" Margin="6,0" CornerRadius="1"
                                     Background="{Binding Group.ColorBrush}" />
                             <Grid x:Name="TabContent" Margin="12,0,8,0" Opacity="{Binding AgeOpacity}">
@@ -218,10 +218,10 @@
                                                    FontFamily="{StaticResource EmojiFont}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                                     </Border>
-                                    <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
+                                    <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{DynamicResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
-                                    <Ellipse x:Name="NoteDot" Width="7" Height="7" Fill="{StaticResource IrisBrush}" Stroke="{DynamicResource FrameBrush}"
+                                    <Ellipse x:Name="NoteDot" Width="7" Height="7" Fill="{DynamicResource IrisBrush}" Stroke="{DynamicResource FrameBrush}"
                                              StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3"
                                              Visibility="Collapsed" IsHitTestVisible="False" />
                                 </Grid>
@@ -319,7 +319,7 @@
                             <!-- Multi-seleção (Ctrl/Shift+clique): contorno íris e fundo realçado -->
                             <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
-                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource IrisBrush}" />
                                 <Setter TargetName="Bg" Property="BorderThickness" Value="1.5,1.5,1.5,0" />
                                 <Setter TargetName="TabTitle" Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </DataTrigger>
@@ -370,7 +370,7 @@
                                     <ColumnDefinition Width="3" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,3,6,3" />
+                                <Border x:Name="Bar" CornerRadius="1.5" Background="{DynamicResource IrisBrush}" Visibility="Hidden" Margin="0,3,6,3" />
                                 <ContentPresenter Grid.Column="1" VerticalAlignment="Center" />
                             </Grid>
                         </Border>
@@ -467,7 +467,7 @@
                         <Grid>
                             <Border x:Name="Bg" Background="Transparent" CornerRadius="10" />
                             <Border x:Name="Mark" Width="3" Height="18" CornerRadius="1.5" HorizontalAlignment="Right" Margin="0,0,-4,0"
-                                    Background="{StaticResource IrisBrush}" Visibility="Collapsed" />
+                                    Background="{DynamicResource IrisBrush}" Visibility="Collapsed" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -478,7 +478,7 @@
                             <Trigger Property="Tag" Value="on">
                                 <Setter TargetName="Bg" Property="Background" Value="{DynamicResource PressedBrush}" />
                                 <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
-                                <Setter Property="Foreground" Value="{StaticResource IrisBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource IrisBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -499,7 +499,7 @@
                             <Grid.RenderTransform><ScaleTransform /></Grid.RenderTransform>
                             <Border x:Name="Bg" CornerRadius="10" Background="Transparent" />
                             <Border x:Name="Bar" Width="3" HorizontalAlignment="Left" Margin="0,9" CornerRadius="1.5"
-                                    Background="{StaticResource IrisBrush}" Visibility="Hidden" />
+                                    Background="{DynamicResource IrisBrush}" Visibility="Hidden" />
                             <Border x:Name="SideGroup" Width="4" HorizontalAlignment="Right" Margin="0,8,2,8" CornerRadius="2"
                                     Background="{Binding Group.ColorBrush}" />
                             <Grid Margin="13,0,6,0" Opacity="{Binding AgeOpacity}">
@@ -522,10 +522,10 @@
                                                    FontFamily="{StaticResource EmojiFont}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                                     </Border>
-                                    <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{StaticResource IrisBrush}"
+                                    <Ellipse x:Name="NewTabIcon" Width="13" Height="13" Stroke="{DynamicResource IrisBrush}"
                                              StrokeThickness="2.5" Visibility="Collapsed" />
                                     <Path x:Name="Spinner" Style="{StaticResource SpinnerArc}" Visibility="Collapsed" />
-                                    <Ellipse x:Name="NoteDot" Width="7" Height="7" Fill="{StaticResource IrisBrush}" Stroke="{DynamicResource FrameBrush}"
+                                    <Ellipse x:Name="NoteDot" Width="7" Height="7" Fill="{DynamicResource IrisBrush}" Stroke="{DynamicResource FrameBrush}"
                                              StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3"
                                              Visibility="Collapsed" IsHitTestVisible="False" />
                                 </Grid>
@@ -624,7 +624,7 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
-                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource IrisBrush}" />
                                 <Setter TargetName="Bg" Property="BorderThickness" Value="1.5" />
                                 <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </DataTrigger>
@@ -652,7 +652,7 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Border x:Name="Bar" CornerRadius="1.5" Background="{StaticResource IrisBrush}" Visibility="Hidden" Margin="0,2" />
+                                <Border x:Name="Bar" CornerRadius="1.5" Background="{DynamicResource IrisBrush}" Visibility="Hidden" Margin="0,2" />
                                 <TextBlock x:Name="Icon" Grid.Column="1" Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="14"
                                            Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Visibility="Collapsed" />
@@ -681,14 +681,14 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Bookmark">
                                 <Setter TargetName="Icon" Property="Text" Value="&#xE735;" />
-                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource IrisBrush}" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Tab">
                                 <Setter TargetName="Icon" Property="Text" Value="&#xE8AB;" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Answer">
                                 <Setter TargetName="Icon" Property="Text" Value="&#xE8EF;" />
-                                <Setter TargetName="Icon" Property="Foreground" Value="{StaticResource IrisBrush}" />
+                                <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource IrisBrush}" />
                                 <Setter TargetName="Label" Property="FontSize" Value="17" />
                                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
                             </DataTrigger>
@@ -711,7 +711,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource FieldBorderBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource Self}}" Value="True">
-                    <Setter Property="BorderBrush" Value="{StaticResource IrisBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource IrisBrush}" />
                     <Setter Property="Background" Value="{DynamicResource FieldFocusBrush}" />
                 </DataTrigger>
             </Style.Triggers>
@@ -759,7 +759,7 @@
                 <Grid x:Name="TabStripHost" SizeChanged="TabStripHost_SizeChanged">
                     <StackPanel x:Name="TabStripPanel" Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Left">
                         <Grid x:Name="BrandMark" Width="40" Height="36" ToolTip="Éteris">
-                            <Ellipse Width="18" Height="18" Stroke="{StaticResource IrisBrush}" StrokeThickness="3" />
+                            <Ellipse Width="18" Height="18" Stroke="{DynamicResource IrisBrush}" StrokeThickness="3" />
                             <Ellipse Width="5" Height="5" Fill="{DynamicResource TextBrush}" />
                         </Grid>
                         <Border x:Name="PrivateBadge" Visibility="Collapsed" VerticalAlignment="Center" Margin="0,0,8,3"
@@ -981,10 +981,10 @@
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="{DynamicResource SelectedBrush}"
-                                                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
+                                                    BorderBrush="{DynamicResource IrisBrush}" BorderThickness="1">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="10"
-                                                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                                               Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
                                                     <ContentPresenter VerticalAlignment="Center" />
                                                 </StackPanel>
                                             </Border>
@@ -1002,10 +1002,10 @@
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="{DynamicResource SelectedBrush}"
-                                                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
+                                                    BorderBrush="{DynamicResource IrisBrush}" BorderThickness="1">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock x:Name="SplitBadgeGlyph" Text="&#xE9A6;" FontFamily="{StaticResource IconFont}" FontSize="10"
-                                                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                                               Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
                                                     <ContentPresenter VerticalAlignment="Center" />
                                                     <TextBlock Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="8"
                                                                Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="5,1,0,0" />
@@ -1025,10 +1025,10 @@
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
                                             <Border x:Name="Pill" CornerRadius="10" Padding="8,2" Background="{DynamicResource SelectedBrush}"
-                                                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1">
+                                                    BorderBrush="{DynamicResource IrisBrush}" BorderThickness="1">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE71E;" FontFamily="{StaticResource IconFont}" FontSize="10"
-                                                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
+                                                               Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" Margin="0,1,5,0" />
                                                     <ContentPresenter VerticalAlignment="Center" />
                                                 </StackPanel>
                                             </Border>
@@ -1185,7 +1185,7 @@
                                     ToolTip="Multimédia: o que está a tocar nas abas">
                                 <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource IconFont}" FontSize="15" />
                             </Button>
-                            <Ellipse x:Name="MediaLiveDot" Width="7" Height="7" Fill="{StaticResource IrisBrush}" IsHitTestVisible="False"
+                            <Ellipse x:Name="MediaLiveDot" Width="7" Height="7" Fill="{DynamicResource IrisBrush}" IsHitTestVisible="False"
                                      HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Visibility="Collapsed">
                                 <Ellipse.Triggers>
                                     <EventTrigger RoutedEvent="Loaded">
@@ -1205,7 +1205,7 @@
                             </Button>
                             <Ellipse Width="30" Height="30" Stroke="{DynamicResource FieldBorderBrush}" StrokeThickness="2" IsHitTestVisible="False"
                                      x:Name="DownloadsTrack" Visibility="Collapsed" />
-                            <Path x:Name="DownloadsRing" Stroke="{StaticResource IrisBrush}" StrokeThickness="2.5"
+                            <Path x:Name="DownloadsRing" Stroke="{DynamicResource IrisBrush}" StrokeThickness="2.5"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False"
                                   Width="34" Height="34" />
                         </Grid>
@@ -1216,8 +1216,8 @@
                             </Button>
                             <Border x:Name="ShieldBadge" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top"
                                     Margin="0,0,-3,0" MinWidth="17" Height="16" CornerRadius="8" Padding="4,0"
-                                    Background="{StaticResource IrisBrush}" Visibility="Collapsed">
-                                <TextBlock x:Name="ShieldCount" FontSize="10" FontWeight="Bold" Foreground="#0B0D13"
+                                    Background="{DynamicResource IrisBrush}" Visibility="Collapsed">
+                                <TextBlock x:Name="ShieldCount" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentInkBrush}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                             </Border>
                         </Grid>
@@ -1335,7 +1335,7 @@
                                                                     <Grid>
                                                                         <Border x:Name="PART_Track" CornerRadius="1.5" Background="{DynamicResource FieldBorderBrush}" />
                                                                         <Border x:Name="PART_Indicator" CornerRadius="1.5" HorizontalAlignment="Left"
-                                                                                Background="{StaticResource IrisBrush}" />
+                                                                                Background="{DynamicResource IrisBrush}" />
                                                                     </Grid>
                                                                 </ControlTemplate>
                                                             </ProgressBar.Template>
@@ -1386,8 +1386,8 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <Grid Width="42" Height="42">
-                                        <Ellipse x:Name="ShieldHalo" Fill="{StaticResource IrisBrush}" Opacity="0.9" />
-                                        <TextBlock Text="&#xEA18;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="#0B0D13"
+                                        <Ellipse x:Name="ShieldHalo" Fill="{DynamicResource IrisBrush}" Opacity="0.9" />
+                                        <TextBlock Text="&#xEA18;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{DynamicResource AccentInkBrush}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
                                     <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
@@ -1402,7 +1402,7 @@
                                 <Border Height="1" Background="{DynamicResource FieldBorderBrush}" Margin="0,16" />
 
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="ShieldBigCount" FontSize="40" FontWeight="Light" Foreground="{StaticResource IrisBrush}"
+                                    <TextBlock x:Name="ShieldBigCount" FontSize="40" FontWeight="Light" Foreground="{DynamicResource IrisBrush}"
                                                VerticalAlignment="Bottom" />
                                     <TextBlock x:Name="ShieldCountLabel" FontSize="13" Foreground="{DynamicResource TextMutedBrush}"
                                                Margin="10,0,0,9" VerticalAlignment="Bottom" TextWrapping="Wrap" MaxWidth="220" />
@@ -1464,7 +1464,7 @@
                                 <Border x:Name="B" Height="38" CornerRadius="10" Background="Transparent" Padding="13,0,0,0">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="13" Width="16"
-                                                   Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" />
+                                                   Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" />
                                         <TextBlock x:Name="L" Text="Nova aba" FontSize="13" Margin="12,0,0,0"
                                                    Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
@@ -1675,7 +1675,7 @@
                                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
                                                 Content="&#xE8BB;" Click="GlanceClose_Click" ToolTip="Fechar (Esc)" Margin="8,-4,-6,0" />
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE7B3;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{StaticResource IrisBrush}"
+                                            <TextBlock Text="&#xE7B3;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource IrisBrush}"
                                                        VerticalAlignment="Center" Margin="0,1,6,0" />
                                             <TextBlock x:Name="GlanceSite" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300" />
@@ -1727,9 +1727,9 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Grid Width="38" Height="38" VerticalAlignment="Top">
-                            <Ellipse Fill="{StaticResource IrisBrush}" />
+                            <Ellipse Fill="{DynamicResource IrisBrush}" />
                             <TextBlock x:Name="PermissionGlyph" Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="17"
-                                       Foreground="#0B0D13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                       Foreground="{DynamicResource AccentInkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <TextBlock x:Name="PermissionText" TextWrapping="Wrap" MaxWidth="360" Margin="12,0,0,0"
                                    VerticalAlignment="Center" FontSize="14" />
@@ -1750,7 +1750,7 @@
             <!-- Procurar na página -->
             <Border x:Name="FindBar" Grid.Row="2" Panel.ZIndex="40" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,12,24,0" CornerRadius="20" Padding="14,4,6,4" Background="{DynamicResource SurfaceRaisedBrush}"
-                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1.5" Visibility="Collapsed">
+                    BorderBrush="{DynamicResource IrisBrush}" BorderThickness="1.5" Visibility="Collapsed">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.45" Color="Black" />
                 </Border.Effect>
@@ -1776,17 +1776,17 @@
 
             <!-- Ecrã dividido: contorno íris da metade ativa (por cima da página, que é uma janela própria) -->
             <Border x:Name="SplitFocusRing" Grid.Row="0" Grid.RowSpan="3" Panel.ZIndex="40" HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Visibility="Collapsed" IsHitTestVisible="False" BorderBrush="{StaticResource IrisBrush}" BorderThickness="2"
+                    Visibility="Collapsed" IsHitTestVisible="False" BorderBrush="{DynamicResource IrisBrush}" BorderThickness="2"
                     CornerRadius="4" Opacity="0.85" />
 
             <!-- Ecrã dividido: faixa que acende ao arrastar uma aba até à margem direita (lado a lado) ou inferior (empilhado) -->
             <Border x:Name="SplitDropHint" Grid.Row="2" Panel.ZIndex="52" Visibility="Collapsed" IsHitTestVisible="False"
-                    Background="{StaticResource IrisBrush}" Opacity="0.4" CornerRadius="6" />
+                    Background="{DynamicResource IrisBrush}" Opacity="0.4" CornerRadius="6" />
 
             <!-- Aviso do modo foco -->
             <Border x:Name="FocusToast" Grid.Row="2" Panel.ZIndex="50" HorizontalAlignment="Center" VerticalAlignment="Top"
                     Margin="0,18,0,0" CornerRadius="16" Padding="16,8" Background="{DynamicResource ToastBrush}" IsHitTestVisible="False"
-                    BorderBrush="{StaticResource IrisBrush}" BorderThickness="1" Opacity="0">
+                    BorderBrush="{DynamicResource IrisBrush}" BorderThickness="1" Opacity="0">
                 <TextBlock FontSize="13" Foreground="{DynamicResource TextBrush}">
                     Modo foco — leve o rato ao topo para as barras; <Bold>F11</Bold> para voltar
                 </TextBlock>
@@ -1805,7 +1805,7 @@
                     BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" Opacity="0">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,10,0"
-                               Foreground="{StaticResource IrisBrush}" VerticalAlignment="Center" />
+                               Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" />
                     <TextBlock x:Name="ToastText" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
@@ -1815,7 +1815,7 @@
                   shell:WindowChrome.IsHitTestVisibleInChrome="True">
                 <Rectangle Fill="{DynamicResource ScrimBrush}" MouseLeftButtonDown="PaletteBackdrop_MouseLeftButtonDown" />
                 <Border x:Name="PaletteCard" Width="680" VerticalAlignment="Top" Margin="0,92,0,0" CornerRadius="22"
-                        Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{StaticResource IrisBrush}"
+                        Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource IrisBrush}"
                         BorderThickness="1.5" RenderTransformOrigin="0.5,0">
                     <Border.RenderTransform>
                         <ScaleTransform x:Name="PaletteScale" />

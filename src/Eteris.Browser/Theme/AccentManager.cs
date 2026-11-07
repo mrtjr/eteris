@@ -5,9 +5,11 @@ using Microsoft.Win32;
 
 namespace Eteris.Browser.Theme;
 
-// Aplica a «Cor do Éteris» (ver Accent) à faixa íris partilhada por toda a interface: o pincel IrisBrush dos
-// recursos da aplicação é um só objeto, usado por StaticResource em todo o lado, por isso mudam-se as cores dos
-// seus degraus no sítio (com uma transição suave) em vez de o substituir.
+// Aplica a «Cor do Éteris» (ver Accent) à faixa íris partilhada por toda a interface. O WPF congela os pincéis
+// dos recursos da aplicação e os que servem de valor a Setters de estilos, por isso o IrisBrush não pode ser
+// retintado no sítio: cada mudança põe nos recursos da aplicação um pincel novo (com os degraus animados desde as
+// cores antigas, o que também o impede de congelar), e toda a interface lê-o por DynamicResource. Junto vão a
+// tinta do texto sobre a cor (AccentInkBrush, grafite ou branco) e a cor lisa da seleção de texto.
 public static class AccentManager
 {
     private static readonly TimeSpan Transition = TimeSpan.FromMilliseconds(420);
@@ -28,8 +30,41 @@ public static class AccentManager
         if (stops.SequenceEqual(Stops) && baseColor == Current) return;
         Current = baseColor;
         Stops = stops;
-        Retint(Application.Current?.Resources["IrisBrush"] as LinearGradientBrush, stops);
+        var resources = Application.Current?.Resources;
+        if (resources is not null)
+        {
+            resources["IrisBrush"] = Recolored(resources["IrisBrush"] as LinearGradientBrush, stops);
+            resources["AccentInkBrush"] = Frozen(new SolidColorBrush(Accent.TextOn(baseColor)));
+            resources["AccentSelectionBrush"] = Frozen(new SolidColorBrush(baseColor));
+        }
         Changed?.Invoke();
+    }
+
+    // Um pincel íris novo com a geometria e as cores em vigor do anterior, animado até aos degraus novos. Os
+    // degraus animados tornam-no impossível de congelar, logo continua vivo mesmo dentro de estilos selados.
+    public static LinearGradientBrush Recolored(LinearGradientBrush? previous, IReadOnlyList<Color> stops)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = previous?.StartPoint ?? new Point(0, 0),
+            EndPoint = previous?.EndPoint ?? new Point(1, 0),
+        };
+        for (var i = 0; i < stops.Count; i++)
+        {
+            var source = previous is not null && i < previous.GradientStops.Count ? previous.GradientStops[i] : null;
+            var offset = source?.Offset ?? (stops.Count == IrisOffsets.Length ? IrisOffsets[i] : stops.Count == 1 ? 0 : (double)i / (stops.Count - 1));
+            brush.GradientStops.Add(new GradientStop(source?.Color ?? stops[i], offset));
+        }
+        Retint(brush, stops);
+        return brush;
+    }
+
+    private static readonly double[] IrisOffsets = [0, 0.35, 0.65, 1];
+
+    private static SolidColorBrush Frozen(SolidColorBrush brush)
+    {
+        brush.Freeze();
+        return brush;
     }
 
     // Degraus de um pincel íris (o da aplicação ou a barra aurora de uma janela) animados até às cores em vigor.

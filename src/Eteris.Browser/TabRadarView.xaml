@@ -171,7 +171,7 @@
                 </Grid.ColumnDefinitions>
                 <Border Width="44" Height="44" CornerRadius="14" Background="{DynamicResource IrisBrush}"
                         VerticalAlignment="Center">
-                    <TextBlock Text="&#xE721;" FontFamily="{DynamicResource IconFont}" FontSize="18" Foreground="#101420"
+                    <TextBlock Text="&#xE721;" FontFamily="{DynamicResource IconFont}" FontSize="18" Foreground="{DynamicResource AccentInkBrush}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" Margin="12,0,10,0" VerticalAlignment="Center">
@@ -347,7 +347,7 @@
                         </ScrollViewer>
                         <WrapPanel Grid.Row="1" Margin="0,8,0,0">
                             <Button x:Name="OpenButton" Content="Abrir" Style="{StaticResource RadarAction}"
-                                    Background="{DynamicResource IrisBrush}" Foreground="#101420" FontWeight="SemiBold" Margin="0,0,5,5" />
+                                    Background="{DynamicResource IrisBrush}" Foreground="{DynamicResource AccentInkBrush}" FontWeight="SemiBold" Margin="0,0,5,5" />
                             <Button x:Name="PinButton" Content="Fixar" Style="{StaticResource RadarAction}" Margin="0,0,5,5" />
                             <Button x:Name="MuteButton" Content="Silenciar" Style="{StaticResource RadarAction}" Margin="0,0,5,5" />
                             <Button x:Name="SplitButton" Content="Abrir ao lado" Style="{StaticResource RadarAction}" Margin="0,0,5,5" />
