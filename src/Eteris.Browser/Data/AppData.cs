@@ -73,6 +73,24 @@ public static class AppData
     // Grava os bloqueios em lote (a cada 20 s e à saída), nunca a cada pedido.
     public static void StartShieldStats() => _statsTimer ??= new Timer(_ => FlushShieldStats(), null, 20_000, 20_000);
 
+    // As tabelas que a 1.ª aba consulta logo ao nascer (motor de vídeo, exceções do escudo, favoritos, modo escuro) abrem-se
+    // numa thread de fundo enquanto a janela é criada: a 1.ª abertura do SQLite (carregar o e_sqlite3, preparar o
+    // Microsoft.Data.Sqlite) custava 20 ms a morno e ~120 ms a frio no fio da interface, no caminho da 1.ª pintura. Os
+    // Lazy são seguros entre threads: se a aba chegar primeiro, espera pela mesma abertura em vez de a repetir.
+    public static Task PrewarmAsync() => Task.Run(() =>
+    {
+        try
+        {
+            _ = LazyVideoWithCodecs.Value;
+            _ = LazyVideo.Value;
+            _ = LazyVideoOff.Value;
+            _ = LazyShieldExceptions.Value;
+            _ = LazyBookmarks.Value;
+            _ = LazyDark.Value;
+        }
+        catch (Exception) { }
+    });
+
     public static void FlushShieldStats()
     {
         var pending = Shields.ShieldStats.TakePending();

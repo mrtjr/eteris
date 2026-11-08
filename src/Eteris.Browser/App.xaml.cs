@@ -12,6 +12,8 @@ public partial class App : Application
         base.OnStartup(e);
         StartupTrace.Mark("onstartup");
         CefConfigurator.Initialize();
+        // As tabelas que a 1.ª aba consulta abrem-se em paralelo com a criação da janela (Data/AppData.cs, PrewarmAsync).
+        _ = Data.AppData.PrewarmAsync();
         // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
         Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
         StartupTrace.Mark("selftest");
