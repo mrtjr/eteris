@@ -352,6 +352,7 @@ public partial class MainWindow : Window
         if (e.PropertyName != nameof(TabsViewModel.Active)) return;
         OnActiveTabChanging();
         OnSplitActiveChanged();
+        MoveFocusOffHiddenPage();
         CloseGlanceOnTabChange();
         _omniboxEdited = false;
         CloseFind();

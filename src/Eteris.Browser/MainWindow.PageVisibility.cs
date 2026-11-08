@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Input;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
@@ -121,6 +122,21 @@ public partial class MainWindow
             if (_leavingPages.Remove(element)) HidePage(element);
     }
 
+    // O foco do teclado ficava na página da aba que se escondeu (minimizada): o Ctrl+Tab seguinte, e qualquer tecla,
+    // iam para uma página invisível e perdiam-se (medido: o 3.º Ctrl+Tab seguido já não trocava). Como no Chrome, a
+    // página da aba que entra recebe o foco.
+    private void MoveFocusOffHiddenPage()
+    {
+        var info = new GuiThreadInfo { Size = Marshal.SizeOf<GuiThreadInfo>() };
+        if (ActiveBrowser is not { } target || !GetGUIThreadInfo(0, ref info) || info.Focus == IntPtr.Zero) return;
+        foreach (var (tab, page) in _browsers)
+        {
+            if (IsTabOnScreen(tab) || page.Handle == IntPtr.Zero || !IsChild(page.Handle, info.Focus)) continue;
+            Keyboard.Focus(target);
+            return;
+        }
+    }
+
     // Também para os motores que não são abas (os sites fixados na barra lateral).
     private static void SetPageVisible(ChromiumWebBrowser browser, bool visible)
     {
@@ -151,6 +167,14 @@ public partial class MainWindow
         public int Left, Top, Right, Bottom;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GuiThreadInfo
+    {
+        public int Size, Flags;
+        public IntPtr Active, Focus, Capture, MenuOwner, MoveSize, Caret;
+        public NativeRect CaretRect;
+    }
+
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr handle, int command);
 
@@ -159,6 +183,12 @@ public partial class MainWindow
 
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsChild(IntPtr parent, IntPtr window);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
 
     [DllImport("user32.dll")]
     private static extern bool GetClientRect(IntPtr handle, out NativeRect rect);
