@@ -81,7 +81,7 @@ public static class SettingsPage
                     }.Where(d => d is not null).Concat(s.Flags).Concat(s.Permissions),
             }),
             syncPreview = settings.SyncPreview,
-            syncGoogle = Sync.GoogleSync.Current() is var g ? new { state = g.State, text = g.Text, url = g.Url } : null,
+            syncGoogle = Sync.GoogleSync.Current() is var g ? new { state = g.State, text = g.Text, url = g.Url, account = g.Account is not null, pending = g.AccountPending } : null,
             tabs = settings.VerticalTabs ? "side" : "top",
             density = settings.Density,
             accent = settings.Accent,

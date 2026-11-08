@@ -412,7 +412,7 @@
             </form>
           </div>
           <div class="item">
-            <div class="label"><b>Entrar com o Google</b><span>Guarda os dados cifrados na pasta oculta da aplicação no seu Google Drive (a Google só vê ficheiros cifrados, os tamanhos e as horas). O início de sessão abre no navegador do sistema.</span>
+            <div class="label"><b>Entrar com o Google</b><span>Guarda os dados cifrados na pasta oculta da aplicação no seu Google Drive (a Google só vê ficheiros cifrados, os tamanhos e as horas). O início de sessão abre no navegador do sistema. Depois, o Éteris pede à Google só o nome e o e-mail da conta, para os mostrar aqui e no menu.</span>
               <span class="syncnote" id="googleNote"></span>
               <div class="code" id="googleUrl" hidden></div></div>
             <button class="action" id="googleButton">Entrar com o Google</button>
@@ -667,16 +667,30 @@
     const googleNote = document.getElementById('googleNote');
     const googleUrl = document.getElementById('googleUrl');
     let poll = 0;
+    // Nome e e-mail da conta: se há sessão sem conta guardada, pedem-se uma vez quando a secção fica à vista DEPOIS de
+    // um gesto da pessoa na página (clique, tecla, roda, toque). Uma aba de Definições reposta no arranque não pede nada.
+    let accountKnown = !!(data.syncGoogle && data.syncGoogle.account), accountAsked = false, touched = false, seen = false;
+    const askAccount = () => {
+      if (!touched || !seen || accountKnown || accountAsked || googleButton.dataset.state !== 'signedIn') return;
+      accountAsked = true;
+      ask('sync-account', paintGoogle);
+    };
     const paintGoogle = g => {
       googleNote.textContent = g.text;
       googleUrl.hidden = !g.url; googleUrl.textContent = g.url || '';
       googleButton.disabled = g.state === 'unconfigured';
       googleButton.textContent = g.state === 'signedIn' ? 'Sair' : g.state === 'waiting' ? 'Cancelar' : 'Entrar com o Google';
       googleButton.dataset.state = g.state;
+      accountKnown = !!g.account;
       clearTimeout(poll);
-      if (g.state === 'waiting') poll = setTimeout(() => ask('sync-status', paintGoogle), 1500);
+      // À espera do início de sessão, ou da conta logo a seguir a entrar: volta a perguntar daqui a pouco.
+      if (g.state === 'waiting' || (g.state === 'signedIn' && g.pending)) poll = setTimeout(() => ask('sync-status', paintGoogle), 1500);
+      if (g.state !== 'signedIn') accountAsked = false;
     };
     paintGoogle(data.syncGoogle);
+    for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
+      addEventListener(type, () => { touched = true; askAccount(); }, { passive: true, capture: true });
+    new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); }).observe(googleButton);
     googleButton.addEventListener('click', () => {
       const state = googleButton.dataset.state;
       ask(state === 'signedIn' ? 'sync-google-out' : state === 'waiting' ? 'sync-google-cancel' : 'sync-google', paintGoogle);

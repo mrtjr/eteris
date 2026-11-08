@@ -9,6 +9,8 @@ namespace Eteris.Sync.Google;
 //   oauth2.googleapis.com/token, /revoke       — trocar o código por tokens, renovar e revogar
 //   www.googleapis.com/drive/v3/…              — listar, ler e apagar na pasta oculta da aplicação (appDataFolder)
 //   www.googleapis.com/upload/drive/v3/…       — enviar ficheiros (multipart e resumable)
+//   www.googleapis.com/drive/v3/about          — nome e e-mail da conta (fields=user(displayName,emailAddress)),
+//                                                só depois de uma ação do utilizador (GoogleAccountService)
 //
 // Só https, sem cookies, sem cabeçalhos do motor (Accept-Language, User-Agent do Chromium…), e só quando o
 // utilizador ligou a sincronização pelo Google. Testes: GoogleSyncTests (lista de endereços e varrimento do código).
@@ -25,6 +27,10 @@ public static class GoogleEndpoints
     public const string Files = "https://www.googleapis.com/drive/v3/files";
     public const string Upload = "https://www.googleapis.com/upload/drive/v3/files";
 
+    // Com que conta se entrou: só o nome e o e-mail (o «fields» é obrigatório e limita a resposta a isto). Aceita o
+    // âmbito drive.appdata (documentação da Google, about.get, «Authorization scopes»): não pede âmbito novo.
+    public const string AboutUser = "https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)";
+
     // Âmbito (não é um endereço pedido): só a pasta oculta da aplicação no Drive, classificado pela Google como não
     // sensível. O Éteris não vê mais nada do Drive do utilizador.
     public const string Scope = "https://www.googleapis.com/auth/drive.appdata";
@@ -40,7 +46,7 @@ public static class GoogleEndpoints
         return host switch
         {
             "oauth2.googleapis.com" => path is "/token" or "/revoke",
-            "www.googleapis.com" => path == "/drive/v3/files" || path.StartsWith("/drive/v3/files/", StringComparison.Ordinal)
+            "www.googleapis.com" => path == "/drive/v3/about" || path == "/drive/v3/files" || path.StartsWith("/drive/v3/files/", StringComparison.Ordinal)
                                     || path == "/upload/drive/v3/files" || path.StartsWith("/upload/drive/v3/files/", StringComparison.Ordinal),
             _ => false,
         };

@@ -8,8 +8,11 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using CefSharp;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Palette;
+using Eteris.Browser.Sync;
+using Eteris.Sync.Google;
 
 namespace Eteris.Browser;
 
@@ -63,6 +66,7 @@ public partial class MainWindow
         }, DispatcherPriority.Input);
         popup.Closed += (_, _) =>
         {
+            if (popup.Tag is Action detach) detach();
             if (!ReferenceEquals(_browserMenu, popup)) return;
             _browserMenu = null;
             _browserMenuButtons = [];
@@ -151,6 +155,16 @@ public partial class MainWindow
         var heading = BrowserMenuHeading(IsPrivate);
         DockPanel.SetDock(heading, Dock.Top);
         content.Children.Add(heading);
+        if (BuildBrowserMenuAccount(popup, rowStyle) is { } account)
+        {
+            // Primeira na ordem do teclado, como está primeiro no ecrã.
+            buttons.Insert(0, account);
+            var holder = new StackPanel { Margin = new Thickness(6, 0, 6, 0) };
+            holder.Children.Add(account);
+            holder.Children.Add(BrowserMenuDivider());
+            DockPanel.SetDock(holder, Dock.Top);
+            content.Children.Add(holder);
+        }
         content.Children.Add(body);
         KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
 
@@ -178,6 +192,105 @@ public partial class MainWindow
         frame.SetResourceReference(Border.BorderBrushProperty, "FieldBorderBrush");
         AutomationProperties.SetName(frame, "Menu do Éteris");
         return frame;
+    }
+
+    // A linha da conta no topo do menu (como no Chrome, no Firefox e no Brave), só com a sincronização experimental
+    // ligada e numa janela normal: nas janelas privadas não aparece nada da conta.
+    internal enum MenuAccountRow { None, SignIn, Account }
+
+    internal static MenuAccountRow BrowserMenuAccountRow(bool syncPreview, bool isPrivate, bool signedIn)
+        => !syncPreview || isPrivate ? MenuAccountRow.None : signedIn ? MenuAccountRow.Account : MenuAccountRow.SignIn;
+
+    private Button? BuildBrowserMenuAccount(Popup popup, Style rowStyle)
+    {
+        var syncPreview = Settings.Current.SyncPreview;
+        // Só lê o disco (tokens cifrados) com a opção ligada; nada sai daqui para a Google.
+        var kind = BrowserMenuAccountRow(syncPreview, IsPrivate, syncPreview && !IsPrivate && GoogleSync.SignedIn);
+        if (kind == MenuAccountRow.None) return null;
+        var button = BrowserMenuAccountButton(kind, kind == MenuAccountRow.Account ? GoogleSync.Account : null, rowStyle);
+        button.Click += (_, _) => RunBrowserMenuAction(popup, () => OpenInternal(SettingsPage.Url + "#sincronizacao"));
+        if (kind == MenuAccountRow.Account && GoogleSync.Account is null)
+        {
+            // Já havia sessão sem conta guardada: abrir o menu (ação do utilizador) pede o nome e o e-mail, em segundo
+            // plano, e a linha atualiza-se se o menu ainda estiver aberto.
+            Action changed = () => Dispatcher.BeginInvoke(() =>
+            {
+                if (popup.IsOpen) FillBrowserMenuAccount(button, MenuAccountRow.Account, GoogleSync.Account);
+            });
+            GoogleSync.AccountChanged += changed;
+            popup.Tag = (Action)(() => GoogleSync.AccountChanged -= changed);
+            GoogleSync.RequestAccount();
+        }
+        return button;
+    }
+
+    internal static Button BrowserMenuAccountButton(MenuAccountRow kind, GoogleAccount? account, Style rowStyle)
+    {
+        var button = new Button { Style = rowStyle, Padding = new Thickness(8, 6, 8, 6) };
+        FillBrowserMenuAccount(button, kind, account);
+        return button;
+    }
+
+    // O que a linha diz. Com sessão: avatar com a inicial (círculo com o gradiente da íris; sem foto, que seria outro
+    // pedido a outro servidor), nome em negrito, e-mail e o estado. Sem sessão: «Entrar com o Google».
+    internal static void FillBrowserMenuAccount(Button button, MenuAccountRow kind, GoogleAccount? account)
+    {
+        var signedIn = kind == MenuAccountRow.Account;
+        var known = signedIn && account is { IsEmpty: false };
+        var title = !signedIn ? "Entrar com o Google"
+            : known ? (string.IsNullOrWhiteSpace(account!.Name) ? account.Email! : account.Name!) : "Conta Google ligada";
+        var detail = known && !string.IsNullOrWhiteSpace(account!.Name) && !string.IsNullOrWhiteSpace(account.Email) ? account.Email : null;
+        var state = signedIn ? "Ligado ao Google Drive" : "Sincronização cifrada (experimental)";
+
+        var avatar = new Border
+        {
+            Width = 32, Height = 32, CornerRadius = new CornerRadius(16),
+            Margin = new Thickness(0, 0, 11, 0), VerticalAlignment = VerticalAlignment.Center,
+        };
+        var mark = new TextBlock
+        {
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        if (known)
+        {
+            avatar.SetResourceReference(Border.BackgroundProperty, "IrisBrush");
+            mark.Text = account!.Initial;
+            mark.FontSize = 15;
+            mark.FontWeight = FontWeights.SemiBold;
+            mark.Foreground = new SolidColorBrush(Color.FromRgb(0x0B, 0x0D, 0x13));
+        }
+        else
+        {
+            avatar.BorderThickness = new Thickness(2);
+            avatar.SetResourceReference(Border.BorderBrushProperty, "IrisBrush");
+            mark.Text = "\uE77B";
+            mark.FontSize = 14;
+            mark.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
+            mark.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+        }
+        avatar.Child = mark;
+
+        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        TextBlock Line(string text, double size, bool strong, bool muted)
+        {
+            var line = new TextBlock { Text = text, FontSize = size, TextTrimming = TextTrimming.CharacterEllipsis };
+            if (strong) line.FontWeight = FontWeights.SemiBold;
+            line.SetResourceReference(TextBlock.ForegroundProperty, muted ? "TextMutedBrush" : "TextBrush");
+            lines.Children.Add(line);
+            return line;
+        }
+        Line(title, 13, strong: true, muted: false);
+        if (detail is not null) Line(detail, 12, strong: false, muted: true);
+        Line(state, 11, strong: false, muted: true).Margin = new Thickness(0, 1, 0, 0);
+
+        var row = new DockPanel();
+        DockPanel.SetDock(avatar, Dock.Left);
+        row.Children.Add(avatar);
+        row.Children.Add(lines);
+        button.Content = row;
+        AutomationProperties.SetName(button, signedIn
+            ? $"Conta Google: {(known ? account!.Label : "ligada")}. {state}. Abrir a sincronização nas Definições"
+            : "Entrar com o Google. Abre a sincronização nas Definições");
     }
 
     internal static Border BrowserMenuHeading(bool isPrivate)

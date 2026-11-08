@@ -23,6 +23,7 @@ transporte alternativo. Base: `C:\cef\notas\viabilidade\viab-sync.md`, `viab-log
 | Definições › **Sincronização** (opção experimental desligada) | `settings.html`, `Sync/` | pronta |
 | Exportar / importar o perfil cifrado num ficheiro `.eteris` | `Sync/ProfileTransfer.cs` | pronto |
 | «Entrar com o Google» / «Sair» | `Sync/GoogleSync.cs` | pronto, **por configurar** (falta o `client_id`) |
+| A conta no menu do navegador e nas Definições (nome, e-mail, avatar com a inicial) | `Google/GoogleAccount.cs`, `MainWindow.BrowserMenu.cs` | pronta (só com a opção experimental) |
 | Sincronização automática com o Drive (ligar o motor aos dados do Éteris) | — | próxima fase |
 | Ecrã de emparelhamento (QR no PC, leitor no telemóvel) | — | próxima fase |
 | Escolher uma pasta (OneDrive/Dropbox) como transporte na interface | — | próxima fase |
@@ -166,11 +167,39 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
   fecha. `access_type=offline` para o token de renovação. Se o utilizador desmarcar a permissão no ecrã da Google, o
   Éteris diz que sem ela não sincroniza.
 - **Tokens** guardados em `<perfil>\sync\google.tokens`, cifrados com DPAPI do utilizador do Windows.
-- **Sair** apaga os tokens deste computador e revoga-os na Google (`oauth2.googleapis.com/revoke`).
+- **Sair** apaga os tokens e a conta guardada deste computador e revoga os tokens na Google
+  (`oauth2.googleapis.com/revoke`).
 - **`client_id`:** lido de `google-oauth.json` ao lado do `Eteris.Browser.exe` (vai com a instalação) ou na pasta do
   perfil (testes). Aceita o JSON que a consola da Google descarrega (`{"installed": {…}}`). Sem ele: «por configurar»
   e nenhum pedido. O `client_secret` das apps de computador não é segredo (vai com o programa; a Google sabe-o); quem
   protege a troca é o PKCE.
+
+### A conta no menu
+
+Como no Chrome, no Firefox e no Brave, a conta com que se entrou aparece no topo do menu do navegador (Alt+F) e nas
+Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Drive…»).
+
+- **De onde vem:** um pedido ao Drive, `GET https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)`
+  com o token de acesso que já existe (renovado pelo código de sempre se expirou; 401 → renova uma vez e repete). O
+  `about.get` aceita o âmbito `drive.appdata` (documentação da Google, *about.get › Authorization scopes*:
+  <https://developers.google.com/workspace/drive/api/reference/rest/v3/about/get>): **nenhum âmbito novo**, nenhum
+  servidor novo (é o mesmo `www.googleapis.com` do Drive) e o `fields` limita a resposta ao nome e ao e-mail.
+- **Sem foto:** seria outro pedido a outro servidor (`lh3.googleusercontent.com`). O avatar é a inicial do nome num
+  círculo com o gradiente da íris.
+- **Quando:** logo a seguir a um início de sessão bem-sucedido; e, se já havia sessão sem conta guardada (quem entrou
+  antes desta versão), **uma vez** quando o utilizador abre o menu do navegador ou a secção Sincronização das
+  Definições (na página, só depois de um gesto da pessoa — clique, tecla, roda, toque — com a secção à vista: uma aba de
+  Definições reposta no arranque não pede nada). Em segundo plano; a linha do menu atualiza-se se ainda estiver aberta.
+  **Nunca no arranque** (a promessa da 0.2.11, «No arranque, nada sai para a Google», mantém-se), nunca num
+  temporizador, e **no máximo uma tentativa falhada por sessão** (depois de falhar, só volta a tentar depois de sair e
+  entrar, ou de reabrir o Éteris). Enquanto não há conta, o menu diz «Conta Google ligada».
+- **Onde fica:** `<perfil>\sync\google.account`, cifrado com DPAPI do utilizador do Windows (como os tokens, com outra
+  «entropia»). **Apagado ao «Sair».** O texto que vem da rede é limpo (sem caracteres de controlo, até 200 caracteres)
+  antes de ir para a interface.
+- **No menu**, só com a opção experimental ligada e numa janela normal (nas janelas privadas não aparece nada da conta;
+  sem a opção, o menu fica como estava): com sessão, avatar, nome em negrito, e-mail e «Ligado ao Google Drive»; sem
+  sessão, «Entrar com o Google». As duas abrem `eteris://settings/#sincronizacao`, são a primeira paragem do teclado no
+  menu e têm nome para leitores de ecrã.
 
 ### Perfil cifrado num ficheiro
 
@@ -202,9 +231,11 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 | `https://oauth2.googleapis.com/revoke` | revogar ao «Sair» |
 | `https://www.googleapis.com/drive/v3/files…` | listar, ler e apagar na pasta oculta da aplicação |
 | `https://www.googleapis.com/upload/drive/v3/files…` | enviar (multipart, resumable, PATCH) |
+| `https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)` | nome e e-mail da conta, para o menu e as Definições (ver «A conta no menu»: só depois de uma ação do utilizador) |
 
 - O `GoogleOnlyHandler` recusa qualquer outro endereço **antes de sair do processo** (só `https`, porta por omissão,
-  sem utilizador no endereço; `www.googleapis.com` só com `/drive/v3/files` e `/upload/drive/v3/files`; `oauth2` só
+  sem utilizador no endereço; `www.googleapis.com` só com `/drive/v3/files`, `/upload/drive/v3/files` e
+  `/drive/v3/about`; `oauth2` só
   `/token` e `/revoke`). Sem cookies, sem redirecionamentos automáticos, sem os cabeçalhos do motor; `User-Agent`
   `Eteris-Sync/1`.
 - Só corre com a opção experimental ligada **e** depois de o utilizador carregar em «Entrar com o Google».
@@ -245,6 +276,8 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 
 - que esta conta Google autorizou a aplicação «Éteris» (aparece em *myaccount.google.com › Segurança › Ligações a apps*),
   e quando houve início de sessão e renovação de tokens;
+- que o Éteris pediu o nome e o e-mail da conta (`about.get`, uma vez depois de entrar — a Google já os conhece; nada
+  do Éteris vai nesse pedido além do token);
 - os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)
   e tamanhos aproximados (preenchidos a 1 KiB e, nos grandes, a «baldes» Padmé: um instantâneo de um perfil grande
   pesa mais do que o de um pequeno); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
@@ -303,6 +336,11 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   resumable, PATCH, 401 com renovação, 429/503 com novas tentativas), 3 aparelhos e emparelhamento pelo Drive falso,
   início de sessão de ponta a ponta pelo loopback, endereço para copiar, estado forjado, permissão em falta, «Sair»
   revoga, `google-oauth.json`, e a **exceção de rede** (lista de endereços, recusa antes de sair, varrimento do código).
+- `GoogleAccountTests` — conta gravada cifrada com DPAPI (nada legível no ficheiro, outra «entropia» não abre), apagada
+  ao sair, **nenhum pedido ao montar a sessão e ler o estado** (o arranque), o pedido só por `RequestIfMissing` (menu e
+  rota `sync-account`) ou depois de entrar (varrimento do código: nada no `App.xaml.cs`/`MainWindow.xaml.cs`, nenhum
+  temporizador, na página só depois de um gesto), uma única tentativa falhada por sessão, 401 com renovação, texto da
+  rede limpo, e a linha do menu nas três situações (sem opção, sem sessão, com sessão) e nas janelas privadas.
 - `SyncIntegrationTests` — opção desligada por omissão, secção nas Definições, definições que viajam (e as que não),
   notas importadas, DPAPI, navegador do sistema (reconhece o Éteris, prefere outro navegador), formulário POST, e que
   este documento regista a exceção.

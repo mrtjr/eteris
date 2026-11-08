@@ -184,13 +184,18 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 // Os tokens deste computador saem já; a revogação na Google segue em segundo plano.
                 _ = Sync.GoogleSync.SignOutAsync();
                 break;
+            case "/sync-account":
+                // A secção Sincronização ficou à vista depois de um gesto do utilizador na página: se há sessão sem
+                // conta guardada, pede o nome e o e-mail ao Drive (uma vez; nunca no arranque).
+                Sync.GoogleSync.RequestAccount();
+                break;
             case "/sync-status":
                 break;
             default:
                 return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
         }
         var status = Sync.GoogleSync.Current();
-        return Json(new { ok = true, state = status.State, text = status.Text, url = status.Url });
+        return Json(new { ok = true, state = status.State, text = status.Text, url = status.Url, account = status.Account is not null, pending = status.AccountPending });
     }
 
     private static IResourceHandler Json(object value)

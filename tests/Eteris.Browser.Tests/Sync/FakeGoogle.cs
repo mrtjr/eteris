@@ -27,6 +27,9 @@ internal sealed class FakeGoogle : HttpMessageHandler
     public List<string> Requests { get; } = [];
     public List<string> Revoked { get; } = [];
     public int Refreshes { get; private set; }
+    // A conta devolvida pelo about.get (fictícia).
+    public string? AccountName { get; set; } = "Ana Teste";
+    public string? AccountEmail { get; set; } = "ana.teste@example.com";
 
     public IReadOnlyCollection<(string Name, byte[] Data)> Files
     {
@@ -60,6 +63,16 @@ internal sealed class FakeGoogle : HttpMessageHandler
 
         var path = uri.AbsolutePath;
         var query = Query(uri);
+        if (request.Method == HttpMethod.Get && path == "/drive/v3/about")
+        {
+            // Como a Google: «fields» é obrigatório e a resposta só leva o que se pediu.
+            if (query.GetValueOrDefault("fields") != "user(displayName,emailAddress)")
+                return Json(HttpStatusCode.BadRequest, new JsonObject { ["error"] = "fields obrigatório" });
+            var user = new JsonObject();
+            if (AccountName is not null) user["displayName"] = AccountName;
+            if (AccountEmail is not null) user["emailAddress"] = AccountEmail;
+            return Json(HttpStatusCode.OK, new JsonObject { ["user"] = user });
+        }
         lock (_files)
         {
             if (request.Method == HttpMethod.Get && path == "/drive/v3/files")

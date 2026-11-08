@@ -9,6 +9,8 @@ namespace Eteris.Browser.Sync;
 // navegador do sistema (PKCE + loopback), tokens guardados com DPAPI no perfil e revogados ao «Sair».
 // Sem o identificador da aplicação (google-oauth.json, criado pelo dono na Google Cloud) fica «por configurar» e não
 // faz pedido nenhum. Ligado, ainda não envia dados: a sincronização automática pelo Drive chega numa próxima fase.
+// A conta (nome e e-mail, para o menu e as Definições) pede-se ao Drive logo a seguir a entrar, ou — se já havia sessão
+// sem conta guardada — quando o utilizador abre o menu ou a secção Sincronização (RequestAccount). Nunca no arranque.
 internal static class GoogleSync
 {
     private static readonly Lock Gate = new();
@@ -17,8 +19,14 @@ internal static class GoogleSync
     private static CancellationTokenSource? _signIn;
     private static string? _manualUrl;
     private static string? _error;
+    private static GoogleAccountService? _account;
+
+    // A conta mudou (obtida ou apagada ao sair). Chamado de qualquer thread.
+    public static event Action? AccountChanged;
 
     public static string TokenPath => Path.Combine(AppPaths.Root, "sync", "google.tokens");
+
+    public static string AccountPath => Path.Combine(AppPaths.Root, "sync", "google.account");
 
     // Onde se procura o identificador: ao lado do programa (vai com a instalação) ou no perfil (testes do dono).
     public static IEnumerable<string> ConfigPaths =>
@@ -34,13 +42,30 @@ internal static class GoogleSync
         get { lock (Gate) return _signIn is not null; }
     }
 
-    public sealed record Status(string State, string Text, string? Url);
+    public sealed record Status(string State, string Text, string? Url, GoogleAccount? Account = null, bool AccountPending = false);
+
+    // Só disco (tokens e conta cifrados): nenhum pedido à Google.
+    public static bool SignedIn => Session()?.IsSignedIn == true;
+
+    public static GoogleAccount? Account => SignedIn ? Accounts()?.Current : null;
+
+    public static bool AccountPending => Accounts()?.Pending == true;
+
+    // Uma ação do utilizador (abrir o menu, abrir a secção Sincronização) quer mostrar a conta: se há sessão e nenhuma
+    // conta guardada, pede-a em segundo plano (no máximo uma tentativa falhada por sessão). Devolve true se pediu.
+    public static bool RequestAccount() => Accounts()?.RequestIfMissing(SignedIn) is not null;
+
+    // O texto do estado com sessão: com a conta, «Ligado como Nome (e-mail)…».
+    internal static string SignedInText(GoogleAccount? account)
+        => (account is { IsEmpty: false } ? $"Ligado como {account.Label} ao Google Drive" : "Ligado ao Google Drive")
+           + " (pasta oculta da aplicação). Ainda nada é enviado: a sincronização automática chega numa próxima versão.";
 
     public static Status Current()
     {
         if (Config is null)
             return new("unconfigured", "Por configurar: falta o identificador da aplicação Google (google-oauth.json). Nada é pedido à Google.", null);
         var signedIn = Session()?.IsSignedIn == true;
+        var accounts = signedIn ? Accounts() : null;
         lock (Gate)
         {
             if (_signIn is not null)
@@ -48,7 +73,10 @@ internal static class GoogleSync
                     ? "À espera do início de sessão no navegador do sistema…"
                     : "Não encontrámos outro navegador: copie este endereço para um navegador (Firefox, Chrome, Brave…) e entre lá.", _manualUrl);
             if (signedIn)
-                return new("signedIn", "Ligado ao Google Drive (pasta oculta da aplicação). Ainda nada é enviado: a sincronização automática chega numa próxima versão.", null);
+            {
+                var account = accounts?.Current;
+                return new("signedIn", SignedInText(account), null, account, accounts?.Pending == true);
+            }
             return new("signedOut", _error ?? "Não ligado.", null);
         }
     }
@@ -71,6 +99,8 @@ internal static class GoogleSync
                 var oauth = new GoogleOAuth(Http(), config, Now);
                 var tokens = await oauth.SignInAsync(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, cancel.Token);
                 Session()?.Use(tokens);
+                // Logo a seguir a entrar (ação do utilizador): com que conta.
+                _ = Accounts()?.AfterSignIn();
             }
             catch (OAuthException e) { lock (Gate) _error = e.Message; }
             catch (OperationCanceledException) { lock (Gate) _error = null; }
@@ -99,6 +129,7 @@ internal static class GoogleSync
     {
         var session = Session();
         if (session is null) return;
+        Accounts()?.Forget();
         try { await session.SignOutAsync(CancellationToken.None); }
         catch (Exception e) when (e is HttpRequestException or IOException) { }
     }
@@ -115,5 +146,18 @@ internal static class GoogleSync
         if (Config is not { } config) return null;
         var http = Http();
         lock (Gate) return _session ??= new GoogleSession(new GoogleOAuth(http, config, Now), new TokenStore(TokenPath, new Dpapi("google-tokens")), Now);
+    }
+
+    private static GoogleAccountService? Accounts()
+    {
+        if (Session() is not { } session) return null;
+        var http = Http();
+        lock (Gate)
+        {
+            if (_account is not null) return _account;
+            _account = new GoogleAccountService(http, session.AccessTokenAsync, new GoogleAccountStore(AccountPath, new Dpapi("google-account")));
+            _account.Changed += _ => AccountChanged?.Invoke();
+            return _account;
+        }
     }
 }

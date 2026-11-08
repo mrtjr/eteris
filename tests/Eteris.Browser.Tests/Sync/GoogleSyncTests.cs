@@ -246,7 +246,9 @@ public class GoogleSyncTests
     [InlineData("https://www.googleapis.com:8443/drive/v3/files", false)]
     [InlineData("https://www.googleapis.com/drive/v2/files", false)]
     [InlineData("https://www.googleapis.com/gmail/v1/users/me/messages", false)]    // nada além do Drive
-    [InlineData("https://www.googleapis.com/drive/v3/about", false)]
+    [InlineData("https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)", true)] // nome e e-mail da conta
+    [InlineData("https://www.googleapis.com/drive/v3/about/x", false)]
+    [InlineData("https://www.googleapis.com/drive/v3/changes", false)]
     [InlineData("https://oauth2.googleapis.com/tokeninfo", false)]
     [InlineData("https://accounts.google.com/o/oauth2/v2/auth", false)]            // esse só no navegador do sistema
     [InlineData("https://www.google-analytics.com/collect", false)]
@@ -278,7 +280,7 @@ public class GoogleSyncTests
         [
             "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", "https://oauth2.googleapis.com/revoke",
             "https://www.googleapis.com/drive/v3/files", "https://www.googleapis.com/upload/drive/v3/files",
-            "https://www.googleapis.com/auth/drive.appdata",
+            "https://www.googleapis.com/auth/drive.appdata", "https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)",
         ];
         foreach (var file in Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories))
         {
@@ -293,7 +295,7 @@ public class GoogleSyncTests
         // A documentação regista a exceção.
         var doc = File.ReadAllText(Path.Combine(root, "docs", "sincronizacao.md"));
         Assert.Contains("A exceção de rede", doc);
-        foreach (var host in new[] { "oauth2.googleapis.com", "accounts.google.com", "www.googleapis.com/drive/v3", "www.googleapis.com/upload/drive/v3" })
+        foreach (var host in new[] { "oauth2.googleapis.com", "accounts.google.com", "www.googleapis.com/drive/v3", "www.googleapis.com/upload/drive/v3", "www.googleapis.com/drive/v3/about" })
             Assert.Contains(host, doc);
     }
 
