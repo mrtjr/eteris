@@ -19,10 +19,12 @@ public static class ShieldEngine
 
     public static Task StartAsync(FilterLists lists) => Task.Run(async () =>
     {
+        Infrastructure.StartupTrace.Mark("escudo.inicio");
         var scriptlets = System.IO.File.Exists(ScriptletsPath) ? System.IO.File.ReadAllText(ScriptletsPath) : null;
         try
         {
-            Swap(AdblockEngine.Create(lists.Load(trusted: false), scriptlets, lists.Load(trusted: true)));
+            Swap(Infrastructure.StartupTrace.IsOn ? CreateTraced(lists, scriptlets) : AdblockEngine.Create(lists.Load(trusted: false), scriptlets, lists.Load(trusted: true)));
+            Infrastructure.StartupTrace.Mark("escudo.trocado");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException)
         {
@@ -35,6 +37,18 @@ public static class ShieldEngine
         if (await lists.UpdateAsync(http, CancellationToken.None))
             Swap(AdblockEngine.Create(lists.Load(trusted: false), scriptlets, lists.Load(trusted: true)));
     });
+
+    // Com ETERIS_TRACE_STARTUP: o mesmo que acima, com o tempo de ler as listas e o de compilar o motor separados.
+    // Fora do método assíncrono, para os textos das listas não ficarem presos à máquina de estados durante a atualização.
+    private static AdblockEngine CreateTraced(FilterLists lists, string? scriptlets)
+    {
+        var rules = lists.Load(trusted: false);
+        var trustedRules = lists.Load(trusted: true);
+        Infrastructure.StartupTrace.Mark("escudo.listas", $"regras={rules.Length} confiaveis={trustedRules.Length} scriptlets={scriptlets?.Length ?? 0}");
+        var engine = AdblockEngine.Create(rules, scriptlets, trustedRules);
+        Infrastructure.StartupTrace.Mark("escudo.motor");
+        return engine;
+    }
 
     private static void Swap(AdblockEngine engine)
         => (Interlocked.Exchange(ref _current, engine) as AdblockEngine)?.Dispose();

@@ -28,6 +28,13 @@ public partial class MainWindow : Window
     public MainWindow(string? initialUrl = null, bool isPrivate = false)
     {
         InitializeComponent();
+        StartupTrace.Mark("janela.xaml");
+        if (StartupTrace.IsOn)
+        {
+            SourceInitialized += (_, _) => StartupTrace.MarkOnce("janela.sourceinit");
+            Loaded += (_, _) => StartupTrace.MarkOnce("janela.loaded");
+            ContentRendered += (_, _) => StartupTrace.MarkOnce("janela.render");
+        }
         IsPrivate = isPrivate;
         if (isPrivate) ConfigurePrivateWindow();
         Tabs.NewTabAddress = NewTabUrl;
@@ -47,6 +54,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
         StartTabs(initialUrl);
+        StartupTrace.Mark("janela.abas");
         WatchSnoozed();
         WatchArchive();
         RestorePlacement();
@@ -68,6 +76,7 @@ public partial class MainWindow : Window
         WatchAltTap();
         Closing += (_, _) => FlushNotes();
         ContentRendered += (_, _) => SetUpOverlayLayer();
+        StartupTrace.Mark("janela.ctor");
     }
 
     public TabsViewModel Tabs { get; } = new();
@@ -114,6 +123,7 @@ public partial class MainWindow : Window
     private void CreateBrowser(BrowserTab tab)
     {
         if (TryCreateVideoView(tab)) return;
+        StartupTrace.Mark("aba.criar", "abas=" + _browsers.Count);
         // Scripts do Éteris que correm antes dos da página. Por site: regras cosméticas do site (escudo ligado) e modo
         // escuro (se pedido). Base, em todas as páginas web: deteção de vídeo só em H.264 e registo do último clique
         // (para distinguir um link aberto pelo utilizador de um anúncio pop-under); também nas internas, o Alt+clique.
@@ -280,6 +290,7 @@ public partial class MainWindow : Window
         browser.FrameLoadStart += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            StartupTrace.MarkOnce("aba.1.commit");
             // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a
             // contagem do Escudo recomeça aqui, no commit.
             // Voltar/Avançar sem pedido é a página reposta da cache (bfcache): volta a contagem e o ícone que ela tinha, e
@@ -309,6 +320,7 @@ public partial class MainWindow : Window
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            if (!firstLoad.Task.IsCompleted) StartupTrace.Mark("aba.carregada");
             firstLoad.TrySetResult();
             var url = e.Url;
             // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
@@ -346,6 +358,7 @@ public partial class MainWindow : Window
         };
         browser.IsBrowserInitializedChanged += (_, _) =>
         {
+            if (browser.IsBrowserInitialized) StartupTrace.Mark("aba.cef");
             if (browser.IsBrowserInitialized && browser.GetBrowser() is { } cef) injector.Start(cef);
             if (browser.IsBrowserInitialized && tab.IsMuted) browser.GetBrowserHost()?.SetAudioMuted(true);
             // Abas abertas em segundo plano: a janela do Chromium fica logo escondida (ver SetPageWindowVisible).
@@ -355,6 +368,7 @@ public partial class MainWindow : Window
         BrowserHost.Children.Add(browser);
         WatchPaneFocus(tab, browser);
         if (IsSplit) LayoutBrowsers();
+        StartupTrace.Mark("aba.criada");
         // Sem UpdateLayout aqui: dispor a aba nova logo a seguir a criá-la (para o CefSharp não desfazer o BirthSize no fim
         // da criação) fazia a 1.ª aba nova da sessão aparecer branca 2–3 fotogramas depois de a antiga sair (medido a
         // 60 fps no ramo motor: 2 em 3 sessões com ele, 0 em 4 sem ele). Com a disposição normal do WPF a janela do CEF

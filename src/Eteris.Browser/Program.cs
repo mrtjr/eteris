@@ -13,7 +13,9 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        StartupTrace.Mark("main");
         VelopackApp.Build().Run();
+        StartupTrace.Mark("velopack");
 
         if (StartupArgs.UserDataDir(args) is { } userDataDir) AppPaths.UseRoot(userDataDir);
         var instanceName = AppPaths.IsCustomProfile
@@ -32,9 +34,11 @@ public static class Program
             if (!AppPaths.IsCustomProfile) SingleInstance.ActivateExisting(InstanceName);
             return;
         }
+        StartupTrace.Mark("instancia");
 
         var app = new App();
         app.InitializeComponent();
+        StartupTrace.Mark("app.recursos");
         app.Run();
     }
 }

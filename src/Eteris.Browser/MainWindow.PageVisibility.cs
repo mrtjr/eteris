@@ -206,6 +206,7 @@ public partial class MainWindow
             if (arrivals[i] is not { } arrival) continue;
             if (presented[i] != PageSwap.Presented.No) _presentation.Presented(arriving[i], arrival);
             else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible) _ = ConfirmPresentedAsync(arriving[i], arrival);
+            if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupTrace.Mark("aba.apresentada", presented[i].ToString());
         }
     }
 

@@ -4,14 +4,14 @@ namespace Eteris.Browser.Data;
 
 public static class AppData
 {
-    private static readonly Lazy<HistoryStore> LazyHistory = new(() => new HistoryStore(AppPaths.Database));
-    private static readonly Lazy<ShieldExceptionStore?> LazyShieldExceptions = new(() =>
+    private static readonly Lazy<HistoryStore> LazyHistory = StartupTrace.Lazy<HistoryStore>("LazyHistory", () => new HistoryStore(AppPaths.Database));
+    private static readonly Lazy<ShieldExceptionStore?> LazyShieldExceptions = StartupTrace.Lazy<ShieldExceptionStore?>("LazyShieldExceptions", () =>
     {
         try { return new ShieldExceptionStore(AppPaths.Database); }
         catch (Exception) { return null; }
     });
 
-    private static readonly Lazy<SiteZoomStore?> LazyZoom = new(() =>
+    private static readonly Lazy<SiteZoomStore?> LazyZoom = StartupTrace.Lazy<SiteZoomStore?>("LazyZoom", () =>
     {
         try { return new SiteZoomStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -19,7 +19,7 @@ public static class AppData
 
     public static HistoryStore History => LazyHistory.Value;
 
-    private static readonly Lazy<HistoryWriter> LazyWriter = new(() => new HistoryWriter(() => History, TimeSpan.FromSeconds(1)));
+    private static readonly Lazy<HistoryWriter> LazyWriter = StartupTrace.Lazy<HistoryWriter>("LazyWriter", () => new HistoryWriter(() => History, TimeSpan.FromSeconds(1)));
 
     // Visitas e ícones: escritos em segundo plano, pela ordem (Data/HistoryWriter.cs).
     public static void QueueWrite(Action<HistoryStore> write) => LazyWriter.Value.Enqueue(write);
@@ -38,7 +38,7 @@ public static class AppData
         if (LazyWriter.IsValueCreated) LazyWriter.Value.Dispose();
     }
 
-    private static readonly Lazy<HiddenElementsStore?> LazyHidden = new(() =>
+    private static readonly Lazy<HiddenElementsStore?> LazyHidden = StartupTrace.Lazy<HiddenElementsStore?>("LazyHidden", () =>
     {
         try { return new HiddenElementsStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -62,7 +62,7 @@ public static class AppData
         catch (Exception) { }
     }
 
-    private static readonly Lazy<DailyStatsStore?> LazyDaily = new(() =>
+    private static readonly Lazy<DailyStatsStore?> LazyDaily = StartupTrace.Lazy<DailyStatsStore?>("LazyDaily", () =>
     {
         try { return new DailyStatsStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -85,7 +85,7 @@ public static class AppData
     }
 
     // Relatório de privacidade (eteris://privacy/): agregados por dia, categoria e domínio do rastreador.
-    private static readonly Lazy<PrivacyEventsStore?> LazyPrivacyEvents = new(() =>
+    private static readonly Lazy<PrivacyEventsStore?> LazyPrivacyEvents = StartupTrace.Lazy<PrivacyEventsStore?>("LazyPrivacyEvents", () =>
     {
         try { return new PrivacyEventsStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -178,7 +178,7 @@ public static class AppData
         catch (Exception) { return new Dictionary<string, string>(); }
     }
 
-    private static readonly Lazy<BookmarkStore> LazyBookmarks = new(() => new BookmarkStore(AppPaths.Database));
+    private static readonly Lazy<BookmarkStore> LazyBookmarks = StartupTrace.Lazy<BookmarkStore>("LazyBookmarks", () => new BookmarkStore(AppPaths.Database));
 
     public static IReadOnlyList<Bookmark> Bookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read)
     {
@@ -186,7 +186,7 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    private static readonly Lazy<ReadingListStore?> LazyReading = new(() =>
+    private static readonly Lazy<ReadingListStore?> LazyReading = StartupTrace.Lazy<ReadingListStore?>("LazyReading", () =>
     {
         try { return new ReadingListStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -240,13 +240,13 @@ public static class AppData
         catch (Exception) { return false; }
     }
 
-    private static readonly Lazy<SavedSessionsStore?> LazySessions = new(() =>
+    private static readonly Lazy<SavedSessionsStore?> LazySessions = StartupTrace.Lazy<SavedSessionsStore?>("LazySessions", () =>
     {
         try { return new SavedSessionsStore(AppPaths.Database); }
         catch (Exception) { return null; }
     });
 
-    private static readonly Lazy<DoneTabsStore?> LazyDone = new(() =>
+    private static readonly Lazy<DoneTabsStore?> LazyDone = StartupTrace.Lazy<DoneTabsStore?>("LazyDone", () =>
     {
         try { return new DoneTabsStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -281,7 +281,7 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    private static readonly Lazy<SnoozedTabsStore?> LazySnoozed = new(() =>
+    private static readonly Lazy<SnoozedTabsStore?> LazySnoozed = StartupTrace.Lazy<SnoozedTabsStore?>("LazySnoozed", () =>
     {
         try { return new SnoozedTabsStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -323,7 +323,7 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    private static readonly Lazy<ArchivedTabsStore?> LazyArchived = new(() =>
+    private static readonly Lazy<ArchivedTabsStore?> LazyArchived = StartupTrace.Lazy<ArchivedTabsStore?>("LazyArchived", () =>
     {
         try { return new ArchivedTabsStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -389,7 +389,7 @@ public static class AppData
         catch (Exception) { return 0; }
     }
 
-    private static readonly Lazy<Permissions.SitePermissionStore?> LazyPermissions = new(() =>
+    private static readonly Lazy<Permissions.SitePermissionStore?> LazyPermissions = StartupTrace.Lazy<Permissions.SitePermissionStore?>("LazyPermissions", () =>
     {
         try { return new Permissions.SitePermissionStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -436,7 +436,7 @@ public static class AppData
         SetVideoOptOut(site, false);
     }
 
-    private static readonly Lazy<StrictSiteStore?> LazyStrict = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyStrict = StartupTrace.Lazy<StrictSiteStore?>("LazyStrict", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database); }
         catch (Exception) { return null; }
@@ -454,7 +454,7 @@ public static class AppData
         catch (Exception) { }
     }
 
-    private static readonly Lazy<StrictSiteStore?> LazyDark = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyDark = StartupTrace.Lazy<StrictSiteStore?>("LazyDark", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "dark_sites"); }
         catch (Exception) { return null; }
@@ -473,7 +473,7 @@ public static class AppData
     }
 
     // «HTTPS primeiro»: hosts que o utilizador aceitou abrir sempre por http:// («Sempre para este site»).
-    private static readonly Lazy<StrictSiteStore?> LazyHttp = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyHttp = StartupTrace.Lazy<StrictSiteStore?>("LazyHttp", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "http_sites", exactHost: true); }
         catch (Exception) { return null; }
@@ -494,7 +494,7 @@ public static class AppData
     }
 
     // «Esquecer este site ao fechar»: sites (domínio registável) cujos dados se apagam ao fechar a última aba.
-    private static readonly Lazy<StrictSiteStore?> LazyForget = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyForget = StartupTrace.Lazy<StrictSiteStore?>("LazyForget", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "forget_sites", siteOf: SiteScope.OfHost); }
         catch (Exception) { return null; }
@@ -525,13 +525,13 @@ public static class AppData
     // Sites que abrem no motor de vídeo (precisam de H.264/AAC). Duas listas: a do motor principal sem codecs, e a do
     // motor com codecs da plataforma (Tabs/PlatformCodecs.cs) — os sites lembrados só por faltarem os codecs não devem
     // continuar a sair do motor principal quando ele os passa a ter; desligar um site tira-o das duas.
-    private static readonly Lazy<StrictSiteStore?> LazyVideo = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyVideo = StartupTrace.Lazy<StrictSiteStore?>("LazyVideo", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "video_sites"); }
         catch (Exception) { return null; }
     });
 
-    private static readonly Lazy<StrictSiteStore?> LazyVideoWithCodecs = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyVideoWithCodecs = StartupTrace.Lazy<StrictSiteStore?>("LazyVideoWithCodecs", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "video_sites_codecs"); }
         catch (Exception) { return null; }
@@ -574,7 +574,7 @@ public static class AppData
 
     // Sites que o utilizador mandou voltar ao motor principal (botão «Motor de vídeo»): nunca trocam sozinhos, nem os da
     // lista embutida (VideoEngine.KnownH264Sites).
-    private static readonly Lazy<StrictSiteStore?> LazyVideoOff = new(() =>
+    private static readonly Lazy<StrictSiteStore?> LazyVideoOff = StartupTrace.Lazy<StrictSiteStore?>("LazyVideoOff", () =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "video_sites_off"); }
         catch (Exception) { return null; }

@@ -23,6 +23,7 @@ public class PageBrowser : ChromiumWebBrowser
     protected override IWindowInfo CreateBrowserWindowInfo(IntPtr handle)
     {
         var info = base.CreateBrowserWindowInfo(handle);
+        Infrastructure.StartupTrace.Mark("aba.hwnd");
         // Uma janela nova fica por cima das irmãs: a de uma aba nova taparia a página à vista assim que aparecesse. Por
         // baixo de todas, é a troca de abas (MainWindow.PageVisibility.cs) que a sobe quando ela já tiver pintado.
         SetWindowPos(handle, HwndBottom, 0, 0, 0, 0, SwpNoSize | SwpNoMove | SwpNoActivate);

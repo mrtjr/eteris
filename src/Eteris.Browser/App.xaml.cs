@@ -10,27 +10,41 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        StartupTrace.Mark("onstartup");
         CefConfigurator.Initialize();
         // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
         Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
+        StartupTrace.Mark("selftest");
         Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
         Theme.ThemeManager.FollowSystemChanges(() => Data.Settings.Current.Theme);
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.ThemeManager.Apply(s.Theme));
+        StartupTrace.Mark("tema");
         // Cor do Éteris: aplicada já, e de novo quando a escolha, a paisagem, o tema ou a cor do Windows mudam.
         Theme.AccentManager.WallpaperSampler = () => Theme.WallpaperAccent.Sample(Data.Settings.Current.NewTabWallpaper);
         Theme.AccentManager.Apply(Data.Settings.Current.Accent, Theme.ThemeManager.Current == Theme.AppTheme.Light);
+        StartupTrace.Mark("cor", "accent=" + Data.Settings.Current.Accent + " paisagem=" + Data.Settings.Current.NewTabWallpaper);
         Theme.AccentManager.FollowWindowsChanges(() => Data.Settings.Current.Accent, () => Theme.ThemeManager.Current == Theme.AppTheme.Light);
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.AccentManager.Apply(s.Accent, Theme.ThemeManager.Current == Theme.AppTheme.Light));
         Theme.ThemeManager.Changed += t => Dispatcher.InvokeAsync(() => Theme.AccentManager.Apply(Data.Settings.Current.Accent, t == Theme.AppTheme.Light));
+        StartupTrace.Mark("cor.seguir");
         _ = Shields.PrivacyPreferences.ApplyAsync();
         Data.Settings.Changed += _ => { var __ = Shields.PrivacyPreferences.ApplyAsync(); };
+        StartupTrace.Mark("privacidade");
         _ = Shields.ShieldEngine.StartAsync(Shields.FilterLists.ForApp());
+        StartupTrace.Mark("escudo.lancado");
         CaptureShield.Install();
         Data.AppData.StartShieldStats();
-        new MainWindow(StartupArgs.InitialUrl(e.Args), StartupArgs.IsPrivate(e.Args)).Show();
+        StartupTrace.Mark("captura");
+        var window = new MainWindow(StartupArgs.InitialUrl(e.Args), StartupArgs.IsPrivate(e.Args));
+        StartupTrace.Mark("janela.criada");
+        window.Show();
+        StartupTrace.Mark("janela.show");
         _ = UpdateService.CheckAndDownloadAsync();
+        StartupTrace.Mark("atualizacoes");
         JumpListTasks.Install();
+        StartupTrace.Mark("jumplist");
         _channel = InstanceChannel.Listen(Program.ChannelName, args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
+        StartupTrace.Mark("onstartup.fim");
     }
 
     private IDisposable? _channel;
