@@ -108,6 +108,11 @@ não está à frente. Não foram tocados.
 oficial; testes `SandboxInfoTests`). Os dois pack URIs do menu usam o nome da montagem em execução
 (`typeof(MainWindow).Assembly`), em vez de `Eteris.Browser` escrito à mão.
 
+**E (primeira parte) — marca no bootstrap.** `build/sandbox/brand-bootstrap.ps1` (corrido pela publicação com
+`EterisSandbox`): compila um `.rc` com o `rc.exe` do Windows SDK e troca, na cópia `Eteris.Browser.exe`, os recursos de
+ícone e de versão (o manifesto fica). O Explorador e o Gestor de Tarefas passam a mostrar «Éteris» 0.2.9 com o ícone do
+Éteris, em vez de «CEF Bootstrap Application»; o arranque com sandbox continua igual (renderers Untrusted, GPU Low).
+
 **D9 (primeira sonda).** No motor puro (cefsimple + bootstrap), `--enable-features=NetworkServiceSandbox` liga a
 funcionalidade (`chrome://sandbox`: `NetworkServiceSandbox` `enabled: true`) mas o Network Service continua «Not
 Sandboxed» e com integridade Medium; as páginas carregam. Em `SystemNetworkContextManager::IsNetworkSandboxEnabled` só
@@ -115,8 +120,7 @@ sobram dois motivos: a preferência `NetworkServiceSandboxEnabled` no Local Stat
 falhado em LPAC (`kDisabledBecauseOfFailedLaunch`). Próximo passo do D9: registo da CEF ligado
 (`--enable-logging --v=1`) para ver qual.
 
-**Falta:** D5 interativo (em cima), D9 (`NetworkServiceSandbox`) e o passo E (ícone/versão do bootstrap — hoje
-«CEF Bootstrap Application» —, assinatura do exe, `chrome_elf.dll` e DLL com o mesmo certificado, Velopack, CI).
+**Falta:** D5 interativo (em cima), D9 (`NetworkServiceSandbox`) e o resto do passo E (assinatura do exe, `chrome_elf.dll` e DLL com o mesmo certificado, Velopack, CI).
 
 ## Passo A — resultado (2026-11-07): feito
 

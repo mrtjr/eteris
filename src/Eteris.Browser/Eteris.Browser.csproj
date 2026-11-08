@@ -142,6 +142,8 @@
   <Target Name="EterisSandboxAfterPublish" AfterTargets="Publish" Condition="'$(EterisSandbox)' == 'true'">
     <Copy SourceFiles="@(_EterisSandboxEntry)" DestinationFiles="@(_EterisSandboxEntry->'$(PublishDir)%(TargetName)')" />
     <Delete Files="$(PublishDir)$(AssemblyName).exe;$(PublishDir)CefSharp.BrowserSubprocess.exe;$(PublishDir)CefSharp.BrowserSubprocess.dll;$(PublishDir)CefSharp.BrowserSubprocess.Core.dll;$(PublishDir)CefSharp.BrowserSubprocess.runtimeconfig.json" />
+    <!-- Ícone e versão do Éteris no bootstrap («CEF Bootstrap Application» por omissão); precisa do rc.exe do SDK. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\build\sandbox\brand-bootstrap.ps1&quot; -Exe &quot;$(PublishDir)Eteris.Browser.exe&quot; -Version $(Version)" />
   </Target>
 
   <!-- Ver EterisCefSharpFeed em cima: a mesma referência, na versão do feed local. -->

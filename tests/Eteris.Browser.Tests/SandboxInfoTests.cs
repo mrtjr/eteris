@@ -105,6 +105,9 @@ public class SandboxInfoTests
         var deleted = publish.Element("Delete")!.Attribute("Files")!.Value;
         Assert.Contains("$(PublishDir)$(AssemblyName).exe", deleted);
         Assert.Contains("$(PublishDir)CefSharp.BrowserSubprocess.exe", deleted);
+        // O bootstrap leva o ícone e a versão do Éteris (build/sandbox/brand-bootstrap.ps1), depois de copiado.
+        Assert.Contains("brand-bootstrap.ps1", publish.Element("Exec")!.Attribute("Command")!.Value);
+        Assert.True(publish.Elements().ToList().IndexOf(publish.Element("Copy")!) < publish.Elements().ToList().IndexOf(publish.Element("Exec")!));
         var check = project.Descendants("Target").Single(t => t.Attribute("Name")?.Value == "EterisSandboxCheck");
         Assert.Equal(3, check.Elements("Error").Count());
     }
