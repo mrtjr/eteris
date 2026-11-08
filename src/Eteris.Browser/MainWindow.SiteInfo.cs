@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
@@ -32,6 +33,28 @@ public partial class MainWindow
         FillSiteInfo();
         if (!SiteInfoPopup.IsOpen) FitSiteInfoToScreen();
         SiteInfoPopup.IsOpen = !SiteInfoPopup.IsOpen;
+        // O clique fora do cartão chega à raiz do Popup (que tem o rato), não ao conteúdo.
+        if (SiteInfoPopup.IsOpen && SiteInfoPopup.Child is { } card && PresentationSource.FromVisual(card)?.RootVisual is UIElement root)
+        {
+            root.PreviewMouseDown -= SiteInfoCard_PreviewMouseDown;
+            root.PreviewMouseDown += SiteInfoCard_PreviewMouseDown;
+        }
+    }
+
+    // O cartão é um Popup com StaysOpen=False: enquanto está aberto fica com o rato, e o clique fora dele só o fecha.
+    // Com o cartão aberto, o 1.º clique noutra aba só fechava o cartão e a aba só mudava ao 2.º (medido ao vivo; o
+    // Ctrl+Tab mudava à primeira). Como no Chrome, o clique que fecha o cartão também escolhe a aba onde caiu.
+    private void SiteInfoCard_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || SiteInfoPopup.Child is not FrameworkElement card) return;
+        var inCard = e.GetPosition(card);
+        if (new Rect(card.RenderSize).Contains(inCard) || PresentationSource.FromVisual(this) is null) return;
+        var point = PointFromScreen(card.PointToScreen(inCard));
+        if (InputHitTest(point) is not DependencyObject hit) return;
+        if (ItemsControl.ContainerFromElement(TabList, hit) is not FrameworkElement { DataContext: BrowserTab tab } item) return;
+        // O «x» e a etiqueta do grupo têm as suas próprias ações: só a aba em si.
+        if (IsInsideTabControl(hit, item) || ReferenceEquals(Tabs.Active, tab)) return;
+        Tabs.Active = tab;
     }
 
     // O cartão nunca passa do fundo da área de trabalho do monitor onde está o cadeado: o que não cabe rola por dentro.
