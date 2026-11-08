@@ -61,8 +61,74 @@ public static class PrivacySignals
         })();
         """;
 
+    // Dispositivos de câmara, microfone e som (medido, docs/paridade.md #6): o motor dava a qualquer site, sem pedir
+    // nada, a lista completa com o nome de cada dispositivo e um deviceId por site que sobrevive a reiniciar — o CEF
+    // responde «sim» a CheckMediaAccessPermission (libcef/browser/media_access_query.cc; a correção no motor está em
+    // docs/motor.md). Até lá, como o Chrome sem permissão: uma entrada por tipo, com nome, deviceId e groupId vazios.
+    // Os reais aparecem, por tipo, quando o site tem a permissão (permissions.query «granted») ou quando um
+    // getUserMedia deste documento foi aceite (áudio → microfone e saídas de som; vídeo → câmara). mediaDevices não
+    // existe nos workers: o registo da sessão cobre todos os frames.
+    public const string DevicesScript = """
+        (() => {
+          try {
+            const MD = self.MediaDevices;
+            if (!MD || typeof MD.prototype.enumerateDevices !== 'function') return;
+            const realEnumerate = MD.prototype.enumerateDevices;
+            const realGetUserMedia = MD.prototype.getUserMedia;
+            const accepted = { audio: false, video: false };
+            const group = kind => kind === 'videoinput' ? 'video' : 'audio';
+            const granted = name => {
+              try { return navigator.permissions.query({ name }).then(s => s.state === 'granted', () => false); }
+              catch (e) { return Promise.resolve(false); }
+            };
+            const blank = real => {
+              const proto = Object.getPrototypeOf(real);
+              const fields = { deviceId: '', kind: real.kind, label: '', groupId: '' };
+              const out = Object.create(proto);
+              for (const key of Object.keys(fields)) Object.defineProperty(out, key, { value: fields[key] });
+              Object.defineProperty(out, 'toJSON', { value: function toJSON() { return Object.assign({}, fields); } });
+              if (typeof proto.getCapabilities === 'function')
+                Object.defineProperty(out, 'getCapabilities', { value: function getCapabilities() { return {}; } });
+              return out;
+            };
+            const filter = (list, shown) => {
+              const out = [];
+              const seen = new Set();
+              for (const device of list) {
+                if (shown[group(device.kind)]) { out.push(device); continue; }
+                if (seen.has(device.kind)) continue;
+                seen.add(device.kind);
+                out.push(blank(device));
+              }
+              return out;
+            };
+            Object.defineProperty(MD.prototype, 'enumerateDevices', {
+              value: function enumerateDevices() {
+                return Promise.all([realEnumerate.call(this), granted('microphone'), granted('camera')])
+                  .then(([list, microphone, camera]) => filter(list, { audio: accepted.audio || microphone, video: accepted.video || camera }));
+              },
+              writable: true, configurable: true, enumerable: true,
+            });
+            if (typeof realGetUserMedia === 'function') {
+              Object.defineProperty(MD.prototype, 'getUserMedia', {
+                value: function getUserMedia() {
+                  return realGetUserMedia.apply(this, arguments).then(stream => {
+                    try {
+                      if (stream.getAudioTracks().length > 0) accepted.audio = true;
+                      if (stream.getVideoTracks().length > 0) accepted.video = true;
+                    } catch (e) { }
+                    return stream;
+                  });
+                },
+                writable: true, configurable: true, enumerable: true,
+              });
+            }
+          } catch (e) { }
+        })();
+        """;
+
     // O que se regista uma vez por sessão do DevTools, antes de qualquer script da página (ScriptletInjector).
-    public static readonly string SessionScript = Compose(GpcScript, HintsScript)!;
+    public static readonly string SessionScript = Compose(GpcScript, HintsScript, DevicesScript)!;
 
     // Páginas onde o sinal vale: os sites e as páginas internas (eteris://privacy/ verifica-o ao vivo).
     public static bool AppliesTo(string url)
