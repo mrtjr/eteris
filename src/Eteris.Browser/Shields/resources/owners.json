@@ -1,10 +1,10 @@
 {
-  "_sobre": "Mapa domínio → empresa do Observatório do site (Shields/SiteObservatory.cs). Escrito à mão pelo projeto Éteris a partir de conhecimento público sobre quem é dono de cada domínio; faz parte do Éteris (GPL-3.0-or-later), sem dados de terceiros. Um domínio cobre os seus subdomínios.",
+  "_sobre": "Mapa domínio → empresa do Observatório do site (Shields/SiteObservatory.cs). Escrito à mão pelo projeto Éteris a partir de conhecimento público sobre quem é dono de cada domínio; faz parte do Éteris (GPL-3.0-or-later), sem dados de terceiros. Um domínio cobre os seus subdomínios. Ficam de fora os domínios de alojamento e de CDN partilhada (cloudfront.net, amazonaws.com, azureedge.net, akamaihd.net, fastly.net, googleusercontent.com, blogspot.com…): quem lá serve um rastreador é o cliente, não a empresa que aluga o servidor.",
   "empresas": [
-    { "nome": "Google", "dominios": ["google.com", "google.pt", "google.com.br", "google.co.uk", "google.de", "google.fr", "google.es", "google-analytics.com", "googletagmanager.com", "googletagservices.com", "doubleclick.net", "googlesyndication.com", "googleadservices.com", "gstatic.com", "googleapis.com", "googleusercontent.com", "youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com", "ggpht.com", "recaptcha.net", "2mdn.net", "app-measurement.com", "firebaseio.com", "firebaseapp.com", "admob.com", "gvt1.com", "gvt2.com", "withgoogle.com", "blogger.com", "blogspot.com"] },
+    { "nome": "Google", "dominios": ["google.com", "google.pt", "google.com.br", "google.co.uk", "google.de", "google.fr", "google.es", "google-analytics.com", "googletagmanager.com", "googletagservices.com", "doubleclick.net", "googlesyndication.com", "googleadservices.com", "gstatic.com", "googleapis.com", "youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com", "ggpht.com", "recaptcha.net", "2mdn.net", "app-measurement.com", "admob.com", "gvt1.com", "gvt2.com", "withgoogle.com", "blogger.com"] },
     { "nome": "Meta", "dominios": ["facebook.com", "facebook.net", "fbcdn.net", "fb.com", "fb.me", "instagram.com", "cdninstagram.com", "whatsapp.com", "whatsapp.net", "messenger.com", "meta.com", "threads.net"] },
-    { "nome": "Amazon", "dominios": ["amazon-adsystem.com", "amazon.com", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazonaws.com", "cloudfront.net", "media-amazon.com", "ssl-images-amazon.com", "assoc-amazon.com", "a2z.com", "amazontrust.com", "twitch.tv", "ttvnw.net", "jtvnw.net"] },
-    { "nome": "Microsoft", "dominios": ["bing.com", "bing.net", "clarity.ms", "microsoft.com", "msn.com", "live.com", "office.com", "office.net", "azureedge.net", "msecnd.net", "windows.net", "s-microsoft.com", "linkedin.com", "licdn.com", "adnxs.com", "adnxs-simple.com", "xandr.com", "msftncsi.com", "skype.com", "github.com", "githubusercontent.com"] },
+    { "nome": "Amazon", "dominios": ["amazon-adsystem.com", "amazon.com", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "media-amazon.com", "ssl-images-amazon.com", "assoc-amazon.com", "a2z.com", "amazontrust.com", "twitch.tv", "ttvnw.net", "jtvnw.net"] },
+    { "nome": "Microsoft", "dominios": ["bing.com", "bing.net", "clarity.ms", "microsoft.com", "msn.com", "live.com", "office.com", "office.net", "s-microsoft.com", "linkedin.com", "licdn.com", "adnxs.com", "adnxs-simple.com", "xandr.com", "msftncsi.com", "skype.com", "github.com"] },
     { "nome": "Criteo", "dominios": ["criteo.com", "criteo.net", "hlserve.com"] },
     { "nome": "Adobe", "dominios": ["omtrdc.net", "demdex.net", "adobedtm.com", "everesttech.net", "typekit.net", "adobe.com", "adobe.io", "2o7.net", "adobelogin.com"] },
     { "nome": "Oracle", "dominios": ["bluekai.com", "bkrtx.com", "addthis.com", "addthisedge.com", "moatads.com", "moatpixel.com", "eloqua.com", "en25.com", "oracleinfinity.io", "grapeshot.co.uk", "oracle.com"] },
@@ -14,9 +14,9 @@
     { "nome": "Taboola", "dominios": ["taboola.com", "taboolasyndication.com"] },
     { "nome": "Outbrain", "dominios": ["outbrain.com", "outbrainimg.com", "zemanta.com"] },
     { "nome": "Hotjar", "dominios": ["hotjar.com", "hotjar.io"] },
-    { "nome": "Cloudflare", "dominios": ["cloudflare.com", "cloudflareinsights.com", "cloudflare.net", "cdnjs.com", "cloudflarestream.com"] },
-    { "nome": "Akamai", "dominios": ["akamaihd.net", "akamaized.net", "akamai.net", "akstat.io", "edgekey.net", "edgesuite.net", "go-mpulse.net"] },
-    { "nome": "Fastly", "dominios": ["fastly.net", "fastlylb.net", "fastly-insights.com"] },
+    { "nome": "Cloudflare", "dominios": ["cloudflare.com", "cloudflareinsights.com", "cdnjs.com", "cloudflarestream.com"] },
+    { "nome": "Akamai", "dominios": ["akstat.io", "go-mpulse.net"] },
+    { "nome": "Fastly", "dominios": ["fastly-insights.com"] },
     { "nome": "Index Exchange", "dominios": ["casalemedia.com", "indexww.com"] },
     { "nome": "The Trade Desk", "dominios": ["adsrvr.org"] },
     { "nome": "PubMatic", "dominios": ["pubmatic.com"] },
@@ -54,12 +54,12 @@
     { "nome": "Lotame", "dominios": ["crwdcntrl.net", "lotame.com"] },
     { "nome": "Spotify", "dominios": ["spotify.com", "scdn.co", "spotifycdn.com"] },
     { "nome": "Apple", "dominios": ["apple.com", "icloud.com", "mzstatic.com", "cdn-apple.com"] },
-    { "nome": "Shopify", "dominios": ["shopify.com", "shopifycdn.com", "myshopify.com", "shopifysvc.com"] },
+    { "nome": "Shopify", "dominios": ["shopify.com", "shopifycdn.com", "shopifysvc.com"] },
     { "nome": "Stripe", "dominios": ["stripe.com", "stripe.network"] },
     { "nome": "PayPal", "dominios": ["paypal.com", "paypalobjects.com", "braintreegateway.com"] },
     { "nome": "Zendesk", "dominios": ["zendesk.com", "zdassets.com", "zopim.com"] },
     { "nome": "Intercom", "dominios": ["intercom.io", "intercomcdn.com", "intercomassets.com"] },
     { "nome": "Wix", "dominios": ["wix.com", "wixstatic.com", "parastorage.com"] },
-    { "nome": "Bunny", "dominios": ["b-cdn.net", "bunny.net"] }
+    { "nome": "Bunny", "dominios": ["bunny.net"] }
   ]
 }

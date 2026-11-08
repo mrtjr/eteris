@@ -27,6 +27,7 @@ public partial class MainWindow
     private TextBlock? _obsTitle;
     private TextBlock? _obsStats;
     private TextBlock? _obsCenterText;
+    private TextBlock? _obsHidden;
     private Style? _obsRowStyle;
     private DispatcherTimer? _obsTimer;
     private BrowserTab? _obsTab;
@@ -76,9 +77,20 @@ public partial class MainWindow
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = ease });
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = ease });
         RefreshObservatory();
-        _obsTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshObservatory(), Dispatcher);
+        if (_obsTimer is null)
+        {
+            _obsTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshObservatory(), Dispatcher);
+            // Fechar a janela com o painel aberto: o temporizador prendia a janela, as abas e os visuais até sair do Éteris.
+            Closed += (_, _) => StopObservatoryTimer();
+        }
         _obsTimer.Start();
         FocusInOverlay(card);
+    }
+
+    private void StopObservatoryTimer()
+    {
+        _obsTimer?.Stop();
+        _obsTab = null;
     }
 
     private void CloseObservatory()
@@ -170,6 +182,13 @@ public partial class MainWindow
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(new Viewbox { Child = _obsCanvas, MaxWidth = ObservatorySize, MaxHeight = ObservatorySize, Stretch = Stretch.Uniform });
         left.Children.Add(legend);
+        // Com mais domínios do que cabem no anel, os que ficam de fora estão só na lista: dito aqui, nunca em silêncio.
+        _obsHidden = new TextBlock
+        {
+            FontSize = 11.5, Foreground = ObsRes("TextFaintBrush"), HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed,
+        };
+        left.Children.Add(_obsHidden);
 
         // Coluna da direita: título, números, lista por empresa e o detalhe do domínio.
         _obsTitle = new TextBlock { FontSize = 19, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -265,6 +284,9 @@ public partial class MainWindow
         _obsTitle!.Text = snap.Site ?? Tabs.Active?.Host ?? "Página";
         _obsCenterText!.Text = snap.Site ?? string.Empty;
         _obsStats!.Text = ObservatoryText.Stats(snap, groups);
+        var hidden = ObservatoryText.HiddenNote(drawing.Hidden);
+        _obsHidden!.Text = hidden ?? string.Empty;
+        _obsHidden.Visibility = hidden is null ? Visibility.Collapsed : Visibility.Visible;
         DrawObservatory(drawing, first);
         FillObservatoryList(groups);
         ShowObservatoryDetail(_obsSelected);
@@ -501,20 +523,32 @@ public partial class MainWindow
         }
     }
 
-    // Bloquear (ou deixar de bloquear) um domínio só neste site; a página recarrega para a regra valer já.
+    // Bloquear (ou deixar de bloquear) um domínio só neste site; a página recarrega para a regra valer já. Deixar de
+    // bloquear desfaz a regra que de facto apanha o domínio (também a do domínio-pai) e, numa janela privada, suspende
+    // a regra guardada só nesta sessão.
     private void SetSiteRule(string site, string host, bool block)
     {
-        if (block) SiteRules.Block(site, host, IsPrivate);
-        else SiteRules.Unblock(site, host, IsPrivate);
         _obsSelected = host;
+        var isPrivate = IsPrivate;
         // Na pilha de anulação, como as outras ações: o Ctrl+Z desfaz a regra, não um fecho de aba antigo.
-        ShowUndoToast(ObservatoryText.RuleToast(site, host, block, IsPrivate),
-            $"{(block ? "Bloquear" : "Deixar de bloquear")} {host} em {site}", () =>
+        if (block)
+        {
+            SiteRules.Block(site, host, isPrivate);
+            ShowUndoToast(ObservatoryText.RuleToast(site, host, true, isPrivate), $"Bloquear {host} em {site}", () =>
             {
-                if (block) SiteRules.Unblock(site, host, IsPrivate);
-                else SiteRules.Block(site, host, IsPrivate);
+                SiteRules.Unblock(site, host, isPrivate);
                 ReloadActive();
             });
+        }
+        else
+        {
+            var undone = SiteRules.Unblock(site, host, isPrivate);
+            ShowUndoToast(ObservatoryText.UnblockToast(site, host, undone), $"Deixar de bloquear {host} em {site}", () =>
+            {
+                foreach (var rule in undone.Rules) SiteRules.Block(site, rule, isPrivate);
+                ReloadActive();
+            });
+        }
         ReloadActive();
     }
 }
@@ -542,6 +576,22 @@ public static class ObservatoryText
         => blocked
             ? $"{host} bloqueado em {site}" + (isPrivate ? " (até terminar a sessão privada)" : string.Empty)
             : $"{host} volta a ser decidido pelas listas em {site}";
+
+    // O que «Deixar de bloquear» fez: a regra que de facto apanhava o domínio (a mais larga) e, numa janela privada,
+    // que a regra guardada só fica suspensa nesta sessão.
+    public static string UnblockToast(string site, string host, SiteUnblock undone)
+    {
+        if (undone.Rules.Count == 0) return $"{host} já não estava bloqueado por si em {site}";
+        var rule = undone.Rules.MinBy(r => r.Length)!;
+        var text = string.Equals(rule, host, StringComparison.OrdinalIgnoreCase)
+            ? $"{host} volta a ser decidido pelas listas em {site}"
+            : $"{rule} e os subdomínios voltam a ser decididos pelas listas em {site}";
+        return undone.SavedKept ? text + " nesta sessão privada (a regra continua nas janelas normais)" : text;
+    }
+
+    // Com mais domínios do que cabem no anel: os que ficam de fora estão só na lista.
+    public static string? HiddenNote(int hidden)
+        => hidden <= 0 ? null : hidden == 1 ? "+1 domínio só na lista" : $"+{hidden} domínios só na lista";
 
     public static string GroupHeader(CompanyGroup g)
         => g.Name.ToUpperInvariant() + " · " + (g.Domains.Count == 1 ? "1 domínio" : $"{g.Domains.Count} domínios")

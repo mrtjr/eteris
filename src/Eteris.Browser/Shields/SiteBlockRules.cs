@@ -62,6 +62,12 @@ public sealed class SiteBlockRules
         lock (_lock) return _rules.SelectMany(p => p.Value.Select(d => (p.Key, d))).OrderBy(r => r.Key).ThenBy(r => r.d).ToList();
     }
 
+    public bool Contains(string site, string domain)
+    {
+        if (_count == 0) return false;
+        lock (_lock) return _rules.TryGetValue(site, out var set) && set.Contains(Normalise(domain));
+    }
+
     // O anfitrião é o domínio da regra ou um subdomínio dele (ads.tracker.example cai em tracker.example).
     public bool Blocks(string site, string host)
     {
@@ -69,22 +75,117 @@ public sealed class SiteBlockRules
         lock (_lock)
         {
             if (!_rules.TryGetValue(site, out var set)) return false;
-            for (var candidate = host.TrimEnd('.'); candidate.Length > 0;)
-            {
+            foreach (var candidate in Candidates(host))
                 if (set.Contains(candidate)) return true;
-                var dot = candidate.IndexOf('.');
-                if (dot < 0) return false;
-                candidate = candidate[(dot + 1)..];
-            }
             return false;
+        }
+    }
+
+    // As regras que apanham o anfitrião, da mais estreita à mais larga (cdn.tracker.example, depois tracker.example).
+    public IReadOnlyList<string> RulesFor(string site, string host)
+    {
+        if (_count == 0) return [];
+        lock (_lock)
+        {
+            if (!_rules.TryGetValue(site, out var set)) return [];
+            return Candidates(host).Where(set.Contains).ToList();
+        }
+    }
+
+    private static IEnumerable<string> Candidates(string host)
+    {
+        for (var candidate = Normalise(host); candidate.Length > 0;)
+        {
+            yield return candidate;
+            var dot = candidate.IndexOf('.');
+            if (dot < 0) yield break;
+            candidate = candidate[(dot + 1)..];
         }
     }
 
     private static string Normalise(string domain) => domain.Trim().TrimEnd('.').ToLowerInvariant();
 }
 
-// As regras em vigor: as guardadas (janelas normais, base de dados) e as da sessão privada (só em memória, esquecidas
-// quando a última janela privada fecha). Uma regra feita numa janela normal vale também nas privadas.
+// O que «Deixar de bloquear» desfez: as regras que deixaram de valer (da mais estreita à mais larga) e se alguma era
+// uma regra guardada que, numa janela privada, fica só suspensa até a sessão privada acabar.
+public sealed record SiteUnblock(IReadOnlyList<string> Rules, bool SavedKept);
+
+// As regras em vigor: as guardadas (janelas normais) e as da sessão privada (só em memória, esquecidas quando a última
+// janela privada fecha). Uma regra feita numa janela normal vale também nas privadas; «Deixar de bloquear» numa janela
+// privada suspende-a só nessa sessão (uma exceção em memória), sem a apagar do disco. Desbloquear um anfitrião desfaz
+// todas as regras que o apanham, também a do domínio-pai: o botão nunca fica sem efeito.
+public sealed class SiteRuleSet(SiteBlockRules saved, Action<string, string>? persistAdd = null,
+    Action<string, string>? persistRemove = null, Action<string>? persistRemoveSite = null)
+{
+    private readonly SiteBlockRules _private = new();
+    private readonly SiteBlockRules _suspended = new();
+
+    public bool IsEmpty(bool isPrivate) => saved.IsEmpty && (!isPrivate || _private.IsEmpty);
+
+    public bool Blocks(string site, string host, bool isPrivate)
+    {
+        if (!isPrivate) return saved.Blocks(site, host);
+        if (_private.Blocks(site, host)) return true;
+        if (_suspended.IsEmpty) return saved.Blocks(site, host);
+        return saved.RulesFor(site, host).Any(rule => !_suspended.Contains(site, rule));
+    }
+
+    // Na janela privada nada fica no disco; uma regra guardada suspensa nesta sessão volta a valer.
+    public void Block(string site, string domain, bool isPrivate)
+    {
+        if (isPrivate)
+        {
+            var resumed = _suspended.Remove(site, domain);
+            if (!resumed || !saved.Contains(site, domain)) _private.Add(site, domain);
+            return;
+        }
+        if (saved.Add(site, domain)) persistAdd?.Invoke(site, domain);
+    }
+
+    public SiteUnblock Unblock(string site, string host, bool isPrivate)
+    {
+        var undone = new List<string>();
+        var savedKept = false;
+        if (isPrivate)
+            foreach (var rule in _private.RulesFor(site, host))
+                if (_private.Remove(site, rule)) undone.Add(rule);
+        foreach (var rule in saved.RulesFor(site, host))
+        {
+            if (isPrivate)
+            {
+                if (!_suspended.Add(site, rule)) continue;
+                savedKept = true;
+            }
+            else
+            {
+                saved.Remove(site, rule);
+                persistRemove?.Invoke(site, rule);
+            }
+            if (!undone.Contains(rule, StringComparer.OrdinalIgnoreCase)) undone.Add(rule);
+        }
+        return new SiteUnblock(undone, savedKept);
+    }
+
+    // «Repor» o site: as regras dele saem.
+    public void Forget(string site)
+    {
+        _private.RemoveSite(site);
+        _suspended.RemoveSite(site);
+        saved.RemoveSite(site);
+        persistRemoveSite?.Invoke(site);
+    }
+
+    public void ForgetPrivate()
+    {
+        _private.Clear();
+        _suspended.Clear();
+    }
+
+    public IReadOnlyList<(string Site, string Domain)> All() => saved.All();
+}
+
+// As regras do Éteris: as guardadas vêm da base de dados (Data/SiteRuleStore) e cada alteração feita numa janela
+// normal vai para lá.
 public static class SiteRules
 {
     private static readonly Lazy<SiteRuleStore?> Store = new(() =>
@@ -93,66 +194,44 @@ public static class SiteRules
         catch (Exception) { return null; }
     });
 
-    private static readonly Lazy<SiteBlockRules> Saved = new(() =>
+    private static readonly Lazy<SiteRuleSet> Rules = new(() =>
     {
-        var rules = new SiteBlockRules();
+        var saved = new SiteBlockRules();
         try
         {
-            foreach (var (site, domain) in Store.Value?.All() ?? []) rules.Add(site, domain);
+            foreach (var (site, domain) in Store.Value?.All() ?? []) saved.Add(site, domain);
         }
         catch (Exception) { }
-        return rules;
+        return new SiteRuleSet(saved,
+            (site, domain) => Quietly(() => Store.Value?.Add(site, domain)),
+            (site, domain) => Quietly(() => Store.Value?.Remove(site, domain)),
+            site => Quietly(() => Store.Value?.RemoveSite(site)));
     });
 
-    private static readonly SiteBlockRules Private = new();
+    private static void Quietly(Action write)
+    {
+        try { write(); }
+        catch (Exception) { }
+    }
 
     // Decisão por pedido: o site da página de topo e o anfitrião do pedido.
     public static bool Blocks(string? pageUrl, string requestUrl, bool isPrivate)
     {
-        var saved = Saved.Value;
-        if (saved.IsEmpty && (!isPrivate || Private.IsEmpty)) return false;
+        var rules = Rules.Value;
+        if (rules.IsEmpty(isPrivate)) return false;
         if (SiteScope.SiteOf(pageUrl) is not { } site) return false;
         var host = SiteObservatory.HostOf(requestUrl).ToString();
         if (host.Length == 0) return false;
-        return saved.Blocks(site, host) || (isPrivate && Private.Blocks(site, host));
+        return rules.Blocks(site, host, isPrivate);
     }
 
-    public static bool IsBlocked(string site, string domain, bool isPrivate)
-        => Saved.Value.ForSite(site).Contains(domain, StringComparer.OrdinalIgnoreCase)
-           || (isPrivate && Private.ForSite(site).Contains(domain, StringComparer.OrdinalIgnoreCase));
+    public static void Block(string site, string domain, bool isPrivate) => Rules.Value.Block(site, domain, isPrivate);
 
-    // Na janela privada nada fica no disco.
-    public static void Block(string site, string domain, bool isPrivate)
-    {
-        if (isPrivate)
-        {
-            Private.Add(site, domain);
-            return;
-        }
-        if (!Saved.Value.Add(site, domain)) return;
-        try { Store.Value?.Add(site, domain); }
-        catch (Exception) { }
-    }
+    public static SiteUnblock Unblock(string site, string host, bool isPrivate) => Rules.Value.Unblock(site, host, isPrivate);
 
-    public static void Unblock(string site, string domain, bool isPrivate)
-    {
-        Private.Remove(site, domain);
-        if (isPrivate) return;
-        Saved.Value.Remove(site, domain);
-        try { Store.Value?.Remove(site, domain); }
-        catch (Exception) { }
-    }
+    public static void Forget(string site) => Rules.Value.Forget(site);
 
-    // «Repor» o site: as regras dele saem.
-    public static void Forget(string site)
-    {
-        Private.RemoveSite(site);
-        Saved.Value.RemoveSite(site);
-        try { Store.Value?.RemoveSite(site); }
-        catch (Exception) { }
-    }
+    public static void ForgetPrivate() => Rules.Value.ForgetPrivate();
 
-    public static void ForgetPrivate() => Private.Clear();
-
-    public static IReadOnlyList<(string Site, string Domain)> All() => Saved.Value.All();
+    public static IReadOnlyList<(string Site, string Domain)> All() => Rules.Value.All();
 }
