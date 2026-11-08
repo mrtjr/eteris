@@ -19,10 +19,41 @@ public class PageBrowser : ChromiumWebBrowser
     // volta a dispô-la logo a seguir no tamanho real (mais uma mudança de tamanho antes da 1.ª pintura).
     public Func<(int Width, int Height)>? BirthSize { get; init; }
 
+    // Só o 1.º browser do processo (o da página do arranque) espera pelo CEF dentro de BuildWindowCore; o aviso de que o
+    // CEF o criou vem de OnAfterCreated, na thread do CEF (TabHandlers.cs).
+    private static readonly ManualResetEvent FirstCreated = new(false);
+    private static int _firstBuilt;
+    private volatile bool _isFirst;
+
+    internal void OnCefCreated()
+    {
+        if (_isFirst) FirstCreated.Set();
+    }
+
+    // A janela do CEF nasce filha da static, que é do fio da interface: o Windows entrega-lhe as mensagens dessa criação
+    // por SendMessage entre threads, e a thread do CEF fica parada até o fio da interface as receber. No arranque, ele
+    // está a meio do Show (disposição e Loaded da janela, ~110 ms), e o browser só nascia depois (medido: cef.criado
+    // 10 ms depois do fim do Show). Aqui o fio da interface recebe só essas mensagens (nenhuma da fila do WPF corre)
+    // até o CEF dizer que criou o browser, com teto de CreationWait.
+    protected override HandleRef BuildWindowCore(HandleRef hwndParent)
+    {
+        _isFirst = Interlocked.Exchange(ref _firstBuilt, 1) == 0;
+        var result = base.BuildWindowCore(hwndParent);
+        if (_isFirst)
+        {
+            Infrastructure.SentMessages.DeliverUntil(FirstCreated, CreationWait);
+            Infrastructure.StartupTrace.Mark("aba.esperou");
+        }
+        return result;
+    }
+
+    public static readonly TimeSpan CreationWait = TimeSpan.FromMilliseconds(250);
+
     // Chamado pelo CefSharp dentro de BuildWindowCore, logo depois de criar a static e antes de pedir ao CEF a janela.
     protected override IWindowInfo CreateBrowserWindowInfo(IntPtr handle)
     {
         var info = base.CreateBrowserWindowInfo(handle);
+        Infrastructure.StartupTrace.Mark("aba.hwnd");
         // Uma janela nova fica por cima das irmãs: a de uma aba nova taparia a página à vista assim que aparecesse. Por
         // baixo de todas, é a troca de abas (MainWindow.PageVisibility.cs) que a sobe quando ela já tiver pintado.
         SetWindowPos(handle, HwndBottom, 0, 0, 0, 0, SwpNoSize | SwpNoMove | SwpNoActivate);

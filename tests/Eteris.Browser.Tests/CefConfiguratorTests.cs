@@ -1,3 +1,4 @@
+using System.IO;
 using CefSharp;
 using Eteris.Browser.Infrastructure;
 
@@ -76,4 +77,29 @@ public class CefConfiguratorTests
     [Fact]
     public void Build_KeepsTheBackForwardCache()
         => Assert.False(CefConfigurator.Build("p").CefCommandLineArgs.ContainsKey("disable-back-forward-cache"));
+
+    // O Cef.Initialize corre noutra thread (InitializeInBackground), e o Cef.Shutdown tem de correr nela: o fecho é do
+    // Éteris. O do próprio CefSharp.Wpf (no fecho do Dispatcher do fio da interface) fica desligado, e os browsers que
+    // ainda existam libertam-se no fio da interface (Cef.PreShutdown) antes do Shutdown na outra thread; o base.OnExit
+    // corre mesmo que o fecho do motor falhe.
+    [Fact]
+    public void Shutdown_IsOursAndReleasesBrowsersOnTheUiThreadFirst()
+    {
+        var configurator = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Infrastructure", "CefConfigurator.cs"));
+        var initialize = configurator.IndexOf("public static void InitializeInBackground", StringComparison.Ordinal);
+        Assert.True(configurator.IndexOf("CefSharpSettings.ShutdownOnExit = false;", initialize, StringComparison.Ordinal)
+                    < configurator.IndexOf("_thread.Start();", initialize, StringComparison.Ordinal));
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "App.xaml.cs"));
+        var exit = app[app.IndexOf("protected override void OnExit", StringComparison.Ordinal)..];
+        var pre = exit.IndexOf("Cef.PreShutdown();", StringComparison.Ordinal);
+        Assert.InRange(pre, 0, exit.IndexOf("CefConfigurator.Shutdown();", StringComparison.Ordinal));
+        Assert.True(exit.IndexOf("finally", pre, StringComparison.Ordinal) < exit.IndexOf("base.OnExit(e);", StringComparison.Ordinal));
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
 }

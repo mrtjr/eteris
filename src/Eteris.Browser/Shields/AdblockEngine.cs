@@ -19,6 +19,26 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
         return new AdblockEngine(handle);
     }
 
+    // O mesmo motor, com o adblock-rust a ler as listas dos ficheiros (o texto, ~8 M carateres, nunca passa pelo .NET)
+    // e a usar o motor já compilado em «cachePath» quando existe e é válido. Não grava nada: um motor compilado de todas
+    // as listas («origin» Compiled) grava-se depois, com SaveCache, já em uso.
+    public static AdblockEngine CreateFromFiles(IEnumerable<string> rulePaths, IEnumerable<string> trustedPaths,
+        string? resourcesPath, string? cachePath, out EngineOrigin origin)
+    {
+        var handle = shields_new_from_files(string.Join('\n', rulePaths), string.Join('\n', trustedPaths), resourcesPath, cachePath, out var from);
+        if (handle.IsInvalid) throw new InvalidOperationException("O motor do escudo não conseguiu carregar as listas.");
+        origin = Enum.IsDefined((EngineOrigin)from) ? (EngineOrigin)from : EngineOrigin.Partial;
+        return new AdblockEngine(handle);
+    }
+
+    // Grava o motor compilado (só as listas) em «cachePath»; pode correr com o motor já em uso. Devolve se ficou gravado.
+    public bool SaveCache(string cachePath)
+    {
+        if (_handle.IsClosed) return false;
+        try { return shields_save_cache(_handle, cachePath) == 1; }
+        catch (ObjectDisposedException) { return false; }
+    }
+
     public bool ShouldBlock(string requestUrl, string? pageUrl, string resourceType)
     {
         if (_handle.IsClosed) return false;
@@ -70,6 +90,13 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
     private static partial ShieldsHandle shields_new(string rules, string trustedRules, string? resources);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial ShieldsHandle shields_new_from_files(string rulePaths, string trustedPaths, string? resourcesPath,
+        string? cachePath, out int origin);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int shields_save_cache(ShieldsHandle handle, string cachePath);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     private static partial nint shields_scriptlets(ShieldsHandle handle, string url);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
@@ -86,4 +113,16 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
 
     [LibraryImport(Library)]
     private static partial void shields_free(nint handle);
+}
+
+// De onde veio o motor de AdblockEngine.CreateFromFiles (os mesmos valores do Origin do eteris_shields).
+public enum EngineOrigin
+{
+    // Compilado de todas as listas: pode ir para a cache.
+    Compiled = 0,
+    // Lido da cache.
+    Cache = 1,
+    // Compilado sem alguma lista que não se leu (bloqueada, erro passageiro): serve nesta sessão, mas não vai para a
+    // cache, senão os arranques seguintes ficavam sem ela até as listas mudarem.
+    Partial = 2,
 }

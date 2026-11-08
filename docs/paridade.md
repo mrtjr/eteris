@@ -20,6 +20,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | **medido** (secção 6): a 0.2.9 era *mais* identificável do que o Chrome; no `main` (R0) deixou de o ser — dispositivos, língua, DNT e dicas do cliente como o Chrome. Canvas, WebGL e áudio continuam fixos (F1/F2) | alta |
+| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | ramo `arranque`: **565 ms** (era 1039 ms na mesma sessão); **164 MB** com 1 aba e **239 MB** com 5 (eram 208 e 292 MB); ver secção 1c | ✅ arranque melhor do que o Firefox e a ~1,2× do Chrome; memória a ~1,15× do Chrome (por integrar) |
 | 4c | Vídeo H.264/AAC (Twitch, Vimeo, MP4 direto, HLS…) | sim | sim (codecs do Windows) | sim | **no motor principal**, como o Firefox: compilação própria da CEF com os codecs do Windows (H.264/HEVC pela placa gráfica, AAC pelo Media Foundation, nenhum descodificador com patentes; MP4, Twitch, g1, BBC, Reddit, TikTok, Dailymotion, HLS, `.m4a` e `.aac` validados, ~2,4% de CPU a 1080p). Sem descodificação por hardware ou num Windows N, uma sonda no arranque devolve tudo ao motor de vídeo (WebView2), como antes. Por publicar: o CI não compila este motor (`docs/motor.md`, «Motor com codecs») | ✅ resolvido (por publicar) |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | via motor de vídeo, **sempre com pergunta** (botão «Tocar no motor de vídeo»); o motor principal continua sem Widevine. Com DRM o site fala com o seu servidor de licenças e o CDM (Google/Microsoft) pode fazer provisionamento — inerente ao DRM, só depois de o utilizador aceitar | média |
 | 8 | Extensões | sim | sim | sim | não | média |
@@ -95,6 +96,53 @@ cada passo, causa e método em `docs/motor.md`.
 
 Rolagem: 16,7 ms por fotograma, 0 perdidos, antes e depois (igual ao Chrome). Limite que fica: o 1.º documento
 de cada aba nova nasce sem os scripts precoces do Escudo (o DevTools só responde depois da 1.ª navegação).
+
+## 1c. Arranque e memória — medido (ramo `arranque`, 2026-11-08)
+
+Método: build Release, perfil de teste com «nova aba» no arranque, `start.html` servida localmente; o tempo vai do
+`Process.Start` ao pedido que a página faz depois de 2 `requestAnimationFrame` (1.ª pintura). Antes e depois são A/B
+intercalados na mesma janela temporal (7 rondas, medianas; memória: 3 rondas, conjunto de trabalho privado
+da árvore de processos aos 15 s com 1 aba e aos 45 s com 5). Chrome 156, Brave 157 e Firefox 159: medição da mesma
+noite (06:53–07:21, 3 arranques, medianas), noutra sessão — comparar proporções, não milissegundos. Marcas de tempo
+e fotografias da memória: `ETERIS_TRACE_STARTUP` (`Infrastructure/StartupTrace.cs`).
+
+| Medida | Éteris 0.2.9 (`c3fe087`) | Éteris ramo `arranque` | Chrome 156 | Brave 157 | Firefox 159 |
+|---|---|---|---|---|---|
+| Arranque morno até à 1.ª pintura | 1039 ms | **565 ms** | 474 ms | 426 ms | 1079 ms |
+| Memória privada, 1 aba | 208 MB (principal 136) | **164 MB** (principal 88) | 143 MB | 141 MB | 340 MB |
+| Memória privada, 5 abas | 292 MB (principal 146) | **239 MB** (principal 93) | 194 MB | 199 MB | 453 MB |
+
+O que mudou, cada passo com o seu A/B (mediana antes → depois, medida na altura de cada um):
+
+| Passo | Ganho medido |
+|---|---|
+| Lista de atalhos e procura de atualizações só depois da 1.ª página (`Infrastructure/FirstPaint.cs`) | 1116 → 1047 ms |
+| O 1.º browser do CEF nasce durante o Show: o fio da interface recebe as mensagens da criação da janela do CEF (`Infrastructure/SentMessages.cs`) | 1035 → 952 ms |
+| Escudo: o adblock-rust lê as listas dos ficheiros e guarda o motor compilado no perfil (`filters\motor-*.dat`) | 1 aba 206 → 167 MB, 5 abas 296 → 245 MB; Escudo ativo aos 372 ms (era 552) |
+| Tabelas da base de dados da 1.ª aba abertas numa thread de fundo | 924 → 893 ms |
+| `Cef.Initialize` numa thread própria, em paralelo com o XAML (o `Cef.Shutdown` volta lá) | 924 → 843 ms (com o anterior 893 → 836) |
+| Motor de composição do WPF (fio de desenho, Direct3D) arrancado numa thread à parte no `Main` (`Infrastructure/CompositionWarmup.cs`) | 732 → 678 ms |
+| JIT do arranque em vários núcleos guiado pelo arranque anterior (`ProfileOptimization`, `Infrastructure/StartupJit.cs`) | 678 → 567 ms |
+
+Correções da revisão (sem custo no arranque): o motor do Escudo só vai para a cache se leu todas as listas (uma lista
+bloqueada pelo antivírus nesse arranque deixava os seguintes sem ela) e grava-se depois de entrar em uso; no arranque,
+o pedido da página principal espera pelo motor no máximo 250 ms (sem cache do motor, a margem medida era ~50 ms; a
+espera não chegou a ser precisa em 5 rondas); o perfil do JIT para de gravar 5 s depois da 1.ª página ou ao abrir uma
+janela privada (o .NET gravava até ao fim do processo: diria que funções a sessão usou) e um arranque `--private` não
+o grava; o fecho do motor liberta no fio da interface os browsers que ainda existam (`Cef.PreShutdown`) e desliga o
+fecho próprio do CefSharp.Wpf. Medição de novo no fim, contra `c3fe087` (Release, A/B intercalado; arranque 7
+rondas, memória 5): 1.ª pintura 1107 → **604 ms**; 1 aba 211 → **168 MB** (principal 135 → 93); 5 abas 298 →
+**244 MB** (principal 148 → 97), ~19 MB por aba a mais (eram ~22).
+
+Avaliado e não registado: GC com `System.GC.Gen0MaxBudget` (6 MB) e `ConserveMemory=7` — depois da correção do
+Escudo o ganho ficou no ruído (1 aba 163 → 154 MB numa medição, 5 abas sem diferença; `Gen0Size` não é aceite pelo
+runtimeconfig, só pela variável de ambiente); `gcConcurrent=0` também sem ganho claro. Painéis do XAML criados só
+quando precisos: a amostragem mostrou que os popups e as camadas custam ~35 ms no total — o custo do XAML era a espera
+pelo motor de composição do WPF. Em aberto: ReadyToRun no código da aplicação (o pacote crossgen2 não está na cache
+local; descarregá-lo precisa de autorização), processos filhos nativos (frente da sandbox, `docs/sandbox.md`), e o
+2.º renderer sem página (~12–16 MB; provavelmente o renderer de reserva do Chromium, que o Chrome também tem — por
+confirmar). O 1.º arranque depois de uma
+atualização do Éteris não aproveita o JIT guiado nem o motor do Escudo guardado (ambos são refeitos nesse arranque).
 
 ## 2. Sandbox — investigado: viável, 1–2 semanas
 
