@@ -131,6 +131,11 @@ def main():
     # Motor do navegador.
     cefsharp = package_dir("CefSharp.Common.NETCore", refs["CefSharp.Wpf.NETCore"])
     copy(os.path.join(cefsharp, "LICENSE"), "CefSharp-LICENSE.txt", f"CefSharp {refs['CefSharp.Wpf.NETCore']}", "BSD-3-Clause")
+    # Publicação com sandbox (-p:EterisSandbox=true, docs/sandbox.md): o CefSharp é o do Éteris, os mesmos pacotes com o
+    # patch build/cefsharp/windows-sandbox-info.patch (versão 156.0.150-eteris.N, N escolhido ao compilar).
+    if os.path.exists(os.path.join(ROOT, "build", "cefsharp", "windows-sandbox-info.patch")):
+        index.append((f"CefSharp {refs['CefSharp.Wpf.NETCore']}-eteris.N, modificado (patch do sandbox em build/cefsharp; "
+                      "só nas publicações com sandbox)", "BSD-3-Clause", "CefSharp-LICENSE.txt"))
     nuspec = open(glob.glob(os.path.join(cefsharp, "*.nuspec"))[0], encoding="utf-8").read()
     cef_version = re.search(r'id="chromiumembeddedframework\.runtime" version="\[?([^"\],]+)', nuspec, re.I).group(1)
     # Motor com codecs (docs/motor.md): com a compilação própria da CEF (a mesma condição do csproj: libcef.dll e
@@ -146,6 +151,11 @@ def main():
         own_licenses = os.path.join(own_runtime, "licenses")
         copy(os.path.join(own_licenses, "LICENSE.txt"), "CEF-LICENSE.txt",
              f"Chromium Embedded Framework {cef_version} (compilação própria, codecs do Windows)", "BSD-3-Clause")
+        # Publicação com sandbox: o Eteris.Browser.exe é o bootstrap.exe da CEF (com o ícone e a versão do Éteris) e a
+        # DLL cliente Eteris.Browser.dll inclui o libcef_dll_wrapper da CEF (build/sandbox/client).
+        if os.path.exists(os.path.join(own_runtime, "bootstrap.exe")):
+            index.append(("Bootstrap da CEF (Eteris.Browser.exe nas publicações com sandbox) e libcef_dll_wrapper (na DLL "
+                          "cliente Eteris.Browser.dll)", "BSD-3-Clause", "CEF-LICENSE.txt"))
         copy(os.path.join(own_licenses, "CREDITS.html"), "Chromium-credits.html",
              f"Chromium {manifest['chromium']['version']} e os seus componentes (CEF {cef_version}, compilação própria)",
              "BSD-3-Clause, LGPL-2.1-or-later (FFmpeg) e outras (ver o ficheiro)")

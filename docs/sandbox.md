@@ -37,6 +37,382 @@ processos correm fechados (sem acesso a ficheiros nem ao sistema).
    `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já faziam — ver «Passo A — resultado» e «Regras para
    o código».
 
+## Passo D — resultado (2026-11-08, ramo `sandbox`): D0–D6 e D9 feitos (D9 também no código), Velopack provado
+
+**D0 — o motor próprio isola as páginas com o bootstrap (sem .NET).** `cefsimple_dll` compilado na árvore do motor
+(`autoninja -n` antes: 220 passos, só o `libcef_dll_wrapper_dll` e o `cefsimple.dll`; o `libcef.dll` ficou igual,
+SHA256 `4D5097CE…F20C` antes e depois, o mesmo do runtime publicado). Pasta de teste com o runtime, `bootstrap.exe`
+renomeado para `cefsimple.exe` e o `cefsimple.dll`. `chrome://sandbox` lido por CDP:
+
+| Processo | Sandbox | Bloqueio | Integridade |
+|---|---|---|---|
+| Renderer (2) | Renderer | Lockdown | S-1-16-0 Untrusted |
+| GPU | GPU | Limited | S-1-16-4096 Low |
+| Storage Service | Service | Lockdown | Untrusted |
+| Audio Service | (script de tokens) | — | Low |
+| Network Service | **Not Sandboxed** (igual ao Chrome 156 sem experiência de campo: D9) | | |
+
+`build/sandbox/sandbox-check.ps1` (tokens dos filhos, sem olhar para a tela) confirma: renderers Untrusted com token
+restrito, GPU Low, nenhum filho com `--no-sandbox`. Com o GPU fechado, o MP4 H.264 1280×720 toca (126 quadros, 0
+perdidos, `err: null`), o `.m4a` e o `.aac` (AAC-LC) descodificam, e a sonda dá `probably` para H.264, AAC, HE-AAC,
+HEVC, VP9, AV1, Opus e MP3.
+
+**D1 — CefSharp com o patch v2** (`build/cefsharp`, ver o README): compila (`prepare-source.ps1` +
+`build-cefsharp.cmd`) e `pack-local.ps1` produz o feed local `156.0.150-eteris.1`.
+
+**D2 — DLL cliente do bootstrap** (`build/sandbox/client`: `eteris_client.cpp`, CMake contra a distribuição do
+próprio motor, `make_distrib --minimal`): `dumpbin /exports` → `EterisSandboxInfo`, `RunWinMain`; `/imports` →
+só `KERNEL32.dll` direto, `libcef.dll` e `SHELL32.dll` em carga diferida; CRT estática (`/MT`, sem `VCRUNTIME140`).
+Testes: `SandboxBootstrapSourceTests` (esquema `eteris://` igual nos dois lados, exportações, patch).
+
+**D3 — o Éteris .NET arranca pelo bootstrap (ainda sem sandbox).** Cópia de `publish` com `EterisSB.exe` (o
+`bootstrap.exe` do runtime) + `EterisSB.dll` (a DLL cliente compilada com `ETERIS_APP_DLL=Eteris.Browser.dll`;
+`build/sandbox/assemble-bootstrap.ps1` junta-os e verifica o SHA256 do `libcef.dll` e a ausência do recurso
+`CEF_INSTALLER_CONFIG`). O processo principal é o `EterisSB.exe` com o .NET dentro (hostfxr): abriu a Wikipédia, e um
+2.º arranque entregou `--new-tab` (abre `eteris://newtab`) e um link à instância aberta e saiu em 116–195 ms com código
+0. O WPF arrancou, portanto a thread é STA. Janela com título em 827–989 ms, contra 869–919 ms pelo apphost (mesmo
+perfil, 2 arranques cada): sem diferença mensurável.
+
+**D4 — sandbox ligado no Éteris.** Publicação com o CefSharp do feed local (`-p:EterisCefSharpFeed=<feed>
+-p:EterisCefSharpN=2`, que define `ETERIS_CEFSHARP_SANDBOX`), `Infrastructure/SandboxInfo.cs` (lê `EterisSandboxInfo`
+da DLL já carregada) e `CefConfigurator` (`WindowsSandboxInfo` + `performDependencyCheck: false`). Os filhos passaram a
+ser o próprio `EterisSB.exe` (nenhum `CefSharp.BrowserSubprocess.exe`). `chrome://sandbox` lido por CDP
+(`ETERIS_TEST_DEVTOOLS_PORT`): **3 renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Service
+Lockdown/Untrusted; só o Network Service «Not Sandboxed»** (como no motor puro e no Chrome 156 sem experiência; D9).
+`sandbox-check.ps1`: nenhum filho com `--no-sandbox`; Audio Service Low. Com o sandbox: Wikipédia; MP4 H.264
+1280×720 (127 quadros, 0 perdidos), `.m4a` e `.aac` tocam; `eteris://newtab` (o esquema registado pela DLL nativa
+nos filhos); janela privada (`--private`, «Nova aba privada»); transferência de um ficheiro (23 912 bytes, igual ao
+original); fecho limpo (WM_CLOSE, sem forçar).
+
+Nota de compilação: a montagem de referência do CefSharp (`RefAssembly`) sai assinada e o `CefSharp.Core` compilado
+referencia o `CefSharp.Core.Runtime` sem nome forte; o pacote local usa a própria montagem x64 como referência (o
+`eteris.1` falhava a compilar o Éteris; `eteris.2` corrige).
+
+**D5 (parcial) — regressão sob sandbox, sem teclado nem rato.** Impressão (`Page.printToPDF`: PDF de 7 páginas,
+470 KB) e o leitor de PDF da CEF (`chrome-extension://mhjf…/index.html`) a abrir esse PDF; memória dos filhos (mesma
+página, 6 filhos): processo filho .NET sem sandbox 237,9 MB privados / 417,5 MB de conjunto de trabalho, filhos nativos
+com sandbox 181,9 MB / 269,2 MB. A 1.ª tentativa com teclas (2026-11-08 05:2x) ficou inválida: dois avisos
+«Segurança do Windows» da Firewall sobre o **Google Chrome** do dono (Google LLC; abertos às 04:58 e 05:03, antes de
+qualquer teste do Éteris nesse intervalo) ficaram no primeiro plano e os scripts de teclas abortam quando o Éteris
+não está à frente. Não foram tocados (continuavam abertos às 06:30); a 2.ª parte foi feita sem primeiro plano:
+
+**D5 (2.ª parte, 2026-11-08 05:50–06:30) — regressão sem teclado, rato nem primeiro plano.** Duas publicações do
+mesmo ramo com o mesmo `libcef.dll` (SHA256 `4D5097CE…`): **base** = publicação normal (apphost, CefSharp oficial,
+filhos `CefSharp.BrowserSubprocess.exe` sem sandbox) e **sandbox** = a publicação do D6 (`Eteris.Browser.exe` =
+bootstrap, filhos nativos com sandbox). Perfis de teste novos; o ecrã dividido entra pela sessão gravada
+(`session.json` com `Split`), o motor de vídeo por `localhost` na lista de sites de vídeo do perfil (`eteris.db`), e o
+resto pelo DevTools de teste (`ETERIS_TEST_DEVTOOLS_PORT`, `Runtime.evaluate`) ou por uma página que escreve o resultado
+no título (lido do `session.json`). Fecho por `WM_CLOSE` em todos os arranques, sem processos a sobrar.
+
+| Verificação | Base | Sandbox |
+|---|---|---|
+| Ecrã dividido reposto da sessão: as duas páginas `visible` ao mesmo tempo (CDP e `BroadcastChannel`) | sim | sim |
+| `window.open` sem gesto | bloqueado (0 abas) | bloqueado (0 abas) |
+| `window.open` com gesto (`userGesture: true`) | abre 1 aba | abre 1 aba |
+| Anúncio em nova aba (`ad.doubleclick.net`, com gesto) | bloqueado | bloqueado |
+| WebRTC (2 `RTCPeerConnection` na página, canal de dados) | 0 candidatos, canal sem abrir | igual |
+| Avisos novos «Segurança do Windows» | nenhum | nenhum |
+| Motor de vídeo (`http://localhost:8814/v.html` entregue à instância aberta) | troca: 6–7 processos `msedgewebview2` | troca: 6–7 |
+| Processador, ecrã dividido com animação a 60 fps, 10 s (4 medições, % de 1 núcleo) | 14,4 · 13,4 · 12,7 · 14,8 (média 13,8) | 12,8 · 16,7 · 14,2 · 13,3 (média 14,3) |
+| Memória privada dos 6 filhos (MB) | 225,5 · 356,1¹ · 221,8 · 222,6 | 279,3¹ · 280,9¹ · 186,4 · 185,3 |
+| Conjunto de trabalho dos 6 filhos (MB) | 426,5 · 556,0¹ · 424,2 · 425,4 | 390,5 · 386,0 · 287,5 · 288,7 |
+| Processo principal, memória privada (MB) | 203,6–209,0 | 203,8–211,8 |
+
+¹ Processo da placa gráfica a 176–222 MB em vez de ~88 MB nesse arranque (acontece nas duas cópias).
+
+Leitura: nenhuma regressão. O WebRTC sem candidatos é o comportamento normal do Éteris (política
+`webrtc-ip-handling-policy=disable_non_proxied_udp` em `Shields/EngineHardening.cs`: sem proxy não há UDP), igual nas
+duas cópias, e por isso também não abriu nenhum aviso da Firewall. Sem as duas medições em que a placa gráfica subiu, os
+filhos com sandbox gastam ~36 MB privados e ~137 MB de conjunto de trabalho a menos (filhos nativos sem .NET); o
+processador fica dentro do ruído. Nota para os testes: `Get-NetTCPConnection` às vezes não mostra a porta do DevTools
+que responde (`/json/version`); verificar a porta pelo HTTP e pelas páginas da própria sessão, nunca só pela tabela de
+ligações. O que faltava ao vivo ficou feito no D5 interativo, em baixo.
+
+**D5 interativo (2026-11-08 09:2x–09:5x) — com teclado e rato, publicação com sandbox depois de fundir o `main`
+(c3fe087).** Publicação `-p:EterisSandbox=true` (CefSharp `156.0.150-eteris.2`, DLL cliente do D6, `libcef.dll`
+SHA256 `4D5097CE…`, o publicado) copiada para a scratchpad **com a ACL do D9** (por isso com o serviço de rede também
+em sandbox); comparada com a publicação normal do mesmo ramo (**base**) onde algo pareceu diferente. Perfis de teste
+novos, `ETERIS_TEST_MUTE=1`, páginas num servidor local (`127.0.0.1`), comandos pela paleta (Ctrl+K) e atalhos,
+verificação pelo DevTools de teste (`Runtime.evaluate`), por UI Automation e por capturas. Área de transferência
+guardada e reposta; ficheiros de teste para a Reciclagem.
+
+| Verificação (com sandbox) | Resultado |
+|---|---|
+| `chrome://sandbox` | renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Lockdown/Untrusted, **Network Service no AppContainer** (`NetworkServiceSandbox` ligada, só por haver ACL) |
+| Vídeo H.264 no motor principal (`bear.mp4` 1280×720) | toca: 153 quadros em 2,2 s, 0 perdidos, sem erro |
+| Centro de multimédia | o botão aparece na barra e o ícone de som na aba |
+| Esconder um elemento (paleta → clique) | o elemento fica `display: none` |
+| Escurecer este site | estilo `eteris-dark` na página, `filter: invert(0.9) hue-rotate(180deg)` |
+| Modo de leitura (F9) | abre (`#eteris-reader`) e fecha |
+| Captura da página inteira (Ctrl+Shift+S) | PNG de 525 KB em Imagens › Éteris |
+| Guardar como PDF (paleta) | PDF de 1,9 MB (`%PDF-`) em Transferências |
+| Transferência (300 000 bytes aleatórios) | ficheiro igual ao original (SHA256); painel de transferências mostra-a |
+| Escolher ficheiro (clique real num `<input type=file>`) | o diálogo «Abrir» do Windows abre no processo principal; Esc → evento `cancel` na página |
+| Imprimir (Ctrl+P) | o diálogo de impressão do Windows abre; Esc fecha-o |
+| Janela privada (Ctrl+Shift+N) | «Nova aba privada — Éteris» |
+| Ecrã dividido (paleta) | as duas páginas `visible` ao mesmo tempo; «Fechar ecrã dividido» volta a uma |
+| Trocar abas (Ctrl+PgDn ×5, duas páginas escuras) | o centro da página nunca passou de luminosidade 24 (fundo 20–24): sem quadro branco |
+| Abrir aba (Ctrl+T) | pior quadro 85 (a imagem da nova aba), sem branco |
+| Espreitar (Alt+clique num link) | cartão com título, autor e parágrafos do artigo |
+| Motor de vídeo (`localhost` na lista do perfil) | a aba passa ao WebView2 (6 processos `msedgewebview2`) |
+| Avisos «Segurança do Windows» novos | nenhum |
+| Fecho (WM_CLOSE) | limpo |
+
+Nenhuma falha só com sandbox. Três coisas vistas e esclarecidas:
+- **Alt+clique numa aba aberta por um link entregue à instância** (2.º arranque com o endereço), sem recarregar:
+  o Chromium transfere o link em vez de o Éteris o espreitar. **Igual na base** (sem sandbox) — não é do sandbox; o
+  script do Alt+clique (`LinkPreview.AltClickScript`, registado pelo `HostScriptRegistry`) ainda não está nessa
+  primeira página. Depois de recarregar, ou numa aba aberta normalmente, funciona nas duas cópias. Fica para o `main`.
+- Na 1.ª tentativa o diálogo «Abrir» não apareceu porque o clique só fechou o painel de transferências aberto pela
+  transferência acima; repetido sem o painel, abre nas duas cópias. O diálogo de impressão ficou aberto (o script não
+  o via: é de outro processo) e bloqueou os passos seguintes dessa sessão; repetidos com Esc, passam.
+- Nessa sessão longa o `chrome://sandbox` mostrou, além da GPU com sandbox, um 2.º processo «GPU / Not Sandboxed»
+  transitório. Não voltou a aparecer em 85 s de sessão nem com o diálogo de impressão aberto 8 s (nenhum processo da
+  placa gráfica com `--no-sandbox`). Compatível com o processo de recolha de informação da placa gráfica do Chromium
+  (`GPU_PROCESS_KIND_INFO_COLLECTION`, sem sandbox também no Chrome, só para ler capacidades DirectX e sair); a vigiar.
+
+Recuo do D9 confirmado ao vivo: a mesma publicação **sem** a ACL (`network-sandbox-acl.ps1 -Check` → 0/2) arranca
+com o serviço de rede «Not Sandboxed», as páginas carregam e o `Local State` **não** fica com
+`network_service_failed_launch_major_version` (a funcionalidade nem é pedida).
+
+**D6 — integração no repositório (opcional, opção B de nomes).** `-p:EterisSandbox=true` (ou
+`build/publish.ps1 -Sandbox -CefSharpFeed <feed> -CefSharpN 2 [-SandboxClientDll <dll>]`): o .NET passa a
+`Eteris.App`, a saída leva `Eteris.Browser.exe` = bootstrap do runtime e `Eteris.Browser.dll` = DLL cliente
+(`build/sandbox/client/build.cmd <distribuição> build\sandbox\client\out`), e a publicação deixa de trazer o
+`CefSharp.BrowserSubprocess.*` e o apphost `Eteris.App.exe`. Verificado numa publicação na scratchpad:
+`Eteris.Browser.exe` com sandbox (renderers Untrusted, GPU Low) e com `--eteris-no-sandbox` (filhos = o próprio exe,
+`--no-sandbox`, integridade Medium), 2.º arranque entrega `--new-tab`, fecho limpo. Sem a opção nada muda (CefSharp
+oficial; testes `SandboxInfoTests`). Os dois pack URIs do menu usam o nome da montagem em execução
+(`typeof(MainWindow).Assembly`), em vez de `Eteris.Browser` escrito à mão.
+
+**E (primeira parte) — marca no bootstrap.** `build/sandbox/brand-bootstrap.ps1` (corrido pela publicação com
+`EterisSandbox`): compila um `.rc` com o `rc.exe` do Windows SDK e troca, na cópia `Eteris.Browser.exe`, os recursos de
+ícone e de versão (o manifesto fica). O Explorador e o Gestor de Tarefas passam a mostrar «Éteris» 0.2.9 com o ícone do
+Éteris, em vez de «CEF Bootstrap Application»; o arranque com sandbox continua igual (renderers Untrusted, GPU Low).
+
+**D9 — Network Service com sandbox: dá, só com a funcionalidade e permissões na pasta (sem alterar o motor).**
+Causa encontrada no registo (`--enable-logging`): `sandbox_win.cc:805 Sandbox cannot access executable
+…\cefsimple.exe … Acesso negado (0x5)`. Com `NetworkServiceSandbox` o serviço de rede arranca num **AppContainer**
+(`SetupAppContainerProfile` em `sandbox/policy/win/sandbox_win.cc`: capacidades `lpacChromeInstallFiles`,
+`registryRead`, `internetClient`, `privateNetworkClientServer`, …; LPAC só com `WinSboxNetworkServiceSandboxIsLPAC`,
+desligado por omissão) e, antes de o lançar, verifica se o AppContainer consegue ler o executável. A pasta de uma
+aplicação fora de `Program Files` não dá acesso a AppContainers; o instalador do Chrome resolve-o dando leitura+execução
+às capacidades `chromeInstallFiles` e `lpacChromeInstallFiles` na pasta de instalação
+(`chrome/installer/setup/configure_app_container_sandbox.cc`). Quando o lançamento falha, o
+`SystemNetworkContextManager` grava `net.network_service_failed_launch_major_version = 156` no `Local State` e, a partir
+daí, `IsNetworkSandboxEnabled` devolve `kDisabledBecauseOfFailedLaunch` **para toda a versão 156** nesse perfil — por isso
+a 1.ª sonda via a funcionalidade ligada e o serviço sem sandbox (os perfis `profile-sbx-d9*` tinham essa marca).
+
+Cadeia no código (Chromium 156 / CEF): `ServiceProcessHostImpl::ShouldEnableSandbox(kNetwork)` →
+`ContentBrowserClient::ShouldSandboxNetworkService()`; a CEF 156 cria sempre o
+`ChromeContentBrowserClientCef` (`ChromeMainDelegateCef::CreateContentBrowserClient`, também com janelas de estilo
+Alloy), que não redefine o método, e fica o do Chrome:
+`SystemNetworkContextManager::IsNetworkSandboxEnabled()` → (1) arranque falhado nesta versão → não; (2)
+`sandbox::policy::features::IsNetworkSandboxSupported()` (Windows 10 20H1+, não ARM64); (3) preferência
+`NetworkServiceSandboxEnabled` (política); (4) a funcionalidade `NetworkServiceSandbox` (desligada por omissão). A
+CEF não a desliga em lado nenhum (`grep` em `cef/`). Os dados de rede do perfil (`Default/Network`: cookies, etc.) recebem
+sozinhos uma entrada para a capacidade do serviço de rede (`content/browser/network_sandbox.cc`): não é preciso tratar
+do perfil.
+
+Prova (2026-11-08):
+
+| Arranque | Network Service (`chrome://sandbox` + tokens) | Página |
+|---|---|---|
+| cefsimple + bootstrap do D0, perfil novo, `--enable-features=NetworkServiceSandbox`, pasta sem ACL | «Not Sandboxed», Medium; `Local State`: `failed_launch_major_version: 156` | carrega |
+| a mesma pasta copiada + as duas entradas de ACL (dadas com `icacls`, as mesmas de `build/sandbox/network-sandbox-acl.ps1`; `-Check` dá 2/2), perfil novo | **Network / AppContainer `S-1-15-2-2084…`**, integridade **Low**; sem marca de falha | `example.com` carrega |
+| Éteris do D6 (`Eteris.Browser.exe` com sandbox) copiado + ACL, perfil novo, `--enable-features=NetworkServiceSandbox` na linha de comandos | **AppContainer, Low** (renderers Untrusted, GPU Low, Storage Untrusted) | «Example Domain — Éteris», fecho limpo |
+
+Passos para o Éteris (sem patch do motor):
+1. **Instalação/atualização:** `network-sandbox-acl.ps1 -Path <pasta raiz da instalação>` — ou o equivalente em C#
+   (`DirectorySecurity.AddAccessRule` com os dois SIDs, `ReadAndExecute`, herança `ContainerInherit,ObjectInherit`) nos
+   ganchos do Velopack (`OnFirstRun`/depois de instalar e de atualizar). Dado na raiz da instalação do Velopack
+   (`%LocalAppData%\<id do pacote>`), com herança, as pastas novas de cada versão herdam-no. Não precisa de administrador (a pasta é do utilizador).
+2. **Arranque:** só juntar `NetworkServiceSandbox` ao `enable-features` (`Shields/EngineHardening.cs`) quando o sandbox
+   está ligado **e** a verificação (`-Check`, ou a mesma leitura de ACL em C#) passa. Ligar a funcionalidade sem a ACL
+   não parte nada (o Chromium recua e as páginas carregam), mas deixa o perfil marcado e sem sandbox de rede até à
+   versão principal seguinte do motor.
+3. **Atenção:** nas cópias desta prova a ACL foi dada pasta a pasta na scratchpad; nas instalações já existentes, um
+   perfil que tenha falhado uma vez só volta a tentar quando o motor mudar de versão principal (ou apagando
+   `net.network_service_failed_launch_major_version` do `Local State`).
+
+**D9 no código (2026-11-08).** `Infrastructure/NetworkSandbox.cs`: a decisão
+`ShouldEnable(sandbox das páginas, ACL)` — a funcionalidade `NetworkServiceSandbox` só entra no `enable-features`
+(`CefConfigurator.Build(..., networkSandbox)`) com o sandbox das páginas ligado **e** a ACL confirmada no próprio
+executável (`Granted`: entradas próprias ou herdadas que se aplicam ao objeto, leitura+execução para as duas
+capacidades, nenhuma a negar; qualquer erro conta como «não»). A ACL é dada por `Grant` (as mesmas entradas do
+`build/sandbox/network-sandbox-acl.ps1`, herdadas) na **raiz da instalação** do Velopack (`InstallRoot`: o pai de
+`current` quando lá está o `Update.exe`), pelos ganchos `OnAfterInstallFastCallback` e `OnAfterUpdateFastCallback`
+(`Program.Main`), só nas publicações com sandbox e sem administrador (a pasta é do utilizador); uma falha não impede a
+instalação — sem ACL o serviço de rede corre como antes. Testes: `NetworkSandboxTests` (decisão, SIDs iguais aos do
+script, raiz do Velopack, herança numa pasta temporária real, entrada a negar, `Build`, ganchos ligados e inertes
+sem sandbox); `EngineFeatureNamesTests` passa a verificar também `NetworkServiceSandbox` (no CEF 156 a cadeia
+`kNetworkServiceSandbox` vem logo depois de um byte de dados, por isso o teste aceita qualquer byte anterior que não
+seja letra, algarismo ou `_`).
+
+**E — Velopack com o bootstrap como `mainExe` (prova da atualização, 2026-11-08).** Opção B: o `mainExe` continua a
+ser `Eteris.Browser.exe` (agora o bootstrap), por isso `build/pack.ps1` não muda e os atalhos de quem atualiza
+continuam válidos. Prova sem tocar na instalação do dono: `packId` de teste `EterisBrowserSbxTest` (instala em
+`%LOCALAPPDATA%\EterisBrowserSbxTest`), título «Eteris SbxTest» (atalhos com outro nome que os do dono), feed local
+(pasta) com **0.2.9-teste** (publicação normal: apphost .NET, sem sandbox) e **0.2.10-teste** (`-p:EterisSandbox=true`;
+o `vpk` gerou também o delta: 6 ficheiros alterados, 3 novos, 6 removidos, 14 MB).
+
+| Passo | Resultado |
+|---|---|
+| `Setup.exe --silent` da 0.2.9-teste | instala em 3 s; o gancho `--veloapp-install` corre; atalhos «Eteris SbxTest» no Ambiente de Trabalho e no menu Iniciar → `…\EterisBrowserSbxTest\current\Eteris.Browser.exe`; chave de desinstalação criada |
+| 0.2.9-teste a correr | todos os processos «Not Sandboxed» (como hoje); ACL da raiz 0/2 (o gancho é inerte sem sandbox) |
+| Atualização pelo feed local (`UpdateManager` + `SimpleFileSource`: verificar → transferir → `ApplyUpdatesAndExit`) | escolhe o **delta** sobre o pacote local da 0.2.9; `Update.exe apply` aplica-o; o `Eteris.Browser.exe` passa a ser o bootstrap («Éteris» 0.2.10, com `Eteris.App.dll`, sem `CefSharp.BrowserSubprocess.exe`) |
+| Gancho `--veloapp-updated` **pelo bootstrap** (bootstrap → DLL cliente → .NET) | correu: ACL dada à raiz (2/2) e herdada por `current` (2/2) |
+| Atalhos depois da atualização | os mesmos, para o mesmo `current\Eteris.Browser.exe` (agora o bootstrap) |
+| 0.2.10-teste aberta pelo destino do atalho, com o perfil da 0.2.9 | arranca; a sessão volta (a página aberta na 0.2.9) e mostra as Novidades; `chrome://sandbox`: GPU Limited/Low, **Network Service no AppContainer**, Storage Untrusted, 4 renderers Untrusted; nenhum filho com `--no-sandbox`; fecho limpo |
+| `Update.exe --uninstall` | remove a pasta, os dois atalhos e a chave de desinstalação (no fim mostra «Desinstalação Concluída», que pede OK) |
+| Estado do utilizador antes/depois (atalhos com destino e SHA256, chaves de desinstalação, `StartMenuInternet`, `RegisteredApplications`, `Classes`, escolhas de http/https/.htm/.html/.pdf) | 0 diferenças **nestes sítios** — mas a fotografia não olhava para os perfis de AppContainer, e a desinstalação **deixou** o do serviço de rede (`cr.sb.netB382764A…`: pasta em `%LOCALAPPDATA%\Packages` e entrada em `AppContainer\Mappings`). Corrigido na revisão, em baixo; o Éteris não se regista como navegador na instalação |
+
+Notas para a publicação:
+- O `Setup.exe` do Velopack 1.2.161 entra em pânico com argumentos para a aplicação (`Setup.exe -- <args>`: erro do
+  clap em `EXE_ARGS`) e fica parado; o Éteris não os usa. Na prova, a aplicação que o Setup arranca depois de instalar
+  saía logo por um gancho de arranque do .NET só de teste (`DOTNET_STARTUP_HOOKS` no ambiente do Setup), para nunca
+  abrir com o perfil por omissão nem falar com a instância aberta do dono — no modo silencioso o Setup acabou por não
+  a arrancar.
+- `brand-bootstrap.ps1` só aceita versões `x.y.z` (os recursos de versão do Windows são numéricos): as publicações de
+  teste usaram `-p:Version=0.2.10` e só o pacote tem o sufixo `-teste`.
+- Ficheiros da prova na scratchpad (`sbx/vpk-test.ps1`, `sbx/vpk-uninstall.ps1`, `sbx/vpk-updater`, `sbx/vpk-hook`).
+
+**Revisão (2026-11-08, 10:00–10:50) — correções e 2.ª prova do Velopack.** Problemas confirmados e corrigidos:
+
+1. **A desinstalação deixava o perfil do AppContainer do serviço de rede.** Com `NetworkServiceSandbox` o Chromium cria
+   um perfil por caminho do executável (`GetAppContainerProfileName` em `sandbox/policy/win/sandbox_win.cc`:
+   `cr.sb.net` + SHA1 em hexadecimal maiúsculo do caminho UTF-8 do programa dos filhos, que é o `GetModuleFileName` do
+   processo principal), com a pasta `%LOCALAPPDATA%\Packages\<nome>` e a chave
+   `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppContainer\Mappings\<SID>`.
+   Confirmado: `ProfileName(C:\Users\Júnior\AppData\Local\EterisBrowserSbxTest\current\Eteris.Browser.exe)` =
+   `cr.sb.netB382764A951831BB0A76C124F3484E6BDFFFB515`, e esse perfil continuava lá depois da 1.ª desinstalação.
+   **Correção:** gancho `OnBeforeUninstallFastCallback` → `NetworkSandbox.OnUninstalling` (só nas publicações com sandbox
+   e pelo bootstrap) → `DeleteAppContainerProfile` para os perfis desta instalação: os que o arranque guardou em
+   `<raiz do Velopack>\network-sandbox-profiles.txt` (`NetworkSandbox.Remember`, só quando o serviço de rede vai mesmo
+   para o AppContainer e só se o nome ainda lá não estiver) e os do próprio caminho do gancho nas formas dada, longa e
+   curta. O nome depende do caminho exato: arrancar pela forma curta 8.3 (`C:\Users\JNIOR~1\…`) cria **outro** perfil
+   (visto nos testes: `sbx\d0\cefsimple.exe` tem dois), por isso o arranque guarda o nome de cada caminho usado.
+   Para cópias à mão: `build/sandbox/appcontainer-profiles.ps1` (lista; com `-Exe … -Remove` apaga só os desses exes).
+2. **Atualização a partir da 0.2.9 pelo caminho real do Éteris** (não por um atualizador externo): 0.2.9 compilada do
+   `c3fe087` (o `main` publicado + correções), só com um patch de teste fora do repositório (`sbx/patch-029t.py`: feed
+   local em vez do GitHub e `--user-data-dir` do perfil de teste nos argumentos do reinício, para a versão nova nunca
+   abrir o perfil do dono). Abaixo.
+3. **A publicação não protegia contra uma DLL cliente desfasada do motor.** A DLL passa a ter recurso de versão com a
+   CEF da distribuição com que foi compilada (`ProductVersion` = `CEF_VERSION`, `Comments` = `cef_commit=<commit>`,
+   gerado pelo CMake a partir de `include/cef_version.h`), e o `EterisSandboxCheck` corre `build/sandbox/verify-client.ps1`
+   **antes de compilar**: commit e versão iguais aos do `manifest.json` do runtime, importações diretas só do
+   `KERNEL32.dll` (tabela de importações do PE; `libcef.dll` em diferido), exportações só `EterisSandboxInfo` e
+   `RunWinMain`, e nenhum `CEF_INSTALLER_CONFIG` no bootstrap nem na DLL. Exige também `SelfContained=true`. Provado:
+   com a DLL do D6 (sem versão) a publicação pára («a DLL não tem a versão da CEF gravada»); com a nova passa
+   (`156.0.15+gcf671c0`, diretas: `KERNEL32.dll`; diferidas: `libcef.dll`, `USER32.dll`, `SHELL32.dll`).
+4. **Licenças:** o `brand-bootstrap.ps1` mantém o `LegalCopyright` do bootstrap da CEF («Copyright (C) 2026 The
+   Chromium Embedded Framework Authors», verificado na publicação) e a DLL cliente declara o `libcef_dll_wrapper`;
+   `licenses/INDEX.md` (gerado por `build/licenses/collect.py`) regista o CefSharp `156.0.150-eteris.N` modificado e o
+   bootstrap/`libcef_dll_wrapper` (BSD-3-Clause, `CEF-LICENSE.txt`); `LicenseComplianceTests` verifica-o.
+5. **Testes com o CefSharp do feed:** `SandboxSupported` passa a ser comparado com o CefSharp compilado
+   (`CefSettings.WindowsSandboxInfo` existe ou não), o ramo com sandbox de `Build` é testado (o ponteiro chega ao
+   CefSharp e o caminho dos filhos não aponta para o bootstrap), e os ganchos só atuam com o CefSharp do Éteris **e** o
+   arranque pelo bootstrap (`SandboxInfo.LaunchedByBootstrap`; uma compilação com o feed mas sem o bootstrap já não dá a
+   ACL). Os testes do sandbox passam com `-p:EterisCefSharpFeed=… -p:EterisCefSharpN=2` (49/49) sem dar a ACL à pasta
+   dos testes (`-Check` → 0/2), e a bateria normal também.
+6. **Processo filho por argumento:** a DLL cliente lê a linha de comandos com o `CommandLineToArgvW` (como o
+   `base::CommandLine` do Chromium) e só um argumento `--type=<valor>` (prefixos `--`, `-` ou `/`, sem distinção de
+   maiúsculas, antes de um `--`) conta; antes procurava a sequência na linha inteira. Ao vivo: um endereço com
+   `?q=--type=renderer` abre a janela («Nova aba — Éteris», com filhos GPU, utilitários e renderers).
+7. **Aviso quando o .NET não arranca:** sem a `hostfxr.dll` (ou com erro do host) aparece «O Éteris não conseguiu
+   arrancar. Falta o .NET na pasta do programa (hostfxr.dll): … Detalhes: …\Eteris-bootstrap.log» (visto ao vivo numa
+   pasta só com o exe, a DLL cliente e o `chrome_elf.dll`), menos nos ganchos `--veloapp-*`.
+8. **ACL:** `GrantedForLaunch` verifica também o `libcef.dll` e a DLL cliente (atualização interrompida a meio), e aceita
+   «ALL APPLICATION PACKAGES» (`S-1-15-2-1`, o que Program Files já dá: o serviço de rede não é LPAC) em vez das duas
+   capacidades; nenhuma entrada dessas três pode negar.
+
+**2.ª prova do Velopack (packId `EterisSbxTeste2`, feed local `sbx/vpk2-feed`: 0.2.9 do `c3fe087` sem sandbox e 0.2.10
+do ramo com sandbox e a DLL cliente nova).** Fotografia antes/depois alargada (`sbx/vpk2-snapshot.ps1`: o de antes mais
+as pastas `cr.sb.*` em `Packages` e as entradas `cr.sb.*` em `AppContainer\Mappings`). Feita duas vezes, igual:
+
+| Passo | Resultado |
+|---|---|
+| `Setup.exe --silent` da 0.2.9 | instala em 3 s; apphost .NET, com `CefSharp.BrowserSubprocess.exe` |
+| 0.2.9 a correr (perfil de teste) | `CheckAndDownloadAsync` no arranque encontra a 0.2.10 no feed e transfere o **delta** |
+| Botão «Atualizar para 0.2.10» (UI Automation: `RestartRequested = true`, fecha as janelas, `ApplyPendingOnExit`) | +535 ms: o **próprio processo da 0.2.9** arranca `Update.exe --silent apply --package …0.2.10-full.nupkg --waitPid <pid da 0.2.9> … -- --user-data-dir=…`; a 0.2.9 sai com código 0 |
+| `Update.exe` | aplica; +3,6 s: gancho `--veloapp-updated 0.2.10` **pelo bootstrap** (ACL dada à raiz: 2/2); +5,3 s: arranca `current\Eteris.Browser.exe --user-data-dir=…` (pai = o `Update.exe`) |
+| 0.2.10 reiniciada | «Éteris» 0.2.10, `Eteris.App.dll`, sem `CefSharp.BrowserSubprocess.exe`; janela «Novidades do Éteris»; `chrome://sandbox`: GPU Limited/Low, **Network Service no AppContainer** `S-1-15-2-3146526238-…` (= `cr.sb.netC236E207…`, o perfil do caminho da instalação), Storage Lockdown/Untrusted, renderers Lockdown/Untrusted; nenhum filho com `--no-sandbox`; `network-sandbox-profiles.txt` = `cr.sb.netC236E2070ED2582B667660D85545E6ED94813633` |
+| `Update.exe --silent uninstall` | gancho `--veloapp-uninstall` pelo bootstrap (125–140 ms); pasta, atalhos e chave de desinstalação removidos; **perfil `cr.sb.netC236E207…` apagado** (pasta e entrada em `Mappings`) |
+| Estado do utilizador antes/depois (incluindo `Packages\cr.sb.*` e `Mappings` `cr.sb.*`) | **0 diferenças** (626 linhas iguais), nas duas vezes |
+
+**Restos dos testes de 8 de novembro na máquina do dono (apagados com DeleteAppContainerProfile, com a confirmação do dono, a 8 de novembro):** seis perfis
+`cr.sb.net*`, todos identificados pelo SHA1 do caminho de um exe de teste (nenhum é de um navegador do dono; os
+`cr.sb.cdm*`, `cr.sb.odm*` e `cr.sb.xr*` de 7 de novembro não são do Éteris e não se mexe neles):
+
+| Perfil | Criado | Exe de teste (caminho tal como foi arrancado) |
+|---|---|---|
+| `cr.sb.net379F5396…` | 05:34 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma longa, `Júnior`) |
+| `cr.sb.net66206779…` | 05:46 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma curta, `JNIOR~1`) |
+| `cr.sb.net2F6D58F6…` | 05:47 | `…\scratchpad\sbx\d9-acl\cefsimple.exe` (curta) |
+| `cr.sb.netAB446901…` | 06:17 | `…\scratchpad\sbx\app-d9\Eteris.Browser.exe` (curta) |
+| `cr.sb.net6C9F810C…` | 09:27 | `…\scratchpad\sbx\app-d5i\Eteris.Browser.exe` (curta) |
+| `cr.sb.netB382764A…` | 10:00 | `%LOCALAPPDATA%\EterisBrowserSbxTest\current\Eteris.Browser.exe` (1.ª prova do Velopack, antes da correção) |
+
+Para os apagar (só estes): `build/sandbox/appcontainer-profiles.ps1 -Exe <cada um dos caminhos acima, na forma
+indicada> -Remove` — ou `DeleteAppContainerProfile` com cada nome.
+
+**Custo do bootstrap no arranque (A/B intercalado, `sbx/ab-startup.ps1`).** Base = publicação normal do ramo (apphost)
+contra sandbox = publicação com `EterisSandbox` (bootstrap: `chrome_elf.dll`, DLL cliente e broker do sandbox antes do
+.NET), mesmo `libcef.dll`, sem a ACL do D9 nas duas (sem perfis de AppContainer novos). 7 rondas com a ordem alternada,
+a 1.ª de aquecimento fora das medianas (6 medições cada):
+
+| Medição | Base | Sandbox | Diferença |
+|---|---|---|---|
+| Arranque até a janela ter título (perfil já criado) | mediana **861,5 ms** (842–887) | mediana **882 ms** (859–914) | +20 ms (+2,4 %) |
+| 2.º arranque com a instância aberta (`--new-tab`, até sair) | mediana **114 ms** (111–115) | mediana **119,5 ms** (117–123) | +5,5 ms (+5 %) |
+
+O 2.º arranque é sistematicamente um pouco mais lento (as 6 medições com sandbox acima das 6 da base): é o custo de
+carregar o `chrome_elf.dll` e o `libcef.dll` e preparar o broker antes de o .NET entregar o link. Pequeno, mas real.
+
+**Falta:** ver «Estado do ramo `sandbox` e o que falta para fundir no `main`», em baixo.
+
+## Estado do ramo `sandbox` e o que falta para fundir no `main` (2026-11-08, depois de fundir o `main` c3fe087)
+
+**Provado:** motor próprio com bootstrap (D0), CefSharp com a informação do sandbox (D1/C), DLL cliente (D2), Éteris
+.NET pelo bootstrap (D3), páginas, placa gráfica e serviço de armazenamento isolados no Éteris (D4), regressão sem e
+**com teclado e rato** (D5: as funcionalidades do Éteris todas, sem regressões só com sandbox; filhos com menos
+memória), saída opcional no repositório (D6) com a marca do Éteris no bootstrap (E, 1.ª parte), o serviço de rede
+também isolado — **no código**, com a ACL dada pelos ganchos do Velopack e verificada no arranque (D9) — e o
+**Velopack com o bootstrap como `mainExe`**: instalar, atualizar por delta de uma versão sem sandbox para uma com
+sandbox (o gancho de atualização corre pelo bootstrap e dá a ACL), atalhos e perfil preservados, e — desde a revisão —
+a atualização feita pelo próprio Éteris (botão «Atualizar para …», reinício pelo `Update.exe`) a partir de uma 0.2.9
+compilada do `c3fe087`, e a desinstalação sem restos também no perfil do AppContainer do serviço de rede (gancho de
+desinstalação; 0 diferenças com os perfis `cr.sb.*` na fotografia). A publicação com sandbox verifica a DLL cliente
+contra o runtime do motor. Os seis perfis `cr.sb.net*` dos testes de 8 de novembro (tabela acima) foram apagados com a confirmação do
+dono.
+
+**Falta, por ordem:**
+1. **E — assinatura conjunta** (½ dia): `Eteris.Browser.exe` (bootstrap com a marca), `Eteris.Browser.dll` (DLL
+   cliente), `Eteris.App.dll` e o runtime da CEF (`libcef.dll`, `chrome_elf.dll`) com o mesmo certificado. O bootstrap da
+   CEF verifica no processo principal (`CheckDllCodeSigning` em `cef/libcef_dll/bootstrap/bootstrap_win.cc`) que o exe,
+   o `chrome_elf.dll` e a DLL cliente estão os três sem assinatura ou os três assinados e válidos com o **mesmo**
+   certificado principal — senão o arranque pára (`LOG(FATAL)`). O `libcef.dll` e o `Eteris.App.dll` não entram nessa
+   verificação, mas devem ir assinados também. Assinar tudo no mesmo passo da publicação, depois do
+   `brand-bootstrap.ps1` (que muda os recursos do exe e invalidaria uma assinatura anterior) e antes do `vpk pack`.
+2. **E — CI com o CefSharp próprio** (1 dia): o `release.yml` precisa do feed local `156.0.150-eteris.2`
+   (`build/cefsharp`, ~15 min de compilação C++/CLI; ou guardado como artefacto/pacote privado), da distribuição mínima da
+   CEF do motor próprio para compilar a DLL cliente (`build/sandbox/client`), do `rc.exe` do Windows SDK
+   (`brand-bootstrap.ps1`) e da assinatura de nome forte que esta sessão não pôde fazer (no Actions assina-se
+   normalmente).
+3. **D9 — casos de rede por ver ao vivo**: proxy do sistema e autenticação integrada do Windows com o serviço de rede
+   no AppContainer (tem a capacidade `enterpriseAuthentication`, mas não há proxy nem domínio nesta máquina). Páginas
+   em `127.0.0.1`/`localhost`, transferências e HTTPS já passaram com ele.
+4. **Custo contínuo** (já em `docs/paridade.md`, #3): cada atualização do motor recompila também o CefSharp próprio
+   e a DLL cliente; propor o patch `WindowsSandboxInfo` ao CefSharp oficial reduz isto.
+5. Fora do sandbox (visto no D5, igual sem sandbox): Alt+clique numa aba aberta por um link entregue à instância
+   transfere o link em vez de o espreitar até a página ser recarregada.
+
+**Recomendação:** fundir no `main` por fases, sempre atrás da opção `EterisSandbox` (por omissão desligada, nada muda
+para quem publica sem ela): (a) já, o código do ramo (passos A–D6, D9 e a marca), que não altera a publicação normal
+(os ganchos do Velopack só mexem na ACL nas publicações com sandbox) e tem testes; (b) uma versão de teste com
+`-Sandbox` para o dono, pelo canal normal do Velopack (a atualização já foi provada); (c) só então ligar
+`EterisSandbox` na publicação oficial, com a assinatura conjunta e a CI. A decisão da versão em que entra é do dono.
+
 ## Passo A — resultado (2026-11-07): feito
 
 Toda a execução de JavaScript nas páginas passou para `Browser/PageScript.cs` (DevTools `Runtime.evaluate`, uma
@@ -107,8 +483,8 @@ pop-ups, abas, ecrã dividido.
 | A | Trocar as 19 chamadas e o `OnContextCreated` por DevTools (útil já: menos dependência do processo filho do CefSharp) | ✅ **feito** (2026-11-07) | testes (`SandboxRulesTests`) + funcionalidades ao vivo com os dois processos filhos (ver «Passo A — resultado») |
 | B | Prova: Éteris a correr com um processo filho nativo mínimo (só CEF, ainda sem sandbox) | ✅ **feito** (2026-11-06) | tudo funciona sem o `CefSharp.BrowserSubprocess` |
 | C | CefSharp com a informação do sandbox no `Cef.Initialize` (versão própria; propor ao projeto oficial) | ✅ **feito** (2026-11-06) | compila e arranca |
-| D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | 2 dias | `chrome://sandbox` mostra os processos isolados |
-| E | Empacotamento (Velopack, licenças, assinatura) | 1 dia | instalador funciona |
+| D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | ✅ **feito no ramo `sandbox`** (2026-11-08), com o D5 interativo; D9 (rede) no código, sem patch do motor | `chrome://sandbox` mostra os processos isolados (ver «Passo D — resultado») |
+| E | Empacotamento (Velopack, licenças, assinatura conjunta, ACL do D9, CI) | marca no bootstrap ✅, ACL do D9 nos ganchos ✅, Velopack (instalar, atualizar 0.2.9 → com sandbox, desinstalar) ✅; falta assinatura conjunta e CI (≈ 1,5 dias) | instalador funciona com o sandbox ligado |
 
 Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo C, cada atualização do motor (ver
 `docs/paridade.md`, #3) obriga a recompilar a versão própria do CefSharp.

@@ -1,4 +1,6 @@
-﻿param([string]$Version = "0.2.9")
+﻿# -Sandbox (docs/sandbox.md, passo D6): processos das paginas isolados. Precisa do feed local do CefSharp com o patch v2
+# (build/cefsharp/pack-local.ps1) e da DLL cliente (build/sandbox/client/build.cmd); sem -Sandbox, nada muda.
+param([string]$Version = "0.2.9", [switch]$Sandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
@@ -24,5 +26,11 @@ if (Test-Path -LiteralPath (Join-Path $cefRuntime "libcef.dll")) {
   "Motor com codecs da plataforma: $fileVersion ($(@($manifest.files).Count) ficheiros verificados)"
 }
 
-dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o "$root\publish" -p:Version=$Version
+$sandboxArgs = @()
+if ($Sandbox) {
+  if (-not $CefSharpFeed -or $CefSharpN -le 0) { throw "-Sandbox precisa de -CefSharpFeed e -CefSharpN (build/cefsharp/README.md)" }
+  $sandboxArgs = @("-p:EterisSandbox=true", "-p:EterisCefSharpFeed=$CefSharpFeed", "-p:EterisCefSharpN=$CefSharpN")
+  if ($SandboxClientDll) { $sandboxArgs += "-p:EterisSandboxClientDll=$SandboxClientDll" }
+}
+dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o "$root\publish" -p:Version=$Version @sandboxArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

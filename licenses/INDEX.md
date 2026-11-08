@@ -7,7 +7,9 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | Éteris; listas de filtros; scriptlets do uBlock Origin | GPL-3.0 | `GPL-3.0.txt` |
 | Fundos da nova aba (imagens geradas por IA) | GPL-3.0-or-later; geradas por IA | `Wallpapers-NOTICE.txt` |
 | CefSharp 156.0.150 | BSD-3-Clause | `CefSharp-LICENSE.txt` |
+| CefSharp 156.0.150-eteris.N, modificado (patch do sandbox em build/cefsharp; só nas publicações com sandbox) | BSD-3-Clause | `CefSharp-LICENSE.txt` |
 | Chromium Embedded Framework 156.0.15 (compilação própria, codecs do Windows) | BSD-3-Clause | `CEF-LICENSE.txt` |
+| Bootstrap da CEF (Eteris.Browser.exe nas publicações com sandbox) e libcef_dll_wrapper (na DLL cliente Eteris.Browser.dll) | BSD-3-Clause | `CEF-LICENSE.txt` |
 | Chromium 156.0.8078.80 e os seus componentes (CEF 156.0.15, compilação própria) | BSD-3-Clause, LGPL-2.1-or-later (FFmpeg) e outras (ver o ficheiro) | `Chromium-credits.html` |
 | FFmpeg (no libcef.dll; sem descodificadores com patentes, commit 9db86ce5b5b4) | LGPL-2.1-or-later | `FFmpeg-LICENSE.txt` |
 | FFmpeg e motor com codecs: código-fonte correspondente (oferta da LGPL) | LGPL-2.1-or-later | `FFmpeg-SOURCE.txt` |

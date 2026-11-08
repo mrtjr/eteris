@@ -84,7 +84,7 @@ public partial class MainWindow
 
     private Border BuildBrowserMenu(Popup popup, List<Button> buttons)
     {
-        var theme = new ResourceDictionary { Source = new Uri("pack://application:,,,/Eteris.Browser;component/Theme/BrowserMenu.xaml", UriKind.Absolute) };
+        var theme = new ResourceDictionary { Source = new Uri($"pack://application:,,,/{typeof(MainWindow).Assembly.GetName().Name};component/Theme/BrowserMenu.xaml", UriKind.Absolute) };
         var rowStyle = (Style)theme["BrowserMenuRow"];
         var controlStyle = (Style)theme["BrowserMenuControl"];
         var items = new StackPanel { Margin = new Thickness(6, 0, 6, 6) };

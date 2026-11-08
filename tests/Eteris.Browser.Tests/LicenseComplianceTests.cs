@@ -48,6 +48,21 @@ public class LicenseComplianceTests
             $"licenses/ foi gerado para outra versão do motor; corra: python build/licenses/collect.py (CefSharp {version})");
     }
 
+    // Publicação com sandbox (-p:EterisSandbox=true, docs/sandbox.md): leva o CefSharp do Éteris (modificado, versão
+    // <oficial>-eteris.N), o bootstrap da CEF como Eteris.Browser.exe e o libcef_dll_wrapper da CEF na DLL cliente.
+    [Fact]
+    public void SandboxPublication_ComponentsAreRegistered()
+    {
+        var csproj = Read("src", "Eteris.Browser", "Eteris.Browser.csproj");
+        var official = Regex.Match(csproj, "<PackageReference Include=\"CefSharp.Wpf.NETCore\" Version=\"([^\"]+)\"").Groups[1].Value;
+        Assert.Contains($"Version=\"{official}-eteris.$(EterisCefSharpN)\"", csproj);
+        var index = Read("licenses", "INDEX.md");
+        Assert.Contains($"| CefSharp {official}-eteris.N, modificado (patch do sandbox em build/cefsharp; só nas publicações com sandbox) | BSD-3-Clause | `CefSharp-LICENSE.txt` |", index);
+        Assert.Contains("| Bootstrap da CEF (Eteris.Browser.exe nas publicações com sandbox) e libcef_dll_wrapper (na DLL cliente Eteris.Browser.dll) | BSD-3-Clause | `CEF-LICENSE.txt` |", index);
+        // O Eteris.Browser.exe com a marca do Éteris mantém o aviso de copyright da CEF nos recursos de versão.
+        Assert.Contains("VALUE \"LegalCopyright\", \"$legal\"", Read("build", "sandbox", "brand-bootstrap.ps1"));
+    }
+
     [Fact]
     public void EveryNuGetPackage_HasItsLicenseText()
     {

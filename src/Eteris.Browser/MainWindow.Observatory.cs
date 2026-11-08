@@ -127,7 +127,7 @@ public partial class MainWindow
     {
         var overlay = new Grid { Visibility = Visibility.Collapsed };
         // As linhas da lista usam o estilo das linhas do menu do Éteris (dicionário à parte, como no menu).
-        var theme = new ResourceDictionary { Source = new Uri("pack://application:,,,/Eteris.Browser;component/Theme/BrowserMenu.xaml", UriKind.Absolute) };
+        var theme = new ResourceDictionary { Source = new Uri($"pack://application:,,,/{typeof(MainWindow).Assembly.GetName().Name};component/Theme/BrowserMenu.xaml", UriKind.Absolute) };
         overlay.Resources.MergedDictionaries.Add(theme);
         _obsRowStyle = (Style)theme["BrowserMenuButton"];
         Grid.SetRowSpan(overlay, 3);

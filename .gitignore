@@ -10,3 +10,5 @@ TestResults/
 .superpowers/
 # Motor com codecs: compilação própria da CEF (centenas de MB; ver docs/motor.md)
 build/cef-codecs/out/
+# Sandbox: DLL cliente do bootstrap compilada por build/sandbox/client/build.cmd (docs/sandbox.md, passo D)
+build/sandbox/client/out/

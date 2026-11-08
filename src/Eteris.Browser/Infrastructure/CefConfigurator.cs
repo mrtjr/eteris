@@ -9,7 +9,8 @@ public static class CefConfigurator
     // Porta 9 («discard»): nada escuta em 127.0.0.1, por isso o updater do Chrome falha logo, sem sair do PC.
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
-    public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false)
+    public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
+                                    int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false)
     {
         var settings = new CefSettings
         {
@@ -17,6 +18,17 @@ public static class CefConfigurator
             // Locale: a língua dos sites (EngineHardening.Configure, mais abaixo).
             LogSeverity = LogSeverity.Disable,
         };
+        // Sandbox dos processos das páginas (docs/sandbox.md, passo D): só com o ponteiro do bootstrap da CEF e o CefSharp
+        // com o patch v2 (build/cefsharp; ETERIS_CEFSHARP_SANDBOX). Os filhos passam a ser o próprio exe (o bootstrap).
+        var sandboxOn = SandboxSupported && sandboxInfo != 0;
+#if ETERIS_CEFSHARP_SANDBOX
+        if (sandboxOn) settings.WindowsSandboxInfo = sandboxInfo;
+#endif
+        // Pelo bootstrap mas sem sandbox (--eteris-no-sandbox, ou o CefSharp oficial): os filhos continuam a ser o próprio
+        // exe (a DLL nativa), não o processo filho .NET, que a publicação com sandbox já não traz.
+        if (!sandboxOn && bootstrapExe is not null) settings.BrowserSubprocessPath = bootstrapExe;
+        // Só nos testes ao vivo (TestSwitches.DevToolsPort): DevTools do motor em 127.0.0.1.
+        if (devToolsPort is { } port) settings.RemoteDebuggingPort = port;
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
         // Voltar/Avançar instantâneos (back/forward cache), como no Chrome: o CefSharp.Wpf desliga-o por omissão por
         // causa do modo fora da tela (OSR), que o Éteris não usa — a página vive numa janela própria (HwndHost).
@@ -49,6 +61,9 @@ public static class CefConfigurator
                     "HttpsUpgrades",
                 }
                 .Where(f => !string.IsNullOrEmpty(f)));
+        // Serviço de rede também em sandbox (AppContainer): só com as páginas em sandbox e a ACL da pasta confirmada
+        // (NetworkSandbox.Decide). O EngineHardening, a seguir, junta-lhe as funcionalidades dele.
+        if (networkSandbox) settings.CefCommandLineArgs["enable-features"] = NetworkSandbox.Feature;
         // Promessas do Éteris na linha de comandos do motor (APIs de anúncios desligadas…): Shields/EngineHardening.cs.
         Shields.EngineHardening.Configure(settings);
         settings.RegisterScheme(new CefCustomScheme
@@ -78,7 +93,14 @@ public static class CefConfigurator
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Shields.PrivacyPreferences.SecureDnsTemplate = Shields.PrivacyPreferences.StartedWithSecureDns is null ? null : Shields.SecureDns.TemplateFor(dns);
         StartupTrace.Mark("localstate");
-        var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute);
+        var sandbox = SandboxEnabled ? SandboxInfo.Pointer : 0;
+        var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
+        // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
+        _dependencyCheck = bootstrap is null;
+        var networkSandbox = NetworkSandbox.Decide(sandbox != 0, Environment.ProcessPath);
+        // O perfil do AppContainer que o Chromium vai criar para este caminho: a desinstalação apaga-o.
+        if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
+        var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox);
         StartupTrace.Mark("cef.settings");
         return settings;
     }
@@ -92,6 +114,8 @@ public static class CefConfigurator
     private static readonly System.Collections.Concurrent.BlockingCollection<Action> Work = [];
     // Uma falha do Cef.Initialize volta a ser lançada no fio da interface (WaitReady), como quando ele corria lá.
     private static System.Runtime.ExceptionServices.ExceptionDispatchInfo? _failure;
+    // Falso quando o Éteris arrancou pelo bootstrap do sandbox (Prepare).
+    private static bool _dependencyCheck = true;
 
     public static void InitializeInBackground(CefSettings settings, Action ready)
     {
@@ -104,7 +128,7 @@ public static class CefConfigurator
         {
             try
             {
-                Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: null);
+                Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null);
                 StartupTrace.Mark("cef.initialize");
                 ready();
             }
@@ -151,4 +175,14 @@ public static class CefConfigurator
         done.Wait();
         failure?.Throw();
     }
+
+    // O sandbox só liga com o CefSharp do Éteris (patch v2); com o oficial o ponteiro é ignorado.
+    public static bool SandboxSupported =>
+#if ETERIS_CEFSHARP_SANDBOX
+        true;
+#else
+        false;
+#endif
+
+    public static bool SandboxEnabled => SandboxSupported && SandboxInfo.Pointer != 0;
 }

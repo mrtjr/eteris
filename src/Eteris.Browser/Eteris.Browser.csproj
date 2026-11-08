@@ -64,8 +64,19 @@
        saída, depois de compilar e de publicar. Os avisos de licença dela vão para licenses\cef-codecs, com o
        manifest.json (proveniência da compilação, e a marca que Tabs/PlatformCodecs.cs procura para saber que o motor
        pode ter codecs). Sem a pasta (build/cef-codecs/out/runtime com libcef.dll e manifest.json), nada muda.
-       O bootstrap.exe/bootstrapc.exe (arranque dos processos filhos pelo sandbox do Chromium, docs/sandbox.md passo D)
-       ainda não é usado pelo Éteris: fica fora da saída até esse passo. -->
+       O bootstrap.exe/bootstrapc.exe (arranque dos processos pelo sandbox do Chromium, docs/sandbox.md passo D) fica fora
+       desta cópia; com -p:EterisSandbox=true (em baixo) o bootstrap.exe vai renomeado para Eteris.Browser.exe. -->
+  <!-- CefSharp com o patch v2 do sandbox (build/cefsharp, docs/sandbox.md passo D): só quando se passa o feed local
+       produzido por build/cefsharp/pack-local.ps1 (-p:EterisCefSharpFeed=<pasta> -p:EterisCefSharpN=<n>). Sem ele, o
+       CefSharp oficial 156.0.150 e nada muda (o ponteiro do sandbox é ignorado: CefConfigurator.SandboxSupported). -->
+  <PropertyGroup>
+    <RestoreAdditionalProjectSources Condition="'$(EterisCefSharpFeed)' != ''">$(EterisCefSharpFeed)</RestoreAdditionalProjectSources>
+    <DefineConstants Condition="'$(EterisCefSharpFeed)' != ''">$(DefineConstants);ETERIS_CEFSHARP_SANDBOX</DefineConstants>
+  </PropertyGroup>
+  <Target Name="EterisCefSharpFeedCheck" BeforeTargets="CollectPackageReferences" Condition="'$(EterisCefSharpFeed)' != '' And '$(EterisCefSharpN)' == ''">
+    <Error Text="EterisCefSharpFeed sem EterisCefSharpN (o N de 156.0.150-eteris.N, ver build/cefsharp/README.md)" />
+  </Target>
+
   <PropertyGroup>
     <EterisCefRuntime>$(MSBuildThisFileDirectory)..\..\build\cef-codecs\out\runtime</EterisCefRuntime>
     <EterisCefRuntimeOn Condition="Exists('$(EterisCefRuntime)\libcef.dll') And Exists('$(EterisCefRuntime)\manifest.json')">true</EterisCefRuntimeOn>
@@ -97,6 +108,52 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <!-- Sandbox dos processos das páginas (docs/sandbox.md, passo D6), só com -p:EterisSandbox=true (mais o feed do
+       CefSharp, em cima, e a DLL cliente de build/sandbox/client/build.cmd). Nomes (opção B):
+         Eteris.Browser.exe = bootstrap.exe do runtime do motor (o ponto de entrada de todos os processos);
+         Eteris.Browser.dll = DLL cliente nativa (filhos: CefExecuteProcess; principal: .NET pela hostfxr);
+         Eteris.App.dll/.exe = este projeto (.NET; o Eteris.App.exe arranca sem sandbox, para desenvolvimento).
+       O Velopack, os atalhos, a lista de saltos, a associação de navegador e a instância única continuam com o
+       Eteris.Browser.exe. Sem a opção, nada muda. -->
+  <PropertyGroup Condition="'$(EterisSandbox)' == 'true'">
+    <AssemblyName>Eteris.App</AssemblyName>
+    <EterisSandboxClientDll Condition="'$(EterisSandboxClientDll)' == ''">$(MSBuildThisFileDirectory)..\..\build\sandbox\client\out\Release\Eteris.Browser.dll</EterisSandboxClientDll>
+  </PropertyGroup>
+
+  <Target Name="EterisSandboxCheck" BeforeTargets="CollectPackageReferences;Build" Condition="'$(EterisSandbox)' == 'true'">
+    <Error Condition="'$(EterisCefSharpFeed)' == ''" Text="EterisSandbox precisa do CefSharp com o patch v2: -p:EterisCefSharpFeed=... -p:EterisCefSharpN=... (build/cefsharp/README.md)" />
+    <Error Condition="'$(EterisCefRuntimeOn)' != 'true' Or !Exists('$(EterisCefRuntime)\bootstrap.exe')" Text="EterisSandbox precisa do runtime do motor com o bootstrap.exe em $(EterisCefRuntime) (build/cef-codecs)" />
+    <Error Condition="!Exists('$(EterisSandboxClientDll)')" Text="EterisSandbox: falta a DLL cliente $(EterisSandboxClientDll) (build/sandbox/client/build.cmd)" />
+    <!-- A DLL cliente arranca o .NET pela hostfxr.dll da pasta do exe: só com o .NET dentro da publicação. -->
+    <Error Condition="'$(SelfContained)' != 'true'" Text="EterisSandbox precisa de SelfContained=true (a DLL cliente arranca o .NET pela hostfxr.dll da pasta do programa)" />
+    <!-- DLL cliente da mesma compilação do motor que o runtime (versão da CEF gravada nela contra o manifest.json),
+         importações diretas só do KERNEL32, só as duas exportações e sem o instalador embutido da CEF. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\build\sandbox\verify-client.ps1&quot; -Dll &quot;$(EterisSandboxClientDll)&quot; -Runtime &quot;$(EterisCefRuntime)&quot;" />
+  </Target>
+
+  <ItemGroup Condition="'$(EterisSandbox)' == 'true'">
+    <_EterisSandboxEntry Include="$(EterisCefRuntime)\bootstrap.exe" TargetName="Eteris.Browser.exe" />
+    <_EterisSandboxEntry Include="$(EterisSandboxClientDll)" TargetName="Eteris.Browser.dll" />
+  </ItemGroup>
+
+  <Target Name="EterisSandboxAfterBuild" AfterTargets="Build" Condition="'$(EterisSandbox)' == 'true' And '$(DesignTimeBuild)' != 'true'">
+    <Copy SourceFiles="@(_EterisSandboxEntry)" DestinationFiles="@(_EterisSandboxEntry->'$(OutDir)%(TargetName)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Na publicação saem o processo filho .NET do CefSharp (os filhos são o Eteris.Browser.exe, também sem
+       sandbox por diagnóstico) e o apphost Eteris.App.exe (sem o bootstrap precisaria desse processo filho). -->
+  <Target Name="EterisSandboxAfterPublish" AfterTargets="Publish" Condition="'$(EterisSandbox)' == 'true'">
+    <Copy SourceFiles="@(_EterisSandboxEntry)" DestinationFiles="@(_EterisSandboxEntry->'$(PublishDir)%(TargetName)')" />
+    <Delete Files="$(PublishDir)$(AssemblyName).exe;$(PublishDir)CefSharp.BrowserSubprocess.exe;$(PublishDir)CefSharp.BrowserSubprocess.dll;$(PublishDir)CefSharp.BrowserSubprocess.Core.dll;$(PublishDir)CefSharp.BrowserSubprocess.runtimeconfig.json" />
+    <!-- Ícone e versão do Éteris no bootstrap («CEF Bootstrap Application» por omissão); precisa do rc.exe do SDK. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\build\sandbox\brand-bootstrap.ps1&quot; -Exe &quot;$(PublishDir)Eteris.Browser.exe&quot; -Version $(Version)" />
+  </Target>
+
+  <!-- Ver EterisCefSharpFeed em cima: a mesma referência, na versão do feed local. -->
+  <ItemGroup Condition="'$(EterisCefSharpFeed)' != ''">
+    <PackageReference Update="CefSharp.Wpf.NETCore" Version="156.0.150-eteris.$(EterisCefSharpN)" />
   </ItemGroup>
 
 </Project>

@@ -5,3 +5,5 @@
 # manifest.json do runtime, e o build.ps1 aplica-os com git apply), sem conversão de fins de linha.
 build/cef-codecs/patches/*.patch -text
 build/cef-codecs/build.ps1 -text
+# CefSharp: o patch aplica-se com git apply ao codigo do CefSharp; sem conversao de fins de linha.
+build/cefsharp/*.patch -text
