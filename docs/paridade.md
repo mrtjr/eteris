@@ -124,6 +124,16 @@ O que mudou, cada passo com o seu A/B (mediana antes → depois, medida na altur
 | Motor de composição do WPF (fio de desenho, Direct3D) arrancado numa thread à parte no `Main` (`Infrastructure/CompositionWarmup.cs`) | 732 → 678 ms |
 | JIT do arranque em vários núcleos guiado pelo arranque anterior (`ProfileOptimization`, `Infrastructure/StartupJit.cs`) | 678 → 567 ms |
 
+Correções da revisão (sem custo no arranque): o motor do Escudo só vai para a cache se leu todas as listas (uma lista
+bloqueada pelo antivírus nesse arranque deixava os seguintes sem ela) e grava-se depois de entrar em uso; no arranque,
+o pedido da página principal espera pelo motor no máximo 250 ms (sem cache do motor, a margem medida era ~50 ms; a
+espera não chegou a ser precisa em 5 rondas); o perfil do JIT para de gravar 5 s depois da 1.ª página ou ao abrir uma
+janela privada (o .NET gravava até ao fim do processo: diria que funções a sessão usou) e um arranque `--private` não
+o grava; o fecho do motor liberta no fio da interface os browsers que ainda existam (`Cef.PreShutdown`) e desliga o
+fecho próprio do CefSharp.Wpf. Medição de novo no fim, contra `c3fe087` (Release, A/B intercalado; arranque 7
+rondas, memória 5): 1.ª pintura 1107 → **604 ms**; 1 aba 211 → **168 MB** (principal 135 → 93); 5 abas 298 →
+**244 MB** (principal 148 → 97), ~19 MB por aba a mais (eram ~22).
+
 Avaliado e não registado: GC com `System.GC.Gen0MaxBudget` (6 MB) e `ConserveMemory=7` — depois da correção do
 Escudo o ganho ficou no ruído (1 aba 163 → 154 MB numa medição, 5 abas sem diferença; `Gen0Size` não é aceite pelo
 runtimeconfig, só pela variável de ambiente); `gcConcurrent=0` também sem ganho claro. Painéis do XAML criados só
