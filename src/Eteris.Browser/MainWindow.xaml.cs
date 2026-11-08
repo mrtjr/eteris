@@ -117,7 +117,7 @@ public partial class MainWindow : Window
         var mainRequestsAtCommit = 0;
         string? committedUrl = null;
         _scriptlets[tab] = injector;
-        var browser = new ChromiumWebBrowser(tab.Address)
+        var browser = new PageBrowser(tab.Address)
         {
             // A página é desenhada pelo próprio Chromium numa janela filha (como no Chrome, Firefox e Brave), sem a
             // cópia de cada quadro para o WPF: ~4× menos processador. Ver docs/paridade.md.

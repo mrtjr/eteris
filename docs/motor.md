@@ -172,6 +172,32 @@ ao tamanho real), o rAF duplo resolve antes de a rasterização acabar e vê-se 
 ~150 ms (WW: 1 captura em 10, a 1.ª). A nova aba preenche-se a si própria (saudação, papel de parede): isso é a
 própria página, não o motor.
 
+## Troca de abas: o resto do estudo do Chromium (T3–T6)
+
+Seguimento do estudo `C:\cef\notas\brave-comparacao\chromium-abas.md` (§5). A recomendação 1 (segurar a página que
+sai por cima até a nova apresentar) é o T1. A recomendação 6 (não mexer em `BrowserSettings.background_color`)
+mantém-se: nada abaixo lhe toca. **Tudo isto foi escrito sem medição ao vivo (o dono estava a usar o PC):** só
+compilação e testes unitários; os casos a medir estão no fim da secção.
+
+**T3 — Mica por baixo da página (rec. 4).** O estudo propunha duas vias: limitar o vidro (`GlassFrameThickness`) às
+barras, ou impedir as janelas da página de pintarem por GDI por cima da cor do `PageBackdrop`. Escolhida a segunda,
+porque a primeira:
+- obrigava a recalcular o vidro a cada mudança da moldura (abas laterais, painel lateral, barras automáticas que
+  deslizam, ecrã inteiro, ecrã dividido), e cada mudança é um `DwmExtendFrameIntoClientArea` (risco de piscar a
+  moldura, que hoje tem 0 fotogramas errados);
+- mudava o aspeto do que o WPF desenha translúcido dentro da área da página (o separador do ecrã dividido ficaria
+  sobre preto, não sobre o Mica);
+- não tirava o fotograma errado, só lhe mudava a cor: fora do vidro, o que a static pinta por GDI aparece com a cor
+  do pincel de controlo do sistema (cinzento claro), pior do que o Mica no tema escuro.
+
+A única janela que pinta por GDI na área da página é a «static» que o CefSharp cria para alojar a do CEF: a
+`CefBrowserWindow` não tem pincel nem apaga o fundo, e o `FillRect` do `Chrome_WidgetWin` só cobre o que fica fora
+da janela de apresentação do GPU (que o cobre inteiro). A static vê-se sempre que a janela do CEF ainda não a cobre:
+aba nova antes de o CEF criar a sua janela e aba que volta de escondida (o CefSharp encolhe a do CEF a 0×0 ao
+esconder). Agora as abas usam `Browser/PageBrowser.cs` (o `ChromiumWebBrowser` com a static sem desenho:
+`WM_ERASEBKGND` responde «apagado» e `WM_PAINT` só valida). Na área de vidro o GDI escrevia alfa 0 e via-se o Mica;
+sem pintura fica o que o WPF desenhou por baixo (P2), ou seja, a cor de fundo da página, com Mica e sem Mica.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -198,3 +224,4 @@ própria página, não o motor.
 | D1 | Fecho: suite completa (1374 testes), medição final comparada com a base e o «puro», `CHANGELOG.md` (secção por publicar, sem versão nem tag), `docs/paridade.md` (secção 1b) | Tabela «Resultado» no topo deste ficheiro |
 | T1 | Troca de abas, aba nova e fecho da aba ativa sem fotograma vazio («dupla memória», `Browser/PageSwap.cs`): a página que entra aparece por baixo da que sai; a que sai só se esconde depois de a nova apresentar (rAF duplo pelo DevTools + 34 ms; uma aba nova espera primeiro pelo fim do 1.º documento; limite 1 s); a página de uma aba fechada que estava à vista fica, calada, até a vizinha aparecer | Fotogramas errados em 10 capturas (tema escuro + Mica): Ctrl+Tab clara↔escura 14 → **0**, Wikipédia 204 → 4, Ctrl+T 96 → **0**, botão + 97 → **0**, fechar a ativa 24 → 1; tema claro e sem Mica: todos → 0–1 (secção «Troca de abas sem piscar») |
 | T2 | Foco do teclado na aba que entra: depois de trocar de aba, o foco do Windows ficava na janela (minimizada) da aba anterior e as teclas iam para uma página invisível; a página da aba ativa passa a recebê-lo (como no Chrome) quando o foco estava numa página que deixou de se ver | 8 Ctrl+Tab seguidos sem clicar: **2 → 8** trocas efetivas |
+| T3 | Mica por baixo da página (rec. 4 do estudo): a static do CefSharp que aloja a janela do CEF deixa de pintar por GDI (`Browser/PageBrowser.cs`, `PageWindow.PaintStep`); na área de vidro o GDI escrevia alfa 0 e o DWM mostrava o Mica onde devia estar a cor de fundo da página. Vidro limitado às barras avaliado e recusado (secção «Troca de abas: o resto do estudo») | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
