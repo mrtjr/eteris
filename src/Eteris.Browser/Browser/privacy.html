@@ -145,14 +145,24 @@
       && !('sharedStorage' in window) && typeof window.HTMLFencedFrameElement === 'undefined'
       ? 'Confirmado nesta página: document.browsingTopics, navigator.joinAdInterestGroup, window.sharedStorage e <fencedframe> não existem'
       : null,
+    // Assíncrona: o que um script de impressão digital pediria ao motor.
+    hints: () => !navigator.userAgentData ? 'Confirmado nesta página: navigator.userAgentData não existe'
+      : navigator.userAgentData.getHighEntropyValues(['uaFullVersion', 'platformVersion', 'model']).then(v =>
+        /\.0\.0\.0$/.test(v.uaFullVersion || '') && v.platformVersion === '10.0.0' && !v.model
+          ? 'Confirmado nesta página: getHighEntropyValues() dá a versão ' + v.uaFullVersion + ' e o Windows ' + v.platformVersion
+          : null),
   };
+  // As promessas desenham-se depois das verificações ao vivo (algumas assíncronas).
+  (async () => {
   const list = document.getElementById('list');
   let kept = 0, broken = 0, optional = 0;
-  for (const p of data.promises) {
+  const seenAll = await Promise.all(data.promises.map(p => p.live && live[p.live]
+    ? Promise.resolve().then(live[p.live]).catch(() => null) : null));
+  for (const [i, p] of data.promises.entries()) {
     let state = p.kept;
     let note = '';
     if (p.live && live[p.live]) {
-      const seen = live[p.live]();
+      const seen = seenAll[i];
       if (seen) note = seen;
       else { state = false; note = 'A verificação ao vivo nesta página falhou.'; }
     }
@@ -178,6 +188,7 @@
   score.append(strong, tail);
   document.getElementById('when').textContent = 'Verificado às ' + new Date().toLocaleTimeString('pt-PT');
   document.getElementById('again').addEventListener('click', () => location.reload());
+  })();
 
   // Relatório: 7 ou 30 dias, só a partir dos agregados que o Éteris mandou na página.
   const report = data.report;

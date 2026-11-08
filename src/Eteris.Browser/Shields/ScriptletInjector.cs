@@ -116,7 +116,8 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
         if (onSession is not null) _queue = _queue.ContinueWith(_ => Quietly(() => onSession(created))).Unwrap();
         // O GPC visível ao JavaScript vale em todas as páginas, com ou sem escudo: registado uma vez por sessão e nunca
         // retirado, não depende do script de cada site nem da corrida de cada navegação.
-        _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.GpcScript))).Unwrap();
+        // As dicas do cliente de alta entropia (PrivacySignals.HintsScript) vão no mesmo registo.
+        _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript))).Unwrap();
         if (!string.IsNullOrEmpty(baseScript))
             _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(baseScript))).Unwrap();
         return true;

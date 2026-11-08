@@ -127,9 +127,9 @@ public static class PrivacyPage
                 oneLanguage, Live: "language", Fix: "eteris://settings/#privacidade"),
             new("hints", "Dicas do cliente mínimas",
                 hintsCut
-                    ? "Os sites recebem só a marca do navegador, se é telemóvel e a plataforma; versão completa, arquitetura, modelo, versão do Windows, memória e ecrã nunca saem, mesmo que os peçam."
+                    ? "Os sites recebem só a marca do navegador, se é telemóvel e a plataforma; versão completa, arquitetura, modelo, versão do Windows, memória e ecrã nunca saem nos pedidos, mesmo que os peçam, e o JavaScript das páginas recebe valores genéricos (a versão sem os números menores, «Windows 10», sem modelo)."
                     : "Há dicas do cliente que identificam o computador a sair nos pedidos.",
-                hintsCut),
+                hintsCut, Live: "hints"),
             new("lan", "Os sites não falam com a sua rede local",
                 lanKept
                     ? "Uma página da Internet não chega a este computador (127.0.0.1, localhost) nem ao router, à impressora ou ao NAS sem o deixar; escrever um endereço local na barra continua livre."
