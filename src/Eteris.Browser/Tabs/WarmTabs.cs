@@ -51,11 +51,17 @@ public static class WarmTabs
         return next;
     }
 
+    // Tamanho mínimo (CSS px) de um iframe de outro site para contar como leitor no PlayingVideoScript.
+    public const int PlayerWidth = 200, PlayerHeight = 150;
+
     // Só um «não» claro deixa a aba quente: erro, tempo esgotado ou resposta estranha contam como vídeo a tocar.
     public static bool PlaysVideo(bool success, object? result) => !success || result is not false;
 
     // Algum <video> a tocar na página: no documento, nas raízes de sombra abertas (leitores como o do Reddit) e nos
-    // iframes do mesmo site. Os iframes de outro site não se deixam ler; o som desses já conta (BrowserTab.IsAudible).
+    // iframes do mesmo site. Os iframes de outro site não se deixam ler, e o som deles também não se vê
+    // (BrowserTab.IsAudible só lê o documento principal): um iframe de outro site com ar de leitor (pelo menos
+    // PlayerWidth×PlayerHeight, com autoplay ou ecrã inteiro permitidos: YouTube, Vimeo, Spotify ou SoundCloud
+    // embutidos) conta como «a tocar», por cautela; a página arrefece mesmo que o leitor esteja parado.
     public const string PlayingVideoScript = """
         (function () {
           try {
@@ -72,6 +78,16 @@ public static class WarmTabs
             if (playing(document) || inShadow(document)) return true;
             for (var f = 0; f < window.frames.length; f++) {
               try { if (playing(window.frames[f].document)) return true; } catch (e) { }
+            }
+            var frames = document.querySelectorAll('iframe');
+            for (var k = 0; k < frames.length; k++) {
+              var frame = frames[k], readable = false;
+              try { readable = !!frame.contentDocument; } catch (e) { }
+              if (readable) continue;
+              var box = frame.getBoundingClientRect();
+              if (box.width < 200 || box.height < 150) continue;
+              var allow = (frame.getAttribute('allow') || '').toLowerCase();
+              if (frame.hasAttribute('allowfullscreen') || allow.indexOf('autoplay') >= 0 || allow.indexOf('fullscreen') >= 0) return true;
             }
             return false;
           } catch (e) { return true; }

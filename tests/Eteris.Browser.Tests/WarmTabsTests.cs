@@ -80,4 +80,15 @@ public class WarmTabsTests
         Assert.Contains("window.frames", PlayingVideoScript);
         Assert.Contains("!v.paused", PlayingVideoScript);
     }
+
+    [Fact]
+    public void PlayingVideoScript_AnEmbeddedPlayerFromAnotherSiteCountsAsPlaying()
+    {
+        // Nem o <video> nem o som de um iframe de outro site se deixam ver (IsAudible só lê o documento principal):
+        // um iframe ilegível com tamanho e permissões de leitor arrefece a página, por cautela.
+        Assert.Contains("contentDocument", PlayingVideoScript);
+        Assert.Contains("allowfullscreen", PlayingVideoScript);
+        Assert.Contains("indexOf('autoplay')", PlayingVideoScript);
+        Assert.Contains($"box.width < {PlayerWidth} || box.height < {PlayerHeight}", PlayingVideoScript);
+    }
 }

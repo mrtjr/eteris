@@ -130,9 +130,13 @@ public partial class MainWindow
         var browser = EnsureWebPanelBrowser(url);
         foreach (var (other, view) in _webPanelBrowsers)
         {
-            var visible = other == url;
-            view.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
-            if (view.IsBrowserInitialized) SetPageVisible(view, visible);
+            if (other != url)
+            {
+                HideWebPanel(view);
+                continue;
+            }
+            view.Visibility = Visibility.Visible;
+            if (view.IsBrowserInitialized) SetPageVisible(view, true);
         }
         SidebarTitle.Text = browser.Title is { Length: > 0 } title ? title : panel.Title;
         if (focus && browser.IsBrowserInitialized) Keyboard.Focus(browser);
@@ -142,11 +146,15 @@ public partial class MainWindow
     // deixa de desenhar, mas continua a receber mensagens).
     private void HideWebPanels()
     {
-        foreach (var view in _webPanelBrowsers.Values)
-        {
-            view.Visibility = Visibility.Hidden;
-            if (view.IsBrowserInitialized) SetPageVisible(view, false);
-        }
+        foreach (var view in _webPanelBrowsers.Values) HideWebPanel(view);
+    }
+
+    // Minimizar primeiro, como HidePage: esconder no WPF faz o CefSharp encolher a janela do CEF a 0×0 e, com a página
+    // ainda «visible», o Chromium dispunha-a a 0×0 antes de a minimizar.
+    private static void HideWebPanel(ChromiumWebBrowser view)
+    {
+        if (view.IsBrowserInitialized) SetPageVisible(view, false);
+        view.Visibility = Visibility.Hidden;
     }
 
     private ChromiumWebBrowser EnsureWebPanelBrowser(string url)

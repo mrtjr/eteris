@@ -208,13 +208,17 @@ vista fica por cima até a aba nova acabar o 1.º documento e apresentar: rAF du
 - a janela do CEF nasce **com o tamanho da área das páginas** (`PageWindow.BirthSize`): o CefSharp usava o tamanho
   da static nesse momento, 0×0 numa aba acabada de criar, e o Chromium começava a página a 0×0 e voltava a dispô-la
   logo a seguir. O tamanho em píxeis segue a mesma conta do CefSharp (`PageWindow.PixelSize`), para que o
-  redimensionamento que ele faz no fim da criação não mude nada.
+  redimensionamento que ele faz no fim da criação não mude nada. Esse redimensionamento (`OnAfterBrowserCreated`, na
+  thread do CEF) usa sempre o `ActualWidth`/`ActualHeight` do WPF: antes da 1.ª disposição dava 0×0 e desfazia o
+  `BirthSize`, por isso a aba é disposta logo a seguir a ser criada (`UpdateLayout`; a criação no CEF é assíncrona).
 
 Não feito: um browser «sobressalente» já com a nova aba carregada (o estudo dá-o como opcional). Custa um processo de
 página sempre vivo; fica para decisão do dono depois de medir o T4.
 
 **T5 — Aba fria restaurada num só passo (rec. 3).** Uma aba escondida há mais do que o período de graça (T6) está
-minimizada e a sua janela do CEF encolhida a 0×0. Ao voltar, a janela do Chromium era restaurada com `ShowWindow`
+minimizada e a sua janela do CEF, em geral, encolhida a 0×0 (o CefSharp encolhe-a ao esconder, mas também lhe devolve
+o tamanho inteiro, escondida, em cada `SizeChanged` e ao restaurar a janela principal; o tamanho de partida não é
+fiável, e o `SetWindowPlacement` não depende dele). Ao voltar, a janela do Chromium era restaurada com `ShowWindow`
 (que repõe o último tamanho «normal», às vezes o 0×0) e corrigida a seguir com `SetWindowPos`: duas mudanças de
 tamanho com a página ainda «hidden», e cada uma avança a superfície do Chromium (página em branco por desenho,
 estudo §2.5). Agora, ainda com a static escondida e por baixo da página à vista, a janela do Chromium é restaurada
@@ -243,13 +247,18 @@ entra ficaria tapada por elas.
 
 Nunca fica quente (`MainWindow.CanStayWarm` + `WarmTabs.Keep`): no ecrã dividido (as metades não tapam a área toda),
 com a janela minimizada ou escondida, sem uma página à vista por cima, numa página que entrou fria e ainda não
-apresentou um fotograma desde essa chegada (`PagePresentation`: Ctrl+Tab de ida e volta antes de a página
-apresentar, ou Ctrl+T seguido de duas trocas; voltaria sem espera, com a superfície em branco ou antiga), numa aba com som (`IsAudible` ou multimédia a
-tocar; arrefece no momento em que começa), numa aba a passar para o motor de vídeo, numa aba fechada a sair, e numa
-página com `<video>` a tocar (verificação ao sair, `WarmTabs.PlayingVideoScript`: documento, raízes de sombra abertas
-e iframes do mesmo site, até 250 ms; sem resposta conta como «a tocar»). Limite conhecido: um vídeo **sem som** num
-iframe de outro site não se deixa ver; essa página pode ficar quente até 8 s. Outro: se a página que entra fria não
-apresentar dentro do teto de 1 s do T1, por baixo dela pode ver-se uma página quente em vez da cor de fundo.
+apresentou um fotograma desde essa chegada (`PagePresentation`: Ctrl+Tab de ida e volta antes de a página apresentar,
+ou Ctrl+T seguido de duas trocas; voltaria sem espera, com a superfície em branco ou antiga), numa aba com som
+(`IsAudible` ou multimédia a tocar no documento principal, lido a cada 2 s por `MediaInfo.Script`; arrefece quando o
+vê), numa aba a passar para o motor de vídeo, numa aba fechada a sair, e numa página com `<video>` a tocar
+(verificação ao sair, `WarmTabs.PlayingVideoScript`: documento, raízes de sombra abertas e iframes do mesmo site, até
+250 ms; sem resposta conta como «a tocar»). Também arrefece, por cautela, uma página com um iframe de outro site com
+ar de leitor (pelo menos 200×150 CSS px, com `autoplay` ou ecrã inteiro permitidos: YouTube, Vimeo, Spotify ou
+SoundCloud embutidos), mesmo parado. Limite conhecido: o `<video>` e o som de um iframe de outro site não se deixam
+ver (o `IsAudible` só lê o documento principal), nem o Web Audio (`AudioContext`, jogos); uma página com um leitor de
+outro site sem esse aspeto, ou com som só por Web Audio, pode ficar quente até 8 s a descodificar e desenhar. Outro:
+se a página que entra fria não apresentar dentro do teto de 1 s do T1, por baixo dela pode ver-se uma página quente em
+vez da cor de fundo.
 
 **Custo de CPU esperado.** Uma página quente desenha como se estivesse à vista: numa página com animação a 60 fps,
 ~9–11 % de 1 núcleo (`docs/paridade.md` #1: 11,1 % à vista; #1b: 10,9 → 9,7 % medido no T1), numa página parada
@@ -306,3 +315,4 @@ errados** e tempo da tecla até à página final **≤ ~120 ms** (o Brave: 0 err
 | T3–T6 | Lista do que falta medir ao vivo para T3–T6 (casos, critério de 0 fotogramas errados e ≤ ~120 ms, CPU de aba animada escondida depois da graça igual à do T1), na secção «Troca de abas: o resto do estudo» | Medição ao vivo pendente (dono a usar o PC) |
 | T6b | Correções da revisão das abas quentes: (1) uma página que entrou fria e ainda não apresentou já não fica quente (`PagePresentation`: cada chegada fria tem um número e só o rAF duplo dessa chegada, depois do 1.º carregamento, a dá por apresentada; também nas chegadas sem página a segurar, e mais tarde, até 8 s, numa página que passe o teto de 1 s) — antes, Ctrl+Tab de ida e volta antes de a página apresentar, ou Ctrl+T e duas trocas, voltava a ela sem espera e mostrava branco ou conteúdo antigo; (7) o resultado da verificação de vídeo só se aplica à mesma saída da página; (8) a graça mede-se com um relógio monótono (`Environment.TickCount64`), não com a hora do sistema | Medição ao vivo pendente (dono a usar o PC). Testes: `PageSwapTests` (`Presentation_*`), `WarmTabsTests` |
 | T6c | Ordem das janelas e cobertura das quentes (revisão): (4) a página que sai e não pode ficar quente (som, motor de vídeo) passa para uma camada de fundo (`Layer.Cooling`) antes de se esconder — antes empatava com a quente que voltava (ou com a que acabou de entrar) e, conforme a ordem do dicionário, ficava por cima dela enquanto era minimizada e escondida; (5) as quentes são revistas antes de ordenar as janelas, por isso ao entrar no ecrã dividido arrefecem ainda tapadas; (6) a revisão verifica se há uma página à vista por cima (sem nenhuma, arrefecem todas; também quando a página de uma aba fechada sai pelo recurso de tempo) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageSwapTests` (`Stack_APageBeingHidden_GoesUnderEverything`) |
+| T6d | Resto da revisão: (2) a aba nova é disposta logo a seguir a ser criada (`UpdateLayout`), porque o CefSharp 156 redimensiona sempre a janela do CEF pelo `ActualWidth` no fim da criação (`OnAfterBrowserCreated`) e, antes da 1.ª disposição, isso dava 0×0 e desfazia o `BirthSize`; (3) o «som» só se vê no documento principal (`MediaInfo.Script`): comentários e limite corrigidos, e um iframe de outro site com ar de leitor (≥ 200×150, `autoplay`/ecrã inteiro) passa a arrefecer a página; Web Audio continua por ver (limite documentado); (9) os painéis web da barra lateral minimizam antes de esconder no WPF, como as abas; frase do T5 sobre o 0×0 corrigida | Medição ao vivo pendente (dono a usar o PC): no T4, registar o tamanho da janela do CEF da aba nova. Testes: `WarmTabsTests` (`PlayingVideoScript_AnEmbeddedPlayerFromAnotherSiteCountsAsPlaying`) |

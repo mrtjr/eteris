@@ -310,6 +310,10 @@ public partial class MainWindow : Window
         BrowserHost.Children.Add(browser);
         WatchPaneFocus(tab, browser);
         if (IsSplit) LayoutBrowsers();
+        // No fim da criação (OnAfterBrowserCreated, na thread do CEF) o CefSharp redimensiona sempre a janela do CEF pelo
+        // ActualWidth/ActualHeight: antes da 1.ª disposição do WPF isso dava 0×0 e desfazia o BirthSize (nascia no tamanho
+        // final, ia a 0×0 e voltava). A criação no CEF é assíncrona: disposta já, a conta dá o mesmo tamanho (PixelSize).
+        if (!browser.IsArrangeValid) browser.UpdateLayout();
     }
 
     private static bool SameHost(string a, string b) => BrowserTab.SameHost(a, b);

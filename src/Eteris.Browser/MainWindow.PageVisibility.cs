@@ -254,7 +254,8 @@ public partial class MainWindow
         // No ecrã dividido as metades não tapam a área toda: uma página quente ver-se-ia no separador.
         if (_split is not null || WindowState == WindowState.Minimized || !IsVisible) return false;
         var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, page)).Key;
-        // Com som (vídeo ou música, mesmo de um iframe de outro site) ou a passar para o motor de vídeo: arrefece já.
+        // Com som (<video>/<audio> do documento principal: MediaInfo.Script; o som de iframes de outro site e o Web Audio
+        // não se veem daqui) ou a passar para o motor de vídeo: arrefece já.
         return tab is not null && !tab.IsAudible && tab.Media != MediaState.Playing && !_videoViews.ContainsKey(tab);
     }
 
