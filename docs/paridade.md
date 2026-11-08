@@ -14,7 +14,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 |---|---|---|---|---|---|---|
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
-| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **desligado** (`--no-sandbox` nos 6 processos); viável em 1–2 semanas, ver `docs/sandbox.md` | **[bloqueia]** |
+| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ramo `sandbox`**: páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, atualização pelo Velopack provada. A publicação oficial ainda sai com `--no-sandbox`: falta a assinatura conjunta e a CI (`docs/sandbox.md`) | **[bloqueia]** até ser publicado |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
@@ -96,12 +96,19 @@ cada passo, causa e método em `docs/motor.md`.
 Rolagem: 16,7 ms por fotograma, 0 perdidos, antes e depois (igual ao Chrome). Limite que fica: o 1.º documento
 de cada aba nova nasce sem os scripts precoces do Escudo (o DevTools só responde depois da 1.ª navegação).
 
-## 2. Sandbox — investigado: viável, 1–2 semanas
+## 2. Sandbox — feito no ramo `sandbox`, por publicar (2026-11-08)
 
-Os 6 processos do motor correm com `--no-sandbox`. Desde o CEF 138 o sandbox no Windows exige o «bootstrap» (a
-aplicação arranca como DLL nativa que recebe a informação do sandbox); o CefSharp não deixa passar essa informação
-e os processos das páginas não podem carregar o .NET dentro do sandbox. Plano em 5 passos (A–E) e custos em
-`docs/sandbox.md`. Critério: `chrome://sandbox` mostra os processos das páginas isolados.
+A publicação oficial (0.2.9) corre os processos do motor com `--no-sandbox`. No ramo `sandbox`, com
+`build/publish.ps1 -Sandbox` (CefSharp próprio com a informação do sandbox, DLL cliente do bootstrap da CEF, opção B:
+`Eteris.Browser.exe` = bootstrap, `.NET` = `Eteris.App`), `chrome://sandbox` mostra o mesmo que o Chrome 156 com a
+experiência de rede ligada: renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Service Untrusted e
+**Network Service num AppContainer** (`NetworkServiceSandbox`, só com a ACL da pasta confirmada no arranque; a ACL é
+dada pelos ganchos do Velopack ao instalar e atualizar). Verificado: todas as funcionalidades do Éteris com teclado e
+rato (D5), sem regressões só com sandbox, e menos memória nos filhos (nativos, sem .NET); a atualização de uma
+instalação sem sandbox para uma com sandbox pelo Velopack (delta, atalhos e perfil preservados).
+
+Para o ✅: assinatura conjunta (o bootstrap pára se o exe, o `chrome_elf.dll` e a DLL cliente não tiverem a mesma
+assinatura) e a CI com o CefSharp próprio. Detalhes, medições e passos em `docs/sandbox.md`.
 
 ## 3. Atualizações do motor
 
