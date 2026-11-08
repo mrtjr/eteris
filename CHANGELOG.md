@@ -2,6 +2,15 @@
 
 ## Por publicar
 
+### Arranque e memória (medidos contra Chrome, Brave e Firefox; `docs/paridade.md`, secção 1c)
+- A 1.ª página aparece em ~565 ms num arranque normal (eram ~1039 ms na mesma máquina e sessão; o Firefox
+  leva ~1,1 s e o Chrome ~0,5 s): o motor do Chromium, o motor de desenho da janela e a base de dados arrancam em
+  paralelo com a janela, o JIT do arranque usa vários núcleos guiado pelo arranque anterior, e a lista de atalhos da
+  barra de tarefas e a procura de atualizações ficam para depois da 1.ª página.
+- Menos memória (164 MB com 1 aba, eram 208; 239 MB com 5, eram 292): o Escudo lê as listas de filtros diretamente
+  e guarda o motor já compilado no perfil, por isso o arranque seguinte não volta a compilar as listas e o bloqueio
+  fica ativo mais cedo.
+
 ### Impressão digital (medida contra Chrome, Brave e Firefox; `docs/paridade.md`, secção 6)
 - Os sites deixam de ver os nomes e os identificadores da câmara, do microfone e dos altifalantes sem pedir
   autorização: antes da permissão, a lista dá uma entrada vazia por tipo, como o Chrome (a correção definitiva no
