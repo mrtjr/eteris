@@ -290,9 +290,19 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             catch (Exception) { return url; }
         }
 
+        // No arranque, a página principal que chegue antes do motor das listas espera um pouco por ele
+        // (ShieldEngine.HoldUntilLoaded); depois disso, nunca.
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
             IRequest request, IRequestCallback callback)
-            => Decide(browser, frame, request, callback);
+        {
+            var decided = Decide(browser, frame, request, callback);
+            if (decided != CefReturnValue.Continue || ShieldEngine.Loaded.IsCompleted) return decided;
+            try
+            {
+                return request.ResourceType == ResourceType.MainFrame ? ShieldEngine.HoldUntilLoaded(request.Url, isProtected, callback) : decided;
+            }
+            catch (Exception) { return decided; }
+        }
 
         // Sem callback (testes), a consulta de CNAME nunca fica à espera: o pedido segue.
         internal CefReturnValue Decide(IBrowser browser, IFrame? frame, IRequest request, IRequestCallback? callback = null)

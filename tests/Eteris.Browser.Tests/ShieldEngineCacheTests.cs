@@ -53,16 +53,59 @@ public sealed class ShieldEngineCacheTests : IDisposable
     public void CreateFromFiles_SecondStartReadsTheCompiledEngine()
     {
         var cache = _lists.EngineCachePath("1");
-        using (var compiled = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, cache, out var fromCache))
+        using (var compiled = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, cache, out var origin))
         {
-            Assert.False(fromCache);
-            Assert.True(File.Exists(cache));
+            Assert.Equal(EngineOrigin.Compiled, origin);
+            // Compilar não grava: o motor entra em uso primeiro e grava-se depois, fora do caminho da 1.ª página.
+            Assert.False(File.Exists(cache));
             AssertAnswers(compiled);
+            Assert.True(compiled.SaveCache(cache));
+            Assert.True(File.Exists(cache));
         }
         using var cached = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, cache, out var again);
-        Assert.True(again);
+        Assert.Equal(EngineOrigin.Cache, again);
         AssertAnswers(cached);
     }
+
+    // Uma lista que existe mas não se lê nesse arranque (o antivírus tem-na aberta com bloqueio): o motor serve sem ela
+    // nesta sessão, mas não vai para a cache (senão os arranques seguintes ficavam sem a lista até ela mudar) e as caches
+    // antigas ficam.
+    [Fact]
+    public void Create_WithALockedList_DoesNotCacheThePartialEngine()
+    {
+        var stale = Path.Combine(_cache, "motor-0000000000000000.dat");
+        File.WriteAllText(stale, "antigo");
+        var locked = Path.Combine(_bundled, "easyprivacy.txt");
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            using var partial = ShieldEngine.Create(_lists);
+            Assert.True(partial.ShouldBlock("https://ad.doubleclick.net/x.js", "https://www.publico.pt/", "script"));
+            Assert.Equal([stale], Directory.GetFiles(_cache, "motor-*"));
+        }
+        using var whole = ShieldEngine.Create(_lists);
+        Assert.Equal(_lists.EngineCachePath(ShieldEngine.EngineVersion()), Assert.Single(Directory.GetFiles(_cache, "motor-*")));
+        using var again = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, _lists.EngineCachePath(ShieldEngine.EngineVersion()), out var origin);
+        Assert.Equal(EngineOrigin.Cache, origin);
+    }
+
+    [Fact]
+    public void SaveCache_ToAMissingFolder_ReportsFailure()
+    {
+        using var engine = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, null, out _);
+        Assert.False(engine.SaveCache(Path.Combine(_root, "nao-existe", "motor.dat")));
+    }
+
+    // No arranque, a página principal espera pelo motor só enquanto ele não chegou, e só num site da rede com escudo.
+    [Theory]
+    [InlineData(true, "https://www.publico.pt/", true, true)]
+    [InlineData(true, "http://www.publico.pt/", true, true)]
+    [InlineData(false, "https://www.publico.pt/", true, false)]
+    [InlineData(true, "https://www.publico.pt/", false, false)]
+    [InlineData(true, "eteris://newtab/", true, false)]
+    [InlineData(true, "data:text/html,ola", true, false)]
+    [InlineData(true, "nao e um endereco", true, false)]
+    public void ShouldHold_OnlyWhileTheEngineIsMissingOnAProtectedWebPage(bool missing, string url, bool shieldOn, bool hold)
+        => Assert.Equal(hold, ShieldEngine.ShouldHold(missing, url, _ => shieldOn));
 
     [Fact]
     public void Create_RemovesEnginesOfOldLists()
@@ -79,8 +122,8 @@ public sealed class ShieldEngineCacheTests : IDisposable
     [Fact]
     public void CreateFromFiles_WithoutCacheStillWorks()
     {
-        using var engine = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, null, out var fromCache);
-        Assert.False(fromCache);
+        using var engine = AdblockEngine.CreateFromFiles(_lists.Paths(false), _lists.Paths(true), null, null, out var origin);
+        Assert.Equal(EngineOrigin.Compiled, origin);
         AssertAnswers(engine);
     }
 

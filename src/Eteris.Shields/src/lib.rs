@@ -13,6 +13,17 @@ pub struct Shields {
     engine: Engine,
 }
 
+/// De onde veio o motor de `Shields::from_files`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Origin {
+    /// Compilado de todas as listas pedidas: pode ir para a cache.
+    Compiled = 0,
+    /// Lido da cache.
+    Cache = 1,
+    /// Compilado sem alguma lista que não se leu: serve nesta sessão, mas não vai para a cache.
+    Partial = 2,
+}
+
 impl Shields {
     /// `trusted_rules`: listas do próprio uBlock (ids `ublock-*`), que podem usar scriptlets "trusted" —
     /// o mesmo modelo de confiança do uBlock Origin.
@@ -30,16 +41,16 @@ impl Shields {
 
     /// O mesmo motor, lido de ficheiros (sem passar o texto das listas pelo C#: são ~8 M carateres que, como strings
     /// .NET, deixavam ~60 MB de lixo no heap grande até ao 1.º GC completo).
-    /// `rule_paths`/`trusted_paths`: listas a ler (as que faltam ou não se leem saltam-se). `resources_path`: JSON dos
-    /// scriptlets. `cache_path`: o motor já compilado (`Engine::serialize`). Se existe e é válido, nada se compila; senão
-    /// compila-se e grava-se lá (o nome do ficheiro identifica as listas e a versão: quem chama invalida-o mudando-o).
-    /// Devolve o motor e se veio da cache.
+    /// `rule_paths`/`trusted_paths`: listas a ler. `resources_path`: JSON dos scriptlets. `cache_path`: o motor já
+    /// compilado (`Engine::serialize`; o nome do ficheiro identifica as listas e a versão: quem chama invalida-o
+    /// mudando-o). Se existe e é válido, nada se compila. Aqui nunca se grava: o motor entra em uso primeiro e quem
+    /// chama grava-o depois com `save_cache` (são ~10 MB fora do caminho da 1.ª página), e só se `Origin::Compiled`.
     pub fn from_files(
         rule_paths: &[&str],
         trusted_paths: &[&str],
         resources_path: Option<&str>,
         cache_path: Option<&str>,
-    ) -> (Self, bool) {
+    ) -> (Self, Origin) {
         let resources = resources_path
             .and_then(|path| std::fs::read(path).ok())
             .and_then(|bytes| serde_json::from_slice::<Vec<Resource>>(&bytes).ok());
@@ -49,28 +60,40 @@ impl Shields {
                 if let Some(parsed) = resources {
                     engine.use_resources(parsed);
                 }
-                return (Shields { engine }, true);
+                return (Shields { engine }, Origin::Cache);
             }
         }
+        // Uma lista que não se lê (bloqueada pelo antivírus, erro de E/S passageiro) salta-se nesta sessão, mas o motor
+        // sem ela não pode ir para a cache: os arranques seguintes ficavam sem a lista até ela mudar.
+        let mut missing = 0;
         let mut set = FilterSet::new(false);
         for path in rule_paths {
-            if let Some(text) = read_list(path) {
-                set.add_filter_list(text, ParseOptions::default());
+            match read_list(path) {
+                Some(text) => {
+                    set.add_filter_list(text, ParseOptions::default());
+                }
+                None => missing += 1,
             }
         }
         for path in trusted_paths {
-            if let Some(text) = read_list(path) {
-                set.add_filter_list(text, trusted_options());
+            match read_list(path) {
+                Some(text) => {
+                    set.add_filter_list(text, trusted_options());
+                }
+                None => missing += 1,
             }
         }
         let mut engine = Engine::new_with_filter_set(set);
-        if let Some(path) = cache_path {
-            write_cache(path, &engine.serialize());
-        }
         if let Some(parsed) = resources {
             engine.use_resources(parsed);
         }
-        (Shields { engine }, false)
+        (Shields { engine }, if missing == 0 { Origin::Compiled } else { Origin::Partial })
+    }
+
+    /// Grava o motor compilado em `path` (só as listas; os scriptlets não fazem parte do ficheiro). Pode correr enquanto
+    /// outras threads consultam o motor. Devolve se ficou gravado.
+    pub fn save_cache(&self, path: &str) -> bool {
+        write_cache(path, &self.engine.serialize())
     }
 
     /// JavaScript dos scriptlets (`##+js(...)`) para a página; vazio se não houver nenhum.
@@ -123,11 +146,13 @@ fn read_list(path: &str) -> Option<String> {
 
 /// Grava o motor compilado: primeiro num ficheiro à parte e depois troca-o, para quem lê nunca ver meio ficheiro.
 /// Uma falha (disco cheio, pasta só de leitura) só faz o próximo arranque compilar de novo.
-fn write_cache(path: &str, bytes: &[u8]) {
+fn write_cache(path: &str, bytes: &[u8]) -> bool {
     let temporary = format!("{path}.{}.tmp", std::process::id());
     if std::fs::write(&temporary, bytes).is_err() || std::fs::rename(&temporary, path).is_err() {
         let _ = std::fs::remove_file(&temporary);
+        return false;
     }
+    true
 }
 
 fn to_css(selectors: impl IntoIterator<Item = String>) -> String {
@@ -245,11 +270,12 @@ example.com#@#.banner-publicidade
         std::fs::write(&resources, both).unwrap();
         let (r, t, j, c) = (rules.to_str().unwrap(), trusted.to_str().unwrap(), resources.to_str().unwrap(), cache.to_str().unwrap());
 
-        let (compiled, from_cache) = Shields::from_files(&[r, "nao-existe.txt"], &[t], Some(j), Some(c));
-        assert!(!from_cache);
-        assert!(cache.exists());
-        let (cached, from_cache) = Shields::from_files(&[], &[], Some(j), Some(c));
-        assert!(from_cache);
+        let (compiled, origin) = Shields::from_files(&[r], &[t], Some(j), Some(c));
+        assert_eq!(origin, Origin::Compiled);
+        assert!(!cache.exists(), "from_files não grava: quem chama grava depois de pôr o motor em uso");
+        assert!(compiled.save_cache(c));
+        let (cached, origin) = Shields::from_files(&[], &[], Some(j), Some(c));
+        assert_eq!(origin, Origin::Cache);
         for s in [&compiled, &cached] {
             assert!(s.should_block("https://ad.doubleclick.net/pixel.gif", "https://www.publico.pt/", "image"));
             assert!(!s.should_block("https://ad.doubleclick.net/allowed/x.js", "https://www.publico.pt/", "script"));
@@ -272,10 +298,41 @@ example.com#@#.banner-publicidade
         std::fs::write(&rules, RULES).unwrap();
         std::fs::write(&cache, b"isto nao e um motor").unwrap();
         let (r, c) = (rules.to_str().unwrap(), cache.to_str().unwrap());
-        let (s, from_cache) = Shields::from_files(&[r], &[], None, Some(c));
-        assert!(!from_cache);
+        let (s, origin) = Shields::from_files(&[r], &[], None, Some(c));
+        assert_eq!(origin, Origin::Compiled);
         assert!(s.should_block("https://ad.doubleclick.net/pixel.gif", "https://www.publico.pt/", "image"));
-        assert!(Shields::from_files(&[], &[], None, Some(c)).1);
+        assert!(s.save_cache(c));
+        assert_eq!(Shields::from_files(&[], &[], None, Some(c)).1, Origin::Cache);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Uma lista que existe mas não se lê (aqui uma pasta; no Windows também um ficheiro aberto com bloqueio) ou que
+    // desapareceu entretanto: o motor serve sem ela, mas é «parcial» e não vai para a cache.
+    #[test]
+    fn from_files_with_an_unreadable_list_is_partial() {
+        let dir = temp_dir("partial");
+        let rules = dir.join("normal.txt");
+        let unreadable = dir.join("easylist.txt");
+        std::fs::write(&rules, RULES).unwrap();
+        std::fs::create_dir_all(&unreadable).unwrap();
+        let (r, u) = (rules.to_str().unwrap(), unreadable.to_str().unwrap());
+        assert!(unreadable.exists());
+        let (s, origin) = Shields::from_files(&[r, u], &[], None, None);
+        assert_eq!(origin, Origin::Partial);
+        assert!(s.should_block("https://ad.doubleclick.net/pixel.gif", "https://www.publico.pt/", "image"));
+        assert_eq!(Shields::from_files(&[r], &[u], None, None).1, Origin::Partial);
+        assert_eq!(Shields::from_files(&[r, "nao-existe.txt"], &[], None, None).1, Origin::Partial);
+        assert_eq!(Shields::from_files(&[r], &[], None, None).1, Origin::Compiled);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Uma pasta que não existe (ou só de leitura): a gravação falha sem pânico, diz que falhou e não deixa restos.
+    #[test]
+    fn save_cache_reports_failure() {
+        let dir = temp_dir("save");
+        let target = dir.join("nao-existe").join("motor.dat");
+        assert!(!shields().save_cache(target.to_str().unwrap()));
+        assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "sem restos .tmp");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
