@@ -76,7 +76,17 @@ public partial class App : Application
             catch (Exception) { }
         }
         UpdateService.ApplyPendingOnExit();
-        CefConfigurator.Shutdown();
-        base.OnExit(e);
+        try
+        {
+            // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se
+            // aqui, no fio da interface, que é o da janela dele; o Cef.Shutdown corre noutra thread (a do Cef.Initialize)
+            // e um HwndHost libertado fora do seu fio falhava.
+            Cef.PreShutdown();
+            CefConfigurator.Shutdown();
+        }
+        finally
+        {
+            base.OnExit(e);
+        }
     }
 }

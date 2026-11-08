@@ -95,6 +95,11 @@ public static class CefConfigurator
 
     public static void InitializeInBackground(CefSettings settings, Action ready)
     {
+        // O fecho do motor é do Éteris (App.OnExit: PreShutdown no fio da interface, Shutdown nesta thread). Sem isto, o
+        // CefSharp.Wpf prendia o seu próprio Cef.Shutdown ao fecho do Dispatcher do fio da interface, que não é a thread do
+        // Cef.Initialize: hoje não fazia nada (o motor já estava fechado), mas lançava se o nosso fecho não tivesse corrido.
+        // Antes de nascer qualquer ChromiumWebBrowser (o construtor estático do CefSharp lê-o).
+        CefSharpSettings.ShutdownOnExit = false;
         _thread = new Thread(() =>
         {
             try
@@ -125,6 +130,8 @@ public static class CefConfigurator
         _failure?.Throw();
     }
 
+    // O Cef.Shutdown liberta os ChromiumWebBrowser ainda registados, na thread onde corre: quem chama faz antes o
+    // Cef.PreShutdown no fio da interface (App.OnExit), que os liberta lá, onde as janelas deles vivem.
     public static void Shutdown()
     {
         if (_thread is null)
