@@ -31,6 +31,8 @@ public static class PageSwap
         Arriving,
         // Quente: tapada por todas as outras.
         Warm,
+        // Saiu e vai ser escondida agora (não fica quente): por baixo de tudo, para que esconder-se não se veja.
+        Cooling,
     }
 
     // Uma página pesada que volta de escondida leva ~200–300 ms a apresentar (Wikipédia, medido); uma aba nova espera

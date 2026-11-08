@@ -112,8 +112,12 @@ public partial class MainWindow
         // Sai sem esperar por ninguém (a que entra já está desenhada: quente, ou o motor de vídeo): quente ou escondida.
         // Quente só por baixo de outra página à vista; sem nenhuma, ver-se-ia no lugar da ativa.
         var cooling = leaving.Where(element => !TryKeepWarm(element, covered: showing.Count > 0)).ToList();
-        // A ordem das janelas antes de as mostrar: a que entra fria nunca aparece por cima da que sai.
-        StackPages(showing);
+        // As quentes que deixam de poder ficar (ecrã dividido, nada à vista por cima) arrefecem antes de mexer na ordem:
+        // ainda estão tapadas, e uma quente nunca chega a ficar à vista no separador do ecrã dividido.
+        ReviewWarmPages(showing, cooling);
+        // A ordem das janelas antes de as mostrar: a que entra fria nunca aparece por cima da que sai, e a que sai e vai
+        // ser escondida já está por baixo da que entra.
+        StackPages(showing, cooling);
         foreach (var element in pages.Select(p => p.Element).Where(showing.Contains))
         {
             element.Visibility = Visibility.Visible;
@@ -123,7 +127,6 @@ public partial class MainWindow
         if (held.Count > 0) _ = HideWhenShownAsync(arriving, held);
         // Sem nenhuma a segurar, ninguém espera pela que entrou: só se regista quando apresenta (para poder ficar quente).
         else if (arriving.Count > 0) _ = WaitPresentedAsync(arriving);
-        ReviewWarmPages();
     }
 
     private bool IsRetiringOnScreen(FrameworkElement element)
@@ -164,6 +167,8 @@ public partial class MainWindow
             if (!_retiringPages.Remove(browser)) return;
             _leavingPages.Remove(browser);
             DisposePage(browser);
+            // Era ela que tapava as quentes.
+            ReviewWarmPages();
         });
     }
 
@@ -177,9 +182,9 @@ public partial class MainWindow
         var cooling = new List<FrameworkElement>();
         foreach (var element in held)
             if (_leavingPages.Remove(element) && !TryKeepWarm(element, covered)) cooling.Add(element);
-        StackPages();
+        ReviewWarmPages(cooling: cooling);
+        StackPages(cooling: cooling);
         foreach (var element in cooling) HidePage(element);
-        ReviewWarmPages();
     }
 
     // Espera (até PageSwap.HoldLimit) que as páginas que entraram frias apresentem e regista as que apresentaram. As que
@@ -262,18 +267,24 @@ public partial class MainWindow
         if (warm.PlayingVideo) ReviewWarmPages();
     }
 
-    // Arrefece (minimiza) as que já não ficam quentes e marca a próxima revisão. Chamado depois de cada disposição, no fim
-    // da graça, quando a janela muda de estado e quando uma aba quente começa a tocar som.
-    private void ReviewWarmPages()
+    // Arrefece (minimiza) as que já não ficam quentes e marca a próxima revisão. Chamado em cada disposição (antes de
+    // ordenar as janelas), no fim da graça, quando a janela muda de estado e quando uma aba quente começa a tocar som.
+    // «showing»: as que vão ficar à vista agora (ainda escondidas no WPF); «cooling»: as que vão ser escondidas agora.
+    private void ReviewWarmPages(IReadOnlySet<FrameworkElement>? showing = null, IReadOnlyCollection<FrameworkElement>? cooling = null)
     {
         if (_warmPages.Count == 0)
         {
             _warmTimer?.Stop();
             return;
         }
+        // Sem nenhuma outra página à vista por cima (aba ativa sem página, nenhuma aba ativa de passagem), uma quente
+        // ver-se-ia no lugar da ativa: arrefecem todas.
+        var covered = _pageElements.Any(element => (element.Visibility == Visibility.Visible || showing?.Contains(element) == true)
+            && cooling?.Contains(element) != true
+            && !(element is ChromiumWebBrowser page && (page.IsDisposed || _warmPages.ContainsKey(page))));
         var now = WarmClock();
         var candidates = _warmPages
-            .Select(p => new WarmTabs.Candidate<ChromiumWebBrowser>(p.Key, p.Value.LeftAt, CanStayWarm(p.Key), p.Value.PlayingVideo))
+            .Select(p => new WarmTabs.Candidate<ChromiumWebBrowser>(p.Key, p.Value.LeftAt, covered && CanStayWarm(p.Key), p.Value.PlayingVideo))
             .ToList();
         var keep = WarmTabs.Keep(candidates, now);
         foreach (var page in _warmPages.Keys.Except(keep).ToList())
@@ -309,16 +320,19 @@ public partial class MainWindow
 
     // ---------- Ordem das janelas das páginas ----------
 
-    // Põe as janelas das páginas pela ordem de PageSwap.StackOrder (à vista, a sair, a entrar fria, quentes), de uma só
-    // vez e só se não estiverem já assim. «showing»: as que vão ficar visíveis agora (ainda escondidas no WPF).
-    private void StackPages(IReadOnlySet<FrameworkElement>? showing = null)
+    // Põe as janelas das páginas pela ordem de PageSwap.StackOrder (à vista, a sair, a entrar fria, quentes, a esconder),
+    // de uma só vez e só se não estiverem já assim. «showing»: as que vão ficar visíveis agora (ainda escondidas no WPF);
+    // «cooling»: as que saem e vão ser escondidas logo a seguir (ainda visíveis no WPF).
+    private void StackPages(IReadOnlySet<FrameworkElement>? showing = null, IReadOnlyCollection<FrameworkElement>? cooling = null)
     {
         var stack = new List<(System.Windows.Interop.HwndHost Page, PageSwap.Layer Layer, long Rank)>();
         foreach (var element in _pageElements)
         {
             if (element is not System.Windows.Interop.HwndHost host || host.Handle == IntPtr.Zero || element is ChromiumWebBrowser { IsDisposed: true }) continue;
             if (element.Visibility != Visibility.Visible && showing?.Contains(element) != true) continue;
-            if (element is ChromiumWebBrowser page && _warmPages.TryGetValue(page, out var warm)) stack.Add((host, PageSwap.Layer.Warm, -warm.LeftAt.Ticks));
+            // Sem isto ficava na camada «à vista», empatada com a que entra, e podia ficar por cima dela enquanto se esconde.
+            if (cooling?.Contains(element) == true) stack.Add((host, PageSwap.Layer.Cooling, 0));
+            else if (element is ChromiumWebBrowser page && _warmPages.TryGetValue(page, out var warm)) stack.Add((host, PageSwap.Layer.Warm, -warm.LeftAt.Ticks));
             else if (_leavingPages.TryGetValue(element, out var serial)) stack.Add((host, PageSwap.Layer.Held, serial));
             else if (_arrivingPages.Contains(element)) stack.Add((host, PageSwap.Layer.Arriving, 0));
             else stack.Add((host, PageSwap.Layer.Shown, 0));

@@ -108,6 +108,15 @@ public class PageSwapTests
     }
 
     [Fact]
+    public void Stack_APageBeingHidden_GoesUnderEverything()
+    {
+        // A sai e não pode ficar quente (som, ecrã dividido) enquanto se volta à quente W: A esconde-se por baixo de W,
+        // em vez de empatar com ela na camada «à vista».
+        var order = StackOrder([("a esconder", Layer.Cooling, 0L), ("voltou", Layer.Shown, 0L), ("quente", Layer.Warm, -1L)]);
+        Assert.Equal(["voltou", "quente", "a esconder"], order);
+    }
+
+    [Fact]
     public void Presentation_AColdPageIsOnlyWarmableAfterItPresents()
     {
         // Ctrl+Tab para B (fria) e de volta antes de B apresentar: B não pode ficar quente (voltaria sem espera,
