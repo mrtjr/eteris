@@ -118,25 +118,31 @@ com o runtime do NuGet (sem codecs) e os utilizadores atualizados pelo Velopack 
 Por isso as releases normais publicam-se **localmente**, com o runtime próprio em `build/cef-codecs/out/runtime`:
 1. Subir a versão (csproj, padrão do `build/publish.ps1`, `CHANGELOG.md`, `Browser/WhatsNewPage.cs`) e fazer commit.
    **Desde a 0.2.12 a publicação sai com o sandbox** (`docs/sandbox.md`, «Como publicar com o sandbox»): antes da 1.ª
-   publicação, e de novo só quando mudar o motor, o CefSharp, o patch ou `build/sandbox/client`, correr
+   publicação, e de novo quando mudar o motor, o CefSharp, o patch ou `build/sandbox/client`, correr
    `powershell -ExecutionPolicy Bypass -File build\sandbox\build-all.ps1` — recompila o CefSharp com o patch v2 para o
    feed local `build/cefsharp/feed` e a DLL cliente para `build/sandbox/client/out`, verifica os dois e corre os testes
    no modo com sandbox (pastas ignoradas pelo git; o feed e a DLL ficam para as publicações seguintes). Precisa da
    distribuição mínima do motor em `build/cef-codecs/out/distrib` (se foi apagada:
-   `build/cef-codecs/build.ps1 -Steps Package`, sem recompilar) ou de `-CefDistrib <pasta>`.
+   `build/cef-codecs/build.ps1 -Steps Package`, sem recompilar) ou de `-CefDistrib <pasta>`. **Em cada release**, depois
+   do commit da versão: `build\sandbox\build-all.ps1 -SkipCefSharp -SkipClient` — só os testes no modo com sandbox (o CI
+   só testa o modo sem), que gravam a marca `build/sandbox/out/tests-ok.json` para esse commit; sem ela o passo 2 recusa.
 2. `.\build\publish.ps1 -Version X.Y.Z` — recusa um runtime que não seja o validado (modo, commit, versão do
    `libcef.dll`, SHA256 de cada ficheiro do manifesto); com o sandbox (a omissão) recusa também a falta do feed ou da
    DLL cliente, verifica a DLL contra o motor (`verify-client.ps1`) e confirma a forma publicada (`Eteris.Browser.exe` =
    bootstrap com a marca e a versão, `Eteris.Browser.dll` = DLL cliente, `Eteris.App.dll`, CefSharp com
-   `WindowsSandboxInfo`, sem `CefSharp.BrowserSubprocess.exe`). A pasta `publish` é limpa antes. `-NoSandbox` só em
-   emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.11). Confirmar que `publish\libcef.dll` tem o SHA256
+   `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
+   para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
+   falhar, e no fim leva `eteris-build.json` (versão, modo, commit e o CefSharp com o SHA256 das montagens).
+   `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.11). Confirmar que `publish\libcef.dll` tem o SHA256
    do `manifest.json`, que não há `bootstrap.exe`/`bootstrapc.exe` com esse nome (o bootstrap vai como
    `Eteris.Browser.exe`) e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em `Shields\lists`,
    `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).
 3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --token … --outputDir Releases` — o pacote delta tem
    de partir do pacote `full` **publicado**: a pasta `Releases` não pode ter um `full` local da mesma versão que não
    seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).
-4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`.
+4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`. Só
+   empacota uma `publish\` com o `eteris-build.json` dessa versão e com sandbox (uma publicação `-NoSandbox` só com
+   `-NoSandbox` também aqui).
 5. Testar o executável de `publish\` num perfil de teste (abre, navega, `eteris://whatsnew/` com a versão nova, um MP4
    H.264 toca no motor principal, sem processos `msedgewebview2` filhos; `chrome://sandbox` com os renderers
    Lockdown/Untrusted e a GPU Low, e `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`;

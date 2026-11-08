@@ -152,7 +152,8 @@ Publicação como a da release (`build/publish.ps1`, motor com codecs da platafo
 temporária, contra a 0.2.9 publicada da mesma forma a partir do `c3fe087`; perfil de teste com «nova aba» no
 arranque; A/B intercalado na mesma janela temporal (arranque 7 rondas depois de 1 de aquecimento, memória 5 rondas;
 medianas, intervalo entre parênteses). A 3.ª coluna é a mesma árvore publicada com `-Sandbox` (sem a ACL do serviço
-de rede na pasta: o serviço de rede fica sem sandbox, como previsto), noutro perfil.
+de rede na pasta: o serviço de rede fica sem sandbox, como previsto), noutro perfil. Histórico: o `-Sandbox` do
+`publish.ps1` era o da altura; desde a 0.2.12 o sandbox é a omissão (secção 2).
 
 | Medida | Éteris 0.2.9 (`c3fe087`) | Éteris `main` | `main` com `-Sandbox` | Chrome 156 | Brave 157 | Firefox 159 |
 |---|---|---|---|---|---|---|
@@ -185,11 +186,18 @@ saem do repositório com um só script, `build/sandbox/build-all.ps1` (feed loca
 instalação 0.2.11 sem sandbox atualiza-se pelo botão do Éteris para a 0.2.12 com sandbox — renderers e armazenamento
 Untrusted, GPU Low, serviço de rede no AppContainer com a ACL dada pelo gancho de atualização, 0 filhos com
 `--no-sandbox`, a sessão da 0.2.11 de volta, atalhos/registo/navegador predefinido com 0 diferenças — e a desinstalação
-deixa o utilizador igual ao de antes (0 diferenças, incluindo os perfis de AppContainer). Fica de fora: a assinatura
+deixa o utilizador igual ao de antes (0 diferenças, incluindo os perfis de AppContainer). Essa prova foi feita com o
+ramo antes de fundir a 0.2.11; depois de fundir (`7723672`) repetiram-se os 2516 testes no modo com sandbox e a
+verificação ao vivo da publicação (sandbox como em cima, flags do arranque sem Google e o Escudo nos pedidos sem aba com
+o serviço de rede no AppContainer), não a prova do Velopack (`docs/sandbox.md`, «Revisão da 0.2.12»). O «navegador
+predefinido igual» só prova que a escolha do dono não mudou (o Éteris não se regista como navegador), e a fotografia
+não cobre os ícones afixados na barra de tarefas. A publicação com sandbox exige agora os testes desse modo aprovados
+para o próprio commit (`build-all.ps1 -SkipCefSharp -SkipClient` em cada release). Fica de fora: a assinatura
 conjunta (só obrigatória quando o Éteris for assinado) e o proxy do sistema / autenticação integrada vistos ao vivo
 (sem domínio nem proxy nesta máquina). Histórico da decisão em baixo.
 
-A publicação oficial (0.2.9) corre os processos do motor com `--no-sandbox`. No `main` (fundido do ramo `sandbox`), com
+Histórico (antes da 0.2.12; o `-Sandbox` do `publish.ps1` já não existe, o sandbox é a omissão): a publicação oficial
+(0.2.9) corre os processos do motor com `--no-sandbox`. No `main` (fundido do ramo `sandbox`), com
 `build/publish.ps1 -Sandbox` (CefSharp próprio com a informação do sandbox, DLL cliente do bootstrap da CEF, opção B:
 `Eteris.Browser.exe` = bootstrap, `.NET` = `Eteris.App`), `chrome://sandbox` mostra o mesmo que o Chrome 156 com a
 experiência de rede ligada: renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Service Untrusted e
