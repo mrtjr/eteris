@@ -7,8 +7,10 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | Éteris; listas de filtros; scriptlets do uBlock Origin | GPL-3.0 | `GPL-3.0.txt` |
 | Fundos da nova aba (imagens geradas por IA) | GPL-3.0-or-later; geradas por IA | `Wallpapers-NOTICE.txt` |
 | CefSharp 156.0.150 | BSD-3-Clause | `CefSharp-LICENSE.txt` |
-| Chromium Embedded Framework | BSD-3-Clause | `CEF-LICENSE.txt` |
-| Chromium e os seus componentes (CEF 156.0.15) | BSD-3-Clause e outras (ver o ficheiro) | `Chromium-credits.html` |
+| Chromium Embedded Framework 156.0.15 (compilação própria, codecs do Windows) | BSD-3-Clause | `CEF-LICENSE.txt` |
+| Chromium 156.0.8078.80 e os seus componentes (CEF 156.0.15, compilação própria) | BSD-3-Clause, LGPL-2.1-or-later (FFmpeg) e outras (ver o ficheiro) | `Chromium-credits.html` |
+| FFmpeg (no libcef.dll; sem descodificadores com patentes, commit 9db86ce5b5b4) | LGPL-2.1-or-later | `FFmpeg-LICENSE.txt` |
+| FFmpeg e motor com codecs: código-fonte correspondente (oferta da LGPL) | LGPL-2.1-or-later | `FFmpeg-SOURCE.txt` |
 | .NET | MIT | `dotnet-LICENSE.txt` |
 | .NET (componentes de terceiros) | várias | `dotnet-THIRD-PARTY-NOTICES.txt` |
 | WPF / Windows Desktop | MIT | `windowsdesktop-LICENSE.txt` |

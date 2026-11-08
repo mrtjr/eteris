@@ -7,8 +7,14 @@ Corre-se sempre que muda uma dependência (CEF/CefSharp, pacotes NuGet, crates d
 Fontes: a cache local do NuGet e do Cargo (os pacotes exatos que entram na compilação), o resources.pak
 do CEF (créditos do Chromium) e build/licenses/static/ (textos que os pacotes não trazem, obtidos uma vez
 das fontes oficiais: gnu.org e os repositórios do Velopack, SQLitePCLRaw e EF Core; a MPL-2.0 é a do adblock-rust).
+
+Com o motor com codecs da plataforma (build/cef-codecs/out/runtime, docs/motor.md), a licença da CEF e os créditos
+do Chromium saem dessa compilação (LICENSE.txt e CREDITS.html, com a LGPL do FFmpeg), e juntam-se o texto da
+licença do FFmpeg e a oferta do código-fonte correspondente, com os commits e os patches do manifest.json.
 """
 import glob
+import html
+import json
 import os
 import re
 import shutil
@@ -45,6 +51,58 @@ def copy(src, name, component, license):
     index.append((component, license, name))
 
 
+# Oferta do código-fonte do FFmpeg (LGPL-2.1, secção 6): o FFmpeg vai ligado de forma estática no libcef.dll da
+# compilação própria. Preenchida com o manifest.json do runtime.
+FFMPEG_SOURCE = """FFmpeg no Éteris: licença e código-fonte correspondente
+=======================================================
+
+Esta instalação do Éteris usa uma compilação própria do Chromium Embedded Framework, com os «codecs da plataforma»:
+CEF {cef_version} (ramo {cef_branch}, commit {cef_commit}) e Chromium {chromium_version} (commit {chromium_commit}),
+compilados com proprietary_codecs=true e ffmpeg_branding=Chromium. O H.264/HEVC é descodificado pela placa gráfica
+através do Windows (D3D11VideoDecoder) e o AAC pelo Media Foundation do Windows; nenhum descodificador com patentes vai
+incluído (nem o OpenH264).
+
+O libcef.dll inclui, ligado de forma estática, o FFmpeg (commit {ffmpeg_commit} de
+https://chromium.googlesource.com/chromium/third_party/ffmpeg, configuração {ffmpeg_config}), sob a GNU Lesser
+General Public License, versão 2.1 ou posterior: o texto completo está em FFmpeg-LICENSE.txt e nos créditos do
+Chromium (Chromium-credits.html). Essa configuração só tem desmultiplexadores, parsers e descodificadores livres
+(FLAC, MP3, Vorbis, Opus, PCM); o patch do Éteris junta-lhe o desmultiplexador ADTS e o parser AAC, que não
+descodificam nada.
+
+Código-fonte correspondente
+---------------------------
+- FFmpeg: https://chromium.googlesource.com/chromium/third_party/ffmpeg/+/{ffmpeg_commit}
+- Chromium: https://chromium.googlesource.com/chromium/src/+/{chromium_commit}
+- CEF: https://github.com/chromiumembeddedframework/cef/commit/{cef_commit}
+- Alterações do Éteris (vão com a instalação, em licenses\\cef-codecs\\patches, e estão no repositório do Éteris, em
+  https://github.com/mrtjr/eteris/tree/main/build/cef-codecs):
+{patches}
+- Script de compilação, com os argumentos GN ({gn_defines}):
+  build/cef-codecs/build.ps1 no mesmo repositório; como reconstruir: build/cef-codecs/README.md.
+
+Com estes ficheiros pode compilar de novo o libcef.dll, com um FFmpeg alterado por si, e pô-lo no lugar do que vem na
+instalação: o Éteris liga-se ao libcef.dll de forma dinâmica.
+
+Oferta escrita: durante pelo menos três anos a contar da última distribuição desta versão do Éteris, qualquer pessoa
+pode pedir uma cópia do código-fonte completo correspondente (FFmpeg, Chromium e CEF nos commits acima, com as
+alterações do Éteris), num suporte habitual para troca de software e pelo custo da cópia, abrindo um pedido em
+https://github.com/mrtjr/eteris/issues.
+"""
+
+
+def ffmpeg_license(credits):
+    """O texto da licença do FFmpeg tal como vem nos créditos do Chromium (LICENSE.md e a LGPL-2.1 completa)."""
+    text = open(credits, encoding="utf-8").read()
+    start = text.find('<span class="title">ffmpeg</span>')
+    if start < 0:
+        sys.exit("Os créditos da compilação própria não têm o FFmpeg: recompile com build/cef-codecs/build.ps1")
+    block = re.search(r"<pre>(.*?)</pre>", text[start:], re.S)
+    license_text = html.unescape(block.group(1)) if block else ""
+    if "GNU LESSER GENERAL PUBLIC LICENSE" not in license_text:
+        sys.exit("Os créditos da compilação própria não têm a LGPL do FFmpeg")
+    return license_text
+
+
 def package_dir(package_id, version=None):
     base = os.path.join(NUGET, package_id.lower())
     if version:
@@ -75,18 +133,43 @@ def main():
     copy(os.path.join(cefsharp, "LICENSE"), "CefSharp-LICENSE.txt", f"CefSharp {refs['CefSharp.Wpf.NETCore']}", "BSD-3-Clause")
     nuspec = open(glob.glob(os.path.join(cefsharp, "*.nuspec"))[0], encoding="utf-8").read()
     cef_version = re.search(r'id="chromiumembeddedframework\.runtime" version="\[?([^"\],]+)', nuspec, re.I).group(1)
-    cef = package_dir("chromiumembeddedframework.runtime.win-x64", cef_version)
-    copy(os.path.join(cef, "LICENSE.txt"), "CEF-LICENSE.txt", "Chromium Embedded Framework", "BSD-3-Clause")
-    pak = os.path.join(cef, "runtimes", "win-x64", "native", "resources.pak")
-    # Motor com codecs (docs/motor.md): com a compilação própria da CEF, os créditos saem do resources.pak dela, que é o
-    # que vai na instalação (o csproj troca o runtime inteiro).
-    own_pak = os.path.join(ROOT, "build", "cef-codecs", "out", "runtime", "resources.pak")
-    own = os.path.exists(own_pak)
-    subprocess.run(["node", os.path.join(ROOT, "build", "licenses", "chromium-credits.js"), own_pak if own else pak,
-                    os.path.join(OUT, "Chromium-credits.html")], check=True)
-    label = (f"Chromium e os seus componentes (CEF {cef_version}, compilação própria, codecs do Windows)" if own
-             else f"Chromium e os seus componentes (CEF {cef_version})")
-    index.append((label, "BSD-3-Clause e outras (ver o ficheiro)", "Chromium-credits.html"))
+    # Motor com codecs (docs/motor.md): com a compilação própria da CEF (a mesma condição do csproj: libcef.dll e
+    # manifest.json), o runtime inteiro é o dela — a licença, os créditos e o FFmpeg também.
+    own_runtime = os.path.join(ROOT, "build", "cef-codecs", "out", "runtime")
+    own = all(os.path.exists(os.path.join(own_runtime, f)) for f in ("libcef.dll", "manifest.json"))
+    if own:
+        manifest = json.load(open(os.path.join(own_runtime, "manifest.json"), encoding="utf-8-sig"))
+        if manifest.get("mode") != "platform-codecs":
+            sys.exit(f"Motor com codecs no modo {manifest.get('mode')!r}: só o modo platform-codecs se distribui")
+        if manifest["cef"]["version"] != cef_version:
+            sys.exit(f"Motor com codecs da CEF {manifest['cef']['version']}, o CefSharp espera {cef_version}")
+        own_licenses = os.path.join(own_runtime, "licenses")
+        copy(os.path.join(own_licenses, "LICENSE.txt"), "CEF-LICENSE.txt",
+             f"Chromium Embedded Framework {cef_version} (compilação própria, codecs do Windows)", "BSD-3-Clause")
+        copy(os.path.join(own_licenses, "CREDITS.html"), "Chromium-credits.html",
+             f"Chromium {manifest['chromium']['version']} e os seus componentes (CEF {cef_version}, compilação própria)",
+             "BSD-3-Clause, LGPL-2.1-or-later (FFmpeg) e outras (ver o ficheiro)")
+        with open(os.path.join(OUT, "FFmpeg-LICENSE.txt"), "w", encoding="utf-8") as f:
+            f.write(ffmpeg_license(os.path.join(own_licenses, "CREDITS.html")))
+        index.append((f"FFmpeg (no libcef.dll; sem descodificadores com patentes, commit {manifest['ffmpeg']['commit'][:12]})",
+                      "LGPL-2.1-or-later", "FFmpeg-LICENSE.txt"))
+        patches = "\n".join(f"  {p['file']} (aplica-se a {p['repo']}; SHA256 {p['sha256']})" for p in manifest["patches"])
+        with open(os.path.join(OUT, "FFmpeg-SOURCE.txt"), "w", encoding="utf-8") as f:
+            f.write(FFMPEG_SOURCE.format(
+                cef_version=cef_version, cef_branch=manifest["cef"]["branch"], cef_commit=manifest["cef"]["commit"],
+                chromium_version=manifest["chromium"]["version"], chromium_commit=manifest["chromium"]["commit"],
+                ffmpeg_commit=manifest["ffmpeg"]["commit"], ffmpeg_config=manifest["ffmpeg"]["config"],
+                gn_defines=manifest["gn_defines"], patches=patches))
+        index.append(("FFmpeg e motor com codecs: código-fonte correspondente (oferta da LGPL)", "LGPL-2.1-or-later",
+                      "FFmpeg-SOURCE.txt"))
+    else:
+        cef = package_dir("chromiumembeddedframework.runtime.win-x64", cef_version)
+        copy(os.path.join(cef, "LICENSE.txt"), "CEF-LICENSE.txt", "Chromium Embedded Framework", "BSD-3-Clause")
+        pak = os.path.join(cef, "runtimes", "win-x64", "native", "resources.pak")
+        subprocess.run(["node", os.path.join(ROOT, "build", "licenses", "chromium-credits.js"), pak,
+                        os.path.join(OUT, "Chromium-credits.html")], check=True)
+        index.append((f"Chromium e os seus componentes (CEF {cef_version})", "BSD-3-Clause e outras (ver o ficheiro)",
+                      "Chromium-credits.html"))
 
     # .NET (vai dentro da instalação, que é autónoma).
     for runtime, name in [("microsoft.netcore.app.runtime.win-x64", ".NET"), ("microsoft.windowsdesktop.app.runtime.win-x64", "WPF / Windows Desktop")]:

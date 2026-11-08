@@ -1,7 +1,7 @@
 # Os scripts .cmd só funcionam com quebras de linha do Windows.
 *.cmd text eol=crlf
 *.bat text eol=crlf
-# Motor com codecs: os patches vão byte a byte como foram validados (o SHA256 deles está no manifest.json do
-# runtime, e o build.ps1 aplica-os com git apply); o script fica com CRLF, como foi validado.
+# Motor com codecs: o script e os patches vão byte a byte como foram validados (LF; o SHA256 dos patches está no
+# manifest.json do runtime, e o build.ps1 aplica-os com git apply), sem conversão de fins de linha.
 build/cef-codecs/patches/*.patch -text
-build/cef-codecs/build.ps1 text eol=crlf
+build/cef-codecs/build.ps1 -text

@@ -1,0 +1,35 @@
+FFmpeg no Éteris: licença e código-fonte correspondente
+=======================================================
+
+Esta instalação do Éteris usa uma compilação própria do Chromium Embedded Framework, com os «codecs da plataforma»:
+CEF 156.0.15 (ramo 8078, commit cf671c072925b27823a61181152f4f288e8e4306) e Chromium 156.0.8078.80 (commit fb096c0011f9d50f0a264a9376420cdea9c421e3),
+compilados com proprietary_codecs=true e ffmpeg_branding=Chromium. O H.264/HEVC é descodificado pela placa gráfica
+através do Windows (D3D11VideoDecoder) e o AAC pelo Media Foundation do Windows; nenhum descodificador com patentes vai
+incluído (nem o OpenH264).
+
+O libcef.dll inclui, ligado de forma estática, o FFmpeg (commit 9db86ce5b5b454dfc96c435f9f0723012980c37f de
+https://chromium.googlesource.com/chromium/third_party/ffmpeg, configuração chromium/config/Chromium/win/x64), sob a GNU Lesser
+General Public License, versão 2.1 ou posterior: o texto completo está em FFmpeg-LICENSE.txt e nos créditos do
+Chromium (Chromium-credits.html). Essa configuração só tem desmultiplexadores, parsers e descodificadores livres
+(FLAC, MP3, Vorbis, Opus, PCM); o patch do Éteris junta-lhe o desmultiplexador ADTS e o parser AAC, que não
+descodificam nada.
+
+Código-fonte correspondente
+---------------------------
+- FFmpeg: https://chromium.googlesource.com/chromium/third_party/ffmpeg/+/9db86ce5b5b454dfc96c435f9f0723012980c37f
+- Chromium: https://chromium.googlesource.com/chromium/src/+/fb096c0011f9d50f0a264a9376420cdea9c421e3
+- CEF: https://github.com/chromiumembeddedframework/cef/commit/cf671c072925b27823a61181152f4f288e8e4306
+- Alterações do Éteris (vão com a instalação, em licenses\cef-codecs\patches, e estão no repositório do Éteris, em
+  https://github.com/mrtjr/eteris/tree/main/build/cef-codecs):
+  patches/platform-codecs.patch (aplica-se a src; SHA256 c7aadb7c1594195507b93cc8b3c22648686c0dfed4340d9d05b6e90eef1d9b8f)
+  patches/ffmpeg-adts-demuxer.patch (aplica-se a src/third_party/ffmpeg; SHA256 7efcb4e628b23c75117bbd3bb0088bfbe0821dcf37e4bf765a37fc9597282c8d)
+- Script de compilação, com os argumentos GN (is_official_build=true proprietary_codecs=true ffmpeg_branding=Chromium enable_platform_hevc=true enable_hevc_parser_and_hw_decoder=true media_use_openh264=false symbol_level=1 blink_symbol_level=0 v8_symbol_level=0):
+  build/cef-codecs/build.ps1 no mesmo repositório; como reconstruir: build/cef-codecs/README.md.
+
+Com estes ficheiros pode compilar de novo o libcef.dll, com um FFmpeg alterado por si, e pô-lo no lugar do que vem na
+instalação: o Éteris liga-se ao libcef.dll de forma dinâmica.
+
+Oferta escrita: durante pelo menos três anos a contar da última distribuição desta versão do Éteris, qualquer pessoa
+pode pedir uma cópia do código-fonte completo correspondente (FFmpeg, Chromium e CEF nos commits acima, com as
+alterações do Éteris), num suporte habitual para troca de software e pelo custo da cópia, abrindo um pedido em
+https://github.com/mrtjr/eteris/issues.

@@ -59,6 +59,7 @@ public class CefCodecsRuntimeTests
             Assert.True(File.Exists(Path.Combine(dir, "patches", patch)), patch);
         var attributes = File.ReadAllLines(Path.Combine(Root(), ".gitattributes"));
         Assert.Contains("build/cef-codecs/patches/*.patch -text", attributes);
+        Assert.Contains("build/cef-codecs/build.ps1 -text", attributes);
     }
 
     [Fact]

@@ -49,6 +49,7 @@ O código-fonte corresponde à tag `1.75.4` desse repositório.
 |---|---|---|
 | Chromium Embedded Framework / CefSharp | https://github.com/cefsharp/CefSharp | BSD-3-Clause |
 | Chromium (incluído no CEF) | https://www.chromium.org | BSD-3-Clause e licenças dos seus componentes |
+| FFmpeg (dentro do `libcef.dll`; sem descodificadores com patentes) | https://chromium.googlesource.com/chromium/third_party/ffmpeg | LGPL-2.1-or-later |
 | Velopack | https://github.com/velopack/velopack | MIT |
 | CommunityToolkit.Mvvm | https://github.com/CommunityToolkit/dotnet | MIT |
 | QRCoder (códigos QR) | https://github.com/Shane32/QRCoder | MIT |
@@ -64,6 +65,18 @@ Os créditos completos do Chromium (centenas de componentes) estão em `licenses
 parte do Windows 10/11 e é atualizado pelo próprio Windows. O Éteris **não** distribui esse runtime nem os seus
 codecs: usa o que já está instalado no sistema (componente de sistema, no sentido da secção 1 da GPL-3.0). As
 licenças de patentes do H.264/AAC são, por isso, as do Windows/Edge e não do Éteris.
+
+**Codecs da plataforma.** As versões do Éteris compiladas com o motor próprio (CEF 156.0.15 compilada pelo projeto
+com `proprietary_codecs=true` e `ffmpeg_branding=Chromium`; ver `build/cef-codecs`) tocam H.264/HEVC e AAC no motor
+principal sem os descodificar: o H.264 e o HEVC são descodificados por componentes do Windows, pela placa gráfica
+(D3D11VideoDecoder), e o AAC pelo Media Foundation do Windows — componentes de sistema, com as licenças de patentes do
+Windows e dos fabricantes. **Nenhum descodificador com patentes vai incluído**: nem os do FFmpeg nem o OpenH264. O
+FFmpeg que vai ligado no `libcef.dll` (LGPL-2.1-or-later, texto em `licenses/FFmpeg-LICENSE.txt`) só tem
+desmultiplexadores, parsers e descodificadores livres. Fonte correspondente: os patches e o script de compilação em
+`build/cef-codecs` (também na instalação, em `licenses/cef-codecs/`), sobre os commits da CEF, do Chromium e do
+FFmpeg indicados em `licenses/FFmpeg-SOURCE.txt`, que tem também a oferta escrita do código-fonte que a LGPL exige.
+Quando o Windows não descodifica (sem descodificação por hardware, ou Windows N sem o Media Feature Pack), a aba usa o
+motor de vídeo acima.
 
 ## Motor de bloqueio: dependências Rust
 
