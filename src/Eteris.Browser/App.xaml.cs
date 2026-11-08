@@ -42,6 +42,8 @@ public partial class App : Application
         FirstPaint.App.SignalAfter(FirstPaint.Fallback);
         FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
         FirstPaint.App.Then(CompositionWarmup.Stop);
+        // O perfil do JIT só grava o arranque (Infrastructure/StartupJit.cs): para pouco depois da 1.ª página.
+        FirstPaint.App.Then(() => _ = Task.Delay(StartupJit.RecordAfterFirstPaint).ContinueWith(_ => StartupJit.Stop(), TaskScheduler.Default));
         FirstPaint.App.Then(() =>
         {
             JumpListTasks.Install();

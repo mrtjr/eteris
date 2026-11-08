@@ -35,8 +35,9 @@ public static class Program
             return;
         }
         StartupTrace.Mark("instancia");
-        // O JIT do arranque passa a correr também noutros núcleos, guiado pelo arranque anterior (Infrastructure/StartupJit.cs).
-        StartupJit.Start(AppPaths.Root);
+        // O JIT do arranque passa a correr também noutros núcleos, guiado pelo arranque anterior (Infrastructure/StartupJit.cs);
+        // um arranque privado não o grava.
+        if (StartupJit.ShouldRecord(args)) StartupJit.Start(AppPaths.Root);
         // O motor de composição do WPF arranca já, numa thread à parte (Infrastructure/CompositionWarmup.cs).
         CompositionWarmup.Start();
 

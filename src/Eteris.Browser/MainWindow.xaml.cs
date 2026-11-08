@@ -38,7 +38,12 @@ public partial class MainWindow : Window
             ContentRendered += (_, _) => StartupTrace.MarkOnce("janela.render");
         }
         IsPrivate = isPrivate;
-        if (isPrivate) ConfigurePrivateWindow();
+        if (isPrivate)
+        {
+            // Nada da janela privada fica no perfil do JIT do arranque (Infrastructure/StartupJit.cs).
+            StartupJit.Stop();
+            ConfigurePrivateWindow();
+        }
         Tabs.NewTabAddress = NewTabUrl;
         DataContext = Tabs;
         Tabs.Tabs.CollectionChanged += OnTabsChanged;
