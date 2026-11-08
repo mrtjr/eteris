@@ -15,7 +15,10 @@ public static class PrivacyCategory
     public const string Debounce = "salto";
     public const string Forgotten = "esquecido";
 
-    public static readonly string[] Blocks = [Lists, Strict, Cloaked, User, LocalNetwork];
+    // Os que contam como «pedidos de rastreio» (o total, o gráfico, as empresas e os rastreadores): as listas, os
+    // escondidos por CNAME e os que o utilizador bloqueou. O modo rigoroso corta também CDNs e embeds (Stripe, YouTube)
+    // e conta à parte; a rede local não é rastreio — fica só no seu mosaico.
+    public static readonly string[] Tracking = [Lists, Cloaked, User];
 
     public static string? Of(ObservedVerdict verdict) => verdict switch
     {
@@ -33,6 +36,10 @@ public static class PrivacyCategory
 public static class PrivacyLedger
 {
     private static ConcurrentDictionary<(string Category, string Subject), int> _pending = new();
+
+    // O auto-teste (eteris://privacy/teste) faz de propósito um pedido à rede local: não entra no relatório.
+    public static bool Counts(string? pageUrl)
+        => !Uri.TryCreate(pageUrl, UriKind.Absolute, out var page) || !Browser.SelfTest.IsTestHost(page.Host);
 
     public static void Count(string category, string? subject)
     {
@@ -71,10 +78,10 @@ public static class PrivacyReport
         var from = today.AddDays(-(days - 1));
         var window = events.Where(e => e.Day >= from && e.Day <= today).ToList();
         var perDay = new int[days];
-        foreach (var e in window.Where(e => PrivacyCategory.Blocks.Contains(e.Category)))
+        foreach (var e in window.Where(e => PrivacyCategory.Tracking.Contains(e.Category)))
             perDay[e.Day.DayNumber - from.DayNumber] += e.Count;
         var byCategory = window.GroupBy(e => e.Category).ToDictionary(g => g.Key, g => g.Sum(e => e.Count));
-        var trackers = window.Where(e => PrivacyCategory.Blocks.Contains(e.Category) && e.Category != PrivacyCategory.LocalNetwork && e.Subject.Length > 0)
+        var trackers = window.Where(e => PrivacyCategory.Tracking.Contains(e.Category) && e.Subject.Length > 0)
             .GroupBy(e => e.Subject)
             .Select(g => (Domain: g.Key, Company: owners.OwnerOf(g.Key), Count: g.Sum(e => e.Count)))
             .OrderByDescending(t => t.Count).ThenBy(t => t.Domain, StringComparer.Ordinal).ToList();
@@ -102,6 +109,9 @@ public static class PrivacyReport
         }
         var skips = byCategory.GetValueOrDefault(PrivacyCategory.Debounce);
         if (skips > 0) text += skips == 1 ? " e saltou 1 redirecionamento de rastreio" : $" e saltou {Number(skips)} redirecionamentos de rastreio";
+        // O modo rigoroso corta também o que não é rastreio (CDNs, embeds): à parte, nunca no total.
+        var strict = byCategory.GetValueOrDefault(PrivacyCategory.Strict);
+        if (strict > 0) text += strict == 1 ? "; o modo rigoroso travou mais 1 pedido a outros domínios" : $"; o modo rigoroso travou mais {Number(strict)} pedidos a outros domínios";
         return text + ".";
     }
 

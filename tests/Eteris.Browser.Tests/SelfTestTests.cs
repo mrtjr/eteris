@@ -154,6 +154,56 @@ public class SelfTestTests
         Assert.DoesNotContain("<img", script);
     }
 
+    // Revisão aos 50: os nomes .invalid não respondem a qualquer página (um fetch bastava para reconhecer o Éteris).
+    [Theory]
+    [InlineData("https://jornal.pt/artigo", "https://autoteste-eteris.invalid/", false, false, false)]
+    [InlineData("https://jornal.pt/artigo", "https://terceiro-eteris.invalid/eco?k=x&run=1", false, false, false)]
+    [InlineData("https://jornal.pt/artigo", "https://autoteste-eteris.invalid/", true, false, false)]
+    [InlineData(null, "https://autoteste-eteris.invalid/", true, false, false)]
+    [InlineData("about:blank", "https://autoteste-eteris.invalid/", true, false, false)]
+    [InlineData("eteris://privacy/teste", "https://autoteste-eteris.invalid/", true, false, true)]
+    [InlineData("eteris://privacy/teste", "https://autoteste-eteris.invalid/eco?k=c1&run=1", false, false, false)]
+    [InlineData("https://jornal.pt/artigo", "https://autoteste-eteris.invalid/", true, true, true)]
+    [InlineData("https://jornal.pt/artigo", "https://autoteste-eteris.invalid/eco?k=c1&run=1", true, true, false)]
+    [InlineData("https://autoteste-eteris.invalid/", "https://autoteste-eteris.invalid/eco?k=c1&run=1", false, false, true)]
+    [InlineData("https://autoteste-eteris.invalid/", "https://terceiro-eteris.invalid/set?run=1", false, false, true)]
+    [InlineData("https://autoteste-eteris.invalid/", "https://autoteste-eteris.invalid/", true, false, true)]
+    [InlineData("http://autoteste-eteris.invalid/", "https://autoteste-eteris.invalid/eco", false, false, false)]
+    [InlineData("https://terceiro-eteris.invalid/", "https://autoteste-eteris.invalid/eco", false, false, false)]
+    [InlineData("https://autoteste-eteris.invalid/", "https://exemplo.pt/", false, false, false)]
+    public void Serves_OnlyTheTestPageAndTheNavigationThatOpensIt(string? main, string request, bool mainFrame, bool explicitOrHistory, bool expected)
+        => Assert.Equal(expected, SelfTest.Serves(main, request, mainFrame, explicitOrHistory));
+
+    // Revisão aos 50: a 22.ª execução já não apaga a meio os cabeçalhos dela própria (falsos ✘ no GPC e na língua).
+    [Fact]
+    public void Received_KeepsTheRunningRunAndTheMainRequest_DropsOnlyOldRuns()
+    {
+        SelfTest.Record("main", H(("Sec-GPC", "1")));
+        for (var i = 0; i < 40; i++)
+        {
+            var run = "rev50-" + i;
+            SelfTest.Record(run + "/c1", H(("Cookie", "eteris_teste=" + run)));
+            SelfTest.Record(run + "/c3", H());
+            SelfTest.Record(run + "/ref", H());
+            Assert.NotNull(SelfTest.Got(run + "/c1"));
+            Assert.NotNull(SelfTest.Got(run + "/c3"));
+            Assert.Equal("1", SelfTest.Got("main")?["Sec-GPC"]);
+        }
+        Assert.Null(SelfTest.Got("rev50-0/c1"));
+        Assert.NotNull(SelfTest.Got("rev50-39/ref"));
+        Assert.NotNull(SelfTest.Got($"rev50-{40 - SelfTest.KeepRuns}/c1"));
+        Assert.Null(SelfTest.Got($"rev50-{39 - SelfTest.KeepRuns}/c1"));
+    }
+
+    [Fact]
+    public void Factory_FailsLikeAMissingName_ForAnyOtherPage()
+    {
+        var factory = Read("src", "Eteris.Browser", "Browser", "SelfTestSchemeHandlerFactory.cs");
+        Assert.Contains("SelfTest.Serves(main, request.Url, mainFrame, explicitOrHistory)", factory);
+        Assert.Contains("response.ErrorCode = CefErrorCode.NameNotResolved;", factory);
+        Assert.DoesNotContain("Received.Clear()", Read("src", "Eteris.Browser", "Browser", "SelfTest.cs"));
+    }
+
     // As peças estão ligadas: o «servidor» nos dois contextos, a rota eteris://privacy/teste, as medições pelo
     // DevTools ao fim do carregamento, fora do histórico e sem o cartão da rede local.
     [Fact]

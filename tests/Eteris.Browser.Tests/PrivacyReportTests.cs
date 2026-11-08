@@ -28,8 +28,10 @@ public class PrivacyReportTests
     public void Week_CountsOnlyTheLastSevenDays_PerDayAndPerCategory()
     {
         var r = PrivacyReport.Build(Sample(), Today, 7);
-        Assert.Equal(100, r.Blocked);
-        Assert.Equal([10, 0, 0, 0, 5, 25, 60], r.PerDay);
+        // A rede local (2) não é rastreio: fica só no seu mosaico.
+        Assert.Equal(98, r.Blocked);
+        Assert.Equal([10, 0, 0, 0, 3, 25, 60], r.PerDay);
+        Assert.Equal(2, r.ByCategory[PrivacyCategory.LocalNetwork]);
         Assert.Equal(60, r.ByCategory[PrivacyCategory.Lists] - 25);
         Assert.Equal(4, r.ByCategory[PrivacyCategory.Debounce]);
         Assert.Equal(1, r.ByCategory[PrivacyCategory.Forgotten]);
@@ -37,17 +39,17 @@ public class PrivacyReportTests
         Assert.Equal(("google-analytics.com", "Google", 40), r.TopTrackers[0]);
         Assert.DoesNotContain(r.TopTrackers, t => t.Domain.Length == 0);
         Assert.Equal(["eulerian.net"], r.CloakedExamples);
-        Assert.Equal("Nos últimos 7 dias, o Escudo travou 100 pedidos de rastreio — 60 % vinham da Google e saltou 4 redirecionamentos de rastreio.", r.Summary);
+        Assert.Equal("Nos últimos 7 dias, o Escudo travou 98 pedidos de rastreio — 61 % vinham da Google e saltou 4 redirecionamentos de rastreio.", r.Summary);
     }
 
     [Fact]
     public void Month_IncludesTheOlderDays()
     {
         var r = PrivacyReport.Build(Sample(), Today, 30);
-        Assert.Equal(607, r.Blocked);
+        Assert.Equal(605, r.Blocked);
         Assert.Equal(30, r.PerDay.Count);
         Assert.Equal(500, r.PerDay[22]);
-        Assert.Equal("Nos últimos 30 dias, o Escudo travou 607 pedidos de rastreio — 92 % vinham da Google e saltou 4 redirecionamentos de rastreio.", r.Summary);
+        Assert.Equal("Nos últimos 30 dias, o Escudo travou 605 pedidos de rastreio — 93 % vinham da Google e saltou 4 redirecionamentos de rastreio.", r.Summary);
     }
 
     [Fact]
@@ -58,6 +60,33 @@ public class PrivacyReportTests
         Assert.Equal("Nos últimos 7 dias ainda não há nada para contar: o relatório enche-se à medida que navega.", r.Summary);
         Assert.Equal("1 234", PrivacyReport.Number(1234).Replace(' ', ' ').Replace(' ', ' '));
     }
+
+    // Revisão aos 50: o modo rigoroso (CDNs, embeds) e a rede local não entram nos «pedidos de rastreio».
+    [Fact]
+    public void StrictAndLocalNetwork_StayOutOfTheTrackingTotal()
+    {
+        List<PrivacyEvent> events =
+        [
+            new(Today, PrivacyCategory.Lists, "doubleclick.net", 10),
+            new(Today, PrivacyCategory.Strict, "js.stripe.com", 30),
+            new(Today, PrivacyCategory.Strict, "youtube.com", 5),
+            new(Today, PrivacyCategory.LocalNetwork, "", 4),
+        ];
+        var r = PrivacyReport.Build(events, Today, 7);
+        Assert.Equal(10, r.Blocked);
+        Assert.Equal(10, r.PerDay[^1]);
+        Assert.Equal([("doubleclick.net", "Google", 10)], r.TopTrackers);
+        Assert.Equal([("Google", 10)], r.TopCompanies);
+        Assert.Equal(35, r.ByCategory[PrivacyCategory.Strict]);
+        Assert.Equal("Nos últimos 7 dias, o Escudo travou 10 pedidos de rastreio — 100 % vinham da Google; o modo rigoroso travou mais 35 pedidos a outros domínios.", r.Summary);
+    }
+
+    [Theory]
+    [InlineData("https://autoteste-eteris.invalid/", false)]
+    [InlineData("https://terceiro-eteris.invalid/eco", false)]
+    [InlineData("https://jornal.pt/", true)]
+    [InlineData(null, true)]
+    public void Ledger_SkipsTheSelfTest(string? pageUrl, bool counts) => Assert.Equal(counts, PrivacyLedger.Counts(pageUrl));
 
     [Fact]
     public void Ledger_AggregatesBySiteOfTheTracker()
@@ -103,8 +132,8 @@ public class PrivacyReportTests
     public void Page_CarriesBothRanges_AndNothingInThePrivateWindow()
     {
         var html = PrivacyPage.Render(State(), Sample(), Today);
-        Assert.Contains("\"week\":{\"days\":7,\"blocked\":100", html);
-        Assert.Contains("\"month\":{\"days\":30,\"blocked\":607", html);
+        Assert.Contains("\"week\":{\"days\":7,\"blocked\":98", html);
+        Assert.Contains("\"month\":{\"days\":30,\"blocked\":605", html);
         Assert.Contains("\"label\":\"Escondidos por CNAME\"", html);
         Assert.Contains("id=\"relatorio\"", html);
         Assert.Contains("Apagar o relatório", html);
@@ -118,7 +147,7 @@ public class PrivacyReportTests
     public void PrivateWindows_NeverFeedTheReport_AndClearingNeedsTheToken()
     {
         var handler = Read("src", "Eteris.Browser", "Shields", "PrivacyRequestHandler.cs");
-        Assert.Contains("if (isPrivate || PrivacyCategory.Of(verdict) is not { } category) return;", handler);
+        Assert.Contains("if (isPrivate || PrivacyCategory.Of(verdict) is not { } category || !PrivacyLedger.Counts(pageUrl)) return;", handler);
         Assert.Contains("if (!isPrivate)\n                foreach (var host in pending.Hosts) PrivacyLedger.Count(PrivacyCategory.Debounce, host);", handler.Replace("\r\n", "\n"));
         var factory = Read("src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
         Assert.Contains("if (!privateContext && InternalPages.IsAuthorized(request.Url)) AppData.ClearPrivacyReport();", factory);

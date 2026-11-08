@@ -113,11 +113,12 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     {
         // Observatório do site (Shields/SiteObservatory.cs): cada sub-recurso com a decisão que teve. Um incremento num
         // dicionário por pedido — o resto só se calcula quando o painel abre.
-        private void Observe(string url, ResourceType type, ObservedVerdict verdict, string? detail = null)
+        private void Observe(string url, ResourceType type, ObservedVerdict verdict, string? detail = null, string? pageUrl = null)
         {
             observatory?.Record(url, type, verdict, detail);
-            // Relatório de privacidade: só os bloqueios, só o domínio do rastreador (a rede local nem isso).
-            if (isPrivate || PrivacyCategory.Of(verdict) is not { } category) return;
+            // Relatório de privacidade: só os bloqueios, só o domínio do rastreador (a rede local nem isso) e nunca o que
+            // o auto-teste faz de propósito (o pedido a 127.0.0.1 dele não é um rastreio).
+            if (isPrivate || PrivacyCategory.Of(verdict) is not { } category || !PrivacyLedger.Counts(pageUrl)) return;
             PrivacyLedger.Count(category, verdict == ObservedVerdict.LocalNetwork ? null : detail ?? SiteObservatory.HostOf(url).ToString());
         }
 
@@ -144,7 +145,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             {
                 var target = CnameUncloak.CloakedTracker(url, documentUrl, type, chain, engine.ShouldBlock);
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
-                Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target);
+                Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target, pageUrl);
                 if (target is null) return CefReturnValue.Continue;
                 Cloaked(uri.Host, target);
                 return CefReturnValue.Cancel;
@@ -165,7 +166,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                     var answered = lookup.IsCompletedSuccessfully;
                     CnameStats.Waited(System.Diagnostics.Stopwatch.GetTimestamp() - started, timedOut: !answered);
                     target = answered ? CnameUncloak.CloakedTracker(url, documentUrl, type, lookup.Result, engine.ShouldBlock) : null;
-                    Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target);
+                    Observe(url, resourceType, target is null ? ObservedVerdict.Allowed : ObservedVerdict.Cloaked, target, pageUrl);
                     if (target is not null) Cloaked(uri.Host, target);
                 }
                 catch (Exception) { }
@@ -358,7 +359,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             {
                 blocking = true;
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var strictBlocked) ? strictBlocked.Host : request.Url);
-                Observe(request.Url, request.ResourceType, ObservedVerdict.Strict);
+                Observe(request.Url, request.ResourceType, ObservedVerdict.Strict, pageUrl: pageUrl);
                 return CefReturnValue.Cancel;
             }
 
@@ -367,7 +368,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             {
                 blocking = true;
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var ruled) ? ruled.Host : request.Url);
-                Observe(request.Url, request.ResourceType, ObservedVerdict.UserBlocked);
+                Observe(request.Url, request.ResourceType, ObservedVerdict.UserBlocked, pageUrl: pageUrl);
                 return CefReturnValue.Cancel;
             }
 
@@ -381,7 +382,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             blocking = true;
             onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var blocked) ? blocked.Host : request.Url);
-            Observe(request.Url, request.ResourceType, ObservedVerdict.Blocked);
+            Observe(request.Url, request.ResourceType, ObservedVerdict.Blocked, pageUrl: pageUrl);
             return CefReturnValue.Cancel;
         }
 
@@ -413,7 +414,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                         try
                         {
                             if (local) Observe(url, type, ObservedVerdict.Allowed);
-                            else BlockLocal(site, url, type);
+                            else BlockLocal(site, url, type, pageUrl);
                         }
                         catch (Exception) { }
                         try
@@ -425,15 +426,15 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                     return CefReturnValue.ContinueAsync;
                 }
             }
-            BlockLocal(site, request.Url, request.ResourceType);
+            BlockLocal(site, request.Url, request.ResourceType, pageUrl);
             return CefReturnValue.Cancel;
         }
 
         // Sem site (um documento sem origem web) não há a quem perguntar: só fica no Observatório.
-        private void BlockLocal(string? site, string url, ResourceType type)
+        private void BlockLocal(string? site, string url, ResourceType type, string? pageUrl)
         {
             if (site is not null) onLocalNetworkBlocked?.Invoke(site, url);
-            Observe(url, type, ObservedVerdict.LocalNetwork);
+            Observe(url, type, ObservedVerdict.LocalNetwork, pageUrl: pageUrl);
         }
 
         private CefReturnValue DecideMainFrame(IBrowser browser, IRequest request)

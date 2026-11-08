@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace Eteris.Browser.Browser;
@@ -20,17 +19,61 @@ public static class SelfTest
 
     public static bool IsTestHost(string? host) => host is Site or ThirdParty;
 
-    // O que o «servidor» recebeu, por medição (chave «main», ou «<run>/<k>» para os pedidos da página).
-    public static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> Received = new();
+    // O que o «servidor» recebeu: o pedido da página («main», o último) e, por execução, os pedidos que ela fez
+    // («<run>/<k>»). Só as execuções mais recentes ficam — nunca se apaga a que está a correr.
+    public const int KeepRuns = 8;
+    private static readonly Lock RunsGate = new();
+    private static readonly Dictionary<string, (long Order, Dictionary<string, IReadOnlyDictionary<string, string>> Keys)> Runs = new(StringComparer.Ordinal);
+    private static IReadOnlyDictionary<string, string>? _main;
+    private static long _order;
 
     public static void Record(string key, IReadOnlyDictionary<string, string> headers)
     {
-        // Só as medições recentes (no máximo umas dezenas de entradas).
-        if (Received.Count > 64) Received.Clear();
-        Received[key] = headers;
+        if (key == "main")
+        {
+            Volatile.Write(ref _main, headers);
+            return;
+        }
+        var slash = key.IndexOf('/');
+        var run = slash < 0 ? string.Empty : key[..slash];
+        var k = slash < 0 ? key : key[(slash + 1)..];
+        lock (RunsGate)
+        {
+            if (!Runs.TryGetValue(run, out var entry))
+            {
+                entry = (++_order, new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal));
+                Runs[run] = entry;
+                // As execuções mais antigas saem; a nova (a que está a correr) fica sempre.
+                while (Runs.Count > KeepRuns)
+                    Runs.Remove(Runs.Where(r => r.Key != run).MinBy(r => r.Value.Order).Key);
+            }
+            // Uma execução só tem umas poucas medições: um pedido repetido substitui, nunca acumula.
+            if (entry.Keys.Count < 16 || entry.Keys.ContainsKey(k)) entry.Keys[k] = headers;
+        }
     }
 
-    public static IReadOnlyDictionary<string, string>? Got(string key) => Received.TryGetValue(key, out var h) ? h : null;
+    public static IReadOnlyDictionary<string, string>? Got(string key)
+    {
+        if (key == "main") return Volatile.Read(ref _main);
+        var slash = key.IndexOf('/');
+        var run = slash < 0 ? string.Empty : key[..slash];
+        var k = slash < 0 ? key : key[(slash + 1)..];
+        lock (RunsGate) return Runs.TryGetValue(run, out var entry) && entry.Keys.TryGetValue(k, out var h) ? h : null;
+    }
+
+    // Quem pode falar com os nomes do teste. Os nomes .invalid não existem na Internet: se respondessem a qualquer
+    // página, um fetch() a eles bastava para reconhecer o Éteris. Servem só a página de teste (os pedidos e iframes
+    // dela, «Repetir o teste», recarregar) e a navegação que a abre: o salto de eteris://privacy/teste, um endereço
+    // escrito ou reposto pelo próprio Éteris (Explicit) ou o histórico. Tudo o resto falha como um nome inexistente.
+    public static bool Serves(string? mainFrameUrl, string requestUrl, bool mainFrameNavigation, bool explicitOrHistory)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var request) || request.Scheme != Uri.UriSchemeHttps || !IsTestHost(request.Host))
+            return false;
+        if (Uri.TryCreate(mainFrameUrl, UriKind.Absolute, out var main) && main.Scheme == Uri.UriSchemeHttps && main.Host == Site)
+            return true;
+        if (!mainFrameNavigation || !IsTestPage(requestUrl)) return false;
+        return explicitOrHistory || string.Equals(mainFrameUrl, Url, StringComparison.OrdinalIgnoreCase);
+    }
 
     public sealed record Check(string Id, string Title, bool? Passed, string Detail);
 

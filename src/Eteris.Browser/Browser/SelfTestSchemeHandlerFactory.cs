@@ -5,7 +5,8 @@ namespace Eteris.Browser.Browser;
 
 // O «servidor» do auto-teste de privacidade: responde a https://autoteste-eteris.invalid/ e a
 // https://terceiro-eteris.invalid/ dentro do próprio Éteris (fábrica por nome, registada no contexto), e anota os
-// cabeçalhos que recebeu para o veredicto. Nada vai à rede: os nomes .invalid nunca existem na Internet.
+// cabeçalhos que recebeu para o veredicto. Nada vai à rede: os nomes .invalid nunca existem na Internet. Só a página de
+// teste fala com eles (SelfTest.Serves); para qualquer outra página falham como um nome inexistente.
 public sealed class SelfTestSchemeHandlerFactory : ISchemeHandlerFactory
 {
     public static void Register(IRequestContext context)
@@ -18,8 +19,71 @@ public sealed class SelfTestSchemeHandlerFactory : ISchemeHandlerFactory
     // Uma exceção num tratador do CEF fecha o Éteris inteiro: aqui nunca passa.
     public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request)
     {
-        try { return Serve(request); }
-        catch (Exception) { return ResourceHandler.ForErrorMessage("Erro no auto-teste", System.Net.HttpStatusCode.InternalServerError); }
+        try
+        {
+            var main = SafeFrame.MainUrl(browser);
+            var mainFrame = frame is not null && request.ResourceType == ResourceType.MainFrame && IsMain(frame);
+            var transition = request.TransitionType;
+            var explicitOrHistory = (transition & TransitionType.SourceMask) == TransitionType.Explicit
+                                    || (transition & TransitionType.ForwardBack) == TransitionType.ForwardBack;
+            if (browser is null || !SelfTest.Serves(main, request.Url, mainFrame, explicitOrHistory)) return NotResolved();
+            return Serve(request);
+        }
+        catch (Exception) { return NotResolved(); }
+    }
+
+    private static bool IsMain(IFrame frame)
+    {
+        try { return frame.IsValid && frame.IsMain; }
+        catch (Exception) { return false; }
+    }
+
+    // O mesmo erro que o Firefox, o Brave e o Chrome dão para um nome .invalid, sem ir à rede.
+    private static IResourceHandler NotResolved() => new NameNotResolvedHandler();
+
+    // O ErrorCode do ResourceHandler do CefSharp não chega à resposta (medido: um fetch() de outra página resolvia, com
+    // uma resposta 200 vazia). O erro vai na própria resposta (IResponse.ErrorCode), sem corpo.
+    private sealed class NameNotResolvedHandler : IResourceHandler
+    {
+        public bool Open(IRequest request, out bool handleRequest, ICallback callback)
+        {
+            callback.Dispose();
+            handleRequest = true;
+            return true;
+        }
+
+        public void GetResponseHeaders(IResponse response, out long responseLength, out string? redirectUrl)
+        {
+            response.ErrorCode = CefErrorCode.NameNotResolved;
+            responseLength = 0;
+            redirectUrl = null;
+        }
+
+        public bool Skip(long bytesToSkip, out long bytesSkipped, CefSharp.Callback.IResourceSkipCallback callback)
+        {
+            callback.Dispose();
+            bytesSkipped = -2;
+            return false;
+        }
+
+        public bool Read(System.IO.Stream dataOut, out int bytesRead, CefSharp.Callback.IResourceReadCallback callback)
+        {
+            callback.Dispose();
+            bytesRead = 0;
+            return false;
+        }
+
+        public bool ProcessRequest(IRequest request, ICallback callback) => false;
+
+        public bool ReadResponse(System.IO.Stream dataOut, out int bytesRead, ICallback callback)
+        {
+            bytesRead = 0;
+            return false;
+        }
+
+        public void Cancel() { }
+
+        public void Dispose() { }
     }
 
     private static IResourceHandler Serve(IRequest request)
