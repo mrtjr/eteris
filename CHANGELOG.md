@@ -18,6 +18,9 @@ Fluidez da navegação (ver `docs/motor.md` e `docs/paridade.md`, secção 1b).
 - As regras cosméticas e os scriptlets do Escudo passam a valer logo na 1.ª página de cada site, e também nas páginas servidas por service worker (YouTube).
 
 ### Vídeo
+- **H.264 e AAC no motor principal** (Twitch, MP4 direto, HLS, g1, BBC, Reddit, TikTok, Dailymotion, `.m4a`/`.aac`), com uma compilação própria do motor com os codecs do Windows: o vídeo é descodificado pela placa gráfica e o som AAC pelo Windows, sem nenhum descodificador com patentes no Éteris (~2,4% de processador a 1080p). Os sites deixam de mudar para o motor de vídeo, com o Escudo, as regras cosméticas e todas as funções da aba.
+- Sem descodificação por hardware (máquina virtual, controlador básico) ou num Windows N, o Éteris percebe-o no arranque e usa o motor de vídeo como antes — também num MP4 que tocaria só o som.
+- Licenças: créditos do motor próprio, LGPL do FFmpeg e a oferta do código-fonte em `licenses/`.
 - **Vídeo que não toca passa a tocar** (motor de vídeo do Windows): a deteção apanha MP4 abertos diretamente, `<video><source mp4>`, leitores MSE (hls.js, Vimeo, BBC, g1), vídeos dentro de componentes (Reddit) e leitores conhecidos em iframes — em 1–4 s, em vez de nunca ou ~11 s.
 - **Twitch, Kick, Vimeo, Dailymotion, TikTok e Instagram abrem logo no motor de vídeo** (1.º fotograma ~4 s mais cedo na 1.ª visita); o botão «Motor de vídeo» exclui o site de vez.
 - Novo botão **«Tocar no motor de vídeo»** (barra de endereço e menu da página) quando a troca não é automática: vídeo de fundo, leitor noutro site, Reddit e **DRM** (Netflix, Spotify…: sempre com pergunta).

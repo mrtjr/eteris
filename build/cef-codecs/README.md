@@ -102,9 +102,11 @@ Caminho de decisão resultante:
 - **Faixas descartadas em silêncio.** Num MP4 `<video src>` sem descodificação por hardware a faixa
   H.264/HEVC é descartada sem erro (toca só o som); num Windows «N» é a faixa AAC (vídeo sem som). O
   leitor HLS nativo responde «maybe» a `application/vnd.apple.mpegurl` sem olhar para o codec. Por
-  isso o Éteris deve decidir o recurso ao WebView2 **uma vez por arranque, no próprio CEF**, com
+  isso o Éteris decide o recurso ao WebView2 **uma vez por sessão, no próprio CEF**
+  (`src/Eteris.Browser/Tabs/PlatformCodecs.cs`), com
   `MediaSource.isTypeSupported('video/mp4; codecs="avc1.640028"')` **e**
-  `MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"')`, e não por página.
+  `MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"')`, e não por página; e trata o vídeo
+  sem imagem (metadados, `videoWidth` 0, motor a dizer «não» ao `avc1`) como «formato não suportado».
 - `AudioContext.decodeAudioData()` de AAC/M4A não funciona (usa diretamente os descodificadores do
   FFmpeg).
 - H.264 de 10 bits ou 4:4:4 e resoluções acima do que a GPU suporta não são reproduzidos (não há
@@ -206,6 +208,34 @@ Em `out\` (ao lado do `build.ps1`):
   os cabeçalhos);
 - `symbols\libcef.dll.pdb` — símbolos para analisar falhas (não se distribui);
 - `logs\` — registos da geração, das compilações e da distribuição.
+
+## No Éteris
+
+O `src/Eteris.Browser/Eteris.Browser.csproj` usa `out\runtime` em vez do runtime da CEF do NuGet
+sempre que lá existem `libcef.dll` e `manifest.json` (na compilação e na publicação). Leva o
+runtime inteiro, menos o `bootstrap.exe`/`bootstrapc.exe` (o arranque dos processos filhos pelo
+sandbox, ainda não usado pelo Éteris: `docs/sandbox.md`, passo D), põe `runtime\licenses\` e o
+`manifest.json` em `licenses\cef-codecs\` na instalação e o `build/licenses/collect.py` gera a
+pasta `licenses/` do repositório a partir dele. O `build/publish.ps1` recusa publicar se o
+`manifest.json` não disser `mode = platform-codecs`, se o commit da CEF não for o `cf671c0…`, se o
+`libcef.dll` não for a versão `156.0.15+gcf671c0+chromium-156.0.8078.80` ou se algum ficheiro não
+bater com o SHA256 gravado. Sem `out\runtime`, o Éteris compila e publica com o runtime do NuGet,
+como antes.
+
+Para reconstruir: correr o `build.ps1` completo (ver «Como correr») e copiar a pasta `out\runtime`
+inteira para `build/cef-codecs/out/runtime` no repositório do Éteris (se o `build.ps1` correr na
+própria pasta do repositório, o resultado já fica no sítio certo); depois
+`python build/licenses/collect.py`. O `build.ps1` e os patches estão no repositório tal como foram
+validados (sem conversão de fins de linha: o SHA256 dos patches está no `manifest.json`).
+
+### Publicação (CI)
+
+O fluxo `.github/workflows/release.yml` **não consegue compilar este motor**: são 110–150 GB de
+código e objetos, 5–10 horas de compilação oficial e o código descarregado à parte, muito acima do
+disco (~14 GB) e do tempo (6 h) dos *runners* alojados do GitHub. Sem `out\runtime`, o CI publica
+o Éteris com o runtime do NuGet (sem codecs). Como publicar com este motor (localmente com o runtime
+próprio, ou levando o runtime verificado ao CI) é uma decisão do dono: `docs/motor.md`, «Motor com
+codecs».
 
 ## Licenças
 

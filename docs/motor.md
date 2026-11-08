@@ -46,7 +46,7 @@ Linha de base e final medidas com o mesmo roteiro e o mesmo build de medição (
 duas páginas a carregar ao mesmo tempo e o processo caía). As falhas registadas durante estes testes vieram de
 outro build (`artifacts2`, trabalho paralelo, `libcef.dll` 0xc0000005), nenhuma dos builds deste ramo.
 
-## Motor com codecs (preparado, por compilar: decisão do dono)
+## Motor com codecs (compilado e integrado)
 
 O motor de vídeo (WebView2) é um recurso: troca de árvore de processos, perde funções que só existem no motor
 principal (`docs/paridade.md` #5) e o Escudo só chega lá por rede e cosmética. A causa é a CEF publicada (a que o
@@ -78,20 +78,47 @@ VP8/HEVC: sem placa gráfica o `isTypeSupported('avc1…')` diz «não» e a det
 - `build/publish.ps1`: recusa publicar se o manifesto não disser `mode = platform-codecs`, se o commit não for o
   `cf671c0…`, se o `libcef.dll` não for `156.0.15+gcf671c0+chromium-156.0.8078.80` ou se algum ficheiro não bater com o
   SHA256 do manifesto (testado: modo `chrome` e versão errada recusados).
-- `build/licenses/collect.py`: os créditos do Chromium saem do `resources.pak` da compilação própria quando existe, e o
-  índice diz «compilação própria, codecs do Windows».
-- `.gitignore`: `build/cef-codecs/out/`.
-- `CefCodecsRuntimeTests`: o alvo nunca pode ficar incondicional.
+- `build/licenses/collect.py`: com a compilação própria, `CEF-LICENSE.txt` e `Chromium-credits.html` são o
+  `LICENSE.txt` e o `CREDITS.html` dela; juntam-se `FFmpeg-LICENSE.txt` (LGPL-2.1 completa, tirada dos créditos) e
+  `FFmpeg-SOURCE.txt` (commits da CEF, do Chromium e do FFmpeg do manifesto, patches com SHA256, argumentos GN e a
+  oferta escrita por três anos); o índice diz «Chromium Embedded Framework 156.0.15 (compilação própria, codecs do
+  Windows)». Sem a compilação, sai igual ao de antes. `THIRD-PARTY-NOTICES.md`: FFmpeg na tabela e a nota «Codecs da
+  plataforma».
+- `.gitignore`: `build/cef-codecs/out/`. `.gitattributes`: o `build.ps1` e os patches sem conversão de fins de linha
+  (o SHA256 dos patches está no manifesto).
+- `CefCodecsRuntimeTests`: o alvo nunca pode ficar incondicional; o `bootstrap.exe`/`bootstrapc.exe` (sandbox, passo D,
+  ainda não usado) fica fora da saída; o `manifest.json` vai para `licenses\cef-codecs` (é a marca da compilação
+  própria na instalação).
 
-**Por fazer quando o dono autorizar:** juntar a `build/cef-codecs/` o `build.ps1` (verificações, aplicação idempotente
-do patch, `cef_create_projects`, compilação com prioridade baixa, `make_distrib --minimal`, recolha do runtime e
-`manifest.json` com modo, GN args, commits e SHA256), o `platform-codecs.patch` e o `README.md`. Um trabalho paralelo
-já os tem em rascunho fora do repositório (com um patch extra para o desmultiplexador ADTS do FFmpeg); entram
-aqui quando estiverem fechados, para não haver duas versões. Neste passo não se descarregou nem compilou nada. Ao juntar:
-acrescentar a `licenses/INDEX.md` a linha «Chromium Embedded Framework 156.0.15 (compilação própria, codecs do
-Windows)», uma nota em `THIRD-PARTY-NOTICES.md` (H.264/HEVC/AAC descodificados por componentes do Windows; o Éteris não
-inclui descodificadores desses formatos), o script e o patch publicados (fonte correspondente da LGPL-2.1 do FFmpeg) e
-a oferta escrita do código do FFmpeg `9db86ce5`.
+**Fontes (no repositório desde C2):** `build/cef-codecs/build.ps1` (passos Check, Patch, Generate, Smoke, Build,
+Package; ASCII), `README.md` (como reconstruir), `patches/platform-codecs.patch` (10 ficheiros de `media/`) e
+`patches/ffmpeg-adts-demuxer.patch` (desmultiplexador ADTS e parser AAC na configuração Chromium do FFmpeg, sem
+descodificadores). O runtime (238 ficheiros, `manifest.json`, `licenses\`) fica em `build/cef-codecs/out/runtime`, fora
+do git; a cópia de trabalho durável está em `C:\cef\eteris-cef-codecs`.
+
+**Escolha do motor no arranque (`Tabs/PlatformCodecs.cs`).** Sem `licenses\cef-codecs\manifest.json` na instalação
+(runtime do NuGet) o motor principal não tem codecs e tudo fica como antes (V1–V8). Com ele, uma sonda **uma vez por
+sessão**, na 1.ª página interna que acaba de carregar (pelo PageScript: nas páginas `eteris:` não há WatchScript nem
+site a ver a pergunta), pergunta `MediaSource.isTypeSupported` para `avc1.640028` **e** `mp4a.40.2`:
+- «sim» aos dois (ou ainda sem resposta): a lista `KnownH264Sites` deixa de abrir sites no motor de vídeo; os sites
+  lembrados passam a uma lista própria (`video_sites_codecs`: os lembrados só por faltarem os codecs não contam); os
+  avisos do WatchScript só contam se o motor respondeu «não» — cada aviso leva no fim `no` quando a página ouviu «não»
+  a H.264/AAC ou quando o próprio script, com o `isTypeSupported` original guardado no arranque, ouve «não»
+  (`VideoReport.EngineSaidNo`). Um MP4 estragado, um leitor parado ou o leitor do Vimeo num iframe já não mandam para
+  o WebView2. O DRM continua a ser só uma pergunta;
+- «não» a algum (sem descodificação por hardware, controlador básico, máquina virtual; Windows N sem o Media Feature
+  Pack): tudo como no motor sem codecs. Sinal novo para o caso medido sem GPU: o FFmpeg descarta em silêncio a faixa
+  H.264 de um MP4 progressivo e só se ouve o som — um `<video>` de MP4/MOV/M3U8 com metadados, `videoWidth` 0 e o motor
+  a dizer «não» ao `avc1` dá `format`, e a aba troca.
+
+**Como publicar (decisão do dono, por tomar).** O `.github/workflows/release.yml` **não** consegue compilar este motor:
+são 110–150 GB de fonte e objetos, 5–10 h de compilação oficial (ThinLTO + PGO) e o código descarregado à parte; os
+runners alojados do GitHub têm ~14 GB de disco e 6 h por trabalho. Sem `build/cef-codecs/out/runtime`, o CI publica com
+o runtime do NuGet (sem codecs): o `publish.ps1` só verifica quando a pasta existe. Caminhos possíveis: (1) publicar
+localmente, nesta máquina, com o runtime próprio (`build/publish.ps1` já recusa um runtime que não seja o validado);
+(2) guardar o runtime (~370 MB, 238 ficheiros) como artefacto de uma release ou de um armazenamento do dono e o CI
+descarregá-lo e verificá-lo pelo SHA256 do manifesto antes do `publish.ps1`; (3) um runner próprio com o checkout
+em `C:\cef`. O `release.yml` não foi alterado.
 
 **Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem
 ATL/MFC e é aceite pelo `vs_toolchain.py` do 156) ou VC.ATLMFC nas Build Tools 2022; árvore num caminho ASCII com menos
@@ -113,7 +140,7 @@ testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídi
 `chrome://media-internals` mostra `D3D11VideoDecoder` + Media Foundation/`MojoAudioDecoder`; com
 `--disable-accelerated-video-decode` o `avc1` dá «não» e o recurso ao WebView2 dispara;
 `--enable-features=MediaFoundationClearPlayback` só como experiência. Com o motor próprio, a lista `KnownH264Sites`
-(V2) deixa de fazer sentido e sai.
+(V2) só vale quando a sonda diz «não» (ver «Escolha do motor no arranque»).
 
 ## Diário do motor
 
@@ -138,6 +165,7 @@ testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídi
 | V3 | Troca de motor sem intervalo vazio: a página do motor principal fica à vista (pausada pelo PageScript) até o WebView2 acabar de carregar o primeiro documento (recurso aos 5 s); só então o WebView2 aparece e, 200 ms depois, o motor principal sai. O WebView2 nasce com fundo branco opaco (antes transparente: via-se o Mica). Posição: o maior vídeo que já tocava retoma no mesmo segundo (`#t=` num ficheiro direto, script de uso único pelo DevTools nos outros; não medido ao vivo). Mostrar logo no `DOMContentLoaded` foi medido e recusado (220–250 ms de branco e, às vezes, um fotograma preto). Cópia de cookies para o motor de vídeo **não** feita: depende de decisão do dono | Captura a 60 fps da página durante a troca automática (página local com `<video src=mp4>`, A/B com a linha de base): antes, 4–5 mudanças de quadro, **3–4 fotogramas escuros** (Mica, luminância 40, 50–67 ms) e **~570 ms de página em branco**; depois, **2 mudanças** (página → vídeo a tocar), **0 fotogramas escuros, 0 ms em branco** (5/5 execuções) |
 | V2b | Botões do motor de vídeo com nome acessível (`AutomationProperties.Name`: «Tocar no motor de vídeo», «Motor de vídeo: voltar ao motor principal»); a omnibox leva um site do motor de vídeo (lembrado ou da lista) logo para lá, sem o carregar também no motor principal | Ao vivo, por UI Automation: no Reddit, clique em «Tocar no motor de vídeo» → motor de vídeo a arrancar **0,2 s** depois (o Reddit responde ao WebView2 com «blocked by network security»: por isso fica só com o botão); Twitch: «Motor de vídeo» → volta ao motor principal e **2 visitas seguidas** abrem no motor principal (exclusão gravada; a lista embutida não a força); link de uma página para a Twitch VOD / Kick: motor de vídeo **~0,7 s** depois do clique (antes: ~11 s de deteção). Limite: num site excluído, o 1.º documento da aba nem sempre mostra o botão (o leitor da Twitch não deixa sinais depois do carregamento); o menu da página tem sempre «Tocar no motor de vídeo» |
 | C1 | Motor com codecs da plataforma preparado no repositório, sem compilar (decisão do dono): alvos MSBuild condicionais que trocam o runtime completo da CEF por `build/cef-codecs/out/runtime`, `publish.ps1` a recusar tudo o que não seja o modo `platform-codecs` do commit `cf671c0` (com SHA256 por ficheiro), `collect.py` com os créditos do runtime que vai de facto, `.gitignore`, testes; secção «Motor com codecs» acima | Sem a pasta: saída igual (nada copiado). Com um runtime falso: `libcef.dll`, `locales\` e avisos (`licenses\cef-codecs`) substituídos, `manifest.json` fora; `publish.ps1`: modo `chrome` → recusado; versão errada → recusada |
+| C2 | Motor com codecs integrado: fontes em `build/cef-codecs` (byte a byte as validadas), runtime próprio na saída sem o `bootstrap.exe`/`bootstrapc.exe`, escolha do motor no arranque (`Tabs/PlatformCodecs.cs`: sonda única na 1.ª página interna; com codecs, `KnownH264Sites` não abre sites no motor de vídeo e só contam os avisos de um motor que disse «não»; sinal novo para o vídeo sem imagem sem GPU), licenças da compilação própria (CREDITS.html e LICENSE.txt dela, LGPL do FFmpeg, oferta do código-fonte), `THIRD-PARTY-NOTICES.md`. `publish.ps1` confirmado com o runtime real | Saída Release: `libcef.dll` `4d5097ce…f20c` (o do manifesto; o do NuGet é `07168eac…`), 236/236 ficheiros com o SHA256 do manifesto, sem `bootstrap*.exe`; `publish.ps1` (verificação): «238 ficheiros verificados». Ao vivo (profile-codecs, sem som, Release): MP4 da w3schools, Twitch VOD e YouTube no motor principal — **0** processos `msedgewebview2` filhos do Éteris de teste (antes: MP4 e Twitch no WebView2). Licenças: `collect.py` sem o runtime gera `licenses/` igual ao anterior (0 diferenças) |
 | D1 | Fecho: suite completa (1374 testes), medição final comparada com a base e o «puro», `CHANGELOG.md` (secção por publicar, sem versão nem tag), `docs/paridade.md` (secção 1b) | Tabela «Resultado» no topo deste ficheiro |
 | M1 | Ramo fundido no main (bloco B, ciclos 31–51): o `ScriptletInjector` do motor (registos fora da navegação, por site) ganha o GPC do main registado à parte quando a sessão nasce e nunca retirado; o `PrivacyRequestHandler` junta todas as decisões do bloco B (saltos, limpeza, HTTPS primeiro, rede local, modo rigoroso, regras do utilizador, listas, CNAME, observatório, referrer, cookies de terceiros, client hints, Accept-Language) dentro do `Decide` que nunca lança, com `SafeFrame` em todas as leituras de frames. A única espera que resta no tratador é a do CNAME, só em sub-recursos (`CnameUncloak.MaxWait`); o pedido da página nunca espera (`ScriptRegistrationTests`) | — |
 | V8 | Motor de vídeo: os scripts nas páginas do WebView2 passam por um só canal (`Browser/VideoPageScript.cs`). O WebView2 não tem o processo filho .NET do CefSharp (a razão da regra do sandbox não se aplica), mas `SandboxRulesTests` recusa `CallDevToolsProtocolMethodAsync`, `ExecuteScriptAsync` e `AddScriptToExecuteOnDocumentCreatedAsync` fora dele | — (sem efeito para o utilizador) |
