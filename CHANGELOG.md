@@ -1,5 +1,17 @@
 # Alterações
 
+## Por publicar
+
+### Privacidade
+- No arranque, nada sai para a Google. Medido com um proxy local que regista todos os pedidos (`docs/paridade.md`,
+  secção 7): apesar de o tráfego de fundo do Chromium já estar desligado, cada arranque fazia 2 pedidos sem nenhuma
+  ação do utilizador — a hora a `clients2.google.com` (o «relógio de rede» do Chromium) e, a `www.google.com` e com
+  os cookies da Google, se o utilizador pode usar o «Modo IA» da pesquisa Google. Os dois estão desligados no motor
+  (`NetworkTimeServiceQuerying`, `AimEnabled`): agora são 0 pedidos nos primeiros 60 s com a nova aba e nos 60 s
+  seguintes com uma página aberta, e 0 em 8 minutos parado. Pesquisar e abrir sites da Google continua igual.
+- Promessa nova em `eteris://privacy/`: «No arranque, nada sai para a Google», lida da linha de comandos do motor
+  (fica ✘ e diz qual interruptor falta se algum sair).
+
 ## 0.2.10 — 2026-11-08
 
 Uma versão de afinação, medida contra Chrome, Brave e Firefox (`docs/paridade.md`): o **arranque ficou ~45% mais

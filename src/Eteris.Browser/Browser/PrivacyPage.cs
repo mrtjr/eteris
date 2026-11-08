@@ -86,6 +86,7 @@ public static class PrivacyPage
         // WebRTC: a política em vigor no perfil, fixada na linha de comandos do motor, e sem o mDNS que abria portas.
         var webRtcFixed = EngineHardening.Switch(s.EngineArgs, EngineHardening.WebRtcPolicySwitch).SequenceEqual([EngineHardening.WebRtcPolicy]);
         var webRtcQuiet = EngineHardening.NoListeningSockets.All(f => disabled.Contains(f.Feature));
+        var googleStillOn = EngineHardening.NoGoogleAtStartup.Where(f => !disabled.Contains(f.Feature)).Select(f => f.Feature).ToList();
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
 
         return
@@ -106,6 +107,11 @@ public static class PrivacyPage
                 quiet ? "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium."
                     : "O motor arrancou sem os interruptores que cortam o tráfego de fundo.",
                 quiet),
+            new("no-google", "No arranque, nada sai para a Google",
+                googleStillOn.Count == 0
+                    ? "Nem o relógio de rede do Chromium (clients2.google.com) nem a verificação do «Modo IA» da pesquisa Google (www.google.com, com os cookies da Google): a Google só recebe um pedido quando pesquisa nela ou abre um site dela."
+                    : "Ainda ligados no motor: " + string.Join(", ", googleStillOn) + ".",
+                googleStillOn.Count == 0),
             new("cookies", "Cookies de terceiros bloqueados",
                 s.ThirdPartyCookiesBlocked
                     ? "Os anunciantes embutidos nas páginas não guardam, não leem e não recebem cookies — nem no JavaScript, nem nos pedidos à rede."
