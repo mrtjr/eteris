@@ -1,6 +1,12 @@
 # Alterações
 
-## Por publicar
+## 0.2.10 — 2026-11-08
+
+Uma versão de afinação, medida contra Chrome, Brave e Firefox (`docs/paridade.md`): o **arranque ficou ~45% mais
+rápido** (a 1.ª página em ~0,6 s, eram ~1,1 s), o Éteris gasta **~50 MB a menos de memória**, a **impressão digital
+ficou ao nível do Chrome** (dispositivos escondidos sem autorização, a língua do Windows, sem «Não rastrear», dicas do
+cliente reduzidas e iguais na página e nos workers) e entram as correções da verificação ao vivo e da noite. O
+**isolamento das páginas (sandbox)** está pronto mas ainda desligado: liga na 0.2.11 (`docs/sandbox.md`).
 
 ### Arranque e memória (medidos contra Chrome, Brave e Firefox; `docs/paridade.md`, secção 1c)
 - A 1.ª página aparece em ~0,6 s num arranque normal (eram ~1,1 s na mesma máquina e sessão; o Firefox

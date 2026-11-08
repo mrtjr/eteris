@@ -19,15 +19,25 @@ public class WhatsNewTests
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
 
-    // 0.2.9: abre com o vídeo no motor principal (codecs do Windows); o destaque antigo que mandava o H.264 para o
-    // motor de vídeo saiu, e os destaques da versão são curtos.
+    // 0.2.10: abre com o arranque e a memória, seguidos da impressão digital (5 destaques); a seguir vêm os 8 da 0.2.9,
+    // a abrir com o vídeo no motor principal (codecs do Windows). O destaque antigo que mandava o H.264 para o motor
+    // de vídeo saiu, e os destaques das duas versões são curtos.
     [Fact]
-    public void Highlights_LeadWithTheEngineVideo_AndAreShort()
+    public void Highlights_LeadWithStartupThenTheEngineVideo_AndAreShort()
     {
-        Assert.Equal("Vídeo no motor do Éteris", WhatsNewPage.Highlights[0].Title);
+        Assert.Equal("Arranque quase duas vezes mais rápido", WhatsNewPage.Highlights[0].Title);
+        Assert.Contains("0,6 s", WhatsNewPage.Highlights[0].Detail);
+        Assert.Equal("Menos memória", WhatsNewPage.Highlights[1].Title);
+        Assert.Contains(WhatsNewPage.Highlights.Take(5), h => h.Title == "Impressão digital como a do Chrome");
+        Assert.Equal("Vídeo no motor do Éteris", WhatsNewPage.Highlights[5].Title);
         Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Title == "Vídeo em todos os sites");
-        Assert.All(WhatsNewPage.Highlights.Take(8), h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.All(WhatsNewPage.Highlights.Take(13), h => Assert.True(h.Detail.Length <= 180, h.Title));
     }
+
+    // O sandbox está pronto mas desligado na 0.2.10: as Novidades não o anunciam antes de ligar.
+    [Fact]
+    public void Highlights_DoNotAnnounceTheSandboxBeforeItIsOn()
+        => Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Title.Contains("sandbox", StringComparison.OrdinalIgnoreCase) || h.Detail.Contains("sandbox", StringComparison.OrdinalIgnoreCase));
 
     // Os fundos são imagens geradas por IA (Browser/Wallpapers/README.md): as novidades não lhes chamam fotografias,
     // para dizer o mesmo que o crédito no rodapé da nova aba.
