@@ -2,7 +2,7 @@
   Feed NuGet local com o CefSharp do Eteris (156.0.150-eteris.N): parte dos pacotes OFICIAIS 156.0.150 (cache global
   do NuGet) e troca so o que o patch muda, para win-x64:
     CefSharp.Common.NETCore: runtimes/win-x64/lib/net6.0/CefSharp.Core.dll, CefSharp.Core.Runtime.dll (+ .pdb) e
-                             ref/net6.0/CefSharp.Core.dll, CefSharp.Core.Runtime.dll (montagens de referencia);
+                             as mesmas em ref/net6.0 (referencia de compilacao);
     CefSharp.Wpf.NETCore:    so a versao e a dependencia [156.0.150-eteris.N] do Common (binarios oficiais).
   x86 e arm64 ficam os oficiais (sem WindowsSandboxInfo): o Eteris so publica win-x64.
   Remove a assinatura do repositorio (.signature.p7s), que deixa de ser valida.
@@ -21,7 +21,9 @@ $built = @{
   'runtimes/win-x64/lib/net6.0/CefSharp.Core.Runtime.dll' = 'CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.dll'
   'runtimes/win-x64/lib/net6.0/CefSharp.Core.Runtime.pdb' = 'CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.pdb'
   'ref/net6.0/CefSharp.Core.dll'                          = 'CefSharp.Core\bin.netcore\x64\Release\net8.0\CefSharp.Core.dll'
-  'ref/net6.0/CefSharp.Core.Runtime.dll'                  = 'CefSharp.Core.Runtime.RefAssembly\bin.netcore\x64\Release\net8.0\CefSharp.Core.Runtime.dll'
+  # Referencia = a propria montagem x64: compilada sem nome forte (PublicKeyToken=null), e e assim que o
+  # CefSharp.Core a referencia; a montagem de referencia do CefSharp (RefAssembly) sai assinada e nao bate.
+  'ref/net6.0/CefSharp.Core.Runtime.dll'                  = 'CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.dll'
 }
 
 function Repack([string]$Id, [hashtable]$Replace, [hashtable]$DepVersions) {

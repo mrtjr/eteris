@@ -37,7 +37,7 @@ processos correm fechados (sem acesso a ficheiros nem ao sistema).
    `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já faziam — ver «Passo A — resultado» e «Regras para
    o código».
 
-## Passo D — resultado (2026-11-08, ramo `sandbox`): D0–D2 feitos
+## Passo D — resultado (2026-11-08, ramo `sandbox`): D0–D4 feitos
 
 **D0 — o motor próprio isola as páginas com o bootstrap (sem .NET).** `cefsimple_dll` compilado na árvore do motor
 (`autoninja -n` antes: 220 passos, só o `libcef_dll_wrapper_dll` e o `cefsimple.dll`; o `libcef.dll` ficou igual,
@@ -64,6 +64,29 @@ HEVC, VP9, AV1, Opus e MP3.
 próprio motor, `make_distrib --minimal`): `dumpbin /exports` → `EterisSandboxInfo`, `RunWinMain`; `/imports` →
 só `KERNEL32.dll` direto, `libcef.dll` e `SHELL32.dll` em carga diferida; CRT estática (`/MT`, sem `VCRUNTIME140`).
 Testes: `SandboxBootstrapSourceTests` (esquema `eteris://` igual nos dois lados, exportações, patch).
+
+**D3 — o Éteris .NET arranca pelo bootstrap (ainda sem sandbox).** Cópia de `publish` com `EterisSB.exe` (o
+`bootstrap.exe` do runtime) + `EterisSB.dll` (a DLL cliente compilada com `ETERIS_APP_DLL=Eteris.Browser.dll`;
+`build/sandbox/assemble-bootstrap.ps1` junta-os e verifica o SHA256 do `libcef.dll` e a ausência do recurso
+`CEF_INSTALLER_CONFIG`). O processo principal é o `EterisSB.exe` com o .NET dentro (hostfxr): abriu a Wikipédia, e um
+2.º arranque entregou `--new-tab` (abre `eteris://newtab`) e um link à instância aberta e saiu em 116–195 ms com código
+0. O WPF arrancou, portanto a thread é STA. Janela com título em 827–989 ms, contra 869–919 ms pelo apphost (mesmo
+perfil, 2 arranques cada): sem diferença mensurável.
+
+**D4 — sandbox ligado no Éteris.** Publicação com o CefSharp do feed local (`-p:EterisCefSharpFeed=<feed>
+-p:EterisCefSharpN=2`, que define `ETERIS_CEFSHARP_SANDBOX`), `Infrastructure/SandboxInfo.cs` (lê `EterisSandboxInfo`
+da DLL já carregada) e `CefConfigurator` (`WindowsSandboxInfo` + `performDependencyCheck: false`). Os filhos passaram a
+ser o próprio `EterisSB.exe` (nenhum `CefSharp.BrowserSubprocess.exe`). `chrome://sandbox` lido por CDP
+(`ETERIS_TEST_DEVTOOLS_PORT`): **3 renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Service
+Lockdown/Untrusted; só o Network Service «Not Sandboxed»** (como no motor puro e no Chrome 156 sem experiência; D9).
+`sandbox-check.ps1`: nenhum filho com `--no-sandbox`; Audio Service Low. Com o sandbox: Wikipédia; MP4 H.264
+1280×720 (127 quadros, 0 perdidos), `.m4a` e `.aac` tocam; `eteris://newtab` (o esquema registado pela DLL nativa
+nos filhos); janela privada (`--private`, «Nova aba privada»); transferência de um ficheiro (23 912 bytes, igual ao
+original); fecho limpo (WM_CLOSE, sem forçar).
+
+Nota de compilação: a montagem de referência do CefSharp (`RefAssembly`) sai assinada e o `CefSharp.Core` compilado
+referencia o `CefSharp.Core.Runtime` sem nome forte; o pacote local usa a própria montagem x64 como referência (o
+`eteris.1` falhava a compilar o Éteris; `eteris.2` corrige).
 
 ## Passo A — resultado (2026-11-07): feito
 

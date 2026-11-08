@@ -21,7 +21,7 @@ Requisitos: Build Tools do Visual Studio 2022 com `Microsoft.VisualStudio.Compon
 git clone --depth 1 --branch v156.0.150 https://github.com/cefsharp/CefSharp.git <pasta>
 powershell -File prepare-source.ps1 -Source <pasta>     # patch, SDK 9, net8.0, packages\ da cache do NuGet
 build-cefsharp.cmd <pasta>                              # Core.Runtime, Core e montagem de referência (x64)
-powershell -File pack-local.ps1 -Source <pasta> -Feed <feed> -N <n>
+powershell -File pack-local.ps1 -Source <pasta> -Feed <feed> -N <n>   # verificado com N=2
 ```
 
 `pack-local.ps1` produz `CefSharp.Common.NETCore` e `CefSharp.Wpf.NETCore` **156.0.150-eteris.N** a partir dos

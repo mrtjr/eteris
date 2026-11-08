@@ -16,7 +16,4 @@ msbuild /nologo /nodeReuse:false /verbosity:minimal /restore /t:build /p:Platfor
 if errorlevel 1 exit /b 2
 msbuild /nologo /nodeReuse:false /verbosity:minimal /restore /t:build /p:Platform=x64 /p:Configuration=Release "/p:SolutionDir=%CD%\\" "/p:LinkKeyFile=" CefSharp.Core\CefSharp.Core.netcore.csproj
 if errorlevel 1 exit /b 3
-rem Montagem de referencia (ref/ do pacote NuGet), com a propriedade WindowsSandboxInfo.
-msbuild /nologo /nodeReuse:false /verbosity:minimal /restore /t:build /p:Platform=x64 /p:Configuration=Release "/p:SolutionDir=%CD%\\" "/p:LinkKeyFile=" CefSharp.Core.Runtime.RefAssembly\CefSharp.Core.Runtime.RefAssembly.netcore.csproj
-if errorlevel 1 exit /b 4
-echo OK: CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.dll, CefSharp.Core\bin.netcore\x64\Release\net8.0\CefSharp.Core.dll e a montagem de referencia
+echo OK: CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.dll e CefSharp.Core\bin.netcore\x64\Release\net8.0\CefSharp.Core.dll

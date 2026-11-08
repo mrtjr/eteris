@@ -9,7 +9,8 @@ public static class CefConfigurator
     // Porta 9 («discard»): nada escuta em 127.0.0.1, por isso o updater do Chrome falha logo, sem sair do PC.
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
-    public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false)
+    public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
+                                    int? devToolsPort = null)
     {
         var settings = new CefSettings
         {
@@ -17,6 +18,13 @@ public static class CefConfigurator
             Locale = "pt-PT",
             LogSeverity = LogSeverity.Disable,
         };
+        // Sandbox dos processos das páginas (docs/sandbox.md, passo D): só com o ponteiro do bootstrap da CEF e o CefSharp
+        // com o patch v2 (build/cefsharp; ETERIS_CEFSHARP_SANDBOX). Os filhos passam a ser o próprio exe (o bootstrap).
+#if ETERIS_CEFSHARP_SANDBOX
+        if (sandboxInfo != 0) settings.WindowsSandboxInfo = sandboxInfo;
+#endif
+        // Só nos testes ao vivo (TestSwitches.DevToolsPort): DevTools do motor em 127.0.0.1.
+        if (devToolsPort is { } port) settings.RemoteDebuggingPort = port;
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
         // Voltar/Avançar instantâneos (back/forward cache), como no Chrome: o CefSharp.Wpf desliga-o por omissão por
         // causa do modo fora da tela (OSR), que o Éteris não usa — a página vive numa janela própria (HwndHost).
@@ -73,6 +81,19 @@ public static class CefConfigurator
             System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty)
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Shields.PrivacyPreferences.SecureDnsTemplate = Shields.PrivacyPreferences.StartedWithSecureDns is null ? null : Shields.SecureDns.TemplateFor(dns);
-        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute), performDependencyCheck: true, browserProcessHandler: null);
+        var sandbox = SandboxEnabled ? SandboxInfo.Pointer : 0;
+        // Com sandbox não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
+        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort),
+            performDependencyCheck: sandbox == 0, browserProcessHandler: null);
     }
+
+    // O sandbox só liga com o CefSharp do Éteris (patch v2); com o oficial o ponteiro é ignorado.
+    public static bool SandboxSupported =>
+#if ETERIS_CEFSHARP_SANDBOX
+        true;
+#else
+        false;
+#endif
+
+    public static bool SandboxEnabled => SandboxSupported && SandboxInfo.Pointer != 0;
 }
