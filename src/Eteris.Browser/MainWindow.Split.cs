@@ -197,6 +197,7 @@ public partial class MainWindow
             columns.Add(new ColumnDefinition { Width = new GridLength(1 - _splitRatio, GridUnitType.Star), MinWidth = 220 });
         }
 
+        var pages = new List<(FrameworkElement, bool)>();
         foreach (var (tab, browser) in _browsers.Select(p => (p.Key, (FrameworkElement)p.Value))
                      .Concat(_videoViews.Select(p => (p.Key, (FrameworkElement)p.Value))))
         {
@@ -204,10 +205,12 @@ public partial class MainWindow
             var visible = pane is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));
             // A meio da troca para o motor de vídeo, só a página do motor principal se vê (até o WebView2 pintar).
             if (browser is Microsoft.Web.WebView2.Wpf.WebView2 && _videoSwitching.Contains(tab)) visible = false;
-            browser.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
-            if (browser is ChromiumWebBrowser cef && cef.IsBrowserInitialized) SetPageVisible(tab, cef, visible);
+            pages.Add((browser, visible));
             PlaceInHost(browser, pane);
         }
+        // Abas fechadas que estavam à vista: saem como uma aba que se esconde (por cima, até a vizinha aparecer).
+        pages.AddRange(_retiringPages.Select(page => ((FrameworkElement)page, false)));
+        ShowPages(pages);
 
         // Depois de a camada de sobreposição existir, a barra de carregamento vive lá (linha da página, ver
         // SetUpOverlayLayer): pô-la na linha 0 da grelha da camada levava-a para o topo da barra de título.

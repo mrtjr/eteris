@@ -125,11 +125,13 @@ public partial class MainWindow : Window
         var mainRequestsAtCommit = 0;
         string? committedUrl = null;
         _scriptlets[tab] = injector;
-        var browser = new ChromiumWebBrowser(tab.Address)
+        var browser = new PageBrowser(tab.Address)
         {
             // A página é desenhada pelo próprio Chromium numa janela filha (como no Chrome, Firefox e Brave), sem a
             // cópia de cada quadro para o WPF: ~4× menos processador. Ver docs/paridade.md.
             Visibility = Visibility.Hidden,
+            // A janela do CEF nasce já com o tamanho da área das páginas (uma aba nova não tem ainda tamanho no WPF).
+            BirthSize = PageAreaPixels,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
             KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),
@@ -294,9 +296,16 @@ public partial class MainWindow : Window
             }
             mainRequestsAtCommit = requests;
         };
+        var firstLoad = new TaskCompletionSource();
+        _firstLoads.Add(browser, firstLoad);
+        browser.LoadError += (_, e) =>
+        {
+            if (e.Frame.IsMain) firstLoad.TrySetResult();
+        };
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            firstLoad.TrySetResult();
             var url = e.Url;
             // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
             if (!e.Browser.IsLoading) injector.Tidy(url);
@@ -341,6 +350,10 @@ public partial class MainWindow : Window
         BrowserHost.Children.Add(browser);
         WatchPaneFocus(tab, browser);
         if (IsSplit) LayoutBrowsers();
+        // No fim da criação (OnAfterBrowserCreated, na thread do CEF) o CefSharp redimensiona sempre a janela do CEF pelo
+        // ActualWidth/ActualHeight: antes da 1.ª disposição do WPF isso dava 0×0 e desfazia o BirthSize (nascia no tamanho
+        // final, ia a 0×0 e voltava). A criação no CEF é assíncrona: disposta já, a conta dá o mesmo tamanho (PixelSize).
+        if (!browser.IsArrangeValid) browser.UpdateLayout();
     }
 
     private static bool SameHost(string a, string b) => BrowserTab.SameHost(a, b);
@@ -385,6 +398,7 @@ public partial class MainWindow : Window
         if (e.PropertyName != nameof(TabsViewModel.Active)) return;
         OnActiveTabChanging();
         OnSplitActiveChanged();
+        MoveFocusOffHiddenPage();
         CloseGlanceOnTabChange();
         // O cartão do cadeado mostrava o site da aba anterior por cima da nova.
         SiteInfoPopup.IsOpen = false;
@@ -407,6 +421,8 @@ public partial class MainWindow : Window
             or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.CustomTitle)
             or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
+        // Uma aba quente que começa a tocar som arrefece já (Tabs/WarmTabs.cs).
+        if (e.PropertyName is nameof(BrowserTab.IsAudible) or nameof(BrowserTab.Media) && _warmPages.Count > 0) ReviewWarmPages();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address))
         {
@@ -525,10 +541,13 @@ public partial class MainWindow : Window
         MaximizeButton.Content = MaximizeButton2.Content = maximized ? "" : "";
         MaximizeButton.ToolTip = MaximizeButton2.ToolTip = maximized ? "Restaurar" : "Maximizar";
         CloseSuggestions();
+        // Janela minimizada: as abas quentes arrefecem (nada se vê).
+        ReviewWarmPages();
     }
 
     private void DisposeBrowsers()
     {
+        ForgetWarmPages();
         foreach (var injector in _scriptlets.Values) injector.Dispose();
         _scriptlets.Clear();
         foreach (var browser in _browsers.Values)

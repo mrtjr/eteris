@@ -56,7 +56,9 @@ resultaram `WasHidden`, esconder a janela do CEF ou a do Chromium, o rastreio de
 página (`Page.setWebLifecycleState`) parava o custo, mas a página voltava «hidden» e sem desenhar. O que resulta:
 **minimizar a janela do Chromium** da aba escondida (`MainWindow.PageVisibility.cs`) — a página passa a «hidden»,
 deixa de desenhar e os temporizadores abrandam mas continuam (como nas abas de fundo do Chrome); ao restaurar,
-volta «visible» e é redimensionada para a área da aba.
+volta «visible» e é redimensionada para a área da aba. Exceção (T6 em `docs/motor.md`): as 1–2 páginas
+deixadas há menos tempo ficam «quentes» (tapadas, sem minimizar) durante 8 s, para voltar a elas sem esperar; uma
+página animada quente gasta como à vista (~9–11 % de 1 núcleo) só nesses 8 s, e nunca com vídeo a tocar ou som.
 
 Feito (no `main`, por publicar):
 1. Avisos, paleta, pesquisa na página, notas, permissões, código QR, minibarra, bolha do link, folha de atalhos e

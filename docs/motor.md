@@ -142,6 +142,173 @@ testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídi
 `--enable-features=MediaFoundationClearPlayback` só como experiência. Com o motor próprio, a lista `KnownH264Sites`
 (V2) só vale quando a sonda diz «não» (ver «Escolha do motor no arranque»).
 
+## Troca de abas sem piscar (T1, T2)
+
+Queixa do dono depois do P1/P2: «a tela ainda pisca um pouco, mas está piscando mesmo quando troca de aba ou abre uma
+nova aba». **Medição**: captura do ecrã a 60 fps da janela inteira (`scratchpad/abas/abasrun.ps1` + `swap.py`), 10
+repetições por caso, páginas locais (clara, outra clara, escura `#0d1117`) servidas em `127.0.0.1` e a Wikipédia.
+Fotograma **errado** = a área da página está longe do estado ANTES da ação e do estado DEPOIS (mais de 3 % dos píxeis
+com |ΔL| > 30 em relação a ambos): branco, Mica, fundo vazio ou página por desenhar. A moldura (barras) foi medida
+à parte: 0 fotogramas errados em todos os casos, antes e depois.
+
+**Causas, provadas por A/B** (build de diagnóstico com interruptores; LD = clara↔escura, WW = Wikipédia↔Wikipédia,
+TL = Ctrl+T a partir da clara; fotogramas errados em 10 capturas):
+
+1. **Esconder antes de a nova aba ter desenhado.** A janela da aba que sai escondia-se no mesmo instante em que a da
+   que entra aparecia. Mas a janela de uma aba escondida está minimizada (#1b) e o CefSharp encolhe-a para 0×0 ao
+   esconder (`OnIsVisibleChanged` → `ResizeBrowser(0, 0)`); ao reaparecer, o Chromium tem de voltar a dispor e
+   rasterizar a página e, até apresentar, a janela mostra um fotograma vazio: o branco por baixo (1 fotograma), depois o
+   Mica (a cadeia de apresentação redimensionada ainda vazia, 1–2), e numa página pesada o branco da página por
+   rasterizar (Wikipédia: até 20 fotogramas, ~340 ms). Nenhum dos sintomas desaparece mexendo só numa das peças:
+   não minimizar (LD 14 → 9, WW 204 → 195), manter o tamanho da janela escondida (14 → 14, 204 → 173), mostrar antes de
+   esconder sem esperar (14 → 13, 204 → 206). Com **dupla memória** — a nova aparece POR BAIXO da antiga, e a antiga só
+   se esconde depois de um `requestAnimationFrame` duplo da nova (+34 ms para o DWM) — LD 14 → **0**, WW 204 → 11
+   (2/10; com limite de 300 ms ainda 48, por isso 1 s).
+2. **Aba nova mostrada antes do 1.º documento.** Uma aba acabada de criar só tem, durante ~100–250 ms, o documento
+   vazio inicial (branco) e a seguir a nova aba a meio de se preencher. Esperar pelo `FrameLoadEnd` do 1.º documento
+   antes do rAF duplo: TL 51 → 11 → 3 com a margem de 34 ms (os restantes eram o último fotograma antigo ainda no ecrã).
+   Pintar o fundo do Chromium da cor da página interna (`BrowserSettings.BackgroundColor`) **não** muda nada com a
+   dupla memória (TL 11 → 11, WW 11 → 12): não entra.
+3. **Fechar a aba ativa:** a página fechada era destruída antes de a vizinha estar ativa (o `TabsViewModel` tira a
+   aba da lista primeiro, a ativa passa por `null`). Agora fica, calada, por cima, até a vizinha apresentar (recurso:
+   2 s). XL 20 → 1 (10 capturas).
+4. **Teclado perdido (não é piscar, mas apareceu na medição):** depois de trocar de aba, o foco do Windows ficava na
+   janela minimizada da aba anterior: o 3.º Ctrl+Tab seguido, e qualquer tecla, iam para uma página invisível
+   (2 trocas efetivas em 8 Ctrl+Tab). A página da aba que entra passa a receber o foco, como no Chrome: **8 em 8**.
+
+Avaliado e recusado: `WS_CLIPSIBLINGS` nas janelas das páginas (20 repetições × 4 casos: 4 fotogramas errados com e 4
+sem). CPU de uma aba animada escondida (#1b, 10 s, todos os processos da instância): 4,8 % de 1 núcleo antes → 2,2 %
+depois (à vista: 10,9 → 9,7 %); a aba que sai continua ativa no máximo até a nova apresentar (≤ 1 s, ~150 ms típico).
+
+| Caso (10 capturas) | Tema escuro + Mica: antes → depois | Claro + Mica | Escuro sem Mica | Latência mediana até ao estado final |
+|---|---|---|---|---|
+| Ctrl+Tab clara ↔ clara | 15 (10/10) → **0** | — | — | 108 → 136 ms |
+| Ctrl+Tab clara ↔ escura | 14 (9/10) → **0** | 49 → **0** | 10 → **0** | 109 → 133 ms |
+| Clique na aba clara ↔ escura | 14 (7/10) → **0** | — | — | 289 → 305 ms |
+| Ctrl+Tab clara ↔ nova aba (eteris://) | 44 (10/10) → **0** | 32 → **0** | 28 → **0** | 125 → 132 ms |
+| Ctrl+Tab com a aba escondida há > 10 s | 14 (10/10) → 1 (1/10, Mica) | — | — | 109 → 133 ms |
+| Ctrl+T a partir da clara | 96 (10/10) → **0** | 71 → **0** | 68 → **0** | 245 → 205 ms |
+| Ctrl+T a partir da escura | 99 (10/10) → **0** | 71 → **0** | 71 → **0** | 237 → 207 ms |
+| Botão + | 97 (10/10) → **0** | — | — | 417 → 369 ms |
+| Fechar a aba ativa (a vizinha aparece) | 24 (10/10) → 1 (1/10) | 20 → **0** | 20 → 1 | 121 → 135 ms |
+| Ctrl+Tab Wikipédia ↔ Wikipédia | 204 (10/10; até ~340 ms de branco) → 4 (1/10) | — | — | 379 → 270 ms |
+
+**Resíduo:** 1 fotograma isolado (17 ms) em ~1 de 40 trocas, sem padrão de caso (Mica ou branco, a ~70–90 ms da
+ação, antes de a antiga sair); e a primeira vez que se mostra uma aba pesada aberta em segundo plano (nunca desenhada
+ao tamanho real), o rAF duplo resolve antes de a rasterização acabar e vê-se a página em branco por desenhar até
+~150 ms (WW: 1 captura em 10, a 1.ª). A nova aba preenche-se a si própria (saudação, papel de parede): isso é a
+própria página, não o motor.
+
+## Troca de abas: o resto do estudo do Chromium (T3–T6)
+
+Seguimento do estudo `C:\cef\notas\brave-comparacao\chromium-abas.md` (§5). A recomendação 1 (segurar a página que
+sai por cima até a nova apresentar) é o T1. A recomendação 6 (não mexer em `BrowserSettings.background_color`)
+mantém-se: nada abaixo lhe toca. **Tudo isto foi escrito sem medição ao vivo (o dono estava a usar o PC):** só
+compilação e testes unitários; os casos a medir estão no fim da secção.
+
+**T3 — Mica por baixo da página (rec. 4).** O estudo propunha duas vias: limitar o vidro (`GlassFrameThickness`) às
+barras, ou impedir as janelas da página de pintarem por GDI por cima da cor do `PageBackdrop`. Escolhida a segunda,
+porque a primeira:
+- obrigava a recalcular o vidro a cada mudança da moldura (abas laterais, painel lateral, barras automáticas que
+  deslizam, ecrã inteiro, ecrã dividido), e cada mudança é um `DwmExtendFrameIntoClientArea` (risco de piscar a
+  moldura, que hoje tem 0 fotogramas errados);
+- mudava o aspeto do que o WPF desenha translúcido dentro da área da página (o separador do ecrã dividido ficaria
+  sobre preto, não sobre o Mica);
+- não tirava o fotograma errado, só lhe mudava a cor: fora do vidro, o que a static pinta por GDI aparece com a cor
+  do pincel de controlo do sistema (cinzento claro), pior do que o Mica no tema escuro.
+
+A única janela que pinta por GDI na área da página é a «static» que o CefSharp cria para alojar a do CEF: a
+`CefBrowserWindow` não tem pincel nem apaga o fundo, e o `FillRect` do `Chrome_WidgetWin` só cobre o que fica fora
+da janela de apresentação do GPU (que o cobre inteiro). A static vê-se sempre que a janela do CEF ainda não a cobre:
+aba nova antes de o CEF criar a sua janela e aba que volta de escondida (o CefSharp encolhe a do CEF a 0×0 ao
+esconder). Agora as abas usam `Browser/PageBrowser.cs` (o `ChromiumWebBrowser` com a static sem desenho:
+`WM_ERASEBKGND` responde «apagado» e `WM_PAINT` só valida). Na área de vidro o GDI escrevia alfa 0 e via-se o Mica;
+sem pintura fica o que o WPF desenhou por baixo (P2), ou seja, a cor de fundo da página, com Mica e sem Mica.
+
+**T4 — Aba nova por baixo e já no tamanho final (rec. 5).** A espera pela 1.ª pintura já vinha do T1 (a página à
+vista fica por cima até a aba nova acabar o 1.º documento e apresentar: rAF duplo + 34 ms). O teto continua a ser
+1 s e não os ~120 ms do estudo: com 300 ms a Wikipédia ainda dava 48 fotogramas errados em 10 capturas (T1); os
+~120 ms são o tempo que se quer ver medido, não o limite. Faltavam duas coisas, agora em `Browser/PageBrowser.cs`
+(chamadas pelo CefSharp dentro de `BuildWindowCore`, antes de pedir a janela ao CEF):
+- a static nasce **por baixo** das outras páginas (uma janela nova fica por cima das irmãs e taparia a página à
+  vista assim que aparecesse; até agora isso dependia de o WPF já ter criado a static quando a troca corria);
+- a janela do CEF nasce **com o tamanho da área das páginas** (`PageWindow.BirthSize`): o CefSharp usava o tamanho
+  da static nesse momento, 0×0 numa aba acabada de criar, e o Chromium começava a página a 0×0 e voltava a dispô-la
+  logo a seguir. O tamanho em píxeis segue a mesma conta do CefSharp (`PageWindow.PixelSize`), para que o
+  redimensionamento que ele faz no fim da criação não mude nada. Esse redimensionamento (`OnAfterBrowserCreated`, na
+  thread do CEF) usa sempre o `ActualWidth`/`ActualHeight` do WPF: antes da 1.ª disposição dava 0×0 e desfazia o
+  `BirthSize`, por isso a aba é disposta logo a seguir a ser criada (`UpdateLayout`; a criação no CEF é assíncrona).
+
+Não feito: um browser «sobressalente» já com a nova aba carregada (o estudo dá-o como opcional). Custa um processo de
+página sempre vivo; fica para decisão do dono depois de medir o T4.
+
+**T5 — Aba fria restaurada num só passo (rec. 3).** Uma aba escondida há mais do que o período de graça (T6) está
+minimizada e a sua janela do CEF, em geral, encolhida a 0×0 (o CefSharp encolhe-a ao esconder, mas também lhe devolve
+o tamanho inteiro, escondida, em cada `SizeChanged` e ao restaurar a janela principal; o tamanho de partida não é
+fiável, e o `SetWindowPlacement` não depende dele). Ao voltar, a janela do Chromium era restaurada com `ShowWindow`
+(que repõe o último tamanho «normal», às vezes o 0×0) e corrigida a seguir com `SetWindowPos`: duas mudanças de
+tamanho com a página ainda «hidden», e cada uma avança a superfície do Chromium (página em branco por desenho,
+estudo §2.5). Agora, ainda com a static escondida e por baixo da página à vista, a janela do Chromium é restaurada
+com `SetWindowPlacement` (`rcNormalPosition` = área da página, `SW_SHOWNOACTIVATE`) já no tamanho que o CefSharp lhe
+vai dar (`PageWindow.PixelSize`, depois de dispor a grelha se o ecrã dividido acabou de mudar): uma só mudança, e o
+redimensionamento do CefSharp ao ficar visível não muda nada. Com o tamanho por saber, fica o caminho antigo
+(`PageWindow.RestoreStep`). Ao esconder, a ordem inverte-se: minimizar primeiro e só depois esconder no WPF (que faz o
+CefSharp encolher a janela do CEF a 0×0) — antes, o Chromium ainda dispunha e apresentava a página a 0×0 enquanto
+«visible». Não evita a nova rasterização (o Chromium larga os tiles de uma página «hidden»), só tira a mudança de
+tamanho a mais e encurta o tempo até ao 1.º fotograma.
+
+**T6 — Abas «quentes» (rec. 2).** A página que sai deixa de ser minimizada logo: fica no tamanho inteiro, não
+minimizada, tapada pela da aba ativa, durante um período de graça (`WarmTabs.Grace` = 8 s; no máximo
+`WarmTabs.Limit` = 2 páginas, as deixadas há menos tempo). Voltar a uma delas é só subir a sua janela: o DWM já tem
+o conteúdo dela e o Chromium nunca a deu por escondida, por isso não há disposição, rasterização nem espera (é o
+«saved frame» do Chrome, caso A do estudo §1.3, que o CEF em janela não consegue ter com a página «hidden»). A troca
+de abas trata-a como uma página que já está à vista (`PageSwap.Plan`: `Keep` enquanto tapada, `Show` sem segurar a
+que sai quando volta). Passada a graça, a página é minimizada como antes (tapada, não se vê).
+
+Quem está por cima de quem passa a ser explícito (`StackPages`, `PageSwap.StackOrder`): à vista → a sair (por cima da
+que entra até esta apresentar) → a entrar fria → quentes (a mais recente primeiro) → a que saiu e vai ser escondida
+agora (`Layer.Cooling`: sem ela empatava com a que entra na camada «à vista» e podia ficar por cima enquanto se
+esconde), num só `DeferWindowPos` e só se a ordem atual for outra. As quentes que deixam de poder ficar são arrefecidas
+antes de mexer na ordem (ainda tapadas), e todas arrefecem quando nenhuma outra página fica à vista por cima. Antes bastava pôr a que entra em `HWND_BOTTOM`; com páginas quentes visíveis por baixo, a que
+entra ficaria tapada por elas.
+
+Nunca fica quente (`MainWindow.CanStayWarm` + `WarmTabs.Keep`): no ecrã dividido (as metades não tapam a área toda),
+com a janela minimizada ou escondida, sem uma página à vista por cima, numa página que entrou fria e ainda não
+apresentou um fotograma desde essa chegada (`PagePresentation`: Ctrl+Tab de ida e volta antes de a página apresentar,
+ou Ctrl+T seguido de duas trocas; voltaria sem espera, com a superfície em branco ou antiga), numa aba com som
+(`IsAudible` ou multimédia a tocar no documento principal, lido a cada 2 s por `MediaInfo.Script`; arrefece quando o
+vê), numa aba a passar para o motor de vídeo, numa aba fechada a sair, e numa página com `<video>` a tocar
+(verificação ao sair, `WarmTabs.PlayingVideoScript`: documento, raízes de sombra abertas e iframes do mesmo site, até
+250 ms; sem resposta conta como «a tocar»). Também arrefece, por cautela, uma página com um iframe de outro site com
+ar de leitor (pelo menos 200×150 CSS px, com `autoplay` ou ecrã inteiro permitidos: YouTube, Vimeo, Spotify ou
+SoundCloud embutidos), mesmo parado. Limite conhecido: o `<video>` e o som de um iframe de outro site não se deixam
+ver (o `IsAudible` só lê o documento principal), nem o Web Audio (`AudioContext`, jogos); uma página com um leitor de
+outro site sem esse aspeto, ou com som só por Web Audio, pode ficar quente até 8 s a descodificar e desenhar. Outro:
+se a página que entra fria não apresentar dentro do teto de 1 s do T1, por baixo dela pode ver-se uma página quente em
+vez da cor de fundo.
+
+**Custo de CPU esperado.** Uma página quente desenha como se estivesse à vista: numa página com animação a 60 fps,
+~9–11 % de 1 núcleo (`docs/paridade.md` #1: 11,1 % à vista; #1b: 10,9 → 9,7 % medido no T1), numa página parada
+quase nada. No pior caso, 2 páginas animadas durante 8 s depois de cada troca: ~20 % de 1 núcleo nesses 8 s. Depois
+da graça o custo de uma aba escondida volta ao de #1b (2,2 % de 1 núcleo medido no T1 para uma aba animada
+escondida): a exceção a «abas escondidas não gastam» é só o período de graça.
+
+**A medir ao vivo (T3–T6), quando o PC estiver livre.** Mesmo método do T1 (`scratchpad/abas/abasrun.ps1` +
+`swap.py`, 60 fps, 10 capturas por caso, tema escuro + Mica, depois claro e sem Mica); critério: **0 fotogramas
+errados** e tempo da tecla até à página final **≤ ~120 ms** (o Brave: 0 errados, ~90–100 ms).
+1. T3: Ctrl+T ×5 a partir de uma página escura (`mica.py`): 0 fotogramas de Mica ou cinzento na área da página.
+2. T4: Ctrl+T e botão + (antes 205 e 369 ms de mediana); confirmar no registo que a janela do CEF da aba nova não
+   muda de tamanho depois de criada (também a 125 % e 150 % de escala).
+3. T5: Ctrl+Tab para uma aba fria (deixada há > 10 s), clara↔escura e Wikipédia↔Wikipédia (antes 133 e 270 ms).
+4. T6: Ctrl+Tab ida e volta em < 8 s: 0 errados e a página certa no 1.º fotograma depois da troca; rodízio de 3 abas
+   (só 2 quentes); página local com `<video muted autoplay loop>` deixada → `visibilityState` «hidden» logo
+   (`vis.html`), como antes; aba com som, ecrã dividido e janela minimizada → nenhuma quente.
+5. CPU (#1b, 10 s, todos os processos): aba animada deixada — durante a graça ~ como à vista (~10 % de 1 núcleo); a
+   partir dos 8 s, **igual a antes** (2,2 % de 1 núcleo no T1).
+6. Sem regressões: fechar a aba ativa (vizinha quente e vizinha fria), troca para o motor de vídeo (V3), 8 Ctrl+Tab
+   seguidos sem clicar (T2: 8/8), painel web da barra lateral com o tamanho certo, minimizar/restaurar a janela com
+   uma aba quente.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -169,3 +336,13 @@ testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídi
 | D1 | Fecho: suite completa (1374 testes), medição final comparada com a base e o «puro», `CHANGELOG.md` (secção por publicar, sem versão nem tag), `docs/paridade.md` (secção 1b) | Tabela «Resultado» no topo deste ficheiro |
 | M1 | Ramo fundido no main (bloco B, ciclos 31–51): o `ScriptletInjector` do motor (registos fora da navegação, por site) ganha o GPC do main registado à parte quando a sessão nasce e nunca retirado; o `PrivacyRequestHandler` junta todas as decisões do bloco B (saltos, limpeza, HTTPS primeiro, rede local, modo rigoroso, regras do utilizador, listas, CNAME, observatório, referrer, cookies de terceiros, client hints, Accept-Language) dentro do `Decide` que nunca lança, com `SafeFrame` em todas as leituras de frames. A única espera que resta no tratador é a do CNAME, só em sub-recursos (`CnameUncloak.MaxWait`); o pedido da página nunca espera (`ScriptRegistrationTests`) | — |
 | V8 | Motor de vídeo: os scripts nas páginas do WebView2 passam por um só canal (`Browser/VideoPageScript.cs`). O WebView2 não tem o processo filho .NET do CefSharp (a razão da regra do sandbox não se aplica), mas `SandboxRulesTests` recusa `CallDevToolsProtocolMethodAsync`, `ExecuteScriptAsync` e `AddScriptToExecuteOnDocumentCreatedAsync` fora dele | — (sem efeito para o utilizador) |
+| T1 | Troca de abas, aba nova e fecho da aba ativa sem fotograma vazio («dupla memória», `Browser/PageSwap.cs`): a página que entra aparece por baixo da que sai; a que sai só se esconde depois de a nova apresentar (rAF duplo pelo DevTools + 34 ms; uma aba nova espera primeiro pelo fim do 1.º documento; limite 1 s); a página de uma aba fechada que estava à vista fica, calada, até a vizinha aparecer | Fotogramas errados em 10 capturas (tema escuro + Mica): Ctrl+Tab clara↔escura 14 → **0**, Wikipédia 204 → 4, Ctrl+T 96 → **0**, botão + 97 → **0**, fechar a ativa 24 → 1; tema claro e sem Mica: todos → 0–1 (secção «Troca de abas sem piscar») |
+| T2 | Foco do teclado na aba que entra: depois de trocar de aba, o foco do Windows ficava na janela (minimizada) da aba anterior e as teclas iam para uma página invisível; a página da aba ativa passa a recebê-lo (como no Chrome) quando o foco estava numa página que deixou de se ver | 8 Ctrl+Tab seguidos sem clicar: **2 → 8** trocas efetivas |
+| T3 | Mica por baixo da página (rec. 4 do estudo): a static do CefSharp que aloja a janela do CEF deixa de pintar por GDI (`Browser/PageBrowser.cs`, `PageWindow.PaintStep`); na área de vidro o GDI escrevia alfa 0 e o DWM mostrava o Mica onde devia estar a cor de fundo da página. Vidro limitado às barras avaliado e recusado (secção «Troca de abas: o resto do estudo») | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
+| T4 | Aba nova (rec. 5): a static nasce por baixo das outras páginas e a janela do CEF nasce já com o tamanho da área das páginas (antes 0×0 numa aba nova, redimensionada a seguir); mesma conta de píxeis do CefSharp (`PageWindow.PixelSize`), por isso o redimensionamento dele no fim da criação não muda nada. A espera pela 1.ª pintura continua a do T1 (teto 1 s) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
+| T5 | Aba fria (rec. 3): a janela do Chromium volta de minimizada num só passo e já no tamanho final (`SetWindowPlacement` com a área da página e `SW_SHOWNOACTIVATE`, antes de a static aparecer), em vez de `ShowWindow` + `SetWindowPos` (duas mudanças de tamanho com a página «hidden»); ao esconder, minimiza antes de o CefSharp encolher a janela a 0×0. Também nos painéis web da barra lateral | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
+| T6 | Abas quentes (rec. 2): a página que sai fica tapada, no tamanho inteiro e sem minimizar, durante 8 s (no máximo 2, as mais recentes; `Tabs/WarmTabs.cs`), e voltar a ela é só subir a janela; nunca com vídeo a tocar, som, ecrã dividido, janela minimizada ou a passar para o motor de vídeo. Ordem das janelas das páginas explícita (`PageSwap.StackOrder`: à vista → a sair → a entrar fria → quentes). Custo: ~9–11 % de 1 núcleo por página animada quente, só durante a graça | Medição ao vivo pendente (dono a usar o PC). Testes: `WarmTabsTests`, `PageSwapTests` |
+| T3–T6 | Lista do que falta medir ao vivo para T3–T6 (casos, critério de 0 fotogramas errados e ≤ ~120 ms, CPU de aba animada escondida depois da graça igual à do T1), na secção «Troca de abas: o resto do estudo» | Medição ao vivo pendente (dono a usar o PC) |
+| T6b | Correções da revisão das abas quentes: (1) uma página que entrou fria e ainda não apresentou já não fica quente (`PagePresentation`: cada chegada fria tem um número e só o rAF duplo dessa chegada, depois do 1.º carregamento, a dá por apresentada; também nas chegadas sem página a segurar, e mais tarde, até 8 s, numa página que passe o teto de 1 s) — antes, Ctrl+Tab de ida e volta antes de a página apresentar, ou Ctrl+T e duas trocas, voltava a ela sem espera e mostrava branco ou conteúdo antigo; (7) o resultado da verificação de vídeo só se aplica à mesma saída da página; (8) a graça mede-se com um relógio monótono (`Environment.TickCount64`), não com a hora do sistema | Medição ao vivo pendente (dono a usar o PC). Testes: `PageSwapTests` (`Presentation_*`), `WarmTabsTests` |
+| T6c | Ordem das janelas e cobertura das quentes (revisão): (4) a página que sai e não pode ficar quente (som, motor de vídeo) passa para uma camada de fundo (`Layer.Cooling`) antes de se esconder — antes empatava com a quente que voltava (ou com a que acabou de entrar) e, conforme a ordem do dicionário, ficava por cima dela enquanto era minimizada e escondida; (5) as quentes são revistas antes de ordenar as janelas, por isso ao entrar no ecrã dividido arrefecem ainda tapadas; (6) a revisão verifica se há uma página à vista por cima (sem nenhuma, arrefecem todas; também quando a página de uma aba fechada sai pelo recurso de tempo) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageSwapTests` (`Stack_APageBeingHidden_GoesUnderEverything`) |
+| T6d | Resto da revisão: (2) a aba nova é disposta logo a seguir a ser criada (`UpdateLayout`), porque o CefSharp 156 redimensiona sempre a janela do CEF pelo `ActualWidth` no fim da criação (`OnAfterBrowserCreated`) e, antes da 1.ª disposição, isso dava 0×0 e desfazia o `BirthSize`; (3) o «som» só se vê no documento principal (`MediaInfo.Script`): comentários e limite corrigidos, e um iframe de outro site com ar de leitor (≥ 200×150, `autoplay`/ecrã inteiro) passa a arrefecer a página; Web Audio continua por ver (limite documentado); (9) os painéis web da barra lateral minimizam antes de esconder no WPF, como as abas; frase do T5 sobre o 0×0 corrigida | Medição ao vivo pendente (dono a usar o PC): no T4, registar o tamanho da janela do CEF da aba nova. Testes: `WarmTabsTests` (`PlayingVideoScript_AnEmbeddedPlayerFromAnotherSiteCountsAsPlaying`) |

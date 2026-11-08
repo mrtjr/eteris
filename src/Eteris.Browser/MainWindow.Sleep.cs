@@ -20,9 +20,20 @@ public partial class MainWindow
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         if (!_browsers.Remove(tab, out var browser)) return;
         ForgetCnameQuota(browser);
-        BrowserHost.Children.Remove(browser);
         PageScript.Release(browser);
-        browser.Dispose();
+        // Quente: está tapada pela aba à vista, pode ir já.
+        if (_warmPages.ContainsKey(browser))
+        {
+            DisposePage(browser);
+            return;
+        }
+        // À vista (a aba ativa fechou): fica por cima até a vizinha apresentar, sem um fotograma vazio pelo meio.
+        if (browser.Visibility == System.Windows.Visibility.Visible && browser.IsBrowserInitialized && IsVisible)
+        {
+            RetirePage(browser);
+            return;
+        }
+        DisposePage(browser);
     }
 
     // A conta das consultas CNAME do browser que sai (Shields/CnameUncloak.cs, CnameQuota).

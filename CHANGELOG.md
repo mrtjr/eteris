@@ -9,10 +9,13 @@ Fluidez da navegação (ver `docs/motor.md` e `docs/paridade.md`, secção 1b).
 - **Voltar/Avançar instantâneos** (back/forward cache, como no Chrome): ~6 ms em vez de ~1,3 s, com a contagem do Escudo da página reposta.
 - A barra de carregamento deixou de pôr uma janela transparente por cima da página: −16% de processador ao carregar.
 - O histórico é escrito em segundo plano (WAL, fila, títulos juntos): a janela deixa de parar 3–6 ms por página.
+- **Voltar a uma aba deixada há pouco é imediato**: as 1–2 páginas deixadas há menos de 8 s ficam prontas por baixo da aba à vista (nunca com vídeo a tocar, som ou ecrã dividido).
 
 ### Correções
 - A página deixa de «piscar» (ficar branca e minúscula por instantes) ~1 s depois de carregar: a miniatura da aba é tirada sem mexer na página à vista.
 - Sem clarão do fundo da janela entre páginas: a área da página tem fundo opaco.
+- **Trocar de aba, abrir uma nova e fechar a ativa sem piscar**: a página que entra aparece por baixo da que sai, já no tamanho final, e só sobe depois de desenhada (antes: branco, o fundo da janela ou, em páginas pesadas, até ~0,3 s de página por desenhar). Sem o Mica a aparecer por trás de uma página ainda vazia.
+- Depois de trocar de aba, o teclado segue a aba ativa (as teclas podiam ir para a página escondida).
 - O Éteris deixa de fechar inteiro quando um iframe desaparece a meio de um pedido.
 - Abrir o Éteris com um endereço já não abre duas abas iguais.
 - As regras cosméticas e os scriptlets do Escudo passam a valer logo na 1.ª página de cada site, e também nas páginas servidas por service worker (YouTube).
