@@ -31,6 +31,7 @@ public class SyncPairingTests
         Assert.Equal("Telemóvel", host.GuestName);
 
         await host.ApproveAsync(secret, "PC da sala");
+        guest.ConfirmCode();
         using var received = await guest.WaitForSecretAsync();
         Assert.Equal(secret.ChainId, received.ChainId);
         Assert.Equal("PC da sala", guest.HostName);
@@ -49,8 +50,69 @@ public class SyncPairingTests
         var hostCode = host.WaitForGuestAsync();
         Assert.Equal(await guest.WaitForCodeAsync(), await hostCode);
         await host.ApproveAsync(secret, "PC");
+        guest.ConfirmCode();
         using var received = await guest.WaitForSecretAsync();
         Assert.Equal(secret.ToCode(), received.ToCode());
+    }
+
+    [Fact]
+    public async Task ShortCode_TransportPosingAsTheHost_GetsNothingUntilTheGuestConfirmsTheCode()
+    {
+        // Código curto (PC↔PC): a chave do anfitrião vem do transporte. Quem o controla põe a SUA chave no passo 1 e
+        // faz de anfitrião só para o convidado, escrevendo logo o passo 5 com a SUA conta.
+        var cloud = new MemoryTransport();
+        var attackerView = new MemoryTransport();
+        using var realHost = await PairingHost.StartAsync(cloud, Now, NoWait);
+        using var attackerSecret = AccountSecret.Create();
+        using var fakeHost = await PairingHost.StartAsync(attackerView, realHost.Session, Now, NoWait, default);
+        using var guest = await PairingGuest.JoinAsync(attackerView, realHost.ShortCode, "Portátil", Now, NoWait);
+        var fakeCode = fakeHost.WaitForGuestAsync();
+        var guestCode = await guest.WaitForCodeAsync();
+        Assert.Equal(await fakeCode, guestCode);
+        await fakeHost.ApproveAsync(attackerSecret, "PC do atacante");
+
+        // O passo 5 do atacante já lá está, mas o convidado não o abre sem o utilizador confirmar NESTE ecrã que o
+        // código é igual ao do anfitrião verdadeiro (que mostra outro, ou nenhum). O utilizador não confirma.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => guest.WaitForSecretAsync());
+        Assert.Null(guest.HostName);
+        // E ConfirmCode antes de haver código não serve de atalho.
+        using var early = await PairingGuest.JoinAsync(attackerView, realHost.ShortCode, "x", Now, NoWait);
+        Assert.Throws<InvalidOperationException>(early.ConfirmCode);
+    }
+
+    [Fact]
+    public async Task GuestName_NeverTravelsInClear()
+    {
+        var cloud = new MemoryTransport();
+        using var secret = AccountSecret.Create();
+        using var host = await PairingHost.StartAsync(cloud, Now, NoWait);
+        using var guest = await PairingGuest.JoinAsync(cloud, host.ShortCode, "PC do Júnior", Now, NoWait);
+        var hostCode = host.WaitForGuestAsync();
+        await guest.WaitForCodeAsync();
+        await hostCode;
+        await host.ApproveAsync(secret, "PC da sala");
+        // Nada foi limpo (fecho brusco do anfitrião): mesmo assim nenhum ficheiro tem os nomes.
+        foreach (var (_, bytes) in cloud.Files)
+        {
+            var text = Encoding.Latin1.GetString(bytes) + Encoding.UTF8.GetString(bytes);
+            Assert.DoesNotContain("Júnior", text);
+            Assert.DoesNotContain("J\u00FAnior", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("PC da sala", text);
+        }
+        Assert.Equal("PC do Júnior", host.GuestName);
+    }
+
+    [Fact]
+    public void PublicKeys_OnlyP256()
+    {
+        using var p256 = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        using (PairingProtocol.ImportPublic(p256.PublicKey.ExportSubjectPublicKeyInfo())) { }
+        using var brainpool = ECDiffieHellman.Create(ECCurve.NamedCurves.brainpoolP256r1);
+        Assert.Equal(256, brainpool.KeySize);
+        Assert.Throws<PairingException>(() => PairingProtocol.ImportPublic(brainpool.PublicKey.ExportSubjectPublicKeyInfo()));
+        using var p384 = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP384);
+        Assert.Throws<PairingException>(() => PairingProtocol.ImportPublic(p384.PublicKey.ExportSubjectPublicKeyInfo()));
+        Assert.Throws<PairingException>(() => PairingProtocol.ImportPublic([1, 2, 3]));
     }
 
     [Fact]
@@ -85,6 +147,7 @@ public class SyncPairingTests
         await Assert.ThrowsAnyAsync<Exception>(async () =>
         {
             await spy.WaitForCodeAsync();
+            spy.ConfirmCode();
             using var stolen = await spy.WaitForSecretAsync();
         });
     }
@@ -110,6 +173,7 @@ public class SyncPairingTests
 
         // O utilizador vê códigos diferentes e recusa: nada é entregue, e o convidado fica a saber.
         await host.RefuseAsync();
+        attacker.ConfirmCode(); // o atacante confirma o que quiser: não lhe serve de nada
         await Assert.ThrowsAsync<PairingException>(() => attacker.WaitForSecretAsync());
     }
 
@@ -139,6 +203,7 @@ public class SyncPairingTests
         var bytes = cloud.Files[path].ToArray();
         bytes[^3] ^= 1;
         cloud.Replace(path, bytes);
+        guest.ConfirmCode();
         await Assert.ThrowsAsync<PairingException>(() => guest.WaitForSecretAsync());
     }
 

@@ -15,15 +15,20 @@ namespace Eteris.Sync.Pairing;
 //   1 anfitrião → transporte : chave pública do anfitrião
 //   2 convidado → transporte : chave pública do convidado + compromisso H(pkC ‖ pkA ‖ nC)
 //   3 anfitrião → transporte : nonce nA (só depois de ver o compromisso)
-//   4 convidado → transporte : nonce nC (abre o compromisso)
+//   4 convidado → transporte : nonce nC (abre o compromisso) + o nome do convidado CIFRADO com a chave da sessão
 //   ambos mostram o código de verificação SAS = 6 algarismos de H(sessão ‖ pkA ‖ pkC ‖ nA ‖ nC)
 //   o utilizador confirma NO ANFITRIÃO que os dois ecrãs mostram o mesmo código
 //   5 anfitrião → transporte : segredo de conta cifrado com ECDH(pkA, pkC) → HKDF → AES-256-GCM (transcrito como AAD)
+//   o utilizador confirma TAMBÉM NO CONVIDADO (ConfirmCode) antes de o segredo ser aberto e usado
 //
 // Porque é seguro (comparação numérica, como no Bluetooth): o QR só tem dados públicos — fotografá-lo não dá nada.
 // Quem também controlar o transporte e se meter no meio tem de escolher a sua chave e o seu nonce ANTES de ver o nonce
 // do anfitrião (o compromisso), por isso acerta no código de 6 algarismos com probabilidade 1 em 1 000 000, e o
 // utilizador vê códigos diferentes e recusa. Sem a confirmação no anfitrião, o passo 5 nunca é escrito.
+// A confirmação no CONVIDADO é obrigatória também: com o código curto (sem QR), a chave do anfitrião vem do transporte,
+// e quem o controla pode fazer de anfitrião só para o convidado (escrever logo o seu passo 5, com a SUA conta). O
+// convidado só abre o segredo depois de o utilizador dizer que o código no ecrã dele é igual ao do anfitrião verdadeiro.
+// Nada do utilizador vai em claro no transporte: o nome do aparelho convidado segue cifrado no passo 4.
 // A sessão expira em 10 minutos e os ficheiros são apagados no fim (ou ao cancelar).
 public static class PairingProtocol
 {
@@ -42,13 +47,34 @@ public static class PairingProtocol
 
     internal static byte[] PublicKey(ECDiffieHellman key) => key.PublicKey.ExportSubjectPublicKeyInfo();
 
+    private const string P256Oid = "1.2.840.10045.3.1.7";
+
+    // Só P-256 (secp256r1): outra curva de 256 bits (brainpoolP256r1, por exemplo) é recusada aqui, e não mais tarde
+    // com uma exceção que ninguém trata.
     internal static ECDiffieHellman ImportPublic(byte[] spki)
     {
-        var key = ECDiffieHellman.Create();
-        key.ImportSubjectPublicKeyInfo(spki, out var read);
-        if (read != spki.Length || key.KeySize != 256) throw new CryptographicException("Chave pública inválida");
-        return key;
+        var key = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        try
+        {
+            key.ImportSubjectPublicKeyInfo(spki, out var read);
+            var curve = key.ExportParameters(false).Curve;
+            var isP256 = curve.IsNamed && (curve.Oid.Value == P256Oid || curve.Oid.FriendlyName is "nistP256" or "ECDSA_P256" or "ECDH_P256" or "secp256r1");
+            if (read != spki.Length || key.KeySize != 256 || !isP256) throw new CryptographicException("Curva errada");
+            return key;
+        }
+        catch (CryptographicException)
+        {
+            key.Dispose();
+            throw new PairingException("A chave do outro aparelho não é válida: emparelhamento recusado.");
+        }
     }
+
+    // Nome do aparelho convidado: cifrado com a chave da sessão (a Google, ou quem tenha a pasta, não o lê).
+    internal const int MaxNameLength = 80;
+
+    internal static string NameContext(string session, byte[] transcript) => session + "|" + Kdf.Hex(transcript) + "|guest-name";
+
+    internal static string SecretContext(string session, byte[] transcript) => session + "|" + Kdf.Hex(transcript);
 
     internal static byte[] Commit(byte[] guestKey, byte[] hostKey, byte[] guestNonce)
         => SHA256.HashData(Concat("eteris-pair-commit-v1"u8.ToArray(), guestKey, hostKey, guestNonce));
@@ -118,7 +144,8 @@ public static class PairingProtocol
 
 public sealed class PairingException(string message) : Exception(message);
 
-// Mensagens (JSON, dentro de SealedFile só o passo 5; os outros são públicos por natureza).
+// Mensagens (JSON). Em claro só o que é público por natureza (chaves públicas, compromisso, nonces, hora); o nome do
+// convidado (passo 4) e o segredo (passo 5) vão em SealedFile, cifrados com a chave da sessão.
 internal sealed record PairingMessage
 {
     [JsonPropertyName("v")] public int Version { get; init; } = PairingProtocol.Version;
@@ -126,7 +153,7 @@ internal sealed record PairingMessage
     [JsonPropertyName("commit")] public string? Commit { get; init; }
     [JsonPropertyName("nonce")] public string? Nonce { get; init; }
     [JsonPropertyName("created")] public long CreatedMs { get; init; }
-    [JsonPropertyName("name")] public string? Name { get; init; }
+    [JsonPropertyName("sealedName")] public string? SealedName { get; init; }
 }
 
 internal sealed record PairingSecret
@@ -198,12 +225,18 @@ public sealed class PairingHost : PairingSide
 
     public string ShortCode => PairingProtocol.ShortCode(Session);
 
+    // Nome do convidado, conhecido só depois do passo 4 (vem cifrado). Mostrar ao lado do código de verificação.
     public string? GuestName { get; private set; }
 
-    public static async Task<PairingHost> StartAsync(ISyncTransport transport, Func<long> now, Func<TimeSpan, CancellationToken, Task>? delay = null,
+    public static Task<PairingHost> StartAsync(ISyncTransport transport, Func<long> now, Func<TimeSpan, CancellationToken, Task>? delay = null,
         CancellationToken cancellationToken = default)
+        => StartAsync(transport, PairingProtocol.NewSession(), now, delay, cancellationToken);
+
+    // Com uma sessão dada: só para os testes (um atacante que controla o transporte faz de anfitrião na sessão de outro).
+    internal static async Task<PairingHost> StartAsync(ISyncTransport transport, string session, Func<long> now,
+        Func<TimeSpan, CancellationToken, Task>? delay, CancellationToken cancellationToken)
     {
-        var host = new PairingHost(transport, PairingProtocol.NewSession(), now, delay);
+        var host = new PairingHost(transport, session, now, delay);
         await host.WriteAsync(PairingProtocol.HostKey, new PairingMessage { Key = Kdf.Base64Url(host.PublicKey), CreatedMs = now() }, cancellationToken).ConfigureAwait(false);
         return host;
     }
@@ -215,7 +248,6 @@ public sealed class PairingHost : PairingSide
         _guestKey = Kdf.FromBase64Url(offer.Key ?? throw new PairingException("Mensagem do convidado incompleta."));
         using (PairingProtocol.ImportPublic(_guestKey)) { }
         var commit = Kdf.FromBase64Url(offer.Commit ?? throw new PairingException("Mensagem do convidado incompleta."));
-        GuestName = offer.Name;
         // O nonce do anfitrião só sai depois de o convidado se ter comprometido com a sua chave e o seu nonce.
         await WriteAsync(PairingProtocol.HostNonce, new PairingMessage { Nonce = Kdf.Base64Url(_hostNonce), CreatedMs = Now() }, cancellationToken).ConfigureAwait(false);
         var reveal = await WaitAsync(PairingProtocol.GuestNonce, _deadline, cancellationToken).ConfigureAwait(false);
@@ -225,7 +257,24 @@ public sealed class PairingHost : PairingSide
             await RefuseAsync(cancellationToken).ConfigureAwait(false);
             throw new PairingException("O outro aparelho não cumpriu o que prometeu: emparelhamento recusado.");
         }
-        _transcript = PairingProtocol.Transcript(Session, PublicKey, _guestKey, _hostNonce, guestNonce);
+        var transcript = PairingProtocol.Transcript(Session, PublicKey, _guestKey, _hostNonce, guestNonce);
+        if (reveal.SealedName is { } sealedName)
+        {
+            var key = PairingProtocol.SessionKey(Key, _guestKey, Session, transcript);
+            try
+            {
+                var name = Encoding.UTF8.GetString(SealedFile.Open(key, SealedFile.Pairing, "pair", PairingProtocol.NameContext(Session, transcript),
+                    Kdf.FromBase64Url(sealedName)));
+                GuestName = name.Length > PairingProtocol.MaxNameLength ? name[..PairingProtocol.MaxNameLength] : name;
+            }
+            catch (Exception e) when (e is CryptographicException or FormatException or UnsupportedFormatException)
+            {
+                await RefuseAsync(cancellationToken).ConfigureAwait(false);
+                throw new PairingException("A mensagem do outro aparelho não confere: emparelhamento recusado.");
+            }
+            finally { CryptographicOperations.ZeroMemory(key); }
+        }
+        _transcript = transcript;
         return PairingProtocol.Sas(_transcript);
     }
 
@@ -236,7 +285,7 @@ public sealed class PairingHost : PairingSide
         if (Now() > _deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.");
         var key = PairingProtocol.SessionKey(Key, _guestKey, Session, _transcript);
         var payload = Json.Bytes(new PairingSecret { Secret = Kdf.Base64Url(secret.ToBytes()), HostName = hostName });
-        var sealedFile = SealedFile.Seal(key, SealedFile.Pairing, "pair", 1, Session + "|" + Kdf.Hex(_transcript), payload);
+        var sealedFile = SealedFile.Seal(key, SealedFile.Pairing, "pair", 1, PairingProtocol.SecretContext(Session, _transcript), payload);
         CryptographicOperations.ZeroMemory(key);
         await Transport.WriteAsync(Path(PairingProtocol.Sealed), sealedFile, cancellationToken).ConfigureAwait(false);
     }
@@ -252,19 +301,24 @@ public sealed class PairingHost : PairingSide
     }
 }
 
-// Aparelho novo: lê o QR (ou o código curto), mostra o mesmo código de verificação e recebe o segredo.
+// Aparelho novo: lê o QR (ou o código curto), mostra o mesmo código de verificação e, DEPOIS de o utilizador confirmar
+// também aqui que é igual ao do anfitrião (ConfirmCode), recebe o segredo.
 public sealed class PairingGuest : PairingSide
 {
     private readonly byte[] _guestNonce = RandomNumberGenerator.GetBytes(32);
     private readonly byte[] _hostKey;
     private readonly long _deadline;
+    private readonly string _name;
     private byte[]? _transcript;
+    private bool _confirmed;
 
-    private PairingGuest(ISyncTransport transport, string session, byte[] hostKey, long deadline, Func<long> now, Func<TimeSpan, CancellationToken, Task>? delay)
+    private PairingGuest(ISyncTransport transport, string session, byte[] hostKey, long deadline, string name, Func<long> now,
+        Func<TimeSpan, CancellationToken, Task>? delay)
         : base(transport, session, now, delay)
     {
         _hostKey = hostKey;
         _deadline = deadline;
+        _name = name.Length > PairingProtocol.MaxNameLength ? name[..PairingProtocol.MaxNameLength] : name;
     }
 
     public string? HostName { get; private set; }
@@ -282,10 +336,11 @@ public sealed class PairingGuest : PairingSide
             throw new PairingException("A chave do outro aparelho não confere com o QR: emparelhamento recusado.");
         if (now() - offer.CreatedMs > (long)PairingProtocol.Lifetime.TotalMilliseconds) throw new PairingException("O emparelhamento expirou. Comece de novo.");
         using (PairingProtocol.ImportPublic(hostKey)) { }
-        var guest = new PairingGuest(transport, session, hostKey, offer.CreatedMs + (long)PairingProtocol.Lifetime.TotalMilliseconds, now, delay);
+        var guest = new PairingGuest(transport, session, hostKey, offer.CreatedMs + (long)PairingProtocol.Lifetime.TotalMilliseconds, guestName, now, delay);
         var commit = PairingProtocol.Commit(guest.PublicKey, hostKey, guest._guestNonce);
+        // Sem o nome: no passo 2 ainda não há chave da sessão, e o transporte não pode ler «PC do Júnior».
         await guest.WriteAsync(PairingProtocol.GuestKey,
-            new PairingMessage { Key = Kdf.Base64Url(guest.PublicKey), Commit = Kdf.Base64Url(commit), CreatedMs = now(), Name = guestName },
+            new PairingMessage { Key = Kdf.Base64Url(guest.PublicKey), Commit = Kdf.Base64Url(commit), CreatedMs = now() },
             cancellationToken).ConfigureAwait(false);
         return guest;
     }
@@ -295,15 +350,36 @@ public sealed class PairingGuest : PairingSide
     {
         var hostNonce = Kdf.FromBase64Url((await WaitAsync(PairingProtocol.HostNonce, _deadline, cancellationToken).ConfigureAwait(false)).Nonce
                                           ?? throw new PairingException("Mensagem do anfitrião incompleta."));
-        await WriteAsync(PairingProtocol.GuestNonce, new PairingMessage { Nonce = Kdf.Base64Url(_guestNonce), CreatedMs = Now() }, cancellationToken).ConfigureAwait(false);
-        _transcript = PairingProtocol.Transcript(Session, _hostKey, PublicKey, hostNonce, _guestNonce);
+        var transcript = PairingProtocol.Transcript(Session, _hostKey, PublicKey, hostNonce, _guestNonce);
+        // O nome segue cifrado com a chave da sessão, na mesma mensagem que abre o compromisso.
+        var key = PairingProtocol.SessionKey(Key, _hostKey, Session, transcript);
+        string sealedName;
+        try
+        {
+            sealedName = Kdf.Base64Url(SealedFile.Seal(key, SealedFile.Pairing, "pair", 1, PairingProtocol.NameContext(Session, transcript),
+                Encoding.UTF8.GetBytes(_name)));
+        }
+        finally { CryptographicOperations.ZeroMemory(key); }
+        await WriteAsync(PairingProtocol.GuestNonce, new PairingMessage { Nonce = Kdf.Base64Url(_guestNonce), CreatedMs = Now(), SealedName = sealedName },
+            cancellationToken).ConfigureAwait(false);
+        _transcript = transcript;
         return PairingProtocol.Sas(_transcript);
     }
 
-    // Espera que o utilizador confirme no anfitrião e devolve o segredo de conta.
+    // O utilizador confirmou NESTE aparelho que o código mostrado é igual ao do anfitrião. Obrigatório antes de
+    // WaitForSecretAsync: sem isto, quem controla o transporte (código curto) podia entregar a SUA conta ao convidado.
+    public void ConfirmCode()
+    {
+        if (_transcript is null) throw new InvalidOperationException("Ainda não há código de verificação.");
+        _confirmed = true;
+    }
+
+    // Espera que o utilizador confirme no anfitrião e devolve o segredo de conta. Só depois de ConfirmCode.
+    // A interface mostra depois o nome do anfitrião (HostName) e o código outra vez antes de juntar o aparelho à conta.
     public async Task<AccountSecret> WaitForSecretAsync(CancellationToken cancellationToken = default)
     {
         if (_transcript is null) throw new InvalidOperationException("Ainda não há código de verificação.");
+        if (!_confirmed) throw new InvalidOperationException("O utilizador ainda não confirmou neste aparelho que os códigos são iguais.");
         while (true)
         {
             if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
@@ -314,7 +390,7 @@ public sealed class PairingGuest : PairingSide
                 var key = PairingProtocol.SessionKey(Key, _hostKey, Session, _transcript);
                 try
                 {
-                    var payload = Json.Parse<PairingSecret>(SealedFile.Open(key, SealedFile.Pairing, "pair", Session + "|" + Kdf.Hex(_transcript), bytes));
+                    var payload = Json.Parse<PairingSecret>(SealedFile.Open(key, SealedFile.Pairing, "pair", PairingProtocol.SecretContext(Session, _transcript), bytes));
                     HostName = payload.HostName;
                     return AccountSecret.FromBytes(Kdf.FromBase64Url(payload.Secret));
                 }

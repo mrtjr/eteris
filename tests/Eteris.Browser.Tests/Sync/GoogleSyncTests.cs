@@ -118,6 +118,7 @@ public class GoogleSyncTests
         var hostCode = host.WaitForGuestAsync();
         Assert.Equal(await guest.WaitForCodeAsync(), await hostCode);
         await host.ApproveAsync(secret, "PC");
+        guest.ConfirmCode();
         using var received = await guest.WaitForSecretAsync();
         Assert.Equal(secret.ChainId, received.ChainId);
         await host.CleanUpAsync();

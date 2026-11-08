@@ -103,10 +103,11 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
 1 anfitrião → transporte  chave pública do anfitrião
 2 convidado → transporte  chave pública do convidado + compromisso SHA-256(pkC ‖ pkA ‖ nC)
 3 anfitrião → transporte  nonce nA (só depois do compromisso)
-4 convidado → transporte  nonce nC (abre o compromisso)
+4 convidado → transporte  nonce nC (abre o compromisso) + nome do convidado cifrado com a chave da sessão
    os dois ecrãs mostram o código de verificação: 6 algarismos de SHA-256(sessão ‖ pkA ‖ pkC ‖ nA ‖ nC)
    o utilizador confirma NO ANFITRIÃO que são iguais
 5 anfitrião → transporte  R cifrado com ECDH(pkA, pkC) → HKDF → AES-256-GCM (transcrito como dados associados)
+   o utilizador confirma TAMBÉM NO CONVIDADO que o código é igual; só então o convidado abre o passo 5
 ```
 
 - O QR só tem dados públicos: **fotografá-lo não dá nada**. Quem também controlar o transporte e se meter no meio tem
@@ -114,6 +115,14 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
   probabilidade 1 em 1 000 000, e o utilizador vê códigos diferentes e recusa. Sem a confirmação, o passo 5 não existe.
 - Com QR, a chave do anfitrião vem do ecrã (autêntica) e tem de conferir com a do transporte. Sem câmara (PC↔PC),
   o código curto `XXXX-XXXX-XXXX-XXXX` dá só a sessão, e quem garante as chaves é o código de verificação.
+- **Confirmação dos dois lados.** Com o código curto, quem controla o transporte pode pôr a sua chave no passo 1 e
+  fazer de anfitrião só para o convidado, escrevendo logo o seu passo 5 (com a SUA conta, para o convidado passar a
+  cifrar tudo com uma chave que o atacante tem). Por isso o convidado também pergunta «o código é igual ao do outro
+  ecrã?» (`PairingGuest.ConfirmCode`) e só depois abre o segredo (`WaitForSecretAsync` recusa sem isso). Depois de o
+  receber, o ecrã mostra o nome do anfitrião e o código outra vez antes de juntar o aparelho à conta.
+- **Nada do utilizador em claro no transporte:** o passo 2 leva só a chave pública e o compromisso; o nome do aparelho
+  convidado segue no passo 4, cifrado com a chave da sessão (mesmo que o anfitrião feche de repente e os ficheiros
+  fiquem lá, a Google não lê «PC do Júnior»). As chaves públicas têm de ser P-256 (outra curva é recusada logo).
 - A sessão expira em 10 minutos e os ficheiros são apagados no fim. O transporte é o mesmo da sincronização (os dois
   aparelhos com a mesma conta Google, ou a mesma pasta).
 
@@ -181,7 +190,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 |---|---|---|
 | **A Google** (ou quem entrar na conta Google) | ver que a conta usa o Éteris, quando sincroniza (horas dos ficheiros, IP dos pedidos), quantos ficheiros e os tamanhos (arredondados a 1 KiB); apagar ficheiros ou não os entregar (o Éteris deixa-os pendentes) | ler favoritos, notas, abas, definições, nomes dos aparelhos ou URLs; alterar ou trocar ficheiros sem ser detetado; abrir a conta Éteris sem o código |
 | **Quem fotografa o QR** | nada | — |
-| **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000 | receber o segredo sem o utilizador confirmar códigos iguais |
+| **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador confirmar códigos iguais no anfitrião; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador) | — remédio: «Nova cadeia» noutro aparelho e retirar o acesso na conta Google |
 | **Quem tem um ficheiro `.eteris`** | nada sem o código | — |
 | **O Éteris (o projeto)** | nada: não há servidor do Éteris | — |
