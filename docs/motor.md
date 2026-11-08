@@ -111,14 +111,34 @@ site a ver a pergunta), pergunta `MediaSource.isTypeSupported` para `avc1.640028
   H.264 de um MP4 progressivo e só se ouve o som — um `<video>` de MP4/MOV/M3U8 com metadados, `videoWidth` 0 e o motor
   a dizer «não» ao `avc1` dá `format`, e a aba troca.
 
-**Como publicar (decisão do dono, por tomar).** O `.github/workflows/release.yml` **não** consegue compilar este motor:
-são 110–150 GB de fonte e objetos, 5–10 h de compilação oficial (ThinLTO + PGO) e o código descarregado à parte; os
-runners alojados do GitHub têm ~14 GB de disco e 6 h por trabalho. Sem `build/cef-codecs/out/runtime`, o CI publica com
-o runtime do NuGet (sem codecs): o `publish.ps1` só verifica quando a pasta existe. Caminhos possíveis: (1) publicar
-localmente, nesta máquina, com o runtime próprio (`build/publish.ps1` já recusa um runtime que não seja o validado);
-(2) guardar o runtime (~370 MB, 238 ficheiros) como artefacto de uma release ou de um armazenamento do dono e o CI
-descarregá-lo e verificá-lo pelo SHA256 do manifesto antes do `publish.ps1`; (3) um runner próprio com o checkout
-em `C:\cef`. O `release.yml` não foi alterado.
+**Publicação (decidido na 0.2.9: localmente, nesta máquina).** O `.github/workflows/release.yml` **não** consegue
+compilar este motor: são 110–150 GB de fonte e objetos, 5–10 h de compilação oficial (ThinLTO + PGO) e o código
+descarregado à parte; os runners alojados do GitHub têm ~14 GB de disco e 6 h por trabalho. Uma publicação pelo CI sai
+com o runtime do NuGet (sem codecs) e os utilizadores atualizados pelo Velopack voltariam a um motor sem H.264/AAC.
+Por isso as releases normais publicam-se **localmente**, com o runtime próprio em `build/cef-codecs/out/runtime`:
+1. Subir a versão (csproj, padrão do `build/publish.ps1`, `CHANGELOG.md`, `Browser/WhatsNewPage.cs`) e fazer commit.
+2. `.\build\publish.ps1 -Version X.Y.Z` — recusa um runtime que não seja o validado (modo, commit, versão do
+   `libcef.dll`, SHA256 de cada ficheiro do manifesto). Confirmar que `publish\libcef.dll` tem o SHA256 do
+   `manifest.json`, que não há `bootstrap*.exe` e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em
+   `Shields\lists`, `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).
+3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --token … --outputDir Releases` — o pacote delta tem
+   de partir do pacote `full` **publicado**: a pasta `Releases` não pode ter um `full` local da mesma versão que não
+   seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).
+4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`.
+5. Testar o executável de `publish\` num perfil de teste (abre, navega, `eteris://whatsnew/` com a versão nova, um MP4
+   H.264 toca no motor principal, sem processos `msedgewebview2` filhos). Nunca instalar o `Setup` na máquina do dono.
+6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
+   (compilar e testes, sem pack nem upload).
+7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --publish --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z
+   --token … --outputDir Releases` e as notas da release (`gh release edit`), com a nota do motor próprio e da oferta
+   do código-fonte do FFmpeg (`licenses/FFmpeg-SOURCE.txt`). O token só no ambiente do processo
+   (`$env:GH_TOKEN = (gh auth token)`), nunca em ficheiros.
+
+A publicação pelo CI ficou só para **emergências** (esta máquina indisponível): `workflow_dispatch` do `release.yml`
+com a tag e o input obrigatório `sem_codecs` = true. Sai com o runtime do NuGet, sem codecs: a sonda do arranque
+(`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
+antes da 0.2.9. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
+dono e o CI descarregá-lo e verificá-lo pelo SHA256 do manifesto; um runner próprio com o checkout em `C:\cef`.
 
 **Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem
 ATL/MFC e é aceite pelo `vs_toolchain.py` do 156) ou VC.ATLMFC nas Build Tools 2022; árvore num caminho ASCII com menos

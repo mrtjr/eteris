@@ -19,6 +19,16 @@ public class WhatsNewTests
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
 
+    // 0.2.9: abre com o vídeo no motor principal (codecs do Windows); o destaque antigo que mandava o H.264 para o
+    // motor de vídeo saiu, e os destaques da versão são curtos.
+    [Fact]
+    public void Highlights_LeadWithTheEngineVideo_AndAreShort()
+    {
+        Assert.Equal("Vídeo no motor do Éteris", WhatsNewPage.Highlights[0].Title);
+        Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Title == "Vídeo em todos os sites");
+        Assert.All(WhatsNewPage.Highlights.Take(8), h => Assert.True(h.Detail.Length <= 180, h.Title));
+    }
+
     // Os fundos são imagens geradas por IA (Browser/Wallpapers/README.md): as novidades não lhes chamam fotografias,
     // para dizer o mesmo que o crédito no rodapé da nova aba.
     [Fact]

@@ -228,14 +228,14 @@ própria pasta do repositório, o resultado já fica no sítio certo); depois
 `python build/licenses/collect.py`. O `build.ps1` e os patches estão no repositório tal como foram
 validados (sem conversão de fins de linha: o SHA256 dos patches está no `manifest.json`).
 
-### Publicação (CI)
+### Publicação
 
-O fluxo `.github/workflows/release.yml` **não consegue compilar este motor**: são 110–150 GB de
-código e objetos, 5–10 horas de compilação oficial e o código descarregado à parte, muito acima do
-disco (~14 GB) e do tempo (6 h) dos *runners* alojados do GitHub. Sem `out\runtime`, o CI publica
-o Éteris com o runtime do NuGet (sem codecs). Como publicar com este motor (localmente com o runtime
-próprio, ou levando o runtime verificado ao CI) é uma decisão do dono: `docs/motor.md`, «Motor com
-codecs».
+As releases do Éteris **publicam-se localmente**, na máquina onde está este runtime: `build/publish.ps1`, `vpk
+download github`, `build/pack.ps1`, teste do pacote, tag e `vpk upload github` — passo a passo em `docs/motor.md`,
+«Publicação». O fluxo `.github/workflows/release.yml` **não consegue compilar este motor** (110–150 GB de código e
+objetos, 5–10 horas de compilação oficial, muito acima do disco, ~14 GB, e do tempo, 6 h, dos *runners* alojados do
+GitHub): no push de uma tag `v*` só compila e corre os testes, sem pack nem upload. A publicação pelo CI existe só
+para emergências, por `workflow_dispatch` com o input `sem_codecs` = true, e sai com o runtime do NuGet, sem codecs.
 
 ## Licenças
 

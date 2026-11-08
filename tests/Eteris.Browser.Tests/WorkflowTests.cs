@@ -24,4 +24,32 @@ public class WorkflowTests
         foreach (Match env in Regex.Matches(Workflow(name), @"^\s+([A-Za-z_]+):", RegexOptions.Multiline))
             Assert.DoesNotContain(env.Groups[1].Value.ToUpperInvariant(), reserved);
     }
+
+    // As releases publicam-se localmente com o motor com codecs (docs/motor.md, «Publicação»): o CI só tem o runtime
+    // do NuGet, sem codecs. O push de uma tag só verifica; publicar pelo CI só por workflow_dispatch com sem_codecs.
+    [Fact]
+    public void Release_TagPushOnlyVerifies_AndCiPublishingNeedsSemCodecs()
+    {
+        var yml = Workflow("release.yml").Replace("\r\n", "\n");
+        var jobs = Regex.Matches(yml[yml.IndexOf("\njobs:\n", StringComparison.Ordinal)..], @"^  ([A-Za-z0-9_-]+):\n", RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.Equal(["verify", "publish-sem-codecs"], jobs);
+
+        var verify = Job(yml, "verify");
+        Assert.Contains("if: github.event_name == 'push'", verify);
+        Assert.Contains("UpdateService.cs", verify);
+        Assert.Contains("dotnet test", verify);
+        Assert.DoesNotContain("vpk", verify);
+        Assert.DoesNotContain("pack.ps1", verify);
+        Assert.DoesNotContain("contents: write", verify);
+
+        var publish = Job(yml, "publish-sem-codecs");
+        Assert.Contains("if: github.event_name == 'workflow_dispatch' && inputs.sem_codecs == true", publish);
+        Assert.Contains("UpdateService.cs", publish);
+        Assert.Contains("vpk upload", publish);
+        Assert.Matches(@"sem_codecs:\n(\s+\w+:.*\n)*?\s+required: true\n(\s+\w+:.*\n)*?\s+type: boolean", yml);
+    }
+
+    private static string Job(string yml, string name)
+        => Regex.Match(yml, "^  " + Regex.Escape(name) + @":\n(.*?)(?=^  \S|\z)", RegexOptions.Multiline | RegexOptions.Singleline).Groups[1].Value;
 }

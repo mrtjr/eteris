@@ -73,7 +73,7 @@ public class LocalNetworkPermissionTests
     [Fact]
     public void WhatsNew_HighlightsThePromisesAndTheLocalNetwork()
     {
-        Assert.Contains(WhatsNewPage.Highlights, h => h.Title == "Promessas verificáveis" && h.Detail.Contains("eteris://privacy/", StringComparison.Ordinal));
+        Assert.Contains(WhatsNewPage.Highlights, h => h.Detail.Contains("eteris://privacy/", StringComparison.Ordinal) && h.Detail.Contains("promessa", StringComparison.Ordinal));
         Assert.Contains(WhatsNewPage.Highlights, h => h.Title == "A rede local é sua");
     }
 }

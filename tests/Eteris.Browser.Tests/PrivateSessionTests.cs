@@ -32,12 +32,11 @@ public class PrivateSessionTests
         Assert.Null(https.Upgrade("http://normal.example/", isPrivate: false));
     }
 
-    // As novidades desta fase estão na página «Novidades», com o atalho que existe na folha.
+    // O HTTPS primeiro está nas «Novidades» da 0.2.9 (junto da rede local); o Anular e o Esquecer e triturar ficam no
+    // CHANGELOG.md (as Novidades levam só os 6–8 destaques da versão).
     [Fact]
-    public void WhatsNew_AnnouncesTheBlockBHighlights()
+    public void WhatsNew_AnnouncesHttpsFirst()
     {
-        Assert.Contains(WhatsNewPage.Highlights, h => h.Title == "HTTPS primeiro, com aviso");
-        Assert.Contains(WhatsNewPage.Highlights, h => h.Title == "Anular" && h.Keys == "Ctrl+Z");
-        Assert.Contains(WhatsNewPage.Highlights, h => h.Title == "Esquecer e triturar" && h.Detail.Contains("Terminar sessão privada"));
+        Assert.Contains(WhatsNewPage.Highlights.Take(8), h => h.Detail.Contains("HTTPS", StringComparison.Ordinal));
     }
 }

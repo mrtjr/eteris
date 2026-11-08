@@ -1,10 +1,35 @@
 # Alterações
 
-## Por publicar (ramo `motor`)
+## 0.2.9 — 2026-11-08
 
-Fluidez da navegação (ver `docs/motor.md` e `docs/paridade.md`, secção 1b).
+A maior versão até agora. O programa de experiência do utilizador fica encerrado nos 50 ciclos (ciclos 1–51 feitos,
+com duas revisões adversariais, aos 25 e aos 50; diário em `docs/ciclos-ux.md`). O Éteris passa a usar um **motor
+próprio com os codecs do Windows**: H.264 e HEVC descodificados pela placa gráfica e AAC pelo Media Foundation, sem
+nenhum descodificador com patentes no Éteris (fontes e patches em `build/cef-codecs`). A navegação ficou ~0,9 s mais
+rápida por página e o Voltar instantâneo, as páginas e as abas deixaram de piscar, e o bloco B pôs a privacidade à
+vista: Observatório, relatório e auto-teste, promessas verificáveis, rede local, HTTPS primeiro e rastreio escondido.
 
-### Mais rápido
+### Abas e interface (bloco A, ciclos 1–30)
+- **Faixa de abas que rola** em vez de as esmagar (roda do rato, setas nas pontas) e a lista «▾» de todas as abas, pesquisável.
+- **Modo compacto** (abas e barra de endereço numa só linha) e **interface que desaparece** em modo foco (`F11`).
+- **Cor do Éteris** (Definições › Aspeto): nove cores, a da paisagem da nova aba ou a do Windows.
+- **Espreitar um link** (`Alt`+clique ou menu do link): título, imagem e primeiros parágrafos num cartão, sem abrir aba nem deixar rasto no histórico.
+- **Ecrã dividido 2.0**: «Abrir link ao lado», arrastar a aba até à margem (lado a lado ou empilhado), trocar lados; a divisão fica na sessão.
+- **Abas com nome, emoji, cor e nota**, pré-visualização dos grupos ao pairar e multi-seleção de abas (`Ctrl`/`Shift`+clique).
+- **Abas como tarefas**: Trancar, Adiar até…, Feito («Feitas hoje») e Arquivo automático das abas esquecidas, no Radar.
+- **Espaços** (`Ctrl+Alt+1 … 9`): ambientes de abas na mesma janela, com nome, cor e emoji; as abas dos outros Espaços dormem.
+- **Barra lateral** (`Ctrl+Shift+B`): Notas, Para ler, Favoritos, Histórico e sites fixados (com vista móvel), à esquerda ou à direita.
+
+### Privacidade à vista (bloco B, ciclos 31–51)
+- **HTTPS primeiro com aviso**: sem recuo silencioso para http://, com «Continuar sem segurança» só desta vez ou sempre; páginas de erro com diagnóstico.
+- **Anular**: «Anular» nos avisos e `Ctrl+Z` fora da página desfazem a última ação do Éteris.
+- **Esquecer e triturar** no cadeado («Esquecer este site ao fechar», «Triturar agora…») e «Terminar sessão privada».
+- **Promessas verificáveis** em `eteris://privacy/`: GPC, APIs de anúncios do Chromium desligadas, um frasco por site, referrer só com a origem, uma só língua, dicas do cliente mínimas também no JavaScript — cada uma com ✔/✘ lido do estado real. Opção para esconder o Éteris do Recall e das capturas.
+- **A rede local é sua**: uma página da Internet não fala com este computador, o router, a impressora ou o NAS sem perguntar.
+- **Rastreio escondido**: links por l.facebook.com, out.reddit.com e afins vão direto ao destino (os avisos anti-phishing ficam), os sites de salto são esquecidos e os rastreadores atrás de um subdomínio do site (CNAME) são desmascarados, também com o DNS cifrado.
+- **Observatório do site** (`Ctrl+Shift+U`), **relatório** dos últimos 7 e 30 dias e **auto-teste** de privacidade em `eteris://privacy/`.
+
+### Mais rápido (ver `docs/motor.md` e `docs/paridade.md`, secção 1b)
 - **Cada página abre ~1 s mais depressa**: o pedido da página deixou de esperar pelo registo dos scripts do Escudo (que o Chromium só entregava depois da navegação). 1.ª pintura ~0,3 s depois do clique (era ~1,25 s).
 - **Voltar/Avançar instantâneos** (back/forward cache, como no Chrome): ~6 ms em vez de ~1,3 s, com a contagem do Escudo da página reposta.
 - A barra de carregamento deixou de pôr uma janela transparente por cima da página: −16% de processador ao carregar.

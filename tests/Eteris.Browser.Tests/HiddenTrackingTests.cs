@@ -66,8 +66,8 @@ public class HiddenTrackingTests
         var item = Assert.Single(WhatsNewPage.Highlights, h => h.Title == "Rastreio escondido");
         Assert.Contains("l.facebook.com", item.Detail);
         Assert.Contains("CNAME", item.Detail);
-        // Entre os primeiros destaques (o Observatório e o relatório, do mesmo bloco de privacidade, vieram para cima).
-        Assert.Contains(item, WhatsNewPage.Highlights.Take(3));
+        // Entre os destaques da versão (os 8 primeiros).
+        Assert.Contains(item, WhatsNewPage.Highlights.Take(8));
     }
 
     [Fact]

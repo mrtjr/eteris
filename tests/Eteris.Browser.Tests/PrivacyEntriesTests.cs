@@ -21,11 +21,14 @@ public class PrivacyEntriesTests
     }
 
     [Fact]
-    public void WhatsNew_LeadsWithTheObservatoryAndTheReport()
+    public void WhatsNew_AnnouncesTheObservatoryAndTheReportAmongTheHighlights()
     {
-        Assert.Equal("Observatório do site", WhatsNewPage.Highlights[0].Title);
-        Assert.Equal("Ctrl+Shift+U", WhatsNewPage.Highlights[0].Keys);
-        Assert.Equal("Relatório e auto-teste de privacidade", WhatsNewPage.Highlights[1].Title);
+        // Entre os destaques da versão (os 8 primeiros), o Observatório seguido do relatório.
+        var top = WhatsNewPage.Highlights.Take(8).ToList();
+        var observatory = top.FindIndex(h => h.Title == "Observatório do site");
+        Assert.True(observatory >= 0);
+        Assert.Equal("Ctrl+Shift+U", top[observatory].Keys);
+        Assert.Equal("Relatório e auto-teste de privacidade", top[observatory + 1].Title);
     }
 
     [Fact]
