@@ -340,7 +340,7 @@ as pastas `cr.sb.*` em `Packages` e as entradas `cr.sb.*` em `AppContainer\Mappi
 | `Update.exe --silent uninstall` | gancho `--veloapp-uninstall` pelo bootstrap (125–140 ms); pasta, atalhos e chave de desinstalação removidos; **perfil `cr.sb.netC236E207…` apagado** (pasta e entrada em `Mappings`) |
 | Estado do utilizador antes/depois (incluindo `Packages\cr.sb.*` e `Mappings` `cr.sb.*`) | **0 diferenças** (626 linhas iguais), nas duas vezes |
 
-**Restos dos testes de 8 de novembro na máquina do dono (por apagar, à espera de confirmação):** seis perfis
+**Restos dos testes de 8 de novembro na máquina do dono (apagados com DeleteAppContainerProfile, com a confirmação do dono, a 8 de novembro):** seis perfis
 `cr.sb.net*`, todos identificados pelo SHA1 do caminho de um exe de teste (nenhum é de um navegador do dono; os
 `cr.sb.cdm*`, `cr.sb.odm*` e `cr.sb.xr*` de 7 de novembro não são do Éteris e não se mexe neles):
 
@@ -383,8 +383,8 @@ sandbox (o gancho de atualização corre pelo bootstrap e dá a ACL), atalhos e 
 a atualização feita pelo próprio Éteris (botão «Atualizar para …», reinício pelo `Update.exe`) a partir de uma 0.2.9
 compilada do `c3fe087`, e a desinstalação sem restos também no perfil do AppContainer do serviço de rede (gancho de
 desinstalação; 0 diferenças com os perfis `cr.sb.*` na fotografia). A publicação com sandbox verifica a DLL cliente
-contra o runtime do motor. Por limpar: os seis perfis `cr.sb.net*` dos testes de 8 de novembro (tabela acima), à
-espera de confirmação do dono.
+contra o runtime do motor. Os seis perfis `cr.sb.net*` dos testes de 8 de novembro (tabela acima) foram apagados com a confirmação do
+dono.
 
 **Falta, por ordem:**
 1. **E — assinatura conjunta** (½ dia): `Eteris.Browser.exe` (bootstrap com a marca), `Eteris.Browser.dll` (DLL
