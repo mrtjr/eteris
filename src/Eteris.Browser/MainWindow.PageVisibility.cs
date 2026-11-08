@@ -207,6 +207,8 @@ public partial class MainWindow
             if (presented[i] != PageSwap.Presented.No) _presentation.Presented(arriving[i], arrival);
             else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible) _ = ConfirmPresentedAsync(arriving[i], arrival);
             if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupTrace.Mark("aba.apresentada", presented[i].ToString());
+            // Uma página apareceu: o arranque correu bem (rede de segurança do sandbox).
+            if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupGuard.Current.Healthy();
         }
         // A 1.ª troca do arranque acabou (com a página à vista, ou desistiu-se dela): o trabalho adiado pode correr.
         Infrastructure.FirstPaint.App.Signal();
@@ -220,6 +222,7 @@ public partial class MainWindow
         if (presented == PageSwap.Presented.No) return;
         if (PageSwap.NeedsMargin([presented])) await Task.Delay(PageSwap.PresentMargin);
         _presentation.Presented(page, arrival);
+        Infrastructure.StartupGuard.Current.Healthy();
     }
 
     // A página desenhou um fotograma do documento certo: o 1.º carregamento acabou (numa aba nova, antes dele só há o

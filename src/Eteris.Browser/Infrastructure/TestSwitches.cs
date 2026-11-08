@@ -10,6 +10,18 @@ public static class TestSwitches
     // e o estado das páginas por CDP (nunca ligado sem esta variável).
     public static int? DevToolsPort => Port(Environment.GetEnvironmentVariable("ETERIS_TEST_DEVTOOLS_PORT"));
 
+    // ETERIS_TEST_CRASH_BEFORE_PAINT=1: o processo termina de repente logo a seguir ao Cef.Initialize, antes da 1.ª página
+    // (como uma queda), para provar a rede de segurança do sandbox (Infrastructure/SandboxFallback.cs).
+    public static bool CrashBeforePaint => IsOn(Environment.GetEnvironmentVariable("ETERIS_TEST_CRASH_BEFORE_PAINT"));
+
+    // Como uma queda: sem fecho, sem relatório do Windows (TerminateProcess), com um código de saída próprio.
+    public const uint CrashExitCode = 0xE7E50001;
+
+    public static void CrashNow() => TerminateProcess(-1, CrashExitCode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool TerminateProcess(nint process, uint exitCode);
+
     public static bool IsOn(string? value) => value?.Trim() == "1";
 
     public static int? Port(string? value)

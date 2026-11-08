@@ -53,7 +53,11 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     // O processo da página morreu (crash, falta de memória): a janela mostra a página de erro em vez de um ecrã vazio.
     protected override void OnRenderProcessTerminated(IWebBrowser chromiumWebBrowser, IBrowser browser, CefTerminationStatus status,
         int errorCode, string errorMessage)
-        => onCrashed?.Invoke();
+    {
+        // Uma página que o motor nem conseguiu lançar conta para a rede de segurança do sandbox.
+        Infrastructure.StartupGuard.Current.RenderProcessTerminated((int)status);
+        onCrashed?.Invoke();
+    }
 
     private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onBlocked, userAgent, onMainFrameRequest, isPrivate,
         localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked, observatory);

@@ -93,7 +93,17 @@ public static class CefConfigurator
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Shields.PrivacyPreferences.SecureDnsTemplate = Shields.PrivacyPreferences.StartedWithSecureDns is null ? null : Shields.SecureDns.TemplateFor(dns);
         StartupTrace.Mark("localstate");
-        var sandbox = SandboxEnabled ? SandboxInfo.Pointer : 0;
+        // Rede de segurança (Infrastructure/SandboxFallback.cs): o marcador «a arrancar» fica no perfil antes do motor
+        // arrancar; dois arranques com sandbox falhados seguidos desligam-no nesta versão, como --eteris-no-sandbox.
+        var args = Environment.GetCommandLineArgs();
+        var available = SandboxSupported ? SandboxInfo.Available : 0;
+        var guard = StartupGuard.ForProfile(AppPaths.Root);
+        var start = guard.Begin(Browser.SettingsPage.Version, available != 0, SandboxInfo.Disabled(args),
+            args.Any(a => a.Equals(SandboxFallback.RetrySwitch, StringComparison.OrdinalIgnoreCase)));
+        var sandbox = start.UseSandbox ? available : 0;
+        SandboxActive = sandbox != 0;
+        guard.WatchChildren();
+        StartupTrace.Mark("rede.seguranca", (start.UseSandbox ? "sandbox" : "sem-sandbox") + " " + start.Notice);
         var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
         // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
         _dependencyCheck = bootstrap is null;
@@ -185,4 +195,7 @@ public static class CefConfigurator
 #endif
 
     public static bool SandboxEnabled => SandboxSupported && SandboxInfo.Pointer != 0;
+
+    // Este arranque corre mesmo com o sandbox (depois da rede de segurança; Prepare).
+    public static bool SandboxActive { get; private set; }
 }

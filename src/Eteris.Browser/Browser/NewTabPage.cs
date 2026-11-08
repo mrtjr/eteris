@@ -33,7 +33,7 @@ public static class NewTabPage
     public static string Render(IReadOnlyList<TopSite> sites, SearchEngine engine, DateTime now, int blocked = 0,
         IReadOnlyList<Bookmark>? bookmarks = null, bool isPrivate = false, int[]? week = null, UserSettings? prefs = null,
         IReadOnlyList<ReadingItem>? reading = null, IReadOnlyList<SavedSession>? sessions = null,
-        IReadOnlyDictionary<string, string>? icons = null)
+        IReadOnlyDictionary<string, string>? icons = null, string? notice = null)
     {
         // Numa janela privada não se mostra nada do perfil normal.
         if (isPrivate)
@@ -47,6 +47,8 @@ public static class NewTabPage
         var data = new
         {
             @private = isPrivate,
+            // Aviso do Éteris (rede de segurança do sandbox: Infrastructure/SandboxFallback.cs), também na janela privada.
+            notice,
             greeting = Greeting(now.Hour),
             blocked = isPrivate ? 0 : blocked,
             token = isPrivate ? null : InternalPages.Token,

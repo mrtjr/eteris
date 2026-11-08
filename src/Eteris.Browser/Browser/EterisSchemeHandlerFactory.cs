@@ -48,7 +48,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             string html;
             if (isPrivate)
             {
-                html = NewTabPage.Render([], engine, now, isPrivate: true, prefs: Settings.Current);
+                html = NewTabPage.Render([], engine, now, isPrivate: true, prefs: Settings.Current, notice: SandboxNotice());
             }
             else
             {
@@ -58,7 +58,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     blocked: Shields.ShieldStats.SessionBlocked, bookmarks: bookmarks,
                     week: AppData.ShieldWeek(), prefs: Settings.Current,
                     reading: AppData.ReadingList(), sessions: AppData.SavedSessions(),
-                    icons: AppData.SiteIcons(sites.Select(s => s.Url).Concat(bookmarks.Select(b => b.Url))));
+                    icons: AppData.SiteIcons(sites.Select(s => s.Url).Concat(bookmarks.Select(b => b.Url))),
+                    notice: SandboxNotice());
             }
             return ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme && !isPrivate),
                 Encoding.UTF8, false, "text/html");
@@ -143,6 +144,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private static IResourceHandler Html(string html)
         => ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme), Encoding.UTF8, false, "text/html");
+
+    // Aviso da rede de segurança do sandbox para a nova aba (nulo quando não há nada a dizer).
+    private static string? SandboxNotice() => Infrastructure.SandboxFallback.NoticeText(Infrastructure.StartupGuard.Current.Notice);
 
     private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
 

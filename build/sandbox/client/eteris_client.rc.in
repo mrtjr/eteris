@@ -24,7 +24,7 @@ BEGIN
       VALUE "ProductName", "Éteris"
       VALUE "ProductVersion", "@CEF_VERSION@"
       VALUE "LegalCopyright", "Inclui o libcef_dll_wrapper: Copyright (C) The Chromium Embedded Framework Authors (BSD-3-Clause)"
-      VALUE "Comments", "cef_commit=@CEF_COMMIT_HASH@"
+      VALUE "Comments", "cef_commit=@CEF_COMMIT_HASH@@ETERIS_CLIENT_FLAVOR@"
     END
   END
   BLOCK "VarFileInfo"

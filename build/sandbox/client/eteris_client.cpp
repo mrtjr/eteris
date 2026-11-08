@@ -97,6 +97,61 @@ bool IsVelopackHook(int argc, LPWSTR* argv) {
   return false;
 }
 
+// Interruptores partilhados com o .NET: --eteris-no-sandbox (Infrastructure/SandboxInfo.cs) desliga o sandbox nesse
+// arranque; --eteris-sandbox-retry (Infrastructure/SandboxFallback.cs) diz-lhe que o arranque veio desta rede de
+// segurança, para avisar na nova aba.
+constexpr wchar_t kNoSandboxSwitch[] = L"--eteris-no-sandbox";
+constexpr wchar_t kSandboxRetrySwitch[] = L"--eteris-sandbox-retry";
+
+bool HasArgument(int argc, LPWSTR* argv, const wchar_t* name) {
+  for (int i = 1; i < argc; ++i)
+    if (_wcsicmp(argv[i], name) == 0) return true;
+  return false;
+}
+
+// Rede de segurança do sandbox (docs/sandbox.md, «Rede de segurança»): o .NET não arrancou num arranque com sandbox.
+// Antes de mostrar o erro, o Éteris volta a arrancar-se a si próprio com --eteris-no-sandbox (o atualizador vive dentro
+// do Éteris: nunca pode ficar sem abrir). Só uma vez (o novo arranque já leva o interruptor), nunca nos ganchos do
+// Velopack (correm sem janela e com prazo). Devolve verdadeiro se o novo processo arrancou.
+bool RelaunchWithoutSandbox(int argc, LPWSTR* argv) {
+  if (IsVelopackHook(argc, argv) || HasArgument(argc, argv, kNoSandboxSwitch)) return false;
+  const std::wstring exe = ModulePath(nullptr);
+  if (exe.empty()) return false;
+  std::wstring command = GetCommandLineW();
+  command += L" ";
+  command += kNoSandboxSwitch;
+  command += L" ";
+  command += kSandboxRetrySwitch;
+  STARTUPINFOW startup = {};
+  startup.cb = sizeof(startup);
+  PROCESS_INFORMATION process = {};
+  if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process))
+    return false;
+  // Este processo foi arrancado pelo utilizador (tem direito ao primeiro plano): passa-o ao novo, para a janela vir à
+  // frente. user32 por /DELAYLOAD.
+  AllowSetForegroundWindow(process.dwProcessId);
+  CloseHandle(process.hThread);
+  CloseHandle(process.hProcess);
+  WriteBootstrapLog(L"Eteris: novo arranque sem sandbox (" + std::wstring(kNoSandboxSwitch) + L"), processo " +
+                    std::to_wstring(process.dwProcessId) + L"\r\n");
+  return true;
+}
+
+// Só nas DLLs de teste (compiladas com -DETERIS_TEST_HOOKS=ON, nunca publicadas: verify-client.ps1 recusa-as): com
+// ETERIS_TEST_DOTNET_FAILS_WITH_SANDBOX=1 no ambiente, o .NET «não arranca» quando o arranque é com sandbox, para provar
+// a rede de segurança ao vivo sem estragar nenhuma instalação.
+bool TestDotNetFailsWithSandbox(int argc, LPWSTR* argv) {
+#if defined(ETERIS_TEST_HOOKS)
+  wchar_t value[4] = {};
+  return GetEnvironmentVariableW(L"ETERIS_TEST_DOTNET_FAILS_WITH_SANDBOX", value, 4) == 1 && value[0] == L'1' &&
+         !HasArgument(argc, argv, kNoSandboxSwitch);
+#else
+  (void)argc;
+  (void)argv;
+  return false;
+#endif
+}
+
 // Quando o .NET nem chega a arrancar (hostfxr em falta, publicação incompleta, erro do host), o Éteris não abriria
 // janela nenhuma: avisa com o caminho do registo, em vez de sair em silêncio.
 void ReportStartupFailure(int argc, LPWSTR* argv, const std::wstring& detail, const std::wstring& log) {
@@ -116,8 +171,10 @@ int RunDotNet(int argc, LPWSTR* argv) {
                                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
   auto run = fxr ? reinterpret_cast<hostfxr_main_startupinfo_fn>(GetProcAddress(fxr, "hostfxr_main_startupinfo"))
                  : nullptr;
+  if (TestDotNetFailsWithSandbox(argc, argv)) run = nullptr;
   if (!run) {
     const std::wstring log = WriteBootstrapLog(L"Eteris: hostfxr.dll em falta ou sem hostfxr_main_startupinfo: " + dir + L"\r\n");
+    if (RelaunchWithoutSandbox(argc, argv)) return 0;
     ReportStartupFailure(argc, argv, L"Falta o .NET na pasta do programa (hostfxr.dll): " + dir, log);
     return static_cast<int>(0x80008083);  // StatusCode::CoreHostLibMissingFailure
   }
@@ -132,6 +189,7 @@ int RunDotNet(int argc, LPWSTR* argv) {
   if (code != 0 && !g_host_errors.empty()) {
     const std::wstring log =
         WriteBootstrapLog(L"Eteris: o .NET terminou com o c\u00F3digo " + std::to_wstring(code) + L":\r\n" + g_host_errors);
+    if (RelaunchWithoutSandbox(argc, argv)) return 0;
     wchar_t hex[16];
     swprintf_s(hex, L"0x%08X", static_cast<unsigned>(code));
     ReportStartupFailure(argc, argv, std::wstring(L"Erro do .NET ") + hex + L".", log);

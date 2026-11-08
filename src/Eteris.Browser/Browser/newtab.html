@@ -401,6 +401,7 @@
   .quick-action svg { width: 15px; height: 15px; }
   .quick-action:hover { background: #0f182bc7; }
   footer { width: min(1120px, calc(100% - 40px)); margin: 0 auto; min-height: 38px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 0; color: var(--secondary); font-size: 10px; text-shadow: 0 1px 6px #000; }
+  .safety-note { max-width: 640px; margin: 4px auto 14px; padding: 9px 14px; border-radius: 10px; border: 1px solid #ffcf7a66; background: #2a1d07d9; color: #ffe2ae; font-size: 13px; line-height: 1.45; text-align: left; }
   .tip { display: none; align-items: center; gap: 7px; min-width: 0; flex: 1 1 350px; line-height: 1.4; }
   .tip.show { display: flex; }
   .tip button { flex: none; min-height: 22px; padding: 0 6px; border-radius: 6px; }
@@ -489,6 +490,7 @@
   <section class="hero" aria-label="Pesquisa">
     <h1 class="greet" id="greet">Nova aba</h1>
     <p class="private-note">O histórico e os dados desta sessão são descartados ao fechar a janela.</p>
+    <p class="safety-note" id="safetyNote" role="alert" hidden></p>
     <div class="search-area">
       <form class="search" id="search" autocomplete="off" role="search">
         <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
@@ -967,6 +969,11 @@
     if (!custom.contains(event.target) && !gear.contains(event.target)) setCustom(false);
   });
 
+  if (data.notice) {
+    const note = document.getElementById('safetyNote');
+    note.textContent = data.notice;
+    note.hidden = false;
+  }
   if (data.tip) {
     const tip = document.getElementById('tip');
     document.getElementById('tipText').textContent = data.tip;

@@ -87,6 +87,10 @@ $info = (Get-Item -LiteralPath $Dll).VersionInfo
 $commit = if ($info.Comments -match 'cef_commit=([0-9a-f]{40})') { $Matches[1] } else { '' }
 if (-not $commit) { $problems.Add("a DLL não tem a versão da CEF gravada (Comments: «$($info.Comments)»): compile-a com build/sandbox/client/build.cmd") }
 elseif ($commit -ne $manifest.cef.commit) { $problems.Add("a DLL foi compilada com a CEF $commit, o runtime é da $($manifest.cef.commit) ($($manifest.cef.version)): recompile-a com a distribuição deste motor") }
+# DLL de teste (cmake -DETERIS_TEST_HOOKS=ON: ganchos lidos do ambiente, docs/sandbox.md «Rede de segurança»): nunca publicar.
+$bytes = [IO.File]::ReadAllBytes($Dll)
+$hook = [Text.Encoding]::Unicode.GetString($bytes).Contains('ETERIS_TEST_')
+if ($info.Comments -match 'test_hooks' -or $hook) { $problems.Add("é uma DLL de teste (ganchos ETERIS_TEST_*): compile-a sem -DETERIS_TEST_HOOKS") }
 if ($info.ProductVersion -notlike "$($manifest.cef.version)+*") { $problems.Add("versão da CEF na DLL «$($info.ProductVersion)», no runtime $($manifest.cef.version)") }
 
 $pe = [EterisPe.Image]::Read($Dll)

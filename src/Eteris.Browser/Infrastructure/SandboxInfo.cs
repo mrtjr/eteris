@@ -15,9 +15,14 @@ public static class SandboxInfo
     public const string ExportName = "EterisSandboxInfo";
 
     private static readonly Lazy<nint> pointer = new(() => Read(Environment.ProcessPath, Environment.GetCommandLineArgs()));
+    private static readonly Lazy<nint> available = new(() => Read(Environment.ProcessPath, []));
     private static readonly Lazy<bool> bootstrap = new(() => FindExport(Environment.ProcessPath) != 0);
 
     public static nint Pointer => pointer.Value;
+
+    // O ponteiro que a DLL nativa entregou, mesmo com --eteris-no-sandbox: o sandbox é possível neste arranque (a rede de
+    // segurança, StartupGuard, decide se o usa).
+    public static nint Available => available.Value;
 
     // O Éteris arrancou pelo bootstrap (a DLL nativa está carregada), com ou sem sandbox: os processos filhos podem ser o
     // próprio exe (com --eteris-no-sandbox, a publicação com sandbox já não traz o processo filho .NET do CefSharp).

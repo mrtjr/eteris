@@ -11,6 +11,13 @@ if(NOT DEFINED CEF_ROOT OR NOT EXISTS "${CEF_ROOT}/cmake/FindCEF.cmake")
 endif()
 set(ETERIS_CLIENT_NAME "Eteris.Browser" CACHE STRING "Nome da DLL (= nome do exe do bootstrap, sem extensao)")
 set(ETERIS_APP_DLL "Eteris.App.dll" CACHE STRING "Montagem .NET que o processo principal arranca")
+# Só para provas ao vivo (docs/sandbox.md, «Rede de segurança»): ganchos de teste lidos do ambiente. A DLL fica marcada
+# («test_hooks» em Comments) e build/sandbox/verify-client.ps1 recusa-a na publicação.
+option(ETERIS_TEST_HOOKS "DLL de teste com ganchos lidos do ambiente (nunca publicar)" OFF)
+set(ETERIS_CLIENT_FLAVOR "")
+if(ETERIS_TEST_HOOKS)
+  set(ETERIS_CLIENT_FLAVOR "; test_hooks")
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
@@ -36,5 +43,8 @@ add_library(eteris_client SHARED eteris_client.cpp "${CMAKE_CURRENT_BINARY_DIR}/
 SET_LIBRARY_TARGET_PROPERTIES(eteris_client)
 add_dependencies(eteris_client libcef_dll_wrapper)
 target_compile_definitions(eteris_client PRIVATE "ETERIS_APP_DLL=L\"${ETERIS_APP_DLL}\"")
+if(ETERIS_TEST_HOOKS)
+  target_compile_definitions(eteris_client PRIVATE ETERIS_TEST_HOOKS)
+endif()
 target_link_libraries(eteris_client libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS})
 set_target_properties(eteris_client PROPERTIES OUTPUT_NAME "${ETERIS_CLIENT_NAME}")
