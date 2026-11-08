@@ -108,6 +108,13 @@ não está à frente. Não foram tocados.
 oficial; testes `SandboxInfoTests`). Os dois pack URIs do menu usam o nome da montagem em execução
 (`typeof(MainWindow).Assembly`), em vez de `Eteris.Browser` escrito à mão.
 
+**D9 (primeira sonda).** No motor puro (cefsimple + bootstrap), `--enable-features=NetworkServiceSandbox` liga a
+funcionalidade (`chrome://sandbox`: `NetworkServiceSandbox` `enabled: true`) mas o Network Service continua «Not
+Sandboxed» e com integridade Medium; as páginas carregam. Em `SystemNetworkContextManager::IsNetworkSandboxEnabled` só
+sobram dois motivos: a preferência `NetworkServiceSandboxEnabled` no Local State ou o recuo depois de um arranque
+falhado em LPAC (`kDisabledBecauseOfFailedLaunch`). Próximo passo do D9: registo da CEF ligado
+(`--enable-logging --v=1`) para ver qual.
+
 **Falta:** D5 interativo (em cima), D9 (`NetworkServiceSandbox`) e o passo E (ícone/versão do bootstrap — hoje
 «CEF Bootstrap Application» —, assinatura do exe, `chrome_elf.dll` e DLL com o mesmo certificado, Velopack, CI).
 
