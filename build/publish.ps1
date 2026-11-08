@@ -64,6 +64,7 @@ $exe = (Get-Item -LiteralPath (Join-Path $publishDir "Eteris.Browser.exe")).Vers
 $core = [Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes((Join-Path $publishDir "CefSharp.Core.dll")))
 if ($NoSandbox) {
   if ((Test-Path -LiteralPath (Join-Path $publishDir "Eteris.App.dll")) -or -not (Test-Path -LiteralPath (Join-Path $publishDir "CefSharp.BrowserSubprocess.exe"))) { throw "Publicação sem sandbox com a forma errada" }
+  if ($core.Contains("WindowsSandboxInfo")) { throw "Publicação sem sandbox com o CefSharp do feed (esperado o oficial)" }
   "Publicado SEM sandbox: $publishDir"
 } else {
   $client = (Get-Item -LiteralPath (Join-Path $publishDir "Eteris.Browser.dll")).VersionInfo
