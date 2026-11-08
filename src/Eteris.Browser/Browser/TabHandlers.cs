@@ -18,6 +18,10 @@ public sealed class PopupToTabHandler(Action<Shields.PopupRequest> onPopup) : Ce
             AtUtc: DateTime.UtcNow));
         return true;
     }
+
+    // Na thread do CEF: o browser existe (a janela dele já foi criada).
+    protected override void OnAfterCreated(IWebBrowser chromiumWebBrowser, IBrowser browser)
+        => Infrastructure.StartupTrace.MarkOnce("cef.criado");
 }
 
 // Com a página desenhada numa janela própria, as teclas vão direto para o Chromium. onKeyDown(tecla virtual, Ctrl,

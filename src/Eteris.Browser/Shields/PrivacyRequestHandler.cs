@@ -20,6 +20,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
         bool userGesture, bool isRedirect)
     {
+        Infrastructure.StartupTrace.MarkOnce("cef.navegar");
         try
         {
             if (onMainNavigation is not null && frame.IsMain)

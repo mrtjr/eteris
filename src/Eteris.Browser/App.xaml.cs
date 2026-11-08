@@ -39,10 +39,14 @@ public partial class App : Application
         StartupTrace.Mark("janela.criada");
         window.Show();
         StartupTrace.Mark("janela.show");
-        _ = UpdateService.CheckAndDownloadAsync();
-        StartupTrace.Mark("atualizacoes");
-        JumpListTasks.Install();
-        StartupTrace.Mark("jumplist");
+        // Depois da 1.ª página (Infrastructure/FirstPaint.cs): nenhuma das duas é precisa para ela.
+        FirstPaint.App.SignalAfter(FirstPaint.Fallback);
+        FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
+        FirstPaint.App.Then(() =>
+        {
+            JumpListTasks.Install();
+            StartupTrace.Mark("jumplist");
+        });
         _channel = InstanceChannel.Listen(Program.ChannelName, args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
         StartupTrace.Mark("onstartup.fim");
     }

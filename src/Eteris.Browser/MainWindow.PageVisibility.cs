@@ -208,6 +208,8 @@ public partial class MainWindow
             else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible) _ = ConfirmPresentedAsync(arriving[i], arrival);
             if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupTrace.Mark("aba.apresentada", presented[i].ToString());
         }
+        // A 1.ª troca do arranque acabou (com a página à vista, ou desistiu-se dela): o trabalho adiado pode correr.
+        Infrastructure.FirstPaint.App.Signal();
     }
 
     // Uma página lenta (mais do que o teto da troca): regista-se quando acabar por apresentar, se ainda for a mesma chegada.
