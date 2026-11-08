@@ -107,9 +107,11 @@ internal static class ProfileTransfer
             .Select(r => new Bookmark(r.Key, r.Text("title") ?? string.Empty)).ToList();
         var bookmarks = marks.Count == 0 ? 0 : AppData.ImportBookmarks(marks);
 
+        // Só contam (e só se gravam) as definições que mudam de facto.
         var settings = 0;
         foreach (var r in records.Where(r => r.Collection == Collections.Settings && Collections.SyncableSettings.Contains(r.Key)))
-            if (r.Text("value") is { } value && Data.Settings.Current.With(r.Key, value) is not null && Data.Settings.Set(r.Key, value)) settings++;
+            if (r.Text("value") is { } value && Data.Settings.Current.With(r.Key, value) is { } next && next != Data.Settings.Current
+                && Data.Settings.Set(r.Key, value)) settings++;
 
         var shield = 0;
         foreach (var r in records.Where(r => r.Collection == Collections.Shield))

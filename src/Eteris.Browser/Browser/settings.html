@@ -125,7 +125,10 @@
   .syncform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
   .syncform input[type=text] { font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
     border-radius: 12px; padding: 9px 12px; width: min(100%, 420px); }
-  .syncform input[type=file] { font-size: 12.5px; color: var(--muted); max-width: 260px; }
+  .syncform label.action { font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; padding: 9px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(255, 255, 255, .05); }
+  .syncform label.action:hover { background: rgba(255, 255, 255, .1); }
+  .syncform .filename { color: var(--muted); font-size: 12.5px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   iframe { display: none; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; } }
 
@@ -394,7 +397,9 @@
             <div class="label"><b>Importar perfil cifrado</b><span>Junta um perfil exportado a este: o que falta entra, as definições do ficheiro passam a valer e as notas ficam por baixo das atuais.</span>
               <span class="syncnote" id="importNote" hidden></span></div>
             <form class="syncform" id="syncImportForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
-              <input type="file" id="syncFile" accept=".eteris">
+              <span class="filename" id="syncFileName">Nenhum ficheiro escolhido</span>
+              <label class="action" for="syncFile">Escolher ficheiro…</label>
+              <input type="file" id="syncFile" accept=".eteris" hidden>
               <input type="text" name="code" id="syncCode" placeholder="Código (14 grupos de 4)" spellcheck="false" aria-label="Código do perfil exportado">
               <input type="hidden" name="data" id="syncData">
               <button class="action" type="submit" id="importButton">Importar</button>
@@ -592,7 +597,8 @@
       const text = sink.contentDocument && sink.contentDocument.body ? sink.contentDocument.body.textContent.trim() : '';
       let reply = null;
       try { reply = JSON.parse(text); } catch (e) { reply = text ? { ok: false, message: text === 'recusado' ? 'Ligue primeiro a opção em cima.' : text } : null; }
-      if (reply && onReply) onReply(reply);
+      // Cada resposta vai só para quem a pediu (uma vez): uma carga tardia do iframe não cai noutro botão.
+      if (reply && onReply) { const handler = onReply; onReply = null; handler(reply); }
     });
     const ask = (path, handler) => { onReply = handler; sink.src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}`; };
     const note = (el, text, bad) => { el.hidden = !text; el.textContent = text || ''; el.classList.toggle('bad', !!bad); };
@@ -611,6 +617,9 @@
 
     const form = document.getElementById('syncImportForm');
     const file = document.getElementById('syncFile');
+    file.addEventListener('change', () => {
+      document.getElementById('syncFileName').textContent = file.files && file.files[0] ? file.files[0].name : 'Nenhum ficheiro escolhido';
+    });
     const importNote = document.getElementById('importNote');
     form.action = `eteris://${location.host}/sync-import?t=${data.token}`;
     form.addEventListener('submit', e => {
