@@ -323,7 +323,8 @@ public partial class MainWindow : Window
                 if (VideoEngine.CanHost(url)) PageScript.Run(browser, VideoEngine.LateWatchScript);
                 else _ = ProbePlatformCodecsAsync(browser, url);
             });
-            if (e.HttpStatusCode is <= 0 or >= 400) return;
+            // Um ficheiro de vídeo ou áudio aberto diretamente acaba «abortado» (-3) depois do commit: conta como visita.
+            if (!HistoryVisit.FromMainEngine(e.HttpStatusCode, committed: Volatile.Read(ref committedUrl) == url)) return;
             // A página do auto-teste é do próprio Éteris: não entra no histórico.
             if (!IsPrivate && !SelfTest.IsTestPage(url)) Dispatcher.InvokeAsync(() =>
             {

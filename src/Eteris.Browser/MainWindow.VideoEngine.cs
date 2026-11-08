@@ -235,6 +235,10 @@ public partial class MainWindow
             titled = true;
             if (!IsPrivate) AppData.UpdateTitleLater(url, title);
         };
+        // A navegação chegou a ter documento (e não é uma página de erro): um ficheiro de média aberto diretamente acaba
+        // «abortado» mas conta como visita (Data/HistoryVisit.cs).
+        ulong? committedNavigation = null;
+        core.ContentLoading += (_, e) => committedNavigation = e.IsErrorPage ? null : e.NavigationId;
         core.NavigationCompleted += (_, e) =>
         {
             FinishVideoSwitch(tab);
@@ -243,7 +247,8 @@ public partial class MainWindow
             var url = core.Source;
             // Sem título do documento (ficheiro de vídeo aberto diretamente): o nome do ficheiro, como no Chrome.
             if (!titled) tab.Title = VideoEngine.PageTitle(core.DocumentTitle, url);
-            if (e.IsSuccess && e.HttpStatusCode is > 0 and < 400 && !IsPrivate)
+            var aborted = e.WebErrorStatus is CoreWebView2WebErrorStatus.ConnectionAborted or CoreWebView2WebErrorStatus.OperationCanceled;
+            if (HistoryVisit.FromVideoEngine(e.IsSuccess, e.HttpStatusCode, aborted, committedNavigation == e.NavigationId) && !IsPrivate)
             {
                 var title = tab.Title;
                 AppData.QueueWrite(h => h.Record(url, title, DateTime.UtcNow));
