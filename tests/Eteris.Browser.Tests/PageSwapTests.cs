@@ -106,4 +106,43 @@ public class PageSwapTests
         order = StackOrder([("entrou", Layer.Shown, 0L), ("saiu", Layer.Warm, -2L), ("quente", Layer.Warm, -1L)]);
         Assert.Equal(["entrou", "saiu", "quente"], order);
     }
+
+    [Fact]
+    public void Presentation_AColdPageIsOnlyWarmableAfterItPresents()
+    {
+        // Ctrl+Tab para B (fria) e de volta antes de B apresentar: B não pode ficar quente (voltaria sem espera,
+        // com a superfície em branco ou antiga).
+        var pages = new PagePresentation<string>();
+        Assert.True(pages.HasPresented("b"));
+        var arrival = pages.Arrive("b");
+        Assert.False(pages.HasPresented("b"));
+        Assert.Equal(arrival, pages.Pending("b"));
+        Assert.True(pages.Presented("b", arrival));
+        Assert.True(pages.HasPresented("b"));
+        Assert.Null(pages.Pending("b"));
+    }
+
+    [Fact]
+    public void Presentation_AnEarlierArrivalDoesNotConfirmTheCurrentOne()
+    {
+        // B saiu e voltou fria enquanto a espera da 1.ª chegada ainda corria: o rAF dessa não conta para a 2.ª.
+        var pages = new PagePresentation<string>();
+        var first = pages.Arrive("b");
+        var second = pages.Arrive("b");
+        Assert.False(pages.Presented("b", first));
+        Assert.False(pages.HasPresented("b"));
+        Assert.True(pages.Presented("b", second));
+        Assert.True(pages.HasPresented("b"));
+        Assert.False(pages.Presented("b", second));
+    }
+
+    [Fact]
+    public void Presentation_ForgetDropsAClosedPage()
+    {
+        var pages = new PagePresentation<string>();
+        var arrival = pages.Arrive("b");
+        pages.Forget("b");
+        Assert.True(pages.HasPresented("b"));
+        Assert.False(pages.Presented("b", arrival));
+    }
 }

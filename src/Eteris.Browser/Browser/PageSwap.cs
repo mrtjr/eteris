@@ -63,3 +63,27 @@ public static class PageSwap
     public static IReadOnlyList<T> StackOrder<T>(IEnumerable<(T Page, Layer Layer, long Rank)> pages)
         => pages.OrderBy(p => p.Layer).ThenBy(p => p.Rank).Select(p => p.Page).ToList();
 }
+
+// Páginas que chegaram frias e ainda não apresentaram um fotograma desde essa chegada. Uma página assim tem na janela
+// uma superfície em branco ou antiga: não pode ficar «quente» (Tabs/WarmTabs.cs), porque voltar a uma quente é só subir
+// a janela, sem esperar por nenhum fotograma. Cada chegada tem um número: a confirmação de uma chegada anterior (a
+// página saiu e voltou entretanto) não conta para a atual.
+public sealed class PagePresentation<T> where T : class
+{
+    private readonly Dictionary<T, long> _arrivals = new(ReferenceEqualityComparer.Instance);
+    private long _serial;
+
+    // A página passa a ver-se fria: fica por apresentar até Presented com este número.
+    public long Arrive(T page) => _arrivals[page] = ++_serial;
+
+    // O número da chegada por apresentar, ou null se a página já apresentou (ou nunca chegou fria).
+    public long? Pending(T page) => _arrivals.TryGetValue(page, out var arrival) ? arrival : null;
+
+    // A página apresentou depois da chegada «arrival»; só conta se for a chegada atual.
+    public bool Presented(T page, long arrival)
+        => _arrivals.TryGetValue(page, out var current) && current == arrival && _arrivals.Remove(page);
+
+    public bool HasPresented(T page) => !_arrivals.ContainsKey(page);
+
+    public void Forget(T page) => _arrivals.Remove(page);
+}

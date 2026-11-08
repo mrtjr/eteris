@@ -5,7 +5,8 @@ namespace Eteris.Browser.Tests;
 
 public class WarmTabsTests
 {
-    private static readonly DateTime Now = new(2026, 11, 7, 22, 0, 0, DateTimeKind.Utc);
+    // Leitura de um relógio monótono (MainWindow.WarmClock): só a diferença conta.
+    private static readonly TimeSpan Now = TimeSpan.FromHours(30);
 
     private static Candidate<string> Left(string page, double secondsAgo, bool eligible = true, bool video = false)
         => new(page, Now - TimeSpan.FromSeconds(secondsAgo), eligible, video);
@@ -48,7 +49,7 @@ public class WarmTabsTests
     }
 
     [Fact]
-    public void Keep_ClockGoingBackwards_CoolsDown()
+    public void Keep_AReadingFromTheFuture_CoolsDown()
     {
         Assert.Empty(Keep([new Candidate<string>("a", Now + TimeSpan.FromSeconds(30), true, false)], Now));
     }

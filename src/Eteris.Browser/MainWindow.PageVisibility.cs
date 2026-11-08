@@ -37,6 +37,9 @@ public partial class MainWindow
     // Páginas que entraram frias e ainda se estão a desenhar, por baixo das que saem.
     private readonly HashSet<FrameworkElement> _arrivingPages = new();
 
+    // Páginas que entraram frias e ainda não apresentaram um fotograma desde então: nunca ficam quentes.
+    private readonly PagePresentation<ChromiumWebBrowser> _presentation = new();
+
     // Páginas quentes: deixadas há pouco, tapadas, sem minimizar (Tabs/WarmTabs.cs).
     private readonly Dictionary<ChromiumWebBrowser, WarmPage> _warmPages = new();
     private DispatcherTimer? _warmTimer;
@@ -50,11 +53,14 @@ public partial class MainWindow
     // Fim do carregamento do 1.º documento de cada página (uma aba nova só se mostra depois dele).
     private readonly ConditionalWeakTable<ChromiumWebBrowser, TaskCompletionSource> _firstLoads = new();
 
-    private sealed class WarmPage(DateTime leftUtc)
+    private sealed class WarmPage(TimeSpan leftAt)
     {
-        public DateTime LeftUtc { get; } = leftUtc;
+        public TimeSpan LeftAt { get; } = leftAt;
         public bool PlayingVideo { get; set; }
     }
+
+    // Relógio das quentes: só anda para a frente (um acerto da hora do sistema não mexe na graça).
+    private static TimeSpan WarmClock() => TimeSpan.FromMilliseconds(Environment.TickCount64);
 
     // Chamado por LayoutBrowsers com todas as páginas (abas, motor de vídeo, abas fechadas a sair) e se se devem ver.
     private void ShowPages(IReadOnlyList<(FrameworkElement Element, bool Visible)> pages)
@@ -81,6 +87,7 @@ public partial class MainWindow
                     if (element.Visibility != Visibility.Visible && element is ChromiumWebBrowser cold)
                     {
                         arriving.Add(cold);
+                        _presentation.Arrive(cold);
                         // Por baixo da que sai até apresentar; sem nenhuma a sair, fica logo por cima.
                         if (holding) _arrivingPages.Add(cold);
                     }
@@ -114,6 +121,8 @@ public partial class MainWindow
         }
         foreach (var element in cooling.Concat(hidden)) HidePage(element);
         if (held.Count > 0) _ = HideWhenShownAsync(arriving, held);
+        // Sem nenhuma a segurar, ninguém espera pela que entrou: só se regista quando apresenta (para poder ficar quente).
+        else if (arriving.Count > 0) _ = WaitPresentedAsync(arriving);
         ReviewWarmPages();
     }
 
@@ -137,6 +146,7 @@ public partial class MainWindow
     {
         _warmPages.Remove(browser);
         _arrivingPages.Remove(browser);
+        _presentation.Forget(browser);
         BrowserHost.Children.Remove(browser);
         if (!browser.IsDisposed) browser.Dispose();
     }
@@ -159,18 +169,7 @@ public partial class MainWindow
 
     private async Task HideWhenShownAsync(List<ChromiumWebBrowser> arriving, List<FrameworkElement> held)
     {
-        var clock = Stopwatch.StartNew();
-        TimeSpan Left() => PageSwap.HoldLimit - clock.Elapsed;
-        foreach (var page in arriving)
-        {
-            while (!page.IsDisposed && !page.IsBrowserInitialized && Left() > TimeSpan.Zero) await Task.Delay(16);
-            if (page.IsDisposed || !page.IsBrowserInitialized) continue;
-            // Aba nova (ou acordada): antes do fim do 1.º carregamento só há o documento vazio, branco.
-            if (_firstLoads.TryGetValue(page, out var loaded) && !loaded.Task.IsCompleted && Left() > TimeSpan.Zero)
-                await Task.WhenAny(loaded.Task, Task.Delay(Left()));
-            if (Left() > TimeSpan.Zero) await PageScript.EvaluateAsync(page, PageSwap.NextFrameScript, Left(), asyncBody: true);
-        }
-        if (arriving.Count > 0) await Task.Delay(PageSwap.PresentMargin);
+        await WaitPresentedAsync(arriving);
         foreach (var page in arriving) _arrivingPages.Remove(page);
         // As que saíram ficam quentes por baixo da que entrou, ou escondem-se — só depois de esta subir. Se a que entrou
         // já não está à vista (fechou entretanto), nada as tapa: escondem-se.
@@ -183,6 +182,50 @@ public partial class MainWindow
         ReviewWarmPages();
     }
 
+    // Espera (até PageSwap.HoldLimit) que as páginas que entraram frias apresentem e regista as que apresentaram. As que
+    // não apresentaram a tempo e continuam à vista ficam a ser vigiadas mais um pouco (até lá não podem ficar quentes).
+    private async Task WaitPresentedAsync(List<ChromiumWebBrowser> arriving)
+    {
+        // Lido já (antes de qualquer espera): o número da chegada que esta espera confirma.
+        var arrivals = arriving.Select(page => _presentation.Pending(page)).ToList();
+        var clock = Stopwatch.StartNew();
+        TimeSpan Left() => PageSwap.HoldLimit - clock.Elapsed;
+        var presented = new bool[arriving.Count];
+        for (var i = 0; i < arriving.Count; i++) presented[i] = await FramePresentedAsync(arriving[i], Left);
+        if (arriving.Count > 0) await Task.Delay(PageSwap.PresentMargin);
+        for (var i = 0; i < arriving.Count; i++)
+        {
+            if (arrivals[i] is not { } arrival) continue;
+            if (presented[i]) _presentation.Presented(arriving[i], arrival);
+            else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible) _ = ConfirmPresentedAsync(arriving[i], arrival);
+        }
+    }
+
+    // Uma página lenta (mais do que o teto da troca): regista-se quando acabar por apresentar, se ainda for a mesma chegada.
+    private async Task ConfirmPresentedAsync(ChromiumWebBrowser page, long arrival)
+    {
+        var clock = Stopwatch.StartNew();
+        if (!await FramePresentedAsync(page, () => WarmTabs.Grace - clock.Elapsed)) return;
+        await Task.Delay(PageSwap.PresentMargin);
+        _presentation.Presented(page, arrival);
+    }
+
+    // A página desenhou um fotograma do documento certo: o 1.º carregamento acabou (numa aba nova, antes dele só há o
+    // documento vazio, branco) e o rAF duplo resolveu. «left»: o tempo que ainda resta.
+    private async Task<bool> FramePresentedAsync(ChromiumWebBrowser page, Func<TimeSpan> left)
+    {
+        while (!page.IsDisposed && !page.IsBrowserInitialized && left() > TimeSpan.Zero) await Task.Delay(16);
+        if (page.IsDisposed || !page.IsBrowserInitialized) return false;
+        if (_firstLoads.TryGetValue(page, out var loaded) && !loaded.Task.IsCompleted)
+        {
+            if (left() > TimeSpan.Zero) await Task.WhenAny(loaded.Task, Task.Delay(left()));
+            if (!loaded.Task.IsCompleted) return false;
+        }
+        if (left() <= TimeSpan.Zero) return false;
+        var frame = await PageScript.EvaluateAsync(page, PageSwap.NextFrameScript, left(), asyncBody: true);
+        return frame.Success && frame.Result is true;
+    }
+
     // ---------- Abas quentes (Tabs/WarmTabs.cs) ----------
 
     // Uma página que sai fica quente se puder; a verificação de vídeo a tocar corre a seguir e arrefece-a se for o caso.
@@ -190,8 +233,9 @@ public partial class MainWindow
     private bool TryKeepWarm(FrameworkElement element, bool covered)
     {
         if (!covered || element is not ChromiumWebBrowser page || !CanStayWarm(page)) return false;
-        _warmPages[page] = new WarmPage(DateTime.UtcNow);
-        _ = CheckWarmVideoAsync(page);
+        var warm = new WarmPage(WarmClock());
+        _warmPages[page] = warm;
+        _ = CheckWarmVideoAsync(page, warm);
         return true;
     }
 
@@ -199,6 +243,9 @@ public partial class MainWindow
     private bool CanStayWarm(ChromiumWebBrowser page)
     {
         if (page.IsDisposed || !page.IsBrowserInitialized || page.Visibility != Visibility.Visible || _retiringPages.Contains(page)) return false;
+        // Entrou fria e ainda não apresentou (saiu logo a seguir, num Ctrl+Tab rápido de ida e volta): a janela tem uma
+        // superfície em branco ou antiga, e uma quente volta sem esperar por nenhum fotograma.
+        if (!_presentation.HasPresented(page)) return false;
         // No ecrã dividido as metades não tapam a área toda: uma página quente ver-se-ia no separador.
         if (_split is not null || WindowState == WindowState.Minimized || !IsVisible) return false;
         var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, page)).Key;
@@ -206,10 +253,11 @@ public partial class MainWindow
         return tab is not null && !tab.IsAudible && tab.Media != MediaState.Playing && !_videoViews.ContainsKey(tab);
     }
 
-    private async Task CheckWarmVideoAsync(ChromiumWebBrowser page)
+    // «warm»: esta saída da página; se entretanto voltou e saiu outra vez, o resultado já não é dela.
+    private async Task CheckWarmVideoAsync(ChromiumWebBrowser page, WarmPage warm)
     {
         var result = await PageScript.EvaluateAsync(page, WarmTabs.PlayingVideoScript, WarmTabs.VideoCheckLimit);
-        if (!_warmPages.TryGetValue(page, out var warm)) return;
+        if (!_warmPages.TryGetValue(page, out var current) || !ReferenceEquals(current, warm)) return;
         warm.PlayingVideo = WarmTabs.PlaysVideo(result.Success, result.Result);
         if (warm.PlayingVideo) ReviewWarmPages();
     }
@@ -223,9 +271,9 @@ public partial class MainWindow
             _warmTimer?.Stop();
             return;
         }
-        var now = DateTime.UtcNow;
+        var now = WarmClock();
         var candidates = _warmPages
-            .Select(p => new WarmTabs.Candidate<ChromiumWebBrowser>(p.Key, p.Value.LeftUtc, CanStayWarm(p.Key), p.Value.PlayingVideo))
+            .Select(p => new WarmTabs.Candidate<ChromiumWebBrowser>(p.Key, p.Value.LeftAt, CanStayWarm(p.Key), p.Value.PlayingVideo))
             .ToList();
         var keep = WarmTabs.Keep(candidates, now);
         foreach (var page in _warmPages.Keys.Except(keep).ToList())
@@ -270,7 +318,7 @@ public partial class MainWindow
         {
             if (element is not System.Windows.Interop.HwndHost host || host.Handle == IntPtr.Zero || element is ChromiumWebBrowser { IsDisposed: true }) continue;
             if (element.Visibility != Visibility.Visible && showing?.Contains(element) != true) continue;
-            if (element is ChromiumWebBrowser page && _warmPages.TryGetValue(page, out var warm)) stack.Add((host, PageSwap.Layer.Warm, -warm.LeftUtc.Ticks));
+            if (element is ChromiumWebBrowser page && _warmPages.TryGetValue(page, out var warm)) stack.Add((host, PageSwap.Layer.Warm, -warm.LeftAt.Ticks));
             else if (_leavingPages.TryGetValue(element, out var serial)) stack.Add((host, PageSwap.Layer.Held, serial));
             else if (_arrivingPages.Contains(element)) stack.Add((host, PageSwap.Layer.Arriving, 0));
             else stack.Add((host, PageSwap.Layer.Shown, 0));

@@ -24,25 +24,27 @@ public static class WarmTabs
     // Quanto se espera pela verificação de vídeo a tocar; sem resposta a tempo conta como «a tocar» (a aba arrefece).
     public static readonly TimeSpan VideoCheckLimit = TimeSpan.FromMilliseconds(250);
 
-    public readonly record struct Candidate<T>(T Page, DateTime LeftUtc, bool Eligible, bool PlayingVideo);
+    // «LeftAt» e «now» são leituras de um relógio que só anda para a frente (MainWindow.WarmClock, não a hora do sistema:
+    // um acerto do relógio, NTP ou manual, arrefecia as quentes ou adiava a revisão).
+    public readonly record struct Candidate<T>(T Page, TimeSpan LeftAt, bool Eligible, bool PlayingVideo);
 
     // As que ficam quentes agora: elegíveis, sem vídeo a tocar, dentro da graça e, destas, as Limit deixadas há menos
     // tempo. As outras arrefecem (são minimizadas).
-    public static IReadOnlyList<T> Keep<T>(IEnumerable<Candidate<T>> candidates, DateTime nowUtc)
+    public static IReadOnlyList<T> Keep<T>(IEnumerable<Candidate<T>> candidates, TimeSpan now)
         => candidates
-            .Where(c => c.Eligible && !c.PlayingVideo && Within(c, nowUtc))
-            .OrderByDescending(c => c.LeftUtc)
+            .Where(c => c.Eligible && !c.PlayingVideo && Within(c, now))
+            .OrderByDescending(c => c.LeftAt)
             .Take(Limit)
             .Select(c => c.Page)
             .ToList();
 
     // Quando voltar a decidir: quando a primeira das que ficam sai da graça. null: nenhuma fica.
-    public static TimeSpan? NextReview<T>(IEnumerable<Candidate<T>> kept, DateTime nowUtc)
+    public static TimeSpan? NextReview<T>(IEnumerable<Candidate<T>> kept, TimeSpan now)
     {
         TimeSpan? next = null;
         foreach (var candidate in kept)
         {
-            var left = candidate.LeftUtc + Grace - nowUtc;
+            var left = candidate.LeftAt + Grace - now;
             if (left < TimeSpan.Zero) left = TimeSpan.Zero;
             if (next is null || left < next) next = left;
         }
@@ -76,9 +78,9 @@ public static class WarmTabs
         })()
         """;
 
-    private static bool Within<T>(Candidate<T> candidate, DateTime nowUtc)
+    private static bool Within<T>(Candidate<T> candidate, TimeSpan now)
     {
-        var age = nowUtc - candidate.LeftUtc;
+        var age = now - candidate.LeftAt;
         return age >= TimeSpan.Zero && age < Grace;
     }
 }
