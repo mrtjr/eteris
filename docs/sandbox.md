@@ -265,7 +265,7 @@ o `vpk` gerou também o delta: 6 ficheiros alterados, 3 novos, 6 removidos, 14 M
 | Atalhos depois da atualização | os mesmos, para o mesmo `current\Eteris.Browser.exe` (agora o bootstrap) |
 | 0.2.10-teste aberta pelo destino do atalho, com o perfil da 0.2.9 | arranca; a sessão volta (a página aberta na 0.2.9) e mostra as Novidades; `chrome://sandbox`: GPU Limited/Low, **Network Service no AppContainer**, Storage Untrusted, 4 renderers Untrusted; nenhum filho com `--no-sandbox`; fecho limpo |
 | `Update.exe --uninstall` | remove a pasta, os dois atalhos e a chave de desinstalação (no fim mostra «Desinstalação Concluída», que pede OK) |
-| Estado do utilizador antes/depois (atalhos com destino e SHA256, chaves de desinstalação, `StartMenuInternet`, `RegisteredApplications`, `Classes`, escolhas de http/https/.htm/.html/.pdf) | **0 diferenças**; o Éteris não se regista como navegador na instalação |
+| Estado do utilizador antes/depois (atalhos com destino e SHA256, chaves de desinstalação, `StartMenuInternet`, `RegisteredApplications`, `Classes`, escolhas de http/https/.htm/.html/.pdf) | 0 diferenças **nestes sítios** — mas a fotografia não olhava para os perfis de AppContainer, e a desinstalação **deixou** o do serviço de rede (`cr.sb.netB382764A…`: pasta em `%LOCALAPPDATA%\Packages` e entrada em `AppContainer\Mappings`). Corrigido na revisão, em baixo; o Éteris não se regista como navegador na instalação |
 
 Notas para a publicação:
 - O `Setup.exe` do Velopack 1.2.161 entra em pânico com argumentos para a aplicação (`Setup.exe -- <args>`: erro do
@@ -277,6 +277,98 @@ Notas para a publicação:
   teste usaram `-p:Version=0.2.10` e só o pacote tem o sufixo `-teste`.
 - Ficheiros da prova na scratchpad (`sbx/vpk-test.ps1`, `sbx/vpk-uninstall.ps1`, `sbx/vpk-updater`, `sbx/vpk-hook`).
 
+**Revisão (2026-11-08, 10:00–10:50) — correções e 2.ª prova do Velopack.** Problemas confirmados e corrigidos:
+
+1. **A desinstalação deixava o perfil do AppContainer do serviço de rede.** Com `NetworkServiceSandbox` o Chromium cria
+   um perfil por caminho do executável (`GetAppContainerProfileName` em `sandbox/policy/win/sandbox_win.cc`:
+   `cr.sb.net` + SHA1 em hexadecimal maiúsculo do caminho UTF-8 do programa dos filhos, que é o `GetModuleFileName` do
+   processo principal), com a pasta `%LOCALAPPDATA%\Packages\<nome>` e a chave
+   `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppContainer\Mappings\<SID>`.
+   Confirmado: `ProfileName(C:\Users\Júnior\AppData\Local\EterisBrowserSbxTest\current\Eteris.Browser.exe)` =
+   `cr.sb.netB382764A951831BB0A76C124F3484E6BDFFFB515`, e esse perfil continuava lá depois da 1.ª desinstalação.
+   **Correção:** gancho `OnBeforeUninstallFastCallback` → `NetworkSandbox.OnUninstalling` (só nas publicações com sandbox
+   e pelo bootstrap) → `DeleteAppContainerProfile` para os perfis desta instalação: os que o arranque guardou em
+   `<raiz do Velopack>\network-sandbox-profiles.txt` (`NetworkSandbox.Remember`, só quando o serviço de rede vai mesmo
+   para o AppContainer e só se o nome ainda lá não estiver) e os do próprio caminho do gancho nas formas dada, longa e
+   curta. O nome depende do caminho exato: arrancar pela forma curta 8.3 (`C:\Users\JNIOR~1\…`) cria **outro** perfil
+   (visto nos testes: `sbx\d0\cefsimple.exe` tem dois), por isso o arranque guarda o nome de cada caminho usado.
+   Para cópias à mão: `build/sandbox/appcontainer-profiles.ps1` (lista; com `-Exe … -Remove` apaga só os desses exes).
+2. **Atualização a partir da 0.2.9 pelo caminho real do Éteris** (não por um atualizador externo): 0.2.9 compilada do
+   `c3fe087` (o `main` publicado + correções), só com um patch de teste fora do repositório (`sbx/patch-029t.py`: feed
+   local em vez do GitHub e `--user-data-dir` do perfil de teste nos argumentos do reinício, para a versão nova nunca
+   abrir o perfil do dono). Abaixo.
+3. **A publicação não protegia contra uma DLL cliente desfasada do motor.** A DLL passa a ter recurso de versão com a
+   CEF da distribuição com que foi compilada (`ProductVersion` = `CEF_VERSION`, `Comments` = `cef_commit=<commit>`,
+   gerado pelo CMake a partir de `include/cef_version.h`), e o `EterisSandboxCheck` corre `build/sandbox/verify-client.ps1`
+   **antes de compilar**: commit e versão iguais aos do `manifest.json` do runtime, importações diretas só do
+   `KERNEL32.dll` (tabela de importações do PE; `libcef.dll` em diferido), exportações só `EterisSandboxInfo` e
+   `RunWinMain`, e nenhum `CEF_INSTALLER_CONFIG` no bootstrap nem na DLL. Exige também `SelfContained=true`. Provado:
+   com a DLL do D6 (sem versão) a publicação pára («a DLL não tem a versão da CEF gravada»); com a nova passa
+   (`156.0.15+gcf671c0`, diretas: `KERNEL32.dll`; diferidas: `libcef.dll`, `USER32.dll`, `SHELL32.dll`).
+4. **Licenças:** o `brand-bootstrap.ps1` mantém o `LegalCopyright` do bootstrap da CEF («Copyright (C) 2026 The
+   Chromium Embedded Framework Authors», verificado na publicação) e a DLL cliente declara o `libcef_dll_wrapper`;
+   `licenses/INDEX.md` (gerado por `build/licenses/collect.py`) regista o CefSharp `156.0.150-eteris.N` modificado e o
+   bootstrap/`libcef_dll_wrapper` (BSD-3-Clause, `CEF-LICENSE.txt`); `LicenseComplianceTests` verifica-o.
+5. **Testes com o CefSharp do feed:** `SandboxSupported` passa a ser comparado com o CefSharp compilado
+   (`CefSettings.WindowsSandboxInfo` existe ou não), o ramo com sandbox de `Build` é testado (o ponteiro chega ao
+   CefSharp e o caminho dos filhos não aponta para o bootstrap), e os ganchos só atuam com o CefSharp do Éteris **e** o
+   arranque pelo bootstrap (`SandboxInfo.LaunchedByBootstrap`; uma compilação com o feed mas sem o bootstrap já não dá a
+   ACL). Os testes do sandbox passam com `-p:EterisCefSharpFeed=… -p:EterisCefSharpN=2` (49/49) sem dar a ACL à pasta
+   dos testes (`-Check` → 0/2), e a bateria normal também.
+6. **Processo filho por argumento:** a DLL cliente lê a linha de comandos com o `CommandLineToArgvW` (como o
+   `base::CommandLine` do Chromium) e só um argumento `--type=<valor>` (prefixos `--`, `-` ou `/`, sem distinção de
+   maiúsculas, antes de um `--`) conta; antes procurava a sequência na linha inteira. Ao vivo: um endereço com
+   `?q=--type=renderer` abre a janela («Nova aba — Éteris», com filhos GPU, utilitários e renderers).
+7. **Aviso quando o .NET não arranca:** sem a `hostfxr.dll` (ou com erro do host) aparece «O Éteris não conseguiu
+   arrancar. Falta o .NET na pasta do programa (hostfxr.dll): … Detalhes: …\Eteris-bootstrap.log» (visto ao vivo numa
+   pasta só com o exe, a DLL cliente e o `chrome_elf.dll`), menos nos ganchos `--veloapp-*`.
+8. **ACL:** `GrantedForLaunch` verifica também o `libcef.dll` e a DLL cliente (atualização interrompida a meio), e aceita
+   «ALL APPLICATION PACKAGES» (`S-1-15-2-1`, o que Program Files já dá: o serviço de rede não é LPAC) em vez das duas
+   capacidades; nenhuma entrada dessas três pode negar.
+
+**2.ª prova do Velopack (packId `EterisSbxTeste2`, feed local `sbx/vpk2-feed`: 0.2.9 do `c3fe087` sem sandbox e 0.2.10
+do ramo com sandbox e a DLL cliente nova).** Fotografia antes/depois alargada (`sbx/vpk2-snapshot.ps1`: o de antes mais
+as pastas `cr.sb.*` em `Packages` e as entradas `cr.sb.*` em `AppContainer\Mappings`). Feita duas vezes, igual:
+
+| Passo | Resultado |
+|---|---|
+| `Setup.exe --silent` da 0.2.9 | instala em 3 s; apphost .NET, com `CefSharp.BrowserSubprocess.exe` |
+| 0.2.9 a correr (perfil de teste) | `CheckAndDownloadAsync` no arranque encontra a 0.2.10 no feed e transfere o **delta** |
+| Botão «Atualizar para 0.2.10» (UI Automation: `RestartRequested = true`, fecha as janelas, `ApplyPendingOnExit`) | +535 ms: o **próprio processo da 0.2.9** arranca `Update.exe --silent apply --package …0.2.10-full.nupkg --waitPid <pid da 0.2.9> … -- --user-data-dir=…`; a 0.2.9 sai com código 0 |
+| `Update.exe` | aplica; +3,6 s: gancho `--veloapp-updated 0.2.10` **pelo bootstrap** (ACL dada à raiz: 2/2); +5,3 s: arranca `current\Eteris.Browser.exe --user-data-dir=…` (pai = o `Update.exe`) |
+| 0.2.10 reiniciada | «Éteris» 0.2.10, `Eteris.App.dll`, sem `CefSharp.BrowserSubprocess.exe`; janela «Novidades do Éteris»; `chrome://sandbox`: GPU Limited/Low, **Network Service no AppContainer** `S-1-15-2-3146526238-…` (= `cr.sb.netC236E207…`, o perfil do caminho da instalação), Storage Lockdown/Untrusted, renderers Lockdown/Untrusted; nenhum filho com `--no-sandbox`; `network-sandbox-profiles.txt` = `cr.sb.netC236E2070ED2582B667660D85545E6ED94813633` |
+| `Update.exe --silent uninstall` | gancho `--veloapp-uninstall` pelo bootstrap (125–140 ms); pasta, atalhos e chave de desinstalação removidos; **perfil `cr.sb.netC236E207…` apagado** (pasta e entrada em `Mappings`) |
+| Estado do utilizador antes/depois (incluindo `Packages\cr.sb.*` e `Mappings` `cr.sb.*`) | **0 diferenças** (626 linhas iguais), nas duas vezes |
+
+**Restos dos testes de 8 de novembro na máquina do dono (por apagar, à espera de confirmação):** seis perfis
+`cr.sb.net*`, todos identificados pelo SHA1 do caminho de um exe de teste (nenhum é de um navegador do dono; os
+`cr.sb.cdm*`, `cr.sb.odm*` e `cr.sb.xr*` de 7 de novembro não são do Éteris e não se mexe neles):
+
+| Perfil | Criado | Exe de teste (caminho tal como foi arrancado) |
+|---|---|---|
+| `cr.sb.net379F5396…` | 05:34 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma longa, `Júnior`) |
+| `cr.sb.net66206779…` | 05:46 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma curta, `JNIOR~1`) |
+| `cr.sb.net2F6D58F6…` | 05:47 | `…\scratchpad\sbx\d9-acl\cefsimple.exe` (curta) |
+| `cr.sb.netAB446901…` | 06:17 | `…\scratchpad\sbx\app-d9\Eteris.Browser.exe` (curta) |
+| `cr.sb.net6C9F810C…` | 09:27 | `…\scratchpad\sbx\app-d5i\Eteris.Browser.exe` (curta) |
+| `cr.sb.netB382764A…` | 10:00 | `%LOCALAPPDATA%\EterisBrowserSbxTest\current\Eteris.Browser.exe` (1.ª prova do Velopack, antes da correção) |
+
+Para os apagar (só estes): `build/sandbox/appcontainer-profiles.ps1 -Exe <cada um dos caminhos acima, na forma
+indicada> -Remove` — ou `DeleteAppContainerProfile` com cada nome.
+
+**Custo do bootstrap no arranque (A/B intercalado, `sbx/ab-startup.ps1`).** Base = publicação normal do ramo (apphost)
+contra sandbox = publicação com `EterisSandbox` (bootstrap: `chrome_elf.dll`, DLL cliente e broker do sandbox antes do
+.NET), mesmo `libcef.dll`, sem a ACL do D9 nas duas (sem perfis de AppContainer novos). 7 rondas com a ordem alternada,
+a 1.ª de aquecimento fora das medianas (6 medições cada):
+
+| Medição | Base | Sandbox | Diferença |
+|---|---|---|---|
+| Arranque até a janela ter título (perfil já criado) | mediana **861,5 ms** (842–887) | mediana **882 ms** (859–914) | +20 ms (+2,4 %) |
+| 2.º arranque com a instância aberta (`--new-tab`, até sair) | mediana **114 ms** (111–115) | mediana **119,5 ms** (117–123) | +5,5 ms (+5 %) |
+
+O 2.º arranque é sistematicamente um pouco mais lento (as 6 medições com sandbox acima das 6 da base): é o custo de
+carregar o `chrome_elf.dll` e o `libcef.dll` e preparar o broker antes de o .NET entregar o link. Pequeno, mas real.
+
 **Falta:** ver «Estado do ramo `sandbox` e o que falta para fundir no `main`», em baixo.
 
 ## Estado do ramo `sandbox` e o que falta para fundir no `main` (2026-11-08, depois de fundir o `main` c3fe087)
@@ -287,7 +379,12 @@ Notas para a publicação:
 memória), saída opcional no repositório (D6) com a marca do Éteris no bootstrap (E, 1.ª parte), o serviço de rede
 também isolado — **no código**, com a ACL dada pelos ganchos do Velopack e verificada no arranque (D9) — e o
 **Velopack com o bootstrap como `mainExe`**: instalar, atualizar por delta de uma versão sem sandbox para uma com
-sandbox (o gancho de atualização corre pelo bootstrap e dá a ACL), atalhos e perfil preservados, desinstalar sem restos.
+sandbox (o gancho de atualização corre pelo bootstrap e dá a ACL), atalhos e perfil preservados, e — desde a revisão —
+a atualização feita pelo próprio Éteris (botão «Atualizar para …», reinício pelo `Update.exe`) a partir de uma 0.2.9
+compilada do `c3fe087`, e a desinstalação sem restos também no perfil do AppContainer do serviço de rede (gancho de
+desinstalação; 0 diferenças com os perfis `cr.sb.*` na fotografia). A publicação com sandbox verifica a DLL cliente
+contra o runtime do motor. Por limpar: os seis perfis `cr.sb.net*` dos testes de 8 de novembro (tabela acima), à
+espera de confirmação do dono.
 
 **Falta, por ordem:**
 1. **E — assinatura conjunta** (½ dia): `Eteris.Browser.exe` (bootstrap com a marca), `Eteris.Browser.dll` (DLL
