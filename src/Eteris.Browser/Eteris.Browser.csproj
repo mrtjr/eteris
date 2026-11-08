@@ -126,6 +126,11 @@
     <Error Condition="'$(EterisCefSharpFeed)' == ''" Text="EterisSandbox precisa do CefSharp com o patch v2: -p:EterisCefSharpFeed=... -p:EterisCefSharpN=... (build/cefsharp/README.md)" />
     <Error Condition="'$(EterisCefRuntimeOn)' != 'true' Or !Exists('$(EterisCefRuntime)\bootstrap.exe')" Text="EterisSandbox precisa do runtime do motor com o bootstrap.exe em $(EterisCefRuntime) (build/cef-codecs)" />
     <Error Condition="!Exists('$(EterisSandboxClientDll)')" Text="EterisSandbox: falta a DLL cliente $(EterisSandboxClientDll) (build/sandbox/client/build.cmd)" />
+    <!-- A DLL cliente arranca o .NET pela hostfxr.dll da pasta do exe: só com o .NET dentro da publicação. -->
+    <Error Condition="'$(SelfContained)' != 'true'" Text="EterisSandbox precisa de SelfContained=true (a DLL cliente arranca o .NET pela hostfxr.dll da pasta do programa)" />
+    <!-- DLL cliente da mesma compilação do motor que o runtime (versão da CEF gravada nela contra o manifest.json),
+         importações diretas só do KERNEL32, só as duas exportações e sem o instalador embutido da CEF. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\build\sandbox\verify-client.ps1&quot; -Dll &quot;$(EterisSandboxClientDll)&quot; -Runtime &quot;$(EterisCefRuntime)&quot;" />
   </Target>
 
   <ItemGroup Condition="'$(EterisSandbox)' == 'true'">

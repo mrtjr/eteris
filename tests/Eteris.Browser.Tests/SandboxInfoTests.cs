@@ -85,10 +85,29 @@ public class SandboxInfoTests
         const string exe = @"C:\Eteris\Eteris.Browser.exe";
         Assert.Equal(exe, CefConfigurator.Build("p", bootstrapExe: exe).BrowserSubprocessPath);
         Assert.EndsWith("CefSharp.BrowserSubprocess.exe", CefConfigurator.Build("p").BrowserSubprocessPath, StringComparison.OrdinalIgnoreCase);
-        // Os testes compilam com o CefSharp oficial: o ponteiro é ignorado e os filhos continuam a ser o bootstrap.
-        Assert.False(CefConfigurator.SandboxSupported);
-        Assert.Equal(exe, CefConfigurator.Build("p", sandboxInfo: 0x1234, bootstrapExe: exe).BrowserSubprocessPath);
+        var withPointer = CefConfigurator.Build("p", sandboxInfo: 0x1234, bootstrapExe: exe);
+        if (CefConfigurator.SandboxSupported)
+        {
+            // CefSharp do Éteris (-p:EterisCefSharpFeed): o ponteiro vai para o CefSharp, que limpa o caminho dos filhos
+            // (são o próprio exe); o Éteris não o põe a apontar para o bootstrap, que desligaria o sandbox.
+            Assert.Equal((nint)0x1234, WindowsSandboxInfo(withPointer));
+            Assert.NotEqual(exe, withPointer.BrowserSubprocessPath);
+            Assert.Equal((nint)0, WindowsSandboxInfo(CefConfigurator.Build("p", bootstrapExe: exe)));
+        }
+        else
+        {
+            // CefSharp oficial: o ponteiro é ignorado e os filhos continuam a ser o bootstrap, sem sandbox.
+            Assert.Equal(exe, withPointer.BrowserSubprocessPath);
+        }
     }
+
+    // SandboxSupported acompanha o CefSharp com que se compilou: só o do Éteris tem CefSettings.WindowsSandboxInfo.
+    [Fact]
+    public void SandboxSupported_FollowsTheCefSharpBuild()
+        => Assert.Equal(typeof(CefSharp.Wpf.CefSettings).GetProperty("WindowsSandboxInfo") is not null, CefConfigurator.SandboxSupported);
+
+    private static nint WindowsSandboxInfo(CefSharp.CefSettingsBase settings)
+        => (nint)settings.GetType().GetProperty("WindowsSandboxInfo")!.GetValue(settings)!;
 
     // Opção B de docs/sandbox.md: com -p:EterisSandbox=true o bootstrap fica com o nome de sempre (Velopack, atalhos,
     // instância única) e o .NET passa a Eteris.App; a publicação deixa de trazer o processo filho .NET e o apphost.
@@ -109,7 +128,14 @@ public class SandboxInfoTests
         Assert.Contains("brand-bootstrap.ps1", publish.Element("Exec")!.Attribute("Command")!.Value);
         Assert.True(publish.Elements().ToList().IndexOf(publish.Element("Copy")!) < publish.Elements().ToList().IndexOf(publish.Element("Exec")!));
         var check = project.Descendants("Target").Single(t => t.Attribute("Name")?.Value == "EterisSandboxCheck");
-        Assert.Equal(3, check.Elements("Error").Count());
+        Assert.Equal(4, check.Elements("Error").Count());
+        Assert.Contains(check.Elements("Error"), e => e.Attribute("Condition")!.Value == "'$(SelfContained)' != 'true'");
+        // A DLL cliente é da compilação do motor que se publica (build/sandbox/verify-client.ps1), antes de compilar.
+        var verify = check.Element("Exec")!.Attribute("Command")!.Value;
+        Assert.Contains("verify-client.ps1", verify);
+        Assert.Contains("-Dll &quot;$(EterisSandboxClientDll)&quot;".Replace("&quot;", "\""), verify);
+        Assert.Contains("-Runtime \"$(EterisCefRuntime)\"", verify);
+        Assert.Contains("CollectPackageReferences", check.Attribute("BeforeTargets")!.Value);
     }
 
     // Com o .NET renomeado (Eteris.App), um pack URI com o nome da montagem escrito à mão deixaria de encontrar o

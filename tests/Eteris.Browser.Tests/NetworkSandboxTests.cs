@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Eteris.Browser.Infrastructure;
@@ -107,16 +108,143 @@ public class NetworkSandboxTests
         Assert.Contains("ThirdPartyStoragePartitioning", on);
     }
 
-    // Os ganchos do Velopack só mexem na ACL nas publicações com sandbox (os testes usam o CefSharp oficial).
+    // Os ganchos do Velopack só mexem em alguma coisa nas publicações com sandbox: CefSharp do Éteris E arranque pelo
+    // bootstrap. O processo dos testes nunca arranca pelo bootstrap, com o CefSharp oficial ou com o do feed
+    // (-p:EterisCefSharpFeed): os ganchos ficam inertes e não dão a ACL à pasta dos testes.
     [Fact]
-    public void Hooks_AreWiredAndInertWithoutTheSandbox()
+    public void Hooks_AreWiredAndInertOutsideTheBootstrap()
     {
         var program = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Program.cs"));
         Assert.Contains(".OnAfterInstallFastCallback(_ => NetworkSandbox.OnInstalled())", program);
         Assert.Contains(".OnAfterUpdateFastCallback(_ => NetworkSandbox.OnInstalled())", program);
-        Assert.False(CefConfigurator.SandboxSupported);
-        NetworkSandbox.OnInstalled();
+        Assert.Contains(".OnBeforeUninstallFastCallback(_ => NetworkSandbox.OnUninstalling())", program);
+        Assert.False(SandboxInfo.LaunchedByBootstrap);
         Assert.False(NetworkSandbox.Granted(AppContext.BaseDirectory));
+        NetworkSandbox.OnInstalled();
+        NetworkSandbox.OnUninstalling();
+        Assert.False(NetworkSandbox.Granted(AppContext.BaseDirectory));
+        Assert.False(NetworkSandbox.OnInstalled(false, AppContext.BaseDirectory));
+        Assert.Empty(NetworkSandbox.OnUninstalling(false, Environment.ProcessPath, _ => throw new InvalidOperationException("apagou")));
+    }
+
+    // O ramo com sandbox do gancho de instalação/atualização, numa instalação do Velopack de mentira: a ACL vai para a
+    // raiz e chega ao exe da versão.
+    [Fact]
+    public void OnInstalled_GrantsTheVelopackRoot()
+    {
+        var root = Directory.CreateTempSubdirectory("eteris-netsbx-").FullName;
+        try
+        {
+            var current = Directory.CreateDirectory(Path.Combine(root, "current")).FullName;
+            File.WriteAllText(Path.Combine(root, "Update.exe"), "");
+            var exe = Path.Combine(current, "Eteris.Browser.exe");
+            File.WriteAllText(exe, "");
+            Assert.True(NetworkSandbox.OnInstalled(true, current));
+            Assert.True(NetworkSandbox.Granted(root));
+            Assert.True(NetworkSandbox.GrantedForLaunch(exe));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    // Como o Chromium (GetAppContainerProfileName): «cr.sb.net» + SHA1 do caminho em UTF-8, maiúsculas. O valor é o do
+    // perfil que a instalação de teste do Velopack deixou nesta máquina (2026-11-08), com o «ú» de «Júnior».
+    [Fact]
+    public void ProfileName_IsTheChromiumOne()
+    {
+        Assert.Equal("cr.sb.netB382764A951831BB0A76C124F3484E6BDFFFB515",
+            NetworkSandbox.ProfileName(@"C:\Users\Júnior\AppData\Local\EterisBrowserSbxTest\current\Eteris.Browser.exe"));
+        Assert.Equal(49, NetworkSandbox.ProfileName(@"C:\a.exe").Length); // o Chromium corta aos 50
+        Assert.NotEqual(NetworkSandbox.ProfileName(@"C:\Eteris\Eteris.Browser.exe"), NetworkSandbox.ProfileName(@"c:\eteris\eteris.browser.exe"));
+    }
+
+    // Desinstalação: os perfis guardados no arranque (um por caminho com que o exe foi arrancado) e o do próprio caminho
+    // do gancho são apagados; fora do Velopack nada é guardado.
+    [Fact]
+    public void Uninstall_RemovesTheRememberedProfiles()
+    {
+        var root = Directory.CreateTempSubdirectory("eteris-netsbx-").FullName;
+        try
+        {
+            var current = Directory.CreateDirectory(Path.Combine(root, "current")).FullName;
+            var exe = Path.Combine(current, "Eteris.Browser.exe");
+            File.WriteAllText(exe, "");
+
+            // Fora do Velopack (sem Update.exe): nada fica escrito.
+            NetworkSandbox.Remember(exe);
+            Assert.False(File.Exists(Path.Combine(current, NetworkSandbox.ProfilesFile)));
+
+            File.WriteAllText(Path.Combine(root, "Update.exe"), "");
+            var file = Path.Combine(root, NetworkSandbox.ProfilesFile);
+            NetworkSandbox.Remember(exe);
+            NetworkSandbox.Remember(exe);
+            var other = exe.ToUpperInvariant(); // o mesmo exe arrancado por outra grafia do caminho
+            NetworkSandbox.Remember(other);
+            File.AppendAllText(file, "lixo\r\ncr.sb.cdm0000000000000000000000000000000000000000\r\n");
+            Assert.Equal(new[] { NetworkSandbox.ProfileName(exe), NetworkSandbox.ProfileName(other) },
+                File.ReadAllLines(file).Where(l => l.StartsWith("cr.sb.net", StringComparison.Ordinal)));
+
+            var deleted = new List<string>();
+            var names = NetworkSandbox.OnUninstalling(true, exe, name => { deleted.Add(name); return 0; });
+            Assert.Equal(names, deleted);
+            Assert.Contains(NetworkSandbox.ProfileName(exe), deleted);
+            Assert.Contains(NetworkSandbox.ProfileName(other), deleted);
+            Assert.All(deleted, name => Assert.Matches("^cr\\.sb\\.net[0-9A-F]{40}$", name));
+            Assert.Equal(deleted.Count, deleted.Distinct().Count());
+
+            // Um erro a apagar um perfil não impede os outros nem a desinstalação.
+            var tried = 0;
+            NetworkSandbox.OnUninstalling(true, exe, _ => { tried++; throw new ExternalException("falhou"); });
+            Assert.Equal(names.Count, tried);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    // «ALL APPLICATION PACKAGES» também abre a pasta ao AppContainer do serviço de rede (não é LPAC): por exemplo numa
+    // instalação em Program Files. E a ACL tem de chegar ao libcef.dll e à DLL cliente, não só ao exe.
+    [Fact]
+    public void Granted_AcceptsAllApplicationPackagesAndChecksTheDlls()
+    {
+        var root = Directory.CreateTempSubdirectory("eteris-netsbx-").FullName;
+        try
+        {
+            var exe = Path.Combine(root, "Eteris.Browser.exe");
+            File.WriteAllText(exe, "");
+            var info = new DirectoryInfo(root);
+            var security = info.GetAccessControl();
+            security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(NetworkSandbox.AllApplicationPackagesSid),
+                FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                PropagationFlags.None, AccessControlType.Allow));
+            info.SetAccessControl(security);
+            Assert.True(NetworkSandbox.Granted(exe));
+            Assert.True(NetworkSandbox.GrantedForLaunch(exe));
+
+            // Uma DLL sem herança (atualização interrompida a meio): o lançamento falharia, por isso não se liga.
+            foreach (var dll in new[] { "libcef.dll", "Eteris.Browser.dll" })
+            {
+                var path = Path.Combine(root, dll);
+                File.WriteAllText(path, "");
+                Assert.True(NetworkSandbox.GrantedForLaunch(exe));
+                var file = new FileInfo(path);
+                var own = file.GetAccessControl();
+                own.SetAccessRuleProtection(true, false);
+                own.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.FullControl, AccessControlType.Allow));
+                file.SetAccessControl(own);
+                Assert.True(NetworkSandbox.Granted(exe));
+                Assert.False(NetworkSandbox.GrantedForLaunch(exe));
+                Assert.False(NetworkSandbox.Decide(true, exe));
+                File.Delete(path);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     private static string[] Features(CefSharp.CefSettingsBase settings)

@@ -2,7 +2,7 @@
 # (make_distrib do runtime em uso: mesmo commit do libcef.dll), com o libcef_dll_wrapper dela, CRT estática (/MT)
 # e os /DELAYLOAD da CEF (CEF_SHARED_LINKER_FLAGS). Ver build.cmd.
 cmake_minimum_required(VERSION 3.21)
-project(eteris_client CXX)
+project(eteris_client CXX RC)
 
 # Barras normais: as macros da CEF voltam a interpretar o caminho, e as barras invertidas viram escapes.
 file(TO_CMAKE_PATH "${CEF_ROOT}" CEF_ROOT)
@@ -17,7 +17,22 @@ find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_DEBUG}" "${CEF_LIB_RELEASE}")
 
-add_library(eteris_client SHARED eteris_client.cpp)
+# Versão da CEF da distribuição gravada na DLL (recurso de versão: ProductVersion = CEF_VERSION, Comments com o commit):
+# a publicação (build/sandbox/verify-client.ps1) compara-a com o manifest.json do runtime, para nunca juntar uma DLL de
+# outra compilação do motor ao libcef.dll.
+file(STRINGS "${CEF_ROOT}/include/cef_version.h" _cef_version_lines
+     REGEX "^#define CEF_(VERSION|VERSION_MAJOR|VERSION_MINOR|VERSION_PATCH|COMMIT_NUMBER|COMMIT_HASH) ")
+foreach(_line IN LISTS _cef_version_lines)
+  if(_line MATCHES "^#define (CEF_[A-Z_]+) \"?([^\"]*)\"?$")
+    set(${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
+  endif()
+endforeach()
+if(NOT CEF_COMMIT_HASH MATCHES "^[0-9a-f]+$" OR NOT CEF_VERSION OR NOT CEF_COMMIT_NUMBER)
+  message(FATAL_ERROR "cef_version.h sem CEF_VERSION/CEF_COMMIT_HASH/CEF_COMMIT_NUMBER: ${CEF_ROOT}")
+endif()
+configure_file(eteris_client.rc.in "${CMAKE_CURRENT_BINARY_DIR}/eteris_client.rc" @ONLY)
+
+add_library(eteris_client SHARED eteris_client.cpp "${CMAKE_CURRENT_BINARY_DIR}/eteris_client.rc")
 SET_LIBRARY_TARGET_PROPERTIES(eteris_client)
 add_dependencies(eteris_client libcef_dll_wrapper)
 target_compile_definitions(eteris_client PRIVATE "ETERIS_APP_DLL=L\"${ETERIS_APP_DLL}\"")

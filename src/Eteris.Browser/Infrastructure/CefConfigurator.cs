@@ -92,6 +92,8 @@ public static class CefConfigurator
         var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
         // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
         var networkSandbox = NetworkSandbox.Decide(sandbox != 0, Environment.ProcessPath);
+        // O perfil do AppContainer que o Chromium vai criar para este caminho: a desinstalação apaga-o.
+        if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
         Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox),
             performDependencyCheck: bootstrap is null, browserProcessHandler: null);
     }

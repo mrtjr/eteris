@@ -81,8 +81,53 @@ public class SandboxBootstrapSourceTests
         Assert.Matches(@"extern ""C"" __declspec\(dllexport\) void\* EterisSandboxInfo\(\)", cpp);
         // Filhos: a informação do sandbox chega ao CefExecuteProcess; o principal guarda-a antes de arrancar o .NET.
         Assert.Contains("CefExecuteProcess(args, app.get(), sandbox_info)", cpp);
-        Assert.True(cpp.IndexOf("g_sandbox_info = sandbox_info;", StringComparison.Ordinal)
-            < cpp.IndexOf("return RunDotNet();", StringComparison.Ordinal));
+        var store = cpp.IndexOf("g_sandbox_info = sandbox_info;", StringComparison.Ordinal);
+        Assert.True(store > cpp.IndexOf("CefExecuteProcess(args, app.get(), sandbox_info)", StringComparison.Ordinal));
+        Assert.True(store < cpp.IndexOf("const int code = RunDotNet(argc, argv);", StringComparison.Ordinal));
+    }
+
+    // Processo filho só com um ARGUMENTO --type=<valor> antes de um «--» (como o base::CommandLine do Chromium no
+    // Windows: prefixos --, - e /, sem distinção de maiúsculas), nunca «--type=» a meio de outro argumento (um endereço).
+    [Fact]
+    public void Client_DetectsChildrenByArgumentNotBySubstring()
+    {
+        var cpp = ClientSource;
+        Assert.DoesNotContain("wcsstr(", cpp);
+        Assert.Contains("CommandLineToArgvW(GetCommandLineW(), &argc)", cpp);
+        Assert.Contains("if (IsChildProcess(argc, argv))", cpp);
+        Assert.Contains("if (wcscmp(a, L\"--\") == 0) return false;", cpp);
+        Assert.Contains("_wcsnicmp(a, L\"type=\", 5) == 0 && a[5] != L'\\0'", cpp);
+    }
+
+    // Sem .NET (hostfxr em falta, erro do host) o Éteris avisa com o caminho do registo, menos nos ganchos do Velopack
+    // (sem janela, com prazo).
+    [Fact]
+    public void Client_ReportsDotNetStartupFailures()
+    {
+        var cpp = ClientSource;
+        Assert.Contains("MessageBoxW(nullptr, text.c_str()", cpp);
+        Assert.Contains("if (IsVelopackHook(argc, argv)) return;", cpp);
+        Assert.Equal(2, Regex.Matches(cpp, @"ReportStartupFailure\(argc, argv, ").Count);
+    }
+
+    // A versão da CEF da distribuição fica gravada na DLL (recurso de versão), para a publicação a comparar com o
+    // manifest.json do runtime (build/sandbox/verify-client.ps1).
+    [Fact]
+    public void Client_CarriesTheCefVersionItWasBuiltWith()
+    {
+        var cmake = Read("build", "sandbox", "client", "CMakeLists.txt");
+        Assert.Contains("\"${CEF_ROOT}/include/cef_version.h\"", cmake);
+        Assert.Contains("configure_file(eteris_client.rc.in", cmake);
+        var rc = Read("build", "sandbox", "client", "eteris_client.rc.in");
+        Assert.Contains("VALUE \"ProductVersion\", \"@CEF_VERSION@\"", rc);
+        Assert.Contains("VALUE \"Comments\", \"cef_commit=@CEF_COMMIT_HASH@\"", rc);
+        Assert.Contains("Chromium Embedded Framework Authors", rc);
+        var verify = Read("build", "sandbox", "verify-client.ps1");
+        Assert.Contains("cef_commit=([0-9a-f]{40})", verify);
+        Assert.Contains("$manifest.cef.commit", verify);
+        Assert.Contains("'KERNEL32.DLL'", verify);
+        Assert.Contains("'EterisSandboxInfo,RunWinMain'", verify);
+        Assert.Contains("CEF_INSTALLER_CONFIG", verify);
     }
 
     // A DLL é carregada em todos os filhos com sandbox: nada corre ao carregá-la, e o .NET só no processo principal.

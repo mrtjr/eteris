@@ -20,6 +20,10 @@ if (-not $Rc) {
   if (-not $Rc) { throw 'rc.exe do Windows SDK não encontrado (passe -Rc)' }
 }
 $v = $Version.Split('.'); $comma = "$($v[0]),$($v[1]),$($v[2]),0"
+# O bootstrap é da CEF (BSD-3-Clause): o aviso de copyright dos recursos de versão dele passa para o recurso novo.
+$legal = (Get-Item -LiteralPath $Exe).VersionInfo.LegalCopyright
+if (-not $legal -or $legal -notmatch 'Chromium Embedded Framework') { $legal = 'Copyright (C) The Chromium Embedded Framework Authors' }
+$legal = $legal -replace '"', '""'
 $work = Join-Path ([IO.Path]::GetTempPath()) ("eteris-brand-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
@@ -48,6 +52,7 @@ BEGIN
       VALUE "OriginalFilename", "Eteris.Browser.exe"
       VALUE "ProductName", "Éteris"
       VALUE "ProductVersion", "$Version"
+      VALUE "LegalCopyright", "$legal"
       VALUE "Comments", "Arranque do Éteris pelo bootstrap da CEF (BSD), com o sandbox dos processos das páginas."
     END
   END
@@ -138,6 +143,7 @@ public static class Res {
   $result = [EterisBrand.Res]::Apply($Exe, (Join-Path $work 'brand.res'), [int[]](3, 14, 16))
   $info = (Get-Item -LiteralPath $Exe).VersionInfo
   if ($info.ProductName -ne 'Éteris' -or $info.FileVersion -ne $Version) { throw "versão não aplicada: $($info.ProductName) $($info.FileVersion)" }
+  if ($info.LegalCopyright -notmatch 'Chromium Embedded Framework') { throw "o aviso de copyright da CEF não ficou no recurso: $($info.LegalCopyright)" }
   "OK: $Exe ($result) - $($info.ProductName) $($info.FileVersion)"
 } finally {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
