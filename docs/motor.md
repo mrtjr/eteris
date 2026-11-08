@@ -226,6 +226,33 @@ CefSharp encolher a janela do CEF a 0×0) — antes, o Chromium ainda dispunha e
 «visible». Não evita a nova rasterização (o Chromium larga os tiles de uma página «hidden»), só tira a mudança de
 tamanho a mais e encurta o tempo até ao 1.º fotograma.
 
+**T6 — Abas «quentes» (rec. 2).** A página que sai deixa de ser minimizada logo: fica no tamanho inteiro, não
+minimizada, tapada pela da aba ativa, durante um período de graça (`WarmTabs.Grace` = 8 s; no máximo
+`WarmTabs.Limit` = 2 páginas, as deixadas há menos tempo). Voltar a uma delas é só subir a sua janela: o DWM já tem
+o conteúdo dela e o Chromium nunca a deu por escondida, por isso não há disposição, rasterização nem espera (é o
+«saved frame» do Chrome, caso A do estudo §1.3, que o CEF em janela não consegue ter com a página «hidden»). A troca
+de abas trata-a como uma página que já está à vista (`PageSwap.Plan`: `Keep` enquanto tapada, `Show` sem segurar a
+que sai quando volta). Passada a graça, a página é minimizada como antes (tapada, não se vê).
+
+Quem está por cima de quem passa a ser explícito (`StackPages`, `PageSwap.StackOrder`): à vista → a sair (por cima da
+que entra até esta apresentar) → a entrar fria → quentes (a mais recente primeiro), num só `DeferWindowPos` e só se a
+ordem atual for outra. Antes bastava pôr a que entra em `HWND_BOTTOM`; com páginas quentes visíveis por baixo, a que
+entra ficaria tapada por elas.
+
+Nunca fica quente (`MainWindow.CanStayWarm` + `WarmTabs.Keep`): no ecrã dividido (as metades não tapam a área toda),
+com a janela minimizada ou escondida, sem uma página à vista por cima, numa aba com som (`IsAudible` ou multimédia a
+tocar; arrefece no momento em que começa), numa aba a passar para o motor de vídeo, numa aba fechada a sair, e numa
+página com `<video>` a tocar (verificação ao sair, `WarmTabs.PlayingVideoScript`: documento, raízes de sombra abertas
+e iframes do mesmo site, até 250 ms; sem resposta conta como «a tocar»). Limite conhecido: um vídeo **sem som** num
+iframe de outro site não se deixa ver; essa página pode ficar quente até 8 s. Outro: se a página que entra fria não
+apresentar dentro do teto de 1 s do T1, por baixo dela pode ver-se uma página quente em vez da cor de fundo.
+
+**Custo de CPU esperado.** Uma página quente desenha como se estivesse à vista: numa página com animação a 60 fps,
+~9–11 % de 1 núcleo (`docs/paridade.md` #1: 11,1 % à vista; #1b: 10,9 → 9,7 % medido no T1), numa página parada
+quase nada. No pior caso, 2 páginas animadas durante 8 s depois de cada troca: ~20 % de 1 núcleo nesses 8 s. Depois
+da graça o custo de uma aba escondida volta ao de #1b (2,2 % de 1 núcleo medido no T1 para uma aba animada
+escondida): a exceção a «abas escondidas não gastam» é só o período de graça.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -255,3 +282,4 @@ tamanho a mais e encurta o tempo até ao 1.º fotograma.
 | T3 | Mica por baixo da página (rec. 4 do estudo): a static do CefSharp que aloja a janela do CEF deixa de pintar por GDI (`Browser/PageBrowser.cs`, `PageWindow.PaintStep`); na área de vidro o GDI escrevia alfa 0 e o DWM mostrava o Mica onde devia estar a cor de fundo da página. Vidro limitado às barras avaliado e recusado (secção «Troca de abas: o resto do estudo») | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
 | T4 | Aba nova (rec. 5): a static nasce por baixo das outras páginas e a janela do CEF nasce já com o tamanho da área das páginas (antes 0×0 numa aba nova, redimensionada a seguir); mesma conta de píxeis do CefSharp (`PageWindow.PixelSize`), por isso o redimensionamento dele no fim da criação não muda nada. A espera pela 1.ª pintura continua a do T1 (teto 1 s) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
 | T5 | Aba fria (rec. 3): a janela do Chromium volta de minimizada num só passo e já no tamanho final (`SetWindowPlacement` com a área da página e `SW_SHOWNOACTIVATE`, antes de a static aparecer), em vez de `ShowWindow` + `SetWindowPos` (duas mudanças de tamanho com a página «hidden»); ao esconder, minimiza antes de o CefSharp encolher a janela a 0×0. Também nos painéis web da barra lateral | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
+| T6 | Abas quentes (rec. 2): a página que sai fica tapada, no tamanho inteiro e sem minimizar, durante 8 s (no máximo 2, as mais recentes; `Tabs/WarmTabs.cs`), e voltar a ela é só subir a janela; nunca com vídeo a tocar, som, ecrã dividido, janela minimizada ou a passar para o motor de vídeo. Ordem das janelas das páginas explícita (`PageSwap.StackOrder`: à vista → a sair → a entrar fria → quentes). Custo: ~9–11 % de 1 núcleo por página animada quente, só durante a graça | Medição ao vivo pendente (dono a usar o PC). Testes: `WarmTabsTests`, `PageSwapTests` |

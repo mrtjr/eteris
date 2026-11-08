@@ -16,6 +16,21 @@ public static class PageSwap
         Hide,
         // Sai, mas continua à vista (por cima) até a página que entra apresentar um fotograma.
         Hold,
+        // Quente (Tabs/WarmTabs.cs) e continua fora de vista: fica como está, tapada.
+        Keep,
+    }
+
+    // Camadas das janelas das páginas, de cima para baixo.
+    public enum Layer
+    {
+        // À vista e já apresentada (incluindo uma quente que voltou: o conteúdo dela já está no ecrã).
+        Shown,
+        // A sair, por cima da que entra até esta apresentar.
+        Held,
+        // A entrar fria: por baixo da que sai, a desenhar-se.
+        Arriving,
+        // Quente: tapada por todas as outras.
+        Warm,
     }
 
     // Uma página pesada que volta de escondida leva ~200–300 ms a apresentar (Wikipédia, medido); uma aba nova espera
@@ -33,8 +48,18 @@ public static class PageSwap
     // Para cada página: o que fazer agora. «Arrives» = passa a ver-se e é uma página do Chromium (só essas apresentam
     // um fotograma vazio ao aparecer). Sem nenhuma a chegar, as que saem escondem-se logo (como antes).
     public static IReadOnlyList<Step> Plan(IReadOnlyList<(bool WasVisible, bool Visible, bool Arrives)> pages)
+        => Plan(pages.Select(p => (p.WasVisible, Warm: false, p.Visible, p.Arrives)).ToList());
+
+    // «WasVisible» = a janela está visível (à vista ou quente); «Warm» = quente, tapada. Uma quente que volta não é uma
+    // chegada (já está desenhada): sobe logo, sem segurar a que sai. Uma quente que continua fora de vista fica.
+    public static IReadOnlyList<Step> Plan(IReadOnlyList<(bool WasVisible, bool Warm, bool Visible, bool Arrives)> pages)
     {
         var arriving = pages.Any(p => p.Visible && !p.WasVisible && p.Arrives);
-        return pages.Select(p => p.Visible ? Step.Show : arriving && p.WasVisible ? Step.Hold : Step.Hide).ToList();
+        return pages.Select(p => p.Visible ? Step.Show : p.Warm ? Step.Keep : arriving && p.WasVisible ? Step.Hold : Step.Hide).ToList();
     }
+
+    // Ordem das janelas das páginas, de cima para baixo: por camada e, dentro dela, por Rank crescente (quem chama dá
+    // o Rank: a ordem por que começaram a sair, para as que saem; a mais recente primeiro, para as quentes).
+    public static IReadOnlyList<T> StackOrder<T>(IEnumerable<(T Page, Layer Layer, long Rank)> pages)
+        => pages.OrderBy(p => p.Layer).ThenBy(p => p.Rank).Select(p => p.Page).ToList();
 }

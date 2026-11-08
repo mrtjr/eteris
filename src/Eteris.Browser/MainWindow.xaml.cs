@@ -375,6 +375,8 @@ public partial class MainWindow : Window
             or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.CustomTitle)
             or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
+        // Uma aba quente que começa a tocar som arrefece já (Tabs/WarmTabs.cs).
+        if (e.PropertyName is nameof(BrowserTab.IsAudible) or nameof(BrowserTab.Media) && _warmPages.Count > 0) ReviewWarmPages();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
         if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); UpdateZoomBadge(); }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
@@ -468,10 +470,13 @@ public partial class MainWindow : Window
         MaximizeButton.Content = MaximizeButton2.Content = maximized ? "" : "";
         MaximizeButton.ToolTip = MaximizeButton2.ToolTip = maximized ? "Restaurar" : "Maximizar";
         CloseSuggestions();
+        // Janela minimizada: as abas quentes arrefecem (nada se vê).
+        ReviewWarmPages();
     }
 
     private void DisposeBrowsers()
     {
+        ForgetWarmPages();
         foreach (var injector in _scriptlets.Values) injector.Dispose();
         _scriptlets.Clear();
         foreach (var browser in _browsers.Values)

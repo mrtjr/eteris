@@ -20,6 +20,12 @@ public partial class MainWindow
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         if (!_browsers.Remove(tab, out var browser)) return;
         PageScript.Release(browser);
+        // Quente: está tapada pela aba à vista, pode ir já.
+        if (_warmPages.ContainsKey(browser))
+        {
+            DisposePage(browser);
+            return;
+        }
         // À vista (a aba ativa fechou): fica por cima até a vizinha apresentar, sem um fotograma vazio pelo meio.
         if (browser.Visibility == System.Windows.Visibility.Visible && browser.IsBrowserInitialized && IsVisible)
         {
