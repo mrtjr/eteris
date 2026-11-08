@@ -14,13 +14,13 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 |---|---|---|---|---|---|---|
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
-| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ramo `sandbox`**: páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, atualização pelo Velopack provada. A publicação oficial ainda sai com `--no-sandbox`: falta a assinatura conjunta e a CI (`docs/sandbox.md`) | **[bloqueia]** até ser publicado |
+| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **no `main`, atrás da opção `EterisSandbox` (desligada por omissão)**: com `build/publish.ps1 -Sandbox`, páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, atualização pelo Velopack provada, e de novo depois de fundir com o arranque (secção 2). A publicação oficial continua com `--no-sandbox`: falta a assinatura conjunta, a CI com o CefSharp próprio e os casos de rede por ver (`docs/sandbox.md`) | **[bloqueia]** até ser publicado |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | **medido** (secção 6): a 0.2.9 era *mais* identificável do que o Chrome; no `main` (R0) deixou de o ser — dispositivos, língua, DNT e dicas do cliente como o Chrome. Canvas, WebGL e áudio continuam fixos (F1/F2) | alta |
-| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | ramo `arranque`: **565 ms** (era 1039 ms na mesma sessão); **164 MB** com 1 aba e **239 MB** com 5 (eram 208 e 292 MB); ver secção 1c | ✅ arranque melhor do que o Firefox e a ~1,2× do Chrome; memória a ~1,15× do Chrome (por integrar) |
+| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | `main`, publicação como a da release: **625 ms** (0.2.9: 1132 ms na mesma sessão); **207 MB** com 1 aba e **320 MB** com 5 (0.2.9: 254 e 376 MB); ver secção 1c | ✅ arranque melhor do que o Firefox e a ~1,3× do Chrome; memória principal −47 MB, filhos iguais (por publicar) |
 | 4c | Vídeo H.264/AAC (Twitch, Vimeo, MP4 direto, HLS…) | sim | sim (codecs do Windows) | sim | **no motor principal**, como o Firefox: compilação própria da CEF com os codecs do Windows (H.264/HEVC pela placa gráfica, AAC pelo Media Foundation, nenhum descodificador com patentes; MP4, Twitch, g1, BBC, Reddit, TikTok, Dailymotion, HLS, `.m4a` e `.aac` validados, ~2,4% de CPU a 1080p). Sem descodificação por hardware ou num Windows N, uma sonda no arranque devolve tudo ao motor de vídeo (WebView2), como antes. Por publicar: o CI não compila este motor (`docs/motor.md`, «Motor com codecs») | ✅ resolvido (por publicar) |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | via motor de vídeo, **sempre com pergunta** (botão «Tocar no motor de vídeo»); o motor principal continua sem Widevine. Com DRM o site fala com o seu servidor de licenças e o CDM (Google/Microsoft) pode fazer provisionamento — inerente ao DRM, só depois de o utilizador aceitar | média |
 | 8 | Extensões | sim | sim | sim | não | média |
@@ -144,9 +144,37 @@ local; descarregá-lo precisa de autorização), processos filhos nativos (frent
 confirmar). O 1.º arranque depois de uma
 atualização do Éteris não aproveita o JIT guiado nem o motor do Escudo guardado (ambos são refeitos nesse arranque).
 
-## 2. Sandbox — feito no ramo `sandbox`, por publicar (2026-11-08)
+### Medição final da publicação (`main` com o arranque e o sandbox fundidos, 2026-11-08)
 
-A publicação oficial (0.2.9) corre os processos do motor com `--no-sandbox`. No ramo `sandbox`, com
+Publicação como a da release (`build/publish.ps1`, motor com codecs da plataforma, *self-contained*) numa pasta
+temporária, contra a 0.2.9 publicada da mesma forma a partir do `c3fe087`; perfil de teste com «nova aba» no
+arranque; A/B intercalado na mesma janela temporal (arranque 7 rondas depois de 1 de aquecimento, memória 5 rondas;
+medianas, intervalo entre parênteses). A 3.ª coluna é a mesma árvore publicada com `-Sandbox` (sem a ACL do serviço
+de rede na pasta: o serviço de rede fica sem sandbox, como previsto), noutro perfil.
+
+| Medida | Éteris 0.2.9 (`c3fe087`) | Éteris `main` | `main` com `-Sandbox` | Chrome 156 | Brave 157 | Firefox 159 |
+|---|---|---|---|---|---|---|
+| Arranque morno até à 1.ª pintura | 1132 ms (1086–1194) | **625 ms** (611–645) | 610 ms (589–642) | 474 ms | 426 ms | 1079 ms |
+| Memória privada, 1 aba | 254 MB (principal 148) | **207 MB** (principal 101) | — | 143 MB | 141 MB | 340 MB |
+| Memória privada, 5 abas | 376 MB (principal 158) | **320 MB** (principal 107) | — | 194 MB | 199 MB | 453 MB |
+
+Os valores absolutos da memória são mais altos do que os da medição acima (build Release noutro perfil; aqui os
+renderers medem ~25 MB cada), mas a diferença entre as versões é a mesma: −47 MB com 1 aba e −56 MB com 5, quase toda
+no processo principal; os filhos (placa gráfica, rede, armazenamento, renderers) ficam iguais. Por aba a mais:
+~30 → ~28 MB. Numa ronda da 0.2.9 o motor escreveu uma vez `Check failed: observers_.empty()` ao fechar; não
+apareceu com o `main`.
+
+Verificação funcional ao vivo da publicação (o mesmo roteiro também na cópia com `-Sandbox`, com o mesmo resultado):
+Wikipédia (`pt.wikipedia.org/wiki/Lisboa`: documento completo, 16 imagens), vídeo H.264 em MP4 direto
+(1280×720, a tocar, 82 fotogramas em ~2,8 s, 0 perdidos, `avc1` «probably» no motor principal), trocar de aba com
+`Ctrl+1`/`Ctrl+2` (a página que sai passa a `hidden`; a que saiu há pouco fica «quente», como previsto), janela
+privada (`--private` entregue à instância aberta: 2.ª janela com «Privada») e fecho limpo (árvore vazia em ~1,4 s).
+Na cópia com `-Sandbox`, os tokens dos filhos depois de fundir — com o `Cef.Initialize` já na thread do arranque —
+são os do ramo: renderers e armazenamento Untrusted (restritos), placa gráfica e áudio Low, nenhum `--no-sandbox`.
+
+## 2. Sandbox — no `main`, atrás da opção `EterisSandbox` e desligado por omissão (2026-11-08)
+
+A publicação oficial (0.2.9) corre os processos do motor com `--no-sandbox`. No `main` (fundido do ramo `sandbox`), com
 `build/publish.ps1 -Sandbox` (CefSharp próprio com a informação do sandbox, DLL cliente do bootstrap da CEF, opção B:
 `Eteris.Browser.exe` = bootstrap, `.NET` = `Eteris.App`), `chrome://sandbox` mostra o mesmo que o Chrome 156 com a
 experiência de rede ligada: renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Service Untrusted e
@@ -157,6 +185,13 @@ instalação sem sandbox para uma com sandbox pelo Velopack (delta, atalhos e pe
 
 Para o ✅: assinatura conjunta (o bootstrap pára se o exe, o `chrome_elf.dll` e a DLL cliente não tiverem a mesma
 assinatura) e a CI com o CefSharp próprio. Detalhes, medições e passos em `docs/sandbox.md`.
+
+**Por omissão continua desligado na próxima versão.** O D5 interativo e a prova de atualização pelo Velopack passaram,
+mas ficam pontos em aberto: a release é compilada pela CI, que não tem o CefSharp próprio nem a DLL cliente (ligá-lo
+só numa publicação local tiraria a release do caminho da CI); falta a assinatura conjunta; o serviço de rede no
+AppContainer ainda não foi visto com proxy do sistema nem autenticação integrada; e o processo «GPU / Not Sandboxed»
+transitório visto numa sessão longa do D5 está «a vigiar». Depois de fundir, a cópia com `-Sandbox` arranca, isola as
+páginas e passa o mesmo roteiro ao vivo que a publicação normal (secção 1c, «Medição final»).
 
 ## 3. Atualizações do motor
 

@@ -407,6 +407,11 @@ dono.
 5. Fora do sandbox (visto no D5, igual sem sandbox): Alt+clique numa aba aberta por um link entregue à instância
    transfere o link em vez de o espreitar até a página ser recarregada.
 
+**Fundido no `main` em 2026-11-08** (passo (a) abaixo), atrás da opção `EterisSandbox`, desligada por omissão na
+próxima versão (razões em `docs/paridade.md`, secção 2). Com o arranque fundido, o `Cef.Initialize` corre na thread
+do arranque (`CefConfigurator.Prepare` decide o sandbox e o serviço de rede, `InitializeInBackground` inicializa):
+a cópia publicada com `-Sandbox` manteve renderers e armazenamento Untrusted, placa gráfica e áudio Low.
+
 **Recomendação:** fundir no `main` por fases, sempre atrás da opção `EterisSandbox` (por omissão desligada, nada muda
 para quem publica sem ela): (a) já, o código do ramo (passos A–D6, D9 e a marca), que não altera a publicação normal
 (os ganchos do Velopack só mexem na ACL nas publicações com sandbox) e tem testes; (b) uma versão de teste com
