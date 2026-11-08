@@ -37,7 +37,7 @@ processos correm fechados (sem acesso a ficheiros nem ao sistema).
    `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já faziam — ver «Passo A — resultado» e «Regras para
    o código».
 
-## Passo D — resultado (2026-11-08, ramo `sandbox`): D0–D4 feitos
+## Passo D — resultado (2026-11-08, ramo `sandbox`): D0–D4 e D6 feitos, D5 em parte
 
 **D0 — o motor próprio isola as páginas com o bootstrap (sem .NET).** `cefsimple_dll` compilado na árvore do motor
 (`autoninja -n` antes: 220 passos, só o `libcef_dll_wrapper_dll` e o `cefsimple.dll`; o `libcef.dll` ficou igual,
@@ -87,6 +87,29 @@ original); fecho limpo (WM_CLOSE, sem forçar).
 Nota de compilação: a montagem de referência do CefSharp (`RefAssembly`) sai assinada e o `CefSharp.Core` compilado
 referencia o `CefSharp.Core.Runtime` sem nome forte; o pacote local usa a própria montagem x64 como referência (o
 `eteris.1` falhava a compilar o Éteris; `eteris.2` corrige).
+
+**D5 (parcial) — regressão sob sandbox, sem teclado nem rato.** Impressão (`Page.printToPDF`: PDF de 7 páginas,
+470 KB) e o leitor de PDF da CEF (`chrome-extension://mhjf…/index.html`) a abrir esse PDF; memória dos filhos (mesma
+página, 6 filhos): processo filho .NET sem sandbox 237,9 MB privados / 417,5 MB de conjunto de trabalho, filhos nativos
+com sandbox 181,9 MB / 269,2 MB. **Por fazer** (precisam de teclado/rato no Éteris de teste): centro de multimédia,
+esconder elemento, escurecer site, leitura F9, captura inteira, anúncio em nova aba, escolher arquivo, WebRTC, tela
+dividida, abas do motor de vídeo, `perf-render.ps1`. A 1.ª tentativa (2026-11-08 05:2x) ficou inválida: dois avisos
+«Segurança do Windows» da Firewall sobre o **Google Chrome** do dono (Google LLC; abertos às 04:58 e 05:03, antes de
+qualquer teste do Éteris nesse intervalo) ficaram no primeiro plano e os scripts de teclas abortam quando o Éteris
+não está à frente. Não foram tocados.
+
+**D6 — integração no repositório (opcional, opção B de nomes).** `-p:EterisSandbox=true` (ou
+`build/publish.ps1 -Sandbox -CefSharpFeed <feed> -CefSharpN 2 [-SandboxClientDll <dll>]`): o .NET passa a
+`Eteris.App`, a saída leva `Eteris.Browser.exe` = bootstrap do runtime e `Eteris.Browser.dll` = DLL cliente
+(`build/sandbox/client/build.cmd <distribuição> build\sandbox\client\out`), e a publicação deixa de trazer o
+`CefSharp.BrowserSubprocess.*` e o apphost `Eteris.App.exe`. Verificado numa publicação na scratchpad:
+`Eteris.Browser.exe` com sandbox (renderers Untrusted, GPU Low) e com `--eteris-no-sandbox` (filhos = o próprio exe,
+`--no-sandbox`, integridade Medium), 2.º arranque entrega `--new-tab`, fecho limpo. Sem a opção nada muda (CefSharp
+oficial; testes `SandboxInfoTests`). Os dois pack URIs do menu usam o nome da montagem em execução
+(`typeof(MainWindow).Assembly`), em vez de `Eteris.Browser` escrito à mão.
+
+**Falta:** D5 interativo (em cima), D9 (`NetworkServiceSandbox`) e o passo E (ícone/versão do bootstrap — hoje
+«CEF Bootstrap Application» —, assinatura do exe, `chrome_elf.dll` e DLL com o mesmo certificado, Velopack, CI).
 
 ## Passo A — resultado (2026-11-07): feito
 
@@ -158,7 +181,7 @@ pop-ups, abas, ecrã dividido.
 | A | Trocar as 19 chamadas e o `OnContextCreated` por DevTools (útil já: menos dependência do processo filho do CefSharp) | ✅ **feito** (2026-11-07) | testes (`SandboxRulesTests`) + funcionalidades ao vivo com os dois processos filhos (ver «Passo A — resultado») |
 | B | Prova: Éteris a correr com um processo filho nativo mínimo (só CEF, ainda sem sandbox) | ✅ **feito** (2026-11-06) | tudo funciona sem o `CefSharp.BrowserSubprocess` |
 | C | CefSharp com a informação do sandbox no `Cef.Initialize` (versão própria; propor ao projeto oficial) | ✅ **feito** (2026-11-06) | compila e arranca |
-| D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | 2 dias | `chrome://sandbox` mostra os processos isolados |
+| D | DLL nativa `RunWinMain` + bootstrap: no processo principal arranca o .NET (`hostfxr`) e passa a informação; nos filhos chama `CefExecuteProcess` | ✅ **feito no ramo `sandbox`** (2026-11-08), menos o D5 interativo | `chrome://sandbox` mostra os processos isolados (ver «Passo D — resultado») |
 | E | Empacotamento (Velopack, licenças, assinatura) | 1 dia | instalador funciona |
 
 Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo C, cada atualização do motor (ver

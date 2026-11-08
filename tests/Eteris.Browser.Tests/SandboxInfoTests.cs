@@ -76,4 +76,47 @@ public class SandboxInfoTests
         Assert.Equal("'$(EterisCefSharpFeed)' != ''", define.Attribute("Condition")!.Value);
         Assert.Contains("ETERIS_CEFSHARP_SANDBOX", define.Value);
     }
+
+    // Pelo bootstrap mas sem sandbox (--eteris-no-sandbox, CefSharp oficial): os filhos são o próprio exe, não o processo
+    // filho .NET (que a publicação com sandbox não traz). Sem bootstrap, o de sempre.
+    [Fact]
+    public void Build_ChildrenAreTheBootstrapWhenThereIsNoSandbox()
+    {
+        const string exe = @"C:\Eteris\Eteris.Browser.exe";
+        Assert.Equal(exe, CefConfigurator.Build("p", bootstrapExe: exe).BrowserSubprocessPath);
+        Assert.EndsWith("CefSharp.BrowserSubprocess.exe", CefConfigurator.Build("p").BrowserSubprocessPath, StringComparison.OrdinalIgnoreCase);
+        // Os testes compilam com o CefSharp oficial: o ponteiro é ignorado e os filhos continuam a ser o bootstrap.
+        Assert.False(CefConfigurator.SandboxSupported);
+        Assert.Equal(exe, CefConfigurator.Build("p", sandboxInfo: 0x1234, bootstrapExe: exe).BrowserSubprocessPath);
+    }
+
+    // Opção B de docs/sandbox.md: com -p:EterisSandbox=true o bootstrap fica com o nome de sempre (Velopack, atalhos,
+    // instância única) e o .NET passa a Eteris.App; a publicação deixa de trazer o processo filho .NET e o apphost.
+    [Fact]
+    public void Project_SandboxLayoutKeepsEterisBrowserExeAsTheEntryPoint()
+    {
+        var project = XDocument.Load(Path.Combine(Root(), "src", "Eteris.Browser", "Eteris.Browser.csproj"));
+        var sandboxProps = project.Descendants("PropertyGroup").Single(g => g.Attribute("Condition")?.Value == "'$(EterisSandbox)' == 'true'");
+        Assert.Equal("Eteris.App", sandboxProps.Element("AssemblyName")!.Value);
+        var entries = project.Descendants("_EterisSandboxEntry").ToDictionary(e => e.Attribute("TargetName")!.Value, e => e.Attribute("Include")!.Value);
+        Assert.Equal(@"$(EterisCefRuntime)\bootstrap.exe", entries["Eteris.Browser.exe"]);
+        Assert.Equal("$(EterisSandboxClientDll)", entries["Eteris.Browser.dll"]);
+        var publish = project.Descendants("Target").Single(t => t.Attribute("Name")?.Value == "EterisSandboxAfterPublish");
+        var deleted = publish.Element("Delete")!.Attribute("Files")!.Value;
+        Assert.Contains("$(PublishDir)$(AssemblyName).exe", deleted);
+        Assert.Contains("$(PublishDir)CefSharp.BrowserSubprocess.exe", deleted);
+        var check = project.Descendants("Target").Single(t => t.Attribute("Name")?.Value == "EterisSandboxCheck");
+        Assert.Equal(3, check.Elements("Error").Count());
+    }
+
+    // Com o .NET renomeado (Eteris.App), um pack URI com o nome da montagem escrito à mão deixaria de encontrar o
+    // recurso: usa-se o nome da montagem em execução (typeof(MainWindow).Assembly).
+    [Fact]
+    public void PackUris_DoNotNameTheAssembly()
+    {
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(Root(), "src", "Eteris.Browser"), "*.*", SearchOption.AllDirectories)
+                     .Where(f => f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".xaml", StringComparison.Ordinal))
+                     .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+            Assert.DoesNotContain("Eteris.Browser;component", File.ReadAllText(file), StringComparison.Ordinal);
+    }
 }

@@ -10,7 +10,7 @@ public static class CefConfigurator
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
     public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
-                                    int? devToolsPort = null)
+                                    int? devToolsPort = null, string? bootstrapExe = null)
     {
         var settings = new CefSettings
         {
@@ -20,9 +20,13 @@ public static class CefConfigurator
         };
         // Sandbox dos processos das páginas (docs/sandbox.md, passo D): só com o ponteiro do bootstrap da CEF e o CefSharp
         // com o patch v2 (build/cefsharp; ETERIS_CEFSHARP_SANDBOX). Os filhos passam a ser o próprio exe (o bootstrap).
+        var sandboxOn = SandboxSupported && sandboxInfo != 0;
 #if ETERIS_CEFSHARP_SANDBOX
-        if (sandboxInfo != 0) settings.WindowsSandboxInfo = sandboxInfo;
+        if (sandboxOn) settings.WindowsSandboxInfo = sandboxInfo;
 #endif
+        // Pelo bootstrap mas sem sandbox (--eteris-no-sandbox, ou o CefSharp oficial): os filhos continuam a ser o próprio
+        // exe (a DLL nativa), não o processo filho .NET, que a publicação com sandbox já não traz.
+        if (!sandboxOn && bootstrapExe is not null) settings.BrowserSubprocessPath = bootstrapExe;
         // Só nos testes ao vivo (TestSwitches.DevToolsPort): DevTools do motor em 127.0.0.1.
         if (devToolsPort is { } port) settings.RemoteDebuggingPort = port;
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
@@ -82,9 +86,10 @@ public static class CefConfigurator
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Shields.PrivacyPreferences.SecureDnsTemplate = Shields.PrivacyPreferences.StartedWithSecureDns is null ? null : Shields.SecureDns.TemplateFor(dns);
         var sandbox = SandboxEnabled ? SandboxInfo.Pointer : 0;
-        // Com sandbox não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
-        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort),
-            performDependencyCheck: sandbox == 0, browserProcessHandler: null);
+        var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
+        // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
+        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap),
+            performDependencyCheck: bootstrap is null, browserProcessHandler: null);
     }
 
     // O sandbox só liga com o CefSharp do Éteris (patch v2); com o oficial o ponteiro é ignorado.
