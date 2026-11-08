@@ -5,9 +5,69 @@ de 1–2 semanas e obriga a alterar o CefSharp.** Ver o plano em baixo.
 
 ## Estado atual (medido)
 
-Os 6 processos do motor do Éteris (páginas, placa gráfica, utilitários) correm com `--no-sandbox`. Uma falha
-explorável no código de uma página fica com os mesmos acessos que o utilizador. Nas três referências esses
-processos correm fechados (sem acesso a ficheiros nem ao sistema).
+Até à 0.2.11 os 6 processos do motor do Éteris (páginas, placa gráfica, utilitários) correm com `--no-sandbox`: uma
+falha explorável no código de uma página fica com os mesmos acessos que o utilizador. Nas três referências esses
+processos correm fechados (sem acesso a ficheiros nem ao sistema). **Desde a 0.2.12 (por publicar) a publicação sai
+com o sandbox ligado** (ramo `rede-seguranca`): páginas Untrusted, placa gráfica Low, armazenamento Untrusted e serviço
+de rede no AppContainer, como no Chrome — ver «Como publicar com o sandbox», a seguir.
+
+## Como publicar com o sandbox (desde a 0.2.12, por omissão)
+
+`build/publish.ps1` publica com o sandbox; `-NoSandbox` fica para emergências (é o que a publicação pelo CI sem codecs
+usa no `release.yml`: o CI não tem o motor próprio, que traz o bootstrap, nem o CefSharp com o patch). As duas peças que
+não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap — compilam-se a partir do repositório com
+**um só script**, `build/sandbox/build-all.ps1`. Passo a passo, na máquina de publicação:
+
+1. **Motor próprio** (`docs/motor.md`, «Motor com codecs»): `build/cef-codecs/out/runtime` com o `bootstrap.exe` e o
+   `manifest.json`, e a distribuição mínima do mesmo motor em
+   `build/cef-codecs/out/distrib/cef_binary_156.0.15+gcf671c0+chromium-156.0.8078.80_windows64_minimal` (o passo
+   `Package` do `build/cef-codecs/build.ps1` cria as duas; se a distribuição foi apagada, `-Steps Package` volta a
+   fazê-la a partir da compilação em `C:\cef`, sem recompilar).
+2. **CefSharp e DLL cliente**: `powershell -ExecutionPolicy Bypass -File build\sandbox\build-all.ps1`. Faz, por ordem:
+   - clone limpo da tag `v156.0.150` do CefSharp (commit `f4cd42e…` verificado) em `build/cefsharp/src` — o único passo
+     que vai à rede (GitHub); `-CefSharpSource <pasta>` usa um clone local, e o `origin` passa sempre a ser o oficial
+     (o SourceLink do `CefSharp.Core.Runtime` precisa dele, senão a ligação falha com LNK1104);
+   - `build/cefsharp/prepare-source.ps1` (patch v2, SDK 9, net8.0, `packages\` da cache do NuGet e
+     `Directory.Build.props`/`.targets` vazios na raiz do clone — sem eles o clone, por estar dentro do repositório,
+     apanhava o `TreatWarningsAsErrors` do Éteris e não compilava), `build-cefsharp.cmd` e `pack-local.ps1` para o feed
+     local `build/cefsharp/feed` (`156.0.150-eteris.N`; N por omissão = o maior da cache do NuGet + 1, porque a cache
+     guarda cada versão para sempre e um N reutilizado com binários novos restauraria os antigos — o script recusa-o);
+   - verificação dos pacotes (versão, dependência `[156.0.150-eteris.N]`, assinatura do repositório removida,
+     `WindowsSandboxInfo` nas quatro montagens trocadas) e `build/cefsharp/feed/eteris-cefsharp.json` (N, tag, commit,
+     SHA256 do patch e das montagens), que o `publish.ps1` lê;
+   - DLL cliente (`build/sandbox/client/build.cmd`) contra a distribuição do passo 1, conferida antes contra o runtime
+     (commit da CEF no `cef_version.h` e SHA256 do `libcef.dll`), e `verify-client.ps1`;
+   - a bateria de testes com o CefSharp do feed (o modo **com** sandbox: `ETERIS_CEFSHARP_SANDBOX`), confirmando que o
+     CefSharp restaurado e carregado é o do feed. A CI (`build.yml`, `release.yml`) continua a correr o modo **sem**
+     sandbox, com o CefSharp oficial: os testes do sandbox seguem o CefSharp com que se compilou
+     (`CefConfigurator.SandboxSupported`), por isso passam nos dois modos sem saltar nenhum.
+
+   Opções: `-CefDistrib <pasta>` (a distribuição noutro sítio — por exemplo quando o caminho do repositório é comprido:
+   o compilador não abre ficheiros acima de 260 caracteres e o script recusa logo uma distribuição com caminhos acima de
+   250), `-N <n>`, `-SkipCefSharp`, `-SkipClient`, `-SkipTests`. Requisitos: git, CMake, Build Tools do Visual Studio
+   2022 com C++/CLI (`VC.CLI.Support`), SDK do .NET 9 (além do 10) e os pacotes oficiais `CefSharp.*` 156.0.150 e
+   `cef.sdk` 156.0.15 na cache do NuGet (o restauro normal do Éteris põe-nos lá). Tudo o que produz fica em pastas
+   ignoradas pelo git (`build/cefsharp/src`, `build/cefsharp/feed`, `build/sandbox/client/out`, `build/sandbox/out`,
+   com os registos em `build/sandbox/out/logs`). Só é preciso repetir quando mudar o motor, o CefSharp, o patch ou
+   `build/sandbox/client`.
+3. **Publicar**: `.\build\publish.ps1 -Version X.Y.Z`. Limpa `publish\`, verifica o motor (manifesto), lê o N do
+   `eteris-cefsharp.json`, recusa a falta do feed, da DLL cliente ou do bootstrap (com a indicação do `build-all.ps1` e
+   do `-NoSandbox`), compila com `-p:EterisSandbox=true` (o `EterisSandboxCheck` corre o `verify-client.ps1` antes de
+   compilar: a DLL tem de ser da mesma compilação do motor e não pode ser a de teste), marca o bootstrap
+   (`brand-bootstrap.ps1`, com o `rc.exe` do Windows SDK) e no fim confirma a forma publicada: `Eteris.Browser.exe` =
+   bootstrap com a versão pedida, `Eteris.Browser.dll` = DLL cliente, `Eteris.App.dll`, `CefSharp.Core.dll` com
+   `WindowsSandboxInfo` e sem `CefSharp.BrowserSubprocess.exe`.
+4. **Empacotar**: `build/pack.ps1` sem mudanças — o `mainExe` continua `Eteris.Browser.exe` (agora o bootstrap), por isso
+   os atalhos de quem atualiza continuam válidos; a ACL do serviço de rede é dada pelos ganchos do Velopack ao instalar e
+   ao atualizar (provado na «3.ª prova do Velopack», em baixo).
+5. **Testar** a pasta `publish\` num perfil de teste: `chrome://sandbox` (renderers Lockdown/Untrusted, GPU Low) e
+   `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`. Fora de uma instalação a pasta não
+   tem a ACL, por isso aí o serviço de rede aparece «Not Sandboxed» (normal).
+6. O resto como sempre (`docs/motor.md`, «Publicação»: `vpk download`, `pack.ps1`, tag, `vpk upload`).
+
+**Assinatura:** o Éteris não é assinado, e o bootstrap aceita o exe, o `chrome_elf.dll` e a DLL cliente os três sem
+assinatura. Se um dia passar a ser assinado, têm de ser os três com o mesmo certificado (senão o arranque pára), assinados
+depois do `brand-bootstrap.ps1` e antes do `vpk pack` (ver «Falta», item 1).
 
 ## Como o sandbox funciona hoje no CEF (Windows)
 

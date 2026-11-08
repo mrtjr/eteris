@@ -3,6 +3,7 @@
     1. aplica windows-sandbox-info.patch (CefSettings.WindowsSandboxInfo, patch v2);
     2. global.json -> SDK 9.0.x (o .NET 10 com o MSBuild 17.14 das Build Tools 2022 da NETSDK1145);
     3. net6.0 -> net8.0 nos 4 projetos compilados (o C++/CLI precisa do pacote Apphost da versao-alvo);
+       Directory.Build.props/.targets vazios na raiz (isola o clone das regras do Eteris quando esta dentro do repositorio);
     4. pasta packages\ (formato packages.config do CefSharp.Core.Runtime: cef.sdk e SourceLink) copiada da cache
        global do NuGet (%USERPROFILE%\.nuget\packages), onde o restauro do Eteris ja as pos; o /restore do msbuild
        nao restaura packages.config.
@@ -23,6 +24,14 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'git apply falhou' }
   $gj = '{' + "`n" + '  "sdk": {' + "`n" + '    "version": "9.0.100",' + "`n" + '    "rollForward": "latestFeature"' + "`n" + '  }' + "`n" + '}' + "`n"
   [IO.File]::WriteAllText((Join-Path $Source 'global.json'), $gj)
+  # O MSBuild procura Directory.Build.props/.targets nas pastas acima do projeto: dentro do repositorio do Eteris
+  # (build/cefsharp/src, de build/sandbox/build-all.ps1) apanharia o TreatWarningsAsErrors do Eteris e o CefSharp
+  # nao compilava (CA1033, CA2213...). Os dois vazios na raiz do clone param a procura (o CefSharp nao os tem).
+  foreach ($stub in 'Directory.Build.props', 'Directory.Build.targets') {
+    $f = Join-Path $Source $stub
+    if (Test-Path -LiteralPath $f) { throw "o CefSharp ja tem $stub" }
+    [IO.File]::WriteAllText($f, "<Project />`n")
+  }
   foreach ($p in 'CefSharp\CefSharp.netcore.csproj', 'CefSharp.Core\CefSharp.Core.netcore.csproj',
                  'CefSharp.Core.Runtime\CefSharp.Core.Runtime.netcore.vcxproj',
                  'CefSharp.Core.Runtime.RefAssembly\CefSharp.Core.Runtime.RefAssembly.netcore.csproj') {

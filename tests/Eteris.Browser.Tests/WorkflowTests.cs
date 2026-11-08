@@ -47,6 +47,10 @@ public class WorkflowTests
         Assert.Contains("if: github.event_name == 'workflow_dispatch' && inputs.sem_codecs == true", publish);
         Assert.Contains("UpdateService.cs", publish);
         Assert.Contains("vpk upload", publish);
+        // O CI não tem o motor próprio nem o CefSharp com o patch do sandbox: a publicação de emergência é sem sandbox
+        // (desde a 0.2.12 o publish.ps1 publica com sandbox por omissão e pararia sem eles).
+        Assert.Contains("publish.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);
+        Assert.DoesNotContain("publish.ps1", verify);
         Assert.Matches(@"sem_codecs:\n(\s+\w+:.*\n)*?\s+required: true\n(\s+\w+:.*\n)*?\s+type: boolean", yml);
     }
 

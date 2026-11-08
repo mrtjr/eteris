@@ -86,9 +86,10 @@ jobs:
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
       - run: dotnet test -c Release --no-build
+      # Sem o motor próprio nem o CefSharp com o patch do sandbox (build/sandbox/build-all.ps1): publica sem sandbox.
       - name: O instalador tem de levar o motor do escudo
         run: |
-          .\build\publish.ps1 -Version $env:RELEASE_TAG.TrimStart("v")
+          .\build\publish.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox
           if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
           if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 10) { throw "listas de filtros em falta no publish" }
           if (-not (Test-Path publish/Shields/resources/scriptlets.json)) { throw "scriptlets.json em falta no publish" }
