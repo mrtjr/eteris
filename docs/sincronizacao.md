@@ -175,11 +175,20 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
 ### Perfil cifrado num ficheiro
 
 Definições › Sincronização › **Exportar perfil cifrado** grava em Transferências um `Perfil Éteris AAAA-MM-DD.eteris`
-(favoritos, Espaços, abas deste computador, definições que viajam, decisões do Escudo, notas) cifrado com um código de
-recuperação **novo**, mostrado uma única vez na página. **Importar** lê o ficheiro escolhido e o código; o código e o
-ficheiro vão no corpo de um POST para `eteris://settings/sync-import` (nunca no endereço). Junta ao perfil: o que falta
-entra, as definições do ficheiro passam a valer, as notas diferentes ficam por baixo das atuais com um título, os
-Espaços em falta são criados na primeira janela. Nenhuma rede. Recusado na janela privada.
+(favoritos, Espaços, definições que viajam, decisões do Escudo, notas) cifrado com um código de recuperação **novo**,
+mostrado uma única vez na página. As **abas abertas não vão**: a importação não as usava, e os URLs de abas podem ter
+tokens (ligações de redefinição de senha, IDs de sessão) que ficariam com quem tivesse o ficheiro e o código.
+**Importar** lê o ficheiro escolhido e o código; o código e o ficheiro vão no corpo de um POST para
+`eteris://settings/sync-import` (nunca no endereço). Junta ao perfil: o que falta entra, as definições do ficheiro passam
+a valer, as notas diferentes ficam por baixo das atuais com um título, os Espaços em falta são criados na primeira
+janela. Nenhuma rede. Recusado na janela privada.
+
+- **Um ficheiro alheio não baixa as proteções sem o utilizador ver** (engenharia social do tipo «importa o meu perfil,
+  o código é este»). Ficam por aplicar, e são listadas uma a uma, as definições que desligam proteções (HTTPS primeiro,
+  cookies de terceiros, links de rastreio, redirecionamentos e sites de salto, rastreadores escondidos, pedidos de
+  notificações, apagar ao fechar, DNS cifrado; ligar as sugestões enquanto escreve) e as decisões que desligam o Escudo
+  ou o aviso de HTTP num site. Só entram se o utilizador carregar em «Aplicar também estas alterações»
+  (`ProfileTransfer.WeakensSetting` / `WeakensShield`; testes em `SyncIntegrationTests`).
 
 ## A exceção de rede
 

@@ -163,10 +163,12 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 try
                 {
                     List<(string Name, int Color, string? Icon)> spaces = [];
-                    var result = Sync.ProfileTransfer.Import(Convert.FromBase64String(data), code, s => spaces = s.ToList());
+                    // «weaker=1» só depois de o utilizador ver a lista do que baixa a proteção e carregar em «Aplicar também».
+                    var allowWeaker = form.GetValueOrDefault("weaker") == "1";
+                    var result = Sync.ProfileTransfer.Import(Convert.FromBase64String(data), code, s => spaces = s.ToList(), allowWeaker);
                     var summary = Sync.ProfileTransfer.Summary(result);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.AfterProfileImport(spaces, summary));
-                    return Json(new { ok = true, message = summary });
+                    return Json(new { ok = true, message = summary, held = result.Held });
                 }
                 catch (FormatException e) { return Json(new { ok = false, message = e.Message }); }
                 catch (Eteris.Sync.Crypto.WrongCodeException e) { return Json(new { ok = false, message = e.Message }); }

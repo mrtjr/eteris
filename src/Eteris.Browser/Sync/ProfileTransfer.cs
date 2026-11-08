@@ -9,15 +9,59 @@ using Eteris.Sync.Model;
 
 namespace Eteris.Browser.Sync;
 
-// «Exportar perfil cifrado» / «Importar perfil cifrado» (Definições › Sincronização): favoritos, Espaços, abas deste
-// computador, definições permitidas, decisões do Escudo e notas num ficheiro .eteris, cifrado com um código de
-// recuperação novo mostrado UMA vez. Nada sai do computador: o ficheiro vai para Transferências e o utilizador leva-o
-// como quiser. É também a prova de ponta a ponta do formato da sincronização (docs/sincronizacao.md).
+// «Exportar perfil cifrado» / «Importar perfil cifrado» (Definições › Sincronização): favoritos, Espaços, definições
+// permitidas, decisões do Escudo e notas num ficheiro .eteris, cifrado com um código de recuperação novo mostrado UMA
+// vez. As abas abertas NÃO vão (a importação não as usava, e os URLs de abas podem ter tokens: ligações de redefinição
+// de senha, IDs de sessão). Nada sai do computador: o ficheiro vai para Transferências e o utilizador leva-o como
+// quiser. É também a prova de ponta a ponta do formato da sincronização (docs/sincronizacao.md).
+//
+// Um ficheiro feito por outra pessoa («importa o meu perfil, o código é este») não baixa as proteções sem o utilizador
+// ver: as definições que desligam proteções e as exceções ao Escudo/HTTPS ficam por aplicar e são listadas; só entram
+// se o utilizador carregar em «Aplicar também» (allowWeaker).
 internal static class ProfileTransfer
 {
     public sealed record Exported(string Path, string Code, int Records);
 
-    public sealed record Imported(int Bookmarks, int Settings, int Shield, int Spaces, bool Notes, string From);
+    public sealed record Imported(int Bookmarks, int Settings, int Shield, int Spaces, bool Notes, string From)
+    {
+        // Alterações que baixam a proteção e NÃO foram aplicadas (à espera de confirmação), em português.
+        public IReadOnlyList<string> Held { get; init; } = [];
+    }
+
+    // Definições em que «true» protege mais: desligá-las baixa a proteção.
+    private static readonly IReadOnlyDictionary<string, string> Protections = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["httpsFirst"] = "Desligar «HTTPS primeiro»",
+        ["cookies"] = "Desligar «Bloquear cookies de terceiros»",
+        ["cleanUrls"] = "Desligar «Limpar links de rastreio»",
+        ["debounce"] = "Desligar «Saltar redirecionamentos de rastreio»",
+        ["bounceForget"] = "Desligar «Esquecer os sites de salto»",
+        ["cname"] = "Desligar «Desmascarar rastreadores escondidos»",
+        ["notifications"] = "Desligar «Bloquear pedidos de notificações»",
+        ["clearOnExit"] = "Desligar «Apagar cookies e dados de sites ao fechar»",
+    };
+
+    // Esta definição do ficheiro baixa a proteção deste computador? Devolve a descrição, ou null.
+    public static string? WeakensSetting(UserSettings current, string key, string value)
+    {
+        var now = SettingValues(current).GetValueOrDefault(key);
+        if (now == value) return null;
+        if (Protections.TryGetValue(key, out var text)) return value == "false" && now == "true" ? text : null;
+        return key switch
+        {
+            "suggest" when value == "true" => "Ligar «Sugestões enquanto escreve» (o que escreve na barra vai para o motor de pesquisa)",
+            "dns" when value == "off" => "Desligar o «DNS cifrado»",
+            _ => null,
+        };
+    }
+
+    // Esta decisão do Escudo baixa a proteção? («strict» e «hide» só acrescentam proteção.)
+    public static string? WeakensShield(string kind, string host) => kind switch
+    {
+        "off" => $"Desligar o Escudo em {host}",
+        "http" => $"Abrir {host} por HTTP sem aviso (exceção ao «HTTPS primeiro»)",
+        _ => null,
+    };
 
     // Valores das definições que viajam (Collections.SyncableSettings), no formato que UserSettings.With aceita.
     public static Dictionary<string, string> SettingValues(UserSettings s)
@@ -73,12 +117,7 @@ internal static class ProfileTransfer
                 {
                     ["name"] = space.Name, ["color"] = space.ColorIndex, ["icon"] = space.Icon, ["order"] = order++,
                 }, nowMs));
-            // As abas abertas deste computador (aparecem noutro como «abas noutros aparelhos»; a importação não as abre).
-            var tabs = new JsonArray(session.Urls.Select((url, i) => (JsonNode)new JsonObject
-            {
-                ["url"] = url, ["title"] = session.Titles is { } t && i < t.Count ? t[i] : null,
-            }).ToArray());
-            records.Add(ProfileArchive.Record(Collections.Tabs, "este-computador", new JsonObject { ["tabs"] = tabs }, nowMs));
+            // As abas abertas NÃO vão (minimização: a importação não as usa e os URLs podem ter tokens).
         }
         return records;
     }
@@ -98,8 +137,11 @@ internal static class ProfileTransfer
 
     // Junta o perfil importado ao deste computador: favoritos, Espaços e decisões do Escudo em falta entram;
     // as definições do ficheiro passam a valer; as notas, se forem diferentes, ficam por baixo das atuais.
-    public static Imported Import(byte[] file, string code, Action<IReadOnlyList<(string Name, int Color, string? Icon)>>? addSpaces = null)
+    // O que baixa a proteção (WeakensSetting, WeakensShield) só entra com allowWeaker; sem isso fica em Held.
+    public static Imported Import(byte[] file, string code, Action<IReadOnlyList<(string Name, int Color, string? Icon)>>? addSpaces = null,
+        bool allowWeaker = false)
     {
+        var held = new List<string>();
         var archive = ProfileArchive.Import(file, code);
         var records = archive.Records.Where(r => !r.Deleted && r.Data is not null).ToList();
 
@@ -110,14 +152,32 @@ internal static class ProfileTransfer
         // Só contam (e só se gravam) as definições que mudam de facto.
         var settings = 0;
         foreach (var r in records.Where(r => r.Collection == Collections.Settings && Collections.SyncableSettings.Contains(r.Key)))
-            if (r.Text("value") is { } value && Data.Settings.Current.With(r.Key, value) is { } next && next != Data.Settings.Current
-                && Data.Settings.Set(r.Key, value)) settings++;
+        {
+            if (r.Text("value") is not { } value || Data.Settings.Current.With(r.Key, value) is not { } next || next == Data.Settings.Current) continue;
+            if (!allowWeaker && WeakensSetting(Data.Settings.Current, r.Key, value) is { } weaker)
+            {
+                held.Add(weaker);
+                continue;
+            }
+            if (Data.Settings.Set(r.Key, value)) settings++;
+        }
 
         var shield = 0;
         foreach (var r in records.Where(r => r.Collection == Collections.Shield))
         {
             var parts = r.Key.Split('|', 3);
             if (parts.Length != 3 || !Collections.ShieldKinds.Contains(parts[0]) || !IsHost(parts[1])) continue;
+            var applies = parts[0] switch
+            {
+                "off" => AppData.IsShieldOn(parts[1]),
+                "http" => !AppData.IsHttpException(parts[1]),
+                _ => true,
+            };
+            if (applies && !allowWeaker && WeakensShield(parts[0], parts[1]) is { } weaker)
+            {
+                held.Add(weaker);
+                continue;
+            }
             switch (parts[0])
             {
                 case "off" when AppData.IsShieldOn(parts[1]): AppData.SetShield(parts[1], false); shield++; break;
@@ -145,7 +205,7 @@ internal static class ProfileTransfer
             .OrderBy(r => r.Data!["order"]?.GetValue<int>() ?? 0)
             .Select(r => (Name: r.Text("name")!, Color: r.Data!["color"]?.GetValue<int>() ?? 0, Icon: r.Text("icon"))).ToList();
         addSpaces?.Invoke(spaces);
-        return new Imported(bookmarks, settings, shield, spaces.Count, notesChanged, archive.DeviceName);
+        return new Imported(bookmarks, settings, shield, spaces.Count, notesChanged, archive.DeviceName) { Held = held };
     }
 
     // As notas do ficheiro entram por baixo das atuais, com um título (nada se perde nem se sobrepõe).
@@ -166,7 +226,12 @@ internal static class ProfileTransfer
         if (r.Spaces > 0) parts.Add(r.Spaces == 1 ? "1 Espaço" : $"{r.Spaces} Espaços");
         if (r.Notes) parts.Add("as notas");
         var from = r.From.Length > 0 ? $" de «{r.From}»" : string.Empty;
-        return parts.Count == 0 ? $"Perfil{from} lido: nada de novo para juntar." : $"Perfil{from} importado: {string.Join(", ", parts)}.";
+        var text = parts.Count == 0 ? $"Perfil{from} lido: nada de novo para juntar." : $"Perfil{from} importado: {string.Join(", ", parts)}.";
+        if (r.Held.Count > 0)
+            text += r.Held.Count == 1
+                ? " 1 alteração baixaria a proteção deste computador e ficou por aplicar."
+                : $" {r.Held.Count} alterações baixariam a proteção deste computador e ficaram por aplicar.";
+        return text;
     }
 
     private static bool IsWebAddress(string url)

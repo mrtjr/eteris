@@ -122,6 +122,9 @@
   .code[hidden], .syncnote[hidden] { display: none; }
   .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
   .syncnote.bad { color: #ffb3c1; }
+  .syncheld { margin: 6px 0 0; padding-left: 18px; color: #ffd8a8; font-size: 12.8px; line-height: 1.45; }
+  .syncheld[hidden], #importWeaker[hidden] { display: none; }
+  #importWeaker { margin-top: 8px; }
   .syncform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
   .syncform input[type=text] { font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
     border-radius: 12px; padding: 9px 12px; width: min(100%, 420px); }
@@ -388,20 +391,23 @@
         </div>
         <div class="syncbody" id="syncBody" hidden>
           <div class="item">
-            <div class="label"><b>Exportar perfil cifrado</b><span>Favoritos, Espaços, definições, decisões do Escudo e notas num ficheiro .eteris em Transferências, para levar para outro computador. O código para o abrir aparece uma única vez: guarde-o.</span>
+            <div class="label"><b>Exportar perfil cifrado</b><span>Favoritos, Espaços, definições, decisões do Escudo e notas num ficheiro .eteris em Transferências, para levar para outro computador (as abas abertas não vão). O código para o abrir aparece uma única vez: guarde-o.</span>
               <span class="syncnote" id="exportNote" hidden></span>
               <div class="code" id="exportCode" hidden></div></div>
             <button class="action" id="exportButton">Exportar…</button>
           </div>
           <div class="item">
-            <div class="label"><b>Importar perfil cifrado</b><span>Junta um perfil exportado a este: o que falta entra, as definições do ficheiro passam a valer e as notas ficam por baixo das atuais.</span>
-              <span class="syncnote" id="importNote" hidden></span></div>
+            <div class="label"><b>Importar perfil cifrado</b><span>Junta um perfil exportado a este: o que falta entra, as definições do ficheiro passam a valer e as notas ficam por baixo das atuais. O que baixaria a proteção deste computador só entra se confirmar.</span>
+              <span class="syncnote" id="importNote" hidden></span>
+              <ul class="syncheld" id="importHeld" hidden></ul>
+              <button class="action" type="button" id="importWeaker" hidden>Aplicar também estas alterações</button></div>
             <form class="syncform" id="syncImportForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
               <span class="filename" id="syncFileName">Nenhum ficheiro escolhido</span>
               <label class="action" for="syncFile">Escolher ficheiro…</label>
               <input type="file" id="syncFile" accept=".eteris" hidden>
               <input type="text" name="code" id="syncCode" placeholder="Código (14 grupos de 4)" spellcheck="false" aria-label="Código do perfil exportado">
               <input type="hidden" name="data" id="syncData">
+              <input type="hidden" name="weaker" id="syncWeaker" value="0">
               <button class="action" type="submit" id="importButton">Importar</button>
             </form>
           </div>
@@ -621,6 +627,21 @@
       document.getElementById('syncFileName').textContent = file.files && file.files[0] ? file.files[0].name : 'Nenhum ficheiro escolhido';
     });
     const importNote = document.getElementById('importNote');
+    const importHeld = document.getElementById('importHeld');
+    const importWeaker = document.getElementById('importWeaker');
+    const weakerField = document.getElementById('syncWeaker');
+    const clearImport = () => {
+      document.getElementById('syncCode').value = ''; document.getElementById('syncData').value = '';
+      weakerField.value = '0'; importHeld.hidden = true; importHeld.replaceChildren(); importWeaker.hidden = true;
+    };
+    const importReply = reply => {
+      note(importNote, (reply.ok ? '✓ ' : '') + reply.message, !reply.ok);
+      const held = reply.ok && Array.isArray(reply.held) ? reply.held : [];
+      if (!held.length) { if (reply.ok) clearImport(); return; }
+      // O ficheiro baixaria proteções: mostra quais e só as aplica se o utilizador carregar no botão.
+      importHeld.replaceChildren(...held.map(text => { const li = document.createElement('li'); li.textContent = text; return li; }));
+      importHeld.hidden = false; importWeaker.hidden = false;
+    };
     form.action = `eteris://${location.host}/sync-import?t=${data.token}`;
     form.addEventListener('submit', e => {
       e.preventDefault();
@@ -629,13 +650,17 @@
       const reader = new FileReader();
       reader.onload = () => {
         document.getElementById('syncData').value = String(reader.result).replace(/^data:[^,]*,/, '');
-        onReply = reply => {
-          note(importNote, (reply.ok ? '✓ ' : '') + reply.message, !reply.ok);
-          if (reply.ok) { document.getElementById('syncCode').value = ''; document.getElementById('syncData').value = ''; }
-        };
+        weakerField.value = '0'; importHeld.hidden = true; importWeaker.hidden = true;
+        onReply = importReply;
         form.submit();
       };
       reader.readAsDataURL(chosen);
+    });
+    importWeaker.addEventListener('click', () => {
+      if (!document.getElementById('syncData').value) return;
+      weakerField.value = '1';
+      onReply = reply => { importReply(reply); if (reply.ok) clearImport(); };
+      form.submit();
     });
 
     const googleButton = document.getElementById('googleButton');

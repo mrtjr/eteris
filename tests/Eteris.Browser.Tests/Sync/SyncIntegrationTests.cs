@@ -74,6 +74,59 @@ public class SyncIntegrationTests
     }
 
     [Fact]
+    public void ImportSummary_SaysWhatWasHeldBack()
+    {
+        var held = new ProfileTransfer.Imported(1, 0, 0, 0, false, "PC") { Held = ["Desligar «HTTPS primeiro»", "Desligar o Escudo em x.pt"] };
+        Assert.Equal("Perfil de «PC» importado: 1 favorito. 2 alterações baixariam a proteção deste computador e ficaram por aplicar.",
+            ProfileTransfer.Summary(held));
+    }
+
+    [Fact]
+    public void ProfileImport_WhatLowersProtection_WaitsForConfirmation()
+    {
+        var dns = Eteris.Browser.Shields.SecureDns.Providers.Keys.First();
+        var current = new UserSettings() with
+        {
+            HttpsFirst = true, BlockThirdPartyCookies = true, CleanUrls = true, SkipTrackingRedirects = true, ForgetBounceTrackers = true,
+            UncloakCname = true, BlockNotificationPrompts = true, ClearOnExit = true, SearchSuggestions = false, SecureDns = dns,
+        };
+        foreach (var key in new[] { "httpsFirst", "cookies", "cleanUrls", "debounce", "bounceForget", "cname", "notifications", "clearOnExit" })
+        {
+            Assert.NotNull(ProfileTransfer.WeakensSetting(current, key, "false"));
+            Assert.Null(ProfileTransfer.WeakensSetting(current, key, "true"));
+        }
+        Assert.NotNull(ProfileTransfer.WeakensSetting(current, "suggest", "true"));
+        Assert.Contains("DNS cifrado", ProfileTransfer.WeakensSetting(current, "dns", "off"));
+        Assert.Null(ProfileTransfer.WeakensSetting(current with { SecureDns = "off" }, "dns", dns)); // ligar protege
+        Assert.Null(ProfileTransfer.WeakensSetting(current, "theme", "light"));                     // gosto, não proteção
+        // O que já está igual nunca é «baixar».
+        foreach (var (key, value) in ProfileTransfer.SettingValues(current))
+            Assert.Null(ProfileTransfer.WeakensSetting(current, key, value));
+
+        Assert.Contains("exemplo.pt", ProfileTransfer.WeakensShield("off", "exemplo.pt"));
+        Assert.Contains("HTTP", ProfileTransfer.WeakensShield("http", "exemplo.pt"));
+        Assert.Null(ProfileTransfer.WeakensShield("strict", "exemplo.pt"));
+        Assert.Null(ProfileTransfer.WeakensShield("hide", "exemplo.pt"));
+
+        // A página mostra a lista e só reenvia com «weaker=1» quando o utilizador carrega no botão.
+        var html = SettingsPage.Render(new UserSettings());
+        Assert.Contains("id=\"importWeaker\"", html);
+        Assert.Contains("name=\"weaker\" id=\"syncWeaker\" value=\"0\"", html);
+        var handler = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("form.GetValueOrDefault(\"weaker\") == \"1\"", handler);
+    }
+
+    [Fact]
+    public void ProfileExport_LeavesOpenTabsOut_AndTheSettingsSayWhatGoes()
+    {
+        // URLs de abas podem ter tokens (redefinição de senha, sessão), e a importação não os usava.
+        var code = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "ProfileTransfer.cs"));
+        Assert.DoesNotContain("Collections.Tabs", code);
+        Assert.DoesNotContain("session.Urls", code);
+        Assert.Contains("as abas abertas não vão", SettingsPage.Render(new UserSettings()));
+    }
+
+    [Fact]
     public void Dpapi_RoundTrips_AndPurposesDoNotMix()
     {
         var secret = RandomNumberGenerator.GetBytes(64);
