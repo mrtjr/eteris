@@ -62,7 +62,8 @@ public static class CefConfigurator
         return settings;
     }
 
-    public static void Initialize()
+    // Tudo o que tem de estar feito antes do Cef.Initialize (pastas, limpeza do perfil, Local State, definições do motor).
+    public static CefSettings Prepare()
     {
         AppPaths.EnsureDirectories();
         StartupTrace.Mark("pastas");
@@ -79,7 +80,68 @@ public static class CefConfigurator
         StartupTrace.Mark("localstate");
         var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute);
         StartupTrace.Mark("cef.settings");
-        Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: null);
-        StartupTrace.Mark("cef.initialize");
+        return settings;
+    }
+
+    // O Cef.Initialize (~100 ms no arranque) corre numa thread própria enquanto o fio da interface cria a janela (o XAML
+    // leva ~280 ms); quem precisa do motor (o 1.º browser, o contexto privado) espera por WaitReady. O CefSharp exige o
+    // Cef.Shutdown na mesma thread do Cef.Initialize: a thread fica à espera dele (Shutdown leva-o lá). «ready» corre
+    // nela logo a seguir à inicialização (o que precisa do contexto global).
+    private static Thread? _thread;
+    private static readonly ManualResetEventSlim Ready = new(false);
+    private static readonly System.Collections.Concurrent.BlockingCollection<Action> Work = [];
+    // Uma falha do Cef.Initialize volta a ser lançada no fio da interface (WaitReady), como quando ele corria lá.
+    private static System.Runtime.ExceptionServices.ExceptionDispatchInfo? _failure;
+
+    public static void InitializeInBackground(CefSettings settings, Action ready)
+    {
+        _thread = new Thread(() =>
+        {
+            try
+            {
+                Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: null);
+                StartupTrace.Mark("cef.initialize");
+                ready();
+            }
+            catch (Exception ex) { _failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex); }
+            finally { Ready.Set(); }
+            foreach (var action in Work.GetConsumingEnumerable()) action();
+        })
+        { IsBackground = true, Name = "Éteris: arranque do motor" };
+        // STA, como o fio da interface onde o Cef.Initialize corria: as esperas numa thread STA recebem as mensagens COM.
+        _thread.SetApartmentState(ApartmentState.STA);
+        _thread.Start();
+    }
+
+    // Espera pelo fim do Cef.Initialize (já acabou, ou nunca foi para outra thread: não espera).
+    public static void WaitReady()
+    {
+        if (_thread is null) return;
+        if (!Ready.IsSet)
+        {
+            Ready.Wait();
+            StartupTrace.Mark("cef.pronto");
+        }
+        _failure?.Throw();
+    }
+
+    public static void Shutdown()
+    {
+        if (_thread is null)
+        {
+            Cef.Shutdown();
+            return;
+        }
+        Ready.Wait();
+        using var done = new ManualResetEventSlim(false);
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? failure = null;
+        Work.Add(() =>
+        {
+            try { Cef.Shutdown(); }
+            catch (Exception ex) { failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex); }
+            finally { done.Set(); }
+        });
+        done.Wait();
+        failure?.Throw();
     }
 }

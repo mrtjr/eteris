@@ -11,12 +11,11 @@ public partial class App : Application
     {
         base.OnStartup(e);
         StartupTrace.Mark("onstartup");
-        CefConfigurator.Initialize();
-        // As tabelas que a 1.ª aba consulta abrem-se em paralelo com a criação da janela (Data/AppData.cs, PrewarmAsync).
+        // O motor arranca numa thread própria enquanto o resto do arranque e o XAML da janela correm aqui; a janela espera
+        // por ele só antes da 1.ª aba (Infrastructure/CefConfigurator.cs).
+        CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
+        // As tabelas que a 1.ª aba consulta abrem-se em paralelo (Data/AppData.cs, PrewarmAsync).
         _ = Data.AppData.PrewarmAsync();
-        // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
-        Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
-        StartupTrace.Mark("selftest");
         Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
         Theme.ThemeManager.FollowSystemChanges(() => Data.Settings.Current.Theme);
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.ThemeManager.Apply(s.Theme));
@@ -29,9 +28,7 @@ public partial class App : Application
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.AccentManager.Apply(s.Accent, Theme.ThemeManager.Current == Theme.AppTheme.Light));
         Theme.ThemeManager.Changed += t => Dispatcher.InvokeAsync(() => Theme.AccentManager.Apply(Data.Settings.Current.Accent, t == Theme.AppTheme.Light));
         StartupTrace.Mark("cor.seguir");
-        _ = Shields.PrivacyPreferences.ApplyAsync();
         Data.Settings.Changed += _ => { var __ = Shields.PrivacyPreferences.ApplyAsync(); };
-        StartupTrace.Mark("privacidade");
         _ = Shields.ShieldEngine.StartAsync(Shields.FilterLists.ForApp());
         StartupTrace.Mark("escudo.lancado");
         CaptureShield.Install();
@@ -55,6 +52,16 @@ public partial class App : Application
 
     private IDisposable? _channel;
 
+    // Logo a seguir ao Cef.Initialize (na thread onde ele correu): o que precisa do contexto global do motor.
+    private static void OnCefReady()
+    {
+        // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
+        Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
+        StartupTrace.Mark("selftest");
+        _ = Shields.PrivacyPreferences.ApplyAsync();
+        StartupTrace.Mark("privacidade");
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         _channel?.Dispose();
@@ -66,7 +73,7 @@ public partial class App : Application
             catch (Exception) { }
         }
         UpdateService.ApplyPendingOnExit();
-        Cef.Shutdown();
+        CefConfigurator.Shutdown();
         base.OnExit(e);
     }
 }
