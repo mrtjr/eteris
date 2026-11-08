@@ -698,15 +698,30 @@
   })();
 
   // Realce da navegação. As últimas secções são curtas e a página não as consegue pôr no topo: pela posição, um clique
-  // em «Sobre» realçava outra. Por isso a secção escolhida (clique, #âncora, data.focus) fica realçada até a pessoa
-  // rolar à mão (roda, toque, teclas, barra de deslocamento); daí em diante volta o realce pela posição, que só conta as
-  // secções à vista (a pesquisa esconde as outras) e, no fim da página, realça a última delas.
+  // em «Sobre» realçava outra. Por isso a secção escolhida (clique, #âncora, data.focus) fica realçada enquanto estiver
+  // à vista e a pessoa não rolar à mão (roda, toque, teclas de rolar, barra de deslocamento). Qualquer outra rolagem que
+  // a tire da vista (Tab, Procurar na página…) também a solta; o foco que chega pelo teclado a outra secção realça essa.
+  // Sem secção escolhida, o realce vai pela posição, que só conta as secções à vista (a pesquisa esconde as outras) e,
+  // no fim da página, realça a última delas. O item realçado leva aria-current, para o leitor de ecrã dizer onde se está.
   const links = [...document.querySelectorAll('nav a')];
   const sections = [...document.querySelectorAll('main section')];
   let pinned = null, byHand = false;
-  const paint = id => links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
-  function markSection() {
-    if (pinned && !byHand) return paint(pinned);
+  const paint = id => links.forEach(a => {
+    const on = a.getAttribute('href') === '#' + id;
+    a.classList.toggle('on', on);
+    if (on) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current');
+  });
+  // A secção fixada ainda serve? Não, se a pesquisa a escondeu ou se uma rolagem a tirou da vista. Fora de uma
+  // rolagem (ao carregar, antes de o motor saltar para a #âncora) só conta a pesquisa.
+  const keepPinned = scrolled => {
+    const s = document.getElementById(pinned);
+    if (!s || s.classList.contains('filtered-out')) return false;
+    if (!scrolled || !innerHeight) return true;
+    const r = s.getBoundingClientRect();
+    return r.bottom > 0 && r.top < innerHeight;
+  };
+  function markSection(scrolled) {
+    if (pinned && !byHand && keepPinned(scrolled === true)) return paint(pinned);
     pinned = null;
     const shown = sections.filter(s => !s.classList.contains('filtered-out'));
     if (!shown.length) return paint(null);
@@ -725,12 +740,23 @@
   }
   links.forEach(a => a.addEventListener('click', () => pin(a.getAttribute('href').slice(1))));
   const handScroll = e => { if (!e.target.closest?.('nav')) byHand = true; };
-  for (const type of ['wheel', 'touchstart', 'mousedown']) addEventListener(type, handScroll, { passive: true });
+  for (const type of ['wheel', 'touchstart']) addEventListener(type, handScroll, { passive: true });
+  // A barra de deslocamento da página: o mousedown nela tem como alvo o próprio documento. Um clique num botão ou num
+  // interruptor não rola nada e não solta o realce.
+  addEventListener('mousedown', e => { if (e.target === document.documentElement) byHand = true; }, { passive: true });
   addEventListener('keydown', e => {
     if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)
         && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) byHand = true;
   });
-  addEventListener('scroll', markSection, { passive: true });
+  // Tab (ou outra tecla) leva o foco a um controlo: o realce vai para a secção dele. O foco dado por um clique
+  // (:focus-visible falso) não mexe no realce.
+  addEventListener('focusin', e => {
+    const el = e.target;
+    if (!(el instanceof Element) || el.closest('nav') || !el.matches(':focus-visible')) return;
+    const section = el.closest('main section');
+    if (section) pin(section.id); else byHand = true;
+  });
+  addEventListener('scroll', () => markSection(true), { passive: true });
   const target = (location.hash && document.getElementById(location.hash.slice(1))) || (data.focus && document.getElementById(data.focus));
   if (target) pin(target.closest('section')?.id);
   markSection();
