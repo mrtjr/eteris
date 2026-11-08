@@ -336,6 +336,28 @@ public static class VideoEngine
 
     private static readonly string[] DirectMediaExtensions = [".mp4", ".m4v", ".mov", ".m4a", ".aac", ".mp3", ".webm", ".ogg", ".m3u8"];
 
+    // Título de uma página do motor de vídeo. Um ficheiro de vídeo/áudio aberto diretamente não tem título (e o WebView2
+    // nem avisa a mudança): como no Chrome, fica o nome do ficheiro, ou o anfitrião quando o caminho não tem nome.
+    public static string PageTitle(string? documentTitle, string? url)
+    {
+        if (!string.IsNullOrWhiteSpace(documentTitle) && !string.Equals(documentTitle, url, StringComparison.OrdinalIgnoreCase)
+            && !documentTitle.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return documentTitle;
+        return UntitledTitle(url);
+    }
+
+    public static string UntitledTitle(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return url ?? string.Empty;
+        var name = uri.AbsolutePath;
+        name = name[(name.LastIndexOf('/') + 1)..];
+        if (name.Length > 0)
+        {
+            try { return Uri.UnescapeDataString(name); }
+            catch (UriFormatException) { return name; }
+        }
+        return uri.Host.Length > 0 ? uri.Host : url!;
+    }
+
     public static string WithTimeFragment(string url, double seconds)
     {
         var hash = url.IndexOf('#');

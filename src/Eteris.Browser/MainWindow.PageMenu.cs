@@ -16,6 +16,8 @@ public partial class MainWindow
     private void ShowPageMenu(BrowserTab tab, ChromiumWebBrowser browser, PageContext context, int x, int y)
     {
         if (!ReferenceEquals(tab, Tabs.Active)) return;
+        // O Avançar também volta ao vídeo de onde se regressou com o Voltar (Tabs/EngineCrossing.cs).
+        context = context with { CanGoForward = tab.Crossing.CanGoForward(inVideo: false, context.CanGoForward) };
         var menu = new DarkMenu();
         foreach (var item in PageMenu.Build(context, Engine.Name))
         {
@@ -32,6 +34,7 @@ public partial class MainWindow
         switch (command)
         {
             case PageCommand.Back: browser.Back(); break;
+            case PageCommand.Forward when !browser.CanGoForward && ReferenceEquals(ActiveBrowser, browser): GoForward(); break;
             case PageCommand.Forward: browser.Forward(); break;
             case PageCommand.Reload: ReloadActive(); break;
             case PageCommand.Print: browser.Print(); break;

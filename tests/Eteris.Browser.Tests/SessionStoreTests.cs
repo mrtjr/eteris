@@ -118,4 +118,21 @@ public sealed class SessionStoreTests : IDisposable
         Assert.Equal(["https://a.pt/"], session.Urls);
         Assert.Equal(0, session.ActiveIndex);
     }
+    // Antes cortava-se em 100 abas: as seguintes perdiam-se em silêncio ao gravar (na faixa e nos Espaços na reserva).
+    [Fact]
+    public void Save_KeepsEveryTab_InTheStripAndInReservedSpaces()
+    {
+        var urls = Enumerable.Range(0, 250).Select(i => $"https://site{i}.pt/").ToList();
+        var titles = urls.Select((_, i) => $"Aba {i}").ToList();
+        var reserved = Enumerable.Range(0, 180).Select(i => $"https://reserva{i}.pt/").ToList();
+        var store = new SessionStore(_path);
+        store.Save(urls, 230, titles, spaces:
+            [new SessionSpace("Geral", 0), new SessionSpace("Trabalho", 1, Tabs: new Session(reserved, 179))], spaceIndex: 0);
+        var session = new SessionStore(_path).Load()!;
+        Assert.Equal(urls, session.Urls);
+        Assert.Equal(titles, session.Titles);
+        Assert.Equal(230, session.ActiveIndex);
+        Assert.Equal(reserved, session.Spaces![1].Tabs!.Urls);
+        Assert.Equal(179, session.Spaces[1].Tabs!.ActiveIndex);
+    }
 }

@@ -16,6 +16,8 @@ Fluidez da navegação (ver `docs/motor.md` e `docs/paridade.md`, secção 1b).
 - O Éteris deixa de fechar inteiro quando um iframe desaparece a meio de um pedido.
 - Abrir o Éteris com um endereço já não abre duas abas iguais.
 - As regras cosméticas e os scriptlets do Escudo passam a valer logo na 1.ª página de cada site, e também nas páginas servidas por service worker (YouTube).
+- A sessão guarda todas as abas: com mais de 100 (na faixa ou num Espaço na reserva), as seguintes perdiam-se em silêncio no arranque seguinte.
+- O cartão do cadeado fecha ao navegar, ao mudar de aba e ao ir para a barra de endereço (ficava aberto com o site anterior).
 
 ### Vídeo
 - **H.264 e AAC no motor principal** (Twitch, MP4 direto, HLS, g1, BBC, Reddit, TikTok, Dailymotion, `.m4a`/`.aac`), com uma compilação própria do motor com os codecs do Windows: o vídeo é descodificado pela placa gráfica e o som AAC pelo Windows, sem nenhum descodificador com patentes no Éteris (~2,4% de processador a 1080p). Os sites deixam de mudar para o motor de vídeo, com o Escudo, as regras cosméticas e todas as funções da aba.
@@ -26,6 +28,7 @@ Fluidez da navegação (ver `docs/motor.md` e `docs/paridade.md`, secção 1b).
 - Novo botão **«Tocar no motor de vídeo»** (barra de endereço e menu da página) quando a troca não é automática: vídeo de fundo, leitor noutro site, Reddit e **DRM** (Netflix, Spotify…: sempre com pergunta).
 - Ligações diretas a **HLS (`.m3u8`) e áudio AAC (`.m4a`/`.aac`) tocam** em vez de irem para as Transferências.
 - A troca de motor já não mostra o fundo da janela nem uma página em branco; o vídeo retoma onde estava.
+- Depois da troca para o motor de vídeo, **Voltar** (e Alt+←) regressa à página anterior no motor principal, e Avançar volta ao vídeo; um ficheiro de vídeo aberto diretamente tem como título o nome do ficheiro (ficava o da página anterior, também no histórico).
 - Motor de vídeo: sem o «component updater» do Edge, com a política de reprodução automática do Éteris, o bloqueador já vale desde o 1.º pedido da página e as regras cosméticas do Escudo também se aplicam.
 
 ## 0.2.8 — 2026-11-07

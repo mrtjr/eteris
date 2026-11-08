@@ -199,4 +199,13 @@ public class VideoEngineTests
     [InlineData("about:blank", false)]
     [InlineData(null, false)]
     public void OnlyWebAddressesGoToTheVideoEngine(string? url, bool expected) => Assert.Equal(expected, VideoEngine.CanHost(url));
+    [Theory]
+    [InlineData(null, "https://www.w3schools.com/html/mov_bbb.mp4", "mov_bbb.mp4")]
+    [InlineData("", "https://www.w3schools.com/html/mov_bbb.mp4?x=1#t=3", "mov_bbb.mp4")]
+    [InlineData("https://cdn.example.com/a%20b.webm", "https://cdn.example.com/a%20b.webm", "a b.webm")]
+    [InlineData("about:blank", "https://cdn.example.com/", "cdn.example.com")]
+    [InlineData("Big Buck Bunny", "https://cdn.example.com/v.mp4", "Big Buck Bunny")]
+    [InlineData(null, "não é endereço", "não é endereço")]
+    public void PageTitle_UntitledMediaUsesTheFileNameOrHost(string? documentTitle, string url, string expected)
+        => Assert.Equal(expected, VideoEngine.PageTitle(documentTitle, url));
 }

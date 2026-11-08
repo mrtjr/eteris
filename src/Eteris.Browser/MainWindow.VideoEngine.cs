@@ -72,7 +72,8 @@ public partial class MainWindow
     private bool TryCreateVideoView(BrowserTab tab)
     {
         if (!VideoEngine.CanHost(tab.Address)) tab.UsesVideoEngine = false;
-        else if (IsVideoSite(tab.Address)) tab.UsesVideoEngine = true;
+        // A página a que se regressou com o Voltar (Tabs/EngineCrossing.cs) fica no motor principal.
+        else if (IsVideoSite(tab.Address) && !tab.Crossing.StaysInMain(tab.Address)) tab.UsesVideoEngine = true;
         if (!tab.UsesVideoEngine) return false;
         CreateVideoView(tab);
         return true;
@@ -158,6 +159,9 @@ public partial class MainWindow
         var pageHost = WebHost(pageUrl);
         var decisions = new Dictionary<(string Page, string Request), bool>();
         var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // O documento atual já deu um título? Um ficheiro de vídeo aberto diretamente não dá (nem o DocumentTitleChanged
+        // dispara): sem isto ficava o título da página anterior, na aba e no histórico.
+        var titled = false;
 
         // Bloqueador: os mesmos filtros do motor principal, em todos os pedidos (incluindo os dos workers), menos os
         // segmentos de vídeo/áudio, que saem logo. (Medido: um filtro por contexto, sem Media, deixava de bloquear.)
@@ -195,7 +199,11 @@ public partial class MainWindow
             mainNavigation = e.Uri;
             pageUrl = e.Uri;
             pageHost = WebHost(e.Uri);
-            if (!e.IsRedirected) tab.ResetShield();
+            if (!e.IsRedirected)
+            {
+                tab.ResetShield();
+                titled = false;
+            }
             tab.IsLoading = true;
             // A cosmética do Escudo deste site (registada uma vez por site, protegida pelo hostname da página).
             _ = EnsureVideoCosmeticsAsync(core, e.Uri, cosmeticHosts);
@@ -216,17 +224,20 @@ public partial class MainWindow
         core.DocumentTitleChanged += (_, _) =>
         {
             var title = core.DocumentTitle;
-            tab.Title = string.IsNullOrEmpty(title) ? tab.Address : title;
             var url = tab.Address;
-            if (!IsPrivate && !string.IsNullOrEmpty(title)) AppData.UpdateTitleLater(url, title);
+            tab.Title = VideoEngine.PageTitle(title, url);
+            if (string.IsNullOrEmpty(title)) return;
+            titled = true;
+            if (!IsPrivate) AppData.UpdateTitleLater(url, title);
         };
         core.NavigationCompleted += (_, e) =>
         {
             FinishVideoSwitch(tab);
             tab.IsLoading = false;
-            tab.CanGoBack = core.CanGoBack;
-            tab.CanGoForward = core.CanGoForward;
+            UpdateVideoHistory(tab, core);
             var url = core.Source;
+            // Sem título do documento (ficheiro de vídeo aberto diretamente): o nome do ficheiro, como no Chrome.
+            if (!titled) tab.Title = VideoEngine.PageTitle(core.DocumentTitle, url);
             if (e.IsSuccess && e.HttpStatusCode is > 0 and < 400 && !IsPrivate)
             {
                 var title = tab.Title;
@@ -234,11 +245,7 @@ public partial class MainWindow
                 RememberFavicon(tab, url);
             }
         };
-        core.HistoryChanged += (_, _) =>
-        {
-            tab.CanGoBack = core.CanGoBack;
-            tab.CanGoForward = core.CanGoForward;
-        };
+        core.HistoryChanged += (_, _) => UpdateVideoHistory(tab, core);
         core.FaviconChanged += async (_, _) => await SetVideoFaviconAsync(tab, core);
         core.ContainsFullScreenElementChanged += (_, _) => OnPageFullscreen(tab, core.ContainsFullScreenElement);
         core.IsDocumentPlayingAudioChanged += (_, _) => tab.IsAudible = core.IsDocumentPlayingAudio;
@@ -261,6 +268,13 @@ public partial class MainWindow
                 tab.RecordBlocked(blocked);
             }
         };
+    }
+
+    // Voltar/Avançar de uma aba do motor de vídeo: o histórico dele e, na 1.ª entrada, o regresso ao motor principal.
+    private static void UpdateVideoHistory(BrowserTab tab, CoreWebView2 core)
+    {
+        tab.CanGoBack = tab.Crossing.CanGoBack(inVideo: true, core.CanGoBack);
+        tab.CanGoForward = tab.Crossing.CanGoForward(inVideo: true, core.CanGoForward);
     }
 
     // Regras cosméticas do Escudo no motor de vídeo (banners, pop-ups): as mesmas do motor principal, registadas pelo
@@ -334,6 +348,7 @@ public partial class MainWindow
         tab.Address = url;
         tab.UsesVideoEngine = true;
         tab.VideoOffer = null;
+        if (tab.IsSleeping || !_browsers.ContainsKey(tab)) tab.Crossing.EnterVideo(null);
         if (tab.IsSleeping)
         {
             ReleaseChromium(tab);
@@ -352,8 +367,11 @@ public partial class MainWindow
     private async Task SwitchWhenReadyAsync(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
     {
         // Posição do maior vídeo (só conta se já estava a tocar há mais de 1 s); e calar a página antes de trocar.
+        // Ao mesmo tempo, a página a que o Voltar do motor de vídeo regressa (o histórico do motor principal perde-se).
+        var back = MainBackTargetAsync(browser, url);
         var position = await PageScript.EvaluateAsync(browser, VideoEngine.PositionScript, TimeSpan.FromMilliseconds(300));
         PageScript.Run(browser, MediaInfo.PauseScript);
+        tab.Crossing.EnterVideo(await back);
         var resumeAt = position.Success && position.Result is double seconds ? seconds : 0;
         if (!_videoSwitching.Contains(tab) || !Tabs.Tabs.Contains(tab)) return;
         if (resumeAt > 1 && VideoEngine.IsDirectMedia(url)) url = VideoEngine.WithTimeFragment(url, resumeAt);
@@ -365,6 +383,21 @@ public partial class MainWindow
             await Task.Delay(5000);
             FinishVideoSwitch(tab);
         });
+    }
+
+    private static async Task<string?> MainBackTargetAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string switchingTo)
+    {
+        try
+        {
+            if (browser.IsDisposed || browser.GetBrowserHost() is not { } host) return null;
+            var read = host.GetNavigationEntriesAsync(currentOnly: false);
+            if (await Task.WhenAny(read, Task.Delay(300)) != read) return null;
+            var entries = await read;
+            // Na página de erro (ou no aviso do «HTTPS primeiro») conta o endereço que falhou, como na omnibox.
+            var urls = entries.Select(entry => ErrorPage.IsErrorPage(entry.Url) ? ErrorPage.FailedUrl(entry.Url) ?? entry.Url : entry.Url).ToList();
+            return EngineCrossing.BackTarget(urls, entries.FindIndex(entry => entry.IsCurrent), switchingTo);
+        }
+        catch (Exception) { return null; }
     }
 
     // O primeiro documento do motor de vídeo carregou: o WebView2 passa a ver-se e só depois (200 ms, já pintado) sai a
@@ -430,16 +463,46 @@ public partial class MainWindow
 
     // ---------- Navegação comum aos dois motores ----------
 
+    // Da 1.ª entrada do motor de vídeo, o Voltar regressa ao motor principal na página anterior; dali, o Avançar volta
+    // ao vídeo (Tabs/EngineCrossing.cs).
     private void GoBack()
     {
-        if (ActiveVideo?.CoreWebView2 is { } core) { if (core.CanGoBack) core.GoBack(); }
-        else ActiveBrowser?.Back();
+        if (Tabs.Active is not { } tab) return;
+        if (ActiveVideo is not { } view)
+        {
+            ActiveBrowser?.Back();
+            return;
+        }
+        if (view.CoreWebView2 is not { } core) return;
+        switch (tab.Crossing.Back(inVideo: true, core.CanGoBack))
+        {
+            case EngineCrossing.Step.InEngine:
+                core.GoBack();
+                break;
+            case EngineCrossing.Step.ToMain when tab.Crossing.ReturnToMain(tab.Address) is { } previous:
+                SwitchToNormalEngine(tab, previous);
+                break;
+        }
     }
 
     private void GoForward()
     {
-        if (ActiveVideo?.CoreWebView2 is { } core) { if (core.CanGoForward) core.GoForward(); }
-        else ActiveBrowser?.Forward();
+        if (Tabs.Active is not { } tab) return;
+        if (ActiveVideo is { } view)
+        {
+            if (view.CoreWebView2 is { CanGoForward: true } core) core.GoForward();
+            return;
+        }
+        if (ActiveBrowser is not { } browser) return;
+        switch (tab.Crossing.Forward(inVideo: false, browser.CanGoForward))
+        {
+            case EngineCrossing.Step.InEngine:
+                browser.Forward();
+                break;
+            case EngineCrossing.Step.ToVideo when tab.Crossing.ForwardToVideo() is { } video:
+                SwitchToVideoEngine(tab, video);
+                break;
+        }
     }
 
     private void StopActive()

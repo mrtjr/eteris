@@ -102,6 +102,9 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private string? _videoOffer;
 
+    // Voltar/Avançar entre o motor principal e o motor de vídeo (Tabs/EngineCrossing.cs).
+    public EngineCrossing Crossing { get; } = new();
+
     [ObservableProperty]
     private bool _canGoBack;
 

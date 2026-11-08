@@ -35,10 +35,10 @@ public sealed record SessionSplit(int Left, int Right, string Orientation)
 public sealed record SessionGroup(string Name, int ColorIndex, bool Collapsed);
 
 // Abas abertas, gravadas continuamente para sobreviverem a um fecho normal ou a um crash.
+// Sem limite de abas: as que não estão à vista são repostas a dormir (sem motor), e cortar a lista perdia em silêncio
+// as abas a mais — da faixa e dos Espaços na reserva — no arranque seguinte.
 public sealed class SessionStore(string path)
 {
-    private const int MaxTabs = 100;
-
     // Campos a null (divisão, identidades) ficam fora do ficheiro: lê-se da mesma e o JSON fica legível.
     private static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 
@@ -64,7 +64,7 @@ public sealed class SessionStore(string path)
         File.Move(temporary, path, overwrite: true);
     }
 
-    // Só o que se pode repor (http, https, eteris://), até MaxTabs, com os campos por aba alinhados.
+    // Só o que se pode repor (http, https, eteris://), todas as abas, com os campos por aba alinhados.
     private static Session Build(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles, IEnumerable<bool>? pinned,
         IEnumerable<int>? groupIds, IReadOnlyList<SessionGroup>? groups, SessionSplit? split, IEnumerable<SessionTabMeta?>? metas)
     {
@@ -73,7 +73,7 @@ public sealed class SessionStore(string path)
         var all = urls.ToList();
         var allTitles = titles?.ToList() ?? [];
         var allPinned = pinned?.ToList() ?? [];
-        var keptIndices = Enumerable.Range(0, all.Count).Where(i => IsRestorable(all[i])).Take(MaxTabs).ToList();
+        var keptIndices = Enumerable.Range(0, all.Count).Where(i => IsRestorable(all[i])).ToList();
         var kept = keptIndices.Select(i => all[i]).ToList();
         var keptTitles = keptIndices.Select(i => i < allTitles.Count ? allTitles[i] : string.Empty).ToList();
         var keptPinned = keptIndices.Select(i => i < allPinned.Count && allPinned[i]).ToList();

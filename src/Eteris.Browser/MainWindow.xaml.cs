@@ -209,7 +209,9 @@ public partial class MainWindow : Window
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             // Nunca a partir da página de erro ou do aviso do «HTTPS primeiro»: o endereço que lá aparece é o que falhou
             // (o http:// por aceitar), e o motor de vídeo abri-lo-ia sem a pessoa escolher «Continuar».
-            if (IsVideoSite(address) && !ErrorPage.IsErrorPage(browser.Address)) Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
+            // Nem a página a que se regressou com o Voltar do motor de vídeo (Tabs/EngineCrossing.cs).
+            if (IsVideoSite(address) && !ErrorPage.IsErrorPage(browser.Address) && !tab.Crossing.StaysInMain(address))
+                Dispatcher.InvokeAsync(() => SwitchToVideoEngine(tab, address));
             // Depois do commit (o DevTools volta a entregar mensagens): os scripts do site atual ficam registados, e os
             // links dentro do mesmo site já os encontram.
             else if (browser.GetBrowser() is { } cef) _ = Task.Run(() => injector.EnsureHost(cef, address));
@@ -261,9 +263,12 @@ public partial class MainWindow : Window
         };
         browser.LoadingStateChanged += (_, e) => Dispatcher.InvokeAsync(() =>
         {
+            // A meio da troca para o motor de vídeo, o estado da aba já é o dele.
+            if (_videoViews.ContainsKey(tab)) return;
             tab.IsLoading = e.IsLoading;
+            tab.Crossing.MainHistoryChanged(e.CanGoBack);
             tab.CanGoBack = e.CanGoBack;
-            tab.CanGoForward = e.CanGoForward;
+            tab.CanGoForward = tab.Crossing.CanGoForward(inVideo: false, e.CanGoForward);
         });
         browser.LoadError += (_, e) => RecoverMainFrame(browser, e, IsPrivate, mainHistory);
         browser.FrameLoadStart += (_, e) =>
@@ -381,6 +386,8 @@ public partial class MainWindow : Window
         OnActiveTabChanging();
         OnSplitActiveChanged();
         CloseGlanceOnTabChange();
+        // O cartão do cadeado mostrava o site da aba anterior por cima da nova.
+        SiteInfoPopup.IsOpen = false;
         _omniboxEdited = false;
         CloseFind();
         CloseSuggestions();
@@ -401,7 +408,12 @@ public partial class MainWindow : Window
             or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
         if (!ReferenceEquals(sender, Tabs.Active)) return;
-        if (e.PropertyName == nameof(BrowserTab.Address)) { SyncOmnibox(); UpdateShieldButton(); UpdateStar(); UpdateZoomBadge(); }
+        if (e.PropertyName == nameof(BrowserTab.Address))
+        {
+            // Página nova na aba à vista: o cartão do cadeado ficava aberto com o site anterior.
+            SiteInfoPopup.IsOpen = false;
+            SyncOmnibox(); UpdateShieldButton(); UpdateStar(); UpdateZoomBadge();
+        }
         if (e.PropertyName == nameof(BrowserTab.IsLoading)) SyncLoading();
         if (e.PropertyName == nameof(BrowserTab.BlockedCount)) UpdateShieldButton();
         if (e.PropertyName == nameof(BrowserTab.Tint)) ApplyTint();
