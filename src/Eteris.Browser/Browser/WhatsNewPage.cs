@@ -6,13 +6,19 @@ namespace Eteris.Browser.Browser;
 public sealed record Highlight(string Icon, string Title, string Detail, string? Keys = null);
 
 // eteris://whatsnew — destaques da versão, mostrados uma vez depois de cada atualização. Os da versão nova vêm
-// primeiro (6–8, curtos; o resto fica no CHANGELOG.md), seguidos dos das versões anteriores.
+// primeiro (4–8, curtos; o resto fica no CHANGELOG.md), seguidos dos das versões anteriores.
 public static class WhatsNewPage
 {
     public const string Url = "eteris://whatsnew/";
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.10
+        new("⚡", "Arranque quase duas vezes mais rápido", "A primeira página aparece em ~0,6 s em vez de ~1,1 s: o motor, o desenho da janela e a base de dados arrancam ao mesmo tempo que a janela."),
+        new("🪶", "Menos memória", "Cerca de 50 MB a menos: o Escudo guarda as listas de filtros já compiladas no perfil e não as volta a compilar em cada arranque."),
+        new("🛡", "Impressão digital como a do Chrome", "Os sites já não veem os nomes da câmara, do microfone e dos altifalantes sem autorização, nem o «Não rastrear»; o GPC continua."),
+        new("🌐", "Na língua do Windows", "Os sites recebem a língua do Windows, como no Chrome, e menos dicas do cliente; quem escolheu outra língua nas Definições mantém-na."),
+        new("✔", "Correções", "Ícone certo nos vídeos abertos diretamente, o mesmo título no histórico nos dois motores, Espreitar à primeira e ecrã dividido sem saltos."),
         // 0.2.9
         new("▶", "Vídeo no motor do Éteris", "H.264, HEVC e AAC tocam na própria aba — Twitch, MP4, HLS, notícias — descodificados pela placa gráfica e pelo Windows, com o Escudo de sempre."),
         new("⚡", "Mais rápido, sem piscar", "Cada página abre quase 1 s mais cedo, Voltar e Avançar são instantâneos e abrir ou trocar de aba já não pisca."),
