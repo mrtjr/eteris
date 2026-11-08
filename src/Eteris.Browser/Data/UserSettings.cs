@@ -44,7 +44,12 @@ public sealed record UserSettings
     // também na janela privada: ligado, as capturas, gravações e partilhas de ecrã mostram um vazio.
     public bool HideFromCapture { get; init; }
     // Língua enviada aos sites (Accept-Language e navigator.languages): «pt-PT», «system» ou «en-US», sempre uma só.
-    public string SiteLanguage { get; init; } = "pt-PT";
+    // Por omissão a do Windows (medido, docs/paridade.md #6): pt-PT fixo num Windows pt-BR com fuso de São Paulo era
+    // uma combinação rara (13,49 bits no Cover Your Tracks, contra 7,92 do Chrome).
+    public string SiteLanguage { get; init; } = "system";
+    // A língua foi escolhida nas Definições. Até à 0.2.9 o pt-PT era o valor por omissão e ficava gravado como se fosse
+    // escolhido: sem esta marca, um pt-PT gravado passa à predefinida (SettingsStore.Load).
+    public bool SiteLanguageChosen { get; init; }
     public string LastSeenVersion { get; init; } = string.Empty;
     public string NewTabTheme { get; init; } = "aurora";
     public string NewTabWallpaper { get; init; } = "coast";
@@ -86,7 +91,7 @@ public sealed record UserSettings
         "bounceForget" when bool.TryParse(value, out var on) => this with { ForgetBounceTrackers = on },
         "cname" when bool.TryParse(value, out var on) => this with { UncloakCname = on },
         "hideFromCapture" when bool.TryParse(value, out var on) => this with { HideFromCapture = on },
-        "siteLanguage" when Shields.RequestIdentity.LanguageChoices.Contains(value) => this with { SiteLanguage = value },
+        "siteLanguage" when Shields.RequestIdentity.LanguageChoices.Contains(value) => this with { SiteLanguage = value, SiteLanguageChosen = true },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },
         "clearOnExit" when bool.TryParse(value, out var on) => this with { ClearOnExit = on },
         "dns" when value == "off" || Shields.SecureDns.Providers.ContainsKey(value) => this with { SecureDns = value },
@@ -114,9 +119,13 @@ public sealed class SettingsStore(string path)
 
     public UserSettings Load()
     {
-        try { return File.Exists(path) ? JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(path)) ?? new() : new(); }
+        try { return File.Exists(path) ? Migrate(JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(path)) ?? new()) : new(); }
         catch (Exception) { return new(); }
     }
+
+    // O pt-PT que a 0.2.9 e anteriores gravavam por omissão passa à língua do Windows; o escolhido nas Definições fica.
+    public static UserSettings Migrate(UserSettings settings)
+        => !settings.SiteLanguageChosen && settings.SiteLanguage == "pt-PT" ? settings with { SiteLanguage = "system" } : settings;
 
     public void Save(UserSettings settings)
     {

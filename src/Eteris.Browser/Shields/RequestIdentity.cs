@@ -8,10 +8,11 @@ public static class RequestIdentity
     public static readonly string[] LanguageChoices = ["pt-PT", "system", "en-US"];
 
     // «Língua enviada aos sites» (Definições › Privacidade): uma só língua, sem a lista com pesos que distingue quem
-    // a envia. «system» é a língua do Windows (pt-BR, por exemplo); sem região conhecida, pt-PT.
+    // a envia. «system» (a predefinida) é a língua do Windows (pt-BR, por exemplo); sem região conhecida, pt-PT. Um
+    // valor desconhecido vale a predefinida.
     public static string Language(string choice, CultureInfo? system = null)
     {
-        if (choice != "system") return LanguageChoices.Contains(choice) ? choice : "pt-PT";
+        if (choice != "system" && LanguageChoices.Contains(choice)) return choice;
         var name = (system ?? CultureInfo.CurrentUICulture).Name;
         if (!name.Contains('-') && name.Length > 0)
         {

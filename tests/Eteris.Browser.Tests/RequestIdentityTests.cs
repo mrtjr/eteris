@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
@@ -16,7 +17,8 @@ public class RequestIdentityTests
     [InlineData("system", "de-DE", "de-DE")]
     [InlineData("system", "pt", "pt-BR")]
     [InlineData("system", "", "pt-PT")]
-    [InlineData("klingon", "pt-BR", "pt-PT")]
+    [InlineData("klingon", "pt-BR", "pt-BR")]
+    [InlineData("klingon", "", "pt-PT")]
     public void Language_IsAlwaysASingleTagWithRegion(string choice, string system, string expected)
     {
         var language = RequestIdentity.Language(choice, system.Length == 0 ? CultureInfo.InvariantCulture : new CultureInfo(system));
@@ -26,11 +28,38 @@ public class RequestIdentityTests
     }
 
     [Fact]
-    public void Setting_DefaultsToPortugueseAndOnlyAcceptsKnownChoices()
+    public void Setting_DefaultsToTheWindowsLanguageAndOnlyAcceptsKnownChoices()
     {
-        Assert.Equal("pt-PT", new UserSettings().SiteLanguage);
+        Assert.Equal("system", new UserSettings().SiteLanguage);
+        Assert.Equal("pt-PT", new UserSettings().With("siteLanguage", "pt-PT")!.SiteLanguage);
         Assert.Equal("system", new UserSettings().With("siteLanguage", "system")!.SiteLanguage);
+        Assert.True(new UserSettings().With("siteLanguage", "pt-PT")!.SiteLanguageChosen);
         Assert.Null(new UserSettings().With("siteLanguage", "pt-PT,en;q=0.5"));
+    }
+
+    // Perfis da 0.2.9 e anteriores: o pt-PT gravado era o valor por omissão, não uma escolha.
+    [Fact]
+    public void SavedDefault_PtPt_MovesToTheWindowsLanguage_ButAChoiceStays()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"eteris-lang-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var old = Path.Combine(dir, "old.json");
+            File.WriteAllText(old, """{ "SiteLanguage": "pt-PT", "SearchEngine": "brave" }""");
+            var migrated = new SettingsStore(old).Load();
+            Assert.Equal("system", migrated.SiteLanguage);
+            Assert.Equal("brave", migrated.SearchEngine);
+
+            var chosen = Path.Combine(dir, "chosen.json");
+            new SettingsStore(chosen).Save(new UserSettings().With("siteLanguage", "pt-PT")!);
+            Assert.Equal("pt-PT", new SettingsStore(chosen).Load().SiteLanguage);
+
+            var english = Path.Combine(dir, "english.json");
+            File.WriteAllText(english, """{ "SiteLanguage": "en-US" }""");
+            Assert.Equal("en-US", new SettingsStore(english).Load().SiteLanguage);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Theory]
