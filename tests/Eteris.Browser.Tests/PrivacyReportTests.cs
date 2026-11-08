@@ -89,18 +89,6 @@ public class PrivacyReportTests
     public void Ledger_SkipsTheSelfTest(string? pageUrl, bool counts) => Assert.Equal(counts, PrivacyLedger.Counts(pageUrl));
 
     [Fact]
-    public void Ledger_AggregatesBySiteOfTheTracker()
-    {
-        PrivacyLedger.Take();
-        PrivacyLedger.Count(PrivacyCategory.Lists, "www.google-analytics.com");
-        PrivacyLedger.Count(PrivacyCategory.Lists, "region1.google-analytics.com");
-        PrivacyLedger.Count(PrivacyCategory.LocalNetwork, null);
-        var taken = PrivacyLedger.Take().OrderBy(t => t.Category).ToList();
-        Assert.Equal([(PrivacyCategory.Lists, "google-analytics.com", 2), (PrivacyCategory.LocalNetwork, "", 1)], taken);
-        Assert.Empty(PrivacyLedger.Take());
-    }
-
-    [Fact]
     public void Store_Accumulates_Prunes_AndClears()
     {
         var path = Path.Combine(Path.GetTempPath(), $"eteris-report-{Guid.NewGuid():N}.db");
@@ -161,5 +149,23 @@ public class PrivacyReportTests
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
         return dir!.FullName;
+    }
+}
+
+// O livro (PrivacyLedger) é um só, estático, e os testes do PrivacyRequestHandler contam nele em paralelo: entre o
+// primeiro Take() e o último um desses pedidos entrava no livro (falha intermitente). Este corre sozinho.
+[Collection(GlobalStateCollection.Name)]
+public class PrivacyLedgerTests
+{
+    [Fact]
+    public void Ledger_AggregatesBySiteOfTheTracker()
+    {
+        PrivacyLedger.Take();
+        PrivacyLedger.Count(PrivacyCategory.Lists, "www.google-analytics.com");
+        PrivacyLedger.Count(PrivacyCategory.Lists, "region1.google-analytics.com");
+        PrivacyLedger.Count(PrivacyCategory.LocalNetwork, null);
+        var taken = PrivacyLedger.Take().OrderBy(t => t.Category).ToList();
+        Assert.Equal([(PrivacyCategory.Lists, "google-analytics.com", 2), (PrivacyCategory.LocalNetwork, "", 1)], taken);
+        Assert.Empty(PrivacyLedger.Take());
     }
 }

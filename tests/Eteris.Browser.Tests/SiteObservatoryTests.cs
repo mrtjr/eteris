@@ -132,17 +132,32 @@ public class SiteObservatoryTests
     }
 
     // O registo corre na thread de rede do Chromium para cada pedido: um domínio já visto não pode reservar memória.
+    // A medição é robusta ao JIT: o ciclo medido é compilado já otimizado (sem OSR a meio) e corre-se em várias rondas,
+    // porque a promoção do Record de tier 0 para tier 1 pode reservar uns poucos KB (visto: 7184 B, ~1 em 9 execuções)
+    // na ronda em que acontece. A garantia não enfraquece: um registo que reservasse por pedido reservaria em todas as
+    // rondas (≥ 24 B × Calls cada); por isso o mínimo tem de ser 0 e nenhuma ronda pode crescer com o número de pedidos.
     [Fact]
     public void Record_ForAKnownHost_AllocatesNothing()
     {
+        const int Rounds = 20, Calls = 10_000;
         var o = new SiteObservatory();
         o.Reset("https://www.site.pt/");
         const string url = "https://www.google-analytics.com/g/collect?v=2&tid=G-1";
         o.Record(url, ResourceType.Ping, ObservedVerdict.Blocked);
+        var allocated = new long[Rounds];
+        for (var r = 0; r < Rounds; r++) allocated[r] = AllocatedWhileRecording(o, url, Calls);
+        Assert.Equal(0, allocated.Min());
+        Assert.All(allocated, bytes => Assert.True(bytes < Calls, $"uma ronda reservou {bytes} B em {Calls} pedidos"));
+        Assert.Equal(1 + Rounds * Calls, Assert.Single(o.Snapshot().ThirdParties).Requests);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining
+        | System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static long AllocatedWhileRecording(SiteObservatory o, string url, int calls)
+    {
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 10_000; i++) o.Record(url, ResourceType.Ping, ObservedVerdict.Blocked);
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
-        Assert.Equal(10_001, Assert.Single(o.Snapshot().ThirdParties).Requests);
+        for (var i = 0; i < calls; i++) o.Record(url, ResourceType.Ping, ObservedVerdict.Blocked);
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     [Fact]

@@ -119,17 +119,6 @@ public class RequestIdentityTests
     public void Build_ReducesAcceptLanguage(string feature)
         => Assert.Contains(feature, EngineHardening.Switch(CefConfigurator.Build("p").CefCommandLineArgs, "enable-features"));
 
-    // A lista de línguas do motor é uma só, fixada ao arrancar.
-    [Fact]
-    public void Configure_SetsASingleAcceptLanguage()
-    {
-        var settings = new CefSharp.Wpf.HwndHost.CefSettings();
-        EngineHardening.Configure(settings, "pt-BR");
-        Assert.Equal("pt-BR", settings.AcceptLanguageList);
-        Assert.Equal("pt-BR", EngineHardening.StartedWithLanguage);
-        Assert.Contains("BrowsingTopics", EngineHardening.Switch(settings.CefCommandLineArgs, "disable-features"));
-    }
-
     // Cookies de terceiros: com um tratador de pedidos é o CEF que os junta ao pedido, por isso o Éteris decide.
     [Theory]
     [InlineData("https://www.publico.pt/", "https://ads.tracker.com/p.gif", CefSharp.ResourceType.Image, true, false, false)]
@@ -149,4 +138,21 @@ public class RequestIdentityTests
     [Fact]
     public void PrivacyPage_HintsRowUsesTheHandlerDecision()
         => Assert.True(Assert.Single(PrivacyPage.Promises(State()), p => p.Id == "hints").Kept);
+}
+
+// EngineHardening.StartedWithLanguage é estático e qualquer CefConfigurator.Build (CefConfiguratorTests, em paralelo)
+// volta a pô-lo na língua das Definições: entre o Configure e a verificação podia ler-se «pt-PT». Este corre sozinho.
+[Collection(GlobalStateCollection.Name)]
+public class EngineLanguageTests
+{
+    // A lista de línguas do motor é uma só, fixada ao arrancar.
+    [Fact]
+    public void Configure_SetsASingleAcceptLanguage()
+    {
+        var settings = new CefSharp.Wpf.HwndHost.CefSettings();
+        EngineHardening.Configure(settings, "pt-BR");
+        Assert.Equal("pt-BR", settings.AcceptLanguageList);
+        Assert.Equal("pt-BR", EngineHardening.StartedWithLanguage);
+        Assert.Contains("BrowsingTopics", EngineHardening.Switch(settings.CefCommandLineArgs, "disable-features"));
+    }
 }
