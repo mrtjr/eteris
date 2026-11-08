@@ -26,6 +26,8 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 8 | Extensões | sim | sim | sim | não | média |
 | 9 | Tradução de páginas | sim (servidor) | sim (local) | sim | não (planeada: local) | média |
 | 10 | Sincronização entre aparelhos | sim | sim | sim | não | baixa |
+| 11 | Pedidos à Google no arranque, sem ação do utilizador | não medido | não medido | não medido | **0** no `main` (0.2.10: 2 por arranque — a hora e o «Modo IA», com os cookies da Google); ver secção 7 | ✅ resolvido (por publicar) |
+| 12 | Escudo nos pedidos sem aba (service workers, shared workers, extensões) | — (sem bloqueador) | sim | sim | **sim** no `main` (0.2.10: o fetch de um service worker ou shared worker, o reencaminhamento `respondWith(fetch(e.request))` de um pedido da página, o `importScripts` de um service worker e o service worker de uma extensão chegavam ao rastreador, sem GPC); ver secção 8 | ✅ resolvido (por publicar) |
 
 ## 1. Desenho das páginas — medido
 
@@ -258,6 +260,102 @@ coveryourtracks.eff.org; era `0648fb12`): o critério de «empate» com o Brave 
 sessão) só chega com o ruído em canvas/WebGL/áudio (F1 por scripts, F2 no motor). Limites que ficam: um iframe de
 outro site com `allow="camera; microphone"` ainda vê os nomes dos dispositivos (patch do motor), e os service/shared
 workers dão a versão real do Windows e do Chromium (`GetUserAgentMetadata` no motor, F2).
+
+## 7. Tráfego sem ação do utilizador — medido (2026-11-08)
+
+A promessa do Éteris é «nada sai do computador sem um pedido seu». Medido com um proxy HTTP local que **regista todos
+os pedidos (CONNECT incluídos) e não encaminha nenhum** (responde 502), passado ao motor só por argumento
+(`--proxy-server=http://127.0.0.1:8897`, nada no Windows), num perfil de teste novo: 60 s com a nova aba, depois 60 s
+com uma página local servida em `127.0.0.1` (o laço local não passa pelo proxy, por isso tudo o que aparece no registo
+saiu sem o utilizador pedir).
+
+| Pedido sem ação do utilizador | 0.2.10 | `main` | Origem no Chromium 156 | Corte |
+|---|---|---|---|---|
+| `GET http://clients2.google.com/time/1/current?cup2key=…` (~1,3 s depois de abrir) | sim, em cada arranque | **não** | relógio de rede: `components/network_time/network_time_tracker.cc` (`kNetworkTimeServiceQuerying`, ligado por omissão no Windows: pergunta sempre que não tem uma hora de rede recente — logo ao arrancar — e depois, a cada verificação de 6 min, com probabilidade de 1,2%). Não depende do `disable-background-networking` | `--disable-features=NetworkTimeServiceQuerying` |
+| `CONNECT www.google.com:443` → `GET https://www.google.com/async/folae?async=_fmt:pb&udm=50&client_locale=pt-BR&client_country=br` (~1,4 s) | sim, em cada arranque, **com os cookies da Google** (`cookies_allowed: YES`) | **não** | elegibilidade do «Modo IA» (AIM) da pesquisa Google: `components/omnibox/browser/aim_eligibility_service.cc` (`ChromeAimEligibilityService`, pedido `kStartup` com `kAimServerRequestOnStartupEnabled`); só pergunta porque o motor de pesquisa por omissão **do Chromium** é a Google. Também refrescava ao mudar de conta, de língua ou ao navegar para um URL do «Modo IA» | `--disable-features=AimEnabled` (o «kill switch» do serviço: o construtor sai logo, `IsAimEligible()` fica falso e o throttle de navegação não pede nada) |
+| na página local, 60 s | nada | nada | — | — |
+
+Como se chegou à origem (A/B, só por argumentos do motor): `--disable-features=NetworkTimeServiceQuerying` tira só o
+`GET …/time/…` e deixa o `CONNECT www.google.com`; o 2.º arranque do mesmo perfil, já com `search.suggest_enabled` e
+`net.network_prediction_options` gravados, continuava a fazê-lo (não era a pré-ligação ao motor de pesquisa,
+`SearchEnginePreconnector`, que respeita essas preferências e espera 5 s); o NetLog do motor
+(`--log-net-log`, `--net-log-capture-mode=Everything`) mostrou o URL completo (`/async/folae`), que só existe no
+`AimEligibilityService`; `--disable-features=AimEnabled` tira só o `CONNECT`, e os dois juntos dão **0 pedidos**.
+
+Correção: os dois nomes estão em `EngineHardening.NoGoogleAtStartup` (com o porquê), juntos ao `disable-features` do
+motor desde o primeiro processo (as preferências do perfil só se aplicam depois do arranque e não chegariam ao 1.º).
+Testes: `Build_FixesEverySwitchThatKeepsTheEngineQuiet` fixa a lista inteira de `disable-features` e os interruptores
+de tráfego de fundo; `EngineFeatureNamesTests` prova que os dois nomes são `base::Feature` do `libcef.dll` em uso; a
+promessa nova «No arranque, nada sai para a Google» em `eteris://privacy/` fica ✘ e diz o nome se algum faltar.
+
+Medição final (`main` publicado como a release, perfil novo): **0 pedidos** em 60 s de nova aba + 60 s de página
+local (0.2.10, mesma sessão: os 2 acima); no 2.º arranque do mesmo perfil, **0 pedidos** em 7 min parado + 1 min com
+a página. Com um proxy que encaminha, a pesquisa na Google, o example.com e `eteris://privacy/` (✔ na promessa nova)
+funcionam como antes. O que o relógio de rede fazia deixa de existir: o aviso «o relógio do computador está errado»
+nas páginas de erro de certificado passa a vir só da data da compilação do motor, como no Chromium sem rede.
+
+Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
+pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
+
+## 8. Pedidos sem aba: a fuga do Escudo — medido (2026-11-08)
+
+O estudo das extensões (`C:\cef\notas\viabilidade\viab-extensoes.md`, secção 3) viu um `fetch` a
+`google-analytics.com` bloqueado na página passar com 200 no service worker de uma extensão. A causa: o Escudo vivia só
+no `PrivacyRequestHandler` de cada aba (`ChromiumWebBrowser.RequestHandler`), e a CEF só lho entrega quando o pedido
+tem browser. Os pedidos sem aba vão ao tratador do **contexto de pedidos**, que o Éteris não tinha
+(`resource_request_handler_wrapper.cc`, `GetHandler`: primeiro o tratador da aba; sem browser, o do contexto, e para
+os workers sem frame o do perfil, `CefBrowserContext::UpdateWorkerRequestContextHandler`).
+
+**Como se mediu.** Um site local em `127.0.0.1:8851` (servidor que regista cada pedido com o `Host` e o `Sec-GPC`),
+`--host-resolver-rules` a mapear um rastreador das listas (`sb.scorecardresearch.com`; a `google-analytics.com` tem
+HSTS pré-carregado e o `http://` nem sai) e um domínio livre de controlo (`cdn.exemplo-livre.com`) para esse servidor,
+perfil de teste novo, a extensão de teste do estudo com `--load-extension`, leitura por DevTools
+(`scratchpad\fuga\fuga.ps1`). Cada vetor pede o rastreador e o domínio livre.
+
+| Pedido ao rastreador | 0.2.10 (`16c050f`) | `main` |
+|---|---|---|
+| `fetch` da página (controlo) | bloqueado | bloqueado |
+| `fetch` de um worker dedicado | bloqueado | bloqueado |
+| `fetch` de um shared worker | **chegou** (sem GPC) | bloqueado |
+| `fetch` do próprio service worker | **chegou** (sem GPC) | bloqueado |
+| `fetch` da página reencaminhado pelo service worker (`respondWith(fetch(e.request))`) | **chegou** (sem GPC): o bloqueio da página era contornado | bloqueado |
+| `importScripts` de um service worker novo | **chegou** (sem GPC) | bloqueado |
+| `fetch` do service worker de uma extensão | **chegou** | bloqueado |
+| domínio livre pelos mesmos caminhos | chega, sem GPC nos sem aba | chega, **com GPC** em todos |
+| contagem no botão do Escudo da aba | 7 | **11** (os 4 sem aba contam na aba que mostra o site) |
+| janela privada (`--private`, contexto em memória), os mesmos vetores sem a extensão | 4 chegavam | **0**; contagem 11 |
+
+**Correção.** `Shields/BrowserlessRequests.cs`: um `RequestContextHandler` que devolve o mesmo
+`PrivacyResourceHandler` das abas, em modo «sem aba» (o browser e o frame chegam nulos e nunca se leem: o CefSharp
+embrulha um browser nulo num objeto que fecharia o Éteris), com a página de topo deduzida de quem fez o pedido (a
+origem do worker; uma origem opaca não é o site de ninguém; sem origem, a do referrer http(s)). Decide como numa aba:
+GPC, língua única e dicas do cliente, referrer só com a origem, rede local (com a autorização do site), modo rigoroso,
+regras do Observatório, listas, CNAME e cookies de terceiros. Uma navegação reencaminhada por um service worker só leva
+os cabeçalhos (saltos, limpeza e HTTPS são da navegação da aba). O contexto global do motor não aceita tratador depois
+de criado: um contexto que partilha o armazenamento com ele e tem o tratador põe-no no perfil (instalado logo a seguir
+ao `Cef.Initialize`, libertado antes do fecho); a janela privada e o «Espreitar» criam o contexto já com ele. Os
+bloqueios contam no total do Escudo, no relatório de privacidade (fora da janela privada) e na aba que mostra o site.
+
+**Custo.** Os pedidos das abas não passam por aqui (a CEF pergunta primeiro à aba). Instalar o tratador leva ~0,5 ms
+na thread do motor, fora do fio da interface; 1.ª página com 4 arranques mornos de cada (compilação de depuração):
+0.2.10 727–855 ms, `main` 702–746 ms (ruído). O fecho continua em ~0,3 s. Um pedido de worker custa o mesmo que um de
+aba.
+
+**O que fica de fora (medido ou por construção).**
+- O script principal do service worker (`sw.js`) e as verificações de atualização dele saem sem passar por nenhum
+  tratador (sem GPC no registo): são pedidos do processo do navegador. Por especificação são sempre da mesma origem
+  da página, por isso não levam nada a terceiros.
+- Pedidos do próprio motor sem página (DNS cifrado, `component updater`, relógio de rede): não passam por tratadores da
+  CEF; estão medidos na secção 7 (0 pedidos sem ação do utilizador).
+- O service worker de um iframe de terceiros tem como topo a origem do iframe (a CEF não diz qual é a página de
+  topo); as listas veem-no como «primeira parte» desse terceiro. As listas por domínio continuam a apanhá-lo.
+- Beacons (`sendBeacon`): o do mesmo site chega, com GPC (passa pela aba); os de outro site não chegaram ao servidor
+  em nenhuma das duas versões, nem o do domínio livre — não é fuga, mas fica por perceber se o motor perde beacons
+  legítimos de outro site.
+
+Testes: `BrowserlessRequestsTests` (página de topo deduzida, bloqueio e contagem com o site do worker, GPC, escudo
+desligado no site, navegação reencaminhada, extensão, rede local, cookies de terceiros, o tratador nunca lê o browser
+nem o frame, cache com teto, e todo o `new RequestContext(` do Éteris com o tratador).
 
 ## Restantes
 

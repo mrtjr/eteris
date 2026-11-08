@@ -24,6 +24,25 @@ public partial class MainWindow
         return script.Length == 0 ? string.Empty : script + "\n;\n";
     }
 
+    // Um pedido sem aba (service worker, shared worker: Shields/BrowserlessRequests.cs) bloqueado pelo Escudo conta na
+    // aba que mostra o site de onde partiu: a ativa, se for desse site, senão a primeira; a janela ativa primeiro. Sem
+    // aba desse site (o worker sobreviveu à página), fica só no total do Escudo. «only»: a janela privada dona do contexto.
+    internal static void RecordBrowserlessBlock(string? top, string host, MainWindow? only = null)
+    {
+        if (TopDocument.SiteKey(top) is not { } site) return;
+        var windows = only is not null ? [only] : NormalWindows().OrderByDescending(w => w.IsActive).ToList();
+        foreach (var window in windows)
+        {
+            var tabs = window.Tabs;
+            var tab = tabs.Active is { } active && TopDocument.SiteKey(active.Address) == site
+                ? active
+                : tabs.Tabs.FirstOrDefault(t => TopDocument.SiteKey(t.Address) == site);
+            if (tab is null) continue;
+            tab.RecordBlocked(host);
+            return;
+        }
+    }
+
     private void UpdateShieldButton()
     {
         var tab = Tabs.Active;

@@ -9,7 +9,7 @@
 # No fim grava publish\eteris-build.json (versão, modo, commit, CefSharp com o SHA256 das montagens): o pack.ps1 só
 # empacota uma pasta com essa marca, e ela fica na instalação como registo do que a release leva. Se alguma verificação
 # falhar, a pasta publish\ é apagada.
-param([string]$Version = "0.2.10", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "")
+param([string]$Version = "0.2.11", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $publishDir = Join-Path $root "publish"

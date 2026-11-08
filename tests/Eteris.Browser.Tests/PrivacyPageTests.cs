@@ -21,7 +21,7 @@ public class PrivacyPageTests
     public void Promises_WithTheRealEngineConfiguration_AreKept()
     {
         var state = Good();
-        foreach (var id in new[] { "gpc-header", "gpc-js", "ad-apis", "quiet", "cookies", "webrtc" })
+        foreach (var id in new[] { "gpc-header", "gpc-js", "ad-apis", "quiet", "no-google", "cookies", "webrtc" })
             Assert.True(Find(state, id).Kept, id);
     }
 
@@ -50,6 +50,20 @@ public class PrivacyPageTests
         Assert.False(Find(Good(mdns), "webrtc").Kept);
         Assert.Contains("firewall", Find(Good(mdns), "webrtc").Detail);
         Assert.False(Find(Good() with { WebRtcProtected = false }, "webrtc").Kept);
+    }
+
+    // «No arranque, nada sai para a Google»: lida da linha de comandos do motor; sem um dos interruptores fica ✘ e diz qual.
+    [Theory]
+    [InlineData("NetworkTimeServiceQuerying")]
+    [InlineData("AimEnabled")]
+    public void NoGoogle_MissingSwitch_IsBrokenAndNamed(string feature)
+    {
+        Assert.True(Find(Good(), "no-google").Kept);
+        var args = EngineArgs();
+        args["disable-features"] = string.Join(',', EngineHardening.Switch(args, "disable-features").Where(f => f != feature));
+        var promise = Find(Good(args), "no-google");
+        Assert.False(promise.Kept);
+        Assert.Contains(feature, promise.Detail);
     }
 
     [Fact]

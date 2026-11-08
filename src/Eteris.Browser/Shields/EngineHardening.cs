@@ -64,6 +64,22 @@ public static class EngineHardening
         ("WebRtcHideLocalIpsWithMdns", "o WebRTC não deixa a porta mDNS (UDP 5353) à escuta em todas as interfaces — o Windows não pede exceção na firewall"),
     ];
 
+    // O que o Chromium ainda mandava à Google sozinho em cada arranque, apesar do disable-background-networking e do
+    // disable-component-update (medido com um proxy local que regista todos os pedidos, docs/paridade.md, secção 7):
+    // - o relógio de rede (components/network_time/network_time_tracker.cc) pedia a hora a
+    //   http://clients2.google.com/time/1/current logo ao arrancar e depois de tempos a tempos. Só serve para dizer
+    //   «o relógio do computador está errado» numa página de erro de certificado; sem ele o Chromium continua a dar esse
+    //   aviso pela data da própria compilação.
+    // - o «Modo IA» da pesquisa Google (components/omnibox/browser/aim_eligibility_service.cc, «kill switch» kAimEnabled)
+    //   perguntava a https://www.google.com/async/folae?udm=50&client_locale=…&client_country=… se o utilizador o pode
+    //   usar — com os cookies da Google, porque o motor de pesquisa por omissão do Chromium é a Google. A barra de
+    //   endereço do Éteris é dele e não usa o «Modo IA»: pesquisar e abrir sites da Google continua igual.
+    public static readonly IReadOnlyList<(string Feature, string What)> NoGoogleAtStartup =
+    [
+        ("NetworkTimeServiceQuerying", "o relógio de rede do Chromium não pergunta a hora a clients2.google.com"),
+        ("AimEnabled", "o «Modo IA» da pesquisa Google não pergunta a www.google.com, com os cookies da Google, se o pode usar"),
+    ];
+
     // Tudo o que o Éteris acrescenta à configuração do motor: interruptores e uma só língua para os sites (a lista de
     // línguas fixa-se ao arrancar; o cabeçalho Accept-Language e o navigator.languages seguem-na).
     // A língua do motor (Locale) é a mesma: é ela que dá o locale por omissão do Intl nas páginas e nos workers
@@ -86,7 +102,7 @@ public static class EngineHardening
     public static void Apply(IDictionary<string, string> args)
     {
         Merge(args, "enable-features", Partitioning.Concat(Identity).Concat(LocalNetworkChecks).Select(f => f.Feature));
-        Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Select(a => a.Feature));
+        Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Concat(NoGoogleAtStartup).Select(a => a.Feature));
         args[WebRtcPolicySwitch] = WebRtcPolicy;
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         Applied = new Dictionary<string, string>(args);

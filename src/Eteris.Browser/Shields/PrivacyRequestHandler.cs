@@ -71,10 +71,10 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     // Este filtro recusa enviar e gravar cookies de outro site que não o de topo (ThirdPartyCookies.Allow), menos os
     // «Partitioned» (CHIPS) que o terceiro grava no frasco deste site de topo (PartitionedCookieJar), como no Chrome,
     // no Firefox e no Brave. Só existe com o bloqueio ligado (GetCookieAccessFilter).
-    internal sealed class ThirdPartyCookieFilter(Func<string, bool> isProtected, bool isPrivate, Func<IBrowser, string?>? topOf = null)
+    internal sealed class ThirdPartyCookieFilter(Func<string, bool> isProtected, bool isPrivate, Func<IBrowser?, string?>? topOf = null)
         : ICookieAccessFilter
     {
-        private string? Top(IBrowser browser) => topOf is null ? SafeFrame.MainUrl(browser) : topOf(browser);
+        private string? Top(IBrowser? browser) => topOf is null ? SafeFrame.MainUrl(browser) : topOf(browser);
 
         public bool CanSendCookie(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, Cookie cookie)
         {
@@ -110,10 +110,12 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
     // Decide cada pedido do separador: cabeçalhos de privacidade, saltos, limpeza e HTTPS do endereço da página, rede
     // local, modo rigoroso, regras do utilizador, listas de bloqueio e CNAME. Corre na thread IO do CEF.
+    // «browserless»: pedidos sem aba (service workers, shared workers, extensões: Shields/BrowserlessRequests.cs). O
+    // browser e o frame chegam nulos; a página de topo é «browserlessTop», deduzida de quem fez o pedido.
     internal sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Action<string> onBlocked,
         string? userAgent, Action? onMainFrameRequest = null, bool isPrivate = false, Func<string, bool>? localNetworkAllowed = null,
         Action<string, string>? onLocalNetworkBlocked = null, Action<IReadOnlyList<string>>? onTrackingSkipped = null,
-        Action<string, string>? onCloaked = null, SiteObservatory? observatory = null)
+        Action<string, string>? onCloaked = null, SiteObservatory? observatory = null, bool browserless = false, string? browserlessTop = null)
         : CefSharp.Handler.ResourceRequestHandler
     {
         // Observatório do site (Shields/SiteObservatory.cs): cada sub-recurso com a decisão que teve. Um incremento num
@@ -130,7 +132,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         // Desmascarar CNAME (Shields/CnameUncloak.cs) para um pedido que as listas deixaram passar. Com o nome já na
         // cache decide-se logo; senão a consulta corre fora da thread de rede e o pedido espera no máximo
         // CnameUncloak.MaxWait (IRequestCallback) — passado isso segue, e os seguintes já encontram a resposta.
-        private CefReturnValue Uncloak(IBrowser browser, IRequest request, string? pageUrl, string? documentUrl, string type,
+        private CefReturnValue Uncloak(IBrowser? browser, IRequest request, string? pageUrl, string? documentUrl, string type,
             IRequestCallback? callback)
         {
             // Sem maneira segura de perguntar o nome canónico (proxy no Windows sem DNS cifrado), não se pergunta.
@@ -155,7 +157,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 Cloaked(uri.Host, target);
                 return CefReturnValue.Cancel;
             }
-            if (callback is null || !Cname.Quota.TryTake(browser.Identifier, pageUrl, host))
+            if (callback is null || !Cname.Quota.TryTake(browserless || browser is null ? BrowserlessId : browser.Identifier, pageUrl, host))
             {
                 CnameStats.Decision(System.Diagnostics.Stopwatch.GetTimestamp() - started);
                 Observe(url, resourceType, ObservedVerdict.Allowed);
@@ -207,6 +209,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         public bool TakeRewrite(int browserId, string url)
             => _rewrites.TryGetValue(browserId, out var rewritten) && rewritten == url && _rewrites.TryRemove(browserId, out _);
 
+        // A conta das consultas de CNAME dos pedidos sem aba (nenhum browser do CEF tem identificador negativo).
+        private const int BrowserlessId = -1;
+
         // «fromUrl»: de onde o link partiu (ver Debounce.Destination) — o google.com/url só se salta vindo do Google.
         private static string? Jump(string url, Func<string, bool> isProtected, string? fromUrl)
         {
@@ -249,7 +254,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         {
             try
             {
-                if (request.ResourceType != ResourceType.MainFrame) return;
+                if (browserless || request.ResourceType != ResourceType.MainFrame) return;
                 if (Jump(newUrl, isProtected, request.Url) is { } jump)
                 {
                     RememberSkip(browser, newUrl);
@@ -266,7 +271,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         {
             try
             {
-                if (request.ResourceType == ResourceType.MainFrame && response.StatusCode is > 0 and not (>= 300 and < 400))
+                if (!browserless && request.ResourceType == ResourceType.MainFrame && response.StatusCode is > 0 and not (>= 300 and < 400))
                     ShieldEngine.Https.Settled(request.Url, isPrivate);
             }
             catch (Exception) { }
@@ -286,8 +291,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         // site (sem cookies próprios, sem cartão da rede local). Vale então o endereço para onde a navegação foi.
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _navigatingTo = new();
 
-        internal string? TopOf(IBrowser browser)
+        internal string? TopOf(IBrowser? browser)
         {
+            if (browserless || browser is null) return browserlessTop;
             var url = SafeFrame.MainUrl(browser);
             if (!string.IsNullOrEmpty(url)) return url;
             try { return _navigatingTo.TryGetValue(browser.Identifier, out var to) ? to : url; }
@@ -309,7 +315,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         }
 
         // Sem callback (testes), a consulta de CNAME nunca fica à espera: o pedido segue.
-        internal CefReturnValue Decide(IBrowser browser, IFrame? frame, IRequest request, IRequestCallback? callback = null)
+        internal CefReturnValue Decide(IBrowser? browser, IFrame? frame, IRequest request, IRequestCallback? callback = null)
         {
             var blocking = false;
             try
@@ -323,7 +329,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             }
         }
 
-        private CefReturnValue DecideUnsafe(IBrowser browser, IFrame? frame, IRequest request, IRequestCallback? callback, ref bool blocking)
+        private CefReturnValue DecideUnsafe(IBrowser? browser, IFrame? frame, IRequest request, IRequestCallback? callback, ref bool blocking)
         {
             foreach (var (name, value) in PrivacySignals.Headers) request.SetHeaderByName(name, value, true);
             // Uma só língua (a com que o motor arrancou) e só as dicas do cliente de baixa entropia, mesmo que o site peça
@@ -343,6 +349,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             if (request.ResourceType == ResourceType.MainFrame)
             {
+                // Sem aba (a navegação que um service worker reencaminha): só os cabeçalhos. Saltos, limpeza e HTTPS são
+                // da navegação da aba, que já passou pelo tratador dela.
+                if (browserless || browser is null) return CefReturnValue.Continue;
                 var result = DecideMainFrame(browser, request);
                 _navigatingTo[browser.Identifier] = request.Url;
                 return result;
@@ -388,7 +397,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             }
 
             // As opções $domain e $third-party das listas referem-se ao documento que fez o pedido (pode ser um iframe).
-            var documentUrl = SafeFrame.Url(frame) is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            var documentUrl = !browserless && SafeFrame.Url(frame) is { Length: > 0 } frameUrl && frameUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? frameUrl
                 : pageUrl;
             var adblockType = ResourceTypes.ToAdblock(request.ResourceType);

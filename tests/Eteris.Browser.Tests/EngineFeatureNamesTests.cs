@@ -16,7 +16,7 @@ public class EngineFeatureNamesTests
 
     public static IEnumerable<object[]> Names()
         => EngineHardening.AdApis.Concat(EngineHardening.Partitioning).Concat(EngineHardening.LocalNetworkChecks)
-            .Concat(EngineHardening.Identity).Concat(EngineHardening.NoListeningSockets)
+            .Concat(EngineHardening.Identity).Concat(EngineHardening.NoListeningSockets).Concat(EngineHardening.NoGoogleAtStartup)
             .Select(f => f.Feature).Append("HttpsUpgrades").Append(NetworkSandbox.Feature).Distinct().Select(n => new object[] { n });
 
     [Theory]

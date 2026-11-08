@@ -36,6 +36,39 @@ public class EngineHardeningTests
         Assert.Equal(disabled.Count, disabled.Distinct().Count());
     }
 
+    // Privacidade (medido com um proxy local, docs/paridade.md, secção 7): no arranque o Chromium pedia a hora a
+    // clients2.google.com e a elegibilidade do «Modo IA» a www.google.com (com os cookies da Google). Fica fixa a lista
+    // inteira do que o motor tem desligado e dos interruptores que o calam: tirar um nome tem de ser uma decisão.
+    [Fact]
+    public void Build_FixesEverySwitchThatKeepsTheEngineQuiet()
+    {
+        var args = CefConfigurator.Build("p").CefCommandLineArgs;
+        Assert.Equal(
+            new[]
+            {
+                "MediaRouter", "DialMediaRouteProvider", "CastMediaRouteProvider",
+                "OptimizationHints", "OptimizationHintsFetching", "OptimizationGuideModelDownloading",
+                "OptimizationGuideOnDeviceModel", "OnDeviceModelPerformanceParams", "HttpsUpgrades",
+                "BrowsingTopics", "Fledge", "ConversionMeasurement", "FencedFrames",
+                "PrivacySandboxAdsAPIsOverride", "PrivacySandboxAdsAPIsM1Override",
+                "WebRtcHideLocalIpsWithMdns",
+                "NetworkTimeServiceQuerying", "AimEnabled",
+            }.Order(StringComparer.Ordinal),
+            Switch("disable-features").Order(StringComparer.Ordinal));
+        Assert.Equal("1", args["disable-background-networking"]);
+        Assert.Equal("1", args["disable-component-update"]);
+        Assert.Equal("url-source=" + CefConfigurator.NoUpdateServer, args["component-updater"]);
+    }
+
+    [Theory]
+    [InlineData("NetworkTimeServiceQuerying")]
+    [InlineData("AimEnabled")]
+    public void Build_SendsNothingToGoogleAtStartup(string feature)
+    {
+        Assert.Contains(feature, Switch("disable-features"));
+        Assert.Contains(EngineHardening.NoGoogleAtStartup, f => f.Feature == feature && !string.IsNullOrWhiteSpace(f.What));
+    }
+
     // Revisão aos 50: a política de IP do WebRTC na linha de comandos (preferência fixa desde o arranque, também na janela
     // privada) e sem o respondedor mDNS do WebRTC, que abria UDP 5353 em todas as interfaces (aviso da firewall).
     [Fact]

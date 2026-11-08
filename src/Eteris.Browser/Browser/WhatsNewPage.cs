@@ -13,6 +13,9 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.11
+        new("🔒", "No arranque, nada sai para a Google", "Abrir o Éteris já não pede a hora à Google nem pergunta pelo «Modo IA»: 0 pedidos no arranque, medido com um proxy, e a promessa à vista em eteris://privacy/."),
+        new("🛡", "Escudo também nos service workers", "Os pedidos sem aba — service workers, shared workers e extensões — passam pelo Escudo como os da página e contam no Escudo do site."),
         // 0.2.10
         new("⚡", "Arranque quase duas vezes mais rápido", "A primeira página aparece em ~0,6 s em vez de ~1,1 s: o motor, o desenho da janela e a base de dados arrancam ao mesmo tempo que a janela."),
         new("🪶", "Menos memória", "Cerca de 50 MB a menos: o Escudo guarda as listas de filtros já compiladas no perfil e não as volta a compilar em cada arranque."),
