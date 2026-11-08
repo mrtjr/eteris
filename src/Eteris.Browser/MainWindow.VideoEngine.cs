@@ -170,10 +170,34 @@ public partial class MainWindow
 
         // Bloqueador: os mesmos filtros do motor principal, em todos os pedidos (incluindo os dos workers), menos os
         // segmentos de vídeo/áudio, que saem logo. (Medido: um filtro por contexto, sem Media, deixava de bloquear.)
+        // Ficheiros de média que o WebView2 gravava em vez de tocar (VideoEngine.PlaysInsteadOfDownload): a transferência
+        // é cancelada (nada fica no disco) e o mesmo endereço volta a abrir, servido como uma página com o leitor.
+        var players = new Dictionary<string, string?>(StringComparer.Ordinal);
+        core.DownloadStarting += (_, e) =>
+        {
+            var download = e.DownloadOperation;
+            var target = VideoEngine.WithoutFragment(download.Uri);
+            if (players.ContainsKey(target))
+            {
+                e.Cancel = true;
+                return;
+            }
+            if (!VideoEngine.PlaysInsteadOfDownload(download.Uri, mainNavigation, download.MimeType, download.ContentDisposition)) return;
+            e.Cancel = true;
+            players[target] = download.MimeType;
+            Dispatcher.InvokeAsync(() => core.Navigate(target));
+        };
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) =>
         {
             var context = e.ResourceContext;
+            if (context == CoreWebView2WebResourceContext.Document && players.Count > 0
+                && players.TryGetValue(VideoEngine.WithoutFragment(e.Request.Uri), out var playerMime))
+            {
+                var page = System.Text.Encoding.UTF8.GetBytes(VideoEngine.PlayerPage(e.Request.Uri, playerMime));
+                e.Response = environment.CreateWebResourceResponse(new MemoryStream(page), 200, "OK", "Content-Type: text/html; charset=utf-8");
+                return;
+            }
             if (!VideoEngine.IsFiltered(context) || pageHost is null || !AppData.IsShieldOn(pageHost)) return;
             var requestUrl = e.Request.Uri;
             if (string.Equals(requestUrl, mainNavigation, StringComparison.Ordinal)) return;
@@ -382,7 +406,8 @@ public partial class MainWindow
         var position = await PageScript.EvaluateAsync(browser, VideoEngine.PositionScript, TimeSpan.FromMilliseconds(300));
         PageScript.Run(browser, MediaInfo.PauseScript);
         tab.Crossing.EnterVideo(await back);
-        var resumeAt = position.Success && position.Result is double seconds ? seconds : 0;
+        // Só a posição da própria página (Tabs/VideoEngine.cs, ResumesFrom).
+        var resumeAt = position.Success && position.Result is double seconds && VideoEngine.ResumesFrom(browser.Address, url) ? seconds : 0;
         if (!_videoSwitching.Contains(tab) || !Tabs.Tabs.Contains(tab)) return;
         if (resumeAt > 1 && VideoEngine.IsDirectMedia(url)) url = VideoEngine.WithTimeFragment(url, resumeAt);
         tab.Address = url;

@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Web.WebView2.Core;
 
 namespace Eteris.Browser.Tabs;
@@ -357,6 +358,45 @@ public static class VideoEngine
         }
         return uri.Host.Length > 0 ? uri.Host : url!;
     }
+
+    public static string WithoutFragment(string url)
+    {
+        var hash = url.IndexOf('#');
+        return hash < 0 ? url : url[..hash];
+    }
+
+    // A posição do vídeo da página do motor principal só vale para essa mesma página. Um ficheiro de média que chega
+    // como transferência (o desvio do DownloadHandler) ou uma navegação para um site de vídeo trocam de motor com a
+    // página ANTERIOR ainda à vista: o #t= dela ia parar ao ficheiro novo (medido: um .aac abria em #t=2).
+    public static bool ResumesFrom(string? shownAddress, string target)
+        => shownAddress is not null && string.Equals(WithoutFragment(shownAddress), WithoutFragment(target), StringComparison.Ordinal);
+
+    // Ficheiro de vídeo/áudio que o motor principal desviou para aqui por não o conseguir tocar e que o WebView2 também
+    // não reconhece (o tipo vem errado do servidor: um .aac como audio/vnd.dlna.adts, o tipo que o registo do Windows dá
+    // ao .aac, por exemplo no http.server do Python). O WebView2 gravava-o em Transferências, com o painel dele, e a aba
+    // ficava vazia. Só a navegação da própria aba (não um link para guardar dentro da página) e sem «attachment».
+    public static bool PlaysInsteadOfDownload(string downloadUrl, string? mainNavigation, string? mimeType, string? contentDisposition)
+        => mainNavigation is not null && string.Equals(WithoutFragment(downloadUrl), WithoutFragment(mainNavigation), StringComparison.Ordinal)
+           && IsPlayableDownload(downloadUrl, mimeType, contentDisposition);
+
+    // No lugar do ficheiro, no mesmo endereço, uma página com o leitor do próprio WebView2: um <audio>/<video> com o
+    // ficheiro como fonte reconhece o formato pelo conteúdo (não pelo tipo que o servidor deu).
+    public static string PlayerPage(string url, string? mimeType)
+    {
+        var bare = WithoutFragment(url);
+        var audio = mimeType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true
+                    || AudioExtensions.Any(e => bare.EndsWith(e, StringComparison.OrdinalIgnoreCase));
+        var name = Uri.TryCreate(bare, UriKind.Absolute, out var uri) && Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath)) is { Length: > 0 } file
+            ? file : bare;
+        var tag = audio ? "audio" : "video";
+        return "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"color-scheme\" content=\"dark light\"><title>"
+            + System.Net.WebUtility.HtmlEncode(name) + "</title><style>html,body{margin:0;height:100%;background:#0e0e0e;"
+            + "display:flex;align-items:center;justify-content:center}video{max-width:100%;max-height:100%}"
+            + "audio{width:min(640px,90vw)}</style></head><body><" + tag + " controls autoplay src=\""
+            + System.Net.WebUtility.HtmlEncode(url) + "\"></" + tag + "></body></html>";
+    }
+
+    private static readonly string[] AudioExtensions = [".aac", ".m4a", ".mp3", ".ogg", ".oga", ".opus", ".wav", ".flac"];
 
     public static string WithTimeFragment(string url, double seconds)
     {
