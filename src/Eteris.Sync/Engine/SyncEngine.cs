@@ -229,7 +229,8 @@ public sealed class SyncEngine
             Records = batch.Records,
             NotesHistory = batch.Notes.Count > 0 ? batch.Notes : null,
         };
-        var file = SealedFile.Seal(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, _keys.Generation, context, Json.Bytes(payload));
+        var file = SealedFile.Seal(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, _keys.Generation, context, Json.Bytes(payload),
+            compress: !Collections.HasTabs(batch.Records));
         await _transport.WriteAsync(SyncPaths.Batch(ChainId, Device.Id, batch.Seq), file, cancellationToken).ConfigureAwait(false);
         State.OwnBatchTimes[batch.Seq] = batch.CreatedMs;
         foreach (var record in batch.Records) State.SentIn[SyncState.RecordKey(record.Collection, record.Id)] = batch.Seq;
@@ -591,7 +592,8 @@ public sealed class SyncEngine
             NotesHistory = State.NotesHistory,
         };
         var context = SyncPaths.SnapshotContext(Device.Id, mine);
-        var file = SealedFile.Seal(_keys.FileKey(SealedFile.Snapshot, context), SealedFile.Snapshot, ChainId, _keys.Generation, context, Json.Bytes(snapshot));
+        var file = SealedFile.Seal(_keys.FileKey(SealedFile.Snapshot, context), SealedFile.Snapshot, ChainId, _keys.Generation, context, Json.Bytes(snapshot),
+            compress: !Collections.HasTabs(snapshot.Records));
         await _transport.WriteAsync(SyncPaths.Snapshot(ChainId, Device.Id, mine), file, cancellationToken).ConfigureAwait(false);
         // O que seguiu nos lotes até «mine» está agora neste instantâneo.
         foreach (var key in State.SentIn.Where(s => s.Value <= mine).Select(s => s.Key).ToList()) State.SentIn.Remove(key);

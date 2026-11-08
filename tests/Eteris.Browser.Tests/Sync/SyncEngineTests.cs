@@ -569,6 +569,24 @@ public class SyncEngineTests
         Assert.Contains(tabs, t => t.Key == devices[1].Device.Id && t.Data!["tabs"]!.AsArray().Count == 1);
     }
 
+    [Fact]
+    public async Task FilesWithOpenTabs_AreNotCompressed()
+    {
+        // Títulos escolhidos pelos sites + URLs com segredos no mesmo bloco comprimido = canal lateral de compressão.
+        using var lab = new SyncLab();
+        var devices = await lab.DevicesAsync("PC");
+        var pc = devices[0];
+        pc.Put(Collections.Bookmarks, "https://x.pt/", Bookmark("x"));
+        Assert.Equal(1, await pc.PushAsync());
+        pc.PublishTabs(new JsonObject { ["tabs"] = new JsonArray("https://banco.pt/?sessao=segredo") });
+        Assert.Equal(2, await pc.PushAsync());
+        byte Options(string path) => SealedFile.ReadHeader(lab.Cloud.Files[path]).Options;
+        Assert.Equal(1, Options(SyncPaths.Batch(pc.ChainId, pc.Device.Id, 1)) & 1);
+        Assert.Equal(0, Options(SyncPaths.Batch(pc.ChainId, pc.Device.Id, 2)) & 1);
+        var snapshot = await pc.CompactAsync();
+        Assert.Equal(0, Options(SyncPaths.Snapshot(pc.ChainId, pc.Device.Id, snapshot)) & 1);
+    }
+
     private static async Task<(SyncEngine, SyncEngine, SyncEngine)> Three(SyncLab lab)
     {
         var d = await lab.DevicesAsync("PC-casa", "PC-trabalho", "Portátil");

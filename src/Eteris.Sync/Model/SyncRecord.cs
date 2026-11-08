@@ -17,6 +17,9 @@ public static class Collections
 
     public static readonly IReadOnlyList<string> All = [Bookmarks, Spaces, Tabs, Settings, Shield, Notes];
 
+    // Ficheiros com abas abertas não são comprimidos (SealedFile: canal lateral de compressão).
+    public static bool HasTabs(IEnumerable<SyncRecord> records) => records.Any(r => r.Collection == Tabs);
+
     public const string NotesKey = "notes";
 
     // Definições que viajam entre aparelhos. Fora da lista ficam as que são deste computador (janela, GPU, sandbox,

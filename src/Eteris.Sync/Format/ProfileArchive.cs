@@ -16,7 +16,8 @@ public static class ProfileArchive
     {
         var salt = RandomNumberGenerator.GetBytes(16);
         var payload = new ArchivePayload { CreatedMs = nowMs, DeviceName = deviceName, Records = records };
-        return SealedFile.Seal(secret.ArchiveKey(salt), SealedFile.Archive, Chain, 1, Context(salt), Json.Bytes(payload), salt);
+        return SealedFile.Seal(secret.ArchiveKey(salt), SealedFile.Archive, Chain, 1, Context(salt), Json.Bytes(payload), salt,
+            compress: !Collections.HasTabs(records));
     }
 
     // Lança FormatException (não é um perfil do Éteris), WrongCodeException (código errado ou ficheiro alterado) ou

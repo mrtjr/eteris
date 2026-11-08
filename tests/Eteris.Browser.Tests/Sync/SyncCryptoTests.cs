@@ -119,6 +119,41 @@ public class SyncCryptoTests
     }
 
     [Fact]
+    public void SealedFile_LargeFiles_FallIntoFewBuckets()
+    {
+        var lengths = new HashSet<int>();
+        for (var n = 1; n < 400_000; n += 37)
+        {
+            var padded = SealedFile.PaddedLength(n);
+            Assert.True(padded >= n && padded % SealedFile.PadBlock == 0, $"{n} → {padded}");
+            Assert.True(padded <= Math.Max(SealedFile.PadBlock, n * 1.125 + SealedFile.PadBlock), $"{n} → {padded}");
+            if (n >= 100_000 && n < 200_000) lengths.Add(padded);
+        }
+        // Um perfil entre 100 e 200 KB cai em poucos tamanhos possíveis (não um por cada favorito).
+        Assert.InRange(lengths.Count, 1, 40);
+        Assert.Equal(SealedFile.PaddedLength(130_000), SealedFile.PaddedLength(131_000));
+
+        var key = RandomNumberGenerator.GetBytes(32);
+        var big = Encoding.UTF8.GetBytes("{\"t\":\"" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(150_000)) + "\"}");
+        Assert.Equal(big.Length, SealedFile.Open(key, SealedFile.Snapshot, "c", "x", SealedFile.Seal(key, SealedFile.Snapshot, "c", 1, "x", big)).Length);
+    }
+
+    [Fact]
+    public void SealedFile_WithoutCompression_StillOpens_AndSaysSoInTheHeader()
+    {
+        var key = RandomNumberGenerator.GetBytes(32);
+        var json = Encoding.UTF8.GetBytes("{\"tabs\":[{\"url\":\"https://x.pt/?token=abc\",\"title\":\"Página\"}]}");
+        var plain = SealedFile.Seal(key, SealedFile.Batch, "c", 1, "x", json, compress: false);
+        Assert.Equal(0, SealedFile.ReadHeader(plain).Options & 1);
+        Assert.Equal(json, SealedFile.Open(key, SealedFile.Batch, "c", "x", plain));
+        Assert.Equal(1, SealedFile.ReadHeader(SealedFile.Seal(key, SealedFile.Batch, "c", 1, "x", json)).Options & 1);
+        // A opção faz parte do cabeçalho autenticado: ligá-la à mão não passa.
+        var flipped = plain.ToArray();
+        flipped[9] = 1;
+        Assert.ThrowsAny<CryptographicException>(() => SealedFile.Open(key, SealedFile.Batch, "c", "x", flipped));
+    }
+
+    [Fact]
     public void SealedFile_FromANewerEteris_IsReportedNotMisread()
     {
         var key = RandomNumberGenerator.GetBytes(32);

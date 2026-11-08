@@ -95,8 +95,16 @@ eteris/pair/<sessão>/…     mensagens de um emparelhamento (apagadas no fim)
 - **DEK** aleatória, embrulhada pela KEK com AES-256-GCM (cadeia e geração como dados associados).
 - Por ficheiro: `chave = HKDF(DEK, "file:<tipo>:<contexto>")` — uma chave por ficheiro, nonce aleatório de 96 bits.
 - **Ficheiro** (`Format/SealedFile.cs`): `"ETS" | tipo | versão | geração | opções | parte pública | nonce | cifra | etiqueta`.
-  Conteúdo JSON → Brotli → **preenchido até ao múltiplo de 1 KiB** → AES-256-GCM. Dados associados = cabeçalho + cadeia
-  + nome lógico (aparelho e número): trocar, reordenar ou mudar de nome um ficheiro falha a verificação.
+  Conteúdo JSON → Brotli → **preenchido** (múltiplo de 1 KiB e, nos grandes, o «balde» Padmé do tamanho: só os bits de
+  cima ficam, no máximo ~12 % a mais) → AES-256-GCM. Dados associados = cabeçalho + cadeia + nome lógico (aparelho e
+  número): trocar, reordenar ou mudar de nome um ficheiro falha a verificação.
+- **O que o tamanho ainda diz:** a ordem de grandeza. Um instantâneo tem o estado inteiro e cresce com o perfil
+  (centenas de KiB num perfil grande), por isso quem vê os tamanhos sabe se o perfil é pequeno ou grande — não o número
+  exato de favoritos, nem o tamanho de uma edição (os lotes pequenos ficam todos em 1–2 KiB).
+- **Sem compressão com abas abertas:** um ficheiro que leve a coleção `tabs` não é comprimido. Os títulos das abas são
+  escolhidos pelos sites e mudam a cada envio; comprimidos no mesmo bloco que URLs com segredos (tokens, ligações de
+  redefinição de senha), abriam um canal lateral de compressão (tipo CRIME/BREACH) a quem vê os tamanhos. A opção vai
+  no cabeçalho autenticado.
 - **Versões:** um ficheiro de formato mais recente fica pendente (não é lido mal nem marcado como lido); registos com
   campos novos são preservados. A versão no cabeçalho de um ficheiro lê-se antes de o decifrar, por isso sozinha **não**
   faz o Éteris pedir uma atualização (quem controla o transporte podia mudá-la e usar isso como isco: «descarregue esta
@@ -201,7 +209,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 
 | Quem | O que consegue | O que não consegue |
 |---|---|---|
-| **A Google** (ou quem entrar na conta Google) | ver que a conta usa o Éteris, quando sincroniza (horas dos ficheiros, IP dos pedidos), quantos ficheiros e os tamanhos (arredondados a 1 KiB); apagar ficheiros ou não os entregar (o Éteris deixa-os pendentes) | ler favoritos, notas, abas, definições, nomes dos aparelhos ou URLs; alterar ou trocar ficheiros sem ser detetado; abrir a conta Éteris sem o código |
+| **A Google** (ou quem entrar na conta Google) | ver que a conta usa o Éteris, quando sincroniza (horas dos ficheiros, IP dos pedidos), quantos ficheiros e os tamanhos (preenchidos: dão a ordem de grandeza do perfil, não o número de favoritos); apagar ficheiros ou não os entregar (o Éteris deixa-os pendentes) | ler favoritos, notas, abas, definições, nomes dos aparelhos ou URLs; alterar ou trocar ficheiros sem ser detetado; abrir a conta Éteris sem o código |
 | **Quem fotografa o QR** | nada | — |
 | **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador confirmar códigos iguais no anfitrião; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador) | — remédio: «Nova cadeia» noutro aparelho e retirar o acesso na conta Google |
@@ -219,7 +227,8 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 - que esta conta Google autorizou a aplicação «Éteris» (aparece em *myaccount.google.com › Segurança › Ligações a apps*),
   e quando houve início de sessão e renovação de tokens;
 - os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)
-  e tamanhos aproximados (preenchidos a 1 KiB); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
+  e tamanhos aproximados (preenchidos a 1 KiB e, nos grandes, a «baldes» Padmé: um instantâneo de um perfil grande
+  pesa mais do que o de um pequeno); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
 - **nunca** o conteúdo: favoritos, URLs, títulos, notas, abas, definições, Espaços, decisões do Escudo, nomes dos
   aparelhos — tudo dentro da cifra. A chave nunca lá vai.
 

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using Eteris.Sync.Crypto;
@@ -11,9 +12,16 @@ namespace Eteris.Sync.Format;
 //   "ETS" | tipo (1) | versão (1) | geração (u32) | opções (1) | n (1) | público (n) | nonce (12) | cifra | etiqueta (16)
 //
 // Em claro só o cabeçalho (nada do utilizador) e o «público» (o sal de um perfil exportado). O conteúdo é JSON,
-// comprimido com Brotli e PREENCHIDO até ao múltiplo seguinte de 1 KiB (o tamanho não denuncia quantos favoritos
-// há), cifrado com AES-256-GCM. Os dados associados (AAD) juntam o cabeçalho, a cadeia e o «contexto» — o nome lógico
-// do ficheiro (aparelho e número do lote) —: trocar, reordenar ou mudar de nome um ficheiro falha a verificação.
+// comprimido com Brotli (salvo quando leva abas abertas, ver em baixo) e PREENCHIDO: até ao múltiplo seguinte de
+// 1 KiB e, nos ficheiros grandes, até ao «balde» Padmé do tamanho (só os bits de cima ficam; no máximo ~12 % a mais).
+// O tamanho dá a ordem de grandeza (um instantâneo tem o estado inteiro, cresce com o perfil), não o número exato de
+// favoritos nem o tamanho de uma edição. Cifrado com AES-256-GCM. Os dados associados (AAD) juntam o cabeçalho, a
+// cadeia e o «contexto» — o nome lógico do ficheiro (aparelho e número do lote) —: trocar, reordenar ou mudar de nome
+// um ficheiro falha a verificação.
+//
+// Sem compressão quando o ficheiro leva a coleção «tabs»: os títulos das abas são escolhidos pelos sites e mudam a
+// cada envio, e comprimi-los juntos com URLs que podem ter segredos (tokens, ligações de redefinição de senha) abre
+// um canal lateral de compressão (tipo CRIME/BREACH) a quem vê os tamanhos. A opção vai no cabeçalho (autenticado).
 public static class SealedFile
 {
     public const int FormatVersion = 1;
@@ -31,7 +39,7 @@ public static class SealedFile
     public sealed record Header(char Kind, int Version, int Generation, byte Options, byte[] Public, int Length);
 
     public static byte[] Seal(ReadOnlySpan<byte> key, char kind, string chain, int generation, string context, ReadOnlySpan<byte> json,
-        ReadOnlySpan<byte> publicPart = default, int version = FormatVersion)
+        ReadOnlySpan<byte> publicPart = default, int version = FormatVersion, bool compress = true)
     {
         if (publicPart.Length > 255) throw new ArgumentException("Parte pública grande demais", nameof(publicPart));
         var header = new byte[FixedHeader + 1 + publicPart.Length];
@@ -39,13 +47,12 @@ public static class SealedFile
         header[3] = (byte)kind;
         header[4] = (byte)version;
         BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(5), generation);
-        header[9] = OptionBrotli;
+        header[9] = compress ? OptionBrotli : (byte)0;
         header[10] = (byte)publicPart.Length;
         publicPart.CopyTo(header.AsSpan(11));
 
-        var compressed = Compress(json);
-        var plainLength = 4 + compressed.Length;
-        plainLength += (PadBlock - plainLength % PadBlock) % PadBlock;
+        var compressed = compress ? Compress(json) : json.ToArray();
+        var plainLength = PaddedLength(4 + compressed.Length);
         var plain = new byte[plainLength]; // o resto fica a zeros: é o preenchimento
         BinaryPrimitives.WriteInt32BigEndian(plain, compressed.Length);
         compressed.CopyTo(plain, 4);
@@ -59,6 +66,24 @@ public static class SealedFile
             Aad(header, chain, context));
         CryptographicOperations.ZeroMemory(plain);
         return output;
+    }
+
+    // Múltiplo de 1 KiB e, acima disso, Padmé (Nikitin et al., 2019): com o tamanho L entre 2^E e 2^(E+1), só os
+    // ⌊log2 E⌋+1 bits de cima ficam, o resto arredonda para cima. Fuga de O(log log L) bits, custo ≤ ~12 %.
+    internal static int PaddedLength(int length)
+    {
+        var padded = Padme(length);
+        padded += (PadBlock - padded % PadBlock) % PadBlock;
+        return checked((int)padded);
+    }
+
+    private static long Padme(long length)
+    {
+        if (length < 2) return length;
+        var e = 63 - BitOperations.LeadingZeroCount((ulong)length);
+        var s = 64 - BitOperations.LeadingZeroCount((ulong)e);
+        var mask = (1L << (e - s)) - 1;
+        return (length + mask) & ~mask;
     }
 
     public static Header ReadHeader(ReadOnlySpan<byte> file)
