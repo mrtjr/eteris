@@ -13,7 +13,11 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        VelopackApp.Build().Run();
+        // Depois de instalar e de atualizar: a ACL da pasta para o serviço de rede com sandbox (NetworkSandbox, D9).
+        VelopackApp.Build()
+            .OnAfterInstallFastCallback(_ => NetworkSandbox.OnInstalled())
+            .OnAfterUpdateFastCallback(_ => NetworkSandbox.OnInstalled())
+            .Run();
 
         if (StartupArgs.UserDataDir(args) is { } userDataDir) AppPaths.UseRoot(userDataDir);
         var instanceName = AppPaths.IsCustomProfile

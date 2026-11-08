@@ -17,7 +17,7 @@ public class EngineFeatureNamesTests
     public static IEnumerable<object[]> Names()
         => EngineHardening.AdApis.Concat(EngineHardening.Partitioning).Concat(EngineHardening.LocalNetworkChecks)
             .Concat(EngineHardening.Identity).Concat(EngineHardening.NoListeningSockets)
-            .Select(f => f.Feature).Append("HttpsUpgrades").Distinct().Select(n => new object[] { n });
+            .Select(f => f.Feature).Append("HttpsUpgrades").Append(NetworkSandbox.Feature).Distinct().Select(n => new object[] { n });
 
     [Theory]
     [MemberData(nameof(Names))]
@@ -68,7 +68,9 @@ public class EngineFeatureNamesTests
                 for (int from = 0, at; (at = span[from..].IndexOf(bytes)) >= 0; from += at + 1)
                 {
                     var offset = from + at;
-                    if (offset > 0 && image[offset - 1] != 0) continue;
+                    // Antes da cadeia não pode haver outra letra do nome (o fim de «kOutroNome»); outros bytes podem
+                    // ser dados vizinhos sem o zero (no CEF 156: «kNetworkServiceSandbox» vem depois de 0xF2).
+                    if (offset > 0 && (char.IsAsciiLetterOrDigit((char)image[offset - 1]) || image[offset - 1] == (byte)'_')) continue;
                     if (AddressOf(offset + skip) is { } address) wanted.TryAdd(address, name);
                 }
             }

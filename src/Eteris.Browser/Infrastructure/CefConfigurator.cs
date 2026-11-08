@@ -10,7 +10,7 @@ public static class CefConfigurator
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
     public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
-                                    int? devToolsPort = null, string? bootstrapExe = null)
+                                    int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false)
     {
         var settings = new CefSettings
         {
@@ -61,6 +61,9 @@ public static class CefConfigurator
                     "HttpsUpgrades",
                 }
                 .Where(f => !string.IsNullOrEmpty(f)));
+        // Serviço de rede também em sandbox (AppContainer): só com as páginas em sandbox e a ACL da pasta confirmada
+        // (NetworkSandbox.Decide). O EngineHardening, a seguir, junta-lhe as funcionalidades dele.
+        if (networkSandbox) settings.CefCommandLineArgs["enable-features"] = NetworkSandbox.Feature;
         // Promessas do Éteris na linha de comandos do motor (APIs de anúncios desligadas…): Shields/EngineHardening.cs.
         Shields.EngineHardening.Configure(settings);
         settings.RegisterScheme(new CefCustomScheme
@@ -88,7 +91,8 @@ public static class CefConfigurator
         var sandbox = SandboxEnabled ? SandboxInfo.Pointer : 0;
         var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
         // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
-        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap),
+        var networkSandbox = NetworkSandbox.Decide(sandbox != 0, Environment.ProcessPath);
+        Cef.Initialize(Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox),
             performDependencyCheck: bootstrap is null, browserProcessHandler: null);
     }
 
