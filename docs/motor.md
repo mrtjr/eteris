@@ -253,6 +253,22 @@ quase nada. No pior caso, 2 páginas animadas durante 8 s depois de cada troca: 
 da graça o custo de uma aba escondida volta ao de #1b (2,2 % de 1 núcleo medido no T1 para uma aba animada
 escondida): a exceção a «abas escondidas não gastam» é só o período de graça.
 
+**A medir ao vivo (T3–T6), quando o PC estiver livre.** Mesmo método do T1 (`scratchpad/abas/abasrun.ps1` +
+`swap.py`, 60 fps, 10 capturas por caso, tema escuro + Mica, depois claro e sem Mica); critério: **0 fotogramas
+errados** e tempo da tecla até à página final **≤ ~120 ms** (o Brave: 0 errados, ~90–100 ms).
+1. T3: Ctrl+T ×5 a partir de uma página escura (`mica.py`): 0 fotogramas de Mica ou cinzento na área da página.
+2. T4: Ctrl+T e botão + (antes 205 e 369 ms de mediana); confirmar no registo que a janela do CEF da aba nova não
+   muda de tamanho depois de criada (também a 125 % e 150 % de escala).
+3. T5: Ctrl+Tab para uma aba fria (deixada há > 10 s), clara↔escura e Wikipédia↔Wikipédia (antes 133 e 270 ms).
+4. T6: Ctrl+Tab ida e volta em < 8 s: 0 errados e a página certa no 1.º fotograma depois da troca; rodízio de 3 abas
+   (só 2 quentes); página local com `<video muted autoplay loop>` deixada → `visibilityState` «hidden» logo
+   (`vis.html`), como antes; aba com som, ecrã dividido e janela minimizada → nenhuma quente.
+5. CPU (#1b, 10 s, todos os processos): aba animada deixada — durante a graça ~ como à vista (~10 % de 1 núcleo); a
+   partir dos 8 s, **igual a antes** (2,2 % de 1 núcleo no T1).
+6. Sem regressões: fechar a aba ativa (vizinha quente e vizinha fria), troca para o motor de vídeo (V3), 8 Ctrl+Tab
+   seguidos sem clicar (T2: 8/8), painel web da barra lateral com o tamanho certo, minimizar/restaurar a janela com
+   uma aba quente.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -283,3 +299,4 @@ escondida): a exceção a «abas escondidas não gastam» é só o período de g
 | T4 | Aba nova (rec. 5): a static nasce por baixo das outras páginas e a janela do CEF nasce já com o tamanho da área das páginas (antes 0×0 numa aba nova, redimensionada a seguir); mesma conta de píxeis do CefSharp (`PageWindow.PixelSize`), por isso o redimensionamento dele no fim da criação não muda nada. A espera pela 1.ª pintura continua a do T1 (teto 1 s) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
 | T5 | Aba fria (rec. 3): a janela do Chromium volta de minimizada num só passo e já no tamanho final (`SetWindowPlacement` com a área da página e `SW_SHOWNOACTIVATE`, antes de a static aparecer), em vez de `ShowWindow` + `SetWindowPos` (duas mudanças de tamanho com a página «hidden»); ao esconder, minimiza antes de o CefSharp encolher a janela a 0×0. Também nos painéis web da barra lateral | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
 | T6 | Abas quentes (rec. 2): a página que sai fica tapada, no tamanho inteiro e sem minimizar, durante 8 s (no máximo 2, as mais recentes; `Tabs/WarmTabs.cs`), e voltar a ela é só subir a janela; nunca com vídeo a tocar, som, ecrã dividido, janela minimizada ou a passar para o motor de vídeo. Ordem das janelas das páginas explícita (`PageSwap.StackOrder`: à vista → a sair → a entrar fria → quentes). Custo: ~9–11 % de 1 núcleo por página animada quente, só durante a graça | Medição ao vivo pendente (dono a usar o PC). Testes: `WarmTabsTests`, `PageSwapTests` |
+| T3–T6 | Lista do que falta medir ao vivo para T3–T6 (casos, critério de 0 fotogramas errados e ≤ ~120 ms, CPU de aba animada escondida depois da graça igual à do T1), na secção «Troca de abas: o resto do estudo» | Medição ao vivo pendente (dono a usar o PC) |
