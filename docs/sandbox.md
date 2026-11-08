@@ -401,7 +401,9 @@ dono.
    normalmente).
 3. **D9 — casos de rede por ver ao vivo**: proxy do sistema e autenticação integrada do Windows com o serviço de rede
    no AppContainer (tem a capacidade `enterpriseAuthentication`, mas não há proxy nem domínio nesta máquina). Páginas
-   em `127.0.0.1`/`localhost`, transferências e HTTPS já passaram com ele.
+   em `127.0.0.1`/`localhost`, transferências e HTTPS já passaram com ele, e desde o ramo `rede-seguranca` também o
+   proxy por argumentos do motor (`--proxy-server`, PAC por HTTP e por `data:`; ver «Rede de segurança do arranque e
+   proxy»).
 4. **Custo contínuo** (já em `docs/paridade.md`, #3): cada atualização do motor recompila também o CefSharp próprio
    e a DLL cliente; propor o patch `WindowsSandboxInfo` ao CefSharp oficial reduz isto.
 5. Fora do sandbox (visto no D5, igual sem sandbox): Alt+clique numa aba aberta por um link entregue à instância
@@ -412,11 +414,93 @@ próxima versão (razões em `docs/paridade.md`, secção 2). Com o arranque fun
 do arranque (`CefConfigurator.Prepare` decide o sandbox e o serviço de rede, `InitializeInBackground` inicializa):
 a cópia publicada com `-Sandbox` manteve renderers e armazenamento Untrusted, placa gráfica e áudio Low.
 
+**Rede de segurança (ramo `rede-seguranca`):** o Éteris abre sempre, sem sandbox se for preciso, e avisa na nova aba
+(DLL cliente volta a arrancá-lo sem sandbox quando o .NET não arranca; 2 arranques com sandbox falhados seguidos —
+queda antes da 1.ª página ou 3 filhos a morrer nos primeiros 30 s — desligam-no até à versão seguinte). Ver «Rede de
+segurança do arranque e proxy», em baixo.
+
 **Recomendação:** fundir no `main` por fases, sempre atrás da opção `EterisSandbox` (por omissão desligada, nada muda
 para quem publica sem ela): (a) já, o código do ramo (passos A–D6, D9 e a marca), que não altera a publicação normal
 (os ganchos do Velopack só mexem na ACL nas publicações com sandbox) e tem testes; (b) uma versão de teste com
 `-Sandbox` para o dono, pelo canal normal do Velopack (a atualização já foi provada); (c) só então ligar
 `EterisSandbox` na publicação oficial, com a assinatura conjunta e a CI. A decisão da versão em que entra é do dono.
+
+## Rede de segurança do arranque e proxy (2026-11-08, ramo `rede-seguranca`, para a 0.2.11 com sandbox)
+
+Com o sandbox ligado na publicação oficial, uma falha que só aconteça com ele (driver, antivírus, política da máquina,
+versão do Windows) não pode deixar o Éteris sem abrir: o atualizador vive dentro do Éteris, por isso um Éteris que não
+abre também nunca recebe a correção. Três camadas:
+
+| Camada | Onde | O que faz |
+|---|---|---|
+| **(a) o .NET não arranca** | DLL cliente (`build/sandbox/client/eteris_client.cpp`, `RelaunchWithoutSandbox`) | Se a `hostfxr.dll` falta ou o host do .NET devolve erro num arranque com sandbox, a DLL volta a arrancar o próprio exe com `--eteris-no-sandbox --eteris-sandbox-retry` (uma só vez: o novo arranque já leva o interruptor; nunca nos ganchos `--veloapp-*`) e passa-lhe o primeiro plano. Só se esse também falhar aparece o aviso «O Éteris não conseguiu arrancar». A nova aba desse arranque avisa («desligado neste arranque … da próxima vez volta a tentar»). |
+| **(b) o processo cai antes da 1.ª página** | `Infrastructure/StartupGuard.cs` + `SandboxFallback.cs` (lógica pura) | `CefConfigurator.Prepare` grava `sandbox-fallback.json` no perfil (`Starting = true`) **antes** do `Cef.Initialize`; a 1.ª página apresentada (`MainWindow.PageVisibility`) ou um fecho normal (`App.OnExit`) limpa-o. Se no arranque seguinte o marcador ainda lá está e esse arranque era com sandbox, conta uma falha; **2 seguidas** → `DisabledFor = <versão>`: os arranques dessa versão correm sem sandbox (o mesmo que `--eteris-no-sandbox`: sem `WindowsSandboxInfo`, filhos com `--no-sandbox`, sem `NetworkServiceSandbox`) e a nova aba (normal e privada) avisa «O isolamento das páginas (sandbox) foi desligado por precaução … na próxima versão do Éteris volta a ser ligado». Uma versão nova volta a tentar do zero. |
+| **(c) filhos a morrer no arranque** | `StartupGuard.WatchChildren` e `OnRenderProcessTerminated` | Só com sandbox e só nos primeiros 30 s: uma thread de fundo vê, de 250 em 250 ms, os filhos do processo com o mesmo exe (páginas, placa gráfica, utilitários; não os do WebView2) e o código com que saem. Contam as exceções do Windows (`0xC…`), o `0x80000003` dos `CHECK` do Chromium e os códigos com que o sandbox mata um filho que não consegue fechar (`SBOX_FATAL_*` 7006–7011 e 7013; não o 7012, limite de memória); do CefSharp contam as páginas que o motor nem conseguiu lançar (`TS_LAUNCH_FAILED`/`TS_INTEGRITY_FAILURE`, 4 e 5). **3 falhas** fazem desse arranque um arranque falhado (mesmo que a página já tenha aparecido), com o mesmo limite de 2 seguidos. |
+
+- Sem sandbox possível (publicação normal, CefSharp oficial) nada disto corre: nem ficheiro, nem vigia.
+- Uma queda **sem** sandbox (por exemplo com `--eteris-no-sandbox` manual) não conta: não é culpa dele.
+- `--eteris-no-sandbox` manual continua igual (sem aviso).
+- O que fica de fora: uma falha do próprio bootstrap **antes** do `RunWinMain` (assinaturas diferentes, `chrome_elf.dll`
+  em falta). Aí o sandbox não muda nada: o bootstrap inicializa o broker do sandbox no processo principal mesmo com
+  `--no-sandbox` (`bootstrap_win.cc`: `if (!is_subprocess || is_sandboxed)`), por isso não há arranque «sem sandbox» que
+  o resolva — é a assinatura conjunta (E) que o evita. Pela mesma razão, no caso (a) o novo arranque só ajuda em falhas
+  passageiras (ficheiro preso pelo antivírus a meio de uma atualização, por exemplo); numa pasta sem .NET o aviso aparece
+  na mesma, mas só uma vez e depois de tentar.
+- Testes: `SandboxFallbackTests` (estados, contagem, versão nova, manual, DLL cliente, códigos de saída, ficheiro
+  partido, guarda inerte sem sandbox, aviso na nova aba normal e privada, interruptores iguais nos dois lados);
+  `SandboxBootstrapSourceTests` (recurso de versão com a marca das DLLs de teste).
+- Ganchos só de teste: `ETERIS_TEST_CRASH_BEFORE_PAINT=1` (`TestSwitches`: `TerminateProcess` logo a seguir ao
+  `Cef.Initialize`, código `0xE7E50001`, sem relatório do Windows) e, só numa DLL cliente compilada com
+  `cmake -DETERIS_TEST_HOOKS=ON`, `ETERIS_TEST_DOTNET_FAILS_WITH_SANDBOX=1`. Essa DLL leva `test_hooks` no recurso de
+  versão e `verify-client.ps1` recusa-a na publicação («é uma DLL de teste»), também pela cadeia `ETERIS_TEST_` no binário
+  (verificado: a DLL normal passa, a de teste é recusada).
+
+**Prova ao vivo** (publicação `-Sandbox` do ramo, CefSharp `156.0.150-eteris.2`, DLL cliente nova; cópia
+`scratchpad\sbx-rede` com a ACL do D9; perfis de teste novos; `ETERIS_TEST_MUTE=1`; verificação por CDP
+(`ETERIS_TEST_DEVTOOLS_PORT`), linhas de comandos dos filhos e capturas; fecho por `WM_CLOSE`, sem processos a sobrar;
+scripts em `scratchpad\rede\live-*.ps1`):
+
+| Caso | Resultado |
+|---|---|
+| (b) 1.º e 2.º arranques com `ETERIS_TEST_CRASH_BEFORE_PAINT=1` | saem com `0xE7E50001`; estado `{"Starting":true,"WithSandbox":true,"Failures":0}` e depois `"Failures":1` |
+| (b) 3.º arranque, normal | `{"WithSandbox":false,"Failures":2,"DisabledFor":"0.2.9"}`; 5/5 filhos com `--no-sandbox`; `chrome://sandbox`: tudo «Not Sandboxed»; a nova aba mostra o aviso |
+| (b) 4.º arranque, mesma versão | continua sem sandbox (5 filhos com `--no-sandbox`) |
+| (b) versão «nova» (`DisabledFor` trocado para `0.2.8`) | volta ao sandbox: 0/5 filhos com `--no-sandbox`, renderers Lockdown/Untrusted, GPU Low, Network Service no AppContainer, Storage Untrusted; sem aviso; no fecho `{"WithSandbox":true,"Failures":0,"DisabledFor":null}` |
+| (c) sessão com sandbox: `Page.crash` + `Browser.crashGpuProcess` + `Page.crash` por CDP (renderer, GPU, renderer) | depois da 1.ª página `"Failures":0`; depois das 3 quedas `"Failures":1` (a página mostra o erro -9001); 2.ª sessão igual → `"Failures":2`; a 3.ª abre sem sandbox (5/5 `--no-sandbox`) e com o aviso |
+| (a) DLL de teste, `ETERIS_TEST_DOTNET_FAILS_WITH_SANDBOX=1` | o 1.º processo sai com 0; o principal passa a ser um filho dele com `… --new-tab --eteris-no-sandbox --eteris-sandbox-retry`; 5/5 filhos sem sandbox; aviso «desligado neste arranque»; registo: «hostfxr.dll em falta …» e «novo arranque sem sandbox (--eteris-no-sandbox), processo …». O arranque seguinte sem a falha simulada volta ao sandbox (0/5), sem aviso |
+| (a) caso real: pasta só com o exe, a DLL cliente publicada e o `chrome_elf.dll` (sem .NET) | 1.º processo → novo arranque sem sandbox → também falha → **um** aviso «O Éteris não conseguiu arrancar. Falta o .NET …» (do 2.º processo); duas linhas «hostfxr.dll em falta» no registo |
+| (e) `--eteris-no-sandbox` manual | 7/7 filhos `--no-sandbox`, sem aviso; duas quedas com ele não contam (`"Failures":0`); sem o interruptor volta ao sandbox |
+
+**Proxy com o serviço de rede no AppContainer (D9).** Só por argumentos do motor na linha de comandos do Éteris (nada
+nas definições do Windows): um proxy HTTP de teste em Python (`127.0.0.1:8899`, regista cada pedido; responde ele
+próprio a anfitriões `*.test`, que não existem no DNS, e encaminha o resto; `CONNECT` para HTTPS) e um PAC servido em
+`127.0.0.1:8898` (`PROXY 127.0.0.1:8899` para tudo menos `127.0.0.1`/`localhost`). Cópia `sbx-rede` com a ACL (2/2),
+perfil novo por caso; `chrome://sandbox` em todos: **Network Service no AppContainer** `S-1-15-2-373877586-…`
+(integridade Default), renderers Lockdown/Untrusted, GPU Limited/Low.
+
+| Argumento | `http://eteris-proxy.test:8080/…` (só existe no proxy) | `https://example.com/` | Registo do proxy | `network_service_failed_launch` no `Local State` |
+|---|---|---|---|---|
+| `--proxy-server=http://127.0.0.1:8899` | «Proxy de teste: eteris-proxy.test» | «Example Domain» | `GET http://eteris-proxy.test:8080/server`, `CONNECT example.com:443` | não |
+| `--proxy-pac-url=http://127.0.0.1:8898/proxy.pac` | igual | igual | `PAC /proxy.pac` (o PAC é lido pelo serviço de rede), depois `GET …/pac-http`, `CONNECT example.com:443` | não |
+| `--proxy-pac-url=data:application/x-ns-proxy-autoconfig;base64,…` | igual | igual | `GET …/pac-data`, `CONNECT example.com:443` | não |
+| `--proxy-pac-url=file:///…/proxy.pac` | `ERR_NAME_NOT_RESOLVED` (o PAC não é usado: ligação direta) | carrega (direto) | nada | não |
+
+O PAC por `file://` falha **igual sem sandbox** (`--eteris-no-sandbox`, tudo «Not Sandboxed»): o Chromium não usa PAC
+por `file://` aqui; não é do sandbox. Um PAC «por ficheiro local» faz-se com `data:` (como em cima) ou servido por HTTP.
+O proxy em `127.0.0.1` funciona a partir do AppContainer.
+
+**Não testável aqui sem mudar o Windows** (fica para uma máquina de empresa ou uma VM):
+- **proxy do sistema** (definições de proxy do Windows, incluindo a deteção automática WPAD por DHCP/DNS, que nesta rede
+  não existe): o Chromium lê-o no processo principal e entrega a configuração ao serviço de rede, por isso o caminho no
+  AppContainer é o dos casos em cima (proxy explícito e PAC por HTTP); não foi visto ao vivo porque obrigava a mudar as
+  definições do Windows do dono;
+- **autenticação integrada** (NTLM/Negotiate/Kerberos num proxy ou site de domínio): o AppContainer do serviço de rede
+  tem a capacidade `enterpriseAuthentication`, mas não há domínio nem proxy com autenticação nesta máquina.
+
+**Visto de passagem (não é do sandbox, igual com `--eteris-no-sandbox`):** com o proxy à frente aparecem no arranque um
+`GET http://clients2.google.com/time/1/current?cup2key=…` (o relógio de rede do Chromium) e um `CONNECT
+www.google.com:443`, apesar do `disable-background-networking` e do `disable-component-update`. Fica para o `main`
+(candidato: `NetworkTimeServiceQuerying` no `disable-features` e procurar a origem do `www.google.com`).
 
 ## Passo A — resultado (2026-11-07): feito
 

@@ -189,9 +189,19 @@ assinatura) e a CI com o CefSharp próprio. Detalhes, medições e passos em `do
 **Por omissão continua desligado na próxima versão.** O D5 interativo e a prova de atualização pelo Velopack passaram,
 mas ficam pontos em aberto: a release é compilada pela CI, que não tem o CefSharp próprio nem a DLL cliente (ligá-lo
 só numa publicação local tiraria a release do caminho da CI); falta a assinatura conjunta; o serviço de rede no
-AppContainer ainda não foi visto com proxy do sistema nem autenticação integrada; e o processo «GPU / Not Sandboxed»
+AppContainer ainda não foi visto com proxy do sistema nem autenticação integrada (com proxy por argumentos do motor —
+`--proxy-server`, PAC por HTTP e por `data:` — já passou: ramo `rede-seguranca`); e o processo «GPU / Not Sandboxed»
 transitório visto numa sessão longa do D5 está «a vigiar». Depois de fundir, a cópia com `-Sandbox` arranca, isola as
 páginas e passa o mesmo roteiro ao vivo que a publicação normal (secção 1c, «Medição final»).
+
+**Rede de segurança para ligar o sandbox (ramo `rede-seguranca`, para a 0.2.11):** uma falha só com sandbox não deixa o
+Éteris sem abrir (o atualizador está lá dentro). A DLL cliente volta a arrancar o Éteris com `--eteris-no-sandbox` quando
+o .NET não arranca; um marcador no perfil (gravado antes do motor, limpo na 1.ª página ou num fecho normal) e a vigia dos
+filhos nos primeiros 30 s (3 a morrer com código de falha) contam os arranques falhados com sandbox; 2 seguidos desligam-no
+até à versão seguinte, com um aviso na nova aba. Provado ao vivo (queda simulada antes da 1.ª página, renderer + GPU a
+cair por CDP, .NET a falhar só com sandbox numa DLL de teste e numa pasta sem .NET). Fica de fora a falha do próprio
+bootstrap antes da DLL cliente (assinaturas): resolve-a a assinatura conjunta. Detalhes em `docs/sandbox.md`, «Rede de
+segurança do arranque e proxy».
 
 ## 3. Atualizações do motor
 
