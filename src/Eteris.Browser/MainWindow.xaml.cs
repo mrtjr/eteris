@@ -258,9 +258,16 @@ public partial class MainWindow : Window
             }
             mainRequestsAtCommit = requests;
         };
+        var firstLoad = new TaskCompletionSource();
+        _firstLoads.Add(browser, firstLoad);
+        browser.LoadError += (_, e) =>
+        {
+            if (e.Frame.IsMain) firstLoad.TrySetResult();
+        };
         browser.FrameLoadEnd += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            firstLoad.TrySetResult();
             var url = e.Url;
             // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
             if (!e.Browser.IsLoading) injector.Tidy(url);

@@ -19,9 +19,14 @@ public partial class MainWindow
     {
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         if (!_browsers.Remove(tab, out var browser)) return;
-        BrowserHost.Children.Remove(browser);
         PageScript.Release(browser);
-        browser.Dispose();
+        // À vista (a aba ativa fechou): fica por cima até a vizinha apresentar, sem um fotograma vazio pelo meio.
+        if (browser.Visibility == System.Windows.Visibility.Visible && browser.IsBrowserInitialized && IsVisible)
+        {
+            RetirePage(browser);
+            return;
+        }
+        DisposePage(browser);
     }
 
     // Chamado antes de mostrar a nova aba ativa: acorda-a se estava a dormir e marca a anterior.

@@ -115,6 +115,63 @@ testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídi
 `--enable-features=MediaFoundationClearPlayback` só como experiência. Com o motor próprio, a lista `KnownH264Sites`
 (V2) deixa de fazer sentido e sai.
 
+## Troca de abas sem piscar (T1, T2)
+
+Queixa do dono depois do P1/P2: «a tela ainda pisca um pouco, mas está piscando mesmo quando troca de aba ou abre uma
+nova aba». **Medição**: captura do ecrã a 60 fps da janela inteira (`scratchpad/abas/abasrun.ps1` + `swap.py`), 10
+repetições por caso, páginas locais (clara, outra clara, escura `#0d1117`) servidas em `127.0.0.1` e a Wikipédia.
+Fotograma **errado** = a área da página está longe do estado ANTES da ação e do estado DEPOIS (mais de 3 % dos píxeis
+com |ΔL| > 30 em relação a ambos): branco, Mica, fundo vazio ou página por desenhar. A moldura (barras) foi medida
+à parte: 0 fotogramas errados em todos os casos, antes e depois.
+
+**Causas, provadas por A/B** (build de diagnóstico com interruptores; LD = clara↔escura, WW = Wikipédia↔Wikipédia,
+TL = Ctrl+T a partir da clara; fotogramas errados em 10 capturas):
+
+1. **Esconder antes de a nova aba ter desenhado.** A janela da aba que sai escondia-se no mesmo instante em que a da
+   que entra aparecia. Mas a janela de uma aba escondida está minimizada (#1b) e o CefSharp encolhe-a para 0×0 ao
+   esconder (`OnIsVisibleChanged` → `ResizeBrowser(0, 0)`); ao reaparecer, o Chromium tem de voltar a dispor e
+   rasterizar a página e, até apresentar, a janela mostra um fotograma vazio: o branco por baixo (1 fotograma), depois o
+   Mica (a cadeia de apresentação redimensionada ainda vazia, 1–2), e numa página pesada o branco da página por
+   rasterizar (Wikipédia: até 20 fotogramas, ~340 ms). Nenhum dos sintomas desaparece mexendo só numa das peças:
+   não minimizar (LD 14 → 9, WW 204 → 195), manter o tamanho da janela escondida (14 → 14, 204 → 173), mostrar antes de
+   esconder sem esperar (14 → 13, 204 → 206). Com **dupla memória** — a nova aparece POR BAIXO da antiga, e a antiga só
+   se esconde depois de um `requestAnimationFrame` duplo da nova (+34 ms para o DWM) — LD 14 → **0**, WW 204 → 11
+   (2/10; com limite de 300 ms ainda 48, por isso 1 s).
+2. **Aba nova mostrada antes do 1.º documento.** Uma aba acabada de criar só tem, durante ~100–250 ms, o documento
+   vazio inicial (branco) e a seguir a nova aba a meio de se preencher. Esperar pelo `FrameLoadEnd` do 1.º documento
+   antes do rAF duplo: TL 51 → 11 → 3 com a margem de 34 ms (os restantes eram o último fotograma antigo ainda no ecrã).
+   Pintar o fundo do Chromium da cor da página interna (`BrowserSettings.BackgroundColor`) **não** muda nada com a
+   dupla memória (TL 11 → 11, WW 11 → 12): não entra.
+3. **Fechar a aba ativa:** a página fechada era destruída antes de a vizinha estar ativa (o `TabsViewModel` tira a
+   aba da lista primeiro, a ativa passa por `null`). Agora fica, calada, por cima, até a vizinha apresentar (recurso:
+   2 s). XL 20 → 1 (10 capturas).
+4. **Teclado perdido (não é piscar, mas apareceu na medição):** depois de trocar de aba, o foco do Windows ficava na
+   janela minimizada da aba anterior: o 3.º Ctrl+Tab seguido, e qualquer tecla, iam para uma página invisível
+   (2 trocas efetivas em 8 Ctrl+Tab). A página da aba que entra passa a receber o foco, como no Chrome: **8 em 8**.
+
+Avaliado e recusado: `WS_CLIPSIBLINGS` nas janelas das páginas (20 repetições × 4 casos: 4 fotogramas errados com e 4
+sem). CPU de uma aba animada escondida (#1b, 10 s, todos os processos da instância): 4,8 % de 1 núcleo antes → 2,2 %
+depois (à vista: 10,9 → 9,7 %); a aba que sai continua ativa no máximo até a nova apresentar (≤ 1 s, ~150 ms típico).
+
+| Caso (10 capturas) | Tema escuro + Mica: antes → depois | Claro + Mica | Escuro sem Mica | Latência mediana até ao estado final |
+|---|---|---|---|---|
+| Ctrl+Tab clara ↔ clara | 15 (10/10) → **0** | — | — | 108 → 136 ms |
+| Ctrl+Tab clara ↔ escura | 14 (9/10) → **0** | 49 → **0** | 10 → **0** | 109 → 133 ms |
+| Clique na aba clara ↔ escura | 14 (7/10) → **0** | — | — | 289 → 305 ms |
+| Ctrl+Tab clara ↔ nova aba (eteris://) | 44 (10/10) → **0** | 32 → **0** | 28 → **0** | 125 → 132 ms |
+| Ctrl+Tab com a aba escondida há > 10 s | 14 (10/10) → 1 (1/10, Mica) | — | — | 109 → 133 ms |
+| Ctrl+T a partir da clara | 96 (10/10) → **0** | 71 → **0** | 68 → **0** | 245 → 205 ms |
+| Ctrl+T a partir da escura | 99 (10/10) → **0** | 71 → **0** | 71 → **0** | 237 → 207 ms |
+| Botão + | 97 (10/10) → **0** | — | — | 417 → 369 ms |
+| Fechar a aba ativa (a vizinha aparece) | 24 (10/10) → 1 (1/10) | 20 → **0** | 20 → 1 | 121 → 135 ms |
+| Ctrl+Tab Wikipédia ↔ Wikipédia | 204 (10/10; até ~340 ms de branco) → 4 (1/10) | — | — | 379 → 270 ms |
+
+**Resíduo:** 1 fotograma isolado (17 ms) em ~1 de 40 trocas, sem padrão de caso (Mica ou branco, a ~70–90 ms da
+ação, antes de a antiga sair); e a primeira vez que se mostra uma aba pesada aberta em segundo plano (nunca desenhada
+ao tamanho real), o rAF duplo resolve antes de a rasterização acabar e vê-se a página em branco por desenhar até
+~150 ms (WW: 1 captura em 10, a 1.ª). A nova aba preenche-se a si própria (saudação, papel de parede): isso é a
+própria página, não o motor.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -139,3 +196,4 @@ testes locais, nunca publicar sem decisão explícita do dono ou parecer jurídi
 | V2b | Botões do motor de vídeo com nome acessível (`AutomationProperties.Name`: «Tocar no motor de vídeo», «Motor de vídeo: voltar ao motor principal»); a omnibox leva um site do motor de vídeo (lembrado ou da lista) logo para lá, sem o carregar também no motor principal | Ao vivo, por UI Automation: no Reddit, clique em «Tocar no motor de vídeo» → motor de vídeo a arrancar **0,2 s** depois (o Reddit responde ao WebView2 com «blocked by network security»: por isso fica só com o botão); Twitch: «Motor de vídeo» → volta ao motor principal e **2 visitas seguidas** abrem no motor principal (exclusão gravada; a lista embutida não a força); link de uma página para a Twitch VOD / Kick: motor de vídeo **~0,7 s** depois do clique (antes: ~11 s de deteção). Limite: num site excluído, o 1.º documento da aba nem sempre mostra o botão (o leitor da Twitch não deixa sinais depois do carregamento); o menu da página tem sempre «Tocar no motor de vídeo» |
 | C1 | Motor com codecs da plataforma preparado no repositório, sem compilar (decisão do dono): alvos MSBuild condicionais que trocam o runtime completo da CEF por `build/cef-codecs/out/runtime`, `publish.ps1` a recusar tudo o que não seja o modo `platform-codecs` do commit `cf671c0` (com SHA256 por ficheiro), `collect.py` com os créditos do runtime que vai de facto, `.gitignore`, testes; secção «Motor com codecs» acima | Sem a pasta: saída igual (nada copiado). Com um runtime falso: `libcef.dll`, `locales\` e avisos (`licenses\cef-codecs`) substituídos, `manifest.json` fora; `publish.ps1`: modo `chrome` → recusado; versão errada → recusada |
 | D1 | Fecho: suite completa (1374 testes), medição final comparada com a base e o «puro», `CHANGELOG.md` (secção por publicar, sem versão nem tag), `docs/paridade.md` (secção 1b) | Tabela «Resultado» no topo deste ficheiro |
+| T1 | Troca de abas, aba nova e fecho da aba ativa sem fotograma vazio («dupla memória», `Browser/PageSwap.cs`): a página que entra aparece por baixo da que sai; a que sai só se esconde depois de a nova apresentar (rAF duplo pelo DevTools + 34 ms; uma aba nova espera primeiro pelo fim do 1.º documento; limite 1 s); a página de uma aba fechada que estava à vista fica, calada, até a vizinha aparecer | Fotogramas errados em 10 capturas (tema escuro + Mica): Ctrl+Tab clara↔escura 14 → **0**, Wikipédia 204 → 4, Ctrl+T 96 → **0**, botão + 97 → **0**, fechar a ativa 24 → 1; tema claro e sem Mica: todos → 0–1 (secção «Troca de abas sem piscar») |
