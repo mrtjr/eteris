@@ -307,6 +307,7 @@ public partial class MainWindow : Window
                 // 1.º documento da aba (nasceu sem os scripts precoces) ou qualquer outro: a deteção de vídeo que não
                 // toca corre agora; se o script precoce já corre na página, não faz nada.
                 if (VideoEngine.CanHost(url)) PageScript.Run(browser, VideoEngine.LateWatchScript);
+                else _ = ProbePlatformCodecsAsync(browser, url);
             });
             if (e.HttpStatusCode is <= 0 or >= 400) return;
             // A página do auto-teste é do próprio Éteris: não entra no histórico.

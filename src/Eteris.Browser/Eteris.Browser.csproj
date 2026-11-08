@@ -61,8 +61,11 @@
   <!-- Motor com codecs da plataforma (docs/motor.md, «Motor com codecs»): quando existe a compilação própria da CEF
        156.0.15 (mesmo commit da do NuGet, por isso o CefSharp 156.0.150 não muda), o runtime COMPLETO (libcef, paks,
        icudtl, snapshot V8, chrome_elf, d3dcompiler, dxcompiler, swiftshader, vulkan, locales) substitui o do NuGet na
-       saída, depois de compilar e de publicar. Os avisos de licença dela vão para licenses\cef-codecs. Sem a pasta
-       (build/cef-codecs/out/runtime com libcef.dll e manifest.json), nada muda. -->
+       saída, depois de compilar e de publicar. Os avisos de licença dela vão para licenses\cef-codecs, com o
+       manifest.json (proveniência da compilação, e a marca que Tabs/PlatformCodecs.cs procura para saber que o motor
+       pode ter codecs). Sem a pasta (build/cef-codecs/out/runtime com libcef.dll e manifest.json), nada muda.
+       O bootstrap.exe/bootstrapc.exe (arranque dos processos filhos pelo sandbox do Chromium, docs/sandbox.md passo D)
+       ainda não é usado pelo Éteris: fica fora da saída até esse passo. -->
   <PropertyGroup>
     <EterisCefRuntime>$(MSBuildThisFileDirectory)..\..\build\cef-codecs\out\runtime</EterisCefRuntime>
     <EterisCefRuntimeOn Condition="Exists('$(EterisCefRuntime)\libcef.dll') And Exists('$(EterisCefRuntime)\manifest.json')">true</EterisCefRuntimeOn>
@@ -70,8 +73,8 @@
 
   <Target Name="EterisCefRuntimeItems" Condition="'$(EterisCefRuntimeOn)' == 'true'">
     <ItemGroup>
-      <_EterisCefFile Include="$(EterisCefRuntime)\**\*" Exclude="$(EterisCefRuntime)\manifest.json;$(EterisCefRuntime)\licenses\**" />
-      <_EterisCefLicense Include="$(EterisCefRuntime)\licenses\**\*" />
+      <_EterisCefFile Include="$(EterisCefRuntime)\**\*" Exclude="$(EterisCefRuntime)\manifest.json;$(EterisCefRuntime)\licenses\**;$(EterisCefRuntime)\bootstrap.exe;$(EterisCefRuntime)\bootstrapc.exe" />
+      <_EterisCefLicense Include="$(EterisCefRuntime)\licenses\**\*;$(EterisCefRuntime)\manifest.json" />
     </ItemGroup>
   </Target>
 

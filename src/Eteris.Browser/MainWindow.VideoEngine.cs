@@ -14,7 +14,8 @@ namespace Eteris.Browser;
 
 // Abas no motor de vídeo (WebView2, o motor do Edge que vem com o Windows): para os sites que só têm vídeo em
 // H.264/AAC, formatos patenteados que o motor principal não traz. A aba continua a ser uma aba do Éteris — mesma
-// barra, mesmo bloqueador, mesma sessão —; só o motor por baixo muda. Ver Tabs/VideoEngine.cs.
+// barra, mesmo bloqueador, mesma sessão —; só o motor por baixo muda. Ver Tabs/VideoEngine.cs. Com o motor com codecs
+// da plataforma (Tabs/PlatformCodecs.cs) o motor principal toca-os e isto fica só para quando ele responde «não».
 //
 // Usa o controlo WebView2 (janela nativa) e não o WebView2CompositionControl: este último precisa da projeção do
 // Windows SDK (Microsoft.Windows.SDK.NET.dll), cuja licença exige impor termos aos utilizadores e proíbe licenças
@@ -48,10 +49,24 @@ public partial class MainWindow
         => IsPrivate ? _privateVideoOptOut.Contains(TrackerBlocker.RegistrableDomain(host.ToLowerInvariant())) || AppData.IsVideoOptOut(host)
             : AppData.IsVideoOptOut(host);
 
-    // Abre no motor de vídeo: site lembrado, ou da lista embutida de sites só em H.264, e não excluído pelo utilizador.
+    // Abre no motor de vídeo: site lembrado, ou da lista embutida de sites só em H.264 (sem codecs no motor principal),
+    // e não excluído pelo utilizador.
     private bool IsVideoSite(string? url)
-        => VideoEngine.CanHost(url) && WebHost(url) is { } host
-           && VideoEngine.OpensInVideoEngine(TrackerBlocker.RegistrableDomain(host.ToLowerInvariant()), AppData.IsVideoSite(host), IsVideoOptOut(host));
+    {
+        if (!VideoEngine.CanHost(url) || WebHost(url) is not { } host) return false;
+        var codecs = PlatformCodecs.MainHasCodecs;
+        return VideoEngine.OpensInVideoEngine(TrackerBlocker.RegistrableDomain(host.ToLowerInvariant()), AppData.IsVideoSite(host, codecs),
+            IsVideoOptOut(host), codecs);
+    }
+
+    // Sonda única por sessão (Tabs/PlatformCodecs.cs): só com a compilação própria do motor, na 1.ª página interna que
+    // acabar de carregar. Se o motor disser «não» ao H.264/AAC, tudo volta a ser como no motor sem codecs.
+    private static async Task ProbePlatformCodecsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    {
+        if (!PlatformCodecs.TryStartProbe(url)) return;
+        var answer = await PageScript.EvaluateAsync(browser, PlatformCodecs.ProbeScript, TimeSpan.FromSeconds(2));
+        PlatformCodecs.Record(answer.Success, answer.Result);
+    }
 
     // Chamado por CreateBrowser: a aba já estava no motor de vídeo (sessão, a acordar) ou o site está lembrado.
     private bool TryCreateVideoView(BrowserTab tab)
@@ -273,11 +288,12 @@ public partial class MainWindow
     {
         if (!_browsers.ContainsKey(tab) || _videoViews.ContainsKey(tab) || !VideoEngine.CanHost(pageUrl)
             || WebHost(pageUrl) is not { } host || !string.Equals(tab.Address, pageUrl, StringComparison.Ordinal)) return;
-        switch (VideoEngine.Decide(report, IsVideoOptOut(host), TrackerBlocker.RegistrableDomain(host.ToLowerInvariant())))
+        var codecs = PlatformCodecs.MainHasCodecs;
+        switch (VideoEngine.Decide(report, IsVideoOptOut(host), TrackerBlocker.RegistrableDomain(host.ToLowerInvariant()), codecs))
         {
             case VideoEngine.Decision.Switch:
                 // Numa janela privada o site não é lembrado: a lista ficaria em disco depois de a janela fechar.
-                if (!IsPrivate) AppData.SetVideoSite(host, true);
+                if (!IsPrivate) AppData.SetVideoSite(host, true, codecs);
                 SwitchToVideoEngine(tab, pageUrl);
                 ShowToast($"O vídeo de {TrackerBlocker.RegistrableDomain(host)} usa H.264 — esta aba passou para o motor de vídeo");
                 break;
@@ -301,7 +317,7 @@ public partial class MainWindow
         else
         {
             AppData.SetVideoOptOut(host, false);
-            AppData.SetVideoSite(host, true);
+            AppData.SetVideoSite(host, true, PlatformCodecs.MainHasCodecs);
         }
         tab.VideoOffer = null;
         SwitchToVideoEngine(tab, tab.Address);

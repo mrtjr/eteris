@@ -15,7 +15,7 @@ public sealed class StrictSiteStore
     private readonly bool _exactHost;
     private readonly Func<string, string>? _siteOf;
 
-    // A tabela é uma constante interna (strict_sites, dark_sites, video_sites, video_sites_off, http_sites), nunca texto
+    // A tabela é uma constante interna (strict_sites, dark_sites, video_sites, video_sites_codecs, video_sites_off, http_sites), nunca texto
     // vindo de fora.
     // siteOf: outra regra para a chave (a lista «esquecer ao fechar» usa o site do SiteScope, pela Public Suffix List).
     public StrictSiteStore(string path, string table = "strict_sites", bool exactHost = false, Func<string, string>? siteOf = null)

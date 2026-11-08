@@ -13,6 +13,8 @@ public class VideoEngineTests
     [InlineData("\u0001eteris-media outra", false)]
     [InlineData("\u0001eteris-media format forte top", false)]
     [InlineData("\u0001eteris-media format strong top extra", false)]
+    [InlineData("\u0001eteris-media format strong top no", true)]
+    [InlineData("\u0001eteris-media format strong top no extra", false)]
     [InlineData("eteris-media format", false)]
     [InlineData(null, false)]
     public void IsReport_OnlyKnownReasons(string? message, bool expected) => Assert.Equal(expected, VideoEngine.IsReport(message));
@@ -23,6 +25,38 @@ public class VideoEngineTests
     [InlineData("format", "format", true, false)] // formato antigo: forte, no topo
     public void Parse_ReadsReasonStrengthAndOrigin(string body, string reason, bool strong, bool frame)
         => Assert.Equal(new VideoEngine.VideoReport(reason, strong, frame), VideoEngine.Parse(VideoEngine.ReportPrefix + body));
+
+    [Fact]
+    public void Parse_ReadsWhetherTheEngineSaidNo()
+    {
+        Assert.True(VideoEngine.Parse(VideoEngine.ReportPrefix + "patented-only strong top no")!.EngineSaidNo);
+        Assert.False(VideoEngine.Parse(VideoEngine.ReportPrefix + "patented-only strong top")!.EngineSaidNo);
+        Assert.Null(VideoEngine.Parse(VideoEngine.ReportPrefix + "format strong top sim"));
+    }
+
+    // Motor com codecs (Tabs/PlatformCodecs.cs): só conta o aviso de um motor que respondeu «não» ao H.264/AAC.
+    [Theory]
+    [InlineData("format", true, false, false, VideoEngine.Decision.None)]          // MP4 estragado: não é o formato
+    [InlineData("patented-only", true, false, false, VideoEngine.Decision.None)]
+    [InlineData("frame-player", false, false, false, VideoEngine.Decision.None)]   // o leitor do Vimeo toca no motor principal
+    [InlineData("drm", true, false, false, VideoEngine.Decision.Offer)]            // DRM: continua a ser uma pergunta
+    [InlineData("format", true, false, true, VideoEngine.Decision.Switch)]         // sem GPU: o motor disse «não»
+    [InlineData("format", false, false, true, VideoEngine.Decision.Offer)]
+    [InlineData("frame-player", false, false, true, VideoEngine.Decision.Offer)]
+    [InlineData("format", true, true, true, VideoEngine.Decision.Offer)]           // o utilizador mandou o site voltar
+    public void Decide_WithPlatformCodecs_OnlyWhenTheEngineSaidNo(string reason, bool strong, bool optedOut, bool saidNo,
+        VideoEngine.Decision expected)
+    {
+        var decision = VideoEngine.Decide(new VideoEngine.VideoReport(reason, strong, false, saidNo), optedOut, mainHasCodecs: true);
+        Assert.Equal(expected, decision);
+    }
+
+    [Fact]
+    public void Decide_WithoutPlatformCodecs_IgnoresWhetherTheEngineSaidNo()
+    {
+        foreach (var saidNo in new[] { false, true })
+            Assert.Equal(VideoEngine.Decision.Switch, VideoEngine.Decide(new VideoEngine.VideoReport("format", true, false, saidNo), false));
+    }
 
     [Theory]
     [InlineData("format", true, false, false, VideoEngine.Decision.Switch)]
@@ -51,6 +85,39 @@ public class VideoEngineTests
     [InlineData("reddit.com", false, false, false)]  // misto: reCAPTCHA no motor de vídeo
     public void OpensInVideoEngine_KnownSitesUnlessOptedOut(string site, bool remembered, bool optedOut, bool expected)
         => Assert.Equal(expected, VideoEngine.OpensInVideoEngine(site, remembered, optedOut));
+
+    // Com codecs no motor principal, a lista embutida deixa de abrir sites no motor de vídeo; o que o utilizador
+    // lembrou nesse modo (lista própria em AppData) continua a valer.
+    [Theory]
+    [InlineData("twitch.tv", false, false, false)]
+    [InlineData("vimeo.com", false, false, false)]
+    [InlineData("tiktok.com", false, false, false)]
+    [InlineData("exemplo.pt", true, false, true)]
+    [InlineData("twitch.tv", true, true, false)]
+    public void OpensInVideoEngine_WithPlatformCodecs_IgnoresTheBuiltInList(string site, bool remembered, bool optedOut, bool expected)
+        => Assert.Equal(expected, VideoEngine.OpensInVideoEngine(site, remembered, optedOut, mainHasCodecs: true));
+
+    [Fact]
+    public void WatchScript_SaysWhenTheEngineItselfRefusesH264OrAac()
+    {
+        // A pergunta do próprio script usa a função original (guardada antes de a envolver) e os mesmos perfis da sonda.
+        var script = VideoEngine.WatchScript;
+        Assert.Contains("const nativeSupported = window.MediaSource && MediaSource.isTypeSupported;", script);
+        Assert.Contains("engineSays('video/mp4; codecs=\"avc1.640028\"')", script);
+        Assert.Contains("engineSays('audio/mp4; codecs=\"mp4a.40.2\"')", script);
+        Assert.True(script.IndexOf("const nativeSupported", StringComparison.Ordinal) < script.IndexOf("type.isTypeSupported = function", StringComparison.Ordinal));
+        Assert.Contains("+ said);", script);
+    }
+
+    [Fact]
+    public void WatchScript_CatchesTheVideoThatPlaysOnlyTheSound()
+    {
+        // Compilação própria sem descodificação por hardware: a faixa H.264 de um MP4 é descartada sem erro.
+        var script = VideoEngine.WatchScript;
+        Assert.Contains("v.readyState >= 1 && v.videoWidth === 0", script);
+        Assert.Contains("&& lacksVideo();", script);
+        Assert.Contains("if (noPicture(m)) return report('format', strength(m));", script);
+    }
 
     [Fact]
     public void WatchScript_DoesNotCountHevcProbesAsPatented()

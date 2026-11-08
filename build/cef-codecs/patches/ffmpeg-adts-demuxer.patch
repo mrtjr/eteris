@@ -1,0 +1,115 @@
+diff --git a/chromium/config/Chromium/win/x64/config.asm b/chromium/config/Chromium/win/x64/config.asm
+index 1aeac50..1ac5b3b 100644
+--- a/chromium/config/Chromium/win/x64/config.asm
++++ b/chromium/config/Chromium/win/x64/config.asm
+@@ -717,7 +717,7 @@
+ %define CONFIG_PROTOCOLS 0
+ %define CONFIG_AANDCTTABLES 0
+ %define CONFIG_AC3DSP 0
+-%define CONFIG_ADTS_HEADER 0
++%define CONFIG_ADTS_HEADER 1
+ %define CONFIG_ATSC_A53 0
+ %define CONFIG_AUDIO_FRAME_QUEUE 0
+ %define CONFIG_AUDIODSP 0
+diff --git a/chromium/config/Chromium/win/x64/config.h b/chromium/config/Chromium/win/x64/config.h
+index 00092de..98909a3 100644
+--- a/chromium/config/Chromium/win/x64/config.h
++++ b/chromium/config/Chromium/win/x64/config.h
+@@ -731,7 +731,7 @@
+ #define CONFIG_PROTOCOLS 0
+ #define CONFIG_AANDCTTABLES 0
+ #define CONFIG_AC3DSP 0
+-#define CONFIG_ADTS_HEADER 0
++#define CONFIG_ADTS_HEADER 1
+ #define CONFIG_ATSC_A53 0
+ #define CONFIG_AUDIO_FRAME_QUEUE 0
+ #define CONFIG_AUDIODSP 0
+diff --git a/chromium/config/Chromium/win/x64/config_components.asm b/chromium/config/Chromium/win/x64/config_components.asm
+index 273352a..4ab0149 100644
+--- a/chromium/config/Chromium/win/x64/config_components.asm
++++ b/chromium/config/Chromium/win/x64/config_components.asm
+@@ -1014,7 +1014,7 @@
+ %define CONFIG_WMV3_NVDEC_CUARRAY_HWACCEL 0
+ %define CONFIG_WMV3_VAAPI_HWACCEL 0
+ %define CONFIG_WMV3_VDPAU_HWACCEL 0
+-%define CONFIG_AAC_PARSER 0
++%define CONFIG_AAC_PARSER 1
+ %define CONFIG_AAC_LATM_PARSER 0
+ %define CONFIG_AC3_PARSER 0
+ %define CONFIG_ADX_PARSER 0
+@@ -1707,7 +1707,7 @@
+ %define CONFIG_AMOVIE_FILTER 0
+ %define CONFIG_MOVIE_FILTER 0
+ %define CONFIG_AA_DEMUXER 0
+-%define CONFIG_AAC_DEMUXER 0
++%define CONFIG_AAC_DEMUXER 1
+ %define CONFIG_AAX_DEMUXER 0
+ %define CONFIG_AC3_DEMUXER 0
+ %define CONFIG_AC4_DEMUXER 0
+diff --git a/chromium/config/Chromium/win/x64/config_components.h b/chromium/config/Chromium/win/x64/config_components.h
+index 6d7d59f..68884b8 100644
+--- a/chromium/config/Chromium/win/x64/config_components.h
++++ b/chromium/config/Chromium/win/x64/config_components.h
+@@ -1016,7 +1016,7 @@
+ #define CONFIG_WMV3_NVDEC_CUARRAY_HWACCEL 0
+ #define CONFIG_WMV3_VAAPI_HWACCEL 0
+ #define CONFIG_WMV3_VDPAU_HWACCEL 0
+-#define CONFIG_AAC_PARSER 0
++#define CONFIG_AAC_PARSER 1
+ #define CONFIG_AAC_LATM_PARSER 0
+ #define CONFIG_AC3_PARSER 0
+ #define CONFIG_ADX_PARSER 0
+@@ -1709,7 +1709,7 @@
+ #define CONFIG_AMOVIE_FILTER 0
+ #define CONFIG_MOVIE_FILTER 0
+ #define CONFIG_AA_DEMUXER 0
+-#define CONFIG_AAC_DEMUXER 0
++#define CONFIG_AAC_DEMUXER 1
+ #define CONFIG_AAX_DEMUXER 0
+ #define CONFIG_AC3_DEMUXER 0
+ #define CONFIG_AC4_DEMUXER 0
+diff --git a/chromium/config/Chromium/win/x64/libavcodec/parser_list.c b/chromium/config/Chromium/win/x64/libavcodec/parser_list.c
+index dddcf25..e5475bf 100644
+--- a/chromium/config/Chromium/win/x64/libavcodec/parser_list.c
++++ b/chromium/config/Chromium/win/x64/libavcodec/parser_list.c
+@@ -1,4 +1,5 @@
+ static const FFCodecParser * const parser_list[] = {
++    &ff_aac_parser,
+     &ff_flac_parser,
+     &ff_mpegaudio_parser,
+     &ff_opus_parser,
+diff --git a/chromium/config/Chromium/win/x64/libavformat/demuxer_list.c b/chromium/config/Chromium/win/x64/libavformat/demuxer_list.c
+index 570a644..29f1f59 100644
+--- a/chromium/config/Chromium/win/x64/libavformat/demuxer_list.c
++++ b/chromium/config/Chromium/win/x64/libavformat/demuxer_list.c
+@@ -1,4 +1,5 @@
+ static const FFInputFormat * const demuxer_list[] = {
++    &ff_aac_demuxer,
+     &ff_flac_demuxer,
+     &ff_matroska_demuxer,
+     &ff_mov_demuxer,
+diff --git a/ffmpeg_generated.gni b/ffmpeg_generated.gni
+index 6dd28da..cfe7cc8 100644
+--- a/ffmpeg_generated.gni
++++ b/ffmpeg_generated.gni
+@@ -411,6 +411,20 @@ if (((current_cpu == "arm64" || current_cpu == "arm64e") &&
+   ]
+ }
+ 
++# Eteris platform-codecs: ADTS demuxer and AAC parser (container parsing only,
++# no AAC decoder) for the Chromium branding on Windows x64. AAC is decoded by
++# the Windows Media Foundation AAC decoder (see //media).
++if (is_win && current_cpu == "x64" && ffmpeg_branding == "Chromium") {
++  ffmpeg_c_sources += [
++    "libavcodec/aac_ac3_parser.c",
++    "libavcodec/aac_parser.c",
++    "libavcodec/adts_header.c",
++    "libavformat/apetag.c",
++    "libavformat/autorename_libavformat_aacdec.c",
++    "libavformat/img2.c",
++  ]
++}
++
+ if (current_cpu == "x64" || (is_win && current_cpu == "x86") ||
+     (use_linux_config && current_cpu == "x86")) {
+   ffmpeg_c_sources += [

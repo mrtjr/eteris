@@ -522,21 +522,34 @@ public static class AppData
         catch (Exception) { }
     }
 
-    // Sites que abrem no motor de vídeo (precisam de H.264/AAC).
+    // Sites que abrem no motor de vídeo (precisam de H.264/AAC). Duas listas: a do motor principal sem codecs, e a do
+    // motor com codecs da plataforma (Tabs/PlatformCodecs.cs) — os sites lembrados só por faltarem os codecs não devem
+    // continuar a sair do motor principal quando ele os passa a ter; desligar um site tira-o das duas.
     private static readonly Lazy<StrictSiteStore?> LazyVideo = new(() =>
     {
         try { return new StrictSiteStore(AppPaths.Database, "video_sites"); }
         catch (Exception) { return null; }
     });
 
-    public static bool IsVideoSite(string host) => LazyVideo.Value?.Contains(host) == true;
+    private static readonly Lazy<StrictSiteStore?> LazyVideoWithCodecs = new(() =>
+    {
+        try { return new StrictSiteStore(AppPaths.Database, "video_sites_codecs"); }
+        catch (Exception) { return null; }
+    });
 
-    public static void SetVideoSite(string host, bool on)
+    public static bool IsVideoSite(string host, bool platformCodecs = false)
+        => (platformCodecs ? LazyVideoWithCodecs : LazyVideo).Value?.Contains(host) == true;
+
+    public static void SetVideoSite(string host, bool on, bool platformCodecs = false)
     {
         try
         {
-            if (on) LazyVideo.Value?.Add(host);
-            else LazyVideo.Value?.Remove(host);
+            if (on) (platformCodecs ? LazyVideoWithCodecs : LazyVideo).Value?.Add(host);
+            else
+            {
+                LazyVideo.Value?.Remove(host);
+                LazyVideoWithCodecs.Value?.Remove(host);
+            }
         }
         catch (Exception) { }
     }

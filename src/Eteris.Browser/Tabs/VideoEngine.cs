@@ -2,9 +2,11 @@ using Microsoft.Web.WebView2.Core;
 
 namespace Eteris.Browser.Tabs;
 
-// Motor de vídeo: o motor principal do Éteris não traz os formatos patenteados H.264/AAC (licenças de patentes).
-// Para os sites que só os usam (o Twitch, por exemplo), a aba passa a usar o WebView2 — o motor do Edge que vem
-// com o Windows e já tem essas licenças —, dentro do próprio Éteris. O site fica lembrado.
+// Motor de vídeo: o motor principal do Éteris (runtime do NuGet) não traz os formatos patenteados H.264/AAC (licenças
+// de patentes). Para os sites que só os usam (o Twitch, por exemplo), a aba passa a usar o WebView2 — o motor do Edge
+// que vem com o Windows e já tem essas licenças —, dentro do próprio Éteris. O site fica lembrado.
+// Com o motor com codecs da plataforma (Tabs/PlatformCodecs.cs), o motor principal toca-os pelo Windows e o motor de
+// vídeo passa a ser só o recurso: quando o próprio motor responde «não» (sem descodificação por hardware, Windows N).
 public static class VideoEngine
 {
     public const string ReportPrefix = "\u0001eteris-media ";
@@ -24,6 +26,12 @@ public static class VideoEngine
     //  - no topo: um leitor conhecido de outro site num iframe (Vimeo, Dailymotion, Brightcove…) → «frame-player».
     // HEVC/Dolby Vision (hvc1/hev1/dvh1) não contam: quase todos os leitores sondam-nos sem precisar deles (o Twitch
     // offline trocava de motor só por isso). O YouTube liga o vídeo em AV1/VP9 e não é sinalizado.
+    //  - motor com codecs sem H.264 (sem descodificação por hardware): o FFmpeg descarta em silêncio a faixa de vídeo
+    //    de um MP4 progressivo e toca só o som — um <video> de MP4/MOV com metadados, sem imagem (videoWidth 0), e o
+    //    motor a dizer «não» ao avc1.
+    // Cada aviso diz no fim («no») se o motor deste documento respondeu «não» ao H.264/AAC: à página (isTypeSupported,
+    // canPlayType, addSourceBuffer) ou à pergunta do próprio script, com a função original guardada no arranque. Com
+    // o motor com codecs, só esses avisos contam (Decide).
     // «strong» = vídeo relevante (visível, ≥ 200×110 ou ≥ 30 000 px², não é um fundo mudo em ciclo sem controlos) ou
     // som pedido com play(); o resto é «weak». O console.debug é guardado logo no arranque (o g1 substitui-o).
     public const string WatchScript = """
@@ -37,17 +45,24 @@ public static class VideoEngine
           const needed = /avc1|avc3|mp4a|h264|aac/i;
           const sourceType = /mp4|m4v|m4a|quicktime|aac|mpegurl|avc1|avc3|mp4a/i;
           const sourceExt = /\.(mp4|m4v|mov|m4a|aac|m3u8)(?:$|[?#])/i;
+          const pictureType = /video\/(mp4|quicktime|x-m4v)|mpegurl|avc1|avc3/i;
+          const pictureExt = /\.(mp4|m4v|mov|m3u8)(?:$|[?#])/i;
           const playerHosts = /^(player\.vimeo\.com|geo\.dailymotion\.com|www\.dailymotion\.com|players\.brightcove\.net|cdn\.jwplayer\.com|content\.jwplatform\.com|player\.twitch\.tv|clips\.twitch\.tv|fast\.wistia\.net)$/i;
           const messages = ['player error', 'manifestincompatiblecodecs', 'não é possível reproduzir este vídeo', 'navegador não compatível',
             'navegador não é compatível', 'browser is not supported', 'unsupported browser', 'format is not supported',
             'format not supported', 'formato não suportado', 'no compatible source'];
           let rejected = false, drmRejected = false, attached = false, reported = false, timer = 0;
           const tried = new WeakSet(), played = new WeakSet(), watched = new WeakSet();
+          const nativeSupported = window.MediaSource && MediaSource.isTypeSupported;
+          const engineSays = mime => { try { return !!nativeSupported.call(MediaSource, mime); } catch (e) { return true; } };
+          const lacksVideo = () => !engineSays('video/mp4; codecs="avc1.640028"');
+          const lacksAudio = () => !engineSays('audio/mp4; codecs="mp4a.40.2"');
           const report = (reason, strength) => {
             if (reported) return;
             if (drmRejected && !rejected && reason !== 'frame-player') reason = 'drm';
             reported = true;
-            try { debug('\u0001eteris-media ' + reason + ' ' + strength + ' ' + (inFrame ? 'frame' : 'top')); } catch (e) {}
+            const said = rejected || lacksVideo() || lacksAudio() ? ' no' : '';
+            try { debug('\u0001eteris-media ' + reason + ' ' + strength + ' ' + (inFrame ? 'frame' : 'top') + said); } catch (e) {}
           };
           const visible = el => {
             const b = el.getBoundingClientRect();
@@ -87,6 +102,10 @@ public static class VideoEngine
             watched.add(el);
             el.addEventListener('error', onError, true);
           };
+          const noPicture = v => v instanceof HTMLVideoElement && v.readyState >= 1 && v.videoWidth === 0 && !v.srcObject
+            && !!v.currentSrc && !v.currentSrc.startsWith('blob:')
+            && (pictureExt.test(v.currentSrc) || [...v.querySelectorAll('source')].some(s => pictureType.test(s.getAttribute('type') || '')))
+            && lacksVideo();
           const stuck = v => v.readyState === 0 && !v.srcObject
             && (!v.currentSrc || v.currentSrc.startsWith('blob:'))
             && (v.networkState !== 0 || v.getAttribute('src') || v.autoplay || tried.has(v))
@@ -104,6 +123,7 @@ public static class VideoEngine
                 watch(m);
                 if (m.error && m.error.code === 4) return report('format', strength(m));
                 if (m.networkState === 3 && m.readyState === 0 && !m.getAttribute('src') && needsPatented(m)) return report('format', strength(m));
+                if (noPicture(m)) return report('format', strength(m));
               }
               const videos = media.filter(v => v instanceof HTMLVideoElement);
               const parked = videos.filter(stuck);
@@ -201,23 +221,25 @@ public static class VideoEngine
     public const string LateWatchScript = "(() => { const __eterisLate = true;\n" + WatchScript + "\n})();";
 
     // Motivo do aviso: format (o formato falhou), patented-only (só pediu H.264/AAC e ficou parado), drm (conteúdo
-    // protegido), frame-player (leitor conhecido de outro site num iframe).
-    public sealed record VideoReport(string Reason, bool Strong, bool FromFrame);
+    // protegido), frame-player (leitor conhecido de outro site num iframe). EngineSaidNo: o motor deste documento
+    // respondeu «não» ao H.264/AAC.
+    public sealed record VideoReport(string Reason, bool Strong, bool FromFrame, bool EngineSaidNo = false);
 
     private static readonly string[] Reasons = ["format", "patented-only", "drm", "frame-player"];
 
     public static bool IsReport(string? message) => Parse(message) is not null;
 
-    // «razão [força] [origem]». O formato antigo (só a razão) conta como forte, no topo.
+    // «razão [força] [origem] [no]». O formato antigo (só a razão) conta como forte, no topo.
     public static VideoReport? Parse(string? message)
     {
         if (message is null || !message.StartsWith(ReportPrefix, StringComparison.Ordinal)) return null;
         var parts = message[ReportPrefix.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length is 0 or > 3 || !Reasons.Contains(parts[0])) return null;
+        if (parts.Length is 0 or > 4 || !Reasons.Contains(parts[0])) return null;
         var strength = parts.Length > 1 ? parts[1] : "strong";
         var origin = parts.Length > 2 ? parts[2] : "top";
         if (strength is not ("strong" or "weak") || origin is not ("top" or "frame")) return null;
-        return new VideoReport(parts[0], strength == "strong", origin == "frame");
+        if (parts.Length > 3 && parts[3] != "no") return null;
+        return new VideoReport(parts[0], strength == "strong", origin == "frame", parts.Length > 3);
     }
 
     public enum Decision { None, Offer, Switch }
@@ -225,9 +247,14 @@ public static class VideoEngine
     // O que a janela faz com um aviso: trocar sozinha só com um sinal forte no próprio documento de topo e nunca com DRM
     // (o CDM fala com servidores de terceiros: só depois de o utilizador escolher). Um site que o utilizador mandou
     // voltar ao motor principal nunca troca sozinho — fica só o botão.
-    public static Decision Decide(VideoReport report, bool optedOut, string? site = null)
+    // mainHasCodecs (Tabs/PlatformCodecs.cs): o motor principal toca H.264/AAC — um erro de vídeo, um leitor parado ou um
+    // leitor noutro iframe já não querem dizer «formato patenteado», a não ser que o motor tenha respondido «não»
+    // (EngineSaidNo); nesse caso vale tudo como no motor sem codecs. O DRM continua a ser só uma pergunta.
+    public static Decision Decide(VideoReport report, bool optedOut, string? site = null, bool mainHasCodecs = false)
     {
-        if (report.Reason is "drm" or "frame-player") return Decision.Offer;
+        if (report.Reason is "drm") return Decision.Offer;
+        if (mainHasCodecs && !report.EngineSaidNo) return Decision.None;
+        if (report.Reason is "frame-player") return Decision.Offer;
         if (!report.Strong || report.FromFrame || optedOut) return Decision.Offer;
         if (site is not null && OfferOnlySites.Contains(site)) return Decision.Offer;
         return Decision.Switch;
@@ -238,16 +265,19 @@ public static class VideoEngine
     public static readonly IReadOnlySet<string> OfferOnlySites = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reddit.com" };
 
     // Sites sobretudo de vídeo e só em H.264 (medido: docs/motor.md, V2): abrem logo no motor de vídeo, sem passar pelo
-    // motor principal, até haver um motor com codecs. Por domínio registável. Os mistos (X, Reddit, g1, BBC, YouTube)
-    // ficam de fora: perderiam a cosmética do Escudo, e o Reddit pede reCAPTCHA no motor de vídeo.
+    // motor principal, quando o motor principal não tem codecs (runtime do NuGet, ou a sonda de PlatformCodecs disse
+    // «não»). Por domínio registável. Os mistos (X, Reddit, g1, BBC, YouTube) ficam de fora: perderiam a cosmética do
+    // Escudo, e o Reddit pede reCAPTCHA no motor de vídeo.
     public static readonly IReadOnlySet<string> KnownH264Sites = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "twitch.tv", "kick.com", "vimeo.com", "dailymotion.com", "tiktok.com", "instagram.com",
     };
 
-    // Abre no motor de vídeo: lembrado pelo utilizador, ou na lista embutida — nunca um site que ele mandou voltar.
-    public static bool OpensInVideoEngine(string site, bool remembered, bool optedOut)
-        => !optedOut && (remembered || KnownH264Sites.Contains(site));
+    // Abre no motor de vídeo: lembrado, ou na lista embutida se o motor principal não tem codecs — nunca um site que o
+    // utilizador mandou voltar. Com codecs, «lembrado» é a lista própria desse modo (AppData.IsVideoSite): os sites
+    // lembrados quando faltavam os codecs não contam.
+    public static bool OpensInVideoEngine(string site, bool remembered, bool optedOut, bool mainHasCodecs = false)
+        => !optedOut && (remembered || (!mainHasCodecs && KnownH264Sites.Contains(site)));
 
     // Argumentos do motor do Edge: sem SmartScreen (enviaria os endereços visitados à Microsoft), sem a interface
     // do Office nos PDFs, sem tráfego de fundo, sem pings de auditoria de links e sem o «component updater» (no

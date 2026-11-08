@@ -30,6 +30,37 @@ public class CefCodecsRuntimeTests
         }
     }
 
+    // O bootstrap.exe/bootstrapc.exe (sandbox, passo D) ainda não é usado: não vai na saída. O manifesto vai para junto
+    // dos avisos de licença: é a marca que Tabs/PlatformCodecs.cs procura.
+    [Fact]
+    public void RuntimeSwap_LeavesOutTheBootstrapAndShipsTheManifestWithTheLicenses()
+    {
+        var items = Project().Descendants("Target").Single(t => t.Attribute("Name")?.Value == "EterisCefRuntimeItems");
+        var file = items.Descendants("_EterisCefFile").Single().Attribute("Exclude")!.Value;
+        Assert.Contains(@"$(EterisCefRuntime)\bootstrap.exe", file);
+        Assert.Contains(@"$(EterisCefRuntime)\bootstrapc.exe", file);
+        Assert.Contains(@"$(EterisCefRuntime)\manifest.json", file);
+        Assert.Contains(@"$(EterisCefRuntime)\manifest.json", items.Descendants("_EterisCefLicense").Single().Attribute("Include")!.Value);
+        Assert.Contains(@"licenses\cef-codecs\", Project().ToString());
+        Assert.Equal(Path.Combine("licenses", "cef-codecs", "manifest.json"), Eteris.Browser.Tabs.PlatformCodecs.MarkerPath);
+    }
+
+    // As fontes do motor (script e patches) vão no repositório byte a byte como foram validadas: o SHA256 dos patches
+    // está no manifest.json do runtime, e o script só tem ASCII, como os outros .ps1 (o PowerShell 5 lê-os em ANSI).
+    [Fact]
+    public void Sources_AreVersionedVerbatim()
+    {
+        var dir = Path.Combine(Root(), "build", "cef-codecs");
+        Assert.True(File.Exists(Path.Combine(dir, "README.md")));
+        var script = File.ReadAllBytes(Path.Combine(dir, "build.ps1"));
+        var bom = script.Length >= 3 && script[0] == 0xEF && script[1] == 0xBB && script[2] == 0xBF;
+        Assert.True(bom || script.All(b => b < 0x80), "build/cef-codecs/build.ps1 tem de ser ASCII ou UTF-8 com BOM");
+        foreach (var patch in new[] { "platform-codecs.patch", "ffmpeg-adts-demuxer.patch" })
+            Assert.True(File.Exists(Path.Combine(dir, "patches", patch)), patch);
+        var attributes = File.ReadAllLines(Path.Combine(Root(), ".gitattributes"));
+        Assert.Contains("build/cef-codecs/patches/*.patch -text", attributes);
+    }
+
     [Fact]
     public void OwnBuild_IsNeverCommitted()
         => Assert.Contains("build/cef-codecs/out/", File.ReadAllLines(Path.Combine(Root(), ".gitignore")));
@@ -41,5 +72,6 @@ public class CefCodecsRuntimeTests
         Assert.Contains("platform-codecs", publish);
         Assert.Contains("156.0.15+gcf671c0+chromium-156.0.8078.80", publish);
         Assert.Contains("sha256", publish);
+        Assert.Contains("cf671c072925b27823a61181152f4f288e8e4306", publish);
     }
 }

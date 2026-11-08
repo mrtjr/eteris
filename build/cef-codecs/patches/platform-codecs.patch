@@ -1,0 +1,590 @@
+diff --git a/media/BUILD.gn b/media/BUILD.gn
+index 1919962dd1..9fbb1e4319 100644
+--- a/media/BUILD.gn
++++ b/media/BUILD.gn
+@@ -15,6 +15,14 @@ import("//testing/libfuzzer/fuzzer_test.gni")
+ import("//testing/test.gni")
+ import("//third_party/ffmpeg/ffmpeg_options.gni")
+ 
++# True when proprietary codecs are enabled but the bundled FFmpeg is built
++# without the patent-encumbered H.264/AAC decoders (ffmpeg_branding=Chromium).
++# FFmpeg then only demuxes those formats and decoding is left to the platform:
++# H.264/HEVC through the GPU process (D3D11VideoDecoder) and AAC through the
++# Windows Media Foundation AAC decoder (MojoAudioDecoder in the GPU process).
++media_platform_proprietary_decoders_only =
++    proprietary_codecs && media_use_ffmpeg && ffmpeg_branding == "Chromium"
++
+ if (enable_library_cdms) {
+   import("//media/cdm/library_cdm/cdm_paths.gni")
+ }
+@@ -57,6 +65,7 @@ buildflag_header("media_buildflags") {
+     "ENABLE_IAMF_TOOLS=$media_use_iamf_tools",
+     "ENABLE_PLATFORM_IAMF_AUDIO=$enable_platform_iamf_audio",
+     "ENABLE_PLATFORM_MPEG_H_AUDIO=$enable_platform_mpeg_h_audio",
++    "PLATFORM_PROPRIETARY_DECODERS_ONLY=$media_platform_proprietary_decoders_only",
+     "ENABLE_MSE_MPEG2TS_STREAM_PARSER=$enable_mse_mpeg2ts_stream_parser",
+     "ENABLE_SYMPHONIA_AUDIO_DECODER=$media_use_symphonia_decoder",
+     "ENABLE_SYMPHONIA_DEMUXER=$media_use_symphonia_demuxer",
+@@ -87,12 +96,23 @@ buildflag_header("media_buildflags") {
+   }
+ }
+ 
+-if (proprietary_codecs && media_use_ffmpeg) {
++# On Windows proprietary_codecs may be combined with ffmpeg_branding=Chromium:
++# see `media_platform_proprietary_decoders_only` above (patch maintained by the
++# Eteris project, along the lines discussed in CEF issue #3559).
++if (proprietary_codecs && media_use_ffmpeg &&
++    !(media_platform_proprietary_decoders_only && is_win)) {
+   assert(
+       ffmpeg_branding != "Chromium",
+       "proprietary codecs and ffmpeg_branding set to Chromium are incompatible")
+ }
+ 
++# Platform-only H.264 support is answered from the supplemental decoder profile
++# cache, which RenderMediaClient only fills when HEVC platform support is on.
++assert(!media_platform_proprietary_decoders_only ||
++           platform_has_optional_hevc_decode_support,
++       "proprietary_codecs with ffmpeg_branding=Chromium requires " +
++           "enable_platform_hevc=true")
++
+ # Common configuration for targets in the media directory; these must not be
+ # exported since things like USE_NEON have different meanings elsewhere in the
+ # code base.
+diff --git a/media/base/supported_types.cc b/media/base/supported_types.cc
+index efc7246c8c..6816640a6c 100644
+--- a/media/base/supported_types.cc
++++ b/media/base/supported_types.cc
+@@ -294,9 +294,13 @@ bool IsDecoderAV1Supported(const VideoType& type) {
+ }
+ 
+ bool IsDecoderAACSupported(const AudioType& type) {
++#if !BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+   if (type.profile != AudioCodecProfile::kXHE_AAC) {
+     return true;
+   }
++#endif  // !BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // Without an FFmpeg AAC decoder every AAC profile (LC, HE v1/v2 and xHE) must
++  // be decoded by the platform decoder announced by the GPU process.
+ #if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER) && \
+     (BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN))
+   return GetSupplementalDecoderAudioTypeCache()->IsProfileSupported(type);
+@@ -447,7 +451,15 @@ bool IsDefaultDecoderSupportedVideoType(const VideoType& type) {
+     case VideoCodec::kTheora:
+       return IsDecoderBuiltInVideoCodec(type.codec);
+     case VideoCodec::kH264:
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++      // FFmpeg has no H.264 decoder: only report support for the profiles the
++      // GPU process (D3D11VideoDecoder) announced, so that canPlayType() and
++      // MediaSource.isTypeSupported() answer "no" without hardware decoding.
++      return GetSupplementalDecoderVideoProfileCache()->IsProfileSupported(
++          type.profile);
++#else
+       return true;
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+     case VideoCodec::kVP8:
+       return IsDecoderBuiltInVideoCodec(type.codec)
+                  ? true
+@@ -579,7 +591,9 @@ bool IsEncoderOptionalVideoType(const media::VideoType& type) {
+ }
+ 
+ bool IsDecoderBuiltInVideoCodec(VideoCodec codec) {
+-#if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS) && BUILDFLAG(USE_PROPRIETARY_CODECS)
++#if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS) && \
++    BUILDFLAG(USE_PROPRIETARY_CODECS) &&       \
++    !BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+   if (codec == VideoCodec::kH264) {
+     return true;
+   }
+diff --git a/media/base/win/mf_helpers.cc b/media/base/win/mf_helpers.cc
+index 929eeac3bf..9a7627e96d 100644
+--- a/media/base/win/mf_helpers.cc
++++ b/media/base/win/mf_helpers.cc
+@@ -28,6 +28,7 @@
+ #include "base/win/scoped_co_mem.h"
+ #include "base/win/windows_version.h"
+ #include "gpu/command_buffer/service/shared_context_state.h"
++#include "media/media_buildflags.h"
+ #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
+ #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
+ #include "gpu/ipc/common/dxgi_helpers.h"
+@@ -535,11 +536,28 @@ HRESULT GetAacAudioType(const AudioDecoderConfig& decoder_config,
+   aac_wave_format->wfx.nSamplesPerSec = decoder_config.samples_per_second();
+   aac_wave_format->wfx.nAvgBytesPerSec =
+       decoder_config.samples_per_second() * decoder_config.bytes_per_frame();
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // The Microsoft AAC decoder MFT documents a 16-bit PCM hint for its input
++  // type; some parsers (MSE "audio/aac") create F32 configs.
++  if (aac_wave_format->wfx.wBitsPerSample != 16) {
++    aac_wave_format->wfx.wBitsPerSample = 16;
++    aac_wave_format->wfx.nAvgBytesPerSec =
++        decoder_config.samples_per_second() * decoder_config.channels() * 2;
++  }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+   aac_wave_format->wfx.nBlockAlign = 1;
+ 
+   size_t extra_size = wave_format_size - sizeof(WAVEFORMATEX);
+   aac_wave_format->wfx.cbSize = static_cast<WORD>(extra_size);
+   aac_wave_format->wPayloadType = 0;  // RAW AAC
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // Without an AudioSpecificConfig the input can only be ADTS: the FFmpeg ADTS
++  // demuxer (no AAC decoder to build one) and WebCodecs "mp4a.*" without a
++  // description. The ADTS headers carry the configuration.
++  if (extra_data.empty()) {
++    aac_wave_format->wPayloadType = 1;  // ADTS
++  }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+   aac_wave_format->wAudioProfileLevelIndication =
+       0xFE;                          // no audio profile specified
+   aac_wave_format->wStructType = 0;  // audio specific config follows
+diff --git a/media/ffmpeg/ffmpeg_common.cc b/media/ffmpeg/ffmpeg_common.cc
+index 1eeaafafaf..ce734c384e 100644
+--- a/media/ffmpeg/ffmpeg_common.cc
++++ b/media/ffmpeg/ffmpeg_common.cc
+@@ -409,6 +409,17 @@ bool AVCodecContextToAudioDecoderConfig(const AVCodecContext* codec_context,
+       sample_format = kSampleFormatMpegHAudio;
+       break;
+ #endif
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++    // FFmpeg only demuxes AAC (no decoder is built), so it does not fill
++    // |sample_fmt|. Like AC3/EAC3 above, use 16 bits per sample, which is also
++    // what MP4 sample entries declare for AAC. The real output format is
++    // chosen by the platform (Media Foundation) decoder.
++    case AudioCodec::kAAC:
++      if (sample_format == kUnknownSampleFormat) {
++        sample_format = kSampleFormatS16;
++      }
++      break;
++#endif
+ 
+     default:
+       break;
+@@ -477,6 +488,13 @@ bool AVCodecContextToAudioDecoderConfig(const AVCodecContext* codec_context,
+       if (aac_parser.Parse(extra_data, &media_log))
+         config->set_profile(aac_parser.GetProfile());
+     }
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++    // No FFmpeg AAC decoder: |sample_fmt| was not set by FFmpeg, so the
++    // bytes-per-channel check below does not apply.
++    if (codec_context->sample_fmt == AV_SAMPLE_FMT_NONE) {
++      return true;
++    }
++#endif
+   }
+ #endif
+ 
+diff --git a/media/filters/ffmpeg_demuxer.cc b/media/filters/ffmpeg_demuxer.cc
+index f9e132f98b..162c706e36 100644
+--- a/media/filters/ffmpeg_demuxer.cc
++++ b/media/filters/ffmpeg_demuxer.cc
+@@ -5,13 +5,16 @@
+ #include "media/filters/ffmpeg_demuxer.h"
+ 
+ #include <algorithm>
++#include <array>
+ #include <iterator>
+ #include <memory>
++#include <optional>
+ #include <set>
+ #include <string_view>
+ #include <utility>
+ 
+ #include "base/base64.h"
++#include "base/compiler_specific.h"
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
+ #include "base/functional/callback_helpers.h"
+@@ -47,6 +50,10 @@
+ #include "media/filters/ffmpeg_glue.h"
+ #include "media/filters/ffmpeg_h264_to_annex_b_bitstream_converter.h"
+ #include "media/formats/mpeg/mpeg1_audio_stream_parser.h"
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++#include "media/formats/mpeg/adts_constants.h"
++#include "media/formats/mpeg/adts_stream_parser.h"
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+ #include "media/formats/webm/webm_crypto_helpers.h"
+ #include "media/media_buildflags.h"
+ #include "third_party/ffmpeg/ffmpeg_features.h"
+@@ -91,6 +98,94 @@ bool IsStreamEnabled(container_names::MediaContainerName container,
+   return stream->disposition & AV_DISPOSITION_DEFAULT;
+ }
+ 
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++// Without an FFmpeg AAC decoder, avformat_find_stream_info() cannot fill the
++// sample rate and channel count of a raw ADTS ("aac" demuxer) stream: the AAC
++// parser deliberately leaves them to the decoder (because of implicit SBR), so
++// the stream would have no valid AudioDecoderConfig and packets would get
++// neither durations nor timestamps. avformat_open_input() leaves the I/O
++// context on the first ADTS frame, so read its header here, before
++// avformat_find_stream_info() copies the codec parameters to the internal
++// codec context, and fill the core sample rate, channel count, profile, frame
++// size and a two-byte AudioSpecificConfig. The platform (Media Foundation)
++// decoder reports the real output format (e.g. doubled by SBR) when decoding.
++void FillAdtsCodecParameters(AVFormatContext* format_context) {
++  if (!format_context->iformat || !format_context->iformat->name ||
++      !format_context->pb ||
++      std::string_view(format_context->iformat->name) != "aac") {
++    return;
++  }
++
++  for (AVStream* stream : AVFormatContextToSpan(format_context)) {
++    AVCodecParameters* codec_parameters = stream->codecpar;
++    if (codec_parameters->codec_id != AV_CODEC_ID_AAC ||
++        codec_parameters->extradata_size > 0 ||
++        (codec_parameters->sample_rate > 0 &&
++         codec_parameters->ch_layout.nb_channels > 0)) {
++      continue;
++    }
++
++    AVIOContext* pb = format_context->pb;
++    const int64_t position = avio_tell(pb);
++    if (position < 0) {
++      return;
++    }
++    std::array<uint8_t, kADTSHeaderSizeWithCrc> header_bytes = {};
++    const int bytes_read =
++        avio_read(pb, header_bytes.data(), header_bytes.size());
++    if (avio_seek(pb, position, SEEK_SET) < 0) {
++      DLOG(ERROR) << __func__ << ": failed to rewind to the first ADTS frame";
++      return;
++    }
++    if (bytes_read < kADTSHeaderMinSize) {
++      return;
++    }
++
++    const std::optional<ADTSStreamParser::Header> header =
++        ADTSStreamParser::ParseHeader(
++            base::span(header_bytes).first(static_cast<size_t>(bytes_read)));
++    // Channel configuration 0 (layout in a program_config_element) cannot be
++    // described without decoding; leave the stream unsupported.
++    if (!header || header->channel_layout == CHANNEL_LAYOUT_NONE ||
++        header->sample_rate <= 0 || header->extra_data.size() != 2) {
++      return;
++    }
++
++    codec_parameters->sample_rate = header->sample_rate;
++    av_channel_layout_uninit(&codec_parameters->ch_layout);
++    av_channel_layout_default(
++        &codec_parameters->ch_layout,
++        ChannelLayoutToChannelCount(header->channel_layout));
++    // audioObjectType (first five bits of the AudioSpecificConfig) minus one,
++    // which is how FFmpeg reports AAC profiles.
++    codec_parameters->profile = (header->extra_data[0] >> 3) - 1;
++    // Lets FFmpeg compute packet durations and interpolate timestamps.
++    codec_parameters->frame_size = kSamplesPerAACFrame;
++
++    uint8_t* extradata = static_cast<uint8_t*>(
++        av_mallocz(header->extra_data.size() + AV_INPUT_BUFFER_PADDING_SIZE));
++    if (!extradata) {
++      return;
++    }
++    // SAFETY: `extradata` was just allocated with room for
++    // `header->extra_data.size()` bytes plus FFmpeg's padding.
++    UNSAFE_BUFFERS(base::span(extradata, header->extra_data.size()))
++        .copy_from(header->extra_data);
++    codec_parameters->extradata = extradata;
++    codec_parameters->extradata_size =
++        static_cast<int>(header->extra_data.size());
++    return;
++  }
++}
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++
++int FindStreamInfo(AVFormatContext* format_context) {
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  FillAdtsCodecParameters(format_context);
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  return avformat_find_stream_info(format_context, nullptr);
++}
++
+ }  // namespace
+ 
+ static base::Time ExtractTimelineOffset(
+@@ -1289,8 +1384,7 @@ void FFmpegDemuxer::OnOpenContextDone(bool result) {
+   // Fully initialize AVFormatContext by parsing the stream a little.
+   blocking_task_runner_->PostTaskAndReplyWithResult(
+       FROM_HERE,
+-      base::BindOnce(&avformat_find_stream_info, glue_->format_context(),
+-                     static_cast<AVDictionary**>(nullptr)),
++      base::BindOnce(&FindStreamInfo, glue_->format_context()),
+       base::BindOnce(&FFmpegDemuxer::OnFindStreamInfoDone,
+                      weak_factory_.GetWeakPtr()));
+ }
+diff --git a/media/filters/win/media_foundation_audio_decoder.cc b/media/filters/win/media_foundation_audio_decoder.cc
+index 2d3023bfbd..f81a59ada5 100644
+--- a/media/filters/win/media_foundation_audio_decoder.cc
++++ b/media/filters/win/media_foundation_audio_decoder.cc
+@@ -27,6 +27,7 @@
+ #include "media/base/win/hresults.h"
+ #include "media/base/win/mf_helpers.h"
+ #include "media/base/win/mf_initializer.h"
++#include "media/media_buildflags.h"
+ 
+ namespace media {
+ 
+@@ -58,6 +59,24 @@ bool CodecSupportsFormat(const AudioDecoderConfig& config,
+     return true;
+   }
+ 
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // SBR (HE-AAC) and parametric stereo (HE-AAC v2) make the core and the
++  // output sample rate / channel count differ by a factor of two, in either
++  // direction: the FFmpeg demuxer (no AAC decoder) reports the core values,
++  // while the MSE/HLS parsers report the doubled ones when SBR is signalled
++  // and the MFT may offer the core values before the first frame. Accept both;
++  // the actual rate and channel count are read back from the chosen output
++  // type and the decoder reconfigures upon MF_E_TRANSFORM_STREAM_CHANGE.
++  if (config.codec() == AudioCodec::kAAC) {
++    const auto related = [](int a, int b) {
++      return a == b || a == 2 * b || 2 * a == b;
++    };
++    return related(static_cast<int>(format.nSamplesPerSec),
++                   config.samples_per_second()) &&
++           related(format.nChannels, config.channels());
++  }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++
+   // Sometimes HE-AAC configurations may be off by a factor of two, so allow
+   // such cases -- they'll reconfigure upon first decoded frame.
+   if (config.codec() == AudioCodec::kAAC &&
+@@ -101,11 +120,21 @@ std::optional<MFT_REGISTER_TYPE_INFO> GetTypeInfo(
+ #endif
+ #if BUILDFLAG(USE_PROPRIETARY_CODECS)
+     case AudioCodec::kAAC:
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++      // FFmpeg has no AAC decoder: the Microsoft AAC decoder MFT handles
++      // AAC-LC, HE-AAC v1/v2 and (from Windows 11 22H2) xHE-AAC.
++      if (config.profile() != AudioCodecProfile::kXHE_AAC ||
++          base::win::GetVersion() >= base::win::Version::WIN11_22H2) {
++        return MFT_REGISTER_TYPE_INFO{MFMediaType_Audio, MFAudioFormat_AAC};
++      }
++      return std::nullopt;
++#else
+       if (config.profile() == AudioCodecProfile::kXHE_AAC &&
+           base::win::GetVersion() >= base::win::Version::WIN11_22H2) {
+         return MFT_REGISTER_TYPE_INFO{MFMediaType_Audio, MFAudioFormat_AAC};
+       }
+       [[fallthrough]];
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+ #endif
+ #if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
+     case AudioCodec::kAC4:
+@@ -116,7 +145,39 @@ std::optional<MFT_REGISTER_TYPE_INFO> GetTypeInfo(
+   }
+ }
+ 
+-bool PopulateInputSample(IMFSample* sample, const DecoderBuffer& input) {
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++// The MP4 (MSE), ADTS and MPEG-2 TS stream parsers prepend an ADTS header to
++// every AAC frame, while the FFmpeg MP4 demuxer hands out raw frames. When the
++// config carries an AudioSpecificConfig the decoder MFT is configured for raw
++// AAC (HEAACWAVEINFO::wPayloadType = 0, see GetAacAudioType()), so strip the
++// ADTS header when the buffer holds exactly one ADTS frame with a single raw
++// data block. Returns the number of header bytes to skip (0 when there is no
++// ADTS header).
++size_t GetAdtsHeaderSize(base::span<const uint8_t> data) {
++  constexpr size_t kAdtsMinHeaderSize = 7;
++  constexpr size_t kAdtsCrcHeaderSize = 9;
++  if (data.size() < kAdtsMinHeaderSize || data[0] != 0xFF ||
++      (data[1] & 0xF6) != 0xF0) {
++    return 0;
++  }
++  const bool protection_absent = (data[1] & 0x01) != 0;
++  const size_t header_size =
++      protection_absent ? kAdtsMinHeaderSize : kAdtsCrcHeaderSize;
++  const size_t frame_length = (static_cast<size_t>(data[3] & 0x03) << 11) |
++                              (static_cast<size_t>(data[4]) << 3) |
++                              (static_cast<size_t>(data[5] & 0xE0) >> 5);
++  const size_t raw_data_blocks = static_cast<size_t>(data[6] & 0x03) + 1;
++  if (frame_length != data.size() || frame_length <= header_size ||
++      raw_data_blocks != 1) {
++    return 0;
++  }
++  return header_size;
++}
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++
++bool PopulateInputSample(IMFSample* sample,
++                         const DecoderBuffer& input,
++                         size_t skip_bytes = 0) {
+   Microsoft::WRL::ComPtr<IMFMediaBuffer> buffer;
+   HRESULT hr = sample->GetBufferByIndex(0, &buffer);
+   RETURN_ON_HR_FAILURE(hr, "Failed to get buffer from sample", false);
+@@ -132,11 +193,14 @@ bool PopulateInputSample(IMFSample* sample, const DecoderBuffer& input) {
+   auto destination = UNSAFE_BUFFERS(base::span(destination_ptr, max_length));
+ 
+   RETURN_ON_FAILURE(!current_length, "Input length is zero", false);
+-  RETURN_ON_FAILURE(input.size() <= max_length, "Input length is too long",
++  RETURN_ON_FAILURE(skip_bytes < input.size(), "Invalid input offset", false);
++  const base::span<const uint8_t> payload =
++      base::span<const uint8_t>(input).subspan(skip_bytes);
++  RETURN_ON_FAILURE(payload.size() <= max_length, "Input length is too long",
+                     false);
+-  destination.copy_prefix_from(input);
++  destination.copy_prefix_from(payload);
+ 
+-  hr = buffer->SetCurrentLength(input.size());
++  hr = buffer->SetCurrentLength(payload.size());
+   RETURN_ON_HR_FAILURE(hr, "Failed to set buffer length", false);
+ 
+   hr = buffer->Unlock();
+@@ -175,6 +239,29 @@ MediaFoundationAudioDecoder::Create() {
+              : nullptr;
+ }
+ 
++// static
++bool MediaFoundationAudioDecoder::HasAacDecoder() {
++  if (!InitializeMediaFoundation()) {
++    return false;
++  }
++
++  MFT_REGISTER_TYPE_INFO type_info = {MFMediaType_Audio, MFAudioFormat_AAC};
++  base::win::ScopedCoMem<IMFActivate*> acts;
++  UINT32 acts_num = 0;
++  if (FAILED(MFTEnumEx(MFT_CATEGORY_AUDIO_DECODER,
++                       MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_LOCALMFT |
++                           MFT_ENUM_FLAG_SORTANDFILTER,
++                       &type_info, nullptr, &acts, &acts_num))) {
++    return false;
++  }
++
++  // SAFETY: MFTEnumEx returns an array of `acts_num` IMFActivate pointers.
++  for (auto* curr_act : UNSAFE_BUFFERS(base::span(acts.get(), acts_num))) {
++    curr_act->Release();
++  }
++  return acts_num > 0;
++}
++
+ MediaFoundationAudioDecoder::MediaFoundationAudioDecoder() = default;
+ 
+ MediaFoundationAudioDecoder::~MediaFoundationAudioDecoder() = default;
+@@ -270,7 +357,17 @@ void MediaFoundationAudioDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
+     return;
+   }
+ 
+-  if (!PopulateInputSample(sample.Get(), *buffer)) {
++  size_t skip_bytes = 0;
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // Without an AudioSpecificConfig (FFmpeg ADTS demuxer, WebCodecs "mp4a.*"
++  // without a description) the MFT is configured for ADTS input, so the ADTS
++  // headers are kept.
++  if (config_.codec() == AudioCodec::kAAC && !config_.extra_data().empty()) {
++    skip_bytes = GetAdtsHeaderSize(base::span<const uint8_t>(*buffer));
++  }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++
++  if (!PopulateInputSample(sample.Get(), *buffer, skip_bytes)) {
+     std::move(decode_cb_bound).Run(DecoderStatus::Codes::kFailed);
+     return;
+   }
+diff --git a/media/filters/win/media_foundation_audio_decoder.h b/media/filters/win/media_foundation_audio_decoder.h
+index 5cff3a4f8f..b496e9b4e8 100644
+--- a/media/filters/win/media_foundation_audio_decoder.h
++++ b/media/filters/win/media_foundation_audio_decoder.h
+@@ -31,6 +31,10 @@ class MEDIA_EXPORT MediaFoundationAudioDecoder : public AudioDecoder {
+   // returns nullptr if not.
+   static std::unique_ptr<MediaFoundationAudioDecoder> Create();
+ 
++  // Returns true if Media Foundation is available and a synchronous AAC
++  // decoder MFT (the Microsoft AAC decoder) is registered on this system.
++  static bool HasAacDecoder();
++
+   MediaFoundationAudioDecoder();
+ 
+   MediaFoundationAudioDecoder(const MediaFoundationAudioDecoder&) = delete;
+diff --git a/media/gpu/windows/supported_profile_helpers.cc b/media/gpu/windows/supported_profile_helpers.cc
+index 01b833a0f0..3797448e8f 100644
+--- a/media/gpu/windows/supported_profile_helpers.cc
++++ b/media/gpu/windows/supported_profile_helpers.cc
+@@ -13,6 +13,7 @@
+ #include "media/base/media_switches.h"
+ #include "media/base/video_codecs.h"
+ #include "media/gpu/windows/av1_guids.h"
++#include "media/media_buildflags.h"
+ 
+ namespace media {
+ 
+@@ -373,8 +374,13 @@ SupportedResolutionRangeMap GetSupportedD3DVideoDecoderResolutions(
+   // mark all the common ones with the same level of support.
+   constexpr VideoCodecProfile kSupportedH264Profiles[] = {
+       H264PROFILE_BASELINE, H264PROFILE_MAIN, H264PROFILE_HIGH};
++#if !BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+   for (const auto profile : kSupportedH264Profiles)
+     supported_resolutions[profile] = h264_profile;
++#endif  // !BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // With PLATFORM_PROPRIETARY_DECODERS_ONLY there is no FFmpeg H.264 decoder
++  // to fall back to, so H.264 is only announced below when the device exposes
++  // the DXVA H.264 decoder profile.
+ 
+   if (!video_device_wrapper) {
+     return supported_resolutions;
+@@ -399,6 +405,12 @@ SupportedResolutionRangeMap GetSupportedD3DVideoDecoderResolutions(
+         for (const auto profile : kSupportedH264Profiles)
+           supported_resolutions[profile] = *result;
+       }
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++      else {
++        for (const auto profile : kSupportedH264Profiles)
++          supported_resolutions[profile] = h264_profile;
++      }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+       continue;
+     }
+ 
+diff --git a/media/mojo/services/gpu_mojo_media_client_win.cc b/media/mojo/services/gpu_mojo_media_client_win.cc
+index 9716800e49..4204b3be99 100644
+--- a/media/mojo/services/gpu_mojo_media_client_win.cc
++++ b/media/mojo/services/gpu_mojo_media_client_win.cc
+@@ -29,6 +29,7 @@
+ #include "media/gpu/windows/d3d12_helpers.h"
+ #include "media/gpu/windows/d3d_video_decoder.h"
+ #include "media/gpu/windows/mf_audio_encoder.h"
++#include "media/media_buildflags.h"
+ 
+ namespace media {
+ 
+@@ -101,6 +102,16 @@ class GpuMojoMediaClientWin final : public GpuMojoMediaClient {
+     }
+ #endif  // BUILDFLAG (ENABLE_PLATFORM_AC3_EAC3_AUDIO)
+ 
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++    // FFmpeg has no AAC decoder, so announce AAC-LC / HE-AAC v1/v2 (profile
++    // kUnknown) whenever the Microsoft AAC decoder MFT is present. Windows "N"
++    // editions without the Media Feature Pack lack it; AAC is then reported
++    // as unsupported.
++    if (MediaFoundationAudioDecoder::HasAacDecoder()) {
++      audio_configs.emplace_back(AudioCodec::kAAC, AudioCodecProfile::kUnknown);
++    }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++
+     if (base::win::GetVersion() >= base::win::Version::WIN11_22H2 &&
+         InitializeMediaFoundation()) {
+       audio_configs.emplace_back(AudioCodec::kAAC, AudioCodecProfile::kXHE_AAC);
+diff --git a/media/renderers/audio_renderer_impl.cc b/media/renderers/audio_renderer_impl.cc
+index 1b439b43b0..fba1b9b6a8 100644
+--- a/media/renderers/audio_renderer_impl.cc
++++ b/media/renderers/audio_renderer_impl.cc
+@@ -40,6 +40,7 @@
+ #include "media/base/timestamp_constants.h"
+ #include "media/filters/audio_clock.h"
+ #include "media/filters/decrypting_demuxer_stream.h"
++#include "media/media_buildflags.h"
+ #include "third_party/perfetto/include/perfetto/tracing/track.h"
+ 
+ namespace media {
+@@ -676,6 +677,16 @@ void AudioRendererImpl::OnDeviceInfoReceived(
+     expecting_config_changes_ = true;
+   }
+ #endif  // BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO) && BUILDFLAG(IS_WIN)
++#if BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
++  // Without an FFmpeg AAC decoder the demuxer cannot resolve implicit SBR
++  // (HE-AAC) or parametric stereo (HE-AAC v2) while probing, so the config may
++  // carry the core sample rate / channel count while the platform decoder
++  // outputs the doubled values. Like AC3/EAC3 above, accept config changes so
++  // that the AudioBufferConverter resamples / remixes them.
++  if (current_decoder_config_.codec() == AudioCodec::kAAC) {
++    expecting_config_changes_ = true;
++  }
++#endif  // BUILDFLAG(PLATFORM_PROPRIETARY_DECODERS_ONLY)
+ 
+   bool use_stream_params =
+       !expecting_config_changes_ || !hw_params.IsValid() ||
