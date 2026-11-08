@@ -106,7 +106,7 @@ public class SandboxPublishTests
     {
         var script = Read("build", "sandbox", "build-all.ps1");
         Assert.Contains("$testsOk = Join-Path $outDir 'tests-ok.json'", script);
-        var delete = script.IndexOf("if (Test-Path -LiteralPath $testsOk) { Remove-Item -LiteralPath $testsOk }", StringComparison.Ordinal);
+        var delete = script.IndexOf("if (Test-Path -LiteralPath $testsOk) { [IO.File]::Delete($testsOk) }", StringComparison.Ordinal);
         var tests = script.IndexOf("Run $log 'dotnet' @('test'", StringComparison.Ordinal);
         var write = script.IndexOf("[IO.File]::WriteAllText($testsOk", StringComparison.Ordinal);
         Assert.True(delete > 0 && tests > delete && write > tests, "build-all.ps1: apagar a marca, testar, só depois escrevê-la");
@@ -115,6 +115,8 @@ public class SandboxPublishTests
         Assert.DoesNotContain("$testsOk", skip.Groups["skip"].Value);
         Assert.Contains("'[^\\x00-\\x7F]'", script);
         Assert.Contains(".ShortPath", script);
+        // O Remove-Item -LiteralPath do PowerShell 5.1 falha com caminhos 8.3.
+        Assert.DoesNotContain("Remove-Item -LiteralPath", script);
     }
 
     // O CefSharp que o build-all compila é o mesmo que o projeto usa (uma atualização do CefSharp mexe nos dois).

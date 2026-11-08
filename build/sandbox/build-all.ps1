@@ -54,7 +54,8 @@ $CefSharpTag = 'v156.0.150'
 $CefSharpCommit = 'f4cd42eb4043d67a4a8153a4c6b66a315a2da0b3'   # git rev-parse v156.0.150^{commit}
 $Official = '156.0.150'
 
-# Caminhos curtos (JNIOR~1) e acentos: só caminhos completos e -LiteralPath.
+# Caminhos curtos (JNIOR~1) e acentos: só caminhos completos e -LiteralPath. Para apagar ficheiros, [IO.File]::Delete: o
+# Remove-Item do PowerShell 5.1, com o caminho literal, não encontra um caminho 8.3 («Não existe um objeto no caminho»).
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if ($repo -match '[^\x00-\x7F]') {
   # Nome curto 8.3 (só ASCII) da mesma pasta; o cmd.exe, o compilador e o CMake recebem-no em vez do caminho com acentos.
@@ -79,7 +80,7 @@ $nugetCache = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path 
 $vcvars = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 # Uma corrida nova invalida a marca da anterior: só volta a existir se esta chegar ao fim com os testes aprovados.
-if (Test-Path -LiteralPath $testsOk) { Remove-Item -LiteralPath $testsOk }
+if (Test-Path -LiteralPath $testsOk) { [IO.File]::Delete($testsOk) }
 
 function Step([string]$Text) { Write-Host ''; Write-Host "== $Text" }
 function Fail([string]$Text) { throw "build-all: $Text" }
@@ -170,7 +171,7 @@ if ($SkipCefSharp) {
 } else {
   Step "CefSharp $CefSharpTag com o patch v2"
   $log = Join-Path $logs 'cefsharp.log'
-  if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log }
+  if (Test-Path -LiteralPath $log) { [IO.File]::Delete($log) }
   Remove-Tree $work
   "clone de $CefSharpSource ($CefSharpTag) para $work"
   Run $log 'git' @('-c', 'advice.detachedHead=false', 'clone', '--quiet', '--depth', '1', '--branch', $CefSharpTag, $CefSharpSource, $work)
@@ -262,7 +263,7 @@ if ($SkipClient) {
   if ($longest -gt 250) { Fail "a distribuição tem caminhos com $longest caracteres (o compilador só aceita 260): copie-a para uma pasta mais curta e passe -CefDistrib <pasta>" }
   "distribuição: $CefDistrib (libcef.dll igual ao do runtime)"
   $log = Join-Path $logs 'client.log'
-  if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log }
+  if (Test-Path -LiteralPath $log) { [IO.File]::Delete($log) }
   Remove-Tree $clientOut
   Run $log 'cmd.exe' @('/d', '/c', "`"$(Join-Path $repo 'build\sandbox\client\build.cmd')`" `"$CefDistrib`" `"$clientOut`"")
   if (-not (Test-Path -LiteralPath $clientDll)) { Fail "build.cmd não produziu $clientDll" }
@@ -277,7 +278,7 @@ if ($SkipTests) {
 } else {
   Step "Testes com o CefSharp do feed ($Official-eteris.$N`: modo com sandbox)"
   $log = Join-Path $logs 'tests.log'
-  if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log }
+  if (Test-Path -LiteralPath $log) { [IO.File]::Delete($log) }
   $artifacts = Join-Path $outDir 'tests'
   # O feed também como fonte do projeto de testes: o restauro dele resolve as dependências do Eteris.Browser com as
   # SUAS fontes, e uma versão nova do feed (ainda fora da cache do NuGet) não seria encontrada (NU1603).
