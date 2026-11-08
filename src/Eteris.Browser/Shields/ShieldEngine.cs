@@ -17,13 +17,33 @@ public static class ShieldEngine
     private static readonly string ScriptletsPath =
         System.IO.Path.Combine(AppContext.BaseDirectory, "Shields", "resources", "scriptlets.json");
 
+    // A versão que entra no nome do motor compilado (FilterLists.EngineCachePath): a do Éteris e a da eteris_shields.dll
+    // (um adblock-rust novo pode ter outro formato).
+    private static string EngineVersion()
+    {
+        var dll = new System.IO.FileInfo(System.IO.Path.Combine(AppContext.BaseDirectory, "eteris_shields.dll"));
+        var app = typeof(ShieldEngine).Assembly.GetName().Version?.ToString() ?? "0";
+        return dll.Exists ? $"{app}|{dll.Length}|{dll.LastWriteTimeUtc.Ticks}" : app;
+    }
+
+    // O motor das listas: do ficheiro já compilado no perfil quando as listas e a versão são as mesmas (~10× mais rápido
+    // do que compilar), e sem o texto das listas passar pelo .NET.
+    public static AdblockEngine Create(FilterLists lists)
+    {
+        var cache = lists.EngineCachePath(EngineVersion());
+        var engine = AdblockEngine.CreateFromFiles(lists.Paths(trusted: false), lists.Paths(trusted: true),
+            System.IO.File.Exists(ScriptletsPath) ? ScriptletsPath : null, cache, out var fromCache);
+        Infrastructure.StartupTrace.Mark("escudo.motor", "cache=" + (fromCache ? 1 : 0));
+        if (!fromCache) lists.RemoveOtherEngineCaches(cache);
+        return engine;
+    }
+
     public static Task StartAsync(FilterLists lists) => Task.Run(async () =>
     {
         Infrastructure.StartupTrace.Mark("escudo.inicio");
-        var scriptlets = System.IO.File.Exists(ScriptletsPath) ? System.IO.File.ReadAllText(ScriptletsPath) : null;
         try
         {
-            Swap(Infrastructure.StartupTrace.IsOn ? CreateTraced(lists, scriptlets) : AdblockEngine.Create(lists.Load(trusted: false), scriptlets, lists.Load(trusted: true)));
+            Swap(Create(lists));
             Infrastructure.StartupTrace.Mark("escudo.trocado");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException)
@@ -34,21 +54,8 @@ public static class ShieldEngine
         if (!lists.IsStale(DateTime.UtcNow)) return;
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Eteris/1.0");
-        if (await lists.UpdateAsync(http, CancellationToken.None))
-            Swap(AdblockEngine.Create(lists.Load(trusted: false), scriptlets, lists.Load(trusted: true)));
+        if (await lists.UpdateAsync(http, CancellationToken.None)) Swap(Create(lists));
     });
-
-    // Com ETERIS_TRACE_STARTUP: o mesmo que acima, com o tempo de ler as listas e o de compilar o motor separados.
-    // Fora do método assíncrono, para os textos das listas não ficarem presos à máquina de estados durante a atualização.
-    private static AdblockEngine CreateTraced(FilterLists lists, string? scriptlets)
-    {
-        var rules = lists.Load(trusted: false);
-        var trustedRules = lists.Load(trusted: true);
-        Infrastructure.StartupTrace.Mark("escudo.listas", $"regras={rules.Length} confiaveis={trustedRules.Length} scriptlets={scriptlets?.Length ?? 0}");
-        var engine = AdblockEngine.Create(rules, scriptlets, trustedRules);
-        Infrastructure.StartupTrace.Mark("escudo.motor");
-        return engine;
-    }
 
     private static void Swap(AdblockEngine engine)
         => (Interlocked.Exchange(ref _current, engine) as AdblockEngine)?.Dispose();

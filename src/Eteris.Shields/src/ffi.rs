@@ -27,6 +27,33 @@ pub unsafe extern "C" fn shields_new(rules: *const c_char, trusted_rules: *const
     catch_unwind(|| Box::into_raw(Box::new(Shields::new(rules, trusted, resources)))).unwrap_or(std::ptr::null_mut())
 }
 
+/// Cria o motor a partir de ficheiros (ver `Shields::from_files`). `rule_paths` e `trusted_paths`: caminhos separados
+/// por '\n'; `resources_path` e `cache_path` podem ser NULL. `from_cache` (pode ser NULL) recebe 1 se o motor veio da
+/// cache. Devolve NULL em erro.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shields_new_from_files(
+    rule_paths: *const c_char,
+    trusted_paths: *const c_char,
+    resources_path: *const c_char,
+    cache_path: *const c_char,
+    from_cache: *mut i32,
+) -> *mut Shields {
+    let Some(rules) = (unsafe { text(rule_paths) }) else { return std::ptr::null_mut() };
+    let trusted = unsafe { text(trusted_paths) }.unwrap_or("");
+    let (resources, cache) = (unsafe { text(resources_path) }, unsafe { text(cache_path) });
+    let rules: Vec<&str> = rules.split('\n').filter(|p| !p.is_empty()).collect();
+    let trusted: Vec<&str> = trusted.split('\n').filter(|p| !p.is_empty()).collect();
+    match catch_unwind(|| Shields::from_files(&rules, &trusted, resources, cache)) {
+        Ok((shields, cached)) => {
+            if !from_cache.is_null() {
+                unsafe { *from_cache = cached as i32 };
+            }
+            Box::into_raw(Box::new(shields))
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 /// JavaScript dos scriptlets para a página (string vazia se não houver). Libertar com `shields_string_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn shields_scriptlets(handle: *const Shields, url: *const c_char) -> *mut c_char {

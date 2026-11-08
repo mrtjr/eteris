@@ -19,6 +19,18 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
         return new AdblockEngine(handle);
     }
 
+    // O mesmo motor, com o adblock-rust a ler as listas dos ficheiros (o texto, ~8 M carateres, nunca passa pelo .NET)
+    // e a usar o motor já compilado em «cachePath» quando existe e é válido (senão compila e grava-o lá).
+    // «fromCache»: se não foi preciso compilar.
+    public static AdblockEngine CreateFromFiles(IEnumerable<string> rulePaths, IEnumerable<string> trustedPaths,
+        string? resourcesPath, string? cachePath, out bool fromCache)
+    {
+        var handle = shields_new_from_files(string.Join('\n', rulePaths), string.Join('\n', trustedPaths), resourcesPath, cachePath, out var cached);
+        if (handle.IsInvalid) throw new InvalidOperationException("O motor do escudo não conseguiu carregar as listas.");
+        fromCache = cached == 1;
+        return new AdblockEngine(handle);
+    }
+
     public bool ShouldBlock(string requestUrl, string? pageUrl, string resourceType)
     {
         if (_handle.IsClosed) return false;
@@ -68,6 +80,10 @@ public sealed partial class AdblockEngine : IRequestBlocker, IDisposable
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     private static partial ShieldsHandle shields_new(string rules, string trustedRules, string? resources);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial ShieldsHandle shields_new_from_files(string rulePaths, string trustedPaths, string? resourcesPath,
+        string? cachePath, out int fromCache);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     private static partial nint shields_scriptlets(ShieldsHandle handle, string url);
