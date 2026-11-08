@@ -2,6 +2,13 @@
 
 ## Por publicar
 
+## 0.2.11 — 2026-11-08
+
+Uma versão de privacidade: **no arranque, nada sai para a Google** — o «relógio de rede» do Chromium e a pergunta
+pelo «Modo IA» da pesquisa Google estão desligados no motor (0 pedidos medidos com um proxy, promessa nova em
+`eteris://privacy/`) — e o **Escudo passa a valer também nos pedidos sem aba**: service workers, shared workers e
+extensões. O isolamento das páginas (sandbox) continua pronto mas desligado.
+
 ### Privacidade
 - No arranque, nada sai para a Google. Medido com um proxy local que regista todos os pedidos (`docs/paridade.md`,
   secção 7): apesar de o tráfego de fundo do Chromium já estar desligado, cada arranque fazia 2 pedidos sem nenhuma
