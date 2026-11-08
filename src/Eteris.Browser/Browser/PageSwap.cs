@@ -47,6 +47,48 @@ public static class PageSwap
     // Corpo de uma função async (PageScript.EvaluateAsync com asyncBody): resolve quando a página já desenhou.
     public const string NextFrameScript = "await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return true;";
 
+    // Uma página no 1.º documento (aba nova, link aberto à frente): o rAF duplo NÃO chega. Medido a 60 fps na 1.ª aba nova
+    // da sessão: o rAF duplo resolvia às vezes ~20 ms depois do fim do carregamento, com o 1.º fotograma ainda ~150 ms
+    // longe do ecrã, e a página antiga saía antes do tempo — 5–6 fotogramas brancos (2 em 9 sessões). O que diz que um
+    // fotograma com conteúdo JÁ ESTÁ no ecrã é a «first-contentful-paint»: o Chromium só a regista quando recebe a hora
+    // da apresentação (medido: chega à página ~16 ms depois dela). Com ela, a página que entra já está no compositor do
+    // Windows (por baixo da que sai) e não é precisa a margem PresentMargin. Sem ela no tempo FirstPaintWait (página sem
+    // conteúdo, motor que não a dá), o rAF duplo e a margem, como antes.
+    public static readonly TimeSpan FirstPaintWait = TimeSpan.FromMilliseconds(400);
+
+    // Resposta do FirstPaintScript quando viu a «first-contentful-paint» (senão devolve true, como o NextFrameScript).
+    public const string OnScreen = "no-ecra";
+
+    public static readonly string FirstPaintScript = $$"""
+        const painted = () => performance.getEntriesByName('first-contentful-paint').length > 0;
+        const seen = painted() || await new Promise(r => {
+          let o;
+          const done = v => { if (o) o.disconnect(); r(v); };
+          try { o = new PerformanceObserver(() => { if (painted()) done(true); }); o.observe({ type: 'paint', buffered: true }); }
+          catch (e) { return r(false); }
+          setTimeout(() => done(painted()), {{(int)FirstPaintWait.TotalMilliseconds}});
+        });
+        if (seen) return '{{OnScreen}}';
+        {{NextFrameScript}}
+        """;
+
+    // O que a espera pela página que entra concluiu.
+    public enum Presented
+    {
+        // Não apresentou dentro do tempo (ou fechou).
+        No,
+        // O rAF duplo resolveu: o fotograma está a caminho do ecrã (falta a margem PresentMargin).
+        Frame,
+        // A «first-contentful-paint» já foi apresentada: está no ecrã.
+        OnScreen,
+    }
+
+    public static Presented FromScript(bool success, object? result)
+        => !success ? Presented.No : result is string answer && answer == OnScreen ? Presented.OnScreen : result is true ? Presented.Frame : Presented.No;
+
+    // A margem para o DWM só faz falta quando alguma página que entrou não está comprovadamente no ecrã.
+    public static bool NeedsMargin(IEnumerable<Presented> arrivals) => arrivals.Any(p => p != Presented.OnScreen);
+
     // Para cada página: o que fazer agora. «Arrives» = passa a ver-se e é uma página do Chromium (só essas apresentam
     // um fotograma vazio ao aparecer). Sem nenhuma a chegar, as que saem escondem-se logo (como antes).
     public static IReadOnlyList<Step> Plan(IReadOnlyList<(bool WasVisible, bool Visible, bool Arrives)> pages)

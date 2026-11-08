@@ -35,6 +35,14 @@ public static class PlatformCodecs
         })()
         """;
 
+    // A sonda corre na 1.ª página interna que acaba de carregar — em geral a 1.ª aba nova da sessão, que nesse momento
+    // está a entrar no ecrã (Browser/PageSwap.cs: a página antiga fica por cima até a nova apresentar). A 1.ª pergunta
+    // ao motor de média da sessão atrasa a apresentação no ecrã: medido a 60 fps, a página antiga saía e viam-se 4–5
+    // fotogramas brancos (~70–85 ms) antes da aba nova, só na 1.ª da sessão (sem a sonda: 0). Por isso espera que a
+    // troca acabe: mais do que o teto de uma troca e, se outra estiver a meio, um pouco mais.
+    public static readonly TimeSpan ProbeDelay = TimeSpan.FromSeconds(1.5);
+    public static readonly TimeSpan ProbeRetry = TimeSpan.FromMilliseconds(100);
+
     // O que a sonda devolveu: só «h264 aac» é Present; qualquer outra resposta é Missing; sem resposta (a página fechou,
     // tempo esgotado) fica por saber e volta a perguntar-se na próxima página interna.
     public static Support FromProbe(bool success, object? result)

@@ -32,6 +32,15 @@ public class PlatformCodecsTests
     public void Probe_OnlyBothCodecsCount(bool success, string? answer, PlatformCodecs.Support expected)
         => Assert.Equal(expected, PlatformCodecs.FromProbe(success, answer));
 
+    // A sonda corre na 1.ª aba nova da sessão: só depois de a troca acabar (teto da troca + margem de apresentação),
+    // senão a 1.ª aba nova aparecia branca 4–5 fotogramas (medido a 60 fps).
+    [Fact]
+    public void Probe_WaitsForThePageSwapToFinish()
+    {
+        Assert.True(PlatformCodecs.ProbeDelay > Eteris.Browser.Browser.PageSwap.HoldLimit + Eteris.Browser.Browser.PageSwap.PresentMargin);
+        Assert.True(PlatformCodecs.ProbeRetry > TimeSpan.Zero && PlatformCodecs.ProbeRetry < PlatformCodecs.ProbeDelay);
+    }
+
     [Fact]
     public void Probe_AsksForH264HighAndAacLcThroughMediaSource()
     {

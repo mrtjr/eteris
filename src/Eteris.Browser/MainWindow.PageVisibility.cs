@@ -129,6 +129,9 @@ public partial class MainWindow
         else if (arriving.Count > 0) _ = WaitPresentedAsync(arriving);
     }
 
+    // Há uma troca de páginas a meio: uma página que entrou ainda não apresentou, ou uma que saiu ainda está por cima.
+    private bool IsSwappingPages => _arrivingPages.Count > 0 || _leavingPages.Count > 0;
+
     private bool IsRetiringOnScreen(FrameworkElement element)
         => element is ChromiumWebBrowser page && _retiringPages.Contains(page) && page.Visibility == Visibility.Visible;
 
@@ -195,13 +198,13 @@ public partial class MainWindow
         var arrivals = arriving.Select(page => _presentation.Pending(page)).ToList();
         var clock = Stopwatch.StartNew();
         TimeSpan Left() => PageSwap.HoldLimit - clock.Elapsed;
-        var presented = new bool[arriving.Count];
+        var presented = new PageSwap.Presented[arriving.Count];
         for (var i = 0; i < arriving.Count; i++) presented[i] = await FramePresentedAsync(arriving[i], Left);
-        if (arriving.Count > 0) await Task.Delay(PageSwap.PresentMargin);
+        if (PageSwap.NeedsMargin(presented)) await Task.Delay(PageSwap.PresentMargin);
         for (var i = 0; i < arriving.Count; i++)
         {
             if (arrivals[i] is not { } arrival) continue;
-            if (presented[i]) _presentation.Presented(arriving[i], arrival);
+            if (presented[i] != PageSwap.Presented.No) _presentation.Presented(arriving[i], arrival);
             else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible) _ = ConfirmPresentedAsync(arriving[i], arrival);
         }
     }
@@ -210,25 +213,30 @@ public partial class MainWindow
     private async Task ConfirmPresentedAsync(ChromiumWebBrowser page, long arrival)
     {
         var clock = Stopwatch.StartNew();
-        if (!await FramePresentedAsync(page, () => WarmTabs.Grace - clock.Elapsed)) return;
-        await Task.Delay(PageSwap.PresentMargin);
+        var presented = await FramePresentedAsync(page, () => WarmTabs.Grace - clock.Elapsed);
+        if (presented == PageSwap.Presented.No) return;
+        if (PageSwap.NeedsMargin([presented])) await Task.Delay(PageSwap.PresentMargin);
         _presentation.Presented(page, arrival);
     }
 
     // A página desenhou um fotograma do documento certo: o 1.º carregamento acabou (numa aba nova, antes dele só há o
-    // documento vazio, branco) e o rAF duplo resolveu. «left»: o tempo que ainda resta.
-    private async Task<bool> FramePresentedAsync(ChromiumWebBrowser page, Func<TimeSpan> left)
+    // documento vazio, branco) e o rAF duplo resolveu — ou, no 1.º documento, a 1.ª pintura com conteúdo já está no
+    // ecrã. «left»: o tempo que ainda resta.
+    private async Task<PageSwap.Presented> FramePresentedAsync(ChromiumWebBrowser page, Func<TimeSpan> left)
     {
         while (!page.IsDisposed && !page.IsBrowserInitialized && left() > TimeSpan.Zero) await Task.Delay(16);
-        if (page.IsDisposed || !page.IsBrowserInitialized) return false;
+        if (page.IsDisposed || !page.IsBrowserInitialized) return PageSwap.Presented.No;
+        // No 1.º documento o rAF duplo resolve antes de o 1.º fotograma chegar ao ecrã (PageSwap.FirstPaintScript).
+        var script = PageSwap.NextFrameScript;
         if (_firstLoads.TryGetValue(page, out var loaded) && !loaded.Task.IsCompleted)
         {
+            script = PageSwap.FirstPaintScript;
             if (left() > TimeSpan.Zero) await Task.WhenAny(loaded.Task, Task.Delay(left()));
-            if (!loaded.Task.IsCompleted) return false;
+            if (!loaded.Task.IsCompleted) return PageSwap.Presented.No;
         }
-        if (left() <= TimeSpan.Zero) return false;
-        var frame = await PageScript.EvaluateAsync(page, PageSwap.NextFrameScript, left(), asyncBody: true);
-        return frame.Success && frame.Result is true;
+        if (left() <= TimeSpan.Zero) return PageSwap.Presented.No;
+        var frame = await PageScript.EvaluateAsync(page, script, left(), asyncBody: true);
+        return PageSwap.FromScript(frame.Success, frame.Result);
     }
 
     // ---------- Abas quentes (Tabs/WarmTabs.cs) ----------

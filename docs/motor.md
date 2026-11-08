@@ -199,6 +199,30 @@ ao tamanho real), o rAF duplo resolve antes de a rasterização acabar e vê-se 
 ~150 ms (WW: 1 captura em 10, a 1.ª). A nova aba preenche-se a si própria (saudação, papel de parede): isso é a
 própria página, não o motor.
 
+## Primeira aba nova da sessão (medição ao vivo do main)
+
+A verificação ao vivo do main deu 4–6 fotogramas brancos (~70–100 ms, 95–100 % da área) na **1.ª** aba nova de cada
+sessão (Ctrl+T, botão +, 1.ª vez que se mostra `eteris://newtab`), em 6/6 sessões; 0 no build do T1. Mesmo método
+(`abasrun2.ps1` + `swap.py`, 60 fps), 1.ª aba nova de sessões novas. Três causas, por A/B:
+1. **A sonda de codecs** (`PlatformCodecs`) corria no fim do carregamento da 1.ª página interna — a própria aba nova, a
+   meio da troca. A 1.ª pergunta ao motor de média da sessão atrasa a apresentação: com a sonda 5 fotogramas (2/2
+   sessões), sem ela (manifesto retirado) 1–2. Agora corre `ProbeDelay` (1,5 s) depois, e nunca a meio de uma troca.
+2. **`UpdateLayout` logo a seguir a criar a aba (T6d, `2333846`)**: bissecção no ramo motor — T4 `c949bb1` 0/4,
+   `d617f7b` 0/4, `2333846` 2/3 sessões com branco. Retirado.
+3. **O rAF duplo não prova que o 1.º fotograma chegou ao ecrã.** Registo dos tempos (build de diagnóstico): nas
+   sessões más o rAF duplo resolvia ~20 ms depois do fim do carregamento e o 1.º fotograma só aparecia ~150 ms
+   depois; nas boas o rAF levava ~150 ms. Com 1 e 2 corrigidos ainda havia branco em 2/9 sessões (e 3/6 com o runtime
+   do NuGet: não é a compilação própria da CEF). No 1.º documento a troca espera agora pela `first-contentful-paint`
+   (`PageSwap.FirstPaintScript`): o Chromium só a regista quando recebe a hora da apresentação (chega à página
+   ~16 ms depois dela), por isso a página que entra já está no compositor do Windows e dispensa a margem de 34 ms. Sem
+   ela em 400 ms (página sem conteúdo), o rAF duplo e a margem, como antes.
+
+| 1.ª aba nova da sessão (Ctrl+T da clara) | Fotogramas brancos | Latência |
+|---|---|---|
+| main antes | 5 em 2/2 sessões (6/6 na verificação) | 1.ª 355–501 ms (com branco); seguintes 181–196 ms |
+| só com 1 e 2 | 5–6 em 2/9 sessões | 1.ª ~340–450 ms |
+| 1 + 2 + 3 | **0 em 8 sessões × 3 abas novas** | 1.ª 358–375 ms (502 na 1.ª sessão depois de compilar); seguintes 190–206 ms |
+
 ## Troca de abas: o resto do estudo do Chromium (T3–T6)
 
 Seguimento do estudo `C:\cef\notas\brave-comparacao\chromium-abas.md` (§5). A recomendação 1 (segurar a página que
@@ -238,6 +262,9 @@ vista fica por cima até a aba nova acabar o 1.º documento e apresentar: rAF du
   redimensionamento que ele faz no fim da criação não mude nada. Esse redimensionamento (`OnAfterBrowserCreated`, na
   thread do CEF) usa sempre o `ActualWidth`/`ActualHeight` do WPF: antes da 1.ª disposição dava 0×0 e desfazia o
   `BirthSize`, por isso a aba é disposta logo a seguir a ser criada (`UpdateLayout`; a criação no CEF é assíncrona).
+  **Revertido depois da medição ao vivo** (ver «Primeira aba nova da sessão» abaixo): com o `UpdateLayout` a 1.ª aba
+  nova da sessão ficava branca 2–3 fotogramas (2 em 3 sessões; 0 em 4 sem ele). A janela do CEF volta a passar por
+  0×0 no fim da criação e ao tamanho final na disposição seguinte, antes da 1.ª pintura.
 
 Não feito: um browser «sobressalente» já com a nova aba carregada (o estudo dá-o como opcional). Custa um processo de
 página sempre vivo; fica para decisão do dono depois de medir o T4.

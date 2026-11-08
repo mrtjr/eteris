@@ -61,9 +61,14 @@ public partial class MainWindow
 
     // Sonda única por sessão (Tabs/PlatformCodecs.cs): só com a compilação própria do motor, na 1.ª página interna que
     // acabar de carregar. Se o motor disser «não» ao H.264/AAC, tudo volta a ser como no motor sem codecs.
-    private static async Task ProbePlatformCodecsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    // Nunca durante uma troca de páginas: a 1.ª pergunta ao motor de média da sessão atrasa a apresentação no ecrã e,
+    // feita no fim do carregamento da 1.ª aba nova, a página antiga saía antes de a nova aparecer (PlatformCodecs.ProbeDelay).
+    private async Task ProbePlatformCodecsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
     {
         if (!PlatformCodecs.TryStartProbe(url)) return;
+        await Task.Delay(PlatformCodecs.ProbeDelay);
+        for (var wait = TimeSpan.Zero; IsSwappingPages && wait < PageSwap.HoldLimit; wait += PlatformCodecs.ProbeRetry)
+            await Task.Delay(PlatformCodecs.ProbeRetry);
         var answer = await PageScript.EvaluateAsync(browser, PlatformCodecs.ProbeScript, TimeSpan.FromSeconds(2));
         PlatformCodecs.Record(answer.Success, answer.Result);
     }
