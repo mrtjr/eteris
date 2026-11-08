@@ -49,5 +49,23 @@ public static class PageWindow
     public static (int Width, int Height) BirthSize((int Width, int Height) fromStatic, (int Width, int Height)? pageArea)
         => pageArea is { Width: > 0, Height: > 0 } area ? area : fromStatic;
 
+    public enum Restore
+    {
+        // Já à vista (ou ainda sem janela): nada a fazer.
+        None,
+        // Num só passo e já no tamanho final: SetWindowPlacement com rcNormalPosition = área da página e
+        // SW_SHOWNOACTIVATE. O Chromium vê uma só mudança de tamanho (de minimizada para o tamanho final).
+        Placement,
+        // Tamanho por saber: restaurar e deixar o CefSharp acertar o tamanho (duas mudanças, como antes).
+        ShowOnly,
+    }
+
+    // Como voltar a mostrar a janela do Chromium de uma aba escondida (minimizada). Restaurar com ShowWindow repõe o
+    // último tamanho «normal», que pode ser o 0×0 de quando o CefSharp a encolheu; corrigir a seguir com SetWindowPos é
+    // uma 2.ª mudança de tamanho com a página ainda «hidden» — o Chromium avança a superfície e mostra a página em
+    // branco (DelegatedFrameHost::EmbedSurface; estudo do Chromium, §3.1).
+    public static Restore RestoreStep(bool minimized, (int Width, int Height) size)
+        => !minimized ? Restore.None : size is { Width: > 0, Height: > 0 } ? Restore.Placement : Restore.ShowOnly;
+
     private static int Whole(double value) => double.IsFinite(value) && value > 0 ? (int)Math.Min(value, int.MaxValue) : 0;
 }

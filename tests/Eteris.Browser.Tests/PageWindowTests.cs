@@ -46,4 +46,17 @@ public class PageWindowTests
         Assert.Equal((640, 480), BirthSize((640, 480), (0, 777)));
         Assert.Equal((640, 480), BirthSize((640, 480), null));
     }
+
+    [Fact]
+    public void RestoreStep_ColdTab_OneStepAtTheFinalSize()
+    {
+        // Minimizada e com o tamanho final conhecido: SetWindowPlacement (uma só mudança de tamanho para o Chromium).
+        Assert.Equal(Restore.Placement, RestoreStep(minimized: true, (1360, 777)));
+        // Tamanho por saber: restaurar e deixar o CefSharp acertá-lo (como antes).
+        Assert.Equal(Restore.ShowOnly, RestoreStep(minimized: true, (0, 777)));
+        Assert.Equal(Restore.ShowOnly, RestoreStep(minimized: true, (1360, 0)));
+        // Já à vista: nada (nunca mexer no tamanho de uma página que se vê).
+        Assert.Equal(Restore.None, RestoreStep(minimized: false, (1360, 777)));
+        Assert.Equal(Restore.None, RestoreStep(minimized: false, (0, 0)));
+    }
 }

@@ -47,6 +47,9 @@ public partial class MainWindow
             {
                 // Por baixo das outras janelas de página: a que sai continua a ver-se por cima.
                 if (arrivingPage.Handle != IntPtr.Zero) SetWindowPos(arrivingPage.Handle, HwndBottom, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+                // Aba fria (minimizada): restaurada já no tamanho final, num só passo, ainda com a static escondida;
+                // quando o CefSharp lhe der o tamanho (ao ficar visível no WPF) já é esse.
+                if (arrivingPage.IsBrowserInitialized) ShowPageWindow(arrivingPage, ArrivalPixels(arrivingPage));
                 arriving.Add(arrivingPage);
             }
             element.Visibility = Visibility.Visible;
@@ -79,8 +82,10 @@ public partial class MainWindow
             DisposePage(retired);
             return;
         }
-        element.Visibility = Visibility.Hidden;
+        // Minimizar primeiro: esconder no WPF faz o CefSharp encolher a janela do CEF a 0×0 (ResizeBrowser(0, 0)) e,
+        // com a página ainda «visible», o Chromium dispunha-a e apresentava-a a 0×0 antes de a minimizar.
         if (element is ChromiumWebBrowser cef && !cef.IsDisposed && cef.IsBrowserInitialized) SetPageVisible(cef, false);
+        element.Visibility = Visibility.Hidden;
     }
 
     private void DisposePage(ChromiumWebBrowser browser)
@@ -147,19 +152,60 @@ public partial class MainWindow
     private static double DeviceScale(Visual visual)
         => PresentationSource.FromVisual(visual)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
 
+    // Tamanho final, em píxeis, de uma página que vai aparecer: o que o CefSharp lhe vai dar (PageWindow.PixelSize). A
+    // posição na grelha pode ter mudado agora mesmo (ecrã dividido): dispor primeiro.
+    private static (int Width, int Height) ArrivalPixels(ChromiumWebBrowser browser)
+    {
+        if (!browser.IsArrangeValid) browser.UpdateLayout();
+        return PageWindow.PixelSize(browser.ActualWidth, browser.ActualHeight, DeviceScale(browser));
+    }
+
     // Também para os motores que não são abas (os sites fixados na barra lateral).
     private static void SetPageVisible(ChromiumWebBrowser browser, bool visible)
     {
-        if (browser.IsDisposed || browser.GetBrowserHost() is not { } host) return;
-        // Dentro da janela do CEF (CefBrowserWindow) está a do Chromium (Chrome_WidgetWin_*), que é a que conta.
-        var frame = host.GetWindowHandle();
+        if (!visible)
+        {
+            if (PageWidget(browser, out _) is { } widget && !IsIconic(widget)) ShowWindow(widget, SwShowMinNoActive);
+            return;
+        }
+        // Com o tamanho que o CefSharp já deu à janela do CEF (a página ficou visível no WPF antes desta chamada).
+        if (PageWidget(browser, out var frame) is null) return;
+        var size = GetClientRect(frame, out var area) ? (area.Right - area.Left, area.Bottom - area.Top) : (0, 0);
+        ShowPageWindow(browser, size);
+    }
+
+    // Mostra a janela do Chromium de uma aba escondida (minimizada) já no tamanho dado (PageWindow.RestoreStep).
+    private static void ShowPageWindow(ChromiumWebBrowser browser, (int Width, int Height) size)
+    {
+        if (PageWidget(browser, out _) is not { } widget) return;
+        switch (PageWindow.RestoreStep(IsIconic(widget), size))
+        {
+            case PageWindow.Restore.Placement:
+                var placement = new NativePlacement { Length = Marshal.SizeOf<NativePlacement>() };
+                if (GetWindowPlacement(widget, ref placement))
+                {
+                    placement.Flags = 0;
+                    placement.ShowCmd = SwShowNoActivate;
+                    // Numa janela filha, em coordenadas da janela do CEF (a página ocupa-a toda).
+                    placement.NormalPosition = new NativeRect { Left = 0, Top = 0, Right = size.Width, Bottom = size.Height };
+                    if (SetWindowPlacement(widget, ref placement)) return;
+                }
+                ShowWindow(widget, SwShowNoActivate);
+                return;
+            case PageWindow.Restore.ShowOnly:
+                ShowWindow(widget, SwShowNoActivate);
+                return;
+        }
+    }
+
+    // Dentro da janela do CEF (CefBrowserWindow) está a do Chromium (Chrome_WidgetWin_*), que é a que conta.
+    private static IntPtr? PageWidget(ChromiumWebBrowser browser, out IntPtr frame)
+    {
+        frame = IntPtr.Zero;
+        if (browser.IsDisposed || !browser.IsBrowserInitialized || browser.GetBrowserHost() is not { } host) return null;
+        frame = host.GetWindowHandle();
         var widget = frame == IntPtr.Zero ? IntPtr.Zero : GetWindow(frame, GwChild);
-        if (widget == IntPtr.Zero || IsIconic(widget) == !visible) return;
-        ShowWindow(widget, visible ? SwShowNoActivate : SwShowMinNoActive);
-        // Restaurar repõe o último tamanho «normal», que pode ser o minúsculo de quando a aba estava escondida:
-        // a janela do Chromium volta a ocupar toda a área da aba.
-        if (visible && GetClientRect(frame, out var area))
-            SetWindowPos(widget, IntPtr.Zero, 0, 0, area.Right - area.Left, area.Bottom - area.Top, SwpNoZOrder | SwpNoActivate);
+        return widget == IntPtr.Zero ? null : widget;
     }
 
     private const int SwShowNoActivate = 4;
@@ -175,6 +221,20 @@ public partial class MainWindow
     private struct NativeRect
     {
         public int Left, Top, Right, Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X, Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePlacement
+    {
+        public int Length, Flags, ShowCmd;
+        public NativePoint MinPosition, MaxPosition;
+        public NativeRect NormalPosition;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -199,6 +259,12 @@ public partial class MainWindow
 
     [DllImport("user32.dll")]
     private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowPlacement(IntPtr handle, ref NativePlacement placement);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPlacement(IntPtr handle, ref NativePlacement placement);
 
     [DllImport("user32.dll")]
     private static extern bool GetClientRect(IntPtr handle, out NativeRect rect);

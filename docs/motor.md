@@ -213,6 +213,19 @@ vista fica por cima até a aba nova acabar o 1.º documento e apresentar: rAF du
 Não feito: um browser «sobressalente» já com a nova aba carregada (o estudo dá-o como opcional). Custa um processo de
 página sempre vivo; fica para decisão do dono depois de medir o T4.
 
+**T5 — Aba fria restaurada num só passo (rec. 3).** Uma aba escondida há mais do que o período de graça (T6) está
+minimizada e a sua janela do CEF encolhida a 0×0. Ao voltar, a janela do Chromium era restaurada com `ShowWindow`
+(que repõe o último tamanho «normal», às vezes o 0×0) e corrigida a seguir com `SetWindowPos`: duas mudanças de
+tamanho com a página ainda «hidden», e cada uma avança a superfície do Chromium (página em branco por desenho,
+estudo §2.5). Agora, ainda com a static escondida e por baixo da página à vista, a janela do Chromium é restaurada
+com `SetWindowPlacement` (`rcNormalPosition` = área da página, `SW_SHOWNOACTIVATE`) já no tamanho que o CefSharp lhe
+vai dar (`PageWindow.PixelSize`, depois de dispor a grelha se o ecrã dividido acabou de mudar): uma só mudança, e o
+redimensionamento do CefSharp ao ficar visível não muda nada. Com o tamanho por saber, fica o caminho antigo
+(`PageWindow.RestoreStep`). Ao esconder, a ordem inverte-se: minimizar primeiro e só depois esconder no WPF (que faz o
+CefSharp encolher a janela do CEF a 0×0) — antes, o Chromium ainda dispunha e apresentava a página a 0×0 enquanto
+«visible». Não evita a nova rasterização (o Chromium larga os tiles de uma página «hidden»), só tira a mudança de
+tamanho a mais e encurta o tempo até ao 1.º fotograma.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -241,3 +254,4 @@ página sempre vivo; fica para decisão do dono depois de medir o T4.
 | T2 | Foco do teclado na aba que entra: depois de trocar de aba, o foco do Windows ficava na janela (minimizada) da aba anterior e as teclas iam para uma página invisível; a página da aba ativa passa a recebê-lo (como no Chrome) quando o foco estava numa página que deixou de se ver | 8 Ctrl+Tab seguidos sem clicar: **2 → 8** trocas efetivas |
 | T3 | Mica por baixo da página (rec. 4 do estudo): a static do CefSharp que aloja a janela do CEF deixa de pintar por GDI (`Browser/PageBrowser.cs`, `PageWindow.PaintStep`); na área de vidro o GDI escrevia alfa 0 e o DWM mostrava o Mica onde devia estar a cor de fundo da página. Vidro limitado às barras avaliado e recusado (secção «Troca de abas: o resto do estudo») | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
 | T4 | Aba nova (rec. 5): a static nasce por baixo das outras páginas e a janela do CEF nasce já com o tamanho da área das páginas (antes 0×0 numa aba nova, redimensionada a seguir); mesma conta de píxeis do CefSharp (`PageWindow.PixelSize`), por isso o redimensionamento dele no fim da criação não muda nada. A espera pela 1.ª pintura continua a do T1 (teto 1 s) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
+| T5 | Aba fria (rec. 3): a janela do Chromium volta de minimizada num só passo e já no tamanho final (`SetWindowPlacement` com a área da página e `SW_SHOWNOACTIVATE`, antes de a static aparecer), em vez de `ShowWindow` + `SetWindowPos` (duas mudanças de tamanho com a página «hidden»); ao esconder, minimiza antes de o CefSharp encolher a janela a 0×0. Também nos painéis web da barra lateral | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
