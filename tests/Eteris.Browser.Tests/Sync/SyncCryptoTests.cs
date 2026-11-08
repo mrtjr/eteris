@@ -64,7 +64,10 @@ public class SyncCryptoTests
         Assert.Throws<WrongCodeException>(() => KeyRing.Open(other, envelope with { ChainId = other.ChainId }));
         // Geração trocada: falha a verificação (a geração faz parte dos dados associados).
         Assert.Throws<WrongCodeException>(() => KeyRing.Open(secret, envelope with { Generation = 2 }));
-        Assert.Throws<UnsupportedFormatException>(() => KeyRing.Open(secret, envelope with { Format = 9 }));
+        // O formato também é autenticado: mudado por quem controla o transporte, não pede uma atualização falsa.
+        Assert.Throws<WrongCodeException>(() => KeyRing.Open(secret, envelope with { Format = 9 }));
+        // Escrito de verdade por um Éteris mais recente (com o código): pede a atualização.
+        Assert.Throws<UnsupportedFormatException>(() => KeyRing.Open(secret, KeyRing.EnvelopeForFormat(secret, 2, 1000)));
     }
 
     [Fact]

@@ -54,7 +54,10 @@ vale neste computador. O prazo do arquivo e a língua dos sites só viajam se o 
 - **HLC** (relógio lógico híbrido: milissegundos + contador + aparelho): ordem total igual em todos os aparelhos e, ao
   contrário da hora pura, um aparelho com o relógio atrasado que já viu uma alteração escreve sempre «depois» dela.
 - **Lápides** com prazo (90 dias). Na compactação saem as mais velhas; um aparelho ausente há mais do que o prazo
-  recomeça dos instantâneos antes de enviar seja o que for, por isso não ressuscita o que os outros apagaram.
+  recomeça dos instantâneos antes de enviar seja o que for, por isso não ressuscita o que os outros apagaram. Ao
+  recomeçar, guarda o que ele próprio já enviou e nenhum instantâneo cobre (o motor lembra em que lote seguiu cada
+  registo), e um registo só conta como «apagado» se faltar num instantâneo mais recente que viu tudo o que o mais
+  antigo viu (de todos os aparelhos) — não só por o autor ainda não ter lido o lote que o criou.
 - **Notas:** cada versão tem identidade = texto + de onde veio (como um commit do git). Edições concorrentes fundem-se
   a partir do antepassado comum mais recente; os dois lados entram por ordem de HLC, por isso todos os aparelhos chegam
   ao mesmo texto. Voltar a um texto antigo é uma versão nova (não «já visto»).
@@ -77,7 +80,11 @@ eteris/pair/<sessão>/…     mensagens de um emparelhamento (apagadas no fim)
   fica pendente e é tentado na próxima ronda; os seguintes desse aparelho esperam por ele. Lotes que chegam fora de
   ordem (o OneDrive faz isso) esperam pelo que falta.
 - Um envio que falha é repetido **igual** (mesmo número, mesmo conteúdo).
-- A compactação apaga os lotes que todos os aparelhos conhecidos já leram, ou mais velhos do que o prazo das lápides.
+- Ao retomar, o transporte manda nos números: se o estado local veio de uma cópia antiga (cópia de segurança, outro
+  disco), os lotes deste aparelho que ela não conhece são lidos de volta, o próximo número passa à frente deles e um
+  lote pendente com número já usado segue com um número novo — nenhum número é reutilizado.
+- A compactação apaga os lotes que todos os aparelhos conhecidos já leram, ou mais velhos do que o prazo das lápides
+  (estes cobertos pelo instantâneo que acabou de escrever, que tem os registos deles).
 
 ### Cifra
 
@@ -90,8 +97,14 @@ eteris/pair/<sessão>/…     mensagens de um emparelhamento (apagadas no fim)
 - **Ficheiro** (`Format/SealedFile.cs`): `"ETS" | tipo | versão | geração | opções | parte pública | nonce | cifra | etiqueta`.
   Conteúdo JSON → Brotli → **preenchido até ao múltiplo de 1 KiB** → AES-256-GCM. Dados associados = cabeçalho + cadeia
   + nome lógico (aparelho e número): trocar, reordenar ou mudar de nome um ficheiro falha a verificação.
-- **Versões:** um ficheiro de formato mais recente é recusado com «atualize o Éteris» e fica pendente (não é lido mal
-  nem marcado como lido); registos com campos novos são preservados.
+- **Versões:** um ficheiro de formato mais recente fica pendente (não é lido mal nem marcado como lido); registos com
+  campos novos são preservados. A versão no cabeçalho de um ficheiro lê-se antes de o decifrar, por isso sozinha **não**
+  faz o Éteris pedir uma atualização (quem controla o transporte podia mudá-la e usar isso como isco: «descarregue esta
+  atualização»). «Atualize o Éteris» só aparece quando o registo de chaves anuncia um formato mais recente, e esse
+  formato vai nos dados associados do embrulho da DEK: só um aparelho com o código o consegue escrever.
+- **Nonces:** a chave de cada ficheiro deriva do seu nome lógico, mas não é «uma cifra por chave» (o estado do aparelho
+  é recifrado a cada sincronização, e um lote que falhou é recifrado igual). Vale o nonce aleatório de 96 bits com
+  poucas cifras por chave (milhares, longe do limite de 2^32).
 - **Nova cadeia** (aparelho perdido ou código exposto): segredo novo, DEK nova, tudo recifrado com IDs novos na cadeia
   nova, e a antiga apagada. Os outros aparelhos recebem o código novo.
 - Tudo na biblioteca padrão do .NET 10 (`HKDF`, `AesGcm`, `HMACSHA256`, `ECDiffieHellman`, `BrotliStream`).

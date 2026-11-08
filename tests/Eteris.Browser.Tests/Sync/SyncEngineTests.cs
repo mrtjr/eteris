@@ -327,20 +327,121 @@ public class SyncEngineTests
     }
 
     [Fact]
-    public async Task BatchFromANewerFormat_WaitsAndAsksForAnUpdate()
+    public async Task BatchWithANewerVersionByte_WaitsWithoutAskingForAnUpdate()
     {
+        // A versão do cabeçalho lê-se antes de decifrar: quem controla o transporte pode mudá-la. O lote fica pendente
+        // (não é lido mal nem marcado como lido), mas o aparelho NÃO diz «atualize o Éteris» por causa disso.
         using var lab = new SyncLab();
         var devices = await lab.DevicesAsync("A", "B");
         devices[0].Put(Collections.Bookmarks, "https://x.pt/", Bookmark("x"));
         await devices[0].PushAsync();
         var path = SyncPaths.Batch(devices[0].ChainId, devices[0].Device.Id, 1);
         var bytes = lab.Cloud.Files[path].ToArray();
-        bytes[4] = SealedFile.FormatVersion + 1; // um Éteris mais recente escreveu este lote
+        bytes[4] = SealedFile.FormatVersion + 1;
         lab.Cloud.Replace(path, bytes);
         var result = await devices[1].PullAsync();
+        Assert.False(result.NeedsUpdate);
+        Assert.DoesNotContain("atualize", result.Pending.Values.Single());
+        Assert.Contains("não conhece", result.Pending.Values.Single());
+        Assert.Equal(0, devices[1].State.Read.GetValueOrDefault(devices[0].Device.Id));
+
+        // Um registo de chaves com o formato mudado à mão também não chega para pedir a atualização.
+        var keysPath = SyncPaths.Keys(devices[0].ChainId);
+        var forged = KeyEnvelope.Parse(lab.Cloud.Files[keysPath]) with { Format = KeyEnvelope.CurrentFormat + 1 };
+        lab.Cloud.Replace(keysPath, forged.ToBytes());
+        Assert.False((await devices[1].PullAsync()).NeedsUpdate);
+
+        // Só quando o registo de chaves, autenticado pela chave da conta, anuncia um formato mais recente.
+        lab.Cloud.Replace(keysPath, KeyRing.EnvelopeForFormat(lab.Secret, KeyEnvelope.CurrentFormat + 1, lab.Now).ToBytes());
+        result = await devices[1].PullAsync();
         Assert.True(result.NeedsUpdate);
         Assert.Contains("atualize o Éteris", result.Pending.Values.Single());
-        Assert.Equal(0, devices[1].State.Read.GetValueOrDefault(devices[0].Device.Id));
+    }
+
+    [Fact]
+    public async Task DeviceIdleLongerThanTheDeadline_KeepsWhatItSent_AndCompactionDoesNotLoseIt()
+    {
+        // Dois PCs. B fez um instantâneo; A envia um lote e fica 91 dias sem uso, com B desligado. Ao voltar, A recomeça
+        // dos instantâneos (caso «ausente»): o que A enviou e nenhum instantâneo cobre não pode desaparecer — nem
+        // daqui, nem de todo quando a compactação de A apagar o lote velho que B nunca leu.
+        using var lab = new SyncLab();
+        var devices = await lab.DevicesAsync("A", "B");
+        var (a, b) = (devices[0], devices[1]);
+        a.Put(Collections.Bookmarks, "https://antes.pt/", Bookmark("antes"));
+        await SyncLab.SettleAsync(a, b);
+        await b.CompactAsync();
+        a.Put(Collections.Bookmarks, "https://so-do-a.pt/", Bookmark("só do A"));
+        await a.SyncAsync();
+
+        lab.Advance(TimeSpan.FromDays(91));
+        var result = await a.PullAsync();
+        Assert.True(result.Rebased);
+        Assert.Equal("só do A", a.Get(Collections.Bookmarks, "https://so-do-a.pt/")!.Text("title"));
+        await a.CompactAsync();
+        Assert.Equal("só do A", a.Get(Collections.Bookmarks, "https://so-do-a.pt/")!.Text("title"));
+
+        // Um aparelho novo (e B, quando voltar) recebe-o.
+        var c = await SyncEngine.JoinAsync(lab.Cloud, lab.Secret, DeviceIdentity.Create("C"), lab.ClockOf("C"));
+        await c.PullAsync();
+        Assert.Equal("só do A", c.Get(Collections.Bookmarks, "https://so-do-a.pt/")!.Text("title"));
+        await SyncLab.SettleAsync(b, a, c);
+        Assert.Equal("só do A", b.Get(Collections.Bookmarks, "https://so-do-a.pt/")!.Text("title"));
+        Assert.Equal(a.Fingerprint(), b.Fingerprint());
+        Assert.Equal(a.Fingerprint(), c.Fingerprint());
+    }
+
+    [Fact]
+    public async Task Rebase_KeepsALiveRecordThatANewerSnapshotSimplyNeverSaw()
+    {
+        // O instantâneo de A tem o favorito de C; o de B (mais recente, depois do horizonte) não o tem só porque B
+        // nunca leu o lote de C — não porque foi apagado. Um aparelho novo não o pode deitar fora.
+        using var lab = new SyncLab();
+        var (a, b, c) = await Three(lab);
+        c.Put(Collections.Bookmarks, "https://do-c.pt/", Bookmark("do C"));
+        await c.PushAsync();
+        await a.PullAsync();
+        await a.CompactAsync();
+        lab.Advance(TimeSpan.FromDays(91));
+        await b.CompactAsync(); // B não leu o lote de C
+
+        var d = await SyncEngine.JoinAsync(lab.Cloud, lab.Secret, DeviceIdentity.Create("D"), lab.ClockOf("D"));
+        var result = await d.PullAsync();
+        Assert.True(result.Rebased);
+        Assert.Equal("do C", d.Get(Collections.Bookmarks, "https://do-c.pt/")!.Text("title"));
+    }
+
+    [Fact]
+    public async Task StateRestoredFromAnOldCopy_NeverReusesBatchNumbers()
+    {
+        using var lab = new SyncLab();
+        var flaky = new FlakyTransport(lab.Cloud);
+        var a = await SyncEngine.CreateAsync(flaky, lab.Secret, DeviceIdentity.Create("A"), lab.ClockOf("A"));
+        var b = await SyncEngine.JoinAsync(lab.Cloud, lab.Secret, DeviceIdentity.Create("B"), lab.ClockOf("B"));
+        a.Put(Collections.Bookmarks, "https://1.pt/", Bookmark("1"));
+        await a.PushAsync();
+        a.Put(Collections.Bookmarks, "https://2.pt/", Bookmark("2"));
+        flaky.FailWrites = 1;
+        await Assert.ThrowsAsync<IOException>(() => a.PushAsync()); // o lote 2 fica pendente
+        var oldCopy = a.State.ToBytes();                          // cópia de segurança tirada AGORA
+
+        // A continua: o lote 2 sai, e mais o 3. B lê-os.
+        a.Put(Collections.Bookmarks, "https://3.pt/", Bookmark("3"));
+        await a.PushAsync();
+        await b.PullAsync();
+        var batch2 = lab.Cloud.Files[SyncPaths.Batch(a.ChainId, a.Device.Id, 2)].ToArray();
+
+        // O disco de A avaria e o estado volta da cópia antiga (NextSeq 3, lote 2 pendente).
+        var restored = await SyncEngine.ResumeAsync(lab.Cloud, lab.Secret, SyncState.Parse(oldCopy), lab.ClockOf("A"));
+        Assert.Equal("3", restored.Get(Collections.Bookmarks, "https://3.pt/")!.Text("title")); // o lote 3 é dele: lido de volta
+        Assert.Equal(4, restored.State.NextSeq);
+        restored.Put(Collections.Bookmarks, "https://4.pt/", Bookmark("4"));
+        Assert.Equal(4, await restored.PushAsync());
+        Assert.Equal(batch2, lab.Cloud.Files[SyncPaths.Batch(a.ChainId, a.Device.Id, 2)]); // nada reescrito
+
+        await b.PullAsync();
+        foreach (var i in new[] { 1, 2, 3, 4 })
+            Assert.Equal($"{i}", b.Get(Collections.Bookmarks, $"https://{i}.pt/")!.Text("title"));
+        Assert.Equal(restored.Fingerprint(), b.Fingerprint());
     }
 
     [Fact]

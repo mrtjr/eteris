@@ -68,11 +68,13 @@ public sealed class KeyRing
 {
     private readonly byte[] _dek;
     private readonly byte[] _ids;
+    private readonly byte[] _kek;
 
-    private KeyRing(KeyEnvelope envelope, byte[] dek)
+    private KeyRing(KeyEnvelope envelope, byte[] dek, byte[] kek)
     {
         Envelope = envelope;
         _dek = dek;
+        _kek = kek;
         _ids = Kdf.Derive(dek, "ids");
     }
 
@@ -86,28 +88,54 @@ public sealed class KeyRing
     {
         var dek = RandomNumberGenerator.GetBytes(32);
         var chain = secret.ChainId;
-        var envelope = new KeyEnvelope(KeyEnvelope.CurrentFormat, chain, generation, Kdf.Base64Url(Wrap(secret.Kek, dek, chain, generation)), nowMs);
-        return new KeyRing(envelope, dek);
+        var kek = secret.Kek;
+        var envelope = new KeyEnvelope(KeyEnvelope.CurrentFormat, chain, generation, Kdf.Base64Url(Wrap(kek, dek, chain, generation, KeyEnvelope.CurrentFormat)), nowMs);
+        return new KeyRing(envelope, dek, kek);
     }
 
+    // O formato do registo de chaves é AUTENTICADO: vai nos dados associados do embrulho da DEK («v<formato>»). Um
+    // formato mais recente só pede «atualize o Éteris» se o embrulho abrir com esse formato (foi um aparelho da conta
+    // que o escreveu); mudado por quem controla o transporte, é «registo alterado». Regra para os formatos futuros:
+    // o embrulho da DEK continua AES-256-GCM com estes dados associados.
     public static KeyRing Open(AccountSecret secret, KeyEnvelope envelope)
     {
-        if (envelope.Format > KeyEnvelope.CurrentFormat)
-            throw new UnsupportedFormatException($"Registo de chaves no formato {envelope.Format}: atualize o Éteris.");
         if (!string.Equals(envelope.ChainId, secret.ChainId, StringComparison.Ordinal))
             throw new WrongCodeException("Este código é de outra conta de sincronização.");
+        var kek = secret.Kek;
+        byte[] dek;
         try
         {
-            return new KeyRing(envelope, Unwrap(secret.Kek, Kdf.FromBase64Url(envelope.WrappedDek), envelope.ChainId, envelope.Generation));
+            dek = Unwrap(kek, Kdf.FromBase64Url(envelope.WrappedDek), envelope.ChainId, envelope.Generation, envelope.Format);
         }
         catch (Exception e) when (e is CryptographicException or FormatException)
         {
             throw new WrongCodeException("O código não abre esta conta (ou o registo de chaves foi alterado).");
         }
+        if (envelope.Format > KeyEnvelope.CurrentFormat)
+        {
+            CryptographicOperations.ZeroMemory(dek);
+            throw new UnsupportedFormatException($"Registo de chaves no formato {envelope.Format}: atualize o Éteris.");
+        }
+        return new KeyRing(envelope, dek, kek);
     }
 
-    // Chave de um ficheiro (lote, instantâneo, estado): uma por ficheiro, por isso o nonce aleatório nunca se repete
-    // sob a mesma chave, e um ficheiro mudado de nome ou de lugar deixa de se decifrar.
+    // O registo de chaves (lido de novo do transporte) foi mesmo escrito por um aparelho desta conta?
+    internal bool Authenticates(KeyEnvelope envelope)
+    {
+        if (!string.Equals(envelope.ChainId, ChainId, StringComparison.Ordinal)) return false;
+        try
+        {
+            CryptographicOperations.ZeroMemory(Unwrap(_kek, Kdf.FromBase64Url(envelope.WrappedDek), envelope.ChainId, envelope.Generation, envelope.Format));
+            return true;
+        }
+        catch (Exception e) when (e is CryptographicException or FormatException) { return false; }
+    }
+
+    // Chave de um ficheiro (lote, instantâneo, estado), derivada do nome lógico: um ficheiro mudado de nome ou de lugar
+    // deixa de se decifrar. NÃO é «uma cifra por chave»: o estado do aparelho (a/<aparelho>) é recifrado com a mesma
+    // chave a cada Pull, e um lote que falhou o envio é recifrado igual. A segurança do AES-GCM vem do nonce aleatório
+    // de 96 bits com poucas cifras por chave (milhares, longe das 2^32 do limite); um nonce derivado ou contador
+    // exigiria outra solução (por exemplo um contador no contexto).
     internal byte[] FileKey(char kind, string context) => Kdf.Derive(_dek, $"file:{kind}:{context}");
 
     // ID opaco e estável de um registo: HMAC(K_ids, coleção ‖ chave natural), 128 bits. O mesmo URL dá o mesmo ID em
@@ -115,23 +143,30 @@ public sealed class KeyRing
     public string OpaqueId(string collection, string naturalKey)
         => Kdf.Hex(HMACSHA256.HashData(_ids, Encoding.UTF8.GetBytes(collection + "\n" + naturalKey)).AsSpan(0, 16));
 
-    private static byte[] Aad(string chain, int generation) => Encoding.UTF8.GetBytes($"eteris-keys|v{KeyEnvelope.CurrentFormat}|{chain}|{generation}");
+    private static byte[] Aad(string chain, int generation, int format) => Encoding.UTF8.GetBytes($"eteris-keys|v{format}|{chain}|{generation}");
 
-    private static byte[] Wrap(byte[] kek, byte[] dek, string chain, int generation)
+    // Só para os testes: um registo de chaves de um formato futuro, escrito por quem tem o código.
+    internal static KeyEnvelope EnvelopeForFormat(AccountSecret secret, int format, long nowMs)
+    {
+        var dek = RandomNumberGenerator.GetBytes(32);
+        return new KeyEnvelope(format, secret.ChainId, 1, Kdf.Base64Url(Wrap(secret.Kek, dek, secret.ChainId, 1, format)), nowMs);
+    }
+
+    private static byte[] Wrap(byte[] kek, byte[] dek, string chain, int generation, int format)
     {
         var output = new byte[12 + dek.Length + 16];
         RandomNumberGenerator.Fill(output.AsSpan(0, 12));
         using var aes = new AesGcm(kek, 16);
-        aes.Encrypt(output.AsSpan(0, 12), dek, output.AsSpan(12, dek.Length), output.AsSpan(12 + dek.Length), Aad(chain, generation));
+        aes.Encrypt(output.AsSpan(0, 12), dek, output.AsSpan(12, dek.Length), output.AsSpan(12 + dek.Length), Aad(chain, generation, format));
         return output;
     }
 
-    private static byte[] Unwrap(byte[] kek, byte[] wrapped, string chain, int generation)
+    private static byte[] Unwrap(byte[] kek, byte[] wrapped, string chain, int generation, int format)
     {
         if (wrapped.Length != 12 + 32 + 16) throw new CryptographicException("Chave embrulhada com tamanho errado");
         var dek = new byte[32];
         using var aes = new AesGcm(kek, 16);
-        aes.Decrypt(wrapped.AsSpan(0, 12), wrapped.AsSpan(12, 32), wrapped.AsSpan(44, 16), dek, Aad(chain, generation));
+        aes.Decrypt(wrapped.AsSpan(0, 12), wrapped.AsSpan(12, 32), wrapped.AsSpan(44, 16), dek, Aad(chain, generation, format));
         return dek;
     }
 }

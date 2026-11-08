@@ -45,6 +45,8 @@ public sealed class SyncState
     [JsonPropertyName("clock")] [JsonConverter(typeof(HlcJsonConverter))] public Hlc Clock { get; set; } = Hlc.Zero;
     [JsonPropertyName("lastPull")] public long LastPullMs { get; set; }
     [JsonPropertyName("ownBatches")] public Dictionary<long, long> OwnBatchTimes { get; set; } = [];
+    // Em que lote deste aparelho seguiu a última versão enviada de cada registo (até o instantâneo próprio a cobrir).
+    [JsonPropertyName("sent")] public Dictionary<string, long> SentIn { get; set; } = new(StringComparer.Ordinal);
 
     public static string RecordKey(string collection, string id) => collection + "/" + id;
 

@@ -77,7 +77,59 @@ public sealed class SyncEngine
     {
         var keys = await OpenKeysAsync(transport, secret, cancellationToken).ConfigureAwait(false);
         if (state.ChainId != keys.ChainId) throw new WrongCodeException("O estado guardado é de outra conta.");
-        return new SyncEngine(transport, keys, state, now, options);
+        var engine = new SyncEngine(transport, keys, state, now, options);
+        await engine.CatchUpOwnBatchesAsync(cancellationToken).ConfigureAwait(false);
+        return engine;
+    }
+
+    // O estado guardado pode ser uma cópia antiga (reposta de uma cópia de segurança, ou de outro disco) com o mesmo
+    // aparelho: o NextSeq voltava atrás e os lotes novos reutilizavam números que os outros já deram como lidos —
+    // ignorados em silêncio. Ao retomar, o que está no transporte manda: lotes e instantâneos deste aparelho com número
+    // igual ou maior do que o NextSeq guardado são de depois desta cópia. São lidos (são deste aparelho; o estado
+    // reposto não os tem), o NextSeq passa à frente deles, e um lote pendente com um número já usado volta à caixa
+    // de saída para seguir com um número novo.
+    private async Task CatchUpOwnBatchesAsync(CancellationToken cancellationToken)
+    {
+        var own = new SortedSet<long>();
+        foreach (var path in await _transport.ListAsync(SyncPaths.Batches(ChainId) + Device.Id + "/", cancellationToken).ConfigureAwait(false))
+            if (SyncPaths.TryParseBatch(ChainId, path, out var device, out var seq) && device == Device.Id) own.Add(seq);
+        var max = own.Count > 0 ? own.Max : 0;
+        foreach (var path in await _transport.ListAsync(SyncPaths.Snapshots(ChainId), cancellationToken).ConfigureAwait(false))
+            if (SyncPaths.TryParseSnapshot(ChainId, path, out var device, out var seq) && device == Device.Id) max = Math.Max(max, seq);
+        if (max < State.NextSeq) return;
+
+        var restoredNext = State.NextSeq;
+        foreach (var seq in own.Where(s => s >= restoredNext))
+        {
+            try
+            {
+                var bytes = await _transport.ReadAsync(SyncPaths.Batch(ChainId, Device.Id, seq), cancellationToken).ConfigureAwait(false);
+                if (bytes is null) continue;
+                var context = SyncPaths.BatchContext(Device.Id, seq);
+                var payload = Json.Parse<BatchPayload>(SealedFile.Open(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, context, bytes));
+                if (payload.Device != Device.Id || payload.Seq != seq) continue;
+                foreach (var version in payload.NotesHistory ?? []) Remember(version, outgoing: false);
+                foreach (var record in payload.Records)
+                {
+                    Merge(record);
+                    State.SentIn[SyncState.RecordKey(record.Collection, record.Id)] = seq;
+                }
+                State.OwnBatchTimes[seq] = payload.CreatedMs;
+            }
+            catch (Exception e) when (e is CryptographicException or FormatException or UnsupportedFormatException) { }
+        }
+        if (State.Pending is { } pending && pending.Seq <= max)
+        {
+            foreach (var record in pending.Records)
+            {
+                var id = SyncState.RecordKey(record.Collection, record.Id);
+                if (!State.Outbox.TryGetValue(id, out var newer) || newer.Version < record.Version) State.Outbox[id] = record;
+            }
+            State.OutboxNotes.InsertRange(0, pending.Notes);
+            State.Pending = null;
+        }
+        State.NextSeq = max + 1;
+        State.Clock = _clock.Last;
     }
 
     private static async Task<KeyRing> OpenKeysAsync(ISyncTransport transport, AccountSecret secret, CancellationToken cancellationToken)
@@ -180,6 +232,7 @@ public sealed class SyncEngine
         var file = SealedFile.Seal(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, _keys.Generation, context, Json.Bytes(payload));
         await _transport.WriteAsync(SyncPaths.Batch(ChainId, Device.Id, batch.Seq), file, cancellationToken).ConfigureAwait(false);
         State.OwnBatchTimes[batch.Seq] = batch.CreatedMs;
+        foreach (var record in batch.Records) State.SentIn[SyncState.RecordKey(record.Collection, record.Id)] = batch.Seq;
         State.Pending = null;
     }
 
@@ -187,8 +240,12 @@ public sealed class SyncEngine
 
     public async Task<PullResult> PullAsync(CancellationToken cancellationToken = default)
     {
-        if (await _transport.ReadAsync(SyncPaths.Keys(ChainId), cancellationToken).ConfigureAwait(false) is null)
-            throw new ChainGoneException("Esta conta deixou de existir: outro aparelho criou uma nova cadeia. Peça o código novo.");
+        var keysFile = await _transport.ReadAsync(SyncPaths.Keys(ChainId), cancellationToken).ConfigureAwait(false)
+                       ?? throw new ChainGoneException("Esta conta deixou de existir: outro aparelho criou uma nova cadeia. Peça o código novo.");
+        // «Atualize o Éteris» só quando o registo de chaves, AUTENTICADO pela chave da conta, anuncia um formato mais
+        // recente. A versão no cabeçalho de um lote é lida antes de o decifrar: quem controla o transporte podia mudá-la
+        // e pôr o aparelho a pedir uma atualização falsa (alavanca para «descarregue esta atualização»).
+        var announced = AnnouncedNewerFormat(keysFile);
 
         var files = await _transport.ListAsync(SyncPaths.Chain(ChainId), cancellationToken).ConfigureAwait(false);
         var batches = new Dictionary<string, SortedSet<long>>(StringComparer.Ordinal);
@@ -205,7 +262,7 @@ public sealed class SyncEngine
         }
 
         var pending = new Dictionary<string, string>(StringComparer.Ordinal);
-        var needsUpdate = false;
+        var needsUpdate = announced;
         var rebased = false;
         var now = _now();
         var fresh = State.Read.Count == 0 && State.Records.Count == State.Outbox.Count;
@@ -221,7 +278,6 @@ public sealed class SyncEngine
                 Rebase(loaded);
                 rebased = true;
             }
-            if (error is UnsupportedFormatException) needsUpdate = true;
         }
 
         var applied = 0;
@@ -249,10 +305,11 @@ public sealed class SyncEngine
                     foreach (var record in payload.Records) applied += Merge(record) ? 1 : 0;
                     State.Read[device] = seq;
                 }
-                catch (UnsupportedFormatException e)
+                catch (UnsupportedFormatException)
                 {
-                    pending[device] = e.Message;
-                    needsUpdate = true;
+                    pending[device] = announced
+                        ? $"lote {seq} de um Éteris mais recente: atualize o Éteris"
+                        : $"lote {seq} num formato que este Éteris não conhece (fica à espera)";
                     break;
                 }
                 catch (Exception e) when (e is CryptographicException or FormatException)
@@ -274,6 +331,16 @@ public sealed class SyncEngine
         var result = await PullAsync(cancellationToken).ConfigureAwait(false);
         await PushAsync(cancellationToken).ConfigureAwait(false);
         return result;
+    }
+
+    private bool AnnouncedNewerFormat(byte[] keysFile)
+    {
+        try
+        {
+            var envelope = KeyEnvelope.Parse(keysFile);
+            return envelope.Format > KeyEnvelope.CurrentFormat && _keys.Authenticates(envelope);
+        }
+        catch (FormatException) { return false; }
     }
 
     private static bool Covers(List<SnapshotPayload> snapshots, Dictionary<string, SortedSet<long>> batches)
@@ -302,31 +369,46 @@ public sealed class SyncEngine
         return (list, error);
     }
 
-    // Recomeça dos instantâneos: o estado sincronizado passa a ser a junção deles (cada um vale até ao que cobre) e só o
-    // que ainda não foi enviado daqui fica por cima. É o que impede um aparelho ausente há mais do que o prazo das
-    // lápides de ressuscitar apagados: um registo vivo num instantâneo velho que falta num mais recente, e que é mais
-    // antigo do que o horizonte das lápides deste, foi apagado e a lápide já saiu — não volta.
+    // Recomeça dos instantâneos: o estado sincronizado passa a ser a junção deles (cada um vale até ao que cobre),
+    // mais o que este aparelho já enviou e nenhum instantâneo cobre, e por cima o que ainda não foi enviado daqui. É o
+    // que impede um aparelho ausente há mais do que o prazo das lápides de ressuscitar apagados: um registo vivo num
+    // instantâneo velho que falta num mais recente QUE VIU TUDO O QUE O VELHO VIU, e que é mais antigo do que o
+    // horizonte das lápides deste, foi apagado e a lápide já saiu — não volta.
     private void Rebase(List<SnapshotPayload> snapshots)
     {
         var unsent = State.Outbox.Values.Concat(State.Pending?.Records ?? []).ToList();
+        // Enviados daqui depois do que os instantâneos cobrem deste aparelho: o PullAsync nunca lê os lotes próprios,
+        // por isso, sem isto, desapareciam deste aparelho (e a compactação seguinte apagava-os de todo).
+        var covered = snapshots.Max(s => s.Covers.GetValueOrDefault(Device.Id));
+        var sentLater = State.SentIn.Where(s => s.Value > covered)
+            .Select(s => State.Records.TryGetValue(s.Key, out var record) && record.Version.Node == Device.Id ? record : null)
+            .OfType<SyncRecord>().ToList();
         State.Records = new Dictionary<string, SyncRecord>(StringComparer.Ordinal);
         State.Outbox = new Dictionary<string, SyncRecord>(StringComparer.Ordinal);
         State.Read = new Dictionary<string, long>(StringComparer.Ordinal);
         var ordered = snapshots.OrderBy(s => s.CreatedMs).ToList();
+        var present = ordered.ToDictionary(s => s, s => s.Records.Select(r => SyncState.RecordKey(r.Collection, r.Id)).ToHashSet(StringComparer.Ordinal));
         foreach (var snapshot in ordered)
         {
             foreach (var version in snapshot.NotesHistory ?? []) Remember(version, outgoing: false);
             foreach (var record in snapshot.Records)
             {
+                var key = SyncState.RecordKey(record.Collection, record.Id);
                 var purged = ordered.Any(newer => newer.CreatedMs > snapshot.CreatedMs && record.Version.Wall < newer.TombstoneHorizonMs
-                                                  && newer.Records.All(r => r.Id != record.Id || r.Collection != record.Collection));
+                                                  && Dominates(newer, snapshot) && !present[newer].Contains(key));
                 if (!purged) Merge(record);
             }
             foreach (var (device, seq) in snapshot.Covers)
                 if (device != Device.Id) State.Read[device] = Math.Max(State.Read.GetValueOrDefault(device), seq);
         }
+        foreach (var record in sentLater) Merge(record);
         foreach (var record in unsent) Merge(record, local: true);
     }
+
+    // O instantâneo mais recente viu tudo o que o mais antigo viu (de todos os aparelhos): só então a falta de um
+    // registo nele quer dizer «apagado». Senão pode faltar só porque o autor ainda não leu o lote que o criou.
+    private static bool Dominates(SnapshotPayload newer, SnapshotPayload older)
+        => older.Covers.All(c => newer.Covers.GetValueOrDefault(c.Key) >= c.Value);
 
     // Funde um registo que veio de fora. Devolve true se o estado local mudou.
     private bool Merge(SyncRecord incoming, bool local = false)
@@ -511,13 +593,17 @@ public sealed class SyncEngine
         var context = SyncPaths.SnapshotContext(Device.Id, mine);
         var file = SealedFile.Seal(_keys.FileKey(SealedFile.Snapshot, context), SealedFile.Snapshot, ChainId, _keys.Generation, context, Json.Bytes(snapshot));
         await _transport.WriteAsync(SyncPaths.Snapshot(ChainId, Device.Id, mine), file, cancellationToken).ConfigureAwait(false);
+        // O que seguiu nos lotes até «mine» está agora neste instantâneo.
+        foreach (var key in State.SentIn.Where(s => s.Value <= mine).Select(s => s.Key).ToList()) State.SentIn.Remove(key);
 
         // Instantâneos antigos deste aparelho saem.
         foreach (var path in await _transport.ListAsync(SyncPaths.Snapshots(ChainId), cancellationToken).ConfigureAwait(false))
             if (SyncPaths.TryParseSnapshot(ChainId, path, out var device, out var seq) && device == Device.Id && seq < mine)
                 await _transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
 
-        // Lotes que já ninguém precisa: lidos por todos os outros aparelhos conhecidos, ou mais velhos do que o prazo.
+        // Lotes que já ninguém precisa: lidos por todos os outros aparelhos conhecidos, ou mais velhos do que o prazo —
+        // estes só porque o instantâneo acabado de escrever os cobre (Covers[este] = mine) e tem os registos deles (o
+        // Rebase já não os perde: SentIn).
         var others = (await DevicesAsync(cancellationToken).ConfigureAwait(false)).Where(d => d.Device != Device.Id).ToList();
         var acked = others.Count == 0 ? mine : others.Min(d => d.Read.GetValueOrDefault(Device.Id));
         foreach (var path in await _transport.ListAsync(SyncPaths.Batches(ChainId) + Device.Id + "/", cancellationToken).ConfigureAwait(false))
