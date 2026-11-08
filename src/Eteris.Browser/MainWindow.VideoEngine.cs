@@ -247,6 +247,8 @@ public partial class MainWindow
                 tab.Favicon = null;
                 tab.Tint = null;
             }
+            // Na troca para o motor de vídeo o endereço da aba já é o novo: o ícone do site anterior sai pelo site dele.
+            else tab.ForgetFaviconOfOtherSite(address);
             tab.IsReaderable = false;
             tab.Address = address;
         };

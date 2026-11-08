@@ -14,6 +14,10 @@
 - A versão do Windows e do Chromium que os sites leem passa a ser a mesma na página e nos seus workers (antes, os
   workers davam a versão exata).
 
+### Correções
+- Um vídeo ou áudio aberto diretamente depois de outro site deixa de ficar com o ícone desse site, nos dois motores.
+- O mesmo ficheiro de média fica no histórico com o mesmo título nos dois motores: o nome do ficheiro, como no Chrome.
+
 ## 0.2.9 — 2026-11-08
 
 A maior versão até agora. O programa de experiência do utilizador fica encerrado nos 50 ciclos (ciclos 1–51 feitos,

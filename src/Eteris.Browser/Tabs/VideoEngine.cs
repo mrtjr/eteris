@@ -346,6 +346,30 @@ public static class VideoEngine
         return UntitledTitle(url);
     }
 
+    // Título de uma página do motor principal: igual ao que chega, exceto num ficheiro de vídeo/áudio aberto
+    // diretamente, a que o Chromium dá o próprio endereço (sem esquema nem «www.») como título — aí, o mesmo critério
+    // do motor de vídeo (PageTitle): o nome do ficheiro.
+    public static string MainEngineTitle(string? title, string? url)
+    {
+        if (IsDirectMedia(url) && (string.IsNullOrWhiteSpace(title) || SameAsAddress(title, url!))) return UntitledTitle(url);
+        return string.IsNullOrEmpty(title) ? url ?? string.Empty : title;
+    }
+
+    private static bool SameAsAddress(string title, string url)
+    {
+        static string Bare(string text)
+        {
+            var bare = text.Trim();
+            foreach (var scheme in (string[])["https://", "http://"])
+                if (bare.StartsWith(scheme, StringComparison.OrdinalIgnoreCase)) bare = bare[scheme.Length..];
+            if (bare.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) bare = bare[4..];
+            bare = bare.TrimEnd('/');
+            try { return Uri.UnescapeDataString(bare); }
+            catch (UriFormatException) { return bare; }
+        }
+        return string.Equals(Bare(title), Bare(url), StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string UntitledTitle(string? url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return url ?? string.Empty;
