@@ -4,9 +4,8 @@ rem Uso: build-cefsharp.cmd <pasta do codigo do CefSharp v156.0.150, com o patch
 rem Requisitos: Visual Studio 2022 / Build Tools com C++/CLI (VC.CLI.Support) e .NET SDK (NetCore.Component.SDK).
 rem Nao usa o build.ps1 oficial: ele importa o ambiente do vcvarsall.bat com uma conversao de texto que estraga
 rem nomes de utilizador com acentos (APPDATA, USERPROFILE...).
-rem Antes de compilar, na copia do CefSharp:
-rem   - global.json: SDK 9.0.x (o .NET 10 com o MSBuild 17.14 da NETSDK1145);
-rem   - TargetFramework net6.0 -> net8.0 nos 4 projetos (o C++/CLI precisa do pacote Apphost da versao-alvo).
+rem Antes de compilar: prepare-source.ps1 -Source <pasta> (aplica o patch, SDK 9 no global.json - o .NET 10 com
+rem o MSBuild 17.14 da NETSDK1145 - e net8.0 nos 4 projetos - o C++/CLI precisa do pacote Apphost da versao-alvo).
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
 if errorlevel 1 exit /b 1
 cd /d "%~1"
@@ -17,4 +16,7 @@ msbuild /nologo /nodeReuse:false /verbosity:minimal /restore /t:build /p:Platfor
 if errorlevel 1 exit /b 2
 msbuild /nologo /nodeReuse:false /verbosity:minimal /restore /t:build /p:Platform=x64 /p:Configuration=Release "/p:SolutionDir=%CD%\\" "/p:LinkKeyFile=" CefSharp.Core\CefSharp.Core.netcore.csproj
 if errorlevel 1 exit /b 3
-echo OK: CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.dll e CefSharp.Core\bin.netcore\x64\Release\net8.0\CefSharp.Core.dll
+rem Montagem de referencia (ref/ do pacote NuGet), com a propriedade WindowsSandboxInfo.
+msbuild /nologo /nodeReuse:false /verbosity:minimal /restore /t:build /p:Platform=x64 /p:Configuration=Release "/p:SolutionDir=%CD%\\" "/p:LinkKeyFile=" CefSharp.Core.Runtime.RefAssembly\CefSharp.Core.Runtime.RefAssembly.netcore.csproj
+if errorlevel 1 exit /b 4
+echo OK: CefSharp.Core.Runtime\bin.netcore\x64\Release\CefSharp.Core.Runtime.dll, CefSharp.Core\bin.netcore\x64\Release\net8.0\CefSharp.Core.dll e a montagem de referencia

@@ -37,6 +37,34 @@ processos correm fechados (sem acesso a ficheiros nem ao sistema).
    `Page.addScriptToEvaluateOnNewDocument`), como os scriptlets já faziam — ver «Passo A — resultado» e «Regras para
    o código».
 
+## Passo D — resultado (2026-11-08, ramo `sandbox`): D0–D2 feitos
+
+**D0 — o motor próprio isola as páginas com o bootstrap (sem .NET).** `cefsimple_dll` compilado na árvore do motor
+(`autoninja -n` antes: 220 passos, só o `libcef_dll_wrapper_dll` e o `cefsimple.dll`; o `libcef.dll` ficou igual,
+SHA256 `4D5097CE…F20C` antes e depois, o mesmo do runtime publicado). Pasta de teste com o runtime, `bootstrap.exe`
+renomeado para `cefsimple.exe` e o `cefsimple.dll`. `chrome://sandbox` lido por CDP:
+
+| Processo | Sandbox | Bloqueio | Integridade |
+|---|---|---|---|
+| Renderer (2) | Renderer | Lockdown | S-1-16-0 Untrusted |
+| GPU | GPU | Limited | S-1-16-4096 Low |
+| Storage Service | Service | Lockdown | Untrusted |
+| Audio Service | (script de tokens) | — | Low |
+| Network Service | **Not Sandboxed** (igual ao Chrome 156 sem experiência de campo: D9) | | |
+
+`build/sandbox/sandbox-check.ps1` (tokens dos filhos, sem olhar para a tela) confirma: renderers Untrusted com token
+restrito, GPU Low, nenhum filho com `--no-sandbox`. Com o GPU fechado, o MP4 H.264 1280×720 toca (126 quadros, 0
+perdidos, `err: null`), o `.m4a` e o `.aac` (AAC-LC) descodificam, e a sonda dá `probably` para H.264, AAC, HE-AAC,
+HEVC, VP9, AV1, Opus e MP3.
+
+**D1 — CefSharp com o patch v2** (`build/cefsharp`, ver o README): compila (`prepare-source.ps1` +
+`build-cefsharp.cmd`) e `pack-local.ps1` produz o feed local `156.0.150-eteris.1`.
+
+**D2 — DLL cliente do bootstrap** (`build/sandbox/client`: `eteris_client.cpp`, CMake contra a distribuição do
+próprio motor, `make_distrib --minimal`): `dumpbin /exports` → `EterisSandboxInfo`, `RunWinMain`; `/imports` →
+só `KERNEL32.dll` direto, `libcef.dll` e `SHELL32.dll` em carga diferida; CRT estática (`/MT`, sem `VCRUNTIME140`).
+Testes: `SandboxBootstrapSourceTests` (esquema `eteris://` igual nos dois lados, exportações, patch).
+
 ## Passo A — resultado (2026-11-07): feito
 
 Toda a execução de JavaScript nas páginas passou para `Browser/PageScript.cs` (DevTools `Runtime.evaluate`, uma

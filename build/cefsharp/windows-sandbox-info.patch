@@ -11,21 +11,74 @@ index edb3e9e..a9c9ebd 100644
          public int RemoteDebuggingPort { get { throw null; } set { } }
          public string ResourcesDirPath { get { throw null; } set { } }
 diff --git a/CefSharp.Core.Runtime/Cef.h b/CefSharp.Core.Runtime/Cef.h
-index 9b08009..4adeb37 100644
+index 9b08009..3e61e06 100644
 --- a/CefSharp.Core.Runtime/Cef.h
 +++ b/CefSharp.Core.Runtime/Cef.h
-@@ -367,7 +367,8 @@ namespace CefSharp
-                 CefMainArgs main_args;
+@@ -329,8 +329,13 @@ namespace CefSharp
+                         "See https://github.com/cefsharp/CefSharp/wiki/General-Usage#request-context-browser-isolation");
+                 }
+ 
++                // Windows sandbox (CEF bootstrap): every sub-process is launched through the bootstrap executable (the
++                // main executable), so BrowserSubprocessPath is ignored and cleared below - CEF forces no_sandbox whenever
++                // browser_subprocess_path is set. The DependencyChecker looks for CefSharp.BrowserSubprocess, so it is skipped.
++                const bool useWindowsSandbox = cefSettings->WindowsSandboxInfo != IntPtr::Zero;
++
+                 //Empty string is acceptable, the main application executable will be used
+-                if (cefSettings->BrowserSubprocessPath == nullptr)
++                if (!useWindowsSandbox && cefSettings->BrowserSubprocessPath == nullptr)
+                 {
+                     throw gcnew Exception("CefSettings BrowserSubprocessPath cannot be null.");
+                 }
+@@ -338,15 +343,19 @@ namespace CefSharp
+                 PathCheck::AssertAbsolute(cefSettings->RootCachePath, "CefSettings.RootCachePath");
+                 PathCheck::AssertAbsolute(cefSettings->CachePath, "CefSettings.CachePath");
+                 PathCheck::AssertAbsolute(cefSettings->LocalesDirPath, "CefSettings.LocalesDirPath");
+-                PathCheck::AssertAbsolute(cefSettings->BrowserSubprocessPath, "CefSettings.BrowserSubprocessPath");
+ 
+-                if (performDependencyCheck)
+-                {
+-                    DependencyChecker::AssertAllDependenciesPresent(cefSettings->Locale, cefSettings->LocalesDirPath, cefSettings->ResourcesDirPath, false, cefSettings->BrowserSubprocessPath);
+-                }
+-                else if (!File::Exists(cefSettings->BrowserSubprocessPath))
++                if (!useWindowsSandbox)
+                 {
+-                    throw gcnew FileNotFoundException("CefSettings.BrowserSubprocessPath not found.", cefSettings->BrowserSubprocessPath);
++                    PathCheck::AssertAbsolute(cefSettings->BrowserSubprocessPath, "CefSettings.BrowserSubprocessPath");
++
++                    if (performDependencyCheck)
++                    {
++                        DependencyChecker::AssertAllDependenciesPresent(cefSettings->Locale, cefSettings->LocalesDirPath, cefSettings->ResourcesDirPath, false, cefSettings->BrowserSubprocessPath);
++                    }
++                    else if (!File::Exists(cefSettings->BrowserSubprocessPath))
++                    {
++                        throw gcnew FileNotFoundException("CefSettings.BrowserSubprocessPath not found.", cefSettings->BrowserSubprocessPath);
++                    }
+                 }
+ 
+                 UIThreadTaskFactory = gcnew TaskFactory(gcnew CefTaskScheduler(TID_UI));
+@@ -364,10 +373,18 @@ namespace CefSharp
+                                                            cefSettings->CefCommandLineArgs,
+                                                            cefSettings->CefCustomSchemes,
+                                                            cefApp));
+-                CefMainArgs main_args;
++                // The module handle of the main executable, as cefsimple does (harmless without the sandbox).
++                CefMainArgs main_args(::GetModuleHandle(nullptr));
                  CefSettings settings = *(cefSettings->_cefSettings);
  
 -                auto success = CefInitialize(main_args, settings, app.get(), nullptr);
++                if (useWindowsSandbox)
++                {
++                    // Sub-processes are the main (bootstrap) executable; a separate one would disable the sandbox.
++                    cef_string_clear(&settings.browser_subprocess_path);
++                }
++
 +                // Windows sandbox: the pointer handed to RunWinMain by CEF's bootstrap.exe (nullptr = no sandbox).
 +                auto success = CefInitialize(main_args, settings, app.get(), cefSettings->WindowsSandboxInfo.ToPointer());
  
                  if (!success)
                  {
 diff --git a/CefSharp.Core.Runtime/CefSettingsBase.h b/CefSharp.Core.Runtime/CefSettingsBase.h
-index c8b3b85..431e2f7 100644
+index c8b3b85..9335fda 100644
 --- a/CefSharp.Core.Runtime/CefSettingsBase.h
 +++ b/CefSharp.Core.Runtime/CefSettingsBase.h
 @@ -27,6 +27,11 @@ namespace CefSharp
@@ -47,7 +100,7 @@ index c8b3b85..431e2f7 100644
 +            /// <summary>
 +            /// Windows only. The sandbox information pointer that CEF's bootstrap.exe passes to the client DLL's RunWinMain
 +            /// (see include/cef_sandbox_win.h). When set, it is passed to CefInitialize and the sandbox is enabled
-+            /// (no_sandbox = false); sub-processes must then also be launched through the bootstrap executable.
++            /// (no_sandbox = false); sub-processes are then launched through the main (bootstrap) executable and BrowserSubprocessPath is ignored.
 +            /// The default (IntPtr.Zero) keeps the current behaviour: sandbox disabled.
 +            /// </summary>
 +            property IntPtr WindowsSandboxInfo
@@ -64,23 +117,17 @@ index c8b3b85..431e2f7 100644
              /// The path to a separate executable that will be launched for sub-processes. By default the browser process executable is used.
              /// See the comments on Cef.ExecuteProcess() for details. If this value is non-empty then it must be an absolute path.
 diff --git a/CefSharp.Core/CefSettingsBase.cs b/CefSharp.Core/CefSettingsBase.cs
-index f53bead..7b20f11 100644
+index f53bead..f7bca36 100644
 --- a/CefSharp.Core/CefSettingsBase.cs
 +++ b/CefSharp.Core/CefSettingsBase.cs
-@@ -1,4 +1,4 @@
--// Copyright © 2020 The CefSharp Authors. All rights reserved.
-+﻿// Copyright © 2020 The CefSharp Authors. All rights reserved.
- //
- // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
- 
 @@ -103,6 +103,17 @@ namespace CefSharp
              set { settings.MultiThreadedMessageLoop = value; }
          }
  
 +        /// <summary>
 +        /// Windows only. The sandbox information pointer that CEF's bootstrap.exe passes to the client DLL's RunWinMain
-+        /// (see include/cef_sandbox_win.h). When set, the sandbox is enabled; sub-processes must then also be launched
-+        /// through the bootstrap executable. Default IntPtr.Zero: sandbox disabled (current behaviour).
++        /// (see include/cef_sandbox_win.h). When set, the sandbox is enabled; sub-processes are then launched
++        /// through the main (bootstrap) executable and BrowserSubprocessPath is ignored. Default IntPtr.Zero: sandbox disabled (current behaviour).
 +        /// </summary>
 +        public System.IntPtr WindowsSandboxInfo
 +        {
