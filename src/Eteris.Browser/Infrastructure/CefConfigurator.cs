@@ -14,7 +14,7 @@ public static class CefConfigurator
         var settings = new CefSettings
         {
             CachePath = profilePath,
-            Locale = "pt-PT",
+            // Locale: a língua dos sites (EngineHardening.Configure, mais abaixo).
             LogSeverity = LogSeverity.Disable,
         };
         settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
