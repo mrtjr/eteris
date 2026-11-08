@@ -80,6 +80,8 @@ public static class SettingsPage
                         s.HiddenElements > 0 ? $"{s.HiddenElements} elemento(s) escondido(s)" : null,
                     }.Where(d => d is not null).Concat(s.Flags).Concat(s.Permissions),
             }),
+            syncPreview = settings.SyncPreview,
+            syncGoogle = Sync.GoogleSync.Current() is var g ? new { state = g.State, text = g.Text, url = g.Url } : null,
             tabs = settings.VerticalTabs ? "side" : "top",
             density = settings.Density,
             accent = settings.Accent,

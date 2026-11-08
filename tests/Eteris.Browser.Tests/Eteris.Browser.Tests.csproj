@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Eteris.Browser\Eteris.Browser.csproj" />
+    <ProjectReference Include="..\..\src\Eteris.Sync\Eteris.Sync.csproj" />
   </ItemGroup>
 
 </Project>

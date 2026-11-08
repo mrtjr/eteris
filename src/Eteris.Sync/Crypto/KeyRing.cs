@@ -1,0 +1,137 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Eteris.Sync.Crypto;
+
+// O segredo de conta R (256 bits do gerador do sistema; nunca derivado de uma senha). Dele saem, por HKDF:
+//   KEK    = HKDF(R, "kek")       — embrulha a chave de dados (DEK);
+//   cadeia = HKDF(R, "chain-id")  — nome opaco da pasta da conta no transporte (16 bytes em hex).
+// R só sai do aparelho escrito como código de recuperação ou cifrado para outro aparelho (emparelhamento).
+public sealed class AccountSecret : IDisposable
+{
+    private readonly byte[] _bytes;
+
+    private AccountSecret(byte[] bytes) => _bytes = bytes;
+
+    public static AccountSecret Create() => new(RandomNumberGenerator.GetBytes(RecoveryCode.SecretBytes));
+
+    public static AccountSecret FromBytes(ReadOnlySpan<byte> bytes)
+        => bytes.Length == RecoveryCode.SecretBytes ? new(bytes.ToArray()) : throw new ArgumentException("Segredo com tamanho errado");
+
+    public static AccountSecret FromCode(string code) => new(RecoveryCode.Decode(code));
+
+    public string ToCode() => RecoveryCode.Encode(_bytes);
+
+    public byte[] ToBytes() => (byte[])_bytes.Clone();
+
+    public string ChainId => Kdf.Hex(Kdf.Derive(_bytes, "chain-id", 16));
+
+    internal byte[] Kek => Kdf.Derive(_bytes, "kek");
+
+    // Chave de um ficheiro de perfil exportado (cada ficheiro tem o seu sal aleatório).
+    internal byte[] ArchiveKey(ReadOnlySpan<byte> salt) => Kdf.Derive(_bytes, "profile-archive", salt);
+
+    public void Dispose() => CryptographicOperations.ZeroMemory(_bytes);
+}
+
+// Registo «chaves» guardado no transporte: só o que não é segredo fica em claro (formato, cadeia, geração, data) e a
+// DEK aleatória vai embrulhada pela KEK (AES-256-GCM, com a cadeia e a geração como dados associados).
+// Trocar a DEK (nova geração) não muda o código; trocar o código é «nova cadeia» (SyncEngine.RotateChainAsync).
+public sealed record KeyEnvelope(
+    [property: JsonPropertyName("format")] int Format,
+    [property: JsonPropertyName("chain")] string ChainId,
+    [property: JsonPropertyName("generation")] int Generation,
+    [property: JsonPropertyName("dek")] string WrappedDek,
+    [property: JsonPropertyName("created")] long CreatedMs)
+{
+    public const int CurrentFormat = 1;
+
+    public byte[] ToBytes() => JsonSerializer.SerializeToUtf8Bytes(this);
+
+    public static KeyEnvelope Parse(ReadOnlySpan<byte> json)
+    {
+        try { return JsonSerializer.Deserialize<KeyEnvelope>(json) ?? throw new FormatException("Registo de chaves vazio"); }
+        catch (JsonException e) { throw new FormatException("Registo de chaves ilegível", e); }
+    }
+}
+
+// O código não abre esta cadeia (é de outra conta, ou o registo de chaves foi adulterado).
+public sealed class WrongCodeException(string message) : CryptographicException(message);
+
+// Um ficheiro escrito por um Éteris mais recente: não se lê, não se marca como lido e pede-se a atualização.
+public sealed class UnsupportedFormatException(string message) : Exception(message);
+
+// Chaves de uma cadeia aberta: a DEK e as derivadas dela (uma por ficheiro, e a dos IDs opacos).
+public sealed class KeyRing
+{
+    private readonly byte[] _dek;
+    private readonly byte[] _ids;
+
+    private KeyRing(KeyEnvelope envelope, byte[] dek)
+    {
+        Envelope = envelope;
+        _dek = dek;
+        _ids = Kdf.Derive(dek, "ids");
+    }
+
+    public string ChainId => Envelope.ChainId;
+
+    public int Generation => Envelope.Generation;
+
+    public KeyEnvelope Envelope { get; }
+
+    public static KeyRing Create(AccountSecret secret, long nowMs, int generation = 1)
+    {
+        var dek = RandomNumberGenerator.GetBytes(32);
+        var chain = secret.ChainId;
+        var envelope = new KeyEnvelope(KeyEnvelope.CurrentFormat, chain, generation, Kdf.Base64Url(Wrap(secret.Kek, dek, chain, generation)), nowMs);
+        return new KeyRing(envelope, dek);
+    }
+
+    public static KeyRing Open(AccountSecret secret, KeyEnvelope envelope)
+    {
+        if (envelope.Format > KeyEnvelope.CurrentFormat)
+            throw new UnsupportedFormatException($"Registo de chaves no formato {envelope.Format}: atualize o Éteris.");
+        if (!string.Equals(envelope.ChainId, secret.ChainId, StringComparison.Ordinal))
+            throw new WrongCodeException("Este código é de outra conta de sincronização.");
+        try
+        {
+            return new KeyRing(envelope, Unwrap(secret.Kek, Kdf.FromBase64Url(envelope.WrappedDek), envelope.ChainId, envelope.Generation));
+        }
+        catch (Exception e) when (e is CryptographicException or FormatException)
+        {
+            throw new WrongCodeException("O código não abre esta conta (ou o registo de chaves foi alterado).");
+        }
+    }
+
+    // Chave de um ficheiro (lote, instantâneo, estado): uma por ficheiro, por isso o nonce aleatório nunca se repete
+    // sob a mesma chave, e um ficheiro mudado de nome ou de lugar deixa de se decifrar.
+    internal byte[] FileKey(char kind, string context) => Kdf.Derive(_dek, $"file:{kind}:{context}");
+
+    // ID opaco e estável de um registo: HMAC(K_ids, coleção ‖ chave natural), 128 bits. O mesmo URL dá o mesmo ID em
+    // todos os aparelhos da conta, e nada o liga ao URL sem a chave.
+    public string OpaqueId(string collection, string naturalKey)
+        => Kdf.Hex(HMACSHA256.HashData(_ids, Encoding.UTF8.GetBytes(collection + "\n" + naturalKey)).AsSpan(0, 16));
+
+    private static byte[] Aad(string chain, int generation) => Encoding.UTF8.GetBytes($"eteris-keys|v{KeyEnvelope.CurrentFormat}|{chain}|{generation}");
+
+    private static byte[] Wrap(byte[] kek, byte[] dek, string chain, int generation)
+    {
+        var output = new byte[12 + dek.Length + 16];
+        RandomNumberGenerator.Fill(output.AsSpan(0, 12));
+        using var aes = new AesGcm(kek, 16);
+        aes.Encrypt(output.AsSpan(0, 12), dek, output.AsSpan(12, dek.Length), output.AsSpan(12 + dek.Length), Aad(chain, generation));
+        return output;
+    }
+
+    private static byte[] Unwrap(byte[] kek, byte[] wrapped, string chain, int generation)
+    {
+        if (wrapped.Length != 12 + 32 + 16) throw new CryptographicException("Chave embrulhada com tamanho errado");
+        var dek = new byte[32];
+        using var aes = new AesGcm(kek, 16);
+        aes.Decrypt(wrapped.AsSpan(0, 12), wrapped.AsSpan(12, 32), wrapped.AsSpan(44, 16), dek, Aad(chain, generation));
+        return dek;
+    }
+}

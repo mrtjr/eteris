@@ -58,6 +58,11 @@
     <InternalsVisibleTo Include="Eteris.Browser.Tests" />
   </ItemGroup>
 
+  <!-- Sincronização (docs/sincronizacao.md): biblioteca .NET sem WPF, partilhável com a versão Android. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Eteris.Sync\Eteris.Sync.csproj" />
+  </ItemGroup>
+
   <!-- Motor com codecs da plataforma (docs/motor.md, «Motor com codecs»): quando existe a compilação própria da CEF
        156.0.15 (mesmo commit da do NuGet, por isso o CefSharp 156.0.150 não muda), o runtime COMPLETO (libcef, paks,
        icudtl, snapshot V8, chrome_elf, d3dcompiler, dxcompiler, swiftshader, vulkan, locales) substitui o do NuGet na

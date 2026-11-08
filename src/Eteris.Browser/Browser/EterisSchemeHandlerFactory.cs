@@ -81,6 +81,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));
+        // Definições › Sincronização (perfil cifrado, «Entrar com o Google»): nunca a partir da janela privada.
+        if (uri is { Host: "settings" } && uri.AbsolutePath.StartsWith("/sync-", StringComparison.Ordinal))
+            return privateContext ? Text("recusado") : SyncRoute(uri, request);
         if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
@@ -135,6 +138,61 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), AppData.SiteSummaries()))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
+
+    private static IResourceHandler SyncRoute(Uri uri, IRequest request)
+    {
+        if (!InternalPages.IsAuthorized(request.Url) || !Settings.Current.SyncPreview) return Text("recusado");
+        switch (uri.AbsolutePath)
+        {
+            case "/sync-export":
+                try
+                {
+                    var exported = Sync.ProfileTransfer.Export(Environment.MachineName, DateTime.Now);
+                    return Json(new { ok = true, file = System.IO.Path.GetFileName(exported.Path), code = exported.Code, records = exported.Records });
+                }
+                catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+                {
+                    return Json(new { ok = false, message = "Não foi possível gravar o ficheiro em Transferências." });
+                }
+            case "/sync-import":
+            {
+                // Formulário enviado por POST (o código e o ficheiro não vão no endereço).
+                var form = SyncForm.Parse(request);
+                if (form.GetValueOrDefault("code") is not { Length: > 0 } code || form.GetValueOrDefault("data") is not { Length: > 0 } data)
+                    return Json(new { ok = false, message = "Escolha o ficheiro e escreva o código." });
+                try
+                {
+                    List<(string Name, int Color, string? Icon)> spaces = [];
+                    var result = Sync.ProfileTransfer.Import(Convert.FromBase64String(data), code, s => spaces = s.ToList());
+                    var summary = Sync.ProfileTransfer.Summary(result);
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.AfterProfileImport(spaces, summary));
+                    return Json(new { ok = true, message = summary });
+                }
+                catch (FormatException e) { return Json(new { ok = false, message = e.Message }); }
+                catch (Eteris.Sync.Crypto.WrongCodeException e) { return Json(new { ok = false, message = e.Message }); }
+                catch (Eteris.Sync.Crypto.UnsupportedFormatException e) { return Json(new { ok = false, message = e.Message }); }
+            }
+            case "/sync-google":
+                Sync.GoogleSync.BeginSignIn();
+                break;
+            case "/sync-google-cancel":
+                Sync.GoogleSync.CancelSignIn();
+                break;
+            case "/sync-google-out":
+                // Os tokens deste computador saem já; a revogação na Google segue em segundo plano.
+                _ = Sync.GoogleSync.SignOutAsync();
+                break;
+            case "/sync-status":
+                break;
+            default:
+                return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+        }
+        var status = Sync.GoogleSync.Current();
+        return Json(new { ok = true, state = status.State, text = status.Text, url = status.Url });
+    }
+
+    private static IResourceHandler Json(object value)
+        => ResourceHandler.FromString(System.Text.Json.JsonSerializer.Serialize(value), Encoding.UTF8, false, "text/plain");
 
     private static SettingsPage.About AboutInfo() => new(
         Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,

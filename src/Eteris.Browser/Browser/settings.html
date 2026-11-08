@@ -116,6 +116,16 @@
   }
   .saved.show { opacity: 1; transform: translate(-50%, 0); }
   .saved::before { content: "✓"; color: #34d399; margin-right: 8px; }
+  .syncbody[hidden] { display: none; }
+  .code { font: 600 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; word-spacing: .3em; user-select: all;
+    background: rgba(0, 0, 0, .3); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-top: 8px; overflow-wrap: anywhere; }
+  .code[hidden], .syncnote[hidden] { display: none; }
+  .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
+  .syncnote.bad { color: #ffb3c1; }
+  .syncform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+  .syncform input[type=text] { font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
+    border-radius: 12px; padding: 9px 12px; width: min(100%, 420px); }
+  .syncform input[type=file] { font-size: 12.5px; color: var(--muted); max-width: 260px; }
   iframe { display: none; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; } }
 
@@ -155,6 +165,7 @@
     <a href="#privacidade"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg>Privacidade</a>
     <a href="#sites"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Sites</a>
     <a href="#importar"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Importar</a>
+    <a href="#sincronizacao"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></svg>Sincronização</a>
     <a href="#sobre"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Sobre</a>
   </nav>
   <main>
@@ -365,6 +376,40 @@
       </div>
     </section>
 
+    <section id="sincronizacao">
+      <h2>Sincronização</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b>Experimentar a sincronização (em desenvolvimento)</b><span>Desligada, nada disto existe. Ligada, aparecem as opções em baixo — e mesmo assim nada sai deste computador sem carregar num botão. Os dados vão sempre cifrados neste computador: a chave nunca vai para a Google nem para ninguém.</span></div>
+          <label class="switch"><input type="checkbox" data-key="syncPreview" id="syncPreview"><i></i></label>
+        </div>
+        <div class="syncbody" id="syncBody" hidden>
+          <div class="item">
+            <div class="label"><b>Exportar perfil cifrado</b><span>Favoritos, Espaços, definições, decisões do Escudo e notas num ficheiro .eteris em Transferências, para levar para outro computador. O código para o abrir aparece uma única vez: guarde-o.</span>
+              <span class="syncnote" id="exportNote" hidden></span>
+              <div class="code" id="exportCode" hidden></div></div>
+            <button class="action" id="exportButton">Exportar…</button>
+          </div>
+          <div class="item">
+            <div class="label"><b>Importar perfil cifrado</b><span>Junta um perfil exportado a este: o que falta entra, as definições do ficheiro passam a valer e as notas ficam por baixo das atuais.</span>
+              <span class="syncnote" id="importNote" hidden></span></div>
+            <form class="syncform" id="syncImportForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
+              <input type="file" id="syncFile" accept=".eteris">
+              <input type="text" name="code" id="syncCode" placeholder="Código (14 grupos de 4)" spellcheck="false" aria-label="Código do perfil exportado">
+              <input type="hidden" name="data" id="syncData">
+              <button class="action" type="submit" id="importButton">Importar</button>
+            </form>
+          </div>
+          <div class="item">
+            <div class="label"><b>Entrar com o Google</b><span>Guarda os dados cifrados na pasta oculta da aplicação no seu Google Drive (a Google só vê ficheiros cifrados, os tamanhos e as horas). O início de sessão abre no navegador do sistema.</span>
+              <span class="syncnote" id="googleNote"></span>
+              <div class="code" id="googleUrl" hidden></div></div>
+            <button class="action" id="googleButton">Entrar com o Google</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="sobre">
       <h2>Sobre</h2>
       <div class="card">
@@ -531,6 +576,78 @@
     input.checked = !!data[input.dataset.key];
     input.addEventListener('change', () => send(input.dataset.key, input.checked));
   });
+
+  // ---------- Sincronização (experimental) ----------
+  (() => {
+    const body = document.getElementById('syncBody');
+    const toggle = document.getElementById('syncPreview');
+    const show = () => { body.hidden = !toggle.checked; };
+    show();
+    toggle.addEventListener('change', show);
+    const sink = document.createElement('iframe');
+    sink.name = 'syncSink'; sink.hidden = true;
+    document.body.append(sink);
+    let onReply = null;
+    sink.addEventListener('load', () => {
+      const text = sink.contentDocument && sink.contentDocument.body ? sink.contentDocument.body.textContent.trim() : '';
+      let reply = null;
+      try { reply = JSON.parse(text); } catch (e) { reply = text ? { ok: false, message: text === 'recusado' ? 'Ligue primeiro a opção em cima.' : text } : null; }
+      if (reply && onReply) onReply(reply);
+    });
+    const ask = (path, handler) => { onReply = handler; sink.src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}`; };
+    const note = (el, text, bad) => { el.hidden = !text; el.textContent = text || ''; el.classList.toggle('bad', !!bad); };
+
+    const exportButton = document.getElementById('exportButton');
+    exportButton.addEventListener('click', () => {
+      exportButton.disabled = true;
+      ask('sync-export', reply => {
+        exportButton.disabled = false;
+        const code = document.getElementById('exportCode');
+        if (!reply.ok) { note(document.getElementById('exportNote'), reply.message, true); code.hidden = true; return; }
+        note(document.getElementById('exportNote'), `✓ Guardado em Transferências › ${reply.file} (${reply.records} registos). Código para o abrir — só aparece agora:`);
+        code.textContent = reply.code; code.hidden = false;
+      });
+    });
+
+    const form = document.getElementById('syncImportForm');
+    const file = document.getElementById('syncFile');
+    const importNote = document.getElementById('importNote');
+    form.action = `eteris://${location.host}/sync-import?t=${data.token}`;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const chosen = file.files && file.files[0];
+      if (!chosen) { note(importNote, 'Escolha primeiro o ficheiro .eteris.', true); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        document.getElementById('syncData').value = String(reader.result).replace(/^data:[^,]*,/, '');
+        onReply = reply => {
+          note(importNote, (reply.ok ? '✓ ' : '') + reply.message, !reply.ok);
+          if (reply.ok) { document.getElementById('syncCode').value = ''; document.getElementById('syncData').value = ''; }
+        };
+        form.submit();
+      };
+      reader.readAsDataURL(chosen);
+    });
+
+    const googleButton = document.getElementById('googleButton');
+    const googleNote = document.getElementById('googleNote');
+    const googleUrl = document.getElementById('googleUrl');
+    let poll = 0;
+    const paintGoogle = g => {
+      googleNote.textContent = g.text;
+      googleUrl.hidden = !g.url; googleUrl.textContent = g.url || '';
+      googleButton.disabled = g.state === 'unconfigured';
+      googleButton.textContent = g.state === 'signedIn' ? 'Sair' : g.state === 'waiting' ? 'Cancelar' : 'Entrar com o Google';
+      googleButton.dataset.state = g.state;
+      clearTimeout(poll);
+      if (g.state === 'waiting') poll = setTimeout(() => ask('sync-status', paintGoogle), 1500);
+    };
+    paintGoogle(data.syncGoogle);
+    googleButton.addEventListener('click', () => {
+      const state = googleButton.dataset.state;
+      ask(state === 'signedIn' ? 'sync-google-out' : state === 'waiting' ? 'sync-google-cancel' : 'sync-google', paintGoogle);
+    });
+  })();
 
   const links = [...document.querySelectorAll('nav a')];
   const sections = [...document.querySelectorAll('main section')];
