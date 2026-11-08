@@ -19,7 +19,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
-| 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | por medir | alta |
+| 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | **medido** (secção 6): a 0.2.9 era *mais* identificável do que o Chrome; no `main` (R0) deixou de o ser — dispositivos, língua, DNT e dicas do cliente como o Chrome. Canvas, WebGL e áudio continuam fixos (F1/F2) | alta |
 | 4c | Vídeo H.264/AAC (Twitch, Vimeo, MP4 direto, HLS…) | sim | sim (codecs do Windows) | sim | **no motor principal**, como o Firefox: compilação própria da CEF com os codecs do Windows (H.264/HEVC pela placa gráfica, AAC pelo Media Foundation, nenhum descodificador com patentes; MP4, Twitch, g1, BBC, Reddit, TikTok, Dailymotion, HLS, `.m4a` e `.aac` validados, ~2,4% de CPU a 1080p). Sem descodificação por hardware ou num Windows N, uma sonda no arranque devolve tudo ao motor de vídeo (WebView2), como antes. Por publicar: o CI não compila este motor (`docs/motor.md`, «Motor com codecs») | ✅ resolvido (por publicar) |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | via motor de vídeo, **sempre com pergunta** (botão «Tocar no motor de vídeo»); o motor principal continua sem Widevine. Com DRM o site fala com o seu servidor de licenças e o CDM (Google/Microsoft) pode fazer provisionamento — inerente ao DRM, só depois de o utilizador aceitar | média |
 | 8 | Extensões | sim | sim | sim | não | média |
@@ -121,6 +121,30 @@ Processo (montado em 2026-11-06):
    o `release.yml` a verificar); o Velopack atualiza os utilizadores sozinho (pacote delta).
 
 O que falta para o ✅ definitivo: fazer uma atualização real do motor de ponta a ponta e medir o tempo total.
+
+## 6. Antifingerprinting — medido (2026-11-08)
+
+Medição completa (Éteris 0.2.9 contra Chrome 156, Brave 157 e Firefox 159; Cover Your Tracks, BrowserLeaks, CreepJS
+e uma sonda própria em 4 sites × 2 sessões) feita fora do repositório, com os scripts `drive.py`/`probe.js`/`analyze.py`.
+Correções R0 no `main` (sem motor novo), medidas no Release do `main` com um perfil de teste e o mesmo condutor:
+
+| Sinal (Cover Your Tracks: bits) | Éteris 0.2.9 | Éteris `main` (R0) | Chrome | Brave | Firefox | O que mudou |
+|---|---|---|---|---|---|---|
+| `enumerateDevices` sem permissão | 8 dispositivos com nome e `deviceId` persistente por site | **3 entradas vazias** | 3 vazias | 3 vazias | 3 vazias | script da sessão (`PrivacySignals.DevicesScript`) até haver permissão ou `getUserMedia` aceite; patch no motor em `docs/motor.md` (FP1) |
+| Language | 8,91 (`pt-PT`) | **6,61** (`pt-BR`) | 6,62 | 6,61 | 6,61 | língua dos sites = a do Windows (o `pt-PT` gravado por omissão migra) |
+| HTTP_ACCEPT (com Accept-Language) | 13,49 | **10,18** (`pt-BR`) | 7,92 (lista com pesos) | 11,32 / 10,99 | 7,92 | idem (uma só língua: fica acima do Chrome, abaixo do Brave) |
+| DNT | 2,03 (`DNT: 1`) | **0,40** | 0,40 | 0,40 | 0,40 | deixa de enviar `DNT: 1`; ficam `Sec-GPC: 1` e `navigator.globalPrivacyControl` |
+| UA-CH página / worker dedicado | `10.0.0`, `156.0.0.0` (script) / **`19.0.0`, `156.0.8078.80`** | `10.0.0`, `156.0.0.0` / **`10.0.0`, `156.0.0.0`**, `getHighEntropyValues` nativo | reais nos dois | reais nos dois | — | metadados reduzidos no motor por aba (`Emulation.setUserAgentOverride`, `ReducedClientHints`); service/shared workers continuam com os reais (o CreepJS lê um service worker) |
+| Intl / `navigator.language` | `pt-PT` / `pt-PT` | `pt-BR` / `pt-BR` | `pt-BR` / `pt-BR` | — | — | o Locale do motor segue a língua dos sites (sem isto a R0 criava a incoerência `pt-BR`/`pt-PT`) |
+| Canvas / WebGL / áudio | 6,82 / 10,94 / 3,24 | 6,82 / 10,92 / 3,25 | 9,18 / 14,49 / 3,24 | 0,91 / 0,98 / 1,38 | 0,91 / 0,98 / 2,19 | nada (F1/F2) |
+| **Soma indicativa** | **101,0** | **93,7** | 91,5–97,4 | 66,3–73,8 | 68,2 | |
+| Veredicto CYT | «unique» | «unique» | «unique» | «randomized» | «unique» | |
+
+A sonda própria continua com o mesmo identificador em todos os sites (`c3e25442` em example.com, wikipedia.org e
+coveryourtracks.eff.org; era `0648fb12`): o critério de «empate» com o Brave (identificador diferente por site e por
+sessão) só chega com o ruído em canvas/WebGL/áudio (F1 por scripts, F2 no motor). Limites que ficam: um iframe de
+outro site com `allow="camera; microphone"` ainda vê os nomes dos dispositivos (patch do motor), e os service/shared
+workers dão a versão real do Windows e do Chromium (`GetUserAgentMetadata` no motor, F2).
 
 ## Restantes
 
