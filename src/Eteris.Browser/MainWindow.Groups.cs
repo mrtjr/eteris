@@ -62,7 +62,7 @@ public partial class MainWindow
         var popup = new Popup
         {
             PlacementTarget = anchor, Placement = PlacementMode.Bottom, VerticalOffset = 4, StaysOpen = false,
-            AllowsTransparency = true, Child = new Border { CornerRadius = new CornerRadius(8), Child = box },
+            AllowsTransparency = true, Child = CodePopup.WithUiFont(new Border { CornerRadius = new CornerRadius(8), Child = box }),
         };
         box.KeyDown += (_, e) =>
         {
