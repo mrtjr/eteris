@@ -41,6 +41,7 @@ public partial class App : Application
         // Depois da 1.ª página (Infrastructure/FirstPaint.cs): nenhuma das duas é precisa para ela.
         FirstPaint.App.SignalAfter(FirstPaint.Fallback);
         FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
+        FirstPaint.App.Then(CompositionWarmup.Stop);
         FirstPaint.App.Then(() =>
         {
             JumpListTasks.Install();

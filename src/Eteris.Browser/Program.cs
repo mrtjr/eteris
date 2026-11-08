@@ -35,6 +35,8 @@ public static class Program
             return;
         }
         StartupTrace.Mark("instancia");
+        // O motor de composição do WPF arranca já, numa thread à parte (Infrastructure/CompositionWarmup.cs).
+        CompositionWarmup.Start();
 
         var app = new App();
         app.InitializeComponent();
