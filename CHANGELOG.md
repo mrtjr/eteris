@@ -19,6 +19,8 @@
 - O mesmo ficheiro de média fica no histórico com o mesmo título nos dois motores: o nome do ficheiro, como no Chrome.
 - Espreitar: depois de fechar o cartão com `Esc`, o `Alt`+clique seguinte volta a abri-lo à primeira, sem mostrar
   por um instante o cartão anterior.
+- Ao sair do ecrã dividido para outra aba, as duas metades ficam no lugar até a nova aparecer (antes a da esquerda
+  via-se por um instante em ecrã inteiro).
 
 ## 0.2.9 — 2026-11-08
 

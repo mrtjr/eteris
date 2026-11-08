@@ -260,7 +260,8 @@ public partial class MainWindow
         // superfície em branco ou antiga, e uma quente volta sem esperar por nenhum fotograma.
         if (!_presentation.HasPresented(page)) return false;
         // No ecrã dividido as metades não tapam a área toda: uma página quente ver-se-ia no separador.
-        if (_split is not null || WindowState == WindowState.Minimized || !IsVisible) return false;
+        // E uma metade a sair do ecrã dividido (ainda no seu lugar, MainWindow.Split.cs) voltaria com metade do tamanho.
+        if (_split is not null || InSplitPane(page) || WindowState == WindowState.Minimized || !IsVisible) return false;
         var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, page)).Key;
         // Com som (<video>/<audio> do documento principal: MediaInfo.Script; o som de iframes de outro site e o Web Audio
         // não se veem daqui) ou a passar para o motor de vídeo: arrefece já.
