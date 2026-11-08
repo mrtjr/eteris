@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
@@ -136,6 +137,15 @@ public partial class MainWindow
             return;
         }
     }
+
+    // Tamanho, em píxeis, da área das páginas: o de uma aba que se vê sozinha (fora do ecrã dividido), e o de qualquer aba
+    // acabada de criar (nasce fora das metades do ecrã dividido).
+    private (int Width, int Height) PageAreaPixels()
+        => PageWindow.PixelSize(BrowserHost.ActualWidth, BrowserHost.ActualHeight, DeviceScale(BrowserHost));
+
+    // Escala do ecrã como o CefSharp a lê (CompositionTarget.TransformToDevice).
+    private static double DeviceScale(Visual visual)
+        => PresentationSource.FromVisual(visual)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
 
     // Também para os motores que não são abas (os sites fixados na barra lateral).
     private static void SetPageVisible(ChromiumWebBrowser browser, bool visible)

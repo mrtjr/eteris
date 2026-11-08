@@ -27,4 +27,27 @@ public static class PageWindow
         WmPaint => Paint.Validate,
         _ => Paint.Pass,
     };
+
+    // Tamanho em píxeis que o CefSharp dá à janela do CEF para um tamanho WPF (ChromiumWebBrowser.ResizeBrowser:
+    // a parte inteira de ActualWidth/ActualHeight e, acima de 100 %, multiplicada pela escala e arredondada). Quem
+    // põe a janela da página no tamanho final antes do CefSharp tem de chegar exatamente ao mesmo número, senão o
+    // CefSharp volta a redimensioná-la (mais uma mudança de tamanho para o Chromium).
+    public static (int Width, int Height) PixelSize(double width, double height, double dpiScale)
+    {
+        var w = Whole(width);
+        var h = Whole(height);
+        if (dpiScale > 1.0)
+        {
+            w = (int)Math.Round(w * dpiScale);
+            h = (int)Math.Round(h * dpiScale);
+        }
+        return (w, h);
+    }
+
+    // Tamanho com que a janela do CEF nasce: o da área das páginas, quando já se sabe; senão o que o CefSharp leu da
+    // static (0×0 numa aba acabada de criar, porque o WPF ainda não a dispôs).
+    public static (int Width, int Height) BirthSize((int Width, int Height) fromStatic, (int Width, int Height)? pageArea)
+        => pageArea is { Width: > 0, Height: > 0 } area ? area : fromStatic;
+
+    private static int Whole(double value) => double.IsFinite(value) && value > 0 ? (int)Math.Min(value, int.MaxValue) : 0;
 }

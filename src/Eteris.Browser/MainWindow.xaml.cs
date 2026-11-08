@@ -122,6 +122,8 @@ public partial class MainWindow : Window
             // A página é desenhada pelo próprio Chromium numa janela filha (como no Chrome, Firefox e Brave), sem a
             // cópia de cada quadro para o WPF: ~4× menos processador. Ver docs/paridade.md.
             Visibility = Visibility.Hidden,
+            // A janela do CEF nasce já com o tamanho da área das páginas (uma aba nova não tem ainda tamanho no WPF).
+            BirthSize = PageAreaPixels,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
             KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),

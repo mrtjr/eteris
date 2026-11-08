@@ -20,4 +20,30 @@ public class PageWindowTests
     [InlineData(0x003D)] // WM_GETOBJECT: acessibilidade
     [InlineData(0x0085)] // WM_NCPAINT: a static não tem moldura
     public void OtherMessages_FollowTheNormalPath(int message) => Assert.Equal(Paint.Pass, PaintStep(message));
+
+    [Theory]
+    [InlineData(1360.0, 777.0, 1.0, 1360, 777)]
+    [InlineData(1360.6, 777.9, 1.0, 1360, 777)] // a parte inteira, como o CefSharp ((int)ActualWidth)
+    [InlineData(1000.0, 601.0, 1.25, 1250, 751)] // 751,25 -> 751
+    [InlineData(1001.0, 603.0, 1.5, 1502, 904)] // 1501,5 -> 1502 e 904,5 -> 904 (Math.Round: ao par, como o CefSharp)
+    [InlineData(800.0, 600.0, 2.0, 1600, 1200)]
+    [InlineData(800.0, 600.0, 0.0, 800, 600)] // sem escala conhecida: como a 100 %
+    public void PixelSize_MatchesTheCefSharpResize(double width, double height, double scale, int expectedWidth, int expectedHeight)
+        => Assert.Equal((expectedWidth, expectedHeight), PixelSize(width, height, scale));
+
+    [Theory]
+    [InlineData(double.NaN, 10.0)]
+    [InlineData(-5.0, 10.0)]
+    [InlineData(double.PositiveInfinity, 10.0)]
+    public void PixelSize_InvalidLayout_IsZero(double width, double height) => Assert.Equal(0, PixelSize(width, height, 1.5).Width);
+
+    [Fact]
+    public void BirthSize_UsesThePageAreaWhenKnown()
+    {
+        // Aba nova: a static ainda é 0×0 (o WPF não a dispôs); a janela do CEF nasce já com o tamanho da área.
+        Assert.Equal((1360, 777), BirthSize((0, 0), (1360, 777)));
+        // Área ainda por dispor (janela a abrir) ou sem área: fica o que o CefSharp leu da static.
+        Assert.Equal((640, 480), BirthSize((640, 480), (0, 777)));
+        Assert.Equal((640, 480), BirthSize((640, 480), null));
+    }
 }

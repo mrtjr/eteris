@@ -198,6 +198,21 @@ esconder). Agora as abas usam `Browser/PageBrowser.cs` (o `ChromiumWebBrowser` c
 `WM_ERASEBKGND` responde «apagado» e `WM_PAINT` só valida). Na área de vidro o GDI escrevia alfa 0 e via-se o Mica;
 sem pintura fica o que o WPF desenhou por baixo (P2), ou seja, a cor de fundo da página, com Mica e sem Mica.
 
+**T4 — Aba nova por baixo e já no tamanho final (rec. 5).** A espera pela 1.ª pintura já vinha do T1 (a página à
+vista fica por cima até a aba nova acabar o 1.º documento e apresentar: rAF duplo + 34 ms). O teto continua a ser
+1 s e não os ~120 ms do estudo: com 300 ms a Wikipédia ainda dava 48 fotogramas errados em 10 capturas (T1); os
+~120 ms são o tempo que se quer ver medido, não o limite. Faltavam duas coisas, agora em `Browser/PageBrowser.cs`
+(chamadas pelo CefSharp dentro de `BuildWindowCore`, antes de pedir a janela ao CEF):
+- a static nasce **por baixo** das outras páginas (uma janela nova fica por cima das irmãs e taparia a página à
+  vista assim que aparecesse; até agora isso dependia de o WPF já ter criado a static quando a troca corria);
+- a janela do CEF nasce **com o tamanho da área das páginas** (`PageWindow.BirthSize`): o CefSharp usava o tamanho
+  da static nesse momento, 0×0 numa aba acabada de criar, e o Chromium começava a página a 0×0 e voltava a dispô-la
+  logo a seguir. O tamanho em píxeis segue a mesma conta do CefSharp (`PageWindow.PixelSize`), para que o
+  redimensionamento que ele faz no fim da criação não mude nada.
+
+Não feito: um browser «sobressalente» já com a nova aba carregada (o estudo dá-o como opcional). Custa um processo de
+página sempre vivo; fica para decisão do dono depois de medir o T4.
+
 ## Diário do motor
 
 | Passo | Alteração | Antes → depois |
@@ -225,3 +240,4 @@ sem pintura fica o que o WPF desenhou por baixo (P2), ou seja, a cor de fundo da
 | T1 | Troca de abas, aba nova e fecho da aba ativa sem fotograma vazio («dupla memória», `Browser/PageSwap.cs`): a página que entra aparece por baixo da que sai; a que sai só se esconde depois de a nova apresentar (rAF duplo pelo DevTools + 34 ms; uma aba nova espera primeiro pelo fim do 1.º documento; limite 1 s); a página de uma aba fechada que estava à vista fica, calada, até a vizinha aparecer | Fotogramas errados em 10 capturas (tema escuro + Mica): Ctrl+Tab clara↔escura 14 → **0**, Wikipédia 204 → 4, Ctrl+T 96 → **0**, botão + 97 → **0**, fechar a ativa 24 → 1; tema claro e sem Mica: todos → 0–1 (secção «Troca de abas sem piscar») |
 | T2 | Foco do teclado na aba que entra: depois de trocar de aba, o foco do Windows ficava na janela (minimizada) da aba anterior e as teclas iam para uma página invisível; a página da aba ativa passa a recebê-lo (como no Chrome) quando o foco estava numa página que deixou de se ver | 8 Ctrl+Tab seguidos sem clicar: **2 → 8** trocas efetivas |
 | T3 | Mica por baixo da página (rec. 4 do estudo): a static do CefSharp que aloja a janela do CEF deixa de pintar por GDI (`Browser/PageBrowser.cs`, `PageWindow.PaintStep`); na área de vidro o GDI escrevia alfa 0 e o DWM mostrava o Mica onde devia estar a cor de fundo da página. Vidro limitado às barras avaliado e recusado (secção «Troca de abas: o resto do estudo») | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
+| T4 | Aba nova (rec. 5): a static nasce por baixo das outras páginas e a janela do CEF nasce já com o tamanho da área das páginas (antes 0×0 numa aba nova, redimensionada a seguir); mesma conta de píxeis do CefSharp (`PageWindow.PixelSize`), por isso o redimensionamento dele no fim da criação não muda nada. A espera pela 1.ª pintura continua a do T1 (teto 1 s) | Medição ao vivo pendente (dono a usar o PC). Testes: `PageWindowTests` |
