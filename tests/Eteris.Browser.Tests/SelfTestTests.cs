@@ -10,7 +10,7 @@ public class SelfTestTests
     private static Dictionary<string, string> H(params (string Name, string Value)[] headers)
         => headers.ToDictionary(h => h.Name, h => h.Value, StringComparer.OrdinalIgnoreCase);
 
-    private static readonly Dictionary<string, string> Main = H(("Sec-GPC", "1"), ("DNT", "1"), ("Accept-Language", "pt-PT"));
+    private static readonly Dictionary<string, string> Main = H(("Sec-GPC", "1"), ("Accept-Language", "pt-PT"));
     private static readonly Dictionary<string, string> FirstParty = H(("Cookie", "eteris_teste=abc"));
     private static readonly Dictionary<string, string> ThirdPartyClean = H(("Accept", "*/*"));
     private static readonly Dictionary<string, string> ReferrerOrigin = H(("Referer", SelfTest.PageUrl));

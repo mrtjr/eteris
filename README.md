@@ -12,7 +12,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 
 **Privacidade**
 - Escudo com as listas do uBlock Origin (motor adblock-rust, ~200 mil regras), scriptlets e regras cosméticas; avisos de cookies removidos.
-- HTTPS primeiro, cookies de terceiros bloqueados, WebRTC sem fuga de IP, «Não rastrear» e GPC.
+- HTTPS primeiro, cookies de terceiros bloqueados, WebRTC sem fuga de IP, Global Privacy Control (GPC).
 - Vídeos com som automático bloqueados até um clique.
 - «Esconder elemento»: clique num anúncio ou caixa e desaparece nesse site para sempre.
 - Janelas privadas com perfil em memória; «Esquecer os últimos 15 min / 1 hora»; apagar histórico, cookies e cache.

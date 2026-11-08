@@ -1,10 +1,13 @@
 namespace Eteris.Browser.Shields;
 
-// Sinais de privacidade que o Éteris envia a todos os sites: «Não rastrear» e Global Privacy Control, no cabeçalho
-// de cada pedido e (o GPC) também no JavaScript, que é onde os avisos de cookies e o Consent Mode o leem.
+// Sinais de privacidade que o Éteris envia a todos os sites: o Global Privacy Control, no cabeçalho de cada pedido e
+// no JavaScript, que é onde os avisos de cookies e o Consent Mode o leem.
+// O «Não rastrear» (DNT: 1) deixou de ir (medido, docs/paridade.md #6): o Chrome e o Brave não o enviam, valia 2,03
+// bits no Cover Your Tracks contra 0,40 de quem não o envia, e o navigator.doNotTrack ficava null, incoerente com o
+// cabeçalho. O GPC é o sinal com valor legal (CCPA) e é o que os sites leem hoje.
 public static class PrivacySignals
 {
-    public static readonly IReadOnlyList<(string Name, string Value)> Headers = [("DNT", "1"), ("Sec-GPC", "1")];
+    public static readonly IReadOnlyList<(string Name, string Value)> Headers = [("Sec-GPC", "1")];
 
     // navigator.globalPrivacyControl === true. Registado pelo ScriptletInjector uma vez por aba (antes de qualquer
     // script da página, em todos os frames do processo, nunca retirado); se o motor já expuser o valor, não mexe.

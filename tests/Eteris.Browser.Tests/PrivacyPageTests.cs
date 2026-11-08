@@ -65,6 +65,7 @@ public class PrivacyPageTests
     {
         Assert.True(Find(Good(), "gpc-header").Kept);
         Assert.False(Find(Good() with { Headers = [("DNT", "1")] }, "gpc-header").Kept);
+        Assert.False(Find(Good() with { Headers = [("Sec-GPC", "1"), ("DNT", "1")] }, "gpc-header").Kept);
     }
 
     [Fact]
