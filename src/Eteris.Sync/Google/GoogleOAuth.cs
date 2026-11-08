@@ -98,8 +98,12 @@ public sealed class LoopbackReceiver : IDisposable
         return new LoopbackReceiver(listener);
     }
 
-    public async Task<AuthorizationResponse> WaitAsync(CancellationToken cancellationToken)
+    // Só a resposta com o «state» deste início de sessão conta (comparação em tempo constante). Qualquer outra — uma
+    // página local ou um processo que varra as portas e mande «/?error=…» ou um código seu — leva 400 e o recetor
+    // continua à espera até ao prazo: não aborta o início de sessão nem põe texto alheio na interface.
+    public async Task<AuthorizationResponse> WaitAsync(string expectedState, CancellationToken cancellationToken)
     {
+        var expected = Encoding.UTF8.GetBytes(expectedState);
         while (true)
         {
             using var client = await _listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
@@ -114,6 +118,11 @@ public sealed class LoopbackReceiver : IDisposable
             }
             var query = ParseQuery(parts[1][2..]);
             var response = new AuthorizationResponse(query.GetValueOrDefault("code"), query.GetValueOrDefault("state"), query.GetValueOrDefault("error"));
+            if (response.State is not { } state || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(state), expected))
+            {
+                await RespondAsync(stream, 400, "Pedido não reconhecido pelo Éteris.", cancellationToken).ConfigureAwait(false);
+                continue;
+            }
             var ok = response.Code is not null;
             await RespondAsync(stream, 200, ok
                 ? "Sessão iniciada no Éteris. Pode fechar esta aba e voltar ao Éteris."
@@ -143,7 +152,8 @@ public sealed class LoopbackReceiver : IDisposable
         var html = "<!doctype html><meta charset=\"utf-8\"><title>Éteris</title>"
                    + "<body style=\"font:16px system-ui;margin:3em;background:#111;color:#eee\"><p>" + WebUtility.HtmlEncode(message) + "</p>";
         var body = Encoding.UTF8.GetBytes(html);
-        var head = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} {(status == 200 ? "OK" : "Not Found")}\r\nContent-Type: text/html; charset=utf-8\r\n"
+        var reason = status switch { 200 => "OK", 400 => "Bad Request", _ => "Not Found" };
+        var head = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} {reason}\r\nContent-Type: text/html; charset=utf-8\r\n"
                                            + $"Content-Length: {body.Length}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
         await stream.WriteAsync(head, cancellationToken).ConfigureAwait(false);
         await stream.WriteAsync(body, cancellationToken).ConfigureAwait(false);
@@ -201,7 +211,7 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(SignInTimeout);
         AuthorizationResponse response;
-        try { response = await receiver.WaitAsync(timeout.Token).ConfigureAwait(false); }
+        try { response = await receiver.WaitAsync(state, timeout.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new OAuthException("O início de sessão no navegador demorou demasiado. Tente de novo.");

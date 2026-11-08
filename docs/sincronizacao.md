@@ -208,10 +208,20 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
   `/token` e `/revoke`). Sem cookies, sem redirecionamentos automáticos, sem os cabeçalhos do motor; `User-Agent`
   `Eteris-Sync/1`.
 - Só corre com a opção experimental ligada **e** depois de o utilizador carregar em «Entrar com o Google».
+- **DNS e proxy:** por não passar pelo motor, este cliente **não usa o «DNS cifrado»** escolhido nas Definições. Os
+  nomes `oauth2.googleapis.com` e `www.googleapis.com` são resolvidos pelo **DNS do Windows**, em claro: o fornecedor
+  de internet (ou quem gere a rede) vê que o computador fala com a API da Google e quando — não o que diz, que vai em
+  HTTPS. Usa o **proxy do Windows**, se houver (aí é o proxy que resolve os nomes). Resolver pelo mesmo DoH seria mais
+  um pedido fora do motor (ao fornecedor do DoH), por isso fica assim e fica dito.
+- O recetor do redirecionamento (`127.0.0.1`) só aceita a resposta com o `state` deste início de sessão (comparação
+  em tempo constante); outra qualquer — uma página local ou um processo que varra as portas — leva 400 e o recetor
+  continua à espera até ao prazo.
 - Testes: `GoogleSyncTests.HttpClient_OnlyReachesGoogleOAuthAndDrive` (lista de endereços),
   `HttpClient_RefusesAnythingElse_BeforeItLeavesTheProcess`, e
   `SyncLibrary_HttpOnlyInTheGoogleFolder_AndOnlyListedAddresses`, que varre o código da biblioteca: cliente HTTP e
-  sockets só na pasta `Google/`, e os únicos endereços escritos no código são os desta tabela (mais `127.0.0.1`).
+  sockets só na pasta `Google/`, e os únicos endereços escritos no código são os desta tabela (mais `127.0.0.1`);
+  `BrowserSyncFolder_HttpOnlyThroughTheGoogleClient` faz o mesmo à integração no navegador (`src/Eteris.Browser/Sync`):
+  nenhum cliente HTTP, socket ou DNS próprio, só o de `GoogleEndpoints.CreateClient`.
   Se a exceção crescer, este documento e esses testes mudam juntos.
 
 ## Ameaças e privacidade

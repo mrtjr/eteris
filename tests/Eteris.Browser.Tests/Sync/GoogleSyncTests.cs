@@ -183,16 +183,22 @@ public class GoogleSyncTests
     }
 
     [Fact]
-    public async Task SignIn_RefusesAForgedState_AndAMissingPermission()
+    public async Task SignIn_IgnoresForgedRedirects_AndRefusesAMissingPermission()
     {
+        // Uma página local (ou um processo que varre as portas) manda «/?error=…» ou um código seu ao recetor antes da
+        // Google: leva 400, o início de sessão não aborta, e o texto dela não chega à interface.
         var google = new FakeGoogle();
         var oauth = new GoogleOAuth(GoogleEndpoints.CreateClient(google), new OAuthClientConfig(google.ClientId, null), Now);
-        var e = await Assert.ThrowsAsync<OAuthException>(() => oauth.SignInAsync(new ConsentingBrowser(google) { ForgeState = true }, null, CancellationToken.None));
-        Assert.Contains("estado", e.Message);
+        var browser = new ConsentingBrowser(google) { ForgeFirst = true };
+        var tokens = await oauth.SignInAsync(browser, null, CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(google.ValidAccessToken, tokens.AccessToken);
+        Assert.Equal(4, browser.Forged.Count);
+        Assert.All(browser.Forged, status => Assert.Equal(HttpStatusCode.BadRequest, status));
 
         var stingy = new FakeGoogle { GrantScope = false };
         var oauth2 = new GoogleOAuth(GoogleEndpoints.CreateClient(stingy), new OAuthClientConfig(stingy.ClientId, null), Now);
-        e = await Assert.ThrowsAsync<OAuthException>(() => oauth2.SignInAsync(new ConsentingBrowser(stingy), null, CancellationToken.None));
+        var e = await Assert.ThrowsAsync<OAuthException>(() => oauth2.SignInAsync(new ConsentingBrowser(stingy), null, CancellationToken.None));
         Assert.Contains("pasta da aplicação", e.Message);
     }
 
@@ -291,6 +297,33 @@ public class GoogleSyncTests
             Assert.Contains(host, doc);
     }
 
+    // A integração no navegador (src/Eteris.Browser/Sync) não cria clientes HTTP, sockets nem DNS próprios: todo o
+    // HttpClient vem de GoogleEndpoints.CreateClient (com o GoogleOnlyHandler à frente).
+    [Fact]
+    public void BrowserSyncFolder_HttpOnlyThroughTheGoogleClient()
+    {
+        var folder = Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync");
+        var usesHttp = false;
+        foreach (var file in Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories))
+        {
+            var code = File.ReadAllText(file);
+            var name = Path.GetFileName(file);
+            foreach (var api in new[] { "new HttpClient", "HttpClientHandler", "SocketsHttpHandler", "HttpMessageHandler", "WebRequest", "WebClient",
+                         "TcpClient", "TcpListener", "UdpClient", "new Socket", "WebSocket", "Dns." })
+                Assert.False(code.Contains(api, StringComparison.Ordinal), $"{name} usa {api}: o cliente HTTP da sincronização é só GoogleEndpoints.CreateClient");
+            Assert.DoesNotMatch(@"HttpClient\s*\(", code);
+            foreach (Match m in Regex.Matches(code, "\"(https?://[^\"]*)\""))
+                Assert.Fail($"{name} tem um endereço escrito no código: {m.Groups[1].Value}");
+            if (code.Contains("HttpClient", StringComparison.Ordinal))
+            {
+                usesHttp = true;
+                Assert.Contains("GoogleEndpoints.CreateClient(", code);
+            }
+        }
+        Assert.True(usesHttp, "a varredura não encontrou o GoogleSync: mudou de pasta?");
+        Assert.Contains("DNS do Windows", File.ReadAllText(Path.Combine(FindRoot(), "docs", "sincronizacao.md")));
+    }
+
     [Fact]
     public void SyncLibrary_IsPlainNet_WithoutPackagesOrWindows()
     {
@@ -322,7 +355,8 @@ public class GoogleSyncTests
     // Faz o que o navegador do sistema e o utilizador fariam: abre o ecrã da Google, aceita e segue o redirecionamento.
     private sealed class ConsentingBrowser(FakeGoogle google) : IExternalBrowser
     {
-        public bool ForgeState { get; init; }
+        public bool ForgeFirst { get; init; }
+        public List<HttpStatusCode> Forged { get; } = [];
         public string Page { get; private set; } = string.Empty;
         public string Redirect { get; private set; } = string.Empty;
         public Task Done { get; private set; } = Task.CompletedTask;
@@ -334,11 +368,14 @@ public class GoogleSyncTests
             var query = LoopbackReceiver.ParseQuery(uri.Query.TrimStart('?'));
             Redirect = query["redirect_uri"];
             var code = google.Authorize(query["code_challenge"], Redirect);
-            var state = ForgeState ? "outro" : query["state"];
+            var state = query["state"];
             Done = Task.Run(async () =>
             {
                 using var local = new HttpClient();
                 await local.GetAsync(Redirect + "favicon.ico"); // o navegador pede isto também
+                if (ForgeFirst)
+                    foreach (var forged in new[] { "?error=nao_fui_eu&state=outro", "?error=access_denied", "?state=outro&code=roubado", "?code=sem-estado" })
+                        Forged.Add((await local.GetAsync(Redirect + forged)).StatusCode);
                 Page = await local.GetStringAsync($"{Redirect}?state={Uri.EscapeDataString(state)}&code={Uri.EscapeDataString(code)}&scope=x");
             });
             return true;

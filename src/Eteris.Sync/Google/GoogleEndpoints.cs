@@ -11,7 +11,12 @@ namespace Eteris.Sync.Google;
 //   www.googleapis.com/upload/drive/v3/…       — enviar ficheiros (multipart e resumable)
 //
 // Só https, sem cookies, sem cabeçalhos do motor (Accept-Language, User-Agent do Chromium…), e só quando o
-// utilizador ligou a sincronização pelo Google. Testes: GoogleNetworkExceptionTests.
+// utilizador ligou a sincronização pelo Google. Testes: GoogleSyncTests (lista de endereços e varrimento do código).
+//
+// DNS e proxy: por não passar pelo motor, este cliente NÃO usa o «DNS cifrado» das Definições. Os dois nomes acima
+// são resolvidos pelo DNS do Windows (o fornecedor de internet vê que o computador fala com a API da Google; o
+// conteúdo vai em HTTPS) e é usado o proxy do Windows, se houver. Resolver pelo mesmo DoH seria mais um pedido fora
+// do motor (ao fornecedor do DoH). Documentado em docs/sincronizacao.md («A exceção de rede»).
 public static class GoogleEndpoints
 {
     public const string Authorize = "https://accounts.google.com/o/oauth2/v2/auth";
