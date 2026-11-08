@@ -64,6 +64,9 @@ public partial class MainWindow
         NameScope.SetNameScope(_overlay, NameScope.GetNameScope(this));
         _overlay.Resources.MergedDictionaries.Add(Resources);
         _overlay.PreviewKeyDown += Window_PreviewKeyDown;
+        // O Alt largado com a camada ativa (o cartão do Espreitar aberto por Alt+clique fica com o teclado) também conta:
+        // sem isto o «Alt em baixo» ficava preso e o Alt+clique seguinte, já com o cartão fechado, não abria nada.
+        _overlay.PreviewKeyUp += (_, e) => AltKeyUp(e.Key == Key.System ? e.SystemKey : e.Key);
         _overlay.PreviewMouseDown += OnSideMouseButton;
         _overlayRoot = root;
 
@@ -130,19 +133,43 @@ public partial class MainWindow
     private void UpdateOverlayVisibility()
     {
         if (_overlay is null || _overlayRoot is null) return;
-        var needed = WindowState != WindowState.Minimized
-                     && _overlayRoot.Children.OfType<UIElement>().Any(c => c.Visibility == Visibility.Visible && c.Opacity > 0.01);
+        var needed = OverlayNeeded();
         AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
         if (needed && !_overlay.IsVisible)
         {
             SyncOverlayBounds();
             _overlay.Show();
         }
-        else if (!needed && _overlay.IsVisible)
+        // Janela minimizada: não há fotograma a pintar (nem a mostrar) — sai já.
+        else if (!needed && _overlay.IsVisible && WindowState == WindowState.Minimized)
         {
             _overlay.Hide();
         }
+        else if (!needed && _overlay.IsVisible && !_overlayHidePending)
+        {
+            // Esconder só depois de a camada ter pintado vazia: escondida no mesmo instante, a janela em camadas
+            // guardava a última imagem (o cartão do Espreitar acabado de fechar), e o próximo Show — a bolha do link
+            // ao passar o rato — mostrava-a durante um fotograma antes de pintar o conteúdo novo.
+            _overlayHidePending = true;
+            var frames = 0;
+            void AfterEmptyFrame(object? sender, EventArgs e)
+            {
+                if (++frames < OverlayHideFrames) return;
+                CompositionTarget.Rendering -= AfterEmptyFrame;
+                _overlayHidePending = false;
+                if (_overlay is { IsVisible: true } overlay && !OverlayNeeded()) overlay.Hide();
+            }
+            CompositionTarget.Rendering += AfterEmptyFrame;
+        }
     }
+
+    // Fotogramas pintados (vazios) antes de esconder a camada: o 1.º leva a imagem vazia, o 2.º garante que já chegou.
+    private const int OverlayHideFrames = 2;
+    private bool _overlayHidePending;
+
+    private bool OverlayNeeded()
+        => _overlayRoot is not null && WindowState != WindowState.Minimized
+           && _overlayRoot.Children.OfType<UIElement>().Any(c => c.Visibility == Visibility.Visible && c.Opacity > 0.01);
 
     private void SyncOverlayBounds()
     {
