@@ -11,6 +11,12 @@
   seguintes com uma página aberta, e 0 em 8 minutos parado. Pesquisar e abrir sites da Google continua igual.
 - Promessa nova em `eteris://privacy/`: «No arranque, nada sai para a Google», lida da linha de comandos do motor
   (fica ✘ e diz qual interruptor falta se algum sair).
+- O Escudo passa a valer também nos pedidos sem aba: os do service worker e do shared worker de um site (incluindo o
+  truque de um service worker reencaminhar os pedidos da própria página, que contornava o bloqueio, e os scripts que
+  ele importa) e os do service worker de uma extensão. Antes chegavam aos rastreadores sem listas, sem GPC, sem filtro
+  de cookies de terceiros nem bloqueio da rede local; agora decidem-se como os da aba, contam no Escudo da aba que
+  mostra o site e no relatório de privacidade. Provado com páginas locais: 5 caminhos chegavam ao rastreador, 0 agora
+  (`docs/paridade.md`, secção 8). Nenhum custo para os pedidos das abas.
 
 ## 0.2.10 — 2026-11-08
 

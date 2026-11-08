@@ -116,7 +116,7 @@ public partial class MainWindow
     private ChromiumWebBrowser EnsureGlanceBrowser(string url)
     {
         if (_glanceBrowser is { IsDisposed: false } existing) return existing;
-        _glanceContext ??= CreatePrivateContext();
+        _glanceContext ??= CreatePrivateContext(onBlocked: null);
         var browser = new ChromiumWebBrowser(url)
         {
             Visibility = Visibility.Hidden,
