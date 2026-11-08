@@ -97,5 +97,5 @@ jobs:
       - name: Descarregar releases anteriores para gerar pacotes delta
         run: vpk download github --repoUrl $env:REPO_URL --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
         continue-on-error: true
-      - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v")
+      - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox
       - run: vpk upload github --repoUrl $env:REPO_URL --publish --releaseName "Éteris $env:RELEASE_TAG (sem codecs)" --tag $env:RELEASE_TAG --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases

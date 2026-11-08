@@ -11,11 +11,19 @@
        da CEF e SHA256 do libcef.dll), para build/sandbox/client/out/Release/Eteris.Browser.dll.
     3. Verificação: pacotes do feed (versão, dependência, assinatura do repositório removida, WindowsSandboxInfo nos
        binários trocados, nada na cache do NuGet com a mesma versão e outros binários), DLL cliente (verify-client.ps1).
-    4. Testes com o CefSharp do feed (o modo COM sandbox: ETERIS_CEFSHARP_SANDBOX; a CI corre o modo sem, com o CefSharp
-       oficial), confirmando que o CefSharp restaurado e carregado é o do feed.
+    4. Testes com o CefSharp do feed: o modo COM sandbox (a constante ETERIS_CEFSHARP_SANDBOX vem do csproj, por causa do
+       -p:EterisCefSharpFeed que este script passa; a CI corre o modo sem, com o CefSharp oficial), confirmando que o
+       CefSharp restaurado e carregado é o do feed. Só com todos aprovados, numa árvore sem alterações por gravar, grava
+       build/sandbox/out/tests-ok.json (commit, N, SHA256 do eteris-cefsharp.json, da DLL cliente e do manifest.json do
+       motor): o publish.ps1 recusa publicar com sandbox sem essa marca para o HEAD atual e estas mesmas peças. Por isso
+       cada release corre pelo menos `build-all.ps1 -SkipCefSharp -SkipClient` DEPOIS do commit da versão.
 
   Tudo o que produz fica em pastas ignoradas pelo git: build/cefsharp/src, build/cefsharp/feed,
-  build/sandbox/client/out e build/sandbox/out (registos e testes).
+  build/sandbox/client/out e build/sandbox/out (registos, testes e a marca).
+
+  Caminho com acentos (por exemplo C:\Users\Júnior\...): o cmd.exe, o C++/CLI, o CMake e o SourceLink só foram provados
+  com caminhos ASCII, por isso o script trabalha pelo nome curto 8.3 da pasta do repositório (JNIOR~1); sem nomes curtos
+  no disco, pára e pede uma cópia num caminho ASCII.
 
   Requisitos: git, CMake, Build Tools do Visual Studio 2022 com C++/CLI (VC.CLI.Support) e o SDK do .NET 9 (além do 10);
   o motor próprio já compilado (build/cef-codecs/out/runtime e a distribuição em build/cef-codecs/out/distrib, ou
@@ -26,7 +34,10 @@
          [-CefSharpSource <URL ou pasta com o git do CefSharp>] [-CefDistrib <cef_binary_*_windows64_minimal>]
          [-N <n>] [-SkipCefSharp] [-SkipClient] [-SkipTests]
   -N: o N de 156.0.150-eteris.N. Por omissão, um a mais do que o maior já existente na cache do NuGet
-  (a cache guarda cada versão para sempre: reutilizar um N com binários novos daria os antigos ao restaurar).
+  (a cache guarda cada versão para sempre: reutilizar um N com binários novos daria os antigos ao restaurar). O N só é
+  único nesta máquina: o que liga uma release aos binários do CefSharp é o eteris-build.json que o publish.ps1 põe na
+  publicação (SHA256 de cada montagem trocada).
+  -SkipTests: não grava a marca dos testes, e o publish.ps1 com sandbox recusa publicar.
 #>
 param(
   [string]$CefSharpSource = 'https://github.com/cefsharp/CefSharp.git',
@@ -45,6 +56,15 @@ $Official = '156.0.150'
 
 # Caminhos curtos (JNIOR~1) e acentos: só caminhos completos e -LiteralPath.
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ($repo -match '[^\x00-\x7F]') {
+  # Nome curto 8.3 (só ASCII) da mesma pasta; o cmd.exe, o compilador e o CMake recebem-no em vez do caminho com acentos.
+  $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($repo).ShortPath
+  if (-not $short -or $short -match '[^\x00-\x7F]') {
+    throw "build-all: o caminho do repositório ($repo) tem acentos e o disco não dá nomes curtos: copie o repositório para um caminho só com ASCII (por exemplo C:\src\navegador)"
+  }
+  "repositório pelo nome curto: $short ($repo)"
+  $repo = $short
+}
 $cefsharpDir = Join-Path $repo 'build\cefsharp'
 $work = Join-Path $cefsharpDir 'src'
 $feed = Join-Path $cefsharpDir 'feed'
@@ -53,10 +73,13 @@ $clientOut = Join-Path $repo 'build\sandbox\client\out'
 $clientDll = Join-Path $clientOut 'Release\Eteris.Browser.dll'
 $outDir = Join-Path $repo 'build\sandbox\out'
 $logs = Join-Path $outDir 'logs'
+$testsOk = Join-Path $outDir 'tests-ok.json'
 $runtime = Join-Path $repo 'build\cef-codecs\out\runtime'
 $nugetCache = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget\packages' }
 $vcvars = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
+# Uma corrida nova invalida a marca da anterior: só volta a existir se esta chegar ao fim com os testes aprovados.
+if (Test-Path -LiteralPath $testsOk) { Remove-Item -LiteralPath $testsOk }
 
 function Step([string]$Text) { Write-Host ''; Write-Host "== $Text" }
 function Fail([string]$Text) { throw "build-all: $Text" }
@@ -97,6 +120,13 @@ function Read-ZipEntry($Zip, [string]$Name) {
   return ,$ms.ToArray()
 }
 
+# git com o stderr fora das exceções do PowerShell 5.1; escreve as linhas da saída (nenhuma se falhar).
+function Git-Out([string[]]$Arguments) {
+  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { $out = @(& git -C $repo @Arguments 2>$null); if ($LASTEXITCODE -ne 0) { $out = @() } } finally { $ErrorActionPreference = $old }
+  $out
+}
+
 function Highest-N {
   $max = 0
   foreach ($dir in @((Join-Path $nugetCache 'cefsharp.common.netcore'), (Join-Path $nugetCache 'cefsharp.wpf.netcore'))) {
@@ -124,6 +154,12 @@ if (-not $SkipCefSharp) {
   }
 }
 "motor: CEF $($motor.cef.version) ($($motor.cef.commit.Substring(0, 12))), CefSharp $Official"
+# O commit que os testes provam (para a marca): o HEAD numa árvore sem alterações por gravar.
+$testedCommit = (Git-Out @('rev-parse', 'HEAD')) -join ''
+$dirtyAtStart = @(Git-Out @('status', '--porcelain')).Count -gt 0
+if (-not $SkipTests -and ($dirtyAtStart -or -not $testedCommit)) {
+  Write-Warning 'árvore com alterações por gravar (ou sem git): os testes correm, mas sem a marca que o publish.ps1 exige; faça commit e corra de novo'
+}
 
 # --- 1. CefSharp com o patch v2 ---------------------------------------------------------------------------------
 if ($SkipCefSharp) {
@@ -255,9 +291,30 @@ if ($SkipTests) {
   $expected = @($built.files | Where-Object { $_.entry -eq 'runtimes/win-x64/lib/net6.0/CefSharp.Core.Runtime.dll' })[0].sha256
   if ((Sha256 $cached) -ne $expected) { Fail "a cache do NuGet restaurou outro CefSharp.Core.Runtime.dll para $Official-eteris.$N" }
   'modo com sandbox: OK (o CefSharp do feed foi restaurado e carregado)'
+  # A marca para o publish.ps1: só com a árvore igual ao commit do princípio ao fim da corrida.
+  $headNow = (Git-Out @('rev-parse', 'HEAD')) -join ''
+  if (-not $dirtyAtStart -and $testedCommit -and $headNow -eq $testedCommit -and @(Git-Out @('status', '--porcelain')).Count -eq 0) {
+    $mark = [ordered]@{
+      commit                  = $testedCommit
+      n                       = $N
+      version                 = "$Official-eteris.$N"
+      feed_manifest_sha256    = Sha256 $feedManifest
+      client_sha256           = Sha256 $clientDll
+      runtime_manifest_sha256 = Sha256 (Join-Path $runtime 'manifest.json')
+      tested_utc              = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+    [IO.File]::WriteAllText($testsOk, ($mark | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
+    "marca dos testes: $testsOk (commit $($testedCommit.Substring(0, 12)))"
+  } else {
+    Write-Warning 'sem a marca dos testes (a árvore tinha alterações por gravar ou o HEAD mudou): o publish.ps1 com sandbox vai recusar'
+  }
 }
 
 Step 'Pronto'
 "CefSharp: $Official-eteris.$N em $feed"
 "DLL cliente: $clientDll"
-'A seguir: build\publish.ps1 -Version X.Y.Z (com sandbox por omissão; docs/motor.md, «Publicação»)'
+if (Test-Path -LiteralPath $testsOk) {
+  'A seguir: build\publish.ps1 -Version X.Y.Z (com sandbox por omissão; docs/motor.md, «Publicação»)'
+} else {
+  Write-Warning 'sem testes aprovados neste commit: o publish.ps1 com sandbox recusa publicar (corra sem -SkipTests, depois do último commit)'
+}

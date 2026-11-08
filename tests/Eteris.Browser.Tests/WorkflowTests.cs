@@ -50,6 +50,8 @@ public class WorkflowTests
         // O CI não tem o motor próprio nem o CefSharp com o patch do sandbox: a publicação de emergência é sem sandbox
         // (desde a 0.2.12 o publish.ps1 publica com sandbox por omissão e pararia sem eles).
         Assert.Contains("publish.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);
+        // E o pack.ps1 só empacota uma publicação sem sandbox quando isso é pedido.
+        Assert.Contains("pack.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);
         Assert.DoesNotContain("publish.ps1", verify);
         Assert.Matches(@"sem_codecs:\n(\s+\w+:.*\n)*?\s+required: true\n(\s+\w+:.*\n)*?\s+type: boolean", yml);
     }
