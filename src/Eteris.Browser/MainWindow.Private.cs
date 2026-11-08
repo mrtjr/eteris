@@ -15,16 +15,19 @@ public partial class MainWindow
 
     // Contexto sem CachePath: cookies, cache e armazenamento ficam só em memória e acabam com a janela.
     private IRequestContext? PrivateContext => IsPrivate
-        ? _privateContext ??= CreatePrivateContext()
+        ? _privateContext ??= CreatePrivateContext((top, host) => Dispatcher.InvokeAsync(() => RecordBrowserlessBlock(top, host, this)))
         : null;
 
-    private static IRequestContext CreatePrivateContext()
+    // «onBlocked»: um pedido sem aba deste contexto (service worker, shared worker) bloqueado pelo Escudo
+    // (Shields/BrowserlessRequests.cs); null, só conta no total.
+    private IRequestContext CreatePrivateContext(Action<string?, string>? onBlocked)
     {
         // Uma só língua para os sites também aqui (o contexto privado não herda a lista do perfil): a mesma com que o
         // motor arrancou, que é a que vai no Accept-Language de todos os pedidos — a das Definições só vale depois de
         // reiniciar, e navigator.languages diferente do cabeçalho distinguia quem a mudou.
         var language = Shields.EngineHardening.StartedWithLanguage is { Length: > 0 } started ? started : Shields.PrivacyPreferences.SiteLanguage;
-        var context = new RequestContext(new RequestContextSettings { AcceptLanguageList = language });
+        var context = new RequestContext(new RequestContextSettings { AcceptLanguageList = language },
+            Shields.BrowserlessRequests.Handler(isPrivate: true, IsLocalNetworkAllowed, onBlocked));
         // As fábricas de esquemas são por contexto: sem isto eteris:// dá ERR_UNKNOWN_URL_SCHEME na janela privada.
         context.RegisterSchemeHandlerFactory(EterisSchemeHandlerFactory.SchemeName, string.Empty, new EterisSchemeHandlerFactory(privateContext: true));
         SelfTestSchemeHandlerFactory.Register(context);

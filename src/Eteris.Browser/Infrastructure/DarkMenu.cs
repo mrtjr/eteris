@@ -17,6 +17,8 @@ public sealed class DarkMenu
     public DarkMenu()
     {
         _menu.Style = (Style)Application.Current.FindResource("DarkContextMenu");
+        // Abre muitas vezes por baixo de um botão de ícone, de quem herdaria a fonte de ícones (ver CodePopup).
+        CodePopup.WithUiFont(_menu);
         _menu.Opened += (_, _) => s_open++;
         _menu.Closed += (_, _) => s_open = Math.Max(0, s_open - 1);
     }

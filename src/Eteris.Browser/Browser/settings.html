@@ -683,16 +683,42 @@
     });
   })();
 
+  // Realce da navegação. As últimas secções são curtas e a página não as consegue pôr no topo: pela posição, um clique
+  // em «Sobre» realçava outra. Por isso a secção escolhida (clique, #âncora, data.focus) fica realçada até a pessoa
+  // rolar à mão (roda, toque, teclas, barra de deslocamento); daí em diante volta o realce pela posição, que só conta as
+  // secções à vista (a pesquisa esconde as outras) e, no fim da página, realça a última delas.
   const links = [...document.querySelectorAll('nav a')];
   const sections = [...document.querySelectorAll('main section')];
+  let pinned = null, byHand = false;
+  const paint = id => links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
   function markSection() {
-    const atBottom = innerHeight + scrollY >= document.body.scrollHeight - 4;
-    let current = sections[0];
-    for (const s of sections) if (s.getBoundingClientRect().top < 120) current = s;
-    if (atBottom) current = sections[sections.length - 1];
-    links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + current.id));
+    if (pinned && !byHand) return paint(pinned);
+    pinned = null;
+    const shown = sections.filter(s => !s.classList.contains('filtered-out'));
+    if (!shown.length) return paint(null);
+    const scrollable = document.documentElement.scrollHeight > innerHeight + 4;
+    const atBottom = scrollable && innerHeight + scrollY >= document.documentElement.scrollHeight - 4;
+    let current = shown[0];
+    for (const s of shown) if (s.getBoundingClientRect().top < 120) current = s;
+    if (atBottom) current = shown[shown.length - 1];
+    paint(current.id);
   }
+  function pin(id) {
+    if (!sections.some(s => s.id === id)) return;
+    pinned = id;
+    byHand = false;
+    paint(id);
+  }
+  links.forEach(a => a.addEventListener('click', () => pin(a.getAttribute('href').slice(1))));
+  const handScroll = e => { if (!e.target.closest?.('nav')) byHand = true; };
+  for (const type of ['wheel', 'touchstart', 'mousedown']) addEventListener(type, handScroll, { passive: true });
+  addEventListener('keydown', e => {
+    if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)
+        && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) byHand = true;
+  });
   addEventListener('scroll', markSection, { passive: true });
+  const target = (location.hash && document.getElementById(location.hash.slice(1))) || (data.focus && document.getElementById(data.focus));
+  if (target) pin(target.closest('section')?.id);
   markSection();
 
   // ---------- Procurar nas definições ----------
@@ -721,7 +747,10 @@
         if (show) any = true;
       }
       document.getElementById('nothing').classList.toggle('show', !any);
+      // A pesquisa muda as secções à vista: o realce volta a seguir a posição.
+      byHand = true;
       if (words.length) window.scrollTo({ top: 0 });
+      markSection();
     };
     find.addEventListener('input', apply);
     find.addEventListener('keydown', e => { if (e.key === 'Escape') { find.value = ''; apply(); find.blur(); } });

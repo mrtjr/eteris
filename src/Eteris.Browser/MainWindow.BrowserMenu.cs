@@ -8,6 +8,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using CefSharp;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Palette;
 
 namespace Eteris.Browser;
@@ -147,37 +148,45 @@ public partial class MainWindow
             Focusable = false,
         };
         var content = new DockPanel();
-        var heading = BuildBrowserMenuHeading();
+        var heading = BrowserMenuHeading(IsPrivate);
         DockPanel.SetDock(heading, Dock.Top);
         content.Children.Add(heading);
         content.Children.Add(body);
         KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
 
-        var frame = new Border
+        var frame = BrowserMenuFrame(content, Math.Clamp(ActualHeight - 74, 254, 665));
+        frame.Resources.MergedDictionaries.Add(theme);
+        return frame;
+    }
+
+    // Moldura do menu. O Popup não tem pai e herda a fonte do MenuButton (IconButton: fonte de ícones), por isso a
+    // raiz fixa a fonte da interface; sem isto o título, o subtítulo e «Zoom» saíam em quadrados.
+    internal static Border BrowserMenuFrame(UIElement content, double maxHeight)
+    {
+        var frame = CodePopup.WithUiFont(new Border
         {
             Child = content,
             Width = 332,
-            MaxHeight = Math.Clamp(ActualHeight - 74, 254, 665),
+            MaxHeight = maxHeight,
             CornerRadius = new CornerRadius(13),
             BorderThickness = new Thickness(1),
             ClipToBounds = true,
             SnapsToDevicePixels = true,
             Margin = new Thickness(0, 0, 1, 1),
-        };
-        frame.Resources.MergedDictionaries.Add(theme);
+        });
         frame.SetResourceReference(Border.BackgroundProperty, "SurfaceRaisedBrush");
         frame.SetResourceReference(Border.BorderBrushProperty, "FieldBorderBrush");
         AutomationProperties.SetName(frame, "Menu do Éteris");
         return frame;
     }
 
-    private Border BuildBrowserMenuHeading()
+    internal static Border BrowserMenuHeading(bool isPrivate)
     {
         var title = new TextBlock { Text = "Éteris", FontSize = 17, FontWeight = FontWeights.SemiBold };
         title.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         var label = new TextBlock
         {
-            Text = IsPrivate ? "JANELA PRIVADA" : "MENU DO NAVEGADOR",
+            Text = isPrivate ? "JANELA PRIVADA" : "MENU DO NAVEGADOR",
             FontSize = 10,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 2, 0, 0),
@@ -250,7 +259,7 @@ public partial class MainWindow
         return row;
     }
 
-    private static Grid BrowserMenuLabel(string glyph, string title, string? shortcut = null)
+    internal static Grid BrowserMenuLabel(string glyph, string title, string? shortcut = null)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });

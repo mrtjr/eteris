@@ -532,6 +532,14 @@ public static class AppData
         catch (Exception) { }
     }
 
+    // A permissão guardada do site (null: nunca respondeu), para quem não tem janela: os pedidos sem aba
+    // (Shields/BrowserlessRequests.cs) perguntam pela rede local na thread de rede; as respostas ficam em memória.
+    public static bool? SitePermission(string site, Permissions.SitePermission kind)
+    {
+        try { return LazyPermissions.Value?.Get(site, kind); }
+        catch (Exception) { return null; }
+    }
+
     // As permissões dadas ao site e aos seus subdomínios, com qualquer porta (meet.google.com em google.com,
     // app.exemplo.pt:8443 em exemplo.pt), para «Triturar» e «Esquecer ao fechar».
     public static void ForgetSitePermissions(string site)

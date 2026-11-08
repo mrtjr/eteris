@@ -63,6 +63,12 @@ public partial class App : Application
         StartupTrace.Mark("selftest");
         _ = Shields.PrivacyPreferences.ApplyAsync();
         StartupTrace.Mark("privacidade");
+        // O Escudo também nos pedidos sem aba do perfil (service workers, shared workers): Shields/BrowserlessRequests.cs.
+        // Um bloqueio conta na aba que mostra o site de onde o pedido partiu.
+        Shields.BrowserlessRequests.Blocked += (top, host) =>
+            Current?.Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.RecordBrowserlessBlock(top, host));
+        Shields.BrowserlessRequests.Install();
+        StartupTrace.Mark("escudo.contexto");
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -81,6 +87,7 @@ public partial class App : Application
             // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se
             // aqui, no fio da interface, que é o da janela dele; o Cef.Shutdown corre noutra thread (a do Cef.Initialize)
             // e um HwndHost libertado fora do seu fio falhava.
+            Shields.BrowserlessRequests.Release();
             Cef.PreShutdown();
             CefConfigurator.Shutdown();
         }
