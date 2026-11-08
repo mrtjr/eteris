@@ -1,5 +1,27 @@
 # Alterações
 
+## Por publicar
+
+### Impressão digital (medida contra Chrome, Brave e Firefox; `docs/paridade.md`, secção 6)
+- Os sites deixam de ver os nomes e os identificadores da câmara, do microfone e dos altifalantes sem pedir
+  autorização: antes da permissão, a lista dá uma entrada vazia por tipo, como o Chrome (a correção definitiva no
+  motor fica para a próxima compilação, `docs/motor.md`).
+- A língua enviada aos sites passa a ser, por omissão, a do Windows (era sempre pt-PT, o que num Windows em pt-BR
+  distinguia quem usa o Éteris); quem a escolheu nas Definições mantém a escolha. As datas e os números das páginas
+  seguem a mesma língua.
+- Deixa de ser enviado o «Não rastrear» (DNT), que o Chrome e o Brave não enviam e que só servia para distinguir o
+  Éteris; o Global Privacy Control (GPC) continua em todos os pedidos e no JavaScript.
+- A versão do Windows e do Chromium que os sites leem passa a ser a mesma na página e nos seus workers (antes, os
+  workers davam a versão exata).
+
+### Correções
+- Um vídeo ou áudio aberto diretamente depois de outro site deixa de ficar com o ícone desse site, nos dois motores.
+- O mesmo ficheiro de média fica no histórico com o mesmo título nos dois motores: o nome do ficheiro, como no Chrome.
+- Espreitar: depois de fechar o cartão com `Esc`, o `Alt`+clique seguinte volta a abri-lo à primeira, sem mostrar
+  por um instante o cartão anterior.
+- Ao sair do ecrã dividido para outra aba, as duas metades ficam no lugar até a nova aparecer (antes a da esquerda
+  via-se por um instante em ecrã inteiro).
+
 ## 0.2.9 — 2026-11-08
 
 A maior versão até agora. O programa de experiência do utilizador fica encerrado nos 50 ciclos (ciclos 1–51 feitos,

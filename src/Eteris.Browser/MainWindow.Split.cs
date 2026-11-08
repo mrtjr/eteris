@@ -175,10 +175,22 @@ public partial class MainWindow
         EnsureSplitChrome();
         var columns = BrowserHost.ColumnDefinitions;
         var rows = BrowserHost.RowDefinitions;
+        // Ao sair do ecrã dividido para outra aba, as metades seguram-se por cima até a nova apresentar (PageSwap, como
+        // numa troca normal) — mas cada uma no seu lugar: postas logo na área inteira, a da esquerda via-se em ecrã
+        // inteiro durante 4–5 fotogramas antes da nova. As faixas da divisão ficam até elas saírem.
+        var all = _browsers.Select(p => (Tab: p.Key, Page: (FrameworkElement)p.Value))
+            .Concat(_videoViews.Select(p => (Tab: p.Key, Page: (FrameworkElement)p.Value))).ToList();
+        var leavingSplit = _split is null
+            ? all.Where(p => p.Page.Visibility == Visibility.Visible && InSplitPane(p.Page) && !ShouldShow(p.Tab, p.Page))
+                .Select(p => p.Page).ToHashSet()
+            : [];
         if (_split is null)
         {
-            columns.Clear();
-            rows.Clear();
+            if (leavingSplit.Count == 0)
+            {
+                columns.Clear();
+                rows.Clear();
+            }
         }
         else if (_split.IsStacked && rows.Count != 3)
         {
@@ -198,15 +210,11 @@ public partial class MainWindow
         }
 
         var pages = new List<(FrameworkElement, bool)>();
-        foreach (var (tab, browser) in _browsers.Select(p => (p.Key, (FrameworkElement)p.Value))
-                     .Concat(_videoViews.Select(p => (p.Key, (FrameworkElement)p.Value))))
+        foreach (var (tab, browser) in all)
         {
             var pane = _split?.PaneOf(tab);
-            var visible = pane is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));
-            // A meio da troca para o motor de vídeo, só a página do motor principal se vê (até o WebView2 pintar).
-            if (browser is Microsoft.Web.WebView2.Wpf.WebView2 && _videoSwitching.Contains(tab)) visible = false;
-            pages.Add((browser, visible));
-            PlaceInHost(browser, pane);
+            pages.Add((browser, ShouldShow(tab, browser)));
+            if (!leavingSplit.Contains(browser)) PlaceInHost(browser, pane);
         }
         // Abas fechadas que estavam à vista: saem como uma aba que se esconde (por cima, até a vizinha aparecer).
         pages.AddRange(_retiringPages.Select(page => ((FrameworkElement)page, false)));
@@ -269,6 +277,17 @@ public partial class MainWindow
     }
 
     // Posição de um elemento na grelha da página: uma metade (coluna ou linha conforme a orientação) ou a área toda.
+    // Posta numa das metades (e não na área inteira).
+    private static bool InSplitPane(UIElement element) => Grid.GetColumnSpan(element) < 3 || Grid.GetRowSpan(element) < 3;
+
+    // A página da aba fica à vista: numa das metades, ou a da aba ativa fora do ecrã dividido.
+    private bool ShouldShow(BrowserTab tab, FrameworkElement page)
+    {
+        // A meio da troca para o motor de vídeo, só a página do motor principal se vê (até o WebView2 pintar).
+        if (page is Microsoft.Web.WebView2.Wpf.WebView2 && _videoSwitching.Contains(tab)) return false;
+        return _split?.PaneOf(tab) is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));
+    }
+
     private void PlaceInHost(UIElement element, SplitPane? pane)
     {
         var stacked = _split?.IsStacked == true;

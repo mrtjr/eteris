@@ -104,10 +104,10 @@ public class EngineHardeningTests
     }
 
     [Fact]
-    public void Headers_SendDoNotTrackAndGpc()
+    public void Headers_SendGpc_ButNotDoNotTrack()
     {
         Assert.Contains(("Sec-GPC", "1"), PrivacySignals.Headers);
-        Assert.Contains(("DNT", "1"), PrivacySignals.Headers);
+        Assert.DoesNotContain(PrivacySignals.Headers, h => h.Name == "DNT");
     }
 
     [Theory]

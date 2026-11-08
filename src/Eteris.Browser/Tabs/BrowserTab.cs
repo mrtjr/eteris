@@ -120,6 +120,14 @@ public partial class BrowserTab : ObservableObject
 
     internal string? FaviconSite { get; set; }
 
+    // A página à vista passou a ser address: o ícone mostrado, se for de outro site, sai já. O endereço da aba não
+    // serve de comparação — a omnibox e a troca para o motor de vídeo escrevem-no antes do commit, e uma página sem
+    // ícone próprio (um ficheiro de vídeo aberto diretamente) ficava com o do site anterior.
+    public void ForgetFaviconOfOtherSite(string? address)
+    {
+        if (Favicon is not null && FaviconSite != Data.HistoryStore.SiteIconKey(address)) Favicon = null;
+    }
+
     [ObservableProperty]
     private Color? _tint;
 
@@ -278,7 +286,7 @@ public partial class BrowserTab : ObservableObject
     // (back/forward cache) repõe a página tal como estava, sem pedidos novos, por isso repõe-se o que ela tinha.
     public const int RememberedPages = 8;
 
-    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon);
+    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon, string? FaviconSite);
 
     private readonly List<LeftPage> _leftPages = [];
 
@@ -289,7 +297,7 @@ public partial class BrowserTab : ObservableObject
         if (url is not null && (BlockedCount > 0 || _leftPages.All(p => p.Url != url)))
         {
             _leftPages.RemoveAll(p => p.Url == url);
-            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon));
+            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite));
             if (_leftPages.Count > RememberedPages) _leftPages.RemoveAt(0);
         }
         ResetShield();
@@ -303,7 +311,11 @@ public partial class BrowserTab : ObservableObject
         _blockedHosts.Clear();
         foreach (var (host, count) in page.Hosts) _blockedHosts[host] = count;
         BlockedCount = page.Blocked;
-        if (page.Favicon is not null) Favicon = page.Favicon;
+        if (page.Favicon is not null)
+        {
+            FaviconSite = page.FaviconSite;
+            Favicon = page.Favicon;
+        }
         return true;
     }
 

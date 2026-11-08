@@ -113,10 +113,13 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
         // O Chromium só corre os scripts registados se o domínio Page estiver ativo na sessão.
         var created = _client;
         _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.EnableAsync())).Unwrap();
+        // Dicas do cliente de alta entropia reduzidas no motor (página, frames, workers dedicados e cabeçalhos). Antes do
+        // onSession: a vista móvel de um site fixado troca-as pelas dela.
+        _queue = _queue.ContinueWith(_ => Quietly(() => ReducedClientHints.Apply(created))).Unwrap();
         if (onSession is not null) _queue = _queue.ContinueWith(_ => Quietly(() => onSession(created))).Unwrap();
         // O GPC visível ao JavaScript vale em todas as páginas, com ou sem escudo: registado uma vez por sessão e nunca
-        // retirado, não depende do script de cada site nem da corrida de cada navegação.
-        // As dicas do cliente de alta entropia (PrivacySignals.HintsScript) vão no mesmo registo.
+        // retirado, não depende do script de cada site nem da corrida de cada navegação. A lista de dispositivos sem
+        // permissão (PrivacySignals.DevicesScript) vai no mesmo registo.
         _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript))).Unwrap();
         if (!string.IsNullOrEmpty(baseScript))
             _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(baseScript))).Unwrap();

@@ -9,9 +9,14 @@ public class CefConfiguratorTests
     public void Build_SetsCachePathToGivenProfile()
         => Assert.Equal(@"C:\x\profile", CefConfigurator.Build(@"C:\x\profile").CachePath);
 
+    // A língua do motor é a dos sites: o Intl das páginas dá o mesmo que o navigator.language.
     [Fact]
-    public void Build_UsesPortugueseLocale()
-        => Assert.Equal("pt-PT", CefConfigurator.Build("p").Locale);
+    public void Build_UsesTheSiteLanguageAsTheEngineLocale()
+    {
+        var settings = CefConfigurator.Build("p");
+        Assert.Equal(settings.AcceptLanguageList, settings.Locale);
+        Assert.Equal(Eteris.Browser.Shields.PrivacyPreferences.SiteLanguage, settings.Locale);
+    }
 
     [Fact]
     public void Build_BlocksAutoplayByDefault()

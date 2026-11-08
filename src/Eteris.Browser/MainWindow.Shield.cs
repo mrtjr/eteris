@@ -67,7 +67,7 @@ public partial class MainWindow
             : "◉  " + SiteObservatory.Summary(SiteObservatory.ByCompany(tab?.Observatory.Snapshot().ThirdParties ?? []));
         ShieldObservatoryLine.Visibility = host is null ? Visibility.Collapsed : Visibility.Visible;
         ShieldObservatoryButton.Visibility = ShieldObservatoryLine.Visibility;
-        ShieldCheckHeaders.Text = "✓  Pedido «Não rastrear» e GPC enviados";
+        ShieldCheckHeaders.Text = "✓  Pedido de privacidade (GPC) enviado";
         ShieldCheckCookies.Text = PrivacyPreferences.ThirdPartyCookiesBlocked
             ? "✓  Cookies de terceiros bloqueados" : "✗  Cookies de terceiros permitidos";
         ShieldCheckWebRtc.Text = PrivacyPreferences.WebRtcIpProtected

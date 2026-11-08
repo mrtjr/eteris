@@ -64,7 +64,8 @@ public static class PrivacyPage
             .Concat(EngineHardening.AdBlinkFeatures.Where(f => !hiddenFromJs.Contains(f))).Distinct().ToList();
         var quiet = s.EngineArgs.ContainsKey("disable-background-networking") && s.EngineArgs.ContainsKey("disable-component-update")
                     && s.EngineArgs.TryGetValue("component-updater", out var updater) && updater.Contains(Infrastructure.CefConfigurator.NoUpdateServer, StringComparison.Ordinal);
-        var gpcHeader = s.Headers.Contains(("Sec-GPC", "1")) && s.Headers.Contains(("DNT", "1"));
+        // Só o GPC: o «DNT: 1» saiu porque distinguia quem o envia (docs/paridade.md #6).
+        var gpcHeader = s.Headers.Contains(("Sec-GPC", "1")) && !s.Headers.Any(h => h.Name == "DNT");
         var enabled = EngineHardening.Switch(s.EngineArgs, "enable-features");
         var missingJars = EngineHardening.Partitioning.Where(p => !enabled.Contains(p.Feature)).Select(p => p.Feature).ToList();
         // O referrer é decidido pela mesma função que o tratador de pedidos usa, com um exemplo à vista.
@@ -90,7 +91,7 @@ public static class PrivacyPage
         return
         [
             new("gpc-header", "Pede a cada site para não o seguir",
-                gpcHeader ? "Cada pedido leva os cabeçalhos «Sec-GPC: 1» (Global Privacy Control) e «DNT: 1»." : "Os pedidos saem sem o cabeçalho Sec-GPC.",
+                gpcHeader ? "Cada pedido leva o cabeçalho «Sec-GPC: 1» (Global Privacy Control). O antigo «DNT: 1» já não vai: o Chrome e o Brave não o enviam e só servia para o distinguir." : "Os pedidos saem sem o cabeçalho Sec-GPC.",
                 gpcHeader),
             new("gpc-js", "O pedido é visível ao JavaScript dos sites",
                 s.GpcScript ? "navigator.globalPrivacyControl vale true em todas as páginas — é aí que os avisos de cookies e o Consent Mode o leem."

@@ -66,10 +66,16 @@ public static class EngineHardening
 
     // Tudo o que o Éteris acrescenta à configuração do motor: interruptores e uma só língua para os sites (a lista de
     // línguas fixa-se ao arrancar; o cabeçalho Accept-Language e o navigator.languages seguem-na).
+    // A língua do motor (Locale) é a mesma: é ela que dá o locale por omissão do Intl nas páginas e nos workers
+    // (Intl.DateTimeFormat().resolvedOptions().locale, toLocaleString()). Com o Locale fixo em pt-PT e os sites em
+    // pt-BR, o Intl dizia pt-PT e o navigator.language pt-BR — uma incoerência que o Chrome não tem (medido,
+    // docs/paridade.md #6). Só muda os textos do próprio Chromium (páginas de erro, validação de formulários); a
+    // interface do Éteris é dele e continua em português europeu.
     public static void Configure(CefSharp.CefSettingsBase settings, string? language = null)
     {
         Apply(settings.CefCommandLineArgs);
         settings.AcceptLanguageList = language ?? PrivacyPreferences.SiteLanguage;
+        settings.Locale = settings.AcceptLanguageList;
         StartedWithLanguage = settings.AcceptLanguageList;
     }
 

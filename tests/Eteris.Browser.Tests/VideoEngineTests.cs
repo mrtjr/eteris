@@ -208,4 +208,27 @@ public class VideoEngineTests
     [InlineData(null, "não é endereço", "não é endereço")]
     public void PageTitle_UntitledMediaUsesTheFileNameOrHost(string? documentTitle, string url, string expected)
         => Assert.Equal(expected, VideoEngine.PageTitle(documentTitle, url));
+
+    // O motor principal recebe do Chromium o endereço como título de um ficheiro de média aberto diretamente: fica o
+    // nome do ficheiro, o mesmo que o motor de vídeo grava (o histórico tinha «w3schools.com/html/mov_bbb.mp4» num e
+    // «mov_bbb.mp4» no outro).
+    [Theory]
+    [InlineData("w3schools.com/html/mov_bbb.mp4", "https://www.w3schools.com/html/mov_bbb.mp4", "mov_bbb.mp4")]
+    [InlineData("www.w3schools.com/html/mov_bbb.mp4", "https://www.w3schools.com/html/mov_bbb.mp4", "mov_bbb.mp4")]
+    [InlineData("https://cdn.example.com/a%20b.mp3", "https://cdn.example.com/a%20b.mp3", "a b.mp3")]
+    [InlineData("cdn.example.com/a b.mp3", "https://cdn.example.com/a%20b.mp3", "a b.mp3")]
+    [InlineData(null, "https://cdn.example.com/v.webm", "v.webm")]
+    [InlineData("Big Buck Bunny", "https://cdn.example.com/v.mp4", "Big Buck Bunny")]
+    [InlineData("example.com/pagina", "https://example.com/pagina", "example.com/pagina")]
+    [InlineData(null, "https://example.com/pagina", "https://example.com/pagina")]
+    [InlineData("Notícias", "https://example.com/", "Notícias")]
+    public void MainEngineTitle_DirectMediaUsesTheFileNameLikeTheVideoEngine(string? title, string url, string expected)
+        => Assert.Equal(expected, VideoEngine.MainEngineTitle(title, url));
+
+    [Fact]
+    public void MainEngineTitle_MatchesTheVideoEngineForAnUntitledFile()
+    {
+        const string url = "https://www.w3schools.com/html/mov_bbb.mp4";
+        Assert.Equal(VideoEngine.PageTitle(null, url), VideoEngine.MainEngineTitle("w3schools.com/html/mov_bbb.mp4", url));
+    }
 }

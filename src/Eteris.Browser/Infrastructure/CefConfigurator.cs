@@ -15,7 +15,7 @@ public static class CefConfigurator
         var settings = new CefSettings
         {
             CachePath = profilePath,
-            Locale = "pt-PT",
+            // Locale: a língua dos sites (EngineHardening.Configure, mais abaixo).
             LogSeverity = LogSeverity.Disable,
         };
         // Sandbox dos processos das páginas (docs/sandbox.md, passo D): só com o ponteiro do bootstrap da CEF e o CefSharp

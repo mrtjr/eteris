@@ -198,6 +198,7 @@ public partial class MainWindow : Window
                 tab.Favicon = null;
                 tab.Tint = null;
             }
+            else tab.ForgetFaviconOfOtherSite(address);
             // O CefSharp pode repetir o mesmo endereço depois do fim do carregamento: só uma página nova apaga a deteção do leitor.
             if (!string.Equals(tab.Address, address, StringComparison.Ordinal))
             {
@@ -254,13 +255,16 @@ public partial class MainWindow : Window
         };
         browser.TitleChanged += (_, e) =>
         {
+            var url = tab.Address;
             if (e.NewValue is not string { Length: > 0 } title)
             {
-                tab.Title = tab.Address;
+                tab.Title = VideoEngine.MainEngineTitle(null, url);
                 return;
             }
+            // Ficheiro de vídeo/áudio aberto diretamente: o Chromium dá o endereço como título; fica o nome do
+            // ficheiro, como no motor de vídeo (e no histórico, o mesmo título nos dois motores).
+            title = VideoEngine.MainEngineTitle(title, url);
             tab.Title = title;
-            var url = tab.Address;
             if (!IsPrivate) AppData.UpdateTitleLater(url, title);
         };
         browser.LoadingStateChanged += (_, e) => Dispatcher.InvokeAsync(() =>
