@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Éteris — navegador privado para Windows</title>
+<meta name="description" content="Éteris: navegador web privado para Windows, de código aberto, com bloqueio de rastreadores e anúncios ativo por defeito e sem telemetria. Sincronização opcional, cifrada ponta a ponta, na pasta oculta da aplicação no Google Drive.">
+<meta name="referrer" content="no-referrer">
+<meta property="og:site_name" content="Éteris">
+<meta property="og:title" content="Éteris — navegador privado para Windows">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="irisbar"></div>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="eteris.png" alt="" width="34" height="34">Éteris</a>
+    <nav class="top" aria-label="Secções">
+      <a href="#privacidade">Promessas</a>
+      <a href="#sincronizacao">Sincronização</a>
+      <a href="#codigo">Código aberto</a>
+      <a href="privacidade.html">Política de privacidade</a>
+      <a href="#en" hreflang="en" lang="en">English</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <img class="logo" src="eteris.png" alt="Ícone do Éteris: um anel com as cores da íris à volta de um núcleo luminoso" width="112" height="112">
+      <h1><span class="grad">Éteris</span><br>o navegador que não o observa</h1>
+      <p class="lead">Navegador web privado para Windows, com bloqueio de rastreadores e anúncios ativo por defeito, páginas internas
+        cuidadas e uma interface que se adapta a cada site. Sem telemetria e sem contas do Éteris: por omissão, tudo fica no
+        seu computador.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/mrtjr/eteris/releases/latest">Transferir para Windows</a>
+        <a class="btn" href="https://github.com/mrtjr/eteris">Ver o código no GitHub</a>
+      </div>
+      <p class="small">Windows de 64 bits. Instala por utilizador, sem permissões de administrador, e atualiza-se sozinho.
+        Ficheiro: <code>EterisBrowser-win-Setup.exe</code> no último release.</p>
+    </div>
+
+    <section id="privacidade">
+      <h2>Promessas de privacidade</h2>
+      <p>O Éteris é feito para que a privacidade seja o estado normal, não uma opção escondida. E cada promessa pode ser
+        conferida: a página <code>eteris://privacy/</code> verifica-as no estado real do navegador, mostra um relatório
+        dos últimos 7 e 30 dias (só números, guardados neste computador e apagáveis) e faz um auto-teste local do que um site vê.</p>
+      <div class="grid">
+        <div class="card"><h3>Escudo ativo por defeito</h3><p>Listas do uBlock Origin (cerca de 200 mil regras), scriptlets e
+          regras cosméticas; avisos de cookies removidos; «Esconder elemento» para o que sobrar.</p></div>
+        <div class="card"><h3>Sem telemetria</h3><p>O Éteris não envia estatísticas de uso, relatórios de erros nem
+          identificadores. Não há servidores do Éteris a receber seja o que for.</p></div>
+        <div class="card"><h3>Sem tráfego de fundo da Google</h3><p>Sem tráfego de fundo do Chromium nem atualizações de componentes
+          da Google; no arranque, nada sai para a Google. As poucas ligações que o Éteris faz sozinho (atualizações, listas
+          do Escudo) estão todas na <a href="privacidade.html#ligacoes">política de privacidade</a>.</p></div>
+        <div class="card"><h3>Proteções na rede</h3><p>HTTPS primeiro, cookies de terceiros bloqueados, cada site com o seu
+          «frasco», WebRTC sem fuga de IP, Global Privacy Control e links sem rastreio.</p></div>
+        <div class="card"><h3>Sem as APIs de anúncios</h3><p>Topics, Protected Audience, Attribution Reporting, Shared Storage
+          e Fenced Frames desligados no motor.</p></div>
+        <div class="card"><h3>Esquecer é fácil</h3><p>Janelas privadas em memória, «Esquecer os últimos 15 min / 1 hora»,
+          apagar histórico, cookies e cache, apagar dados ao fechar.</p></div>
+      </div>
+    </section>
+
+    <section id="sincronizacao">
+      <h2>Sincronização com o Google Drive (opcional)</h2>
+      <p>O Éteris pode guardar uma cópia <strong>cifrada</strong> dos seus dados na <strong>pasta oculta da aplicação</strong>
+        do seu Google Drive, para os levar para outro aparelho. É opcional, está <strong>desligada por omissão</strong> e
+        só começa depois de carregar em «Entrar com o Google» nas Definições › Sincronização. Sem isso, o Éteris não fala
+        com a Google.</p>
+
+      <h3>A permissão que o Éteris pede</h3>
+      <p>Só uma: <code>https://www.googleapis.com/auth/drive.appdata</code> — ver e gerir os dados de configuração da
+        própria aplicação no Google Drive. Com ela o Éteris <strong>só vê a sua própria pasta oculta</strong>: não vê,
+        não lê, não lista e não altera nenhum outro ficheiro do seu Drive, nem o Gmail, os contactos ou o calendário.
+        A pasta não aparece na lista de ficheiros do Drive.</p>
+
+      <h3>O que vai para o Drive</h3>
+      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site e as notas.
+        Vai tudo em ficheiros <strong>cifrados no seu PC antes de sair</strong>, com nomes opacos. O histórico, as abas
+        abertas, as senhas, os cookies e a cache não vão.</p>
+
+      <h3>Cifrado no PC, chave só nos seus aparelhos</h3>
+      <p>A cifra é ponta a ponta (AES-256-GCM, com uma chave por ficheiro). A chave é gerada no seu computador e
+        <strong>nunca vai para a Google nem para o Éteris</strong>: fica nos seus aparelhos e no código de recuperação que
+        só você vê. Sem esse código e sem nenhum aparelho ligado, a cópia na nuvem não se consegue abrir — por ninguém.</p>
+
+      <h3>O que a Google vê</h3>
+      <ul>
+        <li>que a sua conta autorizou a aplicação «Éteris», e quando houve início de sessão;</li>
+        <li>quando o Éteris sincroniza (horas e endereço IP dos pedidos), quantos ficheiros há e o tamanho aproximado;</li>
+        <li><strong>nunca</strong> o conteúdo: favoritos, endereços, títulos, notas, abas, definições ou nomes dos aparelhos.</li>
+      </ul>
+      <p>Para mostrar a conta no menu, o Éteris pede à API do Drive o nome e o e-mail da conta uma vez depois de entrar
+        (a Google já os conhece). Ficam guardados só neste computador, protegidos pelo Windows.</p>
+
+      <h3>Como apagar e retirar o acesso</h3>
+      <ul>
+        <li><strong>No Éteris:</strong> Definições › Sincronização › «Sair» apaga deste computador os tokens e a conta
+          guardada e revoga o acesso na Google.</li>
+        <li><strong>Na Google:</strong> retire o acesso em
+          <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> (Éteris › Remover acesso).</li>
+        <li><strong>Os dados no Drive:</strong> em <a href="https://drive.google.com/">drive.google.com</a> › Definições ›
+          Gerir aplicações › Éteris › Opções › «Eliminar dados ocultos da aplicação».</li>
+      </ul>
+      <p>Os pormenores estão na <a href="privacidade.html">política de privacidade</a>.</p>
+    </section>
+
+    <section id="codigo">
+      <h2>Código aberto</h2>
+      <p>O Éteris é software livre, sob a <a href="https://github.com/mrtjr/eteris/blob/main/LICENSE">GNU GPL versão 3 ou
+        posterior</a>: pode usá-lo, estudá-lo, alterá-lo e redistribuí-lo. Todo o código, incluindo o da cifra e o da
+        sincronização, está em <a href="https://github.com/mrtjr/eteris">github.com/mrtjr/eteris</a>, com a lista de
+        alterações no <a href="https://github.com/mrtjr/eteris/blob/main/CHANGELOG.md">CHANGELOG</a>.
+        Dúvidas, erros e pedidos: <a href="https://github.com/mrtjr/eteris/issues">GitHub Issues</a>.</p>
+    </section>
+
+    <!-- English version (same content) -->
+    <div class="lang" id="en" lang="en">
+      <span class="badge">English</span>
+      <section>
+        <h2>Éteris — the browser that doesn't watch you</h2>
+        <p>Éteris is a private web browser for Windows, with tracker and ad blocking on by default, polished internal pages
+          and an interface that adapts to each site. No telemetry and no Éteris accounts: by default, everything stays on
+          your computer.</p>
+        <div class="cta" style="justify-content:flex-start">
+          <a class="btn primary" href="https://github.com/mrtjr/eteris/releases/latest">Download for Windows</a>
+          <a class="btn" href="https://github.com/mrtjr/eteris">Source code on GitHub</a>
+        </div>
+        <p class="small">64-bit Windows. Installs per user, without administrator rights, and updates itself.</p>
+      </section>
+
+      <section>
+        <h2>Privacy promises</h2>
+        <ul>
+          <li><strong>Shield on by default:</strong> uBlock Origin lists (about 200,000 rules), scriptlets and cosmetic rules; cookie banners removed.</li>
+          <li><strong>No telemetry:</strong> no usage statistics, crash reports or identifiers are sent. There are no Éteris servers.</li>
+          <li><strong>No Google background traffic:</strong> no Chromium background traffic or Google component updates; nothing goes to Google at startup. The few connections Éteris makes on its own (updates, Shield lists) are all listed in the <a href="privacidade.html#connections">privacy policy</a>.</li>
+          <li><strong>Network protections:</strong> HTTPS-first, third-party cookies blocked, per-site storage partitioning, no WebRTC IP leak, Global Privacy Control, tracking-free links.</li>
+          <li><strong>No advertising APIs:</strong> Topics, Protected Audience, Attribution Reporting, Shared Storage and Fenced Frames are disabled.</li>
+          <li><strong>Verifiable:</strong> <code>eteris://privacy/</code> checks every promise against the browser's real state.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Google Drive sync (optional)</h2>
+        <p>Éteris can keep an <strong>end-to-end encrypted</strong> copy of your data in the <strong>hidden application
+          data folder</strong> of your Google Drive, so you can take it to another device. It is optional, <strong>off by
+          default</strong>, and only starts after you click “Sign in with Google” in Settings › Sync. Until then, Éteris
+          does not talk to Google.</p>
+        <h3>The permission Éteris requests</h3>
+        <p>Only <code>https://www.googleapis.com/auth/drive.appdata</code> — see and manage the app's own configuration
+          data in your Google Drive. With it, Éteris <strong>can only see its own hidden folder</strong>: it cannot see,
+          read, list or change any other file in your Drive, nor your Gmail, contacts or calendar.</p>
+        <h3>What goes to Drive</h3>
+        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions and notes — all in
+          files <strong>encrypted on your PC before they leave</strong>, with opaque names. History, open tabs, passwords,
+          cookies and cache are not synced.</p>
+        <h3>Encrypted on your PC, key only on your devices</h3>
+        <p>Encryption is end to end (AES-256-GCM, one key per file). The key is generated on your computer and
+          <strong>never goes to Google or to the Éteris project</strong>: it stays on your devices and in the recovery
+          code only you see. Without that code and without a connected device, nobody can open the cloud copy.</p>
+        <h3>What Google sees</h3>
+        <p>That your account authorized “Éteris”; when Éteris syncs (request times and IP address), how many files there
+          are and their approximate size — <strong>never</strong> the content. To show your account in the menu, Éteris
+          asks the Drive API for the account's name and email once after sign-in; they are stored only on your computer,
+          protected by Windows.</p>
+        <h3>How to delete and revoke access</h3>
+        <ul>
+          <li><strong>In Éteris:</strong> Settings › Sync › “Sign out” deletes the tokens and the stored account from this computer and revokes access at Google.</li>
+          <li><strong>At Google:</strong> remove access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+          <li><strong>The data in Drive:</strong> <a href="https://drive.google.com/">drive.google.com</a> › Settings › Manage apps › Éteris › Options › “Delete hidden app data”.</li>
+        </ul>
+        <p>Full details: <a href="privacidade.html#en">privacy policy</a>.</p>
+      </section>
+
+      <section>
+        <h2>Open source</h2>
+        <p>Éteris is free software under the <a href="https://github.com/mrtjr/eteris/blob/main/LICENSE">GNU GPL version 3
+          or later</a>. All the code, including encryption and sync, is at
+          <a href="https://github.com/mrtjr/eteris">github.com/mrtjr/eteris</a>. Questions and bug reports:
+          <a href="https://github.com/mrtjr/eteris/issues">GitHub Issues</a>.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <nav aria-label="Ligações">
+      <a href="privacidade.html">Política de privacidade · Privacy policy</a>
+      <a href="termos.html">Termos de utilização · Terms of use</a>
+      <a href="https://github.com/mrtjr/eteris">GitHub</a>
+      <a href="https://github.com/mrtjr/eteris/issues">Contacto · Contact</a>
+    </nav>
+    <p>Éteris — software livre (GPL-3.0-or-later). Esta página não usa cookies, scripts nem rastreadores. ·
+      <span lang="en">This page uses no cookies, scripts or trackers.</span></p>
+  </footer>
+</div>
+</body>
+</html>
