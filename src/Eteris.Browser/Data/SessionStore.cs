@@ -91,7 +91,7 @@ public sealed class SessionStore(string path)
         try
         {
             if (!File.Exists(path)) return null;
-            var session = JsonSerializer.Deserialize<Session>(File.ReadAllText(path));
+            var session = Read(File.ReadAllText(path));
             if (session?.Urls is null) return null;
             var spaces = session.Spaces?.Where(s => s is { Name.Length: > 0 })
                 .Select(s => s with { Tabs = s.Tabs?.Urls is null ? null : Filter(s.Tabs) }).ToList();
@@ -109,6 +109,12 @@ public sealed class SessionStore(string path)
         }
 
     }
+
+    // Ajuste e12: lida com o código gerado (Data/StartupJson.cs); sem ele, por reflexão, como sempre. O mesmo resultado.
+    public static Session? Read(string json)
+        => Infrastructure.PerfTuning.IsOn(Infrastructure.PerfTuning.ReadyNewTab)
+            ? JsonSerializer.Deserialize(json, StartupJsonContext.Default.Session)
+            : JsonSerializer.Deserialize<Session>(json);
 
     private static bool IsOnlyInternal(Session session)
         => session.Urls.All(u => u.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));

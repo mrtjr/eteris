@@ -52,13 +52,13 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             }
             else
             {
-                var sites = AppData.TryRead(h => h.TopSites(8));
-                var bookmarks = AppData.Bookmarks(b => b.All(10));
-                html = NewTabPage.Render(sites, engine, now,
-                    blocked: Shields.ShieldStats.SessionBlocked, bookmarks: bookmarks,
-                    week: AppData.ShieldWeek(), prefs: Settings.Current,
-                    reading: AppData.ReadingList(), sessions: AppData.SavedSessions(),
-                    icons: AppData.SiteIcons(sites.Select(s => s.Url).Concat(bookmarks.Select(b => b.Url))));
+                Infrastructure.StartupTrace.MarkOnce("novaaba.pedido");
+                var prefs = Settings.Current;
+                var blocked = Shields.ShieldStats.SessionBlocked;
+                // Ajuste e12: a 1.ª nova aba já preparada no arranque, se ainda vale (Browser/NewTabPrecompute.cs).
+                var ready = NewTabPrecompute.Take(prefs, engine.Name, now, blocked);
+                html = ready ?? NewTabPrecompute.Render(engine, now, prefs, blocked);
+                Infrastructure.StartupTrace.MarkOnce("novaaba.resposta", ready is null ? "pregerada=0" : "pregerada=1");
             }
             return ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme && !isPrivate),
                 Encoding.UTF8, false, "text/html");

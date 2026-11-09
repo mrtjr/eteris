@@ -17,6 +17,9 @@ public partial class App : Application
         if (!CefConfigurator.StartedFromMain) CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
         // As tabelas que a 1.ª aba consulta abrem-se em paralelo (Data/AppData.cs, PrewarmAsync).
         _ = Data.AppData.PrewarmAsync();
+        // Ajuste e12 (desligado por omissão; regra R-2): a 1.ª nova aba do perfil prepara-se já, em fundo
+        // (Browser/NewTabPrecompute.cs). Nunca num arranque privado.
+        if (PerfTuning.IsOn(PerfTuning.ReadyNewTab) && !StartupArgs.IsPrivate(e.Args)) Browser.NewTabPrecompute.Start(() => DateTime.Now);
         Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
         Theme.ThemeManager.FollowSystemChanges(() => Data.Settings.Current.Theme);
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.ThemeManager.Apply(s.Theme));

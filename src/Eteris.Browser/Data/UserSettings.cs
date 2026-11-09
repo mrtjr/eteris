@@ -119,9 +119,15 @@ public sealed class SettingsStore(string path)
 
     public UserSettings Load()
     {
-        try { return File.Exists(path) ? Migrate(JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(path)) ?? new()) : new(); }
+        try { return File.Exists(path) ? Migrate(Read(File.ReadAllText(path)) ?? new()) : new(); }
         catch (Exception) { return new(); }
     }
+
+    // Ajuste e12: lida com o código gerado (Data/StartupJson.cs); sem ele, por reflexão, como sempre. O mesmo resultado.
+    public static UserSettings? Read(string json)
+        => Infrastructure.PerfTuning.IsOn(Infrastructure.PerfTuning.ReadyNewTab)
+            ? JsonSerializer.Deserialize(json, StartupJsonContext.Default.UserSettings)
+            : JsonSerializer.Deserialize<UserSettings>(json);
 
     // O pt-PT que a 0.2.9 e anteriores gravavam por omissão passa à língua do Windows; o escolhido nas Definições fica.
     public static UserSettings Migrate(UserSettings settings)

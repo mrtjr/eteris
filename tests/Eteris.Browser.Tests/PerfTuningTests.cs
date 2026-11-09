@@ -84,7 +84,7 @@ public class PerfTuningTests
         var constants = Regex.Matches(File.ReadAllText(Path.Combine(Root, "src", "Eteris.Browser", "Infrastructure", "PerfTuning.cs")),
             @"public const string (\w+) = ""(e\d+)"";").Select(m => (Name: m.Groups[1].Value, Id: m.Groups[2].Value)).ToList();
         Assert.Equal(PerfTuning.Tweaks.Select(t => t.Id).Order(), constants.Select(c => c.Id).Order());
-        Assert.All(constants, c => Assert.Contains("PerfTuning.IsOn(PerfTuning." + c.Name + ")", code));
+        Assert.All(constants, c => Assert.Matches(@"PerfTuning\.IsOn\((Infrastructure\.)?PerfTuning\." + c.Name + @"\)", code));
         Assert.DoesNotMatch(@"PerfTuning\.IsOn\(""", code);
     }
 
