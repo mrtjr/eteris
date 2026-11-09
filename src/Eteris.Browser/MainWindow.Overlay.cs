@@ -28,6 +28,9 @@ public partial class MainWindow
     private void SetUpOverlayLayer()
     {
         if (_overlay is not null) return;
+        // Braço «puro» das medições de desempenho (só com ETERIS_TEST_PURO): sem a janela em camadas, os elementos ficam
+        // na janela principal (tapados pela página; só para medir).
+        if (Infrastructure.PerfDiagnostics.Without(Infrastructure.PerfLayers.Overlay)) return;
         var root = new Grid();
         foreach (var source in new[] { TitleRow, ToolbarRow })
         {
@@ -139,11 +142,13 @@ public partial class MainWindow
         {
             SyncOverlayBounds();
             _overlay.Show();
+            Infrastructure.PerfCounters.Add("camada.mostrar");
         }
         // Janela minimizada: não há fotograma a pintar (nem a mostrar) — sai já.
         else if (!needed && _overlay.IsVisible && WindowState == WindowState.Minimized)
         {
             _overlay.Hide();
+            Infrastructure.PerfCounters.Add("camada.esconder");
         }
         else if (!needed && _overlay.IsVisible && !_overlayHidePending)
         {
@@ -157,7 +162,11 @@ public partial class MainWindow
                 if (++frames < OverlayHideFrames) return;
                 CompositionTarget.Rendering -= AfterEmptyFrame;
                 _overlayHidePending = false;
-                if (_overlay is { IsVisible: true } overlay && !OverlayNeeded()) overlay.Hide();
+                if (_overlay is { IsVisible: true } overlay && !OverlayNeeded())
+                {
+                    overlay.Hide();
+                    Infrastructure.PerfCounters.Add("camada.esconder");
+                }
             }
             CompositionTarget.Rendering += AfterEmptyFrame;
         }

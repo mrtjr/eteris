@@ -17,13 +17,15 @@ public partial class MainWindow
 
     private void ApplyBackdrop()
     {
-        if (Settings.Current.Mica && !_mica)
+        // Braço «puro» das medições de desempenho (só com ETERIS_TEST_PURO): moldura opaca, como sem o Mica.
+        var mica = Settings.Current.Mica && !PerfDiagnostics.Without(PerfLayers.Mica);
+        if (mica && !_mica)
         {
             _mica = WindowEffects.TryEnableMica(this);
             // Numa janela privada, um véu violeta por cima do material mantém-na reconhecível.
             if (_mica && IsPrivate) Background = new SolidColorBrush(Color.FromArgb(0x99, 0x24, 0x0B, 0x40));
         }
-        else if (!Settings.Current.Mica && _mica)
+        else if (!mica && _mica)
         {
             WindowEffects.DisableMica(this, OpaqueFrame);
             _mica = false;

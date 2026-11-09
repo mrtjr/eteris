@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         StartupTrace.Mark("janela.xaml");
+        ApplyPerfDiagnostics();
         // O motor arranca numa thread própria durante o XAML (Infrastructure/CefConfigurator.cs): daqui em diante é preciso.
         CefConfigurator.WaitReady();
         if (StartupTrace.IsOn)

@@ -46,6 +46,7 @@ public static partial class StartupTrace
     {
         if (FilePath is null) return;
         Write("mark", phase, detail);
+        AfterMark(phase);
     }
 
     // Só a 1.ª vez que a fase acontece (a 1.ª aba, a 1.ª pintura).
@@ -102,6 +103,8 @@ public static partial class StartupTrace
             Snapshot($"gc{seconds}s");
         }
         else Snapshot($"t{seconds}s");
+        // Filhos que nasceram depois da 1.ª pintura (o renderer de reserva, o serviço de áudio…): StartupTrace.Children.cs.
+        if (n <= 4) RecordChildren();
         if (n >= 24) _timer?.Change(Timeout.Infinite, Timeout.Infinite);
         Flush();
     }

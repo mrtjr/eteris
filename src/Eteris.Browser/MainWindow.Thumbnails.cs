@@ -24,6 +24,8 @@ public partial class MainWindow
                 if (tab.ThumbnailAddress != url) tab.Thumbnail = null;
                 return;
             }
+            // Braço «puro» das medições de desempenho (só com ETERIS_TEST_PURO): sem sessão DevTools para a miniatura.
+            if (Infrastructure.PerfDiagnostics.Without(Infrastructure.PerfLayers.DevTools)) return;
             using var client = browser.GetDevToolsClient();
             // SEM clip: com clip (e escala) o Chromium aplica emulação de dispositivo à página à vista enquanto fotografa
             // (docs/motor.md, P1). Sem clip só lê a superfície já desenhada; reduz-se no .NET.

@@ -108,6 +108,8 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
     {
         if (_disposed) return false;
         if (_client is not null) return true;
+        // Braço «puro» das medições de desempenho (só com ETERIS_TEST_PURO): nenhuma sessão DevTools por aba.
+        if (Infrastructure.PerfDiagnostics.Without(Infrastructure.PerfLayers.DevTools)) return false;
         try { _client = browser.GetDevToolsClient(); }
         catch (Exception) { return false; }
         // O Chromium só corre os scripts registados se o domínio Page estiver ativo na sessão.

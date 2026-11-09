@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using CefSharp;
 using Eteris.Browser.Tabs;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser;
 
@@ -12,6 +13,8 @@ public partial class MainWindow
 
     private void StartAudioWatch()
     {
+        // Braço «puro» das medições de desempenho (só com ETERIS_TEST_PURO; nunca numa instalação).
+        if (PerfDiagnostics.Without(PerfLayers.Media)) return;
         _audioTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, async (_, _) =>
         {
             foreach (var (tab, browser) in _browsers.ToList())
@@ -19,6 +22,7 @@ public partial class MainWindow
                 if (!browser.IsBrowserInitialized || browser.IsDisposed) continue;
                 try
                 {
+                    PerfCounters.Add("midia.sondagem");
                     var result = await PageScript.EvaluateAsync(browser, MediaInfo.Script);
                     tab.ApplyMedia(result.Success ? MediaInfo.Parse(result.Result as string) : MediaInfo.Nothing);
                 }
