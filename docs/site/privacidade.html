@@ -46,8 +46,10 @@
       <h2>2. Dados que ficam no seu computador</h2>
       <p>Histórico, favoritos, abas e sessões, notas, definições, decisões do Escudo, cookies, cache, permissões dos sites
         e o relatório de <code>eteris://privacy/</code> (só números) ficam na pasta do perfil do Éteris, no seu computador.
-        Não são enviados ao projeto Éteris nem a ninguém. Pode apagá-los no próprio Éteris (Definições › Privacidade,
-        «Esquecer», apagar ao fechar) ou desinstalando a aplicação e apagando a pasta do perfil.</p>
+        Não são enviados ao projeto Éteris nem a ninguém — salvo, com a sincronização ligada, os favoritos, os Espaços,
+        as definições que viajam, as decisões do Escudo por site e as notas, que vão cifrados para a pasta oculta do seu
+        Google Drive (secção 5). Pode apagá-los no próprio Éteris (Definições › Privacidade, «Esquecer», apagar ao fechar)
+        ou desinstalando a aplicação e apagando a pasta do perfil.</p>
     </section>
 
     <section>
@@ -59,14 +61,14 @@
       </ul>
     </section>
 
-    <section>
+    <section id="ligacoes">
       <h2>4. Ligações que o Éteris faz por si</h2>
       <p>Além das páginas que abre, o Éteris faz apenas estes pedidos, e nenhum leva dados pessoais:</p>
       <ul>
         <li><strong>Atualizações:</strong> pergunta ao GitHub (<code>github.com/mrtjr/eteris</code>, releases) se há uma
           versão nova e descarrega-a de lá. O GitHub vê o endereço IP do pedido.</li>
         <li><strong>Listas do Escudo:</strong> descarrega as listas de filtros do uBlock Origin de
-          <code>ublockorigin.github.io</code>.</li>
+          <code>ublockorigin.github.io</code> e a EasyList Portuguesa de <code>easylist-downloads.adblockplus.org</code>.</li>
         <li><strong>Sugestões de pesquisa:</strong> só se as ligar nas Definições (vêm desligadas), o que escreve na barra
           de endereço é enviado ao motor de pesquisa escolhido.</li>
         <li><strong>DNS cifrado:</strong> só se o escolher nas Definições, os nomes dos sites são resolvidos pelo
@@ -114,8 +116,8 @@
         <code>www.googleapis.com</code>), por HTTPS; o Éteris recusa qualquer outro endereço nesse canal.</p>
 
       <h3>5.3 O que vai para o Drive, cifrado ponta a ponta</h3>
-      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site, as notas e as
-        abas abertas em cada aparelho. O histórico, cookies, cache e permissões dos sites não vão.</p>
+      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site e as notas. O
+        histórico, as abas abertas, cookies, cache e permissões dos sites não vão.</p>
       <ul>
         <li>Tudo é cifrado <strong>no seu computador, antes de sair</strong>, com AES-256-GCM e uma chave por ficheiro,
           derivada de um segredo de 256 bits gerado no seu computador.</li>
@@ -205,8 +207,10 @@
         <h2>2. Data that stays on your computer</h2>
         <p>History, bookmarks, tabs and sessions, notes, settings, Shield decisions, cookies, cache, site permissions and
           the <code>eteris://privacy/</code> report (numbers only) are stored in the Éteris profile folder on your computer.
-          They are not sent to the Éteris project or to anyone else. You can delete them inside Éteris or by uninstalling
-          the app and deleting the profile folder.</p>
+          They are not sent to the Éteris project or to anyone else — except that, with sync turned on, bookmarks, Spaces,
+          the settings that travel, per-site Shield decisions and notes go encrypted to the hidden app folder of your
+          Google Drive (section 5). You can delete them inside Éteris or by uninstalling the app and deleting the profile
+          folder.</p>
       </section>
 
       <section>
@@ -218,11 +222,11 @@
         </ul>
       </section>
 
-      <section>
+      <section id="connections">
         <h2>4. Connections Éteris makes on its own</h2>
         <ul>
           <li><strong>Updates:</strong> checks GitHub (<code>github.com/mrtjr/eteris</code> releases) for a new version and downloads it from there. GitHub sees the request's IP address.</li>
-          <li><strong>Shield lists:</strong> downloads uBlock Origin filter lists from <code>ublockorigin.github.io</code>.</li>
+          <li><strong>Shield lists:</strong> downloads uBlock Origin filter lists from <code>ublockorigin.github.io</code> and EasyList Portuguese from <code>easylist-downloads.adblockplus.org</code>.</li>
           <li><strong>Search suggestions:</strong> only if you turn them on (off by default), what you type in the address bar is sent to your chosen search engine.</li>
           <li><strong>Encrypted DNS:</strong> only if you choose it, site names are resolved by the chosen provider.</li>
           <li><strong>Google:</strong> only with sync turned on and after “Sign in with Google” (section 5).</li>
@@ -268,8 +272,8 @@
           <code>www.googleapis.com</code>) over HTTPS; Éteris refuses any other address on that channel.</p>
 
         <h3>5.3 What goes to Drive, end-to-end encrypted</h3>
-        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions, notes and the tabs
-          open on each device. History, cookies, cache and site permissions are not synced.</p>
+        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions and notes. History,
+          open tabs, cookies, cache and site permissions are not synced.</p>
         <ul>
           <li>Everything is encrypted <strong>on your computer, before it leaves</strong>, with AES-256-GCM and one key
             per file, derived from a 256-bit secret generated on your computer.</li>

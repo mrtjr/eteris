@@ -50,8 +50,9 @@
           regras cosméticas; avisos de cookies removidos; «Esconder elemento» para o que sobrar.</p></div>
         <div class="card"><h3>Sem telemetria</h3><p>O Éteris não envia estatísticas de uso, relatórios de erros nem
           identificadores. Não há servidores do Éteris a receber seja o que for.</p></div>
-        <div class="card"><h3>Nada sai sem um pedido seu</h3><p>Sem tráfego de fundo do Chromium nem atualizações de componentes
-          da Google; no arranque, nada sai para a Google.</p></div>
+        <div class="card"><h3>Sem tráfego de fundo da Google</h3><p>Sem tráfego de fundo do Chromium nem atualizações de componentes
+          da Google; no arranque, nada sai para a Google. As poucas ligações que o Éteris faz sozinho (atualizações, listas
+          do Escudo) estão todas na <a href="privacidade.html#ligacoes">política de privacidade</a>.</p></div>
         <div class="card"><h3>Proteções na rede</h3><p>HTTPS primeiro, cookies de terceiros bloqueados, cada site com o seu
           «frasco», WebRTC sem fuga de IP, Global Privacy Control e links sem rastreio.</p></div>
         <div class="card"><h3>Sem as APIs de anúncios</h3><p>Topics, Protected Audience, Attribution Reporting, Shared Storage
@@ -75,9 +76,9 @@
         A pasta não aparece na lista de ficheiros do Drive.</p>
 
       <h3>O que vai para o Drive</h3>
-      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site, as notas e
-        as abas abertas em cada aparelho. Vai tudo em ficheiros <strong>cifrados no seu PC antes de sair</strong>, com
-        nomes opacos. O histórico, as senhas, os cookies e a cache não vão.</p>
+      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site e as notas.
+        Vai tudo em ficheiros <strong>cifrados no seu PC antes de sair</strong>, com nomes opacos. O histórico, as abas
+        abertas, as senhas, os cookies e a cache não vão.</p>
 
       <h3>Cifrado no PC, chave só nos seus aparelhos</h3>
       <p>A cifra é ponta a ponta (AES-256-GCM, com uma chave por ficheiro). A chave é gerada no seu computador e
@@ -134,7 +135,7 @@
         <ul>
           <li><strong>Shield on by default:</strong> uBlock Origin lists (about 200,000 rules), scriptlets and cosmetic rules; cookie banners removed.</li>
           <li><strong>No telemetry:</strong> no usage statistics, crash reports or identifiers are sent. There are no Éteris servers.</li>
-          <li><strong>Nothing leaves without your request:</strong> no Chromium background traffic or Google component updates; nothing goes to Google at startup.</li>
+          <li><strong>No Google background traffic:</strong> no Chromium background traffic or Google component updates; nothing goes to Google at startup. The few connections Éteris makes on its own (updates, Shield lists) are all listed in the <a href="privacidade.html#connections">privacy policy</a>.</li>
           <li><strong>Network protections:</strong> HTTPS-first, third-party cookies blocked, per-site storage partitioning, no WebRTC IP leak, Global Privacy Control, tracking-free links.</li>
           <li><strong>No advertising APIs:</strong> Topics, Protected Audience, Attribution Reporting, Shared Storage and Fenced Frames are disabled.</li>
           <li><strong>Verifiable:</strong> <code>eteris://privacy/</code> checks every promise against the browser's real state.</li>
@@ -152,9 +153,9 @@
           data in your Google Drive. With it, Éteris <strong>can only see its own hidden folder</strong>: it cannot see,
           read, list or change any other file in your Drive, nor your Gmail, contacts or calendar.</p>
         <h3>What goes to Drive</h3>
-        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions, notes and the
-          tabs open on each device — all in files <strong>encrypted on your PC before they leave</strong>, with opaque
-          names. History, passwords, cookies and cache are not synced.</p>
+        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions and notes — all in
+          files <strong>encrypted on your PC before they leave</strong>, with opaque names. History, open tabs, passwords,
+          cookies and cache are not synced.</p>
         <h3>Encrypted on your PC, key only on your devices</h3>
         <p>Encryption is end to end (AES-256-GCM, one key per file). The key is generated on your computer and
           <strong>never goes to Google or to the Éteris project</strong>: it stays on your devices and in the recovery
