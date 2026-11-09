@@ -61,6 +61,8 @@ public class CaptureShieldPopupTests
             }
             finally
             {
+                // Na mesma thread que o instalou: o gancho não fica para os testes seguintes.
+                CaptureShield.UnhookForTests();
                 CaptureShield.WantedOverride = null;
             }
             return (window, hidden, steps.Log);

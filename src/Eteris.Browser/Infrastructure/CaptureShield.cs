@@ -32,6 +32,9 @@ public static class CaptureShield
     // O gancho fica vivo enquanto o processo existir (o delegado não pode ser recolhido).
     private static WinEventProc? s_hook;
     private static nint s_hookHandle;
+    // A thread que instalou o gancho: os eventos só chegam por ela, e o Windows desfaz o gancho quando ela termina.
+    private static Thread? s_hookThread;
+    private static readonly object s_hookLock = new();
 
     // Cada janela WPF que abre segue a definição; mudar a definição aplica-a a todas as janelas do processo.
     public static void Install()
@@ -57,11 +60,31 @@ public static class CaptureShield
 
     // Uma janela de topo deste processo criada ou mostrada (EVENT_OBJECT_CREATE/SHOW): com a definição ligada, fica já
     // fora das capturas. O evento chega pela fila de mensagens da thread que instalou o gancho (fora de contexto).
+    // Em produção corre uma vez, na thread da interface (vive tanto como o processo). Chamado de outra thread (os testes),
+    // volta a instalar: o gancho de uma thread que já terminou deixou de existir (UnhookWinEvent automático do Windows).
+    // Se a primeira thread ainda viver, ficam dois ganchos ativos durante algum tempo; não faz mal, porque a afinidade
+    // aplicada é a mesma (idempotente).
     public static void HookNewWindows()
     {
-        if (s_hookHandle != 0) return;
-        s_hook = OnWinEvent;
-        s_hookHandle = SetWinEventHook(EventObjectCreate, EventObjectShow, 0, s_hook, (uint)Environment.ProcessId, 0, WinEventOutOfContext);
+        lock (s_hookLock)
+        {
+            if (s_hookHandle != 0 && s_hookThread == Thread.CurrentThread) return;
+            s_hook = OnWinEvent;
+            s_hookHandle = SetWinEventHook(EventObjectCreate, EventObjectShow, 0, s_hook, (uint)Environment.ProcessId, 0, WinEventOutOfContext);
+            s_hookThread = Thread.CurrentThread;
+        }
+    }
+
+    // Testes: desfaz o gancho. O UnhookWinEvent só vale na thread que o instalou; noutra, só se esquece o identificador
+    // (o próximo HookNewWindows instala outro).
+    internal static void UnhookForTests()
+    {
+        lock (s_hookLock)
+        {
+            if (s_hookHandle != 0 && s_hookThread == Thread.CurrentThread) UnhookWinEvent(s_hookHandle);
+            s_hookHandle = 0;
+            s_hookThread = null;
+        }
     }
 
     private static void OnWinEvent(nint hook, uint @event, nint hwnd, int idObject, int idChild, uint thread, uint time)
@@ -87,6 +110,9 @@ public static class CaptureShield
 
     [DllImport("user32.dll")]
     private static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint module, WinEventProc callback, uint processId, uint threadId, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool UnhookWinEvent(nint hook);
 
     [DllImport("user32.dll")]
     private static extern nint GetAncestor(nint hwnd, uint flags);
