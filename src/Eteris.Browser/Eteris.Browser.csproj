@@ -41,6 +41,7 @@
     <EmbeddedResource Include="Browser\privacy.html" />
     <EmbeddedResource Include="Browser\passwords.html" />
     <EmbeddedResource Include="Browser\autofill.html" />
+    <EmbeddedResource Include="Vault\Scripts\cofre.js" LogicalName="Eteris.Browser.Vault.cofre.js" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="Eteris.Browser.THIRD-PARTY-NOTICES.md" />
     <EmbeddedResource Include="Shields\trackers.txt" />
     <!-- Mapa domínio → empresa do Observatório do site: escrito pelo projeto, sem dados de terceiros. -->

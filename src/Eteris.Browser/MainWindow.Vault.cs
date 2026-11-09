@@ -1,7 +1,11 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using CefSharp;
+using CefSharp.Wpf.HwndHost;
+using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
+using Eteris.Browser.Tabs;
 using Eteris.Browser.Vault;
 
 namespace Eteris.Browser;
@@ -72,6 +76,57 @@ public partial class MainWindow
     }
 
     internal void OpenTabFromVault(string url) => Tabs.NewTab(url);
+
+    // ---- O canal com o script do cofre em cada aba (Vault/VaultChannel.cs) ----
+
+    // Lido e escrito na thread do CEF (commit, fim do carregamento) e na da janela (fechar, adormecer).
+    private readonly Dictionary<BrowserTab, VaultChannel> _vaultChannels = [];
+    private readonly Lock _vaultChannelsGate = new();
+
+    // Thread do CEF: commit ou fim do carregamento do frame de topo. Só páginas http(s); o canal nasce na 1.ª e o cofre
+    // não abre (só abre quando um campo pede sugestões).
+    private void VaultPageCommitted(BrowserTab tab, ChromiumWebBrowser browser)
+    {
+        if (browser.IsDisposed || browser.GetBrowser() is not { } cef) return;
+        var url = SafeFrame.MainUrl(cef);
+        if (VaultChannel.EligibleOrigin(url, url) is null) return;
+        VaultChannel channel;
+        lock (_vaultChannelsGate)
+        {
+            if (!_vaultChannels.TryGetValue(tab, out var known) || known.IsDisposed)
+                _vaultChannels[tab] = known = new VaultChannel(cef,
+                    (context, message) => Dispatcher.InvokeAsync(() => OnVaultMessage(tab, context, message)),
+                    () => Dispatcher.InvokeAsync(() => OnVaultNavigated(tab)));
+            channel = known;
+        }
+        _ = Task.Run(channel.Refresh);
+    }
+
+    // A aba fechou, adormeceu ou passou para o motor de vídeo.
+    private void ReleaseVaultChannel(BrowserTab tab)
+    {
+        VaultChannel? channel;
+        lock (_vaultChannelsGate)
+        {
+            if (!_vaultChannels.Remove(tab, out channel)) return;
+        }
+        channel.Dispose();
+    }
+
+    private VaultChannel? VaultChannelOf(BrowserTab tab)
+    {
+        lock (_vaultChannelsGate) return _vaultChannels.GetValueOrDefault(tab);
+    }
+
+    // Uma mensagem validada do script (thread da janela).
+    private void OnVaultMessage(BrowserTab tab, VaultContext context, VaultMessage message)
+    {
+    }
+
+    // O frame de topo mudou de documento (thread da janela).
+    private void OnVaultNavigated(BrowserTab tab)
+    {
+    }
 }
 
 // O que as páginas do cofre pedem ao processo do navegador, feito na thread da interface: a janela dona, os diálogos

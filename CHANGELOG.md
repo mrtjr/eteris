@@ -3,6 +3,10 @@
 ## Por publicar
 
 ### Palavras-passe e preenchimento automático
+- **Canal do gestor com as páginas, sem deixar rasto** (`docs/palavras-passe.md`, C1): o script do gestor corre num
+  mundo isolado de cada página `http(s)` (a página não o vê nem à ligação com o Éteris), fala com o Éteris por
+  mensagens validadas, nunca escreve na página por si e não usa o `Runtime.enable` que os anti-robôs procuram (medido:
+  0 deteções, com controlo positivo). Ainda sem nada visível: a lista de sugestões chega com as tarefas seguintes.
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

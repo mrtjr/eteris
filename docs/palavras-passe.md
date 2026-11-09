@@ -1,8 +1,8 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5) e bloco B (interfaces de gestão: B1–B4) feitos no ramo `sync`, por publicar**
-(os blocos C a E do desenho — preenchimento na página, sincronização e fecho — estão por fazer: por enquanto o cofre
-gere-se nas páginas, mas nada se preenche nem se oferece guardar nas páginas dos sites). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o início do bloco C (na página: C1)
+feitos no ramo `sync`, por publicar** (o resto do bloco C e os blocos D e E do desenho — guardar, gerar, preencher o
+resto, sincronização e fecho — estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -403,3 +403,55 @@ Hello falso a recusar, «Apagar agora» com histórico, cache e a caixa nova →
 apagado.» e as seis palavras-passe continuam lá; com o Hello falso a aceitar → «✓ Histórico e cache apagados ·
 palavras-passe e preenchimento automático também» e `eteris://passwords/` vazio (`passwords-vazio.png`). Captura da
 caixa nas Definições: `apagar-history-cache-vault.png`.
+
+## C1. Canal isolado e guardas
+
+`Vault/VaultChannel.cs`, `Vault/VaultScripts.cs`, `Vault/Scripts/cofre.js` (recurso embutido), `MainWindow.Vault.cs`
+(ligação às abas), `MainWindow.xaml.cs` (commit e fim de carregamento), `MainWindow.Sleep.cs` (libertar).
+
+- **Uma sessão DevTools própria por aba** (só depois do 1.º documento `http(s)`; o arranque não muda e o cofre não
+  abre), com `Page.enable` e o `Page.frameNavigated`. Para cada documento `http(s)` com a origem que o **processo do
+  navegador** conhece para a página de topo (o frame de topo e os iframes da mesma origem; nunca iframes de outros
+  sites, `about:`, `data:`, `file:` nem `eteris:`): `Page.createIsolatedWorld(frameId, "eteris-cofre")` →
+  `Runtime.addBinding(nome aleatório por sessão, executionContextId)` → `Runtime.evaluate(cofre.js, contextId)`.
+- **Sem `Runtime.enable`.** O `Runtime.bindingCalled` chega sem ele (medido: risco R1 do desenho afastado; o plano B da
+  espera longa não foi preciso).
+- **O 1.º documento de cada aba** nasce antes de a sessão poder ouvir o commit dele: o commit e o fim de carregamento do
+  frame de topo (`FrameLoadStart`/`FrameLoadEnd`) pedem também a árvore de frames (`Page.getFrameTree`). Cada documento
+  (frame + loader) prepara-se uma vez; quando o frame navega, os contextos dos documentos que saíram esquecem-se, e um
+  pedido atrasado não chega a outro documento.
+- **Mensagens do script → navegador** pela ligação, validadas por um esquema estrito (`VaultMessages`): JSON até 16 KiB,
+  tipos `ready`, `focus`, `input`, `blur`, `scroll`, `submit`, `formGone`, `generate`, `context`, propriedades
+  conhecidas com o tipo certo (IDs efémeros curtos, tipos de campo e de formulário de uma lista fechada, retângulos
+  finitos, textos com limite); o que não encaixa é descartado. Só o `submit` traz segredos e o `ToString` nunca os
+  mostra. Uma mensagem só vale se o contexto for conhecido; a origem é a do contexto (a do navegador), confirmada outra
+  vez no momento de usar (`IsCurrent`).
+- **Navegador → script** só por `Runtime.evaluate` no `contextId` do documento, com métodos de uma lista (`fill`,
+  `rect`, `forget`) e o argumento serializado pelo `JsonSerializer` (nada é concatenado à mão).
+- **O script** apanha a ligação e tira-a logo do objeto global; define `__cofre` como propriedade própria, não
+  configurável (um `<div id="__cofre">` da página não o substitui); não escreve no DOM.
+
+Testes: `Vault/VaultChannelTests` (esquema das mensagens: aceites, descartadas, tamanho, textos longos, segredos fora
+do `ToString`; contextos por documento, navegação do topo e de um iframe, preparação atrasada ou repetida; origens
+elegíveis e recusadas; a expressão das chamadas com texto hostil; o nome da ligação), `Vault/VaultChannelGuardTests`
+(nenhum `Runtime.enable` no código; avaliações do canal só com `contextId`; o mundo isolado e a ligação com o
+`executionContextId`; o `cofre.js` só sai de `VaultScripts` para o canal; nada no arranque; o script não escreve no
+DOM fora da zona «preencher»: atributos, classes, estilos, nós, foco, eventos, rede ou armazenamento),
+`InjectedScriptsSyntaxTests` (o `cofre.js` compila no Node).
+
+Prova ao vivo (`pp\vivo\c1.ps1`, `pp\vivo\c1b.ps1`, `pp\vivo\c1\`; perfil de teste novo, página local em
+`127.0.0.1:8897`, com um registo **temporário** das mensagens que não foi para o código):
+
+- **A mensagem chega:** `ready` do contexto do mundo isolado, origem `http://127.0.0.1:8897`, com o documento
+  preparado uma vez apesar de o commit e o fim do carregamento o pedirem os dois (`mensagens.txt`).
+- **A página não vê nada:** `typeof window.__cofre` = `undefined`, `'__cofre' in window` = falso, nenhuma propriedade
+  com o nome da ligação no mundo da página; o `MutationObserver` da página não vê mutações do cofre (as 2 que vê são do
+  próprio analisador da página, iguais sem o canal) (`deteccao.txt`, `c1-pagina.png`).
+- **Deteção do `Runtime.enable` negativa,** com controlo positivo: as sondas conhecidas (getters de `stack`, `name`,
+  `message`, `cause` num `Error` registado na consola, `Proxy` registado, `toString`) correm 40 vezes em 10 s. No motor
+  156 a consola lê `name` e `message` uma vez por mensagem mesmo sem DevTools (o texto para o registo do navegador);
+  com um `Runtime.enable` ligado noutra sessão de teste, o `name` passa a ser lido duas vezes (29 deteções em 21 sondas).
+  Com o canal do cofre: 0 deteções em 40 sondas.
+- **Custo, 20 carregamentos** (`medir.html`, primeiro carregamento frio fora da conta, duas rondas): fim do
+  carregamento com o canal 11,8 e 12,3 ms de média (mediana 10 e 11), sem o canal 10,3 e 10,2 (mediana 10 e 10); o
+  script fica pronto ~5 ms (mediana) depois do commit.

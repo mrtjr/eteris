@@ -312,6 +312,8 @@ public partial class MainWindow : Window
             var arriving = e.Url;
             Volatile.Write(ref committedUrl, arriving);
             tab.Observatory.Commit(arriving);
+            // Documento novo: o canal do cofre prepara-o (mundo isolado; MainWindow.Vault.cs).
+            VaultPageCommitted(tab, browser);
             if (requests == mainRequestsAtCommit)
             {
                 var restored = e.TransitionType.HasFlag(TransitionType.ForwardBack);
@@ -335,6 +337,8 @@ public partial class MainWindow : Window
             if (!firstLoad.Task.IsCompleted) StartupTrace.Mark("aba.carregada");
             firstLoad.TrySetResult();
             var url = e.Url;
+            // O 1.º documento de uma aba nasce antes de a sessão do canal do cofre poder ouvir o commit dele.
+            VaultPageCommitted(tab, browser);
             // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
             if (!e.Browser.IsLoading) injector.Tidy(url);
             Dispatcher.InvokeAsync(() =>

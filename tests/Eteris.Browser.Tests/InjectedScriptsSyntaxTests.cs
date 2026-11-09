@@ -42,6 +42,7 @@ public class InjectedScriptsSyntaxTests
         { "auto-teste de privacidade (falha)", SelfTest.FailedScript("tempo esgotado") },
         { "scripts de um site (guarda do topo)", HostScriptRegistry.Guard("www.publico.pt",
             ScriptletScripts.Wrap("testMark(1)", "https://www.publico.pt/") + "\n;\n" + CosmeticScripts.InjectEarly(".a { display: none }") + DarkPages.EarlyScript)! },
+        { "cofre (mundo isolado)", Eteris.Browser.Vault.VaultScripts.Cofre("eabc123") },
         { "script base (por protocolo)", HostScriptRegistry.ForProtocols(["http:", "https:"], VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript) },
     };
 
