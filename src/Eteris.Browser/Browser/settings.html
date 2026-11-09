@@ -904,10 +904,13 @@
       show('syncDeleteItem', d.connected);
       // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
       $('syncOffTitle').textContent = phase === 'stopped' ? 'A sincronização parou neste computador' : 'A sincronização está desligada neste computador';
-      $('syncOffText').textContent = phase === 'stopped' && s.notice ? s.notice + ' Pode ligá-la outra vez.'
+      $('syncOffText').textContent = phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
         : d.hasKey ? 'Ligue-a para continuar com a mesma conta (a chave ficou neste computador).'
         : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';
       $('syncStart').textContent = phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';
+      // A apagar do Drive: «Ligar» espera que acabe (com o apagar interrompido, «Ligar» acaba-o primeiro). «Apagar…» fica
+      // ativo (tem o foco depois de confirmar; carregar outra vez só volta a tentar acabar).
+      $('syncStart').disabled = !!s.deleting && !!s.running;
       // Estado.
       const state = s.running ? 'A sincronizar…' : s.error ? s.error : s.update ? 'Há dados de um Éteris mais recente: atualize o Éteris para os receber.'
         : s.lastText || (phase === 'starting' ? 'A ligar…' : 'Ligada. A primeira sincronização está a caminho.');
@@ -1020,7 +1023,8 @@
       }
       paintTopic(d);
       note($('syncDevicesNote'), msg && msg.area === 'devices' ? msg.text : '', true);
-      note($('syncDeleteNote'), msg && msg.area === 'delete' ? msg.text : '', true);
+      const deleteError = msg && msg.area === 'delete' ? msg.text : '';
+      note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);
       return s;
     };
     const msg0 = (d, area) => d.message && d.message.area === area ? d.message.text : '';
@@ -1185,7 +1189,7 @@
     $('syncDeleteConfirm').addEventListener('click', () => {
       if (!deleteArmed || Date.now() - deleteArmed < ARM_GUARD) return;
       disarmDelete(false);
-      $('syncDeleteNote').hidden = false; note($('syncDeleteNote'), 'A apagar…');
+      note($('syncDeleteNote'), 'A apagar os dados do Éteris do Google Drive…');
       $('syncDelete').focus();
       askGoogle('sync-delete-cloud');
     });

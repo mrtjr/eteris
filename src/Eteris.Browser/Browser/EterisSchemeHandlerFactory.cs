@@ -337,7 +337,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 });
             }
             case "/sync-delete-cloud":
-                Sync.SyncService.Act("delete", agent => agent.DeleteCloudDataAsync());
+                Sync.SyncService.DeleteCloud();
                 break;
             case "/sync-status":
                 break;

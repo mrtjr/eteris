@@ -107,6 +107,13 @@ internal static class SyncService
     public static void AfterFirstPaint()
     {
         Hook();
+        // «Apagar os meus dados…» que o fecho do Éteris interrompeu: a sincronização já está desligada (ficou gravado
+        // antes do primeiro pedido); acaba de apagar, sem ronda nenhuma.
+        if (Agent()?.DeletePending == true)
+        {
+            Act("delete", a => a.FinishCloudDeletionAsync());
+            return;
+        }
         if (!Enabled) return;
         lock (Gate) Schedule.Startup(Now());
         Arm();
@@ -220,6 +227,12 @@ internal static class SyncService
                 await agent.StartAsync(switchAccount).ConfigureAwait(false);
                 ok = agent.Status.Error is null;
             }
+            catch (SyncUserException e)
+            {
+                // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê.
+                ok = false;
+                Say("delete", e.Message);
+            }
             catch (Exception) { ok = false; }
             lock (Gate)
             {
@@ -229,6 +242,19 @@ internal static class SyncService
             }
             Arm();
         });
+    }
+
+    // «Apagar os meus dados do Éteris no Google Drive»: grava já (antes de responder à página e de qualquer pedido) que a
+    // sincronização está desligada e que falta apagar, para o agendador, e só depois apaga em segundo plano. Se o
+    // Éteris fechar a meio, ao abrir continua desligada e o apagar acaba (AfterFirstPaint).
+    public static void DeleteCloud()
+    {
+        if (Agent() is not { } agent) return;
+        Hook();
+        agent.BeginCloudDeletion();
+        lock (Gate) Schedule.Stop();
+        Arm();
+        Act("delete", a => a.FinishCloudDeletionAsync());
     }
 
     // «Sair»: a sincronização para neste computador (a revogação na Google é do GoogleSync).
@@ -325,6 +351,7 @@ internal static class SyncService
     public static string Summary(SyncStatus? status, long nowMs)
     {
         if (status is null) return "Sincronização desligada";
+        if (status.Deleting) return "A apagar os dados do Drive…";
         if (status.Requests.Count > 0) return $"Pedido de «{status.Requests[0].Name}» · código {status.Requests[0].Code}";
         if (status.NeedsSignIn) return "Sincronização em pausa: entre outra vez";
         if (status.WaitingRequests > 0 && status.Phase == SyncPhase.On) return "Um computador novo pede para entrar";
@@ -363,6 +390,7 @@ internal static class SyncService
                 last = d.LastSyncMs > 0 ? "sincronizou " + Ago(d.LastSyncMs, nowMs) : "ainda não sincronizou",
             }),
             update = status.NeedsUpdate,
+            deleting = status.Deleting,
             summary = Summary(status, nowMs),
             // Aprovar um aparelho novo entrega-lhe também segredos (o pedido diz isso e o «Aprovar» pede o Windows Hello).
             secrets = Agent()?.HasSecrets == true,
@@ -390,7 +418,13 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + ".tmp";
-        File.WriteAllBytes(temp, protector.Protect(Json.Bytes(saved)));
+        // Até ao disco antes de trocar: «desligada, a apagar» tem de valer mesmo que o Éteris (ou o Windows) feche logo a
+        // seguir.
+        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            stream.Write(protector.Protect(Json.Bytes(saved)));
+            stream.Flush(flushToDisk: true);
+        }
         File.Move(temp, path, overwrite: true);
     }
 

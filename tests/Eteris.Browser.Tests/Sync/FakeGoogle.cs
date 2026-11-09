@@ -36,6 +36,12 @@ internal sealed class FakeGoogle : HttpMessageHandler
         get { lock (_files) return _files.Values.Select(f => (f.Name, f.Data)).ToList(); }
     }
 
+    // Os identificadores dos ficheiros, por ordem (para segurar o pedido a um ficheiro com Hold).
+    public IReadOnlyList<string> FileIds
+    {
+        get { lock (_files) return _files.Keys.Order(StringComparer.Ordinal).ToList(); }
+    }
+
     public void ExpireAccessToken() => ValidAccessToken = "acesso-" + Guid.NewGuid().ToString("N")[..6];
 
     // Segura o próximo pedido a este caminho (por exemplo «/token» ou «/drive/v3/about») até o teste o libertar:

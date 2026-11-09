@@ -458,6 +458,186 @@ public sealed class SyncAgentTests : IDisposable
         Assert.NotNull(casa.Agent.Status.RecoveryCode);
     }
 
+    // «Apagar os meus dados…» e a janela fecha a meio (ainda «A sincronizar…»): o «desligada» ficou gravado antes do
+    // primeiro pedido; ao reabrir continua desligada, nenhuma ronda (agendada ou forçada) envia nada, e o apagar acaba.
+    [Fact]
+    public async Task DeleteCloudData_ClosedMidway_LeavesTheProfileOff_AndOnReopenFinishesWithoutUploading()
+    {
+        var (casa, trabalho, reaberta) = await InterruptedDeleteAsync();
+        Assert.False(reaberta.Agent.Enabled);
+        Assert.Equal(SyncPhase.Stopped, reaberta.Agent.Status.Phase);
+        Assert.True(reaberta.Agent.Status.Deleting);
+        Assert.True(reaberta.Agent.DeletePending);
+
+        // Uma ronda do agendador (ou forçada) não volta a criar a conta nem envia nada.
+        var antes = FilesInFolder();
+        Assert.NotEmpty(antes);
+        casa.Profile.Bookmark("https://depois.example/", "Depois");
+        Assert.True(await reaberta.Agent.RunAsync(force: true));
+        Assert.Equal(antes, FilesInFolder());
+        Assert.False(reaberta.Agent.HasLocalChanges());
+
+        // Acaba de apagar (o anfitrião retoma-o ao abrir).
+        await reaberta.Agent.FinishCloudDeletionAsync();
+        Assert.Empty(FilesInFolder());
+        Assert.False(reaberta.Agent.Status.Deleting);
+        Assert.False(casa.Store.Load()!.DeletePending);
+        Assert.False(casa.Store.Load()!.Enabled);
+        Assert.Contains("apagados", reaberta.Agent.Status.Notice);
+        Assert.True(await reaberta.Agent.RunAsync(force: true));
+        Assert.Empty(FilesInFolder());
+        Assert.Equal("Fica", casa.Profile.Title("https://fica.example/"));
+
+        // O outro aparelho para, sem voltar a criar a conta.
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.Empty(FilesInFolder());
+    }
+
+    // «Ligar» com um apagar por acabar: acaba primeiro de apagar e só depois cria uma conta nova (a antiga não volta).
+    [Fact]
+    public async Task Start_AfterAnInterruptedDelete_FinishesTheDeleteFirst_ThenCreatesAFreshAccount()
+    {
+        var (casa, _, reaberta) = await InterruptedDeleteAsync();
+        var velhas = FilesInFolder().Select(f => f.Split('/')[1]).Distinct().ToList();
+        await reaberta.Agent.StartAsync();
+        Assert.Equal(SyncPhase.On, reaberta.Agent.Status.Phase);
+        Assert.NotNull(reaberta.Agent.Status.RecoveryCode);
+        Assert.False(reaberta.Agent.Status.Deleting);
+        var cadeias = FilesInFolder().Select(f => f.Split('/')[1]).Where(c => c != "pair").Distinct().ToList();
+        Assert.Single(cadeias);
+        Assert.DoesNotContain(cadeias[0], velhas);
+        Assert.Equal("Fica", casa.Profile.Title("https://fica.example/"));
+    }
+
+    // O apagar chega a meio de uma ronda: o «desligada» fica gravado logo (sem esperar pela ronda), a ronda não grava
+    // nem envia depois, e o apagar corre a seguir e deixa a pasta vazia.
+    [Fact]
+    public async Task DeleteCloudData_DuringARound_IsSavedAtOnce_AndTheRoundNeitherSavesNorUploadsAfterwards()
+    {
+        var (casa, _) = await TwoAsync();
+        Task? apagar = null;
+        SavedSync? gravadoLogo = null;
+        casa.Profile.Bookmark("https://durante.example/", "Durante");
+        casa.Profile.DuringCycle = () =>
+        {
+            apagar = casa.Agent.DeleteCloudDataAsync();
+            gravadoLogo = casa.Store.Load();
+        };
+        Assert.True(await casa.Agent.RunAsync(force: true));
+        Assert.NotNull(apagar);
+        await apagar!.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.NotNull(gravadoLogo);
+        Assert.False(gravadoLogo!.Enabled);
+        Assert.True(gravadoLogo.DeletePending);
+        Assert.Null(gravadoLogo.Secret);
+        Assert.Empty(FilesInFolder());
+        Assert.False(casa.Agent.Enabled);
+        Assert.False(casa.Store.Load()!.DeletePending);
+
+        casa.Profile.Bookmark("https://depois.example/", "Depois");
+        Assert.True(await casa.Agent.RunAsync(force: true));
+        Assert.Empty(FilesInFolder());
+    }
+
+    // O mesmo no Google Drive (falso): o pedido de apagar de um ficheiro fica preso, a janela fecha; ao reabrir está
+    // desligada, a ronda não faz pedido nenhum, e acabar de apagar não envia nada (só listas e DELETE).
+    [Fact]
+    public async Task DeleteCloudData_OnTheDrive_ClosedMidway_OnReopenFinishes_AndNothingIsUploadedAgain()
+    {
+        var google = new FakeGoogle();
+        var casa = NewDevice("Casa", DriveFor(google));
+        casa.Profile.Bookmark("https://fica.example/", "Fica");
+        await casa.Agent.StartAsync();
+        Assert.True(google.FileIds.Count >= 2);
+        var (chegou, soltar) = google.Hold("/drive/v3/files/" + google.FileIds[1]);
+        try
+        {
+            using var fechar = new CancellationTokenSource();
+            var apagar = casa.Agent.DeleteCloudDataAsync(fechar.Token);
+            var gravado = casa.Store.Load()!;
+            Assert.False(gravado.Enabled);
+            Assert.True(gravado.DeletePending);
+            await chegou.WaitAsync(TimeSpan.FromSeconds(30));
+            fechar.Cancel(); // a janela fecha a meio
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => apagar);
+            Assert.NotEmpty(google.Files);
+
+            var reaberta = NewDevice("Casa", DriveFor(google), casa.Store, casa.Profile);
+            Assert.False(reaberta.Agent.Enabled);
+            Assert.True(reaberta.Agent.Status.Deleting);
+            int antes;
+            lock (google.Requests) antes = google.Requests.Count;
+            Assert.True(await reaberta.Agent.RunAsync(force: true));
+            lock (google.Requests) Assert.Equal(antes, google.Requests.Count);
+            await reaberta.Agent.FinishCloudDeletionAsync();
+            Assert.Empty(google.Files);
+            List<string> depois;
+            lock (google.Requests) depois = google.Requests.Skip(antes).ToList();
+            Assert.DoesNotContain(depois, r => r.StartsWith("POST", StringComparison.Ordinal) || r.StartsWith("PATCH", StringComparison.Ordinal));
+            Assert.False(reaberta.Agent.Enabled);
+            Assert.Contains("apagados", reaberta.Agent.Status.Notice);
+        }
+        finally { soltar(); }
+    }
+
+    // Dois aparelhos na conta; a «Casa» começa a apagar e a janela fecha depois de apagar alguns ficheiros (o pedido
+    // seguinte fica preso até ao fecho). Devolve a «Casa» reaberta (o mesmo estado guardado e o mesmo perfil).
+    private async Task<(Device Casa, Device Trabalho, Device Reaberta)> InterruptedDeleteAsync()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Profile.Bookmark("https://fica.example/", "Fica");
+        await Settle(casa, trabalho);
+        var preso = new StuckTransport(new FolderTransport(_folder), deletesBeforeStuck: 2);
+        var aberta = NewDevice("Casa", () => preso, casa.Store, casa.Profile);
+        using var fechar = new CancellationTokenSource();
+        var apagar = aberta.Agent.DeleteCloudDataAsync(fechar.Token);
+        // Gravado antes do primeiro pedido.
+        var gravado = casa.Store.Load()!;
+        Assert.False(gravado.Enabled);
+        Assert.True(gravado.DeletePending);
+        Assert.Null(gravado.Secret);
+        Assert.Null(gravado.Engine);
+        await preso.Stuck.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.True(aberta.Agent.Status.Deleting);
+        fechar.Cancel(); // a janela fecha a meio
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => apagar);
+        return (casa, trabalho, NewDevice("Casa", store: casa.Store, profile: casa.Profile));
+    }
+
+    private List<string> FilesInFolder()
+        => Directory.Exists(_folder)
+            ? Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(_folder, f).Replace(Path.DirectorySeparatorChar, '/')).Order(StringComparer.Ordinal).ToList()
+            : [];
+
+    // Apaga os primeiros ficheiros e prende o pedido seguinte até ao fecho (o token de cancelamento).
+    private sealed class StuckTransport(ISyncTransport inner, int deletesBeforeStuck) : ISyncTransport
+    {
+        private readonly TaskCompletionSource _stuck = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _deletes;
+
+        public Task Stuck => _stuck.Task;
+
+        public string Name => inner.Name;
+
+        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default) => inner.ListAsync(prefix, cancellationToken);
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default) => inner.ReadAsync(path, cancellationToken);
+
+        public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default) => inner.WriteAsync(path, data, cancellationToken);
+
+        public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _deletes) > deletesBeforeStuck)
+            {
+                _stuck.TrySetResult();
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            await inner.DeleteAsync(path, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task SignOut_KeepingTheKey_ResumesWithoutCode_ForgettingIt_AsksAgain()
     {

@@ -113,7 +113,10 @@
   computadores continuam sozinhos e o removido deixa de ler e escrever.
 - **«Sair»** para a sincronização neste computador, apaga e revoga a sessão Google e, se se escolher, apaga também a
   chave deste computador. **«Apagar os meus dados do Éteris no Google Drive»** apaga os ficheiros da pasta da
-  aplicação (com confirmação), sem sair da conta.
+  aplicação (com confirmação), sem sair da conta. A sincronização fica desligada (gravado no disco) **antes** de se
+  apagar o primeiro ficheiro: se o Éteris fechar a meio, ao abrir continua desligada, nada volta a ser enviado e o
+  apagar acaba sozinho («Ligar outra vez» também o acaba primeiro); uma ronda que estava a correr já não grava nem
+  envia depois do apagar; «A apagar os dados do Éteris do Google Drive…» fica à vista enquanto corre.
 - A secção Sincronização e a conta no menu deixam de estar atrás da opção experimental: aparecem sempre que a
   compilação tem o identificador da aplicação Google (sem ele: «indisponível nesta compilação»).
 - `eteris://privacy/`: «No arranque, nada sai para a Google» continua verdadeira por omissão e, com a sincronização

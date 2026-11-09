@@ -126,6 +126,13 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   lugar onde se carregou, não aceita o 2.º clique de um duplo clique e desarma-se ao fim de 10 s. Os dados deste computador ficam;
   a sincronização fica desligada aqui e, nos outros aparelhos, para na ronda seguinte (não recriam a conta sozinhos,
   o que desfaria o «apagar»). «Ligar outra vez» cria uma conta nova.
+  A ordem protege o «apagar»: a rota grava logo (`SyncAgent.BeginCloudDeletion`, antes de responder à página e de
+  qualquer pedido; o `sync.state` é escrito até ao disco antes de trocar) a sincronização desligada, a chave e o motor
+  esquecidos e `deleting: true`; para o agendador e os emparelhamentos a meio; só depois `FinishCloudDeletionAsync`
+  apaga (à espera de uma ronda em curso, que já não grava — `IsCurrent` — e cujo envio, se o houve, sai com o resto).
+  Se o Éteris fechar a meio, ao abrir a sincronização continua desligada (nenhuma ronda, nem forçada, corre) e
+  `AfterFirstPaint` acaba de apagar; «Ligar outra vez» acaba primeiro e só depois cria a conta nova. Se não conseguir
+  acabar (sem rede, sessão da Google acabada), diz-o na nota de «Apagar…» e tenta outra vez ao abrir.
 
 ## Quando sincroniza
 

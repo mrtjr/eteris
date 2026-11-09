@@ -38,6 +38,9 @@ public sealed class SavedSync
     // As coleções que já fizeram a «primeira junção» com a conta (null = estado de antes destas linhas: com base, as
     // coleções que já existiam). Uma coleção ligada outra vez sai daqui e junta-se de novo sem perder nada.
     [JsonPropertyName("joined")] public List<string>? Joined { get; set; }
+    // «Apagar os meus dados do Éteris» por acabar: a sincronização já está desligada aqui (gravado antes do primeiro
+    // pedido) e falta apagar no transporte o que ainda lá está. Ao abrir, o anfitrião acaba; «Ligar» acaba primeiro.
+    [JsonPropertyName("deleting")] public bool DeletePending { get; set; }
 }
 
 public interface ISyncStore
@@ -74,6 +77,10 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // Pedidos de aparelhos novos vistos numa ronda e ainda sem resposta: só se responde quando o utilizador abre o menu
     // ou a secção Sincronização (CheckRequestsAsync).
     public int WaitingRequests { get; init; }
+
+    // A apagar os dados do Éteris no transporte (ou por acabar, se o Éteris fechou a meio): a sincronização já está
+    // desligada neste aparelho.
+    public bool Deleting { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -155,6 +162,12 @@ public sealed class SyncAgent
         get { lock (_gate) return _saved?.Secret is not null; }
     }
 
+    // «Apagar os meus dados…» por acabar (o Éteris fechou a meio). Só disco.
+    public bool DeletePending
+    {
+        get { lock (_gate) return _saved?.DeletePending == true; }
+    }
+
     // As coleções ligadas neste aparelho (as de omissão até o utilizador escolher). Só disco.
     public IReadOnlySet<string> EnabledCollections
     {
@@ -230,6 +243,7 @@ public sealed class SyncAgent
                 {
                     NeedsSignIn = _needsSignIn,
                     WaitingRequests = _waiting,
+                    Deleting = _saved?.DeletePending == true,
                 };
             }
         }
@@ -245,6 +259,8 @@ public sealed class SyncAgent
 
     public async Task StartAsync(bool switchAccount, CancellationToken cancellationToken = default)
     {
+        // «Apagar os meus dados…» por acabar (o Éteris fechou a meio): acaba primeiro; a conta nova começa do zero.
+        if (DeletePending) await FinishCloudDeletionAsync(cancellationToken).ConfigureAwait(false);
         lock (_gate)
         {
             _saved ??= new SavedSync();
@@ -399,7 +415,12 @@ public sealed class SyncAgent
             }
             return;
         }
-        SetPhase(SyncPhase.Choose);
+        lock (_gate)
+        {
+            if (!IsCurrent(saved)) return;
+            _phase = SyncPhase.Choose;
+        }
+        Notify();
     }
 
     private async Task<HashSet<string>> ChainsAsync(CancellationToken cancellationToken)
@@ -620,7 +641,8 @@ public sealed class SyncAgent
     {
         lock (_gate)
         {
-            if (!ReferenceEquals(_saved, saved)) return;
+            // Um «apagar» começou entretanto: o aviso dele fica (esta ronda já não é a deste aparelho).
+            if (!ReferenceEquals(_saved, saved) || saved.DeletePending) return;
             _engine = null;
             saved.Enabled = false;
             if (keeps != StopKeeps.Everything)
@@ -1082,13 +1104,73 @@ public sealed class SyncAgent
 
     // «Apagar os meus dados do Éteris»: apaga todos os ficheiros do Éteris no transporte (todas as contas, pedidos de
     // emparelhamento). Não sai da conta Google. A sincronização fica desligada neste aparelho; nos outros para.
-    // Lista outra vez depois de apagar (outro aparelho a meio de uma ronda pode ter escrito entretanto), até 4 passagens.
+    //
+    // A ordem é a que protege o «apagar»: primeiro grava (já, sem esperar por uma ronda em curso) que a sincronização
+    // está desligada e que falta apagar, e esquece a chave e o motor; só depois apaga. Assim, se o Éteris fechar a meio,
+    // ao abrir continua desligada e nenhuma ronda volta a criar a conta ou a enviar (o anfitrião acaba de apagar). Uma
+    // ronda que já estava a correr deixa de gravar (IsCurrent) e o apagar só começa depois dela (_run): o que ela tenha
+    // escrito entretanto também sai.
     public async Task DeleteCloudDataAsync(CancellationToken cancellationToken = default)
     {
+        BeginCloudDeletion();
+        await FinishCloudDeletionAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    // A primeira metade (síncrona, só disco): o anfitrião chama-a na rota, antes de responder à página.
+    public void BeginCloudDeletion()
+    {
+        GuestFlow? guest;
+        List<HostFlow> hosts;
+        lock (_gate)
+        {
+            var saved = _saved ??= new SavedSync();
+            saved.Enabled = false;
+            saved.DeletePending = true;
+            saved.Secret = null;
+            saved.CodePending = false;
+            saved.Engine = null;
+            saved.Baseline = null;
+            saved.Joined = null;
+            saved.Rotation = null;
+            saved.CreatedMs = 0;
+            saved.Stopped = DeletingText;
+            _store.Save(saved);
+            _engine = null;
+            _pinnedFor = null;
+            _phase = SyncPhase.Stopped;
+            _notice = DeletingText;
+            _error = null;
+            _needsSignIn = false;
+            _needsUpdate = false;
+            _pendingDevices = 0;
+            _waiting = 0;
+            _devices = [];
+            _secretsInAccount = false;
+            // Emparelhamentos a meio escrevem fora das rondas: param já (nada de pedidos novos depois do apagar).
+            guest = _guest;
+            _guest = null;
+            hosts = _hosts.Values.ToList();
+            _hosts.Clear();
+        }
+        guest?.Cancel.Cancel();
+        foreach (var host in hosts) host.Cancel.Cancel();
+        Notify();
+    }
+
+    // A segunda metade: apaga no transporte o que lá estiver (também depois de reabrir, se o Éteris fechou a meio).
+    // Lista outra vez depois de apagar (outro aparelho a meio de uma ronda pode ter escrito entretanto), até 4 passagens.
+    public async Task FinishCloudDeletionAsync(CancellationToken cancellationToken = default)
+    {
+        SavedSync? saved;
+        lock (_gate) saved = _saved;
+        if (saved is not { DeletePending: true }) return;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         SetRunning(true);
         try
         {
+            lock (_gate)
+                if (!ReferenceEquals(_saved, saved) || !saved.DeletePending)
+                    return; // «Sair» com «apagar a chave», ou outro pedido já acabou
             var transport = Transport();
             for (var pass = 0; pass < 4; pass++)
             {
@@ -1096,15 +1178,21 @@ public sealed class SyncAgent
                 if (files.Count == 0) break;
                 foreach (var path in files) await transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
             }
-            lock (_gate) _hosts.Clear();
-            SavedSync saved;
-            lock (_gate) saved = _saved ??= new SavedSync();
-            Stop(saved, "Os dados do Éteris foram apagados do Google Drive. A sincronização está desligada; os dados deste computador ficaram.", StopKeeps.Nothing);
+            lock (_gate)
+            {
+                if (!ReferenceEquals(_saved, saved) || !saved.DeletePending) return;
+                saved.DeletePending = false;
+                saved.Stopped = DeletedText;
+                _store.Save(saved);
+                _phase = SyncPhase.Stopped;
+                _notice = DeletedText;
+                _error = null;
+            }
         }
         catch (Exception e) when (IsTransient(e))
         {
             Fail(e);
-            throw new SyncUserException(Message(e));
+            throw new SyncUserException(NotDeletedText);
         }
         finally
         {
@@ -1113,6 +1201,15 @@ public sealed class SyncAgent
         }
         Notify();
     }
+
+    private const string DeletingText =
+        "A apagar os dados do Éteris do Google Drive. A sincronização já está desligada neste computador; os dados deste computador ficam.";
+
+    private const string DeletedText =
+        "Os dados do Éteris foram apagados do Google Drive. A sincronização está desligada; os dados deste computador ficaram.";
+
+    private const string NotDeletedText =
+        "Ainda não se conseguiu apagar tudo do Google Drive (sem ligação, ou a sessão da Google acabou). A sincronização ficou desligada neste computador e nada voltou a ser enviado. O Éteris acaba de apagar quando abrir outra vez; também pode carregar outra vez em «Apagar…».";
 
     // «Sair»: a sincronização para neste aparelho. Com forgetKey, a cópia local da conta sai também (para voltar a
     // entrar é preciso o código ou outro aparelho); sem ela, entrar outra vez retoma sem código — e um código de
@@ -1180,12 +1277,6 @@ public sealed class SyncAgent
     private ISyncTransport Transport()
     {
         lock (_gate) return _transport ??= _transportFactory();
-    }
-
-    private void SetPhase(SyncPhase phase)
-    {
-        lock (_gate) _phase = phase;
-        Notify();
     }
 
     private void SetRunning(bool running)

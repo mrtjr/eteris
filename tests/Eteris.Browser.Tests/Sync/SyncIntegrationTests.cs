@@ -51,7 +51,8 @@ public class SyncIntegrationTests
 
     // O arranque: a sincronização só se marca depois da 1.ª página, e a primeira ronda fica para 30 s depois (sem
     // sincronização ligada, nada). Nada de rede ao montar o serviço nem ao ler o estado (SyncAgentTests prova-o com o
-    // Drive falso); aqui, que o arranque só chama AfterFirstPaint e que ele só marca o agendador.
+    // Drive falso); aqui, que o arranque só chama AfterFirstPaint e que ele só marca o agendador. A única exceção é um
+    // «Apagar os meus dados…» que o fecho do Éteris interrompeu: esse acaba ao abrir (nunca com uma ronda).
     [Fact]
     public void Startup_OnlySchedulesTheFirstRound_ThirtySecondsAfterTheWindow()
     {
@@ -138,6 +139,61 @@ public class SyncIntegrationTests
         {
             try { Directory.Delete(Path.GetDirectoryName(path)!, recursive: true); } catch (IOException) { }
         }
+    }
+
+    // «Apagar os meus dados do Éteris no Google Drive»: a rota grava «desligada, a apagar» antes de responder (e antes de
+    // qualquer pedido), para o agendador, e só depois apaga em segundo plano; ao abrir, um apagar interrompido acaba
+    // (sem ronda nenhuma); a página diz «A apagar…» enquanto corre e o menu também.
+    [Fact]
+    public void DeleteCloud_IsSavedBeforeAnyRequest_ResumesOnStartup_AndThePageSaysDeleting()
+    {
+        var src = Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser");
+        var handler = File.ReadAllText(Path.Combine(src, "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("case \"/sync-delete-cloud\":\n                Sync.SyncService.DeleteCloud();", handler.Replace("\r\n", "\n"), StringComparison.Ordinal);
+        Assert.DoesNotContain("agent.DeleteCloudDataAsync()", handler, StringComparison.Ordinal);
+
+        var service = File.ReadAllText(Path.Combine(src, "Sync", "SyncService.cs"));
+        var delete = Regex.Match(service, @"public static void DeleteCloud\(\)\s*\{(?<b>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["b"].Value;
+        var begin = delete.IndexOf("agent.BeginCloudDeletion();", StringComparison.Ordinal);
+        var stop = delete.IndexOf("Schedule.Stop();", StringComparison.Ordinal);
+        var act = delete.IndexOf("Act(\"delete\", a => a.FinishCloudDeletionAsync());", StringComparison.Ordinal);
+        Assert.True(begin >= 0 && stop > begin && act > stop, delete);
+        var startup = Regex.Match(service, @"public static void AfterFirstPaint\(\)\s*\{(?<b>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["b"].Value;
+        Assert.Contains("if (Agent()?.DeletePending == true)", startup, StringComparison.Ordinal);
+        Assert.True(startup.IndexOf("DeletePending", StringComparison.Ordinal) < startup.IndexOf("if (!Enabled) return;", StringComparison.Ordinal));
+
+        var page = File.ReadAllText(Path.Combine(src, "Browser", "settings.html"));
+        Assert.Contains("const deleteError = msg && msg.area === 'delete' ? msg.text : '';", page, StringComparison.Ordinal);
+        Assert.Contains("note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("note($('syncDeleteNote'), msg && msg.area === 'delete' ? msg.text : '', true);", page, StringComparison.Ordinal);
+        Assert.Contains("$('syncStart').disabled = !!s.deleting && !!s.running;", page, StringComparison.Ordinal);
+
+        var now = 1_762_560_000_000L;
+        var deleting = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, true, 0, null, "A apagar", null, null, [], [], false, 0) { Deleting = true };
+        Assert.Equal("A apagar os dados do Drive…", SyncService.Summary(deleting, now));
+        Assert.Contains("deleting = True", SyncService.StatusData(deleting, now).ToString(), StringComparison.Ordinal);
+    }
+
+    // «A apagar» vai no estado guardado (DPAPI), escrito até ao disco antes de se apagar o primeiro ficheiro.
+    [Fact]
+    public void SyncState_KeepsTheDeleteInProgress_AndIsWrittenThrough()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "eteris-sync-state-" + Guid.NewGuid().ToString("N"), "sync.state");
+        try
+        {
+            var store = new DpapiSyncStore(path, new Dpapi("sync-state"));
+            store.Save(new Eteris.Sync.Engine.SavedSync { Enabled = false, DeletePending = true, Stopped = "A apagar" });
+            var loaded = store.Load()!;
+            Assert.True(loaded.DeletePending);
+            Assert.False(loaded.Enabled);
+            Assert.False(File.Exists(path + ".tmp"));
+        }
+        finally
+        {
+            try { Directory.Delete(Path.GetDirectoryName(path)!, recursive: true); } catch (IOException) { }
+        }
+        var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs"));
+        Assert.Contains("stream.Flush(flushToDisk: true);", service, StringComparison.Ordinal);
     }
 
     [Fact]
