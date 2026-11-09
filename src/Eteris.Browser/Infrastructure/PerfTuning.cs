@@ -30,6 +30,7 @@ public static class PerfTuning
     public const string ReleaseGlance = "e6";
     public const string SmallBackForwardCache = "e7";
     public const string HideWhenUnseen = "e8";
+    public const string UpdatesOnExitOnly = "e10";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -44,6 +45,8 @@ public static class PerfTuning
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D-5"),
         new(HideWhenUnseen, "a página à vista deixa de desenhar com a janela minimizada, noutra área de trabalho ou com a sessão bloqueada (nunca com som, multimédia, captura ou Picture-in-Picture)",
             OnByDefault: false, Waits: "D4"),
+        new(UpdatesOnExitOnly, "as atualizações aplicam-se só ao sair do Éteris, nunca no arranque", OnByDefault: false,
+            BeforeFirstPaint: true, Waits: "D-7"),
         new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
     ];

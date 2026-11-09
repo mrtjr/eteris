@@ -16,11 +16,16 @@ public static class Program
         StartupTrace.Mark("main");
         // Depois de instalar e de atualizar: a ACL da pasta para o serviço de rede com sandbox (NetworkSandbox, D9); antes
         // de desinstalar: o perfil do AppContainer dele, que ficaria no utilizador.
-        VelopackApp.Build()
+        var velopack = VelopackApp.Build()
             .OnAfterInstallFastCallback(_ => NetworkSandbox.OnInstalled())
             .OnAfterUpdateFastCallback(_ => NetworkSandbox.OnInstalled())
-            .OnBeforeUninstallFastCallback(_ => NetworkSandbox.OnUninstalling())
-            .Run();
+            .OnBeforeUninstallFastCallback(_ => NetworkSandbox.OnUninstalling());
+        // Ajuste e10 (plano de desempenho da 0.2.14, à espera da decisão D-7; desligado por omissão): o Éteris já aplica as
+        // atualizações ao sair (UpdateService.ApplyPendingOnExit); sem isto o Velopack procura também, em cada arranque,
+        // um pacote descarregado para aplicar. Uma atualização descarregada antes de uma saída que falhou espera pela
+        // próxima saída limpa (o UpdateService volta a encontrá-la depois da 1.ª página).
+        if (PerfTuning.IsOn(PerfTuning.UpdatesOnExitOnly)) velopack = velopack.SetAutoApplyOnStartup(false);
+        velopack.Run();
         StartupTrace.Mark("velopack");
 
         if (StartupArgs.UserDataDir(args) is { } userDataDir) AppPaths.UseRoot(userDataDir);
