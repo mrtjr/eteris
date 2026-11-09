@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Eteris.Sync.Crypto;
 using Eteris.Sync.Format;
 using Eteris.Sync.Model;
+using Eteris.Sync.Secrets;
 
 namespace Eteris.Sync.Engine;
 
@@ -63,6 +64,9 @@ public sealed class SyncState
     [JsonPropertyName("dkey")] public string? DeviceKey { get; set; }
     // Chaves públicas dos outros aparelhos, fixadas na primeira vez que se veem (aparelho → SPKI em base64url).
     [JsonPropertyName("peers")] public Dictionary<string, string> PeerKeys { get; set; } = new(StringComparer.Ordinal);
+    // As chaves dos selos da cadeia atual (Secrets/SealKeys): só para voltar a selar os registos secretos deste aparelho
+    // depois de outro aparelho fazer «nova cadeia» (a cadeia antiga já foi apagada quando este aparelho dá por isso).
+    [JsonPropertyName("seal")] public SealKeys? Seals { get; set; }
 
     public static string RecordKey(string collection, string id) => collection + "/" + id;
 

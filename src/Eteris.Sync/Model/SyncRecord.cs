@@ -15,7 +15,22 @@ public static class Collections
     public const string Shield = "shield";       // chave: «tipo|site|valor»; conjunto com lápides (LWW por elemento)
     public const string Notes = "notes";         // chave: «notes»; fusão 3-way por linhas (NotesMerge)
 
-    public static readonly IReadOnlyList<string> All = [Bookmarks, Spaces, Tabs, Settings, Shield, Notes];
+    // Coleções secretas (cofre de palavras-passe e preenchimento automático, docs/sincronizacao.md «Coleções secretas»):
+    // cada registo leva um selo próprio por dentro da cifra do ficheiro (Secrets/SecretSeal), com a chave natural e os
+    // campos lá dentro; a Key no motor é opaca («s:» + HMAC). Os campos estão em Secrets/SecretSchemas.
+    public const string Logins = "logins";           // palavras-passe; chave natural: origem e utilizador
+    public const string LoginsNever = "loginsNever"; // «Nunca neste site»; chave natural: origem
+    public const string Cards = "cards";             // cartões (nunca o código de segurança); chave natural: ID do item
+    public const string Ibans = "ibans";
+    public const string Contacts = "contacts";       // informações de contacto (moradas, e-mails, telefones)
+    public const string IdDocs = "idDocs";           // documentos de identificação (passaporte, carta de condução/CNH, CC/RG, NIF/CPF)
+    public const string Travel = "travel";           // viagens (veículos, programas de fidelidade)
+
+    public static readonly IReadOnlyList<string> Secret = [Logins, LoginsNever, Cards, Ibans, Contacts, IdDocs, Travel];
+
+    public static bool IsSecret(string collection) => Secret.Contains(collection, StringComparer.Ordinal);
+
+    public static readonly IReadOnlyList<string> All = [Bookmarks, Spaces, Tabs, Settings, Shield, Notes, .. Secret];
 
     // Ficheiros com abas abertas não são comprimidos (SealedFile: canal lateral de compressão).
     public static bool HasTabs(IEnumerable<SyncRecord> records) => records.Any(r => r.Collection == Tabs);

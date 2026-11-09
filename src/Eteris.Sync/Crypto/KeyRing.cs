@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Eteris.Sync.Secrets;
 
 namespace Eteris.Sync.Crypto;
 
@@ -76,7 +77,18 @@ public sealed class KeyRing
         _dek = dek;
         _kek = kek;
         _ids = Kdf.Derive(dek, "ids");
+        SecretKey = Kdf.Derive(dek, "secrets:v1");
+        SecretKeyId = Kdf.Derive(dek, "secret-keys:v1");
+        Seals = new SealKeys(envelope.ChainId, envelope.Generation, Kdf.Base64Url(SecretKey), Kdf.Base64Url(SecretKeyId));
     }
+
+    // Chaves dos registos secretos (Secrets/SecretSeal): K_seg cifra o selo, K_skey faz as chaves opacas. Derivam da DEK,
+    // por isso qualquer aparelho da conta as tem, e mudam com a geração e com a «nova cadeia».
+    internal byte[] SecretKey { get; }
+
+    internal byte[] SecretKeyId { get; }
+
+    public SealKeys Seals { get; }
 
     public string ChainId => Envelope.ChainId;
 

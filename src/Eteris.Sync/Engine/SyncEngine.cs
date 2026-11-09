@@ -6,6 +6,7 @@ using Eteris.Sync.Format;
 using Eteris.Sync.Merge;
 using Eteris.Sync.Model;
 using Eteris.Sync.Pairing;
+using Eteris.Sync.Secrets;
 using Eteris.Sync.Transport;
 
 namespace Eteris.Sync.Engine;
@@ -48,6 +49,7 @@ public sealed class SyncEngine
         _clock = new HybridClock(state.Device.Id, now);
         _clock.Restore(state.Clock);
         state.DeviceNames[state.Device.Id] = state.Device.Name;
+        state.Seals = keys.Seals;
         if (state.DeviceKey is null)
         {
             using var key = PairingProtocol.NewKey();
@@ -90,7 +92,10 @@ public sealed class SyncEngine
         foreach (var version in previous.NotesHistory) Remember(version, outgoing: false);
         foreach (var record in previous.Records.Values.Where(r => r.Version.Node == Device.Id))
         {
-            var moved = record with { Id = _keys.OpaqueId(record.Collection, record.Key) };
+            // Os registos secretos mudam de Key e de selo (as chaves dos selos da cadeia antiga ficaram no estado dela);
+            // sem elas (estado de um Éteris anterior), não passam: o perfil volta a enviá-los se mudarem.
+            var moved = Move(record, previous.Seals, this);
+            if (moved is null) continue;
             var id = SyncState.RecordKey(moved.Collection, moved.Id);
             _clock.Observe(moved.Version);
             if (State.Records.TryGetValue(id, out var current) && current.Version >= moved.Version) continue;
@@ -233,17 +238,69 @@ public sealed class SyncEngine
     private Hlc Stage(string collection, string key, JsonObject? data, bool deleted)
     {
         if (collection == Collections.Notes) throw new ArgumentException("As notas mudam-se com SetNotes.", nameof(collection));
+        if (Collections.IsSecret(collection)) throw new ArgumentException("Os registos secretos mudam-se com PutSecret e DeleteSecret.", nameof(collection));
+        return StageRecord(collection, key, _keys.OpaqueId(collection, key), deleted ? null : (JsonObject)data!.DeepClone(), deleted);
+    }
+
+    private Hlc StageRecord(string collection, string key, string id, JsonObject? data, bool deleted)
+    {
         var version = _clock.Now();
-        Accept(new SyncRecord
-        {
-            Collection = collection,
-            Id = _keys.OpaqueId(collection, key),
-            Key = key,
-            Version = version,
-            Deleted = deleted,
-            Data = deleted ? null : (JsonObject)data!.DeepClone(),
-        }, outgoing: true);
+        Accept(new SyncRecord { Collection = collection, Id = id, Key = key, Version = version, Deleted = deleted, Data = data }, outgoing: true);
         return version;
+    }
+
+    // ---- registos secretos (Secrets/SecretSeal) ---------------------------------------------------------------------
+
+    // A chave opaca de um registo secreto nesta cadeia.
+    public string SecretKey(string collection, string naturalKey) => _keys.Seals.OpaqueKey(collection, naturalKey);
+
+    // Grava um registo secreto selado. Os campos que este Éteris não conhece (de um Éteris mais recente, dentro do selo
+    // atual) seguem tal e qual.
+    public Hlc PutSecret(string collection, SecretItem item)
+    {
+        if (!Collections.IsSecret(collection)) throw new ArgumentException("Coleção que não é secreta.", nameof(collection));
+        var key = SecretKey(collection, item.NaturalKey);
+        var data = (JsonObject)item.Data.DeepClone();
+        if (Get(collection, key) is { Deleted: false } existing && OpenSecret(existing) is { } old)
+            foreach (var (name, value) in old.Data)
+                if (!SecretSchemas.IsKnown(collection, name) && !data.ContainsKey(name)) data[name] = value?.DeepClone();
+        var id = _keys.OpaqueId(collection, key);
+        return StageRecord(collection, key, id, _keys.Seals.Seal(collection, id, new SecretItem(item.NaturalKey, data)), deleted: false);
+    }
+
+    // Apaga um registo secreto: a lápide leva só a chave natural, selada (para a «nova cadeia» a poder levar).
+    public Hlc DeleteSecret(string collection, string naturalKey)
+    {
+        if (!Collections.IsSecret(collection)) throw new ArgumentException("Coleção que não é secreta.", nameof(collection));
+        var key = SecretKey(collection, naturalKey);
+        var id = _keys.OpaqueId(collection, key);
+        return StageRecord(collection, key, id, _keys.Seals.Seal(collection, id, new SecretItem(naturalKey, new JsonObject())), deleted: true);
+    }
+
+    // Abre o selo de um registo desta cadeia. null = não abre (adulterado, movido, de outra cadeia, formato mais recente):
+    // o registo fica de fora (não se aplica) e conta como erro, sem parar a ronda.
+    public SecretItem? OpenSecret(SyncRecord record) => Open(record, _keys.Seals);
+
+    private static SecretItem? Open(SyncRecord record, SealKeys? seals)
+    {
+        if (seals is null || !Collections.IsSecret(record.Collection)) return null;
+        try
+        {
+            var item = seals.Open(record.Collection, record.Id, record.Data);
+            return seals.OpaqueKey(record.Collection, item.NaturalKey) == record.Key ? item : null;
+        }
+        catch (Exception e) when (e is CryptographicException or FormatException) { return null; }
+    }
+
+    // Um registo levado para outra cadeia: o ID opaco é refeito; os secretos são abertos com as chaves de onde vêm e
+    // selados de novo com as da cadeia nova (Key opaca nova). null = um secreto que não abre.
+    private static SyncRecord? Move(SyncRecord record, SealKeys? from, SyncEngine to)
+    {
+        if (!Collections.IsSecret(record.Collection)) return record with { Id = to._keys.OpaqueId(record.Collection, record.Key) };
+        if (Open(record, from) is not { } item) return null;
+        var key = to.SecretKey(record.Collection, item.NaturalKey);
+        var id = to._keys.OpaqueId(record.Collection, key);
+        return record with { Key = key, Id = id, Data = to._keys.Seals.Seal(record.Collection, id, item) };
     }
 
     private void Accept(SyncRecord record, bool outgoing)
@@ -733,7 +790,10 @@ public sealed class SyncEngine
             // As notas passam com o seu histórico (a base comum da fusão a três não se perde na troca de chave).
             foreach (var record in State.Records.Values)
             {
-                var moved = record with { Id = engine._keys.OpaqueId(record.Collection, record.Key) };
+                // Os secretos voltam a ser selados com as chaves da cadeia nova (Key opaca e selo novos); os que não
+                // abrem (adulterados) ficam para trás.
+                var moved = Move(record, _keys.Seals, engine);
+                if (moved is null) continue;
                 engine.State.Records[SyncState.RecordKey(moved.Collection, moved.Id)] = moved;
                 engine.State.Outbox[SyncState.RecordKey(moved.Collection, moved.Id)] = moved;
                 engine._clock.Observe(moved.Version);

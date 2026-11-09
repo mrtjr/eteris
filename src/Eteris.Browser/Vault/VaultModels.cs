@@ -39,14 +39,8 @@ public static class VaultIds
 // Campos que nunca se guardam nem sincronizam: o código de segurança do cartão (CVV/CVC/CSC/CID).
 public static class VaultFields
 {
-    private static readonly HashSet<string> Exact = new(StringComparer.Ordinal) { "cid", "cvn", "securitycode", "cardsecuritycode", "cardverificationcode", "cardverificationvalue" };
-
-    public static bool IsForbidden(string name)
-    {
-        var key = new string(name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
-        return Exact.Contains(key) || key.Contains("cvv", StringComparison.Ordinal) || key.Contains("cvc", StringComparison.Ordinal)
-               || key.Contains("csc", StringComparison.Ordinal);
-    }
+    // A mesma regra da sincronização (Eteris.Sync.Secrets.SecretSchemas): um selo com um destes campos é recusado.
+    public static bool IsForbidden(string name) => Eteris.Sync.Secrets.SecretSchemas.IsForbidden(name);
 
     // A mensagem diz o nome do campo, nunca o valor.
     public static void RejectForbidden(IEnumerable<KeyValuePair<string, string?>> fields)

@@ -2,8 +2,8 @@
 
 Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e bloco C (na página: C1–C7 — canal,
 classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador, preencher contactos,
-pagamentos, documentos e viagens, janelas privadas) feitos no ramo `sync`, por publicar** (os blocos D — sincronização
-— e E — fecho — do desenho estão por fazer). O gestor é próprio, em
+pagamentos, documentos e viagens, janelas privadas) feitos no ramo `sync`, por publicar**; bloco D (sincronização) a
+caminho, a partir de D1 (os blocos D e E — fecho — do desenho estão por acabar). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -812,3 +812,34 @@ contactos, cartão e documentos inventados; páginas locais em `127.0.0.1:8903`;
 6. Fechada a janela privada: o `cofre.db` tem **o mesmo SHA-256 de antes** e todos os itens continuam «usada=nunca».
    (Antes da correção acima, o hash mudava sem nenhum item mudar.)
 7. Na janela normal, o mesmo preenchimento grava a «última utilização» da palavra-passe (o hash muda).
+
+## D1. Selo e coleções secretas (`Eteris.Sync`)
+
+As sete coleções do cofre entram na biblioteca da sincronização como **secretas** (`Model/SyncRecord.cs`,
+`Collections.Secret` e `IsSecret`): `logins`, `loginsNever`, `cards`, `ibans`, `contacts`, `idDocs`, `travel`.
+
+- **Esquemas** (`Secrets/SecretSchemas.cs`, partilhados com o Android): os campos de cada coleção (desenho, secção
+  4.1), com o tipo (texto, inteiro, verdadeiro/falso). `Canonical` dá a forma canónica (só os campos conhecidos, por
+  ordem de nome, sem nulos) e `IsValid` confere os tipos. O código de segurança do cartão (`cvc`, `cvv`, `csc`,
+  `cid`, `cvn`, `securityCode`…) é recusado em qualquer nível; o cofre do navegador usa a mesma regra
+  (`VaultFields.IsForbidden` chama `SecretSchemas.IsForbidden`).
+- **Chaves** (`Crypto/KeyRing.cs`): `K_seg = HKDF(DEK, "secrets:v1")` e `K_skey = HKDF(DEK, "secret-keys:v1")`. Derivam
+  da cadeia, por isso qualquer aparelho emparelhado as tem, e mudam com a geração e com a «nova cadeia».
+- **Selo** (`Secrets/SecretSeal.cs`): o `Data` de um registo secreto é `{"v":1,"n":<nonce de 96 bits>,"c":<AES-256-GCM>}`
+  com `{"k": chave natural, "d": campos}` lá dentro e os dados associados
+  `eteris-secret|v1|<cadeia>|<geração>|<coleção>|<Id>`. A `Key` no motor é opaca: `"s:" + HMAC(K_skey, coleção ‖ chave
+  natural)`, 128 bits, igual em todos os aparelhos da conta. Recusa selar mais de 64 KiB.
+- **Motor** (`Engine/SyncEngine.cs`): `PutSecret`, `DeleteSecret` (a lápide leva só a chave natural, selada) e
+  `OpenSecret` (null quando o selo não abre: o registo fica de fora, sem parar a ronda). Os campos de um Éteris mais
+  recente dentro do selo seguem tal e qual quando este aparelho muda o registo. `Put`/`Delete` recusam as coleções
+  secretas (só passam pelo selo).
+
+Testes: `Sync/SyncSecretsTests` — as coleções e os esquemas do desenho; nenhum campo proibido nos esquemas e a mesma
+regra no cofre; forma canónica e tipos; chaves derivadas da DEK e iguais entre aparelhos, diferentes noutra conta; ida
+e volta; nenhum texto em claro no selo; **cada byte** do texto cifrado e do nonce verificado; o selo preso ao `Id`, à
+coleção, à cadeia e à geração (e a outra conta); campos proibidos em qualquer nível e o limite de tamanho; no motor, o
+registo secreto viaja selado entre dois aparelhos e nenhum dos textos inventados (site, utilizador, palavra-passe,
+número do cartão, nota) aparece no transporte nem no estado do motor; selo movido para outro `Id` ou outra `Key` não
+abre; campos desconhecidos preservados; lápide com a chave natural.
+
+Prova ao vivo: nenhuma (biblioteca pura).
