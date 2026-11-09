@@ -358,6 +358,21 @@ Testes: `BrowserlessRequestsTests` (página de topo deduzida, bloqueio e contage
 desligado no site, navegação reencaminhada, extensão, rede local, cookies de terceiros, o tratador nunca lê o browser
 nem o frame, cache com teto, e todo o `new RequestContext(` do Éteris com o tratador).
 
+## 9. Chaves de acesso (WebAuthn) — provado (2026-11-09, ramo `sync`)
+
+O Éteris não tem gestor de chaves de acesso próprio (desenho do gestor de palavras-passe, v1): o WebAuthn das páginas
+tem de seguir para o Windows, como no Chrome, no Firefox e no Brave. **Prova ao vivo** (`docs/palavras-passe.md`, E2):
+numa página local em `http://localhost` com um utilizador inventado, `navigator.credentials.create()` no Éteris (CEF
+156, estilo Alloy) abre a janela **«Segurança do Windows › Salvar sua chave de acesso»** do próprio Windows
+(`webauthn.dll`), presa à janela do Éteris, com o utilizador e «Chave de acesso do localhost». Neste PC, sem Windows
+Hello configurado (`isUserVerifyingPlatformAuthenticatorAvailable()` = `false`, igual ao `DeviceNotPresent` da A3),
+o Windows pede uma chave de segurança USB. Nada foi criado (a janela não foi tocada; fecha com a janela do Éteris).
+**Diferenças observadas:** o prazo do pedido (30 s) não fecha a janela do Windows (ficou aberta 45 s, até o Éteris a
+fechar) — no Chrome o prazo cancela a operação; e, enquanto essa janela está aberta, um segundo pedido da página não
+começa. A sugestão de chaves de acesso no campo do utilizador («UI condicional») e as chaves guardadas no próprio
+navegador ficam para depois (como no desenho). **Por provar à mão (dono):** num PC com Windows Hello, a mesma página
+pede o PIN/rosto/impressão digital, e o «Outro dispositivo» (telemóvel por QR) aparece na mesma janela.
+
 ## Restantes
 
 Ordem depois dos três bloqueadores: #5, #6 (medir primeiro com testes públicos de fingerprinting), #9, #7, #8, #10.

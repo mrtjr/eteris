@@ -1010,3 +1010,25 @@ preenchimento automático ainda não existe»; agora cada secção (Pagamentos, 
 Viagens) e as Definições das Palavras-passe têm «Sincronizar entre computadores» com o que passa e a ligação para o
 tópico (`12-b-preenchimento-textos.png`). O texto da conta em Definições › Sincronização passou a incluir as
 palavras-passe e o preenchimento automático (`13-b-definicoes-conta.png`).
+
+## E2. Chaves de acesso pelo Windows (prova)
+
+Sem código: só a prova de que o WebAuthn das páginas segue para a janela do Windows (risco R7 do desenho) e a
+documentação. **Prova ao vivo** (`pp\vivo\e2\e2.ps1`, `pp\vivo\e2\registo.txt` e capturas; perfil de teste; uma
+página local servida em `127.0.0.1` e aberta como `http://localhost:8911/`, com um utilizador inventado; nenhum site
+de fora):
+
+1. `PublicKeyCredential` existe e `isUserVerifyingPlatformAuthenticatorAvailable()` dá `false` (este PC não tem Windows
+   Hello configurado; o mesmo que a A3 mediu: `DeviceNotPresent`).
+2. «Criar chave de acesso» (Enter real no botão) → abre-se a janela **«Segurança do Windows» › «Salvar sua chave de
+   acesso»**, com «teste@exemplo.test» e «Chave de acesso do localhost»; sem Hello, pede «Insira a chave de segurança
+   na porta USB» (`e2-1-criar-janela-windows.png`). A janela é do Windows (processo `CredentialUIBroker` no primeiro
+   plano) e fica presa à janela do Éteris (aparece na árvore de UI Automation dela).
+3. Não se tocou na janela: nada foi criado. O prazo do pedido (30 s) **não** a fechou (45 s depois continuava aberta,
+   e a promessa da página continuava por resolver); fechar a janela do Éteris fecha-a. No Chrome o prazo cancela a
+   operação: diferença anotada em `docs/paridade.md` (secção 9), para ver com o motor.
+
+O tópico «O que passa entre PCs» diz «Chaves de acesso — Não passam: ficam no Windows Hello ou na chave de segurança»,
+e `docs/sincronizacao.md` tem a mesma linha em «O que sincroniza». **Por provar à mão (dono):** num PC com Windows
+Hello, a mesma página pede o PIN, o rosto ou a impressão digital, e «Outro dispositivo» (telemóvel por QR) aparece na
+mesma janela.
