@@ -119,11 +119,21 @@ public static class PerfTuning
     private static volatile string? _suspended;
 
     // Gancho da rede de segurança do sandbox (D-18, por fundir: o StartupGuard está no ramo do sandbox). A 1.ª queda antes
-    // da 1.ª página desliga os ajustes no arranque seguinte (chamar isto antes de o motor arrancar); só a 2.ª desliga o
-    // sandbox. Daí em diante IsOn é falso para todos.
+    // da 1.ª página desliga os ajustes no arranque seguinte; só a 2.ª desliga o sandbox. Daí em diante IsOn é falso para
+    // todos. ONDE CHAMAR: antes da 1.ª leitura de um ajuste, e não no Prepare, onde o StartupGuard decide hoje no ramo do
+    // sandbox: o e10 lê-se no Program.Main antes do Velopack.Run, o e11 logo depois da instância única, o e12 no
+    // App.OnStartup e na leitura do settings.json, e o e3 e o e16 no próprio Prepare, antes do Begin do StartupGuard. Ler
+    // o marcador do StartupGuard no início do Main (o --user-data-dir já vem nos argumentos). E só gastar o 1.º degrau se
+    // o arranque que caiu tinha ajustes antes da 1.ª página ligados (AnyBeforeFirstPaint, a guardar no marcador): sem
+    // nenhum, a queda não é deles e conta para o sandbox, como hoje (os e1, e4 e e5, ligados por omissão, correm depois).
     public static void Suspend(string reason) => _suspended = string.IsNullOrWhiteSpace(reason) ? "rede de segurança" : reason;
 
     public static string? SuspendedBecause => _suspended;
+
+    // Há neste arranque algum ajuste ligado que mexe no caminho antes da 1.ª página (o que a rede de segurança desliga).
+    public static bool AnyBeforeFirstPaint => AnyBeforeFirstPaintIn(On);
+
+    public static bool AnyBeforeFirstPaintIn(IReadOnlySet<string> on) => Tweaks.Any(t => t.BeforeFirstPaint && on.Contains(t.Id));
 
     public static bool IsOn(string id) => _suspended is null && Resolved.Value.Contains(id);
 

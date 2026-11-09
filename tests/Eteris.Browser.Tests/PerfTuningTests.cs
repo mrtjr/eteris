@@ -168,6 +168,18 @@ public class PerfTuningTests
         Assert.Matches(@"IsOn\(string id\)\s*=>\s*_suspended is null\s*&&", code);
     }
 
+    // A rede de segurança (D-18) só gasta o 1.º degrau quando a queda pode ser de um ajuste antes da 1.ª página: os ligados
+    // por omissão correm todos depois dela, por isso uma queda com a configuração de omissão continua a contar para o
+    // sandbox.
+    [Fact]
+    public void BeforeFirstPaint_IsNoneWithTheDefaults()
+    {
+        Assert.False(PerfTuning.AnyBeforeFirstPaintIn(PerfTuning.Resolve(Exe, testValue: null)));
+        Assert.True(PerfTuning.AnyBeforeFirstPaintIn(PerfTuning.Resolve([.. Exe, "--eteris-ajustes=e3"], null)));
+        Assert.False(PerfTuning.AnyBeforeFirstPaintIn(PerfTuning.Resolve([.. Exe, "--eteris-ajustes=e13"], null)));
+        Assert.False(PerfTuning.AnyBeforeFirstPaintIn(PerfTuning.Resolve([.. Exe, "--eteris-ajustes=tudo", "--eteris-sem-ajustes"], null)));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
