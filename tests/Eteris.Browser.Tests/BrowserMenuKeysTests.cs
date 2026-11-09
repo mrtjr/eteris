@@ -5,7 +5,6 @@ using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Threading;
 
 namespace Eteris.Browser.Tests;
 
@@ -13,6 +12,7 @@ namespace Eteris.Browser.Tests;
 // Home, End e a seta para cima não mexiam; aberto com o foco na página, as setas rolavam a página e o Esc chegava-lhe.
 // Duas causas: (1) as teclas de um Popup sem pai não sobem até à janela (nem pelo PlacementTarget); (2) com o foco na
 // página, o foco do Win32 fica no Chromium e as teclas vão para ShortcutFromPage, que não sabia do menu.
+[Collection(WpfCollection.Name)]
 public class BrowserMenuKeysTests
 {
     [Theory]
@@ -276,22 +276,8 @@ public class BrowserMenuKeysTests
         Assert.Contains("if (alt && !ctrl && !shift && key is Key.F or Key.E) return () => ToggleBrowserMenu(byKeyboard: true);", window);
     }
 
-    private static T OnSta<T>(Func<T> work)
-    {
-        T result = default!;
-        Exception? error = null;
-        var thread = new Thread(() =>
-        {
-            try { result = work(); }
-            catch (Exception e) { error = e; }
-            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
-        if (error is not null) throw new Xunit.Sdk.XunitException(error.ToString());
-        return result;
-    }
+    private static T OnSta<T>(Func<T> work, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
+        => StaRunner.Run(work, nameof(BrowserMenuKeysTests) + "." + test);
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {

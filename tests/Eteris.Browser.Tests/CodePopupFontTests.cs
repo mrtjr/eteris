@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using System.Windows.Threading;
 using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser.Tests;
@@ -11,6 +10,7 @@ namespace Eteris.Browser.Tests;
 // Captura do dono: no menu do navegador (Alt+F) o título «Éteris», o subtítulo e «Zoom» saíam em quadrados. O Popup é
 // criado em código sem pai, herda as propriedades do PlacementTarget (o MenuButton, com a fonte de ícones) e o texto sem
 // fonte própria herdava a Segoe Fluent Icons, que não tem letras.
+[Collection(WpfCollection.Name)]
 public class CodePopupFontTests
 {
     private static readonly FontFamily UiFont = new("Segoe UI Variable Text, Segoe UI");
@@ -103,22 +103,8 @@ public class CodePopupFontTests
             foreach (var found in Texts(child)) yield return found;
     }
 
-    private static T OnSta<T>(Func<T> work)
-    {
-        T result = default!;
-        Exception? error = null;
-        var thread = new Thread(() =>
-        {
-            try { result = work(); }
-            catch (Exception e) { error = e; }
-            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
-        if (error is not null) throw new Xunit.Sdk.XunitException(error.ToString());
-        return result;
-    }
+    private static T OnSta<T>(Func<T> work, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
+        => StaRunner.Run(work, nameof(CodePopupFontTests) + "." + test);
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {

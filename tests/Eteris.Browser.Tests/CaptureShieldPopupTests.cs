@@ -10,20 +10,25 @@ namespace Eteris.Browser.Tests;
 
 // Revisão aos 50: «Esconder do Recall e de capturas» também nas janelas de topo que abrem depois de ligar — os Popups
 // do WPF (sugestões com o histórico, cadeado, lista de abas, menus) têm uma janela própria que não é uma Window.
+// CI da v0.2.11: a thread do teste ficou mais de 20 s presa (fora da espera de 10 s, provavelmente a criar ou a fechar a
+// janela do WPF sob o lock global da composição, com outros testes de janelas em paralelo). Agora corre na coleção WPF,
+// sem paralelismo, pelo StaRunner (passo e tempos na mensagem), com prazo interno de 15 s e temporizador Normal.
+[Collection(WpfCollection.Name)]
 public class CaptureShieldPopupTests
 {
     [Fact]
     public void PopupOpenedAfterwards_IsHiddenFromCapture()
     {
-        var excluded = false;
-        var hadWindow = false;
-        Exception? error = null;
-        var thread = new Thread(() =>
+        var (hadWindow, excluded, log) = StaRunner.Run(steps =>
         {
+            var window = false;
+            var hidden = false;
             try
             {
+                steps.Mark("gancho");
                 CaptureShield.WantedOverride = () => CaptureShield.WdaExcludeFromCapture;
                 CaptureShield.HookNewWindows();
+                steps.Mark("popup.criar");
                 var popup = new Popup
                 {
                     Child = new TextBlock { Text = "sugestões do histórico", Width = 120, Height = 40 },
@@ -31,37 +36,39 @@ public class CaptureShieldPopupTests
                     HorizontalOffset = 20,
                     VerticalOffset = 20,
                 };
+                steps.Mark("popup.abrir");
+                // Cria a HwndSource e a MediaContext desta thread (passa pelo lock global da composição do WPF).
                 popup.IsOpen = true;
+                steps.Mark("espera");
                 // O evento do Windows chega pela fila de mensagens desta thread: espera-se por ele (com a máquina
-                // ocupada pela bateria inteira pode demorar), até 10 s.
+                // ocupada pela bateria inteira pode demorar), até 15 s. Prioridade Normal: o trabalho de fundo, de
+                // entrada ou de desenho do WPF não abafa o temporizador, que é a única saída do frame.
                 var frame = new DispatcherFrame();
-                var started = DateTime.UtcNow;
-                var timer = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Background, (_, _) =>
+                var deadline = steps.Elapsed + TimeSpan.FromSeconds(15);
+                var timer = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Normal, (_, _) =>
                 {
                     if (PresentationSource.FromVisual(popup.Child) is HwndSource source)
                     {
-                        hadWindow = true;
-                        excluded = CaptureShield.IsExcluded(source.Handle);
+                        window = true;
+                        hidden = CaptureShield.IsExcluded(source.Handle);
                     }
-                    if (excluded || DateTime.UtcNow - started > TimeSpan.FromSeconds(10)) frame.Continue = false;
+                    if (hidden || steps.Elapsed > deadline) frame.Continue = false;
                 }, Dispatcher.CurrentDispatcher);
                 Dispatcher.PushFrame(frame);
                 timer.Stop();
+                steps.Mark(hidden ? "popup.fechar" : "popup.fechar (sem afinidade)");
                 popup.IsOpen = false;
             }
-            catch (Exception e) { error = e; }
             finally
             {
                 CaptureShield.WantedOverride = null;
-                Dispatcher.CurrentDispatcher.InvokeShutdown();
             }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
-        Assert.Null(error);
-        Assert.True(hadWindow);
-        Assert.True(excluded);
+            return (window, hidden, steps.Log);
+        }, nameof(PopupOpenedAfterwards_IsHiddenFromCapture),
+        // Presa a thread, o finally dela não corre: o resto da bateria não pode herdar «Exclude».
+        onTimeout: () => CaptureShield.WantedOverride = null);
+        Assert.True(hadWindow, log);
+        Assert.True(excluded, log);
     }
 
     [Fact]
