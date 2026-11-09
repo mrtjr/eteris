@@ -2,8 +2,8 @@
 
 Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e bloco C (na página: C1–C7 — canal,
 classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador, preencher contactos,
-pagamentos, documentos e viagens, janelas privadas) feitos no ramo `sync`, por publicar**; bloco D (sincronização) a
-caminho, a partir de D1 (os blocos D e E — fecho — do desenho estão por acabar). O gestor é próprio, em
+pagamentos, documentos e viagens, janelas privadas) e bloco D (sincronização: D1–D5) feitos no ramo `sync`, por
+publicar** (o bloco E — fecho — do desenho está por fazer, salvo a prova E2 das chaves de acesso). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -912,3 +912,58 @@ utilização» sim (um só sítio da janela a grava); sem coleções ligadas ou 
 chave = ilegível; cofre de antes ganha as colunas; e **dois computadores pela pasta local com o cofre real** (guardar
 num aparece no outro, apagar some, mudar nos dois deixa a anterior no histórico com aviso, Pagamentos só depois de
 ligado).
+
+## D4. O tópico «O que passa entre PCs», aprovação e `.eteris`
+
+- **Tópico** (Definições › Sincronização, `Sync/SyncChoices.cs`, `settings.html`): o texto do topo do desenho e uma
+  linha por grupo de `SyncGroups` — Favoritos, Espaços, Definições, Decisões do Escudo, Notas, **Palavras-passe**
+  («Palavras-passe, notas e sites onde nunca guardar»), **Pagamentos** («Cartões (sem o código de segurança) e IBAN»),
+  **Informações de contacto** («Nomes, moradas, e-mails e telefones»), **Documentos de identificação** («Passaporte, carta
+  de condução/CNH, Cartão de Cidadão/RG, NIF/CPF») e **Viagens** («Veículos e programas de fidelidade») —, cada uma com o
+  interruptor deste computador (um checkbox focável, com o nome da linha para o leitor de ecrã), e duas linhas só de
+  informação: «Abas abertas» e «Chaves de acesso» («Não passam: ficam no Windows Hello ou na chave de segurança»).
+  Omissões da decisão D-1. A rota `sync-choose` passa por `SyncChoices.ChooseAsync`: ligar Pagamentos ou Documentos
+  pede o Windows Hello (`ReauthPurpose.SyncSecrets`, sempre, sem a janela de graça) e, recusado, a linha fica desligada
+  com «Não foi confirmado com o Windows: … continua desligado». Ligar uma linha marca uma ronda já.
+- **Aprovar um aparelho novo** (`sync-approve`, `SyncChoices.MayApproveAsync`): com segredos em jogo (coleções do cofre
+  ligadas aqui ou registos secretos na conta) o pedido diz «Este computador vai receber também as suas palavras-passe,
+  informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello»
+  e «Aprovar» pede-o (`ApproveDevice`, sempre); recusado, o pedido continua à espera.
+- **`.eteris`** (`ProfileTransfer`, `ProfileArchive`): sem o cofre por omissão. A caixa «Incluir palavras-passe,
+  pagamentos e documentos» (desmarcada) pede o Windows Hello (`ExportProfileSecrets`, sempre) **antes** de decifrar o que
+  quer que seja; leva o cofre inteiro, cada item selado com chaves derivadas da chave do ficheiro (`ArchiveSeals`), por
+  isso nem dentro do ficheiro aberto há um segredo fora dos selos. Ao importar, os itens entram no cofre (com a mesma
+  chave natural vale o do ficheiro; a anterior fica no histórico) e o resumo diz quantos.
+- **Código de recuperação:** o texto diz «Com este código abre-se também o cofre de palavras-passe (e os pagamentos e
+  documentos, se os sincronizar)» e aconselha guardá-lo também fora do próprio cofre.
+
+Testes: `Sync/SyncChoicesTests` — as doze linhas pela ordem, os textos (os dois nomes de cada documento) e as omissões;
+Pagamentos e Documentos pedem o Windows (`SyncSecrets`, sempre) e, recusado, ficam desligados; desligar não pede; as
+outras linhas nunca pedem; aprovar com segredos pede `ApproveDevice` e sem segredos não; exportar sem segredos não pede
+nem decifra nada, recusado não decifra nada, aceite leva-os; o ficheiro com segredos abre só com o código, recusa
+coleções que não são do cofre e o código de segurança; do cofre A para o cofre B pelo ficheiro, com a anterior no
+histórico e o resumo; a página tem o tópico, a caixa desmarcada e o texto do código; as rotas passam pelas decisões
+testadas.
+
+## D5. Nova cadeia e documentação da sincronização
+
+- **Nova cadeia** (remover um aparelho ou gerar um código novo; `SyncEngine.StartRotationAsync`): cada registo secreto é
+  aberto com as chaves da cadeia antiga e **selado de novo** com as da nova (outra `Key` opaca, outro selo, dados
+  associados com a cadeia nova); as lápides também (levam a chave natural selada). Um aparelho que fica e recebe a conta
+  nova volta a selar o que ele próprio tinha escrito (`RestageOwn`), com as chaves dos selos da cadeia antiga que o motor
+  guarda no seu estado (protegido por DPAPI; um estado de antes destas chaves deixa-os para o perfil voltar a enviar).
+  O aparelho removido não abre nada da cadeia nova.
+- **Aviso** ao remover um aparelho com segredos na conta: «O aparelho removido já tinha as suas palavras-passe: mude as
+  dos sites importantes.» (gerar só um código novo não o diz).
+- **Documentação** (`docs/sincronizacao.md`): secção nova «Coleções secretas» (coleções, chaves naturais e campos, a
+  cifra interna, o perfil com segredos, o tópico, emparelhamento, nova cadeia e `.eteris`), a linha das palavras-passe
+  e a das chaves de acesso em «O que sincroniza», a ameaça «quem tem o código de recuperação ou um aparelho emparelhado
+  tem também as palavras-passe…» com o remédio, e em «O que a Google vê» que o número de palavras-passe também pesa no
+  tamanho do instantâneo (a ordem de grandeza).
+
+Testes: `Sync/SyncSecretRotationTests` — remover um de três aparelhos: todos os selos mudam (nenhuma `Key` antiga),
+abrem só com a `K_seg` nova (nem com a antiga, nem com a antiga com a cadeia nova), os que ficam continuam iguais e a
+sincronizar, o removido para e com o código e as chaves antigas não abre nada, e nenhum texto inventado aparece na
+cadeia nova; um código novo também volta a selar, sem o aviso do aparelho removido; `RestageOwn` sela de novo o que o
+aparelho escreveu (lápide incluída) e um estado antigo sem as chaves não passa segredos; a documentação lista as sete
+coleções, todos os campos, as derivações, os dados associados, o tópico, a ameaça e o que a Google vê.

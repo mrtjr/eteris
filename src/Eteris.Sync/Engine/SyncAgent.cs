@@ -1029,6 +1029,9 @@ public sealed class SyncAgent
                     var done = device is null
                         ? "A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos."
                         : $"«{name}» foi removido. A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos.";
+                    // Os selos novos não servem de nada contra o que o aparelho removido já leu (desenho, secção 4.5).
+                    if (device is not null && engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)))
+                        done += " O aparelho removido já tinha as suas palavras-passe: mude as dos sites importantes.";
                     _notice = newcomers.Count == 0 ? done
                         : done + $" Apareceu na conta {string.Join(", ", newcomers)}, que não estava na lista: não recebeu a chave nova. Se for seu, junte-o outra vez com o código novo ou por aprovação.";
                 }

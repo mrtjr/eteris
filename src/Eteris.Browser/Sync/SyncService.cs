@@ -268,6 +268,13 @@ internal static class SyncService
         get { lock (Gate) return _message is { } m ? new { area = m.Area, text = m.Text } : null; }
     }
 
+    // Uma mensagem para uma parte da página sem ação na rede (por exemplo «não foi confirmado com o Windows»).
+    public static void Say(string area, string? text)
+    {
+        lock (Gate) _message = text is null ? null : (area, text);
+        Changed?.Invoke();
+    }
+
     // Uma ação do utilizador nas Definições, em segundo plano (as rotas da página não esperam pela rede).
     public static void Act(string area, Func<SyncAgent, Task> action)
     {
@@ -357,6 +364,8 @@ internal static class SyncService
             }),
             update = status.NeedsUpdate,
             summary = Summary(status, nowMs),
+            // Aprovar um aparelho novo entrega-lhe também segredos (o pedido diz isso e o «Aprovar» pede o Windows Hello).
+            secrets = Agent()?.HasSecrets == true,
         };
 }
 

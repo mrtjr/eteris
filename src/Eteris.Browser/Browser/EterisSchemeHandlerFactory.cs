@@ -85,7 +85,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));
         // Definições › Sincronização (perfil cifrado, «Entrar com o Google»): nunca a partir da janela privada.
         if (uri is { Host: "settings" } && uri.AbsolutePath.StartsWith("/sync-", StringComparison.Ordinal))
-            return privateContext ? Text("recusado") : SyncRoute(uri, request);
+            return privateContext ? Text("recusado") : SyncRoute(uri, request, browser.Identifier);
         if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url, privateContext);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
@@ -152,11 +152,49 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 
-    private static IResourceHandler SyncRoute(Uri uri, IRequest request)
+    // A confirmação do Windows (Windows Hello ou a palavra-passe do Windows), com a janela desta aba como dona.
+    private static Task<bool> ConfirmWithWindows(int browserId, Vault.ReauthPurpose purpose)
+    {
+        Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
+        return Vault.VaultRoutes.Profile!.ConfirmAsync(browserId, purpose);
+    }
+
+    private static IResourceHandler SyncRoute(Uri uri, IRequest request, int browserId)
     {
         if (!InternalPages.IsAuthorized(request.Url)) return Text("recusado");
         switch (uri.AbsolutePath)
         {
+            case "/sync-export" when InternalPages.Query(uri, "secrets") == "1":
+                // Com as palavras-passe, os pagamentos e os documentos: só depois do Windows Hello (sempre, sem graça).
+                return new VaultResourceHandler(async () =>
+                {
+                    var (ok, secrets) = await Sync.SyncChoices.SecretsForExportAsync(true, purpose => ConfirmWithWindows(browserId, purpose),
+                        () => Sync.ProfileTransfer.CollectSecrets(Vault.VaultService.Profile, () => System.IO.File.Exists(System.IO.Path.Combine(Infrastructure.AppPaths.Root, Vault.VaultKey.FileName))))
+                        .ConfigureAwait(false);
+                    if (!ok) return Vault.VaultReply.Json(new { ok = false, message = Sync.SyncChoices.NotConfirmed("nada foi exportado") });
+                    try
+                    {
+                        var exported = Sync.ProfileTransfer.Export(Environment.MachineName, DateTime.Now, secrets);
+                        return Vault.VaultReply.Json(new { ok = true, file = System.IO.Path.GetFileName(exported.Path), code = exported.Code, records = exported.Records, secrets = secrets?.Count ?? 0 });
+                    }
+                    catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+                    {
+                        return Vault.VaultReply.Json(new { ok = false, message = "Não foi possível gravar o ficheiro em Transferências." });
+                    }
+                });
+            case "/sync-choose" when InternalPages.Query(uri, "g") is { Length: > 0 } group:
+            {
+                // Uma linha do tópico «O que passa entre PCs» neste computador (Pagamentos e Documentos pedem o Windows).
+                var on = InternalPages.Query(uri, "on") == "1";
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is not { } agent) return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                    var error = await Sync.SyncChoices.ChooseAsync(agent, group, on, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false);
+                    Sync.SyncService.Say("choices", error);
+                    if (error is null && on) Sync.SyncService.SyncNow();
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
             case "/sync-export":
                 try
                 {
@@ -242,8 +280,17 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 break;
             }
             case "/sync-approve" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
-                Sync.SyncService.Act("approve", agent => agent.ApproveAsync(id));
-                break;
+                // Com segredos em jogo, o aparelho novo recebe-os: o Windows confirma primeiro (sempre).
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is { } agent)
+                    {
+                        if (await Sync.SyncChoices.MayApproveAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                            Sync.SyncService.Act("approve", a => a.ApproveAsync(id));
+                        else Sync.SyncService.Say("approve", Sync.SyncChoices.NotConfirmed("o pedido continua à espera"));
+                    }
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
             case "/sync-refuse" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
                 Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
                 break;

@@ -34,6 +34,15 @@ public sealed class AccountSecret : IDisposable
     // Chave de um ficheiro de perfil exportado (cada ficheiro tem o seu sal aleatório).
     internal byte[] ArchiveKey(ReadOnlySpan<byte> salt) => Kdf.Derive(_bytes, "profile-archive", salt);
 
+    // Os selos dos registos secretos dentro de um ficheiro exportado (com segredos): derivados da chave do ficheiro,
+    // como os da conta derivam da DEK (o código mostrado uma vez abre o ficheiro e os selos).
+    internal SealKeys ArchiveSeals(ReadOnlySpan<byte> salt)
+    {
+        var key = ArchiveKey(salt);
+        try { return new SealKeys("archive/" + Kdf.Hex(salt), 1, Kdf.Base64Url(Kdf.Derive(key, "secrets:v1")), Kdf.Base64Url(Kdf.Derive(key, "secret-keys:v1"))); }
+        finally { CryptographicOperations.ZeroMemory(key); }
+    }
+
     public void Dispose() => CryptographicOperations.ZeroMemory(_bytes);
 }
 

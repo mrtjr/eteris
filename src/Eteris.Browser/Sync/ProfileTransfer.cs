@@ -26,6 +26,37 @@ internal static class ProfileTransfer
     {
         // Alterações que baixam a proteção e NÃO foram aplicadas (à espera de confirmação), em português.
         public IReadOnlyList<string> Held { get; init; } = [];
+
+        // Itens do cofre que entraram (só num ficheiro exportado com segredos), e palavras-passe cuja anterior ficou no
+        // histórico (a do ficheiro vale, como na primeira junção da sincronização).
+        public int Vault { get; init; }
+
+        public int VaultReplaced { get; init; }
+    }
+
+    // Todos os itens do cofre deste perfil, no formato da sincronização (só depois do Windows Hello; nunca sem o cofre
+    // existir: sem cofre, nada). Os itens decifram-se agora, um a um.
+    public static IReadOnlyList<ArchiveSecret> CollectSecrets(Vault.VaultService vault, Func<bool> exists)
+    {
+        if (!exists()) return [];
+        var secrets = new List<ArchiveSecret>();
+        foreach (var collection in Vault.VaultCollections.All)
+            foreach (var (key, _) in vault.SyncEntries(collection))
+                if (vault.ReadSynced(collection, key) is { } item) secrets.Add(new ArchiveSecret(Vault.VaultCollections.Name(collection), item));
+        return secrets;
+    }
+
+    // Os itens do cofre de um ficheiro importado entram no cofre (a do ficheiro vale; a anterior fica no histórico).
+    public static (int Applied, int Replaced) ApplySecrets(Vault.VaultService vault, IReadOnlyList<ArchiveSecret> secrets)
+    {
+        int applied = 0, replaced = 0;
+        foreach (var s in secrets)
+        {
+            if (Vault.VaultCollections.Parse(s.Collection) is not { } collection || vault.ApplySynced(collection, s.Item) is not { } result) continue;
+            applied++;
+            if (result.PasswordReplaced) replaced++;
+        }
+        return (applied, replaced);
     }
 
     // Definições em que «true» protege mais: desligá-las baixa a proteção.
@@ -124,15 +155,16 @@ internal static class ProfileTransfer
         return records;
     }
 
-    public static Exported Export(string deviceName, DateTime now)
+    // secrets: os itens do cofre (null = sem segredos, o normal; com eles só depois do Windows Hello: SyncChoices).
+    public static Exported Export(string deviceName, DateTime now, IReadOnlyList<ArchiveSecret>? secrets = null)
     {
         using var secret = AccountSecret.Create();
         var records = Collect(Data.Settings.Current, new DateTimeOffset(now).ToUnixTimeMilliseconds());
-        var bytes = ProfileArchive.Export(records, secret, deviceName, new DateTimeOffset(now).ToUnixTimeMilliseconds());
+        var bytes = ProfileArchive.Export(records, secret, deviceName, new DateTimeOffset(now).ToUnixTimeMilliseconds(), secrets);
         var folder = Downloads.DownloadPaths.DownloadsFolder();
         var path = Downloads.DownloadPaths.Unique(folder, FileName(now));
         File.WriteAllBytes(path, bytes);
-        return new Exported(path, secret.ToCode(), records.Count);
+        return new Exported(path, secret.ToCode(), records.Count + (secrets?.Count ?? 0));
     }
 
     public static string FileName(DateTime now) => $"Perfil Éteris {now:yyyy-MM-dd}{ProfileArchive.Extension}";
@@ -144,7 +176,7 @@ internal static class ProfileTransfer
         bool allowWeaker = false)
     {
         var held = new List<string>();
-        var archive = ProfileArchive.Import(file, code);
+        var (archive, vaultItems) = ProfileArchive.ImportAll(file, code);
         var records = archive.Records.Where(r => !r.Deleted && r.Data is not null).ToList();
 
         var marks = records.Where(r => r.Collection == Collections.Bookmarks && IsWebAddress(r.Key))
@@ -207,7 +239,8 @@ internal static class ProfileTransfer
             .OrderBy(r => r.Data!["order"]?.GetValue<int>() ?? 0)
             .Select(r => (Name: r.Text("name")!, Color: r.Data!["color"]?.GetValue<int>() ?? 0, Icon: r.Text("icon"))).ToList();
         addSpaces?.Invoke(spaces);
-        return new Imported(bookmarks, settings, shield, spaces.Count, notesChanged, archive.DeviceName) { Held = held };
+        var (vault, replaced) = vaultItems.Count == 0 ? (0, 0) : ApplySecrets(Vault.VaultService.Profile, vaultItems);
+        return new Imported(bookmarks, settings, shield, spaces.Count, notesChanged, archive.DeviceName) { Held = held, Vault = vault, VaultReplaced = replaced };
     }
 
     // As notas do ficheiro entram por baixo das atuais, com um título (nada se perde nem se sobrepõe).
@@ -227,8 +260,13 @@ internal static class ProfileTransfer
         if (r.Shield > 0) parts.Add(r.Shield == 1 ? "1 decisão do Escudo" : $"{r.Shield} decisões do Escudo");
         if (r.Spaces > 0) parts.Add(r.Spaces == 1 ? "1 Espaço" : $"{r.Spaces} Espaços");
         if (r.Notes) parts.Add("as notas");
+        if (r.Vault > 0) parts.Add(r.Vault == 1 ? "1 item do cofre (palavras-passe e preenchimento automático)" : $"{r.Vault} itens do cofre (palavras-passe e preenchimento automático)");
         var from = r.From.Length > 0 ? $" de «{r.From}»" : string.Empty;
         var text = parts.Count == 0 ? $"Perfil{from} lido: nada de novo para juntar." : $"Perfil{from} importado: {string.Join(", ", parts)}.";
+        if (r.VaultReplaced > 0)
+            text += r.VaultReplaced == 1
+                ? " 1 palavra-passe mudou: a anterior ficou no histórico."
+                : $" {r.VaultReplaced} palavras-passe mudaram: as anteriores ficaram no histórico.";
         if (r.Held.Count > 0)
             text += r.Held.Count == 1
                 ? " 1 alteração baixaria a proteção deste computador e ficou por aplicar."

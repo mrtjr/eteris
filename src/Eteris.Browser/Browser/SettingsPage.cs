@@ -68,6 +68,8 @@ public static class SettingsPage
             connected = !isPrivate && Sync.SyncService.Available && Sync.SyncService.Connected,
             enabled = !isPrivate && Sync.SyncService.Enabled,
             hasKey = !isPrivate && Sync.SyncService.Agent()?.HasKey == true,
+            // «O que passa entre PCs»: as linhas e o interruptor de cada uma neste computador.
+            choices = isPrivate ? null : Sync.SyncChoices.Data(Sync.SyncService.Agent()?.EnabledCollections ?? Eteris.Sync.Model.SyncGroups.DefaultCollections),
             message = isPrivate ? null : Sync.SyncService.Message,
         };
     }

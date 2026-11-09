@@ -49,7 +49,8 @@ quando o utilizador carregar em «Ligar a sincronização»). Exportar/importar 
 | Notas | sim | fusão a três por linhas; ao entrar num aparelho com notas diferentes, as dele ficam por baixo das da conta com um título; não se aplicam enquanto o utilizador está a escrever |
 | Histórico | **não** (nesta versão) | — |
 | Abas abertas | **não** (nesta versão) | a biblioteca tem a coleção `tabs` («abas noutros aparelhos»), mas o Éteris não a publica |
-| Palavras-passe e preenchimento automático | **não** (ainda) | o gestor do Chromium está desligado (`credentials_enable_service = false`, verificação de fugas desligada). O cofre próprio do Éteris (`docs/palavras-passe.md`) já existe, **só neste computador** (`<raiz>\cofre.db`, cifrado com uma chave DPAPI), e já preenche palavras-passe nas páginas a pedido e guarda-as depois do envio com a escolha do utilizador (C1–C7: a lista de sugestões, a bolha de guardar, o gerador e o preenchimento de contactos, pagamentos, documentos e viagens usam só esse cofre local; nada vai para a pasta do Drive; a janela privada lê-o para preencher e não lhe muda nada, nem a «última utilização», que por isso nunca sobe da janela privada); entra na sincronização no bloco D do desenho, como coleções **secretas** com uma segunda cifra por registo (`logins`, `loginsNever`, `cards`, `ibans`, `contacts`, `idDocs`, `travel`), com Pagamentos e Documentos desligados por omissão |
+| Palavras-passe e preenchimento automático | sim (o cofre próprio do Éteris), com uma **segunda cifra** por registo | sete coleções **secretas** (`logins`, `loginsNever`, `cards`, `ibans`, `contacts`, `idDocs`, `travel`): ver «Coleções secretas». Cada computador escolhe no tópico «O que passa entre PCs»; Pagamentos e Documentos de identificação vêm desligados e ligá-los pede o Windows Hello. O gestor do Chromium continua desligado (`credentials_enable_service = false`, verificação de fugas desligada); a janela privada lê o cofre para preencher e não lhe muda nada, nem a «última utilização», que por isso nunca sobe da janela privada. O histórico local das palavras-passe não sobe |
+| Chaves de acesso | **não** | ficam no Windows Hello ou na chave de segurança (o WebAuthn segue para a janela do Windows: `docs/palavras-passe.md`, E2) |
 | Cookies, transferências, zoom por site, permissões, leitura para mais tarde, sessões guardadas | não | — |
 
 O que é de cada computador fica: as abas, o zoom por site, as permissões dadas a sites, a barra lateral.
@@ -359,7 +360,8 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
 
 Definições › Sincronização › **Exportar perfil cifrado** grava em Transferências um `Perfil Éteris AAAA-MM-DD.eteris`
 (favoritos, Espaços, definições que viajam, decisões do Escudo, notas) cifrado com um código de recuperação **novo**,
-mostrado uma única vez na página. As **abas abertas não vão**: a importação não as usava, e os URLs de abas podem ter
+mostrado uma única vez na página. O cofre de palavras-passe só vai com a caixa «Incluir palavras-passe, pagamentos e
+documentos», depois do Windows Hello, selado item a item (ver «Coleções secretas»). As **abas abertas não vão**: a importação não as usava, e os URLs de abas podem ter
 tokens (ligações de redefinição de senha, IDs de sessão) que ficariam com quem tivesse o ficheiro e o código.
 **Importar** lê o ficheiro escolhido e o código; o código e o ficheiro vão no corpo de um POST para
 `eteris://settings/sync-import` (nunca no endereço). Junta ao perfil: o que falta entra, as definições do ficheiro passam
@@ -372,6 +374,96 @@ janela. Nenhuma rede. Recusado na janela privada.
   notificações, apagar ao fechar, DNS cifrado; ligar as sugestões enquanto escreve) e as decisões que desligam o Escudo
   ou o aviso de HTTP num site. Só entram se o utilizador carregar em «Aplicar também estas alterações»
   (`ProfileTransfer.WeakensSetting` / `WeakensShield`; testes em `SyncIntegrationTests`).
+
+## Coleções secretas
+
+O cofre de palavras-passe e do preenchimento automático (`docs/palavras-passe.md`) passa entre computadores em sete
+coleções **secretas**: cada registo leva uma **segunda cifra** própria por dentro da cifra do ficheiro (o «selo»), e a
+chave do registo no motor é opaca. Biblioteca: `Model/SyncRecord.cs` (`Collections.Secret`, `IsSecret`),
+`Secrets/SecretSchemas.cs` (campos, partilhados com o Android), `Secrets/SecretSeal.cs`, `Engine/ISecretSource.cs`,
+`Engine/ProfileSync.cs`, `Model/SyncGroups.cs`. Navegador: `Vault/VaultSyncProfile.cs`, `Vault/VaultSyncMap.cs`,
+`Vault/VaultService.Sync.cs`, `Sync/SyncChoices.cs`.
+
+| Coleção | Linha do tópico | Chave natural (dentro do selo) | Campos (dentro do selo) |
+|---|---|---|---|
+| `logins` | Palavras-passe | origem `\n` utilizador (uma gerada por confirmar: `gerada\n<ID>`) | `origin`, `username`, `password`, `note`, `created`, `changed`, `used`, `formAction`, `generated`, `realm` |
+| `loginsNever` | Palavras-passe | origem | `origin`, `created` |
+| `cards` | Pagamentos | ID do item | `name`, `number`, `expMonth`, `expYear`, `nickname`, `created`, `used` — **nunca** `cvc`/`csc`/`cvv` (recusados ao selar, em qualquer nível) |
+| `ibans` | Pagamentos | ID do item | `iban`, `nickname`, `created` |
+| `contacts` | Informações de contacto | ID do item | `label`, `givenName`, `familyName`, `organization`, `street`, `number`, `complement`, `neighborhood`, `city`, `region`, `postalCode`, `country`, `email`, `phone`, `created`, `used` |
+| `idDocs` | Documentos de identificação | ID do item | `type` (`passport`, `driverLicense`, `nationalId`, `taxId`: passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF), `number`, `name`, `country`, `issuer`, `issued`, `expires`, `note` |
+| `travel` | Viagens | ID do item | `type` (`vehicle`, `loyalty`), `make`, `model`, `year`, `owner`, `plate`, `plateRegion`, `vin`, `company`, `program`, `number`, `name` |
+
+Não vão: os candidatos por guardar, o histórico local das palavras-passe, a chave do cofre, a janela de graça do
+Windows Hello, os interruptores «Pedir o Windows Hello…» (são deste PC) e a «última utilização» das janelas privadas
+(nem chega a ser gravada).
+
+**Cifra interna (o selo).**
+
+- `K_seg = HKDF(DEK, "secrets:v1")` cifra e `K_skey = HKDF(DEK, "secret-keys:v1")` faz as chaves opacas
+  (`KeyRing.SecretKey`/`SecretKeyId`). Derivam da cadeia: qualquer aparelho emparelhado as tem, e mudam com a geração e
+  com a «nova cadeia».
+- `Key` = `"s:" + hex(HMAC(K_skey, coleção ‖ chave natural))[0..32]`; o `Id` continua a ser o `OpaqueId` de sempre,
+  calculado sobre essa `Key`.
+- `Data` = `{"v":1,"n":<nonce de 96 bits>,"c":<AES-256-GCM(K_seg, {"k": chave natural, "d": campos})>}`, com os dados
+  associados `eteris-secret|v1|<cadeia>|<geração>|<coleção>|<Id>`. Um selo movido para outro `Id`, coleção, cadeia ou
+  geração não abre: esse registo fica de fora (não se aplica, conta como erro, nessa ronda nada dessa coleção se apaga
+  aqui) e a ronda continua. Recusa selar mais de 64 KiB.
+- O que isto dá, além da cifra do ficheiro: o estado do motor, os instantâneos, a base do `ProfileSync`, os lotes
+  pendentes e o `.eteris` **nunca têm um segredo nem um site em claro**, mesmo dentro da DPAPI; o bloco selado é
+  incompressível (nenhum canal lateral de compressão ao lado dos títulos que os sites escolhem); e um aparelho com uma
+  linha desligada recebe os selos dessa linha e **nunca os abre**.
+- O motor guarda no estado do aparelho (protegido por DPAPI, nunca no transporte) as chaves dos selos da cadeia atual,
+  só para voltar a selar os registos que o próprio aparelho escreveu quando outro faz «nova cadeia» (a cadeia antiga já
+  não existe quando ele dá por isso).
+
+**O perfil com segredos.** O cofre dá à sincronização, de cada item, só uma chave **local** opaca e uma **impressão**
+(HMAC com uma chave do próprio cofre, gravadas com o item: nada se decifra para comparar). A base guarda a impressão.
+Quando a impressão muda, só esse item se decifra, sela e envia. No sentido contrário, o conteúdo vai ao cofre, que o
+volta a cifrar com a chave local, tal como veio (sem eco). **Conflito**: ganha a versão mais recente (HLC); quem perde
+guarda a palavra-passe anterior no histórico local (1 versão) e o estado avisa «A palavra-passe de *site* mudou noutro
+computador; a anterior ficou no histórico…» (e «Mostrar» em `eteris://passwords/` mostra a anterior). **Primeira
+junção** (aparelho novo, ou linha ligada outra vez): o que só existe aqui sobe; com a mesma chave natural vale a versão
+da conta e a deste computador vai para o histórico. Apagar deixa uma lápide (com a chave natural selada). Itens gerados
+à espera de confirmação também passam.
+
+**Escolha por aparelho — o tópico «O que passa entre PCs»** (Definições › Sincronização; `SavedSync.Collections`):
+
+| Linha | Coleções | Por omissão | O que diz |
+|---|---|---|---|
+| Favoritos | `bookmarks` | ligado | Os favoritos e as pastas |
+| Espaços | `spaces` | ligado | Nome, cor e emoji; as abas de cada Espaço ficam em cada computador |
+| Definições | `settings` | ligado | Só as que fazem sentido noutro computador |
+| Decisões do Escudo | `shield` | ligado | Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site |
+| Notas | `notes` | ligado | O texto das notas |
+| Palavras-passe | `logins`, `loginsNever` | ligado | Palavras-passe, notas e sites onde nunca guardar |
+| Pagamentos | `cards`, `ibans` | **desligado**; ligar pede o Windows Hello | Cartões (sem o código de segurança) e IBAN |
+| Informações de contacto | `contacts` | ligado | Nomes, moradas, e-mails e telefones |
+| Documentos de identificação | `idDocs` | **desligado**; ligar pede o Windows Hello | Passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF |
+| Viagens | `travel` | ligado | Veículos e programas de fidelidade |
+| Abas abertas | — | — | Não passam: ficam em cada computador (sem interruptor) |
+| Chaves de acesso | — | — | Não passam: ficam no Windows Hello ou na chave de segurança (sem interruptor) |
+
+Decisão D-1 do dono: Pagamentos e Documentos aparecem, desligados por omissão, e ligá-los pede o Windows Hello
+(sempre, sem a janela de graça). Desligar uma linha para de enviar e de aplicar essas coleções e **não apaga nada**,
+nem aqui nem na conta; ligar outra vez faz a primeira junção só dessa linha (`SavedSync.Joined`). Texto do topo:
+«Tudo é cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a
+chave nunca lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador
+escolhe o que recebe: desligar uma linha não apaga nada. Quem perder o código de recuperação e todos os computadores
+perde estes dados: não há «esqueci-me do código».»
+
+**Emparelhamento, nova cadeia e exportar.**
+
+- **Aprovar um aparelho novo** com segredos em jogo (coleções do cofre ligadas aqui ou registos secretos na conta): o
+  pedido diz «Este computador vai receber também as suas palavras-passe…» e «Aprovar» pede o Windows Hello (sempre).
+- **Nova cadeia / remover aparelho:** os selos voltam a ser feitos com a `K_seg` nova (outra `Key`, outro selo; os
+  dados associados com a cadeia nova); o aparelho removido não abre nada da cadeia nova. O aviso diz «O aparelho
+  removido já tinha as suas palavras-passe: mude as dos sites importantes».
+- **`.eteris` exportado:** sem o cofre por omissão. A caixa «Incluir palavras-passe, pagamentos e documentos» pede o
+  Windows Hello (sempre) e leva o cofre inteiro, cada item selado com chaves derivadas da chave do ficheiro (o código
+  novo, mostrado uma vez, abre também os selos). Ao importar, os itens entram no cofre e, com a mesma chave natural,
+  vale o do ficheiro (a anterior fica no histórico).
+- **Código de recuperação:** o texto que o mostra diz que com ele se abre também o cofre de palavras-passe.
 
 ## A exceção de rede
 
@@ -422,6 +514,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 | **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador confirmar códigos iguais no anfitrião; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador) | — remédio: «Nova cadeia» noutro aparelho e retirar o acesso na conta Google |
 | **Quem tem um ficheiro `.eteris`** | nada sem o código | — |
+| **Quem tem o código de recuperação ou um aparelho emparelhado** | tudo o que a conta tem: **Quem tem o código de recuperação ou um aparelho emparelhado tem também as palavras-passe, pagamentos e documentos** (das linhas que algum aparelho sincroniza) | — remédio: «Nova cadeia» (remover o aparelho ou gerar um código novo) **e mudar as palavras-passe** dos sites importantes, porque o que já foi lido não se desfaz |
 | **O Éteris (o projeto)** | nada: não há servidor do Éteris | — |
 
 - **Recuperação (D6):** sem o código e sem nenhum aparelho ligado, a cópia na nuvem é irrecuperável. Não há
@@ -444,9 +537,11 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
   do Éteris vai nesse pedido além do token);
 - os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)
   e tamanhos aproximados (preenchidos a 1 KiB e, nos grandes, a «baldes» Padmé: um instantâneo de um perfil grande
-  pesa mais do que o de um pequeno); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
+  pesa mais do que o de um pequeno; o número de palavras-passe também pesa no tamanho do instantâneo — a ordem de
+  grandeza, não o número); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
 - **nunca** o conteúdo: favoritos, URLs, títulos, notas, abas, definições, Espaços, decisões do Escudo, nomes dos
-  aparelhos — tudo dentro da cifra. A chave nunca lá vai.
+  aparelhos, palavras-passe, cartões, moradas, documentos — tudo dentro da cifra (os do cofre com uma segunda cifra
+  própria). A chave nunca lá vai.
 
 O utilizador pode apagar os dados da pasta oculta em *Google Drive › Definições › Gerir aplicações › Éteris › Eliminar
 dados ocultos da app*, e retirar o acesso em *myaccount.google.com/permissions*.

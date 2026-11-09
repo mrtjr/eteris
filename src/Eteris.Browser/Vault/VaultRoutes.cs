@@ -426,6 +426,14 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
 
     // «Apagar dados de navegação» › «Palavras-passe e preenchimento automático»: o cofre inteiro (as cinco áreas), depois
     // da reautenticação. Os apagamentos à espera de «Anular» deixam de ter o que anular.
+    // A confirmação do Windows pedida por outra página interna (Definições › Sincronização: ligar Pagamentos ou
+    // Documentos, aprovar um aparelho novo, exportar o perfil com segredos), com a janela dessa aba como dona.
+    public async Task<bool> ConfirmAsync(int browserId, ReauthPurpose purpose)
+    {
+        var window = await host.WindowAsync(browserId).ConfigureAwait(false);
+        return await gate.RequestAsync(window, purpose, host.WhileInFront(browserId)).ConfigureAwait(false);
+    }
+
     public async Task<bool> EraseVaultAsync(int browserId)
     {
         var window = await host.WindowAsync(browserId).ConfigureAwait(false);

@@ -39,6 +39,20 @@
 - **Janela privada** (C7): preenche palavras-passe, moradas, cartões e documentos quando escolhe, mas não guarda nada:
   nem a «última utilização», nem a oferta de guardar, nem o gerador; o gestor abre numa janela normal. Medido: o
   ficheiro do cofre fica exatamente igual depois de uma janela privada o usar.
+- **As palavras-passe passam entre computadores** (D1–D5): com a sincronização ligada, as palavras-passe, os sites onde
+  nunca guardar, as informações de contacto e as viagens passam para os outros computadores da conta, cada registo com
+  uma **segunda cifra própria** por dentro da cifra de sempre (nem dentro do Éteris, nem no Google Drive, nem num perfil
+  exportado há um site ou uma palavra-passe fora desse selo). Pagamentos e Documentos de identificação vêm desligados
+  e ligá-los pede o Windows Hello. Se a mesma palavra-passe mudar em dois computadores, fica a mais recente e a outra
+  vai para o histórico desse computador (o «Mostrar» das Palavras-passe mostra-a) com um aviso.
+- **Definições › Sincronização › «O que passa entre PCs»**: uma linha por tipo de dado (Favoritos, Espaços, Definições,
+  Decisões do Escudo, Notas, Palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação, Viagens)
+  com o interruptor deste computador, e as que não passam (abas abertas, chaves de acesso). Desligar não apaga nada;
+  ligar outra vez junta sem perder nada.
+- **Aprovar um computador novo** com palavras-passe na conta diz que ele as vai receber e pede o Windows Hello;
+  **remover um computador** volta a selar tudo com chaves novas e lembra de mudar as palavras-passe dos sites
+  importantes; **exportar o perfil cifrado** pode levar o cofre (caixa «Incluir palavras-passe, pagamentos e
+  documentos», com o Windows Hello); o código de recuperação diz que também abre o cofre.
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,
