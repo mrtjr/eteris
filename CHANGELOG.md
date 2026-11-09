@@ -30,6 +30,12 @@
   tamanho e o formato que o site pede. Também no menu de contexto: «Gerar palavra-passe forte». A palavra-passe fica
   logo guardada («Não confirmada») para não se perder e é confirmada quando o formulário é enviado com sucesso. Nunca
   na janela privada.
+- **Preencher moradas, cartões, IBAN, NIF/CPF, documentos e viagens** (C6): num formulário de morada aparece a lista
+  das suas informações de contacto (Portugal e Brasil: código postal/CEP, bairro, distrito/estado, país em listas…);
+  num formulário de pagamento, os cartões (nunca o código de segurança: o CVC fica vazio e com o cursor); num campo de
+  NIF/CPF, os seus números fiscais. Cartões, IBAN e documentos só em ligações seguras e com o Windows Hello. Passaporte,
+  carta de condução/CNH, Cartão de Cidadão/RG, matrícula/placa e fidelidade: pelo menu de contexto do campo,
+  «Preencher com… ›», que também deixa usar uma palavra-passe de outro site (com confirmação).
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

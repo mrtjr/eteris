@@ -20,7 +20,7 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE8D7;" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="2,1,10,0"
                                Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="Gerir palavras-passe…" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
+                    <TextBlock x:Name="ManageText" Text="Gerir palavras-passe…" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
             </Border>

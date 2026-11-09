@@ -227,15 +227,76 @@
     // O que se preenche no formulário escolhido: cada campo visível com tipo recebe o valor desse tipo, se o navegador o
     // mandou (uma palavra-passe guardada manda o utilizador e a atual; o gerador, a nova). Nunca o CVC nem um código de
     // uma utilização; nunca um campo sem tipo (escondido, tapado, fora do ecrã). Pares [índice, valor].
+    // Contactos e cartões (C6): o valor de cada campo no formato dele — nome completo, rua com o número quando o formulário
+    // não tem campo para ele, validade MM/AA ou MM/AAAA, mês e ano em listas, país e estado pelo nome ou pelo código, e só
+    // os algarismos num campo curto demais para o formato (CPF, CEP). metas[i]: {maxLength, placeholder, options, filled};
+    // opts.keep: os campos que o utilizador já escreveu ficam como estão (menos o campo onde escolheu, opts.anchor).
     const NEVER_FILL = new Set(['cc-csc', 'one-time-code']);
-    function fillPlan(kinds, visible, values) {
+    function fillPlan(kinds, visible, values, metas, opts) {
       const plan = [];
+      const seen = kinds.filter((k, i) => visible[i] && k);
       kinds.forEach((kind, i) => {
         if (!visible[i] || !kind || NEVER_FILL.has(kind)) return;
-        const v = values && Object.prototype.hasOwnProperty.call(values, kind) ? values[kind] : null;
+        const meta = (metas && metas[i]) || {};
+        if (opts && opts.keep && meta.filled && i !== opts.anchor) return;
+        const v = valueFor(kind, values || {}, seen, meta);
         if (typeof v === 'string' && v !== '') plan.push([i, v]);
       });
       return plan;
+    }
+
+    function valueFor(kind, values, kinds, meta) {
+      const has = k => Object.prototype.hasOwnProperty.call(values, k) && typeof values[k] === 'string' && values[k] !== '';
+      let v = has(kind) ? values[kind] : null;
+      if (kind === 'name' && !v && (has('given-name') || has('family-name')))
+        v = [values['given-name'], values['family-name']].filter(Boolean).join(' ');
+      if (kind === 'street-address' && v && has('address-number') && !kinds.includes('address-number')) v = v + ', ' + values['address-number'];
+      if (kind === 'cc-exp' && has('cc-exp-month') && has('cc-exp-year')) v = expiry(values['cc-exp-month'], values['cc-exp-year'], meta);
+      if (kind === 'cc-exp-year' && v && meta.maxLength === 2) v = v.slice(-2);
+      if (!v) return null;
+      if (meta.options) return pickOption(meta.options, [v, values[kind + ':alt']]);
+      return fit(v, meta);
+    }
+
+    // MM/AA por omissão; MM/AAAA num campo que o pede (placeholder ou comprimento); MMAA num campo de 4.
+    function expiry(month, year, meta) {
+      const m = String(month).padStart(2, '0'), y = String(year);
+      if (meta.maxLength === 4) return m + y.slice(-2);
+      const long = meta.maxLength >= 7 || /(aaaa|yyyy)/i.test(String(meta.placeholder || ''));
+      return m + '/' + (long ? y : y.slice(-2));
+    }
+
+    function fit(v, meta) {
+      if (meta.maxLength > 0 && v.length > meta.maxLength) {
+        const plain = v.replace(/[^0-9A-Za-z]/g, '');
+        if (plain.length <= meta.maxLength) return plain;
+      }
+      return v;
+    }
+
+    // A opção de uma lista: pelo valor ou pelo texto (sem acentos nem maiúsculas), ou o mesmo número (08 = 8, 2029 = 29).
+    function pickOption(options, wanted) {
+      for (const w of wanted) {
+        if (typeof w !== 'string' || w === '') continue;
+        const nw = norm(w);
+        const exact = options.find(o => norm(o.value) === nw || norm(o.text) === nw);
+        if (exact) return exact.value;
+        if (/^\d+$/.test(w)) {
+          const n = Number(w);
+          const num = options.find(o => (/^\d+$/.test(String(o.value)) && Number(o.value) === n) || (/^\d{4}$/.test(w) && String(o.value) === w.slice(-2)));
+          if (num) return num.value;
+        }
+      }
+      return null;
+    }
+
+    // Depois de preencher um cartão, o foco vai para o código de segurança (vazio); de resto, volta ao campo escolhido.
+    function focusAfter(kinds, visible, values, anchor) {
+      if (values && typeof values['cc-number'] === 'string') {
+        const csc = kinds.findIndex((k, i) => k === 'cc-csc' && visible[i]);
+        if (csc >= 0) return csc;
+      }
+      return anchor;
     }
 
     // <preencher>
@@ -265,7 +326,7 @@
 
     return Object.freeze({
       version: 1, KINDS, norm, textOf, classifyField, classifyForm, isVisible, debounce, touchesFields, USERLIKE, TEXTUAL,
-      fillPlan, fillField, focusBack, submission, constraints,
+      fillPlan, fillField, focusBack, submission, constraints, fit, focusAfter,
     });
   })();
 
@@ -658,16 +719,25 @@
     const anchor = nodeOf(arg.field);
     if (!owner || !anchor || !anchor.isConnected || ownerOf(anchor) !== owner) return 0;
     const info = formInfo(anchor, true);
+    const at = info.fields.indexOf(anchor);
+    const metas = info.fields.map(f => ({
+      maxLength: f.nodeName === 'SELECT' ? 0 : Math.max(0, Number(f.maxLength) || 0),
+      placeholder: f.getAttribute('placeholder') || '',
+      filled: f.nodeName !== 'SELECT' && String(f.value || '') !== '',
+      options: f.nodeName === 'SELECT' ? Array.from(f.options).slice(0, 400).map(o => ({ value: o.value, text: o.text })) : null,
+    }));
+    const visible = info.kinds.map(() => true);
     // value: só o campo escolhido (menu de contexto: documento, viagem, palavra-passe gerada num campo qualquer).
     const plan = typeof arg.value === 'string'
-      ? (arg.value !== '' ? [[info.fields.indexOf(anchor), arg.value]] : [])
-      : Classifier.fillPlan(info.kinds, info.kinds.map(() => true), arg.values || {});
+      ? (arg.value !== '' ? [[at, Classifier.fit(arg.value, metas[at])]] : [])
+      : Classifier.fillPlan(info.kinds, visible, arg.values || {}, metas, { keep: arg.keep === true, anchor: at });
     if (!plan.length) return 0;
     let count = 0;
     filling = true;
     try {
       for (const [i, value] of plan) if (Classifier.fillField(info.fields[i], value)) count++;
-      Classifier.focusBack(anchor);
+      const next = typeof arg.value === 'string' ? at : Classifier.focusAfter(info.kinds, visible, arg.values || {}, at);
+      Classifier.focusBack(info.fields[next] || anchor);
     } finally {
       filling = false;
       quietUntil = performance.now() + 150;

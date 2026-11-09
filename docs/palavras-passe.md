@@ -1,9 +1,9 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o bloco C até ao C5 (na página: canal,
-classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador) feitos no ramo `sync`,
-por publicar** (o resto do bloco C — preencher contactos, pagamentos, documentos e viagens, janelas privadas — e os
-blocos D e E do desenho estão por fazer). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o bloco C até ao C6 (na página: canal,
+classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador, preencher contactos,
+pagamentos, documentos e viagens) feitos no ramo `sync`, por publicar** (o C7 — janelas privadas — e os blocos D e E do
+desenho estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -586,8 +586,8 @@ no computador; teclas e cliques reais; a página regista as teclas que lhe chega
    nada se preenche; a aceitar, preenche.
 
 Por fazer neste bloco: ícones da cache de favicons na lista (por agora só a inicial), a «última utilização» (`used`) ao
-preencher, a confirmação com os dois nomes quando se escolhe à mão noutro site (o texto existe; o menu de contexto é do
-C6).
+preencher (feita no C7). A confirmação com os dois nomes quando se escolhe à mão noutro site chegou com o menu de
+contexto (C6).
 
 ## C4. Guardar, atualizar e «Nunca neste site»
 
@@ -697,3 +697,73 @@ criação de conta em `127.0.0.1:8901` com `minlength=12`, `maxlength=16` e `pat
 4. Enviar (navega): no cofre, a mesma palavra-passe com o e-mail do formulário e `gerada=False`.
 5. Shift+F10 na palavra-passe nova: «Gerar palavra-passe forte» no menu (`4-menu.png`); escolhida, preenche os dois
    campos e fica por confirmar (sem envio).
+
+## C6. Preencher contactos, pagamentos, documentos e viagens
+
+`Vault/AutofillFill.cs` (`AutofillPolicy`, `AutofillValues`, `AutofillRows`, decisões puras), `Vault/Scripts/cofre.js`
+(`fillPlan` com os formatos de cada campo, `fit`, `focusAfter`), `Infrastructure/DarkMenu.cs` (submenus),
+`Theme/Theme.xaml` (`DarkSubmenuItem`), `Browser/PageMenu.cs`, `MainWindow.PageMenu.cs`, `MainWindow.Vault.cs`,
+`Vault/SuggestionList.xaml(.cs)` (título e rodapé por tipo).
+
+- **Quando aparece a lista** (`AutofillPolicy.ModeFor`): num campo de contacto (nome, apelido/sobrenome, empresa, rua,
+  número, complemento, bairro, cidade, distrito/estado, código postal/CEP, país, telefone, e-mail) de um formulário de
+  **morada** (ou de pagamento com morada) → «Informações de contacto»; num campo de cartão (número, titular, validade,
+  mês, ano) de um formulário de **pagamento** → cartões; num campo **IBAN** → IBAN; num campo de **NIF/CPF** (D-2) →
+  os números fiscais, em qualquer formulário. **Nunca no CVC.** Os outros documentos (passaporte, carta de
+  condução/CNH, Cartão de Cidadão/RG) e as viagens (matrícula/placa, fidelidade) **não se detetam sozinhos**: só pelo
+  menu de contexto. Cada secção de `eteris://autofill/` desligada («Preencher automaticamente…») não mostra a lista
+  dela. Um e-mail ou telefone solto (newsletter) não é uma morada. As linhas vêm dos metadados do cofre — os números
+  **não se decifram** para a lista: «Ana Teste · Avenida Inventada 1000, São Paulo», «Visa •••• 1111 · 08/29 ·
+  alcunha», «PT50 •••• 0154», «CPF •••• 4725 · Ana Teste»; rodapé «Gerir informações de contacto…», «Gerir
+  pagamentos…», «Gerir documentos…» (abre a secção certa de `eteris://autofill/`).
+- **Cartões, IBAN e documentos nunca em `http`** (o próprio computador conta como seguro): nem lista nem menu (no menu,
+  «Só em ligações seguras (https)»), e o preenchimento confirma outra vez. **Sempre com a reautenticação** (D-5: «Pedir
+  o Windows Hello ao preencher pagamentos», ligado por omissão; cartões e IBAN pedem `FillPayment`, documentos
+  `FillDocument`), com a janela de graça e cancelada se a aba sair da frente; recusada, nada se preenche.
+- **Preencher** (`FillItemAsync`): a aba à vista na janela ativa e o mesmo documento (confirmados antes e depois da
+  reautenticação); o item decifra-se agora; os valores por tipo de campo (`AutofillValues`: nunca o código de
+  segurança) vão para `__cofre.fill` no contexto do documento e o dicionário esvazia-se. No script, **só o formulário
+  do campo escolhido**, cada campo no formato dele: nome completo num só campo; a rua com o número quando o formulário
+  não tem campo para ele; validade MM/AA, MM/AAAA (pelo `placeholder` ou comprimento) ou MMAA; mês e ano em listas
+  (`08` = `8`, `2029` = `29`); país e estado em listas pelo nome ou pelo código; num campo curto demais para o formato,
+  só os algarismos (CPF de 11, CEP de 8, NIF de 9). Os campos que o utilizador já escreveu ficam como estão (menos o
+  campo onde escolheu). Depois de um cartão, **o CVC fica vazio e com o foco**; de resto, o foco volta ao campo.
+- **Menu de contexto num campo** (qualquer campo de uma página onde o cofre está, também na janela privada):
+  **«Preencher com… ›»** com «Palavra-passe ›», «Contacto ›», «Cartão ›» (cartões e IBAN), «Documento ›» e «Viagem ›»
+  (submenus novos do menu escuro: → ou Enter abrem, ← ou Esc voltam; cada um só abre o cofre quando é aberto). Num
+  campo do tipo da categoria preenche o formulário inteiro como a lista; noutro campo (o passaporte num campo
+  «Passaporte», a matrícula num campo «Matrícula»), **só esse campo** com o valor principal do item (número do
+  documento, matrícula/placa ou VIN, número de fidelidade). Em «Palavra-passe ›», as deste site primeiro e, por baixo,
+  até 15 de **outros sites**: escolher uma pede a confirmação com os dois nomes («Esta palavra-passe é de *a*. Usar em
+  *b*?»), a defesa contra domínios parecidos que faltava do C3.
+
+Testes: `Vault/AutofillFillTests` (quando aparece cada lista, por tipo de campo e de formulário: nunca no CVC, NIF/CPF
+sozinho, documentos e viagens só pelo menu; os interruptores das secções; cartões, IBAN e documentos nunca em `http`,
+com o próprio computador seguro; a reautenticação de cada categoria, ligada por omissão; os valores de um contacto do
+Brasil, de um cartão (nunca o código de segurança) e do NIF/CPF formatado; o valor principal de cada item para um só
+campo; as linhas mascaradas; «Preencher com…» no menu de contexto, também na janela privada; no Node: a morada com o
+nome completo e a rua com ou sem o número, o cartão no formato de cada campo e nunca o CVC, o foco no CVC, as listas de
+país e estado, os algarismos num campo curto, os campos já escritos ficam), `PageMenuTests`, `VaultChannelGuardTests` (o
+script continua sem escrever na página fora do preenchimento).
+
+Prova ao vivo (`pp\vivo\c6.ps1`, `pp\vivo\c6\registo.txt` e capturas; perfil de teste com 2 contactos, um cartão de
+teste 4111 1111 1111 1111, um IBAN, CPF, NIF, passaporte, um veículo e um programa de fidelidade, todos inventados e
+criados pelo `VaultService` real; páginas locais em `127.0.0.1:8902`; Windows Hello falso por `ETERIS_TEST_REAUTH`;
+teclas reais; listas e menus lidos e clicados por UI Automation; a página mostra o valor de cada campo e o foco):
+
+1. Morada do Brasil: o foco no nome mostra os dois contactos (`1-contactos.png`); «Ana Teste» preenche nome,
+   sobrenome, CEP, endereço, número, complemento, bairro, cidade, estado (lista: SP) e telefone; o CPF fica vazio
+   (`2-morada-br.png`).
+2. CPF num campo de 11 algarismos: a lista dos números fiscais aparece sozinha; o CPF, com o Windows a aceitar, entra
+   só com os algarismos.
+3. Morada de Portugal: nome completo num campo, «Rua Inventada, 12» (sem campo para o número), código postal,
+   localidade, país (lista: PT); Tab até ao NIF → «NIF •••• 6789» → 123456789 (`3-morada-pt.png`).
+4. Cartão: a lista «Visa •••• 1111 · 08/29 · Cartão de teste» (`4-cartoes.png`); ↓ Enter com o Windows a aceitar →
+   número, titular e validade 08/29; o CVV vazio e com o foco (`5-cartao.png`).
+5. Check-in: o foco no passaporte não mostra lista nenhuma; Shift+F10 › «Preencher com…» › «Documento» ›
+   «Passaporte •••• 4567 · Ana Teste» (`6-menu-documento.png`) → P1234567 só nesse campo; na matrícula, › «Viagem» ›
+   o veículo (`7-menu-viagem.png`) → AA-00-AA.
+6. Com o Windows a recusar, escolher o cartão não preenche nada.
+
+Não provado ao vivo: a recusa em `http` fora do próprio computador (as páginas de teste só podem estar em `127.0.0.1`,
+que conta como seguro); fica nos testes.

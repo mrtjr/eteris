@@ -7,6 +7,7 @@ using CefSharp;
 using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Tabs;
 using Eteris.Browser.Vault;
 
@@ -126,8 +127,9 @@ public partial class MainWindow
 
     // ---- Sugestões, teclado e preencher palavras-passe (docs/palavras-passe.md, C3) ----
 
-    // O que a lista mostra para o campo: palavras-passe guardadas (C3) ou o gerador (C5).
-    private enum VaultListMode { Logins, Generate }
+    // O que a lista mostra para o campo: palavras-passe guardadas (C3), o gerador (C5), contactos, cartões, IBAN ou o
+    // número fiscal (C6).
+    private enum VaultListMode { Logins, Generate, Contacts, Cards, Ibans, TaxIds }
 
     // O campo com o foco numa página (o último «focus» do script): a aba, o documento e o que o script disse do campo.
     // Generated: a palavra-passe que o gerador propõe (só na memória, até ser aceite ou o foco sair).
@@ -220,6 +222,21 @@ public partial class MainWindow
             HookVaultList();
             return;
         }
+        // Contacto, cartão, IBAN, NIF/CPF (C6): a lista dos guardados (cartões, IBAN e documentos nunca em http).
+        var autofill = AutofillPolicy.ModeFor(kind, message.FormKind, AutofillOn);
+        if (autofill != AutofillMode.None)
+        {
+            if (!AutofillPolicy.AllowedOn(AutofillPolicy.CategoryOf(autofill), context.Origin)) return;
+            IReadOnlyList<SuggestionRow> items;
+            try { items = AutofillRowsFor(autofill); }
+            catch (Exception) { return; }
+            if (items.Count == 0) return;
+            _vaultFocus = new VaultFocus(tab, context, field, form, kind, message.FormKind, rect) { Mode = ListModeOf(autofill), Rows = items };
+            HookVaultList();
+            _vaultCanOpen = true;
+            ShowVaultList(selected: -1);
+            return;
+        }
         if (!VaultFillPolicy.OffersLogins(kind, message.FormKind)) return;
         IReadOnlyList<LoginEntry> logins;
         try { logins = VaultService.Profile.LoginsFor(context.Origin); }
@@ -281,13 +298,28 @@ public partial class MainWindow
             _vaultList.ManageRequested += () =>
             {
                 CloseVaultList();
-                OpenVaultPage("eteris://passwords/");
+                OpenVaultPage(_vaultFocus is { } shown ? AutofillPolicy.ManageUrl(CategoryOf(shown.Mode)) : "eteris://passwords/");
             };
             AddToOverlay(_vaultList);
         }
         HookVaultList();
         var wasOpen = _vaultListOpen;
-        _vaultList.Heading = focus.Mode == VaultListMode.Generate ? "Palavra-passe forte" : "Palavras-passe guardadas";
+        _vaultList.Heading = focus.Mode switch
+        {
+            VaultListMode.Generate => "Palavra-passe forte",
+            VaultListMode.Contacts => "Informações de contacto",
+            VaultListMode.Cards => "Cartões guardados",
+            VaultListMode.Ibans => "IBAN guardados",
+            VaultListMode.TaxIds => "Documentos de identificação",
+            _ => "Palavras-passe guardadas",
+        };
+        _vaultList.Footer = focus.Mode switch
+        {
+            VaultListMode.Contacts => "Gerir informações de contacto…",
+            VaultListMode.Cards or VaultListMode.Ibans => "Gerir pagamentos…",
+            VaultListMode.TaxIds => "Gerir documentos…",
+            _ => "Gerir palavras-passe…",
+        };
         _vaultList.Show(focus.Rows, selected);
         _vaultList.Visibility = Visibility.Visible;
         if (!wasOpen) _vaultShownAt = DateTime.UtcNow;
@@ -387,8 +419,198 @@ public partial class MainWindow
     {
         if (_vaultFocus is not { } focus || _vaultList?.SelectedRow is not { } row) return;
         CloseVaultList();
-        if (focus.Mode == VaultListMode.Generate) _ = FillGeneratedAsync(focus, onlyThisField: false);
-        else _ = FillVaultLoginAsync(focus, row);
+        switch (focus.Mode)
+        {
+            case VaultListMode.Generate:
+                _ = FillGeneratedAsync(focus, onlyThisField: false);
+                break;
+            case VaultListMode.Logins:
+                _ = FillVaultLoginAsync(focus, row);
+                break;
+            default:
+                _ = FillItemAsync(focus.Tab, focus.Context, focus.Field, focus.Form, focus.Kind, CategoryOf(focus.Mode), row.Id);
+                break;
+        }
+    }
+
+    // ---- Contactos, pagamentos, documentos e viagens (docs/palavras-passe.md, C6) ----
+
+    private AutofillSwitches AutofillOn
+        => new(Data.Settings.Current.AutofillContacts, Data.Settings.Current.AutofillPayments, Data.Settings.Current.AutofillDocuments);
+
+    private static VaultListMode ListModeOf(AutofillMode mode) => mode switch
+    {
+        AutofillMode.Contacts => VaultListMode.Contacts,
+        AutofillMode.Cards => VaultListMode.Cards,
+        AutofillMode.Ibans => VaultListMode.Ibans,
+        _ => VaultListMode.TaxIds,
+    };
+
+    private static FillCategory CategoryOf(VaultListMode mode) => mode switch
+    {
+        VaultListMode.Contacts => FillCategory.Contact,
+        VaultListMode.Cards => FillCategory.Card,
+        VaultListMode.Ibans => FillCategory.Iban,
+        VaultListMode.TaxIds => FillCategory.Document,
+        _ => FillCategory.Login,
+    };
+
+    // As linhas pelos metadados do cofre (os números não se decifram para a lista).
+    private static IReadOnlyList<SuggestionRow> AutofillRowsFor(AutofillMode mode)
+    {
+        var vault = VaultService.Profile;
+        IEnumerable<VaultEntry> entries = mode switch
+        {
+            AutofillMode.Contacts => vault.List(VaultCollection.Contacts),
+            AutofillMode.Cards => vault.List(VaultCollection.Cards),
+            AutofillMode.Ibans => vault.List(VaultCollection.Ibans),
+            _ => vault.List(VaultCollection.IdDocs).Where(d => d.Meta["type"]?.GetValue<string>() == IdDocItem.TypeCode(IdDocType.TaxId)),
+        };
+        return entries.Select(AutofillRows.FromEntry).OfType<SuggestionRow>().ToList();
+    }
+
+    private static IReadOnlyList<SuggestionRow> RowsOf(VaultCollection collection)
+        => VaultService.Profile.List(collection).Select(AutofillRows.FromEntry).OfType<SuggestionRow>().ToList();
+
+    // Preencher um contacto, cartão, IBAN, documento ou viagem (lista ou menu de contexto): a aba à vista na janela ativa
+    // e o mesmo documento; cartões, IBAN e documentos nunca em http e com a reautenticação (D-5, «Pedir o Windows Hello ao
+    // preencher pagamentos», ligado por omissão); o item decifra-se agora. Num campo do tipo da categoria, o formulário
+    // inteiro desse campo (os campos que o utilizador já escreveu ficam; o CVC fica vazio e com o foco); noutro campo
+    // (menu de contexto), só esse campo com o valor principal.
+    private async Task FillItemAsync(BrowserTab tab, VaultContext context, string field, string form, string? kind, FillCategory category, string id)
+    {
+        if (VaultChannelOf(tab) is not { } channel) return;
+        bool Allowed() => VaultFillPolicy.CanFill(new VaultFillPolicy.FillCheck(IsTabOnScreen(tab), IsActive || _overlay?.IsActive == true,
+            channel.IsCurrent(context), context.Origin, context.Origin)) == FillVerdict.Allowed;
+        if (!Allowed()) return;
+        if (!AutofillPolicy.AllowedOn(category, context.Origin))
+        {
+            ShowToast("Cartões, IBAN e documentos só se preenchem em ligações seguras (https).");
+            return;
+        }
+        if (AutofillPolicy.Reauth(category) is { } purpose
+            && ReauthPolicy.Needs(purpose, Data.Settings.Current.PasswordAskHello, Data.Settings.Current.PaymentsAskHello)
+            && !await ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken()))
+            return;
+        if (!Allowed()) return;
+        object? item;
+        try
+        {
+            var vault = VaultService.Profile;
+            item = category switch
+            {
+                FillCategory.Contact => vault.GetContact(id),
+                FillCategory.Card => vault.GetCard(id),
+                FillCategory.Iban => vault.GetIban(id),
+                FillCategory.Document => vault.GetIdDoc(id),
+                _ => vault.GetTravel(id),
+            };
+        }
+        catch (Exception) { return; }
+        if (item is null) return;
+        Dictionary<string, string>? values = AutofillPolicy.FillsForm(category, kind) ? item switch
+        {
+            ContactItem c => AutofillValues.Contact(c),
+            CardItem c => AutofillValues.Card(c),
+            IbanItem i => AutofillValues.Iban(i),
+            IdDocItem { Type: IdDocType.TaxId } d => AutofillValues.TaxId(d),
+            _ => null,
+        } : null;
+        object argument = values is not null
+            ? new { field, form, values, keep = category is FillCategory.Contact or FillCategory.Card }
+            : new { field, form, value = AutofillValues.Single(item) };
+        var result = await channel.CallAsync(context, "fill", argument);
+        values?.Clear();
+        if (!result.Success || result.Result is not double filled || filled < 1)
+            ShowToast("Não foi possível preencher este campo.");
+    }
+
+    // «Preencher com… ›» no menu de contexto de um campo: palavra-passe, contacto, cartão (e IBAN), documento, viagem. Cada
+    // submenu só abre o cofre quando é aberto.
+    private void AddFillWithMenu(DarkMenu menu, VaultContextField f)
+    {
+        var origin = f.Context.Origin;
+        var kind = f.Message.Kind;
+        void Rows(DarkMenu sub, VaultCollection collection, FillCategory category)
+        {
+            foreach (var row in RowsOf(collection))
+            {
+                var id = row.Id;
+                sub.Item(row.Glyph ?? string.Empty, row.Detail.Length > 0 ? $"{row.Title} · {row.Detail}" : row.Title,
+                    () => _ = FillItemAsync(f.Tab, f.Context, f.Message.Field!, f.Message.Form!, kind, category, id));
+            }
+        }
+        void Secure(DarkMenu sub, Action<DarkMenu> fill)
+        {
+            if (AutofillPolicy.AllowedOn(FillCategory.Card, origin)) fill(sub);
+            else sub.Item("\uE72E", "Só em ligações seguras (https)", () => { }, enabled: false);
+        }
+        menu.Submenu("\uE8D7", "Palavra-passe", sub => FillWithLogins(sub, f));
+        menu.Submenu("\uE77B", "Contacto", sub => Rows(sub, VaultCollection.Contacts, FillCategory.Contact));
+        menu.Submenu("\uE8C7", "Cartão", sub => Secure(sub, s =>
+        {
+            Rows(s, VaultCollection.Cards, FillCategory.Card);
+            Rows(s, VaultCollection.Ibans, FillCategory.Iban);
+        }));
+        menu.Submenu("\uE779", "Documento", sub => Secure(sub, s => Rows(s, VaultCollection.IdDocs, FillCategory.Document)));
+        menu.Submenu("\uE804", "Viagem", sub => Rows(sub, VaultCollection.Travel, FillCategory.Travel));
+    }
+
+    // As palavras-passe deste site primeiro; as de outros sites (até 15) pedem confirmação com os dois nomes.
+    private void FillWithLogins(DarkMenu sub, VaultContextField f)
+    {
+        var vault = VaultService.Profile;
+        var origin = f.Context.Origin;
+        var mine = vault.LoginsFor(origin);
+        foreach (var login in mine)
+        {
+            var id = login.Id;
+            sub.Item("", $"{(login.Username.Length > 0 ? login.Username : VaultFillPolicy.NoUsername)} · {Origins.DisplayHost(login.Origin)}",
+                () => _ = FillLoginFromMenuAsync(f, id, otherSite: false));
+        }
+        var others = vault.Logins()
+            .Where(l => !Origins.IsAndroid(l.Origin) && Origins.Match(l.Origin, origin) == OriginMatch.None)
+            .OrderBy(l => Origins.DisplayHost(l.Origin), StringComparer.CurrentCulture).Take(15).ToList();
+        if (others.Count == 0) return;
+        if (mine.Count > 0) sub.Separator();
+        sub.Item("", "De outros sites (pede confirmação):", () => { }, enabled: false);
+        foreach (var login in others)
+        {
+            var id = login.Id;
+            sub.Item("", $"{(login.Username.Length > 0 ? login.Username : VaultFillPolicy.NoUsername)} · {Origins.DisplayHost(login.Origin)}",
+                () => _ = FillLoginFromMenuAsync(f, id, otherSite: true));
+        }
+    }
+
+    private async Task FillLoginFromMenuAsync(VaultContextField f, string id, bool otherSite)
+    {
+        if (VaultChannelOf(f.Tab) is not { } channel || f.Message is not { Field: { } field, Form: { } form }) return;
+        LoginItem? login;
+        try { login = VaultService.Profile.GetLogin(id); }
+        catch (Exception) { return; }
+        if (login is null) return;
+        var saved = login.Origin;
+        if (otherSite)
+        {
+            if (MessageBox.Show(this, VaultFillPolicy.OtherSiteQuestion(login.Origin, f.Context.Origin), "Usar noutro site?",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            saved = f.Context.Origin;
+        }
+        bool Allowed() => VaultFillPolicy.CanFill(new VaultFillPolicy.FillCheck(IsTabOnScreen(f.Tab), IsActive || _overlay?.IsActive == true,
+            channel.IsCurrent(f.Context), saved, f.Context.Origin)) == FillVerdict.Allowed;
+        if (!Allowed()) return;
+        if (VaultFillPolicy.NeedsReauth(Data.Settings.Current.PasswordAskHello)
+            && !await ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, ReauthPurpose.FillPassword, VaultFrontToken()))
+            return;
+        if (!Allowed()) return;
+        var values = new Dictionary<string, string> { ["username"] = login.Username, ["password"] = login.Password };
+        object argument = AutofillPolicy.FillsForm(FillCategory.Login, f.Message.Kind)
+            ? new { field, form, values }
+            : new { field, form, value = f.Message.Kind is "new-password" ? login.Password : login.Username };
+        var result = await channel.CallAsync(f.Context, "fill", argument);
+        values.Clear();
+        if (!result.Success || result.Result is not double filled || filled < 1)
+            ShowToast("Não foi possível preencher este campo.");
     }
 
     // ---- O gerador (docs/palavras-passe.md, C5) ----

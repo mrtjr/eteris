@@ -6,7 +6,7 @@ public enum PageCommand
     OpenLinkNewTab, PreviewLink, OpenLinkSideBySide, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
     Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink, PlayInVideoEngine,
-    GeneratePassword,
+    GeneratePassword, FillWith,
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
@@ -57,9 +57,12 @@ public static class PageMenu
             items.Add(new(PageCommand.Paste, "", "Colar", "Ctrl+V"));
             items.Add(new(PageCommand.SelectAll, "", "Selecionar tudo", "Ctrl+A"));
             items.Add(null);
-            if (ctx.Vault is { IsPassword: true, CanGenerate: true })
+            // O cofre (C5, C6): «Preencher com… ›» (palavra-passe, contacto, cartão, documento, viagem) em qualquer campo de
+            // uma página onde o script do cofre está; «Gerar palavra-passe forte» num campo de palavra-passe.
+            if (ctx.Vault is { } vault)
             {
-                items.Add(new(PageCommand.GeneratePassword, "\uE8D7", "Gerar palavra-passe forte"));
+                items.Add(new(PageCommand.FillWith, "\uE8D7", "Preencher com…"));
+                if (vault is { IsPassword: true, CanGenerate: true }) items.Add(new(PageCommand.GeneratePassword, "\uE8D7", "Gerar palavra-passe forte"));
                 items.Add(null);
             }
         }

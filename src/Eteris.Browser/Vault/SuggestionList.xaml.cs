@@ -34,6 +34,17 @@ public partial class SuggestionList : UserControl
 
     public int Selected { get; private set; } = -1;
 
+    // O rodapé («Gerir palavras-passe…», «Gerir pagamentos…»…).
+    public string Footer
+    {
+        get => ManageText.Text;
+        set
+        {
+            ManageText.Text = value;
+            AutomationProperties.SetName(Manage, value.TrimEnd('…'));
+        }
+    }
+
     // O nome da lista para o leitor de ecrã («Palavras-passe guardadas», «Palavra-passe forte»…).
     public string Heading
     {
