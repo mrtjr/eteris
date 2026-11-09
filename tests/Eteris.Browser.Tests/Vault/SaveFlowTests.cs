@@ -202,6 +202,21 @@ public class SaveFlowTests
         Assert.Equal("ana@exemplo.test", offer.Username);
     }
 
+    // Revisão: uma gerada que já tem utilizador (gerada para uma conta que existe) confirma-se sem perguntar só com esse
+    // utilizador; outro, vindo do formulário, pergunta na bolha (nunca muda o utilizador em silêncio).
+    [Fact]
+    public void GeneratedPassword_WithAnotherUsernameInTheForm_IsAskedNotConfirmedSilently()
+    {
+        var same = SavePolicy.Decide(Candidate("change", user: "ana@exemplo.test", password: null, newPassword: "Gerada-Xk7aQ9"), false,
+            [Stored("ana@exemplo.test", "Gerada-Xk7aQ9", generated: true, id: "g1")]);
+        Assert.Equal(SaveOfferKind.ConfirmGenerated, same.Kind);
+        var other = SavePolicy.Decide(Candidate("change", user: "outra@exemplo.test", password: null, newPassword: "Gerada-Xk7aQ9"), false,
+            [Stored("ana@exemplo.test", "Gerada-Xk7aQ9", generated: true, id: "g1")]);
+        Assert.Equal(SaveOfferKind.Save, other.Kind);
+        Assert.Equal("outra@exemplo.test", other.Username);
+        Assert.Null(other.ExistingId);
+    }
+
     // O ícone de chave fica até à próxima navegação; a que trouxe a oferta (e um redirecionamento logo a seguir) não conta.
     [Fact]
     public void Offer_SurvivesOnlyTheNavigationsRightAfterIt()

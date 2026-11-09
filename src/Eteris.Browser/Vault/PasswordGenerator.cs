@@ -12,6 +12,8 @@ public sealed record PasswordRules(int? MinLength, int? MaxLength, string? Patte
 // subconjunto de pattern: uma sequência de classes ([…], \d, \w, ., letras) com quantificadores ({n}, {n,m}, {n,},
 // +, *, ?) gera-se peça a peça; outro padrão (lookaheads, grupos, alternativas) aceita a palavra-passe normal se ela o
 // cumprir. A palavra-passe inteira tem de cumprir o padrão, como no HTML; se não der, null (o gerador não se oferece).
+// O padrão vem da página: corre sem retrocesso (NonBacktracking, tempo linear) e, quando o padrão o exige (lookaheads),
+// com retrocesso mas com um limite de tempo para a geração inteira (Budget), para uma página não parar a interface.
 public static class PasswordGenerator
 {
     public const string Lower = "abcdefghijkmnpqrstuvwxyz";
@@ -22,7 +24,9 @@ public static class PasswordGenerator
     public const int MaxLength = 64;
 
     private const string All = Lower + Upper + Digits + Symbols;
-    private static readonly TimeSpan s_regexTimeout = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan s_regexTimeout = TimeSpan.FromMilliseconds(20);
+    // O tempo total que o padrão da página pode gastar numa geração (todas as tentativas juntas).
+    public static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(100);
 
     public static double EntropyBits(int length, int alphabet) => length * Math.Log2(alphabet);
 
@@ -35,19 +39,25 @@ public static class PasswordGenerator
         var target = Math.Clamp(DefaultLength, Math.Min(min ?? 1, hi), hi);
         if (string.IsNullOrEmpty(rules?.Pattern)) return Default(target);
 
-        Regex check;
-        try { check = new Regex("^(?:" + rules.Pattern + ")$", RegexOptions.CultureInvariant, s_regexTimeout); }
-        catch (ArgumentException) { return null; }
-        bool Fits(string pw) => pw.Length >= (min ?? 0) && pw.Length <= (max ?? int.MaxValue) && Matches(check, pw);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        if (Compile("^(?:" + rules.Pattern + ")$") is not { } check) return null;
+        var outOfTime = false;
+        bool Fits(string pw)
+        {
+            if (pw.Length < (min ?? 0) || pw.Length > (max ?? int.MaxValue)) return false;
+            if (clock.Elapsed > Budget) { outOfTime = true; return false; }
+            try { return check.IsMatch(pw); }
+            catch (RegexMatchTimeoutException) { outOfTime = clock.Elapsed > Budget; return false; }
+        }
 
         if (Atoms(rules.Pattern) is { } atoms)
         {
             if (atoms.All(a => a.Chars.Length == 1)) return null;
-            for (var attempt = 0; attempt < 50; attempt++)
+            for (var attempt = 0; attempt < 50 && !outOfTime; attempt++)
                 if (FromAtoms(atoms, target) is { } pw && Fits(pw)) return pw;
             return null;
         }
-        for (var attempt = 0; attempt < 100; attempt++)
+        for (var attempt = 0; attempt < 100 && !outOfTime; attempt++)
         {
             var pw = attempt < 50 ? Default(target) : Default(target, withSymbols: false);
             if (Fits(pw)) return pw;
@@ -55,10 +65,14 @@ public static class PasswordGenerator
         return null;
     }
 
-    private static bool Matches(Regex check, string pw)
+    // Sem retrocesso quando o padrão o permite; senão (lookaheads, referências), com retrocesso e prazo por tentativa.
+    private static Regex? Compile(string pattern)
     {
-        try { return check.IsMatch(pw); }
-        catch (RegexMatchTimeoutException) { return false; }
+        try { return new Regex(pattern, RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, s_regexTimeout); }
+        catch (NotSupportedException) { }
+        catch (ArgumentException) { return null; }
+        try { return new Regex(pattern, RegexOptions.CultureInvariant, s_regexTimeout); }
+        catch (ArgumentException) { return null; }
     }
 
     // Um de cada classe (com espaço para isso) e o resto do alfabeto inteiro, baralhado.

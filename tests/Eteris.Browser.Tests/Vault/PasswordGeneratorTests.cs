@@ -92,6 +92,19 @@ public class PasswordGeneratorTests
     public void Pattern_ThatCannotBeMet_GivesNothing(string pattern)
         => Assert.Null(PasswordGenerator.Generate(new PasswordRules(null, null, pattern)));
 
+    // Um padrão da página com retrocesso catastrófico não para a interface: o gerador não corre o padrão com retrocesso
+    // (NonBacktracking) e, quando o padrão o exige (lookaheads), tem um limite de tempo para a geração inteira.
+    [Theory]
+    [InlineData("(.+)+~", 32)]
+    [InlineData("(?=(.+)+~).*", 32)]
+    [InlineData(@"(?=(\w+)+~)[a-z]{20,}", 40)]
+    public void Pattern_WithCatastrophicBacktracking_GivesUpQuickly(string pattern, int min)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Null(PasswordGenerator.Generate(new PasswordRules(min, null, pattern)));
+        Assert.True(clock.ElapsedMilliseconds < 1500, $"{clock.ElapsedMilliseconds} ms");
+    }
+
     // ---- Quando se oferece e o que a lista mostra ----
 
     [Theory]

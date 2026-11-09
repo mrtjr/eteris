@@ -156,7 +156,7 @@ public partial class MainWindow : Window
             BirthSize = PageAreaPixels,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
-            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),
+            KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromPage(key, ctrl, shift, alt, tab), KeyUpFromPage),
             FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
@@ -708,7 +708,8 @@ public partial class MainWindow : Window
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
     // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página:
     // decide BrowserMenuKeys.FromPage (puro) e o trabalho vai para a thread da janela. Não se lê nada do WPF aqui.
-    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt)
+    // from: a aba de onde veio a tecla (null: um site fixado na barra lateral).
+    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt, BrowserTab? from = null)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
@@ -722,7 +723,7 @@ public partial class MainWindow : Window
         }
         // A lista de sugestões de palavras-passe aberta (ou ↓ num campo com sugestões): ↑ ↓ Enter Esc são dela e a
         // página nunca os vê (MainWindow.Vault.cs).
-        if (SuggestionKeyFromPage(key, ctrl, shift, alt) is { } listKey) return listKey;
+        if (SuggestionKeyFromPage(key, ctrl, shift, alt, from) is { } listKey) return listKey;
         if (shortcut is { } action)
         {
             Dispatcher.InvokeAsync(action);
@@ -744,6 +745,8 @@ public partial class MainWindow : Window
     private void OnPageFocused(BrowserTab tab)
     {
         CloseSuggestions();
+        // O foco passou para outra aba (a outra metade do ecrã dividido): o campo do cofre da anterior deixa de contar.
+        if (_vaultFocus is { } vault && !ReferenceEquals(vault.Tab, tab)) ForgetVaultFocus();
         if (IsSplit && !ReferenceEquals(Tabs.Active, tab) && _split!.PaneOf(tab) is not null) Tabs.Active = tab;
     }
 

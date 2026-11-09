@@ -171,9 +171,11 @@ public partial class MainWindow
             case VaultMessageType.Blur when IsVaultFocus(tab, context, message.Field):
                 ForgetVaultFocus();
                 break;
+            // O campo mexeu-se: a lista fecha em vez de o seguir (como no Chrome e no Firefox), para a página não a
+            // levar para debaixo do cursor; o ↓ volta a abri-la no sítio novo.
             case VaultMessageType.Scroll when IsVaultFocus(tab, context, message.Field):
                 if (message.Rect is { } rect) _vaultFocus = _vaultFocus! with { Rect = rect };
-                if (_vaultListOpen) PlaceVaultList();
+                CloseVaultList();
                 break;
             case VaultMessageType.Generate when IsVaultFocus(tab, context, message.Field):
                 OnVaultGenerate(message);
@@ -234,7 +236,8 @@ public partial class MainWindow
             _vaultFocus = new VaultFocus(tab, context, field, form, kind, message.FormKind, rect) { Mode = ListModeOf(autofill), Rows = items };
             HookVaultList();
             _vaultCanOpen = true;
-            ShowVaultList(selected: -1);
+            // Sem gesto (um campo.focus() da página), a lista só abre com ↓.
+            if (message.Gesture) ShowVaultList(selected: -1);
             return;
         }
         if (!VaultFillPolicy.OffersLogins(kind, message.FormKind)) return;
@@ -246,15 +249,21 @@ public partial class MainWindow
         _vaultFocus = new VaultFocus(tab, context, field, form, kind, message.FormKind, rect) { Logins = logins, Rows = rows };
         HookVaultList();
         _vaultCanOpen = rows.Count > 0;
-        if (rows.Count > 0 && Data.Settings.Current.PasswordSuggestions) ShowVaultList(selected: -1);
+        if (rows.Count > 0 && message.Gesture && Data.Settings.Current.PasswordSuggestions) ShowVaultList(selected: -1);
     }
 
-    // As restrições do campo chegaram: o gerador propõe uma palavra-passe que as cumpre (ou nada, se não der).
-    private void OnVaultGenerate(VaultMessage message)
+    // As restrições do campo chegaram: o gerador propõe uma palavra-passe que as cumpre (ou nada, se não der). O padrão
+    // vem da página: a geração corre fora da thread da interface (e tem um prazo total, PasswordGenerator.Budget).
+    private async void OnVaultGenerate(VaultMessage message)
     {
         if (_vaultFocus is not { Mode: VaultListMode.Generate } focus || !VaultWindowPolicy.Allows(VaultAction.Generate, IsPrivate)
             || !Data.Settings.Current.PasswordOffer) return;
-        if (PasswordGenerator.Generate(new PasswordRules(message.MinLength, message.MaxLength, message.Pattern)) is not { } password) return;
+        var rules = new PasswordRules(message.MinLength, message.MaxLength, message.Pattern);
+        string? password;
+        try { password = await Task.Run(() => PasswordGenerator.Generate(rules)); }
+        catch (Exception) { return; }
+        // O foco pode ter mudado enquanto se gerava.
+        if (password is null || !ReferenceEquals(_vaultFocus, focus)) return;
         _vaultFocus = focus with { Generated = password, Rows = [GeneratorPolicy.Row(password)] };
         _vaultCanOpen = true;
         if (Data.Settings.Current.PasswordSuggestions) ShowVaultList(selected: -1);
@@ -289,10 +298,11 @@ public partial class MainWindow
             };
             Grid.SetRowSpan(_vaultList, 3);
             Panel.SetZIndex(_vaultList, 90);
-            _vaultList.Chosen += index =>
+            _vaultList.Chosen += (index, pressedAt) =>
             {
-                // Um clique logo a seguir a a lista aparecer não conta (cliques roubados).
-                if (!VaultFillPolicy.AcceptsClick(DateTime.UtcNow - _vaultShownAt)) return;
+                // O botão do rato tem de ter descido nesta linha depois de a lista aparecer (ou mudar) há pelo menos o
+                // guarda: um clique logo a seguir não conta (cliques roubados).
+                if (!VaultFillPolicy.AcceptsClick(pressedAt - _vaultShownAt)) return;
                 _vaultList.Select(index);
                 AcceptVaultSuggestion();
             };
@@ -304,7 +314,6 @@ public partial class MainWindow
             AddToOverlay(_vaultList);
         }
         HookVaultList();
-        var wasOpen = _vaultListOpen;
         _vaultList.Heading = focus.Mode switch
         {
             VaultListMode.Generate => "Palavra-passe forte",
@@ -323,7 +332,8 @@ public partial class MainWindow
         };
         _vaultList.Show(focus.Rows, selected);
         _vaultList.Visibility = Visibility.Visible;
-        if (!wasOpen) _vaultShownAt = DateTime.UtcNow;
+        // O guarda contra cliques roubados recomeça sempre que a lista aparece ou muda de linhas.
+        _vaultShownAt = DateTime.UtcNow;
         _vaultListOpen = true;
         _vaultHasSelection = _vaultList.Selected >= 0;
         PlaceVaultList();
@@ -387,9 +397,11 @@ public partial class MainWindow
         return MaNoActivate;
     }
 
-    // Thread do CEF (ShortcutFromPage): as teclas da lista, decididas por VaultKeys (puro). null: não é do cofre.
-    private bool? SuggestionKeyFromPage(Key key, bool ctrl, bool shift, bool alt)
+    // Thread do CEF (ShortcutFromPage): as teclas da lista, decididas por VaultKeys (puro). null: não é do cofre. Só as
+    // teclas da própria aba do campo contam (from): as de um site fixado ou da outra metade do ecrã são de lá.
+    private bool? SuggestionKeyFromPage(Key key, bool ctrl, bool shift, bool alt, BrowserTab? from)
     {
+        if (from is null || Volatile.Read(ref _vaultFocus) is not { } focus || !ReferenceEquals(focus.Tab, from)) return null;
         var action = VaultKeys.FromPage(key, ctrl, shift, alt, _vaultListOpen, _vaultHasSelection, _vaultCanOpen);
         if (action == VaultKeyAction.None) return null;
         Dispatcher.InvokeAsync(() => HandleVaultKey(action));
@@ -578,7 +590,7 @@ public partial class MainWindow
                 () => _ = FillLoginFromMenuAsync(f, id, otherSite: false));
         }
         var others = vault.Logins()
-            .Where(l => !Origins.IsAndroid(l.Origin) && Origins.Match(l.Origin, origin) == OriginMatch.None)
+            .Where(l => VaultFillPolicy.OffersElsewhere(l.Origin, origin) && Origins.Match(l.Origin, origin) == OriginMatch.None)
             .OrderBy(l => Origins.DisplayHost(l.Origin), StringComparer.CurrentCulture).Take(15).ToList();
         if (others.Count == 0) return;
         if (mine.Count > 0) sub.Separator();
@@ -669,7 +681,8 @@ public partial class MainWindow
     private async Task GenerateFromMenuAsync(BrowserTab tab)
     {
         if (_vaultContextField is not { } f || !ReferenceEquals(f.Tab, tab) || f.Message is not { Field: { } field, Form: { } form } m) return;
-        if (PasswordGenerator.Generate(new PasswordRules(m.MinLength, m.MaxLength, m.Pattern)) is not { } password)
+        var rules = new PasswordRules(m.MinLength, m.MaxLength, m.Pattern);
+        if (await Task.Run(() => PasswordGenerator.Generate(rules)) is not { } password)
         {
             ShowToast("Este campo não aceita uma palavra-passe gerada.");
             return;

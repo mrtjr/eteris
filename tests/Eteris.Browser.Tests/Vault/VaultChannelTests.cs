@@ -32,6 +32,16 @@ public class VaultChannelTests
         Assert.Equal(new VaultRect(10.5, 20, 300, 32), message.Rect);
         Assert.True(message.Visible);
         Assert.Equal("ana", message.Prefix);
+        Assert.False(message.Gesture);
+    }
+
+    // Revisão: o foco diz se veio de um gesto do utilizador (só então a lista abre sozinha); só aceita true ou false.
+    [Fact]
+    public void Focus_SaysWhetherItCameFromAGesture()
+    {
+        Assert.True(VaultMessages.Parse("""{"t":"focus","field":"f3","form":"m1","kind":"username","rect":[1,2,3,4],"visible":true,"gesture":true}""")!.Gesture);
+        Assert.False(VaultMessages.Parse("""{"t":"focus","field":"f3","form":"m1","kind":"username","rect":[1,2,3,4],"visible":true,"gesture":false}""")!.Gesture);
+        Assert.Null(VaultMessages.Parse("""{"t":"focus","field":"f3","form":"m1","kind":"username","rect":[1,2,3,4],"visible":true,"gesture":"sim"}"""));
     }
 
     [Fact]

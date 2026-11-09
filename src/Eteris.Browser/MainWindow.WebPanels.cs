@@ -197,6 +197,8 @@ public partial class MainWindow
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.
         browser.FindHandler = NewFindHandler();
         browser.KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromWebPanel(browser, key, ctrl, shift, alt), KeyUpFromPage);
+        // O foco no painel: o campo do cofre da aba deixa de contar (as teclas da lista nunca vêm de um painel).
+        browser.FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(ForgetVaultFocus));
         // Ecrã inteiro pedido pelo site (um vídeo): não cabe na barra — sai e diz como o ver numa aba.
         browser.DisplayHandler = new FaviconHandler((_, _) => { }, fullscreen =>
         {

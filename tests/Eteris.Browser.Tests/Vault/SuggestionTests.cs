@@ -243,10 +243,26 @@ public class VaultFillPolicyTests
         Assert.Equal(FillVerdict.OtherSite, VaultFillPolicy.CanFill(ok with { PageOrigin = "http://exemplo.com" }));
     }
 
-    // Escolher à mão noutro domínio pede confirmação com os dois nomes (C6, menu de contexto).
+    // Escolher à mão noutro domínio pede confirmação com as duas origens completas (esquema e porta) (C6, menu de
+    // contexto); numa página http, com um aviso.
     [Fact]
-    public void OtherSite_ConfirmationNamesBoth()
-        => Assert.Equal("Esta palavra-passe é de github.com. Usar em g1thub.com?", VaultFillPolicy.OtherSiteQuestion("https://github.com", "https://g1thub.com"));
+    public void OtherSite_ConfirmationNamesBothOrigins()
+    {
+        Assert.Equal("Esta palavra-passe é de https://github.com. Usar em https://g1thub.com?", VaultFillPolicy.OtherSiteQuestion("https://github.com", "https://g1thub.com"));
+        var http = VaultFillPolicy.OtherSiteQuestion("http://velho.exemplo", "http://outro.exemplo:8080");
+        Assert.StartsWith("Esta palavra-passe é de http://velho.exemplo. Usar em http://outro.exemplo:8080?", http);
+        Assert.Contains("não é segura", http);
+    }
+
+    // Revisão: uma palavra-passe de https nunca vai para uma página http, nem escolhida à mão (desenho, secção 3.6).
+    [Theory]
+    [InlineData("https://banco.exemplo", "http://banco.exemplo", false)]
+    [InlineData("https://banco.exemplo", "https://outro.exemplo", true)]
+    [InlineData("http://velho.exemplo", "http://outro.exemplo", true)]
+    [InlineData("https://banco.exemplo", "http://localhost:3000", true)]
+    [InlineData("android://x@com.exemplo/", "https://outro.exemplo", false)]
+    public void OtherSite_NeverFromHttpsToHttp(string saved, string page, bool offered)
+        => Assert.Equal(offered, VaultFillPolicy.OffersElsewhere(saved, page));
 
     // Contra cliques roubados: um clique nos primeiros 300 ms da lista não conta.
     [Fact]

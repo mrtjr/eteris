@@ -27,6 +27,8 @@ public sealed record VaultMessage(VaultMessageType Type)
     public string? FormKind { get; init; }
     public VaultRect? Rect { get; init; }
     public bool Visible { get; init; }
+    // O foco veio de um gesto do utilizador (rato ou toque no campo, ou Tab): só então a lista abre sozinha.
+    public bool Gesture { get; init; }
     public string? Prefix { get; init; }
     public string? Username { get; init; }
     public string? Password { get; init; }
@@ -68,7 +70,7 @@ public static class VaultMessages
     private static readonly Dictionary<string, Shape> s_shapes = new(StringComparer.Ordinal)
     {
         ["ready"] = new(VaultMessageType.Ready, ["v"], []),
-        ["focus"] = new(VaultMessageType.Focus, ["field", "form", "kind", "rect", "visible"], ["formKind", "prefix"]),
+        ["focus"] = new(VaultMessageType.Focus, ["field", "form", "kind", "rect", "visible"], ["formKind", "prefix", "gesture"]),
         ["input"] = new(VaultMessageType.Input, ["field"], ["prefix"]),
         ["blur"] = new(VaultMessageType.Blur, ["field"], []),
         ["scroll"] = new(VaultMessageType.Scroll, ["field"], ["rect"]),
@@ -139,6 +141,10 @@ public static class VaultMessages
                 case "visible":
                     if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
                     message = message with { Visible = value.GetBoolean() };
+                    break;
+                case "gesture":
+                    if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
+                    message = message with { Gesture = value.GetBoolean() };
                     break;
                 case "prefix":
                     if (Text(value, MaxPrefix) is not { } prefix) return null;

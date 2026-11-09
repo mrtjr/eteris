@@ -13,6 +13,8 @@ public partial class SuggestionList : UserControl
 {
     private readonly List<(SuggestionRow Row, Border Element)> _rows = [];
     private Point? _lastMouse;
+    // A linha onde o botão do rato desceu e quando (UTC): só um clique que começa e acaba na mesma linha escolhe.
+    private (Border Element, DateTime At)? _pressed;
 
     public SuggestionList()
     {
@@ -27,8 +29,8 @@ public partial class SuggestionList : UserControl
         };
     }
 
-    // A linha escolhida com o rato (índice).
-    public event Action<int>? Chosen;
+    // A linha escolhida com o rato (índice) e quando o botão desceu nela (UTC).
+    public event Action<int, DateTime>? Chosen;
 
     public event Action? ManageRequested;
 
@@ -61,6 +63,7 @@ public partial class SuggestionList : UserControl
         // O primeiro movimento depois de aparecer só marca onde o cursor está (pode ser o WPF a avisar que a lista
         // apareceu por baixo dele).
         _lastMouse = null;
+        _pressed = null;
         Rows.Children.Clear();
         _rows.Clear();
         for (var i = 0; i < rows.Count; i++)
@@ -132,12 +135,18 @@ public partial class SuggestionList : UserControl
             if (!moved) return;
             Select(_rows.FindIndex(r => ReferenceEquals(r.Element, element)));
         };
-        element.MouseLeftButtonDown += (_, e) => e.Handled = true;
+        element.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            _pressed = (element, DateTime.UtcNow);
+        };
         element.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
+            if (_pressed is not { } pressed || !ReferenceEquals(pressed.Element, element)) return;
+            _pressed = null;
             var i = _rows.FindIndex(r => ReferenceEquals(r.Element, element));
-            if (i >= 0) Chosen?.Invoke(i);
+            if (i >= 0) Chosen?.Invoke(i, pressed.At);
         };
         return element;
     }

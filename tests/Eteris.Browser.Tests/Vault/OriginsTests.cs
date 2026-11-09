@@ -57,6 +57,40 @@ public class OriginsTests
         Assert.Equal(OriginMatch.Exact, Origins.Match("http://exemplo.com", "http://exemplo.com"));
     }
 
+    // Revisão: sem a lista de sufixos públicos nativa (o eteris_shields.dll em falta ou antigo), a aproximação do
+    // TrackerBlocker juntava alice.github.io e bob.github.io: o cofre falha fechado (só a origem exata).
+    [Fact]
+    public void Match_WithoutThePreciseList_IsExactOnly()
+    {
+        Assert.Equal(OriginMatch.None, Origins.Match("https://conta.exemplo.com", "https://www.exemplo.com", precisePsl: false));
+        Assert.Equal(OriginMatch.None, Origins.Match("https://alice.github.io", "https://bob.github.io", precisePsl: false));
+        Assert.Equal(OriginMatch.Exact, Origins.Match("https://conta.exemplo.com", "https://conta.exemplo.com", precisePsl: false));
+        Assert.Equal(OriginMatch.SameSite, Origins.Match("https://conta.exemplo.com", "https://www.exemplo.com", precisePsl: true));
+    }
+
+    // Como o Chromium (psl_matching_helper): nada de correspondência por domínio registável em google.com.
+    [Fact]
+    public void Match_GoogleComIsNeverSameSite()
+    {
+        Assert.Equal(OriginMatch.None, Origins.Match("https://accounts.google.com", "https://sites.google.com", precisePsl: true));
+        Assert.Equal(OriginMatch.Exact, Origins.Match("https://accounts.google.com", "https://accounts.google.com"));
+    }
+
+    // Revisão: o anfitrião em Unicode só quando não engana (letras latinas); um nome com letras de outros alfabetos (a
+    // «а» cirílica de pаypal.com) aparece em punycode, como na barra de endereço.
+    [Fact]
+    public void DisplayHost_ShowsPunycodeForLookalikes()
+    {
+        var idn = new System.Globalization.IdnMapping();
+        var lookalike = idn.GetAscii("p\u0430ypal.com");
+        Assert.StartsWith("xn--", lookalike);
+        Assert.Equal(lookalike, Origins.DisplayHost("https://" + lookalike));
+        Assert.Equal("bücher.example", Origins.DisplayHost("https://xn--bcher-kva.example"));
+        Assert.Equal("açores.pt", Origins.DisplayHost("https://" + idn.GetAscii("açores.pt")));
+        var greek = idn.GetAscii("\u03b1\u03b2\u03b3.example");
+        Assert.Equal(greek, Origins.DisplayHost("https://" + greek));
+    }
+
     // Cada um tem o seu site em github.io (sufixo público, secção PRIVATE da lista).
     [Fact]
     public void Match_PublicSuffixSubdomainsAreDifferentSites()

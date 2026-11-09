@@ -339,7 +339,70 @@ public class CofreClassifierTests
               v({ hit: false }), v({ width: 1, height: 1 })].join(''));
             """);
         if (output is null) return;
-        Assert.Equal("100000001000", output);
+        Assert.Equal("100000000000", output);
+    }
+
+    // Revisão: os campos que o utilizador não vê não contam (formulários escondidos). Opacidade efetiva quase 1, um tamanho
+    // realista (10×10), texto com cor e o iframe da mesma origem visível e opaco.
+    [Fact]
+    public void Visibility_HiddenFieldTricks()
+    {
+        var output = Run("""
+            const base = { width: 200, height: 30, display: 'block', visibility: 'visible', opacity: 1, inViewport: true, hit: true };
+            const v = d => C.isVisible(Object.assign({}, base, d)) ? 1 : 0;
+            print([v({ opacity: 0.95 }), v({ opacity: 0.85 }), v({ width: 9 }), v({ height: 9 }), v({ width: 10, height: 10 }),
+              v({ textVisible: false }), v({ textVisible: true }), v({ frameVisible: false }), v({ frameVisible: true })].join(''));
+            """);
+        if (output is null) return;
+        Assert.Equal("100010101", output);
+    }
+
+    // Tapado: o campo conta só se a maior parte dos pontos de amostra (centro e quatro pontos para dentro dos cantos) cair
+    // no próprio campo (ou num rótulo transparente por cima, como os rótulos flutuantes).
+    [Fact]
+    public void Covered_ByMostSamplePoints()
+    {
+        var output = Run("""
+            print([C.uncovered([true, true, true, true, true]), C.uncovered([true, true, true, false, false]),
+              C.uncovered([true, true, false, false, false]), C.uncovered([false, false, false, false, false]), C.uncovered([])].join(','));
+            """);
+        if (output is null) return;
+        Assert.Equal("true,true,false,false,false", output);
+    }
+
+    // A lista só abre sozinha com um gesto do utilizador: um botão do rato que desceu em cima do campo (ou do rótulo dele)
+    // ou a tecla Tab, há menos de um segundo. Um campo.focus() da página, um clique noutro sítio ou um gesto antigo não
+    // contam.
+    [Fact]
+    public void Gesture_OnlyATrustedPointerOnTheFieldOrTab_JustBefore()
+    {
+        var output = Run("""
+            const g = (last, now, onField) => C.gesture(last, now, onField) ? 1 : 0;
+            print([g(null, 100, true), g({ at: 50, pointer: true }, 100, true), g({ at: 50, pointer: true }, 100, false),
+              g({ at: 50, key: 'Tab' }, 100, false), g({ at: 50, key: 'Enter' }, 100, false), g({ at: 50, pointer: true }, 1200, true),
+              g({ at: 200, pointer: true }, 100, true)].join(''));
+            """);
+        if (output is null) return;
+        Assert.Equal("0101000", output);
+    }
+
+    // O que a página consegue fingir com eventos sintéticos não conta: o envio, o rolar e o escrever só valem com
+    // isTrusted (o Enter, o clique no botão e o clique num campo já o pediam).
+    [Theory]
+    [InlineData("onSubmit")]
+    [InlineData("onInput")]
+    [InlineData("onScroll")]
+    [InlineData("onEnter")]
+    [InlineData("onButton")]
+    [InlineData("onPointerDown")]
+    public void Handlers_IgnoreSyntheticEvents(string handler)
+    {
+        var source = VaultScripts.Source;
+        var start = source.IndexOf("const " + handler + " = ", StringComparison.Ordinal);
+        if (start < 0) start = source.IndexOf("function " + handler + "(", StringComparison.Ordinal);
+        Assert.True(start >= 0, handler);
+        var end = source.IndexOf("\n  }", start, StringComparison.Ordinal);
+        Assert.Contains("isTrusted", source[start..end]);
     }
 
     // O MutationObserver só reage a nós com campos e espera 250 ms sem mudanças.

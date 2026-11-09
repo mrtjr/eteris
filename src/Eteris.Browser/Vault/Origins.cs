@@ -51,14 +51,20 @@ public static class Origins
 
     // Exata → mesmo domínio registável (Public Suffix List, como o Chromium) → nunca entre domínios. http e https
     // separados; portas iguais; um IP só corresponde a si próprio; android:// nunca.
-    public static OriginMatch Match(string saved, string current)
+    public static OriginMatch Match(string saved, string current) => Match(saved, current, Shields.PublicSuffix.Precise);
+
+    // precisePsl: a lista de sufixos públicos é a nativa. Sem ela, só a origem exata (falha fechado: a aproximação juntava
+    // alice.github.io e bob.github.io). Nunca em google.com, como o Chromium (psl_matching_helper).
+    internal static OriginMatch Match(string saved, string current, bool precisePsl)
     {
         if (Normalize(saved) is not { } a || Normalize(current) is not { } b || IsAndroid(a) || IsAndroid(b)) return OriginMatch.None;
         if (a == b) return OriginMatch.Exact;
         Uri ua = new(a), ub = new(b);
         if (ua.Scheme != ub.Scheme || ua.Port != ub.Port) return OriginMatch.None;
         if (ua.HostNameType != UriHostNameType.Dns || ub.HostNameType != UriHostNameType.Dns) return OriginMatch.None;
+        if (!precisePsl) return OriginMatch.None;
         var site = Shields.PublicSuffix.RegistrableDomain(ua.Host);
+        if (site == "google.com") return OriginMatch.None;
         return site.Contains('.') && site == Shields.PublicSuffix.RegistrableDomain(ub.Host) ? OriginMatch.SameSite : OriginMatch.None;
     }
 
@@ -69,11 +75,19 @@ public static class Origins
     public static string? Host(string origin)
         => Normalize(origin) is { } normal && !IsAndroid(normal) ? new Uri(normal).Host : null;
 
-    // O anfitrião como o utilizador o lê (IDN em Unicode).
+    // O anfitrião como o utilizador o lê: em Unicode só quando tem só letras latinas que não se confundem (bücher,
+    // açores); com letras de outros alfabetos (a «а» cirílica de pаypal.com), em punycode, como na barra de endereço. Mais
+    // estrito do que as regras de IDN do Chromium, mas nunca mostra dois nomes iguais para sites diferentes.
     public static string? DisplayHost(string origin)
     {
         if (Host(origin) is not { } host) return null;
-        try { return new IdnMapping().GetUnicode(host); }
+        string unicode;
+        try { unicode = new IdnMapping().GetUnicode(host); }
         catch (ArgumentException) { return host; }
+        return unicode == host || unicode.All(SafeHostChar) ? unicode : host;
     }
+
+    // ASCII, ou latim acentuado (Latin-1 e Latin Extended-A), sem os que imitam letras simples (ı sem ponto, ĸ, ſ).
+    private static bool SafeHostChar(char c)
+        => c < 0x80 || (c >= 0xC0 && c <= 0x17F && c is not ('\u00D7' or '\u00F7' or '\u0131' or '\u0138' or '\u017F'));
 }

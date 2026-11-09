@@ -85,7 +85,12 @@ public static class SavePolicy
             var owner = c.Username.Length > 0 ? c.Username
                 : c.FormKind == "change" && sameOrigin.FirstOrDefault(s => !s.Generated && !string.IsNullOrEmpty(c.Password) && s.Password == c.Password) is { } account
                     ? account.Username : generated.Username;
-            return new(SaveOfferKind.ConfirmGenerated, c.Origin, owner, password, generated.Id);
+            // Já com um utilizador (gerada para uma conta que existe): sem perguntar, só com esse; o formulário com outro
+            // utilizador pergunta na bolha (nunca muda o utilizador em silêncio).
+            if (generated.Username.Length == 0 || owner == generated.Username)
+                return new(SaveOfferKind.ConfirmGenerated, c.Origin, owner, password, generated.Id);
+            // Decide-se como um envio normal, só com as confirmadas (a gerada fica «Não confirmada»).
+            sameOrigin = [.. sameOrigin.Where(s => !s.Generated)];
         }
 
         StoredLogin? existing;

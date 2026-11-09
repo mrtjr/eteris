@@ -58,9 +58,29 @@ public static class VaultFillPolicy
         return Origins.Match(check.SavedOrigin, check.PageOrigin) == OriginMatch.None ? FillVerdict.OtherSite : FillVerdict.Allowed;
     }
 
-    // A pergunta quando o utilizador escolhe à mão uma palavra-passe de outro site (menu de contexto, C6).
+    // A pergunta quando o utilizador escolhe à mão uma palavra-passe de outro site (menu de contexto, C6): as duas origens
+    // completas (esquema, anfitrião como na barra de endereço e porta) e, numa página http, o aviso.
     public static string OtherSiteQuestion(string savedOrigin, string pageOrigin)
-        => $"Esta palavra-passe é de {Origins.DisplayHost(savedOrigin) ?? savedOrigin}. Usar em {Origins.DisplayHost(pageOrigin) ?? pageOrigin}?";
+    {
+        var question = $"Esta palavra-passe é de {FullOrigin(savedOrigin)}. Usar em {FullOrigin(pageOrigin)}?";
+        return Origins.IsSecure(pageOrigin) ? question
+            : question + "\n\nAtenção: a ligação a esta página não é segura (http). Quem estiver na mesma rede pode ver a palavra-passe.";
+    }
+
+    private static string FullOrigin(string origin)
+    {
+        if (Origins.Normalize(origin) is not { } normal || Origins.IsAndroid(normal)) return origin;
+        var uri = new Uri(normal);
+        return uri.Scheme + "://" + (Origins.DisplayHost(normal) ?? uri.Host) + (uri.IsDefaultPort ? string.Empty : ":" + uri.Port);
+    }
+
+    // As palavras-passe «De outros sites» (escolha à mão): nunca as de android://, e nunca uma de https numa página que não
+    // é segura (http fora do próprio computador): credenciais https nunca vão para http (desenho, secção 3.6).
+    public static bool OffersElsewhere(string savedOrigin, string pageOrigin)
+    {
+        if (Origins.Normalize(savedOrigin) is not { } saved || Origins.IsAndroid(saved)) return false;
+        return !saved.StartsWith("https://", StringComparison.Ordinal) || Origins.IsSecure(pageOrigin);
+    }
 
     public static bool AcceptsClick(TimeSpan sinceShown) => sinceShown >= ClickGuard;
 

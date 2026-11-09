@@ -165,11 +165,29 @@
       return { formKind, kinds, user, passwords: pw };
     }
 
-    // Só se oferece num campo que se vê: com tamanho, mostrado, opaco o bastante (com os antepassados), dentro do ecrã e
-    // não tapado (o centro devolve o próprio campo ou um descendente).
+    // Só se oferece (e só se preenche) num campo que se vê: com um tamanho realista, mostrado, opaco (com os antepassados
+    // e, num iframe da mesma origem, com o iframe e os dele), com o texto à vista, dentro do ecrã e não tapado (a maior
+    // parte dos pontos de amostra cai no próprio campo). Contra os formulários escondidos (desenho, secção 6).
+    const MIN_OPACITY = 0.9;
+    const MIN_SIDE = 10;
     function isVisible(m) {
-      return m.width >= 5 && m.height >= 5 && m.display !== 'none' && m.visibility !== 'hidden' && m.visibility !== 'collapse'
-        && m.opacity >= 0.1 && m.inViewport === true && m.hit === true;
+      return m.width >= MIN_SIDE && m.height >= MIN_SIDE && m.display !== 'none' && m.visibility !== 'hidden' && m.visibility !== 'collapse'
+        && m.opacity >= MIN_OPACITY && m.textVisible !== false && m.frameVisible !== false && m.inViewport === true && m.hit === true;
+    }
+
+    // samples: para cada ponto de amostra (centro e quatro pontos para dentro dos cantos), se caiu no campo. Um ícone por
+    // cima de uma ponta (o olho da palavra-passe) não chega para o tapar; uma camada por cima da maior parte, sim.
+    function uncovered(samples) {
+      if (!Array.isArray(samples) || samples.length === 0) return false;
+      return samples.filter(x => x === true).length * 2 > samples.length;
+    }
+
+    // Um gesto do utilizador mesmo antes do foco: o botão do rato (ou um toque) desceu em cima do campo ou do rótulo dele
+    // (onField), ou a tecla Tab. last: {at, pointer} ou {at, key}, só de eventos confiáveis (isTrusted).
+    const GESTURE_MS = 1000;
+    function gesture(last, now, onField) {
+      if (!last || typeof last.at !== 'number' || now < last.at || now - last.at > GESTURE_MS) return false;
+      return last.key === 'Tab' || (last.pointer === true && onField === true);
     }
 
     function debounce(fn, ms, timers) {
@@ -325,7 +343,8 @@
     // </preencher>
 
     return Object.freeze({
-      version: 1, KINDS, norm, textOf, classifyField, classifyForm, isVisible, debounce, touchesFields, USERLIKE, TEXTUAL,
+      version: 1, MIN_OPACITY, KINDS, norm, textOf, classifyField, classifyForm, isVisible, uncovered, gesture, debounce,
+      touchesFields, USERLIKE, TEXTUAL,
       fillPlan, fillField, focusBack, submission, constraints, fit, focusAfter,
     });
   })();
@@ -413,24 +432,69 @@
     return opacity;
   }
 
+  // Uma cor CSS sem nada à vista (transparent, rgba(…, 0)).
+  function clear(color) {
+    const c = String(color || '').replace(/\s+/g, '');
+    return c === 'transparent' || /^rgba\([\d.]+,[\d.]+,[\d.]+,0(\.0+)?\)$/.test(c) || /\/0(\.0+)?%?\)$/.test(c);
+  }
+
+  // Um rótulo do próprio campo por cima dele só não o tapa se for transparente (os rótulos flutuantes): um rótulo com
+  // fundo tapa-o como qualquer outra camada.
+  function seeThroughLabel(node, field) {
+    const label = node && node.closest ? node.closest('label') : null;
+    if (!label || label.control !== field) return false;
+    try {
+      const style = getComputedStyle(label);
+      return clear(style.backgroundColor) && (style.backgroundImage === 'none' || style.backgroundImage === '');
+    } catch (e) { return false; }
+  }
+
+  // Cada ponto de amostra cai no campo (ou num descendente, ou num rótulo dele transparente)?
+  function samplesOf(field, r, vw, vh) {
+    const root = field.getRootNode();
+    const out = [];
+    for (const [fx, fy] of [[0.5, 0.5], [0.15, 0.3], [0.85, 0.3], [0.15, 0.7], [0.85, 0.7]]) {
+      const x = Math.min(Math.max(r.left + r.width * fx, 0), vw - 1);
+      const y = Math.min(Math.max(r.top + r.height * fy, 0), vh - 1);
+      const top = (root.elementFromPoint ? root.elementFromPoint(x, y) : null) || document.elementFromPoint(x, y);
+      out.push(!!top && (top === field || field.contains(top) || seeThroughLabel(top, field)));
+    }
+    return out;
+  }
+
+  // Num iframe da mesma origem, o iframe (e os de cima) também têm de se ver: mostrados, opacos e não tapados, no
+  // documento de cima, no ponto onde está o campo.
+  function frameVisible(field) {
+    try {
+      const r = field.getBoundingClientRect();
+      let x = r.left + r.width / 2, y = r.top + r.height / 2;
+      for (let w = window, depth = 0; w !== w.top && depth < 10; w = w.parent, depth++) {
+        const frame = w.frameElement;
+        if (!frame) return true;
+        const style = getComputedStyle(frame);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+        if (effectiveOpacity(frame) < Classifier.MIN_OPACITY) return false;
+        const f = frame.getBoundingClientRect();
+        x += f.left + frame.clientLeft;
+        y += f.top + frame.clientTop;
+        if (frame.ownerDocument.elementFromPoint(x, y) !== frame) return false;
+      }
+      return true;
+    } catch (e) { return true; /* iframe de outra origem: o script não entra nesses */ }
+  }
+
   // O que o classificador precisa de saber sobre a visibilidade de um campo, e o retângulo dele.
   function measure(field) {
     const r = field.getBoundingClientRect();
     const style = getComputedStyle(field);
     const vw = innerWidth, vh = innerHeight;
     const inViewport = r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh;
-    let hit = false;
-    if (inViewport && r.width > 0 && r.height > 0) {
-      const x = Math.min(Math.max(r.left + r.width / 2, 0), vw - 1);
-      const y = Math.min(Math.max(r.top + r.height / 2, 0), vh - 1);
-      const root = field.getRootNode();
-      const top = (root.elementFromPoint ? root.elementFromPoint(x, y) : null) || document.elementFromPoint(x, y);
-      const label = top && top.closest ? top.closest('label') : null;
-      hit = !!top && (top === field || field.contains(top) || (label !== null && label.control === field));
-    }
+    const hit = inViewport && r.width > 0 && r.height > 0 && Classifier.uncovered(samplesOf(field, r, vw, vh));
+    // O texto tem de se ver: um campo com a cor do texto transparente esconde o que lá se preencher.
+    const textVisible = field.nodeName === 'SELECT' || !clear(style.webkitTextFillColor || style.color);
     return {
       width: r.width, height: r.height, display: style.display, visibility: style.visibility,
-      opacity: effectiveOpacity(field), inViewport, hit, rect: r,
+      opacity: effectiveOpacity(field), textVisible, frameVisible: hit ? frameVisible(field) : true, inViewport, hit, rect: r,
     };
   }
 
@@ -504,6 +568,24 @@
   let quietUntil = 0;
   let focused = null;
   let leftWithWindow = null;
+  // O último gesto confiável (botão do rato ou toque, ou a tecla Tab): a lista só abre sozinha com um foco que vem de
+  // um gesto (um campo.focus() da página não chega; o ↓ no campo abre-a pelo navegador).
+  let lastGesture = null;
+  // Os campos com um valor do utilizador: escrito por ele (input confiável) ou preenchido pelo Éteris. Só a palavra-passe
+  // de um destes vai no envio (C4): uma que a página pôs não se oferece guardar.
+  const userValues = new WeakSet();
+
+  function onTheField(field, g) {
+    if (!g || !g.pointer) return false;
+    const t = g.target;
+    try {
+      if (t && (t === field || field.contains(t))) return true;
+      const label = t && t.closest ? t.closest('label') : null;
+      if (label && label.control === field) return true;
+      const r = field.getBoundingClientRect();
+      return g.x >= r.left - 4 && g.x <= r.right + 4 && g.y >= r.top - 4 && g.y <= r.bottom + 4;
+    } catch (e) { return false; }
+  }
 
   function deepTarget(event) {
     const path = event.composedPath ? event.composedPath() : [];
@@ -516,7 +598,7 @@
     return a;
   }
 
-  function report(field) {
+  function report(field, gesture) {
     if (!isField(field) || performance.now() < quietUntil) return;
     const info = formInfo(field, true);
     // Um campo escondido, tapado ou fora do ecrã não tem tipo (nada se oferece nele).
@@ -526,11 +608,12 @@
     observe();
     const root = field.getRootNode();
     if (root !== document && root.host) listen(root);
-    const message = { t: 'focus', field: idOf(field, 'f'), form: info.id, kind, formKind: info.formKind, rect: topRect(field), visible: true };
+    const message = { t: 'focus', field: idOf(field, 'f'), form: info.id, kind, formKind: info.formKind, rect: topRect(field), visible: true, gesture: gesture === true };
     if (Classifier.USERLIKE.has(kind)) message.prefix = String(field.value || '').slice(0, 256);
     send(message);
-    // Uma palavra-passe nova: as restrições do campo, para o gerador (C5). Nunca na janela privada (D-3).
-    if (OFERECER && kind === 'new-password') send(generateMessage(field, info));
+    // Uma palavra-passe nova: as restrições do campo, para o gerador (C5), só depois de um gesto. Nunca na janela
+    // privada (D-3).
+    if (OFERECER && gesture === true && kind === 'new-password') send(generateMessage(field, info));
   }
 
   function generateMessage(field, info) {
@@ -553,16 +636,26 @@
     // A janela voltou a ter o foco com o mesmo campo: não é um gesto novo.
     if (field === leftWithWindow) { leftWithWindow = null; return; }
     leftWithWindow = null;
+    if (!isField(field)) return;
+    const gesture = Classifier.gesture(lastGesture, performance.now(), onTheField(field, lastGesture));
     // Depois de o motor pôr o campo à vista (o foco pelo teclado rola a página): mede-se no fotograma seguinte.
-    requestAnimationFrame(() => { if (!filling && deepActive() === field) report(field); });
+    requestAnimationFrame(() => { if (!filling && deepActive() === field) report(field, gesture); });
   });
 
   // Um clique num campo que já tem o foco (depois de Esc, por exemplo) volta a pedir as sugestões.
   const onPointerDown = once((e) => {
-    if (filling || !e.isTrusted) return;
+    if (!e.isTrusted) return;
     const field = deepTarget(e);
-    if (isField(field) && field === deepActive()) report(field);
+    lastGesture = { at: performance.now(), pointer: true, target: field, x: e.clientX, y: e.clientY };
+    if (filling) return;
+    if (isField(field) && field === deepActive()) report(field, true);
   });
+
+  // Sem once: o Enter (onEnter) escuta o mesmo keydown e o once deixava-o de fora.
+  const onKeyGesture = (e) => {
+    if (!e.isTrusted || e.key !== 'Tab') return;
+    lastGesture = { at: performance.now(), key: 'Tab' };
+  };
 
   const onFocusOut = once((e) => {
     if (filling) return;
@@ -578,8 +671,9 @@
   });
 
   const onInput = once((e) => {
-    if (filling) return;
+    if (filling || !e.isTrusted) return;
     const field = deepTarget(e);
+    if (isField(field)) userValues.add(field);
     if (!isField(field) || field !== focused) return;
     const info = formInfo(field);
     const kind = info.kinds[info.fields.indexOf(field)];
@@ -595,8 +689,13 @@
   let lastSubmit = null;
   let goneWatch = null;
 
+  // Uma palavra-passe que o utilizador não escreveu nem o Éteris preencheu (posta pela página) não conta.
   function valuesOf(info) {
-    return info.fields.map(f => (f.nodeName === 'INPUT' ? String(f.value || '') : ''));
+    return info.fields.map(f => {
+      if (f.nodeName !== 'INPUT') return '';
+      if (String(f.type || '').toLowerCase() === 'password' && !userValues.has(f)) return '';
+      return String(f.value || '');
+    });
   }
 
   function submitted(owner) {
@@ -646,6 +745,7 @@
   }
 
   const onSubmit = once((e) => {
+    if (!e.isTrusted) return;
     const form = deepTarget(e);
     if (form && form.nodeName === 'FORM') submitted(form);
   });
@@ -687,6 +787,7 @@
     target.addEventListener('focusin', onFocusIn, true);
     target.addEventListener('focusout', onFocusOut, true);
     target.addEventListener('pointerdown', onPointerDown, true);
+    target.addEventListener('keydown', onKeyGesture, true);
     target.addEventListener('input', onInput, true);
     target.addEventListener('contextmenu', onContext, true);
     if (OFERECER) {
@@ -698,8 +799,8 @@
   listen(window);
 
   let scrollQueued = false;
-  function onScroll() {
-    if (!focused || scrollQueued) return;
+  function onScroll(e) {
+    if (!e || !e.isTrusted || !focused || scrollQueued) return;
     scrollQueued = true;
     requestAnimationFrame(() => {
       scrollQueued = false;
@@ -735,7 +836,7 @@
     let count = 0;
     filling = true;
     try {
-      for (const [i, value] of plan) if (Classifier.fillField(info.fields[i], value)) count++;
+      for (const [i, value] of plan) if (Classifier.fillField(info.fields[i], value)) { count++; userValues.add(info.fields[i]); }
       const next = typeof arg.value === 'string' ? at : Classifier.focusAfter(info.kinds, visible, arg.values || {}, at);
       Classifier.focusBack(info.fields[next] || anchor);
     } finally {
