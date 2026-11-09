@@ -48,7 +48,7 @@ public class WorkflowTests
         Assert.Contains("UpdateService.cs", publish);
         Assert.Contains("vpk upload", publish);
         // O CI não tem o motor próprio nem o CefSharp com o patch do sandbox: a publicação de emergência é sem sandbox
-        // (desde a 0.2.12 o publish.ps1 publica com sandbox por omissão e pararia sem eles).
+        // (desde a 0.2.14 o publish.ps1 publica com sandbox por omissão e pararia sem eles).
         Assert.Contains("publish.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);
         // E o pack.ps1 só empacota uma publicação sem sandbox quando isso é pedido.
         Assert.Contains("pack.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);

@@ -1,9 +1,9 @@
-﻿# Publicação (docs/motor.md, «Publicação»). Desde a 0.2.12 sai COM sandbox por omissão (docs/sandbox.md): processos das
+﻿# Publicação (docs/motor.md, «Publicação»). Desde a 0.2.14 sai COM sandbox por omissão (docs/sandbox.md): processos das
 # páginas, placa gráfica e armazenamento isolados, serviço de rede no AppContainer. Precisa do motor próprio
 # (build/cef-codecs/out/runtime, com o bootstrap.exe), do CefSharp com o patch v2 no feed local build/cefsharp/feed e da
 # DLL cliente build/sandbox/client/out/Release/Eteris.Browser.dll — os dois feitos por build/sandbox/build-all.ps1.
 # -NoSandbox: só para emergências (por exemplo a publicação pelo CI sem codecs, que não tem nada disto): o Éteris corre
-# com --no-sandbox, como até à 0.2.11.
+# com --no-sandbox, como até à 0.2.13.
 # Com sandbox exige também a marca dos testes aprovados no modo com sandbox (build/sandbox/out/tests-ok.json, do
 # build-all.ps1) para o HEAD atual, sem alterações por gravar, e para estas mesmas peças (feed, DLL cliente, motor).
 # No fim grava publish\eteris-build.json (versão, modo, commit, CefSharp com o SHA256 das montagens): o pack.ps1 só

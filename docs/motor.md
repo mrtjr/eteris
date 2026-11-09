@@ -117,7 +117,7 @@ descarregado à parte; os runners alojados do GitHub têm ~14 GB de disco e 6 h 
 com o runtime do NuGet (sem codecs) e os utilizadores atualizados pelo Velopack voltariam a um motor sem H.264/AAC.
 Por isso as releases normais publicam-se **localmente**, com o runtime próprio em `build/cef-codecs/out/runtime`:
 1. Subir a versão (csproj, padrão do `build/publish.ps1`, `CHANGELOG.md`, `Browser/WhatsNewPage.cs`) e fazer commit.
-   **Desde a 0.2.12 a publicação sai com o sandbox** (`docs/sandbox.md`, «Como publicar com o sandbox»): antes da 1.ª
+   **Desde a 0.2.14 a publicação sai com o sandbox** (`docs/sandbox.md`, «Como publicar com o sandbox»): antes da 1.ª
    publicação, e de novo quando mudar o motor, o CefSharp, o patch ou `build/sandbox/client`, correr
    `powershell -ExecutionPolicy Bypass -File build\sandbox\build-all.ps1` — recompila o CefSharp com o patch v2 para o
    feed local `build/cefsharp/feed` e a DLL cliente para `build/sandbox/client/out`, verifica os dois e corre os testes
@@ -133,7 +133,7 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
    para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
    falhar, e no fim leva `eteris-build.json` (versão, modo, commit e o CefSharp com o SHA256 das montagens).
-   `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.11). Confirmar que `publish\libcef.dll` tem o SHA256
+   `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.13). Confirmar que `publish\libcef.dll` tem o SHA256
    do `manifest.json`, que não há `bootstrap.exe`/`bootstrapc.exe` com esse nome (o bootstrap vai como
    `Eteris.Browser.exe`) e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em `Shields\lists`,
    `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).

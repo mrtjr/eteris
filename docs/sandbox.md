@@ -5,13 +5,15 @@ de 1–2 semanas e obriga a alterar o CefSharp.** Ver o plano em baixo.
 
 ## Estado atual (medido)
 
-Até à 0.2.11 os 6 processos do motor do Éteris (páginas, placa gráfica, utilitários) correm com `--no-sandbox`: uma
+Até à 0.2.13 os 6 processos do motor do Éteris (páginas, placa gráfica, utilitários) correm com `--no-sandbox`: uma
 falha explorável no código de uma página fica com os mesmos acessos que o utilizador. Nas três referências esses
-processos correm fechados (sem acesso a ficheiros nem ao sistema). **Desde a 0.2.12 (por publicar) a publicação sai
-com o sandbox ligado** (ramo `rede-seguranca`): páginas Untrusted, placa gráfica Low, armazenamento Untrusted e serviço
-de rede no AppContainer, como no Chrome — ver «Como publicar com o sandbox», a seguir.
+processos correm fechados (sem acesso a ficheiros nem ao sistema). **Desde a 0.2.14 (por publicar) a publicação sai
+com o sandbox ligado** (ramo `rede-seguranca`, fundido no ramo da 0.2.14): páginas Untrusted, placa gráfica Low, armazenamento Untrusted e serviço
+de rede no AppContainer, como no Chrome — ver «Como publicar com o sandbox», a seguir. As provas feitas com o nome 0.2.12 (3.ª prova do
+Velopack, «Revisão da 0.2.12») ficam como histórico: o sandbox ficou pronto para a 0.2.12, mas a 0.2.12 e a 0.2.13
+saíram sem ele.
 
-## Como publicar com o sandbox (desde a 0.2.12, por omissão)
+## Como publicar com o sandbox (desde a 0.2.14, por omissão)
 
 `build/publish.ps1` publica com o sandbox; `-NoSandbox` fica para emergências (é o que a publicação pelo CI sem codecs
 usa no `release.yml`: o CI não tem o motor próprio, que traz o bootstrap, nem o CefSharp com o patch). As duas peças que
@@ -254,7 +256,7 @@ com o serviço de rede «Not Sandboxed», as páginas carregam e o `Local State`
 `network_service_failed_launch_major_version` (a funcionalidade nem é pedida).
 
 **D6 — integração no repositório (opcional, opção B de nomes).** `-p:EterisSandbox=true` (na altura
-`build/publish.ps1 -Sandbox -CefSharpFeed <feed> -CefSharpN 2 [-SandboxClientDll <dll>]`; histórico: desde a 0.2.12 o
+`build/publish.ps1 -Sandbox -CefSharpFeed <feed> -CefSharpN 2 [-SandboxClientDll <dll>]`; histórico: desde a 0.2.14 o
 sandbox é a omissão do `publish.ps1`, sem argumentos, e o `-Sandbox` já não existe — ver «Como publicar com o
 sandbox»): o .NET passa a
 `Eteris.App`, a saída leva `Eteris.Browser.exe` = bootstrap do runtime e `Eteris.Browser.dll` = DLL cliente
@@ -367,7 +369,7 @@ Notas para a publicação:
    Confirmado: `ProfileName(C:\Users\Júnior\AppData\Local\EterisBrowserSbxTest\current\Eteris.Browser.exe)` =
    `cr.sb.netB382764A951831BB0A76C124F3484E6BDFFFB515`, e esse perfil continuava lá depois da 1.ª desinstalação.
    **Correção:** gancho `OnBeforeUninstallFastCallback` → `NetworkSandbox.OnUninstalling` (na altura só nas publicações
-   com sandbox e pelo bootstrap; desde a revisão da 0.2.12 em todas, dentro de uma instalação do Velopack, para uma
+   com sandbox e pelo bootstrap; desde a revisão da 0.2.12, que sai na 0.2.14, em todas, dentro de uma instalação do Velopack, para uma
    versão sem sandbox instalada por cima de uma com sandbox também os apagar) → `DeleteAppContainerProfile` para os
    perfis desta instalação: os que o arranque guardou em
    `<raiz do Velopack>\network-sandbox-profiles.txt` (`NetworkSandbox.Remember`, só quando o serviço de rede vai mesmo
@@ -476,9 +478,9 @@ dono.
    certificado principal — senão o arranque pára (`LOG(FATAL)`). O `libcef.dll` e o `Eteris.App.dll` não entram nessa
    verificação, mas devem ir assinados também. Assinar tudo no mesmo passo da publicação, depois do
    `brand-bootstrap.ps1` (que muda os recursos do exe e invalidaria uma assinatura anterior) e antes do `vpk pack`.
-   **Não bloqueia a 0.2.12:** o Éteris não é assinado, e os três sem assinatura passam a verificação (provado em baixo,
+   **Não bloqueia a 0.2.14:** o Éteris não é assinado, e os três sem assinatura passam a verificação (provado em baixo,
    «3.ª prova do Velopack»). Só passa a ser obrigatório no dia em que se assinar o Éteris.
-2. ~~**E — CI com o CefSharp próprio**~~ — **resolvido de outra forma (0.2.12):** as releases publicam-se localmente
+2. ~~**E — CI com o CefSharp próprio**~~ — **resolvido de outra forma (0.2.14; preparado com o nome 0.2.12):** as releases publicam-se localmente
    (`docs/motor.md`, «Publicação»: o CI nem compila o motor próprio, que traz o bootstrap), por isso o CefSharp próprio e
    a DLL cliente passam a ser reprodutíveis a partir do repositório com `build/sandbox/build-all.ps1` na máquina de
    publicação («Como publicar com o sandbox», em cima). O CI continua verde sem eles: o `build.yml` e a verificação das
@@ -495,8 +497,8 @@ dono.
 5. Fora do sandbox (visto no D5, igual sem sandbox): Alt+clique numa aba aberta por um link entregue à instância
    transfere o link em vez de o espreitar até a página ser recarregada.
 
-**Fundido no `main` em 2026-11-08** (passo (a) abaixo), atrás da opção `EterisSandbox`, desligada por omissão na
-0.2.10 e na 0.2.11 (razões em `docs/paridade.md`, secção 2); **ligada por omissão na publicação a partir da 0.2.12**
+**Fundido no `main` em 2026-11-08** (passo (a) abaixo), atrás da opção `EterisSandbox`, desligada por omissão da
+0.2.10 à 0.2.13 (razões em `docs/paridade.md`, secção 2); **ligada por omissão na publicação a partir da 0.2.14**
 (ramo `rede-seguranca`, passo (c) abaixo). Com o arranque fundido, o `Cef.Initialize` corre na thread
 do arranque (`CefConfigurator.Prepare` decide o sandbox e o serviço de rede, `InitializeInBackground` inicializa):
 a cópia publicada com `-Sandbox` manteve renderers e armazenamento Untrusted, placa gráfica e áudio Low.
@@ -511,10 +513,12 @@ para quem publica sem ela): (a) já, o código do ramo (passos A–D6, D9 e a ma
 (os ganchos do Velopack só mexem na ACL nas publicações com sandbox) e tem testes; (b) uma versão de teste com
 `-Sandbox` para o dono, pelo canal normal do Velopack (a atualização já foi provada); (c) só então ligar
 `EterisSandbox` na publicação oficial, com a assinatura conjunta e a CI. A decisão da versão em que entra é do dono.
-(a) e (b) feitos; (c) preparado para a 0.2.12 — com a rede de segurança, sem assinatura (o Éteris não é assinado) e com
+(a) e (b) feitos; (c) preparado para a 0.2.12 e adiado para a 0.2.14 — com a rede de segurança, sem assinatura (o Éteris não é assinado) e com
 o CefSharp e a DLL reprodutíveis pelo `build-all.ps1` em vez da CI (ver «Falta», itens 1 e 2).
 
 ### 3.ª prova do Velopack: da 0.2.11 sem sandbox para a 0.2.12 com sandbox por omissão (2026-11-08)
+
+*(Histórico: provado com o nome 0.2.12; o sandbox não saiu na 0.2.12 nem na 0.2.13 e sai na 0.2.14.)*
 
 Pacote de teste à parte: `packId` `EterisBrowserSbxTest3`, título «Eteris SbxTest3», feed local numa pasta
 (`scratchpad\sbx3\feed`), perfil de teste próprio; o Éteris instalado do dono, a versão de teste dele e os navegadores
@@ -561,6 +565,8 @@ O que esta prova **não** cobre (revisão da 0.2.12):
 
 ### Revisão da 0.2.12 (2026-11-08): o que mudou e a prova depois de fundir o `main`
 
+*(Histórico: provado com o nome 0.2.12; o sandbox não saiu na 0.2.12 nem na 0.2.13 e sai na 0.2.14.)*
+
 Problemas confirmados na revisão e corrigidos no ramo:
 
 1. **Peças publicadas sem testes aprovados.** O `build-all.ps1` gravava o `eteris-cefsharp.json` antes da DLL cliente e
@@ -606,7 +612,7 @@ Problemas confirmados na revisão e corrigidos no ramo:
 - Não repetido depois de fundir: a prova do Velopack 0.2.11 → 0.2.12 (instalar, atualizar, desinstalar) e a
   compilação completa do CefSharp e da DLL cliente (a fusão não mexe no patch, no `build/sandbox/client` nem no motor).
 
-## Rede de segurança do arranque e proxy (2026-11-08, ramo `rede-seguranca`, para a 0.2.12 com sandbox)
+## Rede de segurança do arranque e proxy (2026-11-08, ramo `rede-seguranca`, para a 0.2.14 com sandbox)
 
 Com o sandbox ligado na publicação oficial, uma falha que só aconteça com ele (driver, antivírus, política da máquina,
 versão do Windows) não pode deixar o Éteris sem abrir: o atualizador vive dentro do Éteris, por isso um Éteris que não

@@ -14,7 +14,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 |---|---|---|---|---|---|---|
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
-| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ligado por omissão na publicação da 0.2.12**: páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, rede de segurança no arranque, CefSharp e DLL cliente reprodutíveis a partir do repositório (`build/sandbox/build-all.ps1`) e atualização de uma 0.2.11 sem sandbox provada pelo Velopack (atalhos, perfil e navegador predefinido iguais; desinstalação sem restos). Até à 0.2.11 a publicação corre com `--no-sandbox` (secção 2) | ✅ resolvido na 0.2.12 (por publicar) |
+| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ligado por omissão na publicação da 0.2.14**: páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, rede de segurança no arranque, CefSharp e DLL cliente reprodutíveis a partir do repositório (`build/sandbox/build-all.ps1`) e atualização de uma 0.2.11 sem sandbox provada pelo Velopack (atalhos, perfil e navegador predefinido iguais; desinstalação sem restos). Até à 0.2.13 a publicação corre com `--no-sandbox` (secção 2) | ✅ resolvido na 0.2.14 (por publicar) |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
@@ -153,7 +153,7 @@ temporária, contra a 0.2.9 publicada da mesma forma a partir do `c3fe087`; perf
 arranque; A/B intercalado na mesma janela temporal (arranque 7 rondas depois de 1 de aquecimento, memória 5 rondas;
 medianas, intervalo entre parênteses). A 3.ª coluna é a mesma árvore publicada com `-Sandbox` (sem a ACL do serviço
 de rede na pasta: o serviço de rede fica sem sandbox, como previsto), noutro perfil. Histórico: o `-Sandbox` do
-`publish.ps1` era o da altura; desde a 0.2.12 o sandbox é a omissão (secção 2).
+`publish.ps1` era o da altura; desde a 0.2.14 o sandbox é a omissão (secção 2).
 
 | Medida | Éteris 0.2.9 (`c3fe087`) | Éteris `main` | `main` com `-Sandbox` | Chrome 156 | Brave 157 | Firefox 159 |
 |---|---|---|---|---|---|---|
@@ -175,9 +175,9 @@ privada (`--private` entregue à instância aberta: 2.ª janela com «Privada»)
 Na cópia com `-Sandbox`, os tokens dos filhos depois de fundir — com o `Cef.Initialize` já na thread do arranque —
 são os do ramo: renderers e armazenamento Untrusted (restritos), placa gráfica e áudio Low, nenhum `--no-sandbox`.
 
-## 2. Sandbox — resolvido na 0.2.12 (por publicar): ligado por omissão na publicação (2026-11-08)
+## 2. Sandbox — resolvido na 0.2.14 (por publicar): ligado por omissão na publicação (2026-11-08)
 
-**0.2.12 (ramo `rede-seguranca`, por publicar):** `build/publish.ps1` passa a publicar **com** sandbox por omissão
+**0.2.14 (ramo `rede-seguranca`, preparado com o nome 0.2.12, por publicar):** `build/publish.ps1` passa a publicar **com** sandbox por omissão
 (`-NoSandbox` só para emergências; a publicação pelo CI sem codecs usa-o). O CefSharp com o patch v2 e a DLL cliente
 saem do repositório com um só script, `build/sandbox/build-all.ps1` (feed local `build/cefsharp/feed` e
 `build/sandbox/client/out`, com verificação e a bateria de testes no modo com sandbox); passo a passo em
@@ -187,7 +187,7 @@ instalação 0.2.11 sem sandbox atualiza-se pelo botão do Éteris para a 0.2.12
 Untrusted, GPU Low, serviço de rede no AppContainer com a ACL dada pelo gancho de atualização, 0 filhos com
 `--no-sandbox`, a sessão da 0.2.11 de volta, atalhos/registo/navegador predefinido com 0 diferenças — e a desinstalação
 deixa o utilizador igual ao de antes (0 diferenças, incluindo os perfis de AppContainer). Essa prova foi feita com o
-ramo antes de fundir a 0.2.11; depois de fundir (`7723672`) repetiram-se os 2516 testes no modo com sandbox e a
+ramo antes de fundir a 0.2.11 (histórico: provado com o nome 0.2.12; sai na 0.2.14); depois de fundir (`7723672`) repetiram-se os 2516 testes no modo com sandbox e a
 verificação ao vivo da publicação (sandbox como em cima, flags do arranque sem Google e o Escudo nos pedidos sem aba com
 o serviço de rede no AppContainer), não a prova do Velopack (`docs/sandbox.md`, «Revisão da 0.2.12»). O «navegador
 predefinido igual» só prova que a escolha do dono não mudou (o Éteris não se regista como navegador), e a fotografia
@@ -196,7 +196,7 @@ para o próprio commit (`build-all.ps1 -SkipCefSharp -SkipClient` em cada releas
 conjunta (só obrigatória quando o Éteris for assinado) e o proxy do sistema / autenticação integrada vistos ao vivo
 (sem domínio nem proxy nesta máquina). Histórico da decisão em baixo.
 
-Histórico (antes da 0.2.12; o `-Sandbox` do `publish.ps1` já não existe, o sandbox é a omissão): a publicação oficial
+Histórico (antes da 0.2.14; o `-Sandbox` do `publish.ps1` já não existe, o sandbox é a omissão): a publicação oficial
 (0.2.9) corre os processos do motor com `--no-sandbox`. No `main` (fundido do ramo `sandbox`), com
 `build/publish.ps1 -Sandbox` (CefSharp próprio com a informação do sandbox, DLL cliente do bootstrap da CEF, opção B:
 `Eteris.Browser.exe` = bootstrap, `.NET` = `Eteris.App`), `chrome://sandbox` mostra o mesmo que o Chrome 156 com a
@@ -209,7 +209,7 @@ instalação sem sandbox para uma com sandbox pelo Velopack (delta, atalhos e pe
 Para o ✅: assinatura conjunta (o bootstrap pára se o exe, o `chrome_elf.dll` e a DLL cliente não tiverem a mesma
 assinatura) e a CI com o CefSharp próprio. Detalhes, medições e passos em `docs/sandbox.md`.
 
-**Por omissão desligado na 0.2.10 e na 0.2.11.** O D5 interativo e a prova de atualização pelo Velopack passaram,
+**Por omissão desligado da 0.2.10 à 0.2.13.** O D5 interativo e a prova de atualização pelo Velopack passaram,
 mas ficam pontos em aberto: a release é compilada pela CI, que não tem o CefSharp próprio nem a DLL cliente (ligá-lo
 só numa publicação local tiraria a release do caminho da CI); falta a assinatura conjunta; o serviço de rede no
 AppContainer ainda não foi visto com proxy do sistema nem autenticação integrada (com proxy por argumentos do motor —
@@ -217,7 +217,7 @@ AppContainer ainda não foi visto com proxy do sistema nem autenticação integr
 transitório visto numa sessão longa do D5 está «a vigiar». Depois de fundir, a cópia com `-Sandbox` arranca, isola as
 páginas e passa o mesmo roteiro ao vivo que a publicação normal (secção 1c, «Medição final»).
 
-**Rede de segurança para ligar o sandbox (ramo `rede-seguranca`, para a 0.2.11):** uma falha só com sandbox não deixa o
+**Rede de segurança para ligar o sandbox (ramo `rede-seguranca`, para a 0.2.14):** uma falha só com sandbox não deixa o
 Éteris sem abrir (o atualizador está lá dentro). A DLL cliente volta a arrancar o Éteris com `--eteris-no-sandbox` quando
 o .NET não arranca; um marcador no perfil (gravado antes do motor, limpo na 1.ª página ou num fecho normal) e a vigia dos
 filhos nos primeiros 30 s (3 a morrer com código de falha) contam os arranques falhados com sandbox; 2 seguidos desligam-no

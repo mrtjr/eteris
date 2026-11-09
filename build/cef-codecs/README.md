@@ -232,7 +232,7 @@ validados (sem conversão de fins de linha: o SHA256 dos patches está no `manif
 
 As releases do Éteris **publicam-se localmente**, na máquina onde está este runtime: `build/sandbox/build-all.ps1`
 (o CefSharp com o patch do sandbox e a DLL cliente do bootstrap; em cada release, depois do commit da versão, pelo menos
-`-SkipCefSharp -SkipClient`, que corre os testes no modo com sandbox), `build/publish.ps1` (desde a 0.2.12 com sandbox
+`-SkipCefSharp -SkipClient`, que corre os testes no modo com sandbox), `build/publish.ps1` (desde a 0.2.14 com sandbox
 por omissão; `-NoSandbox` só em emergência), `vpk download github`, `build/pack.ps1`, teste do pacote, tag e
 `vpk upload github` — passo a passo em `docs/motor.md`, «Publicação», e `docs/sandbox.md`, «Como publicar com o
 sandbox». O fluxo `.github/workflows/release.yml` **não consegue compilar este motor** (110–150 GB de código e

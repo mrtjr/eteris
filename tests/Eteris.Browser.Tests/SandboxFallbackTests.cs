@@ -9,7 +9,7 @@ namespace Eteris.Browser.Tests;
 // Rede de segurança do sandbox (docs/sandbox.md, «Rede de segurança»): o Éteris abre sempre, sem sandbox se for preciso.
 public class SandboxFallbackTests
 {
-    private const string V = "0.2.11";
+    private const string V = "0.2.14";
 
     private static SandboxStart Start(SandboxFallbackState previous, string version = V, bool available = true,
         bool manualOff = false, bool retried = false)
@@ -63,15 +63,15 @@ public class SandboxFallbackTests
     {
         var disabled = Start(Crash(Start(Crash(Start(new())))));
         Assert.False(disabled.UseSandbox);
-        var next = Start(SandboxFallback.Healthy(disabled.State), version: "0.2.12");
+        var next = Start(SandboxFallback.Healthy(disabled.State), version: "0.2.15");
         Assert.True(next.UseSandbox);
         Assert.Equal(SandboxNotice.None, next.Notice);
         Assert.Null(next.State.DisabledFor);
         Assert.Equal(0, next.State.Failures);
         // E se a versão nova também cai duas vezes, volta a desligar (para ela).
-        var again = Start(Crash(Start(Crash(next), version: "0.2.12")), version: "0.2.12");
+        var again = Start(Crash(Start(Crash(next), version: "0.2.15")), version: "0.2.15");
         Assert.False(again.UseSandbox);
-        Assert.Equal("0.2.12", again.State.DisabledFor);
+        Assert.Equal("0.2.15", again.State.DisabledFor);
     }
 
     // Uma queda sem sandbox (manual) não é culpa dele: não conta.

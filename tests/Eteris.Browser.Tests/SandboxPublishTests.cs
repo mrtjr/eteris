@@ -5,7 +5,7 @@ using System.Xml.Linq;
 
 namespace Eteris.Browser.Tests;
 
-// Desde a 0.2.12 a publicação sai com o sandbox ligado por omissão (docs/sandbox.md, «Como publicar com o sandbox»):
+// Desde a 0.2.14 a publicação sai com o sandbox ligado por omissão (docs/sandbox.md, «Como publicar com o sandbox»):
 // build/publish.ps1 usa o CefSharp com o patch v2 e a DLL cliente que build/sandbox/build-all.ps1 compila a partir do
 // repositório; -NoSandbox fica só para emergências (a publicação pelo CI, que não tem nada disso).
 public class SandboxPublishTests
