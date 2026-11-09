@@ -1,6 +1,7 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local) em curso no ramo `sync`, por publicar; ainda sem interface.** O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5) feito no ramo `sync`, por publicar; ainda sem interface** (os blocos B a E do
+desenho — páginas de gestão, preenchimento na página, sincronização e fecho — estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -175,3 +176,34 @@ navegadores (o `v20` App-Bound do Chrome, o `key4.db` do Firefox): só o CSV que
 Testes: `Vault/PasswordCsvTests` (um ficheiro sintético de cada um dos cinco, aspas, quebras de linha, BOM e CRLF,
 prioridade das notas, linhas recusadas sem a palavra-passe, limites, ida e volta, importação com duplicados, conflitos e
 resumo, pastas da nuvem).
+
+## A5. Área de transferência segura e capturas
+
+`Vault/SecureClipboard.cs` e `Infrastructure/CaptureShield.cs`.
+
+- **Copiar um segredo** (`SecureClipboard`) faz-se no processo do navegador — a página nunca o vê —, pela API do
+  Windows, com os três formatos que o Windows respeita: `ExcludeClipboardContentFromMonitorProcessing`,
+  `CanIncludeInClipboardHistory = 0` (fora do histórico, Win+V) e `CanUploadToCloudClipboard = 0` (fora da nuvem). Ao
+  fim de **60 s**, se o número de sequência da área de transferência não mudou (o segredo ainda lá está), é limpo; o
+  que o utilizador copiar entretanto fica. Uma segunda cópia tem o seu próprio prazo. A área de transferência abre-se
+  com uma janela só de mensagens criada e destruída na mesma chamada (nenhuma janela sem ciclo de mensagens fica dona
+  dela) e os bytes do segredo em memória gerida são apagados.
+- **Um segredo à vista** (`SecretOnScreen`): todas as janelas do Éteris saem das capturas de ecrã, gravações,
+  partilhas e do Recall (`WDA_EXCLUDEFROMCAPTURE`; `WDA_MONITOR` antes do Windows 10 2004), mesmo com «Esconder do
+  Recall e de capturas» desligado, até o esconder ou, no máximo, **30 s** (então avisa quem o mostrou para o esconder).
+  Vários segredos ao mesmo tempo contam-se; cada um liberta uma vez.
+
+Testes: `Vault/SecureClipboardTests` (formatos de exclusão; limpo aos 60 s só se for o mesmo; segunda cópia;
+área de transferência ocupada; nada de cópias sem exclusão em `Vault/`; afinidade com um segredo à vista; contagem e
+prazo de 30 s). Os testes nunca tocam na área de transferência real.
+
+Prova ao vivo (comando de teste fora do repositório, com as classes do Éteris; a área de transferência do dono — uma
+imagem — guardada e reposta):
+- `SecureClipboard.Copy`: o texto chegou à área de transferência e os três formatos estavam lá
+  (`CanIncludeInClipboardHistory`, `CanUploadToCloudClipboard`, `ExcludeClipboardContentFromMonitorProcessing`: os três
+  presentes). **Neste PC o histórico da área de transferência (Win+V) está desligado** (`Clipboard.IsHistoryEnabled()` =
+  falso): a prova de que a entrada não aparece no Win+V fica para um PC com o histórico ligado (ligá-lo aqui seria
+  mudar uma definição do sistema). O teste não abre o painel Win+V (mostraria o histórico do dono numa captura):
+  compara só o item mais recente do histórico com o marcador, sem o mostrar, e retira o item de controlo que pôs.
+- `SecretOnScreen` numa janela WPF fora do ecrã: afinidade `0x0` → `0x11` com o segredo à vista → `0x0` ao esconder;
+  outra vez `0x11` e, sem esconder, o aviso e `0x0` aos 30 s.

@@ -8,6 +8,16 @@
   Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de
   formulários da Google (`content-autofill.googleapis.com`) fica também cortado no motor. `eteris://privacy/` › «Nada
   sai do computador sem um pedido seu» diz os dois e verifica-os no estado real (`docs/palavras-passe.md`).
+- **Gestor de palavras-passe próprio, base local** (ainda sem interface; `docs/palavras-passe.md`, tarefas A1–A5):
+  cofre `cofre.db` com cada item cifrado em AES-256-GCM (metadados e segredo em separado) e a chave protegida pela DPAPI
+  do Windows, aberto só quando é preciso (o arranque não muda); palavras-passe, cartões (nunca o código de segurança),
+  IBAN, contactos, documentos de identificação (passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF) e
+  viagens, com as validações de cada um (Luhn, IBAN, NIF e CPF, código postal/CEP); sugestões só para a mesma origem
+  ou o mesmo domínio registável, nunca entre domínios, `http` e `https` separados; confirmação com o Windows Hello ou a
+  palavra-passe do Windows (janela de graça de 5 minutos por janela, que recomeça ao bloquear o Windows; exportar
+  pede sempre); importar CSV do Chrome, Brave, Firefox, Bitwarden e 1Password e exportar no formato do Chrome; copiar
+  um segredo fica fora do histórico da área de transferência (Win+V) e da nuvem e é limpo ao fim de 60 s; com um
+  segredo à vista, o Éteris sai das capturas de ecrã.
 
 ### Sincronização entre computadores («Entrar com o Google»)
 - **Login completo:** entra-se com a conta Google no navegador do sistema e os **favoritos, Espaços (nome, cor, emoji
@@ -15,7 +25,7 @@
   bloqueios por site, exceções ao HTTPS primeiro) e notas** passam de um computador para o outro, como no Chrome, no
   Firefox e no Brave — mas **sempre cifrados de ponta a ponta**: os dados vão para a pasta oculta da aplicação no
   Google Drive do utilizador (âmbito `drive.appdata`), a chave nunca sai dos aparelhos e a Google só vê ficheiros
-  cifrados, os tamanhos e as horas. Histórico, abas abertas, cookies e palavras-passe (que o Éteris não guarda) não
+  cifrados, os tamanhos e as horas. Histórico, abas abertas, cookies e palavras-passe (o cofre novo ainda fica só no computador) não
   sincronizam.
 - **Primeiro computador:** a conta cria-se sozinha e aparece o **código de recuperação** com «Copiar» e «Já guardei» e
   o aviso de que, sem ele e sem outro computador, os dados na nuvem não se recuperam.
