@@ -24,6 +24,8 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
 
 - `ETERIS_TEST_MUTE=1` (no ambiente do processo que lança o Éteris): nenhum som sai dos dois motores
   (`mute-audio` no Chromium, `CoreWebView2.IsMuted` no motor de vídeo). Ver `Infrastructure/TestSwitches.cs`.
+- `ETERIS_TEST_SYNC_FOLDER=<pasta>`: a sincronização usa esta pasta em vez do Google Drive (nenhum pedido de rede;
+  dois perfis de teste na mesma pasta). Ignorada pela versão instalada. Ver `docs/sincronizacao.md`.
 
 ## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
 
@@ -111,13 +113,19 @@ site a ver a pergunta), pergunta `MediaSource.isTypeSupported` para `avc1.640028
   H.264 de um MP4 progressivo e só se ouve o som — um `<video>` de MP4/MOV/M3U8 com metadados, `videoWidth` 0 e o motor
   a dizer «não» ao `avc1` dá `format`, e a aba troca.
 
+### Como publicar
+
 **Publicação (decidido na 0.2.9: localmente, nesta máquina).** O `.github/workflows/release.yml` **não** consegue
 compilar este motor: são 110–150 GB de fonte e objetos, 5–10 h de compilação oficial (ThinLTO + PGO) e o código
 descarregado à parte; os runners alojados do GitHub têm ~14 GB de disco e 6 h por trabalho. Uma publicação pelo CI sai
 com o runtime do NuGet (sem codecs) e os utilizadores atualizados pelo Velopack voltariam a um motor sem H.264/AAC.
 Por isso as releases normais publicam-se **localmente**, com o runtime próprio em `build/cef-codecs/out/runtime`:
 1. Subir a versão (csproj, padrão do `build/publish.ps1`, `CHANGELOG.md`, `Browser/WhatsNewPage.cs`) e fazer commit.
-2. `.\build\publish.ps1 -Version X.Y.Z` — recusa um runtime que não seja o validado (modo, commit, versão do
+2. `.\build\publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho do google-oauth.json>` — o `-GoogleOAuthJson` copia
+   o identificador da aplicação Google («App para computador», descarregado da Google Cloud; nunca no repositório, está
+   no `.gitignore`) para `publish\google-oauth.json`, depois de verificar que é um cliente `installed` com `client_id`
+   e endereços da Google; sem ele publica **sem login** (a secção Sincronização diz «indisponível nesta compilação») e
+   avisa. Recusa um runtime que não seja o validado (modo, commit, versão do
    `libcef.dll`, SHA256 de cada ficheiro do manifesto). Confirmar que `publish\libcef.dll` tem o SHA256 do
    `manifest.json`, que não há `bootstrap*.exe` e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em
    `Shields\lists`, `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).
@@ -126,7 +134,8 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).
 4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`.
 5. Testar o executável de `publish\` num perfil de teste (abre, navega, `eteris://whatsnew/` com a versão nova, um MP4
-   H.264 toca no motor principal, sem processos `msedgewebview2` filhos). Nunca instalar o `Setup` na máquina do dono.
+   H.264 toca no motor principal, sem processos `msedgewebview2` filhos; com `-GoogleOAuthJson`, Definições ›
+   Sincronização mostra «Entrar com o Google» e não «indisponível»). Nunca instalar o `Setup` na máquina do dono.
 6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
    (compilar e testes, sem pack nem upload).
 7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --publish --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z

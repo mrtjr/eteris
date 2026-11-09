@@ -53,7 +53,7 @@ public static class SettingsPage
             google = new
             {
                 state = on ? "signedIn" : "signedOut",
-                text = on ? $"Ligado à pasta de teste {Sync.SyncService.TestFolder} (ETERIS_TEST_SYNC_FOLDER; nenhum pedido de rede)."
+                text = on ? $"Ligado à pasta de teste «{System.IO.Path.GetFileName(Sync.SyncService.TestFolder)}» (ETERIS_TEST_SYNC_FOLDER; nenhum pedido de rede)."
                     : "Pasta de teste (ETERIS_TEST_SYNC_FOLDER): carregue em «Ligar» para sincronizar por ela.",
                 url = (string?)null, account = false, pending = false, folder = true,
             };

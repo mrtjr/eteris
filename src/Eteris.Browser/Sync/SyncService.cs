@@ -45,8 +45,8 @@ internal static class SyncService
     // Há com que sincronizar: o identificador da aplicação Google (google-oauth.json) ou a pasta de teste.
     public static bool Available => FolderMode || GoogleSync.Config is not null;
 
-    // Ligado à conta (Google com sessão; na pasta de teste, a sincronização ligada). Só disco.
-    public static bool Connected => FolderMode ? Agent()?.Enabled == true : GoogleSync.SignedIn;
+    // Ligado à conta (Google com sessão; na pasta de teste, ligada ou parada — até «Sair»). Só disco.
+    public static bool Connected => FolderMode ? Agent()?.Status.Phase is not (null or SyncPhase.Off) : GoogleSync.SignedIn;
 
     public static bool Enabled => Available && Connected && Agent()?.Enabled == true;
 

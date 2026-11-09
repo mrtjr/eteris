@@ -104,7 +104,7 @@
   button.action.danger:hover { background: rgba(255, 122, 144, .14); }
   .clearpanel { background: rgba(0, 0, 0, .18); align-items: flex-end; }
   .clearpanel[hidden] { display: none; }
-  .check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--fg, #e9ebf2); margin: 6px 0; cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); margin: 6px 0; cursor: pointer; }
   .check input { accent-color: var(--accent); width: 16px; height: 16px; }
   .check small { color: var(--faint); }
   .about b { font-size: 17px; font-weight: 600; }
@@ -143,6 +143,7 @@
   ul.devices .devname { font-weight: 600; color: var(--text); }
   ul.devices small { color: var(--muted); flex: 1; }
   .label strong { color: var(--text); }
+  #syncWhat, #syncStays, #syncWhen { display: block; margin-top: 4px; }
   iframe { display: none; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; } }
 
@@ -161,6 +162,10 @@
   html.light button.action { background: #fff; }
   html.light button.action:hover:not(:disabled) { background: #eef0f6; }
   html.light .clearpanel { background: rgba(20, 24, 40, .03); }
+  html.light .code, html.light .syncform input[type=text] { background: rgba(20, 24, 40, .05); }
+  html.light .syncalert { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  html.light .syncnote.bad, html.light #syncState.bad { color: #b4233c; }
+  html.light button.action.danger { color: #b4233c; border-color: rgba(180, 35, 60, .35); }
   html.light .saved { background: #fff; box-shadow: 0 12px 40px rgba(20, 24, 40, .18); }
   html.light .logo::after { background: #f3f4f9; box-shadow: inset 0 0 0 5px #1b1f2a; }
   html.light a.link { color: #0e7490; }
@@ -441,7 +446,7 @@
               <span class="syncnote" id="syncDevicesNote" hidden></span></div>
           </div>
           <div class="item">
-            <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span>Quando: 30 s depois de abrir o Éteris, 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora». Sem rede, volta a tentar sozinho.</span></div>
+            <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris, 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora». Sem rede, volta a tentar sozinho.</span></div>
           </div>
           <div class="item" id="syncDeleteItem">
             <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
@@ -734,11 +739,14 @@
     const googleTitle = $('googleTitle');
     const googleNote = $('googleNote');
     const googleUrl = $('googleUrl');
-    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, lastState = null;
+    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, lastState = null, quickUntil = 0;
     // Pedidos do estado (estado, conta, entrar, sair, ações): só a resposta mais recente desenha. Uma resposta
     // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
     const askGoogle = (path, extra) => {
       const seq = ++googleAsked;
+      // Depois de uma ação (entrar, ligar, aprovar, procurar pedidos…), o resultado chega em segundo plano: pergunta
+      // amiúde durante uns segundos.
+      if (path !== 'sync-status') quickUntil = Date.now() + 15000;
       ask(path, d => { if (seq < googlePainted) return; googlePainted = seq; paint(d); }, extra);
     };
     // Nome e e-mail da conta: se há sessão sem conta guardada, pedem-se uma vez quando a secção fica à vista DEPOIS de
@@ -868,7 +876,7 @@
       // À espera do início de sessão, da conta, de uma ronda ou do outro computador: volta a perguntar daqui a pouco.
       // Senão, de 20 em 20 s (só o estado guardado: nenhum pedido à rede), para «há 2 min» e pedidos novos.
       const busy = d.google.state === 'waiting' || (d.google.state === 'signedIn' && d.google.pending) || s.running || joining
-        || s.phase === 'starting' || s.phase === 'pairing';
+        || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil;
       poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
       askLook();
     };

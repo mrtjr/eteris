@@ -12,3 +12,7 @@ TestResults/
 build/cef-codecs/out/
 # Sandbox: DLL cliente do bootstrap compilada por build/sandbox/client/build.cmd (docs/sandbox.md, passo D)
 build/sandbox/client/out/
+# Identificador da aplicação Google (OAuth «App para computador»): nunca no repositório. Vai para a pasta publish pelo
+# build/publish.ps1 -GoogleOAuthJson (docs/motor.md, «Como publicar»; docs/sincronizacao.md).
+google-oauth.json
+**/google-oauth.json

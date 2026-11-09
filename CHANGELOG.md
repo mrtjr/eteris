@@ -2,6 +2,34 @@
 
 ## Por publicar
 
+### Sincronização entre computadores («Entrar com o Google»)
+- **Login completo:** entra-se com a conta Google no navegador do sistema e os **favoritos, Espaços (nome, cor, emoji
+  e ordem), definições que viajam, decisões do Escudo por site (desligado, modo estrito, elementos escondidos,
+  bloqueios por site, exceções ao HTTPS primeiro) e notas** passam de um computador para o outro, como no Chrome, no
+  Firefox e no Brave — mas **sempre cifrados de ponta a ponta**: os dados vão para a pasta oculta da aplicação no
+  Google Drive do utilizador (âmbito `drive.appdata`), a chave nunca sai dos aparelhos e a Google só vê ficheiros
+  cifrados, os tamanhos e as horas. Histórico, abas abertas, cookies e palavras-passe (que o Éteris não guarda) não
+  sincronizam.
+- **Primeiro computador:** a conta cria-se sozinha e aparece o **código de recuperação** com «Copiar» e «Já guardei» e
+  o aviso de que, sem ele e sem outro computador, os dados na nuvem não se recuperam.
+- **Computador seguinte:** «Aprovar noutro computador» (este mostra um código; o outro mostra o pedido com o nome do
+  computador e o mesmo código, no menu da conta e nas Definições, e aprova-se lá) ou «Usar o código de recuperação».
+  Os dados juntam-se sem se perder nada: o que só existia nesse computador também sobe.
+- **Quando:** 30 s depois de abrir (só com a sincronização ligada), 10 s depois de uma alteração, de 10 em 10 minutos
+  e em «Sincronizar agora»; sem rede, volta a tentar sozinho com espera crescente. O estado está nas Definições
+  («Sincronizado há 2 min», «A sincronizar…», o erro) e na linha da conta do menu.
+- **Aparelhos:** lista nas Definições com «Remover» — troca as chaves (código de recuperação novo), os outros
+  computadores continuam sozinhos e o removido deixa de ler e escrever.
+- **«Sair»** para a sincronização neste computador, apaga e revoga a sessão Google e, se se escolher, apaga também a
+  chave deste computador. **«Apagar os meus dados do Éteris no Google Drive»** apaga os ficheiros da pasta da
+  aplicação (com confirmação), sem sair da conta.
+- A secção Sincronização e a conta no menu deixam de estar atrás da opção experimental: aparecem sempre que a
+  compilação tem o identificador da aplicação Google (sem ele: «indisponível nesta compilação»).
+- `eteris://privacy/`: «No arranque, nada sai para a Google» continua verdadeira por omissão e, com a sincronização
+  ligada, diz a exceção escolhida (só os pedidos da sincronização, cifrados, para o seu Drive, e quando).
+- Publicação: `build/publish.ps1 -GoogleOAuthJson <ficheiro>` põe o identificador da aplicação Google na instalação
+  (verificado; nunca no repositório); sem ele publica sem login e avisa.
+
 ## 0.2.12 — 2026-11-08
 
 Uma versão de correções no **menu do navegador**: volta a ler-se (o título, o subtítulo e o «Zoom» saíam em

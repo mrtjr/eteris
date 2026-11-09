@@ -274,6 +274,18 @@ nas páginas de erro de certificado passa a vir só da data da compilação do m
 Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
 pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
 
+**Sincronização (ramo `sync`, por publicar).** Por omissão está desligada e a promessa fica exatamente como medida
+acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o estado só leem o disco; testes
+`SyncAgentTests.Startup_BuildingTheAgentAndReadingTheState_SendsNothing` e
+`SyncIntegrationTests.Startup_OnlySchedulesTheFirstRound_ThirtySecondsAfterTheWindow`). Com ela ligada — escolha do
+utilizador —, a exceção é dita em `eteris://privacy/` (`PrivacyPage.SyncException`): só os pedidos da sincronização,
+cifrados, para a pasta oculta da aplicação no Drive dele, **30 s depois de a janela estar pronta**, 10 s depois de uma
+alteração e de 10 em 10 minutos, por um cliente próprio que só fala com `oauth2.googleapis.com` (`/token`, `/revoke`) e
+`www.googleapis.com` (`/drive/v3/files`, `/upload/drive/v3/files`, `/drive/v3/about`) — nada pelo motor
+(`GoogleSyncTests.HttpClient_OnlyReachesGoogleOAuthAndDrive`, varrimento `SyncLibrary_HttpOnlyInTheGoogleFolder…` e
+`BrowserSyncFolder_HttpOnlyThroughTheGoogleClient`). Prova ao vivo com a pasta de teste: a 1.ª escrita chega 31,6 s
+depois de abrir; a medição com o Drive real e o proxy fica para a fase «Prova».
+
 ## 8. Pedidos sem aba: a fuga do Escudo — medido (2026-11-08)
 
 O estudo das extensões (`C:\cef\notas\viabilidade\viab-extensoes.md`, secção 3) viu um `fetch` a
