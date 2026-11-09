@@ -28,6 +28,7 @@ public static class PerfTuning
     public const string MediaPolling = "e4";
     public const string OwnLinkBubble = "e5";
     public const string ReleaseGlance = "e6";
+    public const string SmallBackForwardCache = "e7";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -38,6 +39,8 @@ public static class PerfTuning
             OnByDefault: true),
         new(ReleaseGlance, "o Espreitar liberta o motor 60 s depois de fechar; os sites fixados escondidos na barra lateral adormecem como as abas (salvo «Manter acordado»)",
             OnByDefault: true),
+        new(SmallBackForwardCache, "Voltar/Avançar instantâneo para as 3 últimas páginas de cada aba (o Chromium guarda 6): menos renderers vivos",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D-5"),
         new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
     ];

@@ -17,7 +17,10 @@ public class EngineFeatureNamesTests
     public static IEnumerable<object[]> Names()
         => EngineHardening.AdApis.Concat(EngineHardening.Partitioning).Concat(EngineHardening.LocalNetworkChecks)
             .Concat(EngineHardening.Identity).Concat(EngineHardening.NoListeningSockets).Concat(EngineHardening.NoGoogleAtStartup)
-            .Select(f => f.Feature).Append("HttpsUpgrades").Append(NetworkSandbox.Feature).Distinct().Select(n => new object[] { n });
+            .Select(f => f.Feature).Append("HttpsUpgrades").Append(NetworkSandbox.Feature)
+            // As de desempenho levam parâmetros («Nome:param/valor»): procura-se só o nome.
+            .Concat(EnginePerformance.Enabled.Select(f => EnginePerformance.FeatureName(f.Feature)))
+            .Distinct().Select(n => new object[] { n });
 
     [Theory]
     [MemberData(nameof(Names))]
