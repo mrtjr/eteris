@@ -163,18 +163,51 @@ public class SyncIntegrationTests
         Assert.True(startup.IndexOf("DeletePending", StringComparison.Ordinal) < startup.IndexOf("if (!Enabled) return;", StringComparison.Ordinal));
 
         var page = File.ReadAllText(Path.Combine(src, "Browser", "settings.html"));
-        Assert.Contains("const deleteError = msg && msg.area === 'delete' ? msg.text : '';", page, StringComparison.Ordinal);
+        Assert.Contains("const deleteError = (msg && msg.area === 'delete' ? msg.text : '') || (s.deleting && !s.running ? s.deleteError || '' : '');", page, StringComparison.Ordinal);
         Assert.Contains("note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);", page, StringComparison.Ordinal);
         Assert.DoesNotContain("note($('syncDeleteNote'), msg && msg.area === 'delete' ? msg.text : '', true);", page, StringComparison.Ordinal);
         Assert.Contains("$('syncStart').disabled = !!s.deleting && !!s.running;", page, StringComparison.Ordinal);
         // Reaberta com o apagar por acabar (ainda sem «running»): a página pergunta de 1,5 em 1,5 s até acabar (ou até
         // dizer porque não acabou), em vez de ficar 20 s em «A apagar…» (visto na prova ao vivo).
-        Assert.Contains("|| (s.deleting && !(d.message && d.message.area === 'delete'))", page, StringComparison.Ordinal);
+        // Com o apagar a falhar (deleteError), a sondagem rápida para: a página diz porquê e oferece «Tentar de novo».
+        Assert.Contains("|| (s.deleting && !s.deleteError && !(d.message && d.message.area === 'delete'))", page, StringComparison.Ordinal);
 
         var now = 1_762_560_000_000L;
         var deleting = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, true, 0, null, "A apagar", null, null, [], [], false, 0) { Deleting = true };
         Assert.Equal("A apagar os dados do Drive…", SyncService.Summary(deleting, now));
         Assert.Contains("deleting = True", SyncService.StatusData(deleting, now).ToString(), StringComparison.Ordinal);
+    }
+
+    // Um apagar que não acabou (falha de rede ou inesperada): a página e o menu dizem porquê em vez de «A apagar…» para
+    // sempre, «Tentar de novo» volta a tentar sem outra confirmação, e «Ligar» passa a «Ligar sem acabar de apagar».
+    [Fact]
+    public void DeleteCloud_ThatFails_IsShown_WithTryAgain_AndStartAnyway()
+    {
+        var src = Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser");
+        var handler = File.ReadAllText(Path.Combine(src, "Browser", "EterisSchemeHandlerFactory.cs")).Replace("\r\n", "\n");
+        Assert.Contains("case \"/sync-delete-retry\":\n                Sync.SyncService.RetryDeleteCloud();", handler, StringComparison.Ordinal);
+        Assert.Contains("Sync.SyncService.Start(switchAccount: true, abandonDeletion: InternalPages.Query(uri, \"anyway\") == \"1\");", handler, StringComparison.Ordinal);
+
+        var service = File.ReadAllText(Path.Combine(src, "Sync", "SyncService.cs"));
+        Assert.Contains("if (abandonDeletion) agent.AbandonCloudDeletion();", service, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception e) { return \"Não foi possível concluir (\" + e.Message + \").\"; }", service, StringComparison.Ordinal);
+
+        var page = File.ReadAllText(Path.Combine(src, "Browser", "settings.html"));
+        Assert.Contains("<button class=\"action\" id=\"syncDeleteRetry\" hidden>Tentar de novo</button>", page, StringComparison.Ordinal);
+        Assert.Contains("show('syncDeleteRetry', !!s.deleting && !!deleteError && !s.running);", page, StringComparison.Ordinal);
+        Assert.Contains("askGoogle('sync-delete-retry');", page, StringComparison.Ordinal);
+        Assert.Contains("const deleteStuck = !!s.deleting && !!s.deleteError && !s.running;", page, StringComparison.Ordinal);
+        Assert.Contains("$('syncStart').textContent = deleteStuck ? 'Ligar sem acabar de apagar'", page, StringComparison.Ordinal);
+        Assert.Contains("askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : '')", page, StringComparison.Ordinal);
+
+        var now = 1_762_560_000_000L;
+        var failed = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, false, 0, null, "A apagar", null, null, [], [], false, 0)
+        {
+            Deleting = true,
+            DeleteError = "Ainda não se conseguiu apagar tudo do Google Drive (sem ligação ao Google Drive).",
+        };
+        Assert.Equal("Por apagar do Drive: veja Definições › Sincronização", SyncService.Summary(failed, now));
+        Assert.Contains("deleteError = Ainda não se conseguiu", SyncService.StatusData(failed, now).ToString(), StringComparison.Ordinal);
     }
 
     // «A apagar» vai no estado guardado (DPAPI), escrito até ao disco antes de se apagar o primeiro ficheiro.

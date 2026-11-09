@@ -81,6 +81,9 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // A apagar os dados do Éteris no transporte (ou por acabar, se o Éteris fechou a meio): a sincronização já está
     // desligada neste aparelho.
     public bool Deleting { get; init; }
+
+    // O apagar não acabou e porquê (com «Tentar de novo»): só enquanto Deleting. null = a correr, ou ainda não tentou.
+    public string? DeleteError { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -118,6 +121,8 @@ public sealed class SyncAgent
     private int _pendingDevices;
     private int _waiting;
     private GuestFlow? _guest;
+    // Porque é que o último «acabar de apagar» falhou (mostrado com «Tentar de novo» enquanto o apagar estiver por acabar).
+    private string? _deleteError;
     private IReadOnlyList<DeviceInfo> _devices = [];
     // A conta tem registos secretos vivos (visto no fim da última ronda; o motor só se lê dentro de uma ronda).
     private bool _secretsInAccount;
@@ -147,6 +152,9 @@ public sealed class SyncAgent
     // A conta do transporte com que se está agora (para o Google Drive, uma impressão digital da conta Google; null =
     // não se sabe, ou o transporte não tem contas). Só disco: nunca faz pedidos.
     public Func<string?>? AccountKey { get; init; }
+
+    // Registo de diagnóstico (nomes opacos do transporte, nunca dados): o que o apagar deixou de fora e porque falhou.
+    public Action<string>? Log { get; init; }
 
     // Mudou alguma coisa no estado (para a interface se redesenhar). Chamado de qualquer thread.
     public event Action? Changed;
@@ -244,6 +252,7 @@ public sealed class SyncAgent
                     NeedsSignIn = _needsSignIn,
                     WaitingRequests = _waiting,
                     Deleting = _saved?.DeletePending == true,
+                    DeleteError = _saved?.DeletePending == true ? _deleteError : null,
                 };
             }
         }
@@ -259,8 +268,13 @@ public sealed class SyncAgent
 
     public async Task StartAsync(bool switchAccount, CancellationToken cancellationToken = default)
     {
-        // «Apagar os meus dados…» por acabar (o Éteris fechou a meio): acaba primeiro; a conta nova começa do zero.
-        if (DeletePending) await FinishCloudDeletionAsync(cancellationToken).ConfigureAwait(false);
+        // «Apagar os meus dados…» por acabar (o Éteris fechou a meio): acaba primeiro; a conta nova começa do zero. Se não
+        // acabar, diz porquê e como sair dali: tentar de novo, ou ligar sem acabar de apagar (AbandonCloudDeletion).
+        if (DeletePending)
+        {
+            try { await FinishCloudDeletionAsync(cancellationToken).ConfigureAwait(false); }
+            catch (SyncUserException e) { throw new SyncUserException(e.Message + " " + StartAnywayText); }
+        }
         lock (_gate)
         {
             _saved ??= new SavedSync();
@@ -388,6 +402,7 @@ public sealed class SyncAgent
             {
                 try
                 {
+                    // Se um «apagar» (ou «Sair») chegou entretanto, a entrada não grava nada e a ronda acaba aqui.
                     await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false);
                     return;
                 }
@@ -692,7 +707,8 @@ public sealed class SyncAgent
             SetRunning(true);
             try
             {
-                await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false);
+                // «Apagar…» ou «Sair» enquanto se entrava: nada foi gravado e não há ronda.
+                if (!await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false)) return;
                 SavedSync saved;
                 lock (_gate) saved = _saved!;
                 await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -714,12 +730,22 @@ public sealed class SyncAgent
         }
     }
 
-    private async Task JoinCoreAsync(AccountSecret account, string? from, CancellationToken cancellationToken)
+    // Entra na conta e grava-a. Devolve false (sem gravar nada) se, enquanto se lia a conta, começou um «apagar» ou o
+    // utilizador saiu: como nas rondas (IsCurrent), nada grava depois de BeginCloudDeletion ou de «Sair».
+    private async Task<bool> JoinCoreAsync(AccountSecret account, string? from, CancellationToken cancellationToken)
     {
+        SavedSync? before;
+        bool wasOn;
+        lock (_gate)
+        {
+            before = _saved;
+            wasOn = before?.Enabled == true;
+        }
         var engine = await SyncEngine.JoinAsync(Transport(), account, DeviceIdentity.Create(DeviceName), _now, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         lock (_gate)
         {
+            if (!ReferenceEquals(_saved, before) || before is { DeletePending: true } || (wasOn && before is { Enabled: false })) return false;
             _engine = engine;
             _saved ??= new SavedSync();
             _saved.Enabled = true;
@@ -739,6 +765,7 @@ public sealed class SyncAgent
             _guest = null;
             _notice = from is null ? null : $"Este computador entrou na conta, aprovado em «{from}».";
         }
+        return true;
     }
 
     // «Aprovar noutro computador»: abre o pedido, espera que um aparelho ligado responda, mostra o código de
@@ -783,10 +810,12 @@ public sealed class SyncAgent
                 SetRunning(true);
                 try
                 {
-                    await JoinCoreAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false);
-                    SavedSync saved;
-                    lock (_gate) saved = _saved!;
-                    await CycleAsync(saved, flow.Cancel.Token).ConfigureAwait(false);
+                    if (await JoinCoreAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false))
+                    {
+                        SavedSync saved;
+                        lock (_gate) saved = _saved!;
+                        await CycleAsync(saved, flow.Cancel.Token).ConfigureAwait(false);
+                    }
                 }
                 finally
                 {
@@ -1135,6 +1164,7 @@ public sealed class SyncAgent
             saved.CreatedMs = 0;
             saved.Stopped = DeletingText;
             _store.Save(saved);
+            _deleteError = null;
             _engine = null;
             _pinnedFor = null;
             _phase = SyncPhase.Stopped;
@@ -1159,6 +1189,9 @@ public sealed class SyncAgent
 
     // A segunda metade: apaga no transporte o que lá estiver (também depois de reabrir, se o Éteris fechou a meio).
     // Lista outra vez depois de apagar (outro aparelho a meio de uma ronda pode ter escrito entretanto), até 4 passagens.
+    // Um nome que o transporte recusa (ArgumentException: não é do esquema nem uma cópia em conflito dentro da pasta do
+    // Éteris) fica de fora, com registo, e não trava o resto. Qualquer outra falha — de rede ou inesperada — chega ao
+    // utilizador (SyncUserException, e Status.DeleteError com «Tentar de novo») em vez de deixar o apagar preso.
     public async Task FinishCloudDeletionAsync(CancellationToken cancellationToken = default)
     {
         SavedSync? saved;
@@ -1166,33 +1199,56 @@ public sealed class SyncAgent
         if (saved is not { DeletePending: true }) return;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         SetRunning(true);
+        var left = new HashSet<string>(StringComparer.Ordinal);
         try
         {
             lock (_gate)
+            {
                 if (!ReferenceEquals(_saved, saved) || !saved.DeletePending)
                     return; // «Sair» com «apagar a chave», ou outro pedido já acabou
+                _deleteError = null;
+            }
             var transport = Transport();
             for (var pass = 0; pass < 4; pass++)
             {
-                var files = await transport.ListAsync(SyncPaths.Root, cancellationToken).ConfigureAwait(false);
+                var files = (await transport.ListAsync(SyncPaths.Root, cancellationToken).ConfigureAwait(false)).Where(f => !left.Contains(f)).ToList();
                 if (files.Count == 0) break;
-                foreach (var path in files) await transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
+                foreach (var path in files)
+                {
+                    try { await transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false); }
+                    catch (ArgumentException e)
+                    {
+                        left.Add(path);
+                        Log?.Invoke($"Apagar do transporte: «{path}» ficou de fora ({e.Message}).");
+                    }
+                }
             }
             lock (_gate)
             {
                 if (!ReferenceEquals(_saved, saved) || !saved.DeletePending) return;
+                var done = left.Count == 0 ? DeletedText : DeletedText + LeftOutText(left.Count);
                 saved.DeletePending = false;
-                saved.Stopped = DeletedText;
+                saved.Stopped = done;
                 _store.Save(saved);
                 _phase = SyncPhase.Stopped;
-                _notice = DeletedText;
+                _notice = done;
                 _error = null;
+                _deleteError = null;
             }
         }
-        catch (Exception e) when (IsTransient(e))
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            Fail(e);
-            throw new SyncUserException(NotDeletedText);
+            throw; // o Éteris a fechar: acaba ao abrir
+        }
+        catch (Exception e)
+        {
+            var text = NotDeletedText(e);
+            Log?.Invoke($"Apagar do transporte: não acabou ({e.GetType().Name}: {e.Message}).");
+            if (IsTransient(e)) Fail(e);
+            lock (_gate)
+                if (ReferenceEquals(_saved, saved) && saved.DeletePending)
+                    _deleteError = text;
+            throw new SyncUserException(text);
         }
         finally
         {
@@ -1208,8 +1264,44 @@ public sealed class SyncAgent
     private const string DeletedText =
         "Os dados do Éteris foram apagados do Google Drive. A sincronização está desligada; os dados deste computador ficaram.";
 
-    private const string NotDeletedText =
-        "Ainda não se conseguiu apagar tudo do Google Drive (sem ligação, ou a sessão da Google acabou). A sincronização ficou desligada neste computador e nada voltou a ser enviado. O Éteris acaba de apagar quando abrir outra vez; também pode carregar outra vez em «Apagar…».";
+    private static string NotDeletedText(Exception e)
+    {
+        var why = e switch
+        {
+            Google.OAuthException { NeedsSignIn: true } => "a sessão da Google acabou: entre outra vez com o Google",
+            HttpRequestException or TaskCanceledException or TimeoutException or Google.OAuthException => "sem ligação ao Google Drive",
+            IOException or UnauthorizedAccessException => "a pasta de sincronização não está acessível",
+            _ => "erro inesperado: " + e.Message,
+        };
+        return $"Ainda não se conseguiu apagar tudo do Google Drive ({why}). A sincronização ficou desligada neste computador e nada voltou a ser enviado. Carregue em «Tentar de novo» (o Éteris também tenta quando abrir outra vez).";
+    }
+
+    private static string LeftOutText(int count)
+        => count == 1
+            ? " Ficou 1 ficheiro com um nome que o Éteris não reconhece (não foi apagado)."
+            : $" Ficaram {count} ficheiros com nomes que o Éteris não reconhece (não foram apagados).";
+
+    private const string StartAnywayText =
+        "Para ligar já a sincronização, carregue em «Ligar sem acabar de apagar»: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o código de recuperação dela (ou volte a «Apagar…» mais tarde).";
+
+    // «Ligar sem acabar de apagar»: o utilizador desiste de acabar o apagar que falhou (fica no transporte o que lá
+    // estava) e liga a sincronização a seguir (StartAsync). Nunca fica preso num apagar que não acaba.
+    public void AbandonCloudDeletion()
+    {
+        lock (_gate)
+        {
+            if (_saved is not { DeletePending: true } saved) return;
+            saved.DeletePending = false;
+            saved.Stopped = null;
+            _store.Save(saved);
+            _deleteError = null;
+            _notice = null;
+            _error = null;
+            _phase = SyncPhase.Off;
+        }
+        Log?.Invoke("Apagar do transporte: o utilizador ligou sem acabar de apagar.");
+        Notify();
+    }
 
     // «Sair»: a sincronização para neste aparelho. Com forgetKey, a cópia local da conta sai também (para voltar a
     // entrar é preciso o código ou outro aparelho); sem ela, entrar outra vez retoma sem código — e um código de

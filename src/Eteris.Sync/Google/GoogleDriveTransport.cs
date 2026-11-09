@@ -167,7 +167,7 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
                 var url = $"{GoogleEndpoints.Files}?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name,modifiedTime)"
                           + (page is null ? string.Empty : "&pageToken=" + Uri.EscapeDataString(page));
                 using var response = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, url), cancellationToken).ConfigureAwait(false);
-                var list = JsonSerializer.Deserialize<FileList>(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))
+                var list = Parse<FileList>(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))
                            ?? throw new HttpRequestException("Lista do Drive ilegível.");
                 foreach (var file in list.Files ?? [])
                 {
@@ -228,8 +228,16 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
 
     private static async Task<string> ReadIdAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var file = JsonSerializer.Deserialize<DriveFile>(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+        var file = Parse<DriveFile>(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
         return file?.Id ?? throw new HttpRequestException("O Drive não devolveu o ID do ficheiro.");
+    }
+
+    // Uma resposta 200 que não é o JSON do Drive (um portal de Wi-Fi, um proxy, uma resposta cortada) é uma falha de rede:
+    // passa sozinha e o Éteris tenta outra vez (uma JsonException ficava por apanhar e travava, por exemplo, o apagar).
+    private static T? Parse<T>(string json)
+    {
+        try { return JsonSerializer.Deserialize<T>(json); }
+        catch (JsonException e) { throw new HttpRequestException("Resposta do Drive ilegível.", e); }
     }
 
     private sealed record FileMetadata([property: JsonPropertyName("name")] string Name, [property: JsonPropertyName("parents")] string[] Parents);

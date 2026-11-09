@@ -4,7 +4,7 @@ namespace Eteris.Sync.Transport;
 // computador, pasta de rede, pen). Nenhum pedido de rede do Éteris: quem leva os ficheiros é o cliente da nuvem.
 // Escrita atómica (temporário + mudança de nome na mesma pasta), por isso o cliente da nuvem nunca apanha um ficheiro
 // a meio. Cada aparelho só escreve ficheiros seus, novos e imutáveis (exceto o seu estado), e não há «cópias em
-// conflito»; as que aparecerem são ignoradas (SyncPaths).
+// conflito»; as que aparecerem são ignoradas ao ler (SyncPaths) e saem ao apagar (DeleteAsync).
 public sealed class FolderTransport : ISyncTransport
 {
     private const string TempMark = ".eteris-tmp-";
@@ -59,7 +59,7 @@ public sealed class FolderTransport : ISyncTransport
 
     public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
     {
-        var file = Physical(path);
+        var file = PhysicalToDelete(path);
         if (File.Exists(file)) File.Delete(file);
         // Pastas vazias de aparelhos/emparelhamentos saem também (até à raiz «eteris»).
         var dir = Path.GetDirectoryName(file);
@@ -76,6 +76,28 @@ public sealed class FolderTransport : ISyncTransport
         var slash = prefix.LastIndexOf('/');
         return slash < 0 ? string.Empty : prefix[..slash];
     }
+
+    // Apagar aceita também os nomes fora do esquema que a própria pasta lista dentro de «eteris»: as «cópias em
+    // conflito» que o cliente da nuvem cria a partir dos ficheiros do Éteris («keys (1)», «000000000003 (Cópia em
+    // conflito de Trabalho)»). Estão na pasta do Éteris e são cópias de ficheiros dele (cifrados): saem com «Apagar os
+    // meus dados…» e nas limpezas, em vez de as travar. Ler e escrever continuam só com os nomes do esquema. Nunca fora
+    // de «eteris», nem «.»/«..», separadores, «:» (fluxos NTFS), carateres proibidos ou nomes que o Windows encurtaria.
+    private string PhysicalToDelete(string logical)
+    {
+        if (!logical.StartsWith(SyncPaths.Root, StringComparison.Ordinal)) return Physical(logical);
+        var segments = logical.Split('/');
+        foreach (var segment in segments)
+            if (!SyncPaths.IsValidSegment(segment) && !IsPlainFileName(segment))
+                throw new ArgumentException("Nome de ficheiro inválido: " + logical, nameof(logical));
+        var full = Path.GetFullPath(Path.Combine([_root, .. segments]));
+        var mine = Path.Combine(_root, SyncPaths.Root.TrimEnd('/')) + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(mine, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Fora da pasta: " + logical, nameof(logical));
+        return full;
+    }
+
+    private static bool IsPlainFileName(string segment)
+        => segment.Length is > 0 and <= 255 && segment is not "." and not ".." && !segment.EndsWith('.') && !segment.EndsWith(' ')
+           && segment.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && !segment.Contains(':');
 
     // Nome lógico → caminho dentro da raiz; nada de «..», raízes ou segmentos estranhos.
     private string Physical(string logical)

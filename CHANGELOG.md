@@ -116,7 +116,12 @@
   aplicação (com confirmação), sem sair da conta. A sincronização fica desligada (gravado no disco) **antes** de se
   apagar o primeiro ficheiro: se o Éteris fechar a meio, ao abrir continua desligada, nada volta a ser enviado e o
   apagar acaba sozinho («Ligar outra vez» também o acaba primeiro); uma ronda que estava a correr já não grava nem
-  envia depois do apagar; «A apagar os dados do Éteris do Google Drive…» fica à vista enquanto corre.
+  envia depois do apagar; «A apagar os dados do Éteris do Google Drive…» fica à vista enquanto corre. Se o apagar
+  não acabar (sem rede, sessão da Google acabada ou um erro inesperado), as Definições e o menu dizem porquê, com
+  **«Tentar de novo»**, em vez de ficarem em «A apagar…»; «Ligar outra vez» passa a **«Ligar sem acabar de apagar»**
+  (o que ficou no Drive fica lá), para nunca ficar preso. As «cópias em conflito» que um cliente de nuvem deixe na
+  pasta do Éteris («keys (1)») também saem, e uma entrada (com o código ou com a chave guardada) que esteja a meio
+  quando se carrega em «Apagar…» já não volta a ligar a sincronização nem a gravar a chave.
 - A secção Sincronização e a conta no menu deixam de estar atrás da opção experimental: aparecem sempre que a
   compilação tem o identificador da aplicação Google (sem ele: «indisponível nesta compilação»).
 - `eteris://privacy/`: «No arranque, nada sai para a Google» continua verdadeira por omissão e, com a sincronização

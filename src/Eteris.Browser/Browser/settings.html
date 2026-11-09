@@ -123,7 +123,7 @@
   .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
   .syncnote.bad { color: #ffb3c1; }
   .syncheld { margin: 6px 0 0; padding-left: 18px; color: #ffd8a8; font-size: 12.8px; line-height: 1.45; }
-  .syncheld[hidden], #importWeaker[hidden], #syncDeleteCancel[hidden], #syncReauth[hidden] { display: none; }
+  .syncheld[hidden], #importWeaker[hidden], #syncDeleteCancel[hidden], #syncDeleteRetry[hidden], #syncReauth[hidden] { display: none; }
   #importWeaker { margin-top: 8px; }
   /* «O que passa entre PCs»: uma linha por grupo, com o interruptor deste computador (o checkbox continua focável). */
   .topic { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
@@ -510,7 +510,7 @@
           <div class="item" id="syncDeleteItem">
             <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
               <span class="syncnote" id="syncDeleteNote" role="status" hidden></span></div>
-            <div class="stack"><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
+            <div class="stack"><button class="action" id="syncDeleteRetry" hidden>Tentar de novo</button><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
           </div>
         </div>
         <div class="item">
@@ -904,10 +904,16 @@
       show('syncDeleteItem', d.connected);
       // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
       $('syncOffTitle').textContent = phase === 'stopped' ? 'A sincronização parou neste computador' : 'A sincronização está desligada neste computador';
-      $('syncOffText').textContent = phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
+      // Um apagar do Drive que não acabou (e já não está a correr): diz o que fazer, e «Ligar» passa a «Ligar sem acabar
+      // de apagar» (nunca fica preso num apagar que não acaba).
+      const deleteStuck = !!s.deleting && !!s.deleteError && !s.running;
+      $('syncOffText').textContent = deleteStuck
+        ? 'Ainda há dados do Éteris por apagar do Drive (o porquê está em «Apagar os meus dados…», mais abaixo). Pode tentar de novo, ou ligar já a sincronização sem acabar de apagar: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o código de recuperação dela.'
+        : phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
         : d.hasKey ? 'Ligue-a para continuar com a mesma conta (a chave ficou neste computador).'
         : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';
-      $('syncStart').textContent = phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';
+      $('syncStart').textContent = deleteStuck ? 'Ligar sem acabar de apagar' : phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';
+      $('syncStart').dataset.anyway = deleteStuck ? '1' : '';
       // A apagar do Drive: «Ligar» espera que acabe (com o apagar interrompido, «Ligar» acaba-o primeiro). «Apagar…» fica
       // ativo (tem o foco depois de confirmar; carregar outra vez só volta a tentar acabar).
       $('syncStart').disabled = !!s.deleting && !!s.running;
@@ -1023,8 +1029,10 @@
       }
       paintTopic(d);
       note($('syncDevicesNote'), msg && msg.area === 'devices' ? msg.text : '', true);
-      const deleteError = msg && msg.area === 'delete' ? msg.text : '';
+      // O porquê de um apagar que não acabou: a mensagem da última ação ou, depois de reabrir, o estado (deleteError).
+      const deleteError = (msg && msg.area === 'delete' ? msg.text : '') || (s.deleting && !s.running ? s.deleteError || '' : '');
       note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);
+      show('syncDeleteRetry', !!s.deleting && !!deleteError && !s.running);
       return s;
     };
     const msg0 = (d, area) => d.message && d.message.area === area ? d.message.text : '';
@@ -1080,7 +1088,7 @@
       // estado guardado: nenhum pedido à rede), para «há 2 min» e pedidos novos.
       const busy = d.google.state === 'waiting' || (d.google.state === 'signedIn' && d.google.pending) || s.running || joining
         || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil
-        || (s.deleting && !(d.message && d.message.area === 'delete'));
+        || (s.deleting && !s.deleteError && !(d.message && d.message.area === 'delete'));
       poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
       askLook();
       // Depois de uma ação que muda o que está à vista, o foco vai para o que apareceu (o leitor de ecrã diz o quê).
@@ -1125,7 +1133,13 @@
       }
       else askGoogle(state === 'waiting' ? 'sync-google-cancel' : 'sync-google');
     });
-    $('syncStart').addEventListener('click', () => askGoogle('sync-start'));
+    $('syncStart').addEventListener('click', () => askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : ''));
+    // «Tentar de novo» (um apagar do Drive que não acabou): volta a tentar já; o foco fica na nota que diz o resultado.
+    $('syncDeleteRetry').addEventListener('click', () => {
+      note($('syncDeleteNote'), 'A apagar os dados do Éteris do Google Drive…');
+      $('syncDelete').focus();
+      askGoogle('sync-delete-retry');
+    });
     $('syncNow').addEventListener('click', () => askGoogle('sync-now'));
     $('syncReauth').addEventListener('click', () => askGoogle('sync-google'));
     let newCodeArmed = 0;

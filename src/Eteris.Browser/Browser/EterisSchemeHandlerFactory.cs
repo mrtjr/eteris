@@ -266,7 +266,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 break;
             case "/sync-start":
                 // «Ligar a sincronização» / «Ligar outra vez» (depois de ler o porquê): também com outra conta Google.
-                Sync.SyncService.Start(switchAccount: true);
+                // «anyway=1»: «Ligar sem acabar de apagar», depois de um apagar do Drive que não acabou.
+                Sync.SyncService.Start(switchAccount: true, abandonDeletion: InternalPages.Query(uri, "anyway") == "1");
                 break;
             case "/sync-new-code":
                 // Um código novo abre também o cofre (palavras-passe…): com segredos em jogo, o Windows confirma primeiro
@@ -338,6 +339,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             }
             case "/sync-delete-cloud":
                 Sync.SyncService.DeleteCloud();
+                break;
+            case "/sync-delete-retry":
+                Sync.SyncService.RetryDeleteCloud();
                 break;
             case "/sync-status":
                 break;

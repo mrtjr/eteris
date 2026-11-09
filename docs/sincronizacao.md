@@ -132,7 +132,21 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   apaga (à espera de uma ronda em curso, que já não grava — `IsCurrent` — e cujo envio, se o houve, sai com o resto).
   Se o Éteris fechar a meio, ao abrir a sincronização continua desligada (nenhuma ronda, nem forçada, corre) e
   `AfterFirstPaint` acaba de apagar; «Ligar outra vez» acaba primeiro e só depois cria a conta nova. Se não conseguir
-  acabar (sem rede, sessão da Google acabada), diz-o na nota de «Apagar…» e tenta outra vez ao abrir.
+  acabar, diz-o na nota de «Apagar…» e tenta outra vez ao abrir.
+  Qualquer falha do apagar fica à vista: `FinishCloudDeletionAsync` transforma toda a exceção (de rede, da sessão ou
+  inesperada — uma lista ilegível, um estado estranho) numa `SyncUserException` com o porquê e guarda-o em
+  `SyncStatus.DeleteError`; a página deixa de perguntar de 1,5 em 1,5 s, mostra o porquê com «Tentar de novo»
+  (`/sync-delete-retry`, sem outra confirmação) e o menu diz «Por apagar do Drive: veja Definições › Sincronização».
+  «Ligar outra vez» com o apagar por acabar tenta acabá-lo primeiro; se falhar, diz porquê e o botão passa a «Ligar sem
+  acabar de apagar» (`/sync-start?anyway=1` → `AbandonCloudDeletion`): o que ficou no transporte fica lá e, se o
+  registo de chaves da conta antiga ainda lá estiver, o computador pede para escolher como entrar (não há caminho sem
+  saída). Nomes inesperados não travam o apagar: na pasta, as «cópias em conflito» dentro de `eteris/` («keys (1)»,
+  «… (Cópia em conflito de …)») são do Éteris e apagam-se (`FolderTransport.DeleteAsync` aceita os nomes que ela própria
+  lista dentro de `eteris/`, sem «..», separadores, «:» nem carateres proibidos; ler e escrever continuam só com os nomes
+  do esquema); um nome que o transporte recuse apagar (`ArgumentException`) fica de fora, com registo, e o aviso final
+  diz quantos ficaram. No Drive, uma resposta que não é JSON é uma falha de rede (passa sozinha). Uma entrada a meio
+  (`JoinWithCodeAsync`, ou retomar com a chave guardada) confere, como as rondas, que o estado é o mesmo e que não
+  começou um apagar nem «Sair» antes de gravar: depois de `BeginCloudDeletion` nada volta a gravar `on`, a chave ou o motor.
 
 ## Quando sincroniza
 

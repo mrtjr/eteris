@@ -79,7 +79,12 @@ internal static class SyncService
             // neste computador; sem nenhuma ligada, ou sem cofre neste perfil, nem o abre).
             var profile = new Vault.ProfileWithVault(new BrowserProfile(), new Vault.VaultSyncProfile(() => Vault.VaultService.Profile),
                 () => _agent?.EnabledCollections);
-            _agent = new SyncAgent(Transport, profile, store, DeviceName, Now) { AccountKey = AccountKey };
+            _agent = new SyncAgent(Transport, profile, store, DeviceName, Now)
+            {
+                AccountKey = AccountKey,
+                // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
+                Log = m => System.Diagnostics.Debug.WriteLine("[sincronização] " + m),
+            };
             _agent.Changed += () => Changed?.Invoke();
             return _agent;
         }
@@ -215,10 +220,12 @@ internal static class SyncService
 
     // Entrou na Google (GoogleSync) ou carregou em «Ligar a sincronização» / «Ligar outra vez»: liga e faz a primeira
     // ronda já. «switchAccount» só no botão (o utilizador leu o aviso de que a sessão é de outra conta Google).
-    public static void Start(bool switchAccount = false)
+    // «abandonDeletion»: «Ligar sem acabar de apagar», depois de um apagar do Drive que não acabou (o que ficou fica lá).
+    public static void Start(bool switchAccount = false, bool abandonDeletion = false)
     {
         if (Agent() is not { } agent) return;
         Hook();
+        if (abandonDeletion) agent.AbandonCloudDeletion();
         _ = Task.Run(async () =>
         {
             bool ok;
@@ -229,11 +236,16 @@ internal static class SyncService
             }
             catch (SyncUserException e)
             {
-                // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê.
+                // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê (e que pode
+                // tentar de novo ou ligar sem acabar de apagar).
                 ok = false;
                 Say("delete", e.Message);
             }
-            catch (Exception) { ok = false; }
+            catch (Exception e)
+            {
+                ok = false;
+                if (agent.DeletePending) Say("delete", "Não foi possível acabar de apagar (" + e.Message + ").");
+            }
             lock (Gate)
             {
                 Schedule.Now(Now());
@@ -254,6 +266,13 @@ internal static class SyncService
         agent.BeginCloudDeletion();
         lock (Gate) Schedule.Stop();
         Arm();
+        Act("delete", a => a.FinishCloudDeletionAsync());
+    }
+
+    // «Tentar de novo» depois de um apagar do Drive que não acabou (já decidido: sem outra confirmação).
+    public static void RetryDeleteCloud()
+    {
+        if (Agent() is not { DeletePending: true }) return;
         Act("delete", a => a.FinishCloudDeletionAsync());
     }
 
@@ -330,6 +349,8 @@ internal static class SyncService
             return null;
         }
         catch (SyncUserException e) { return e.Message; }
+        // Uma falha inesperada também chega à página (antes perdia-se e a página ficava à espera para sempre).
+        catch (Exception e) { return "Não foi possível concluir (" + e.Message + ")."; }
     }
 
     // ---- estado para a interface ------------------------------------------------------------------------------------
@@ -351,7 +372,7 @@ internal static class SyncService
     public static string Summary(SyncStatus? status, long nowMs)
     {
         if (status is null) return "Sincronização desligada";
-        if (status.Deleting) return "A apagar os dados do Drive…";
+        if (status.Deleting) return status.DeleteError is null ? "A apagar os dados do Drive…" : "Por apagar do Drive: veja Definições › Sincronização";
         if (status.Requests.Count > 0) return $"Pedido de «{status.Requests[0].Name}» · código {status.Requests[0].Code}";
         if (status.NeedsSignIn) return "Sincronização em pausa: entre outra vez";
         if (status.WaitingRequests > 0 && status.Phase == SyncPhase.On) return "Um computador novo pede para entrar";
@@ -391,6 +412,7 @@ internal static class SyncService
             }),
             update = status.NeedsUpdate,
             deleting = status.Deleting,
+            deleteError = status.DeleteError,
             summary = Summary(status, nowMs),
             // Aprovar um aparelho novo entrega-lhe também segredos (o pedido diz isso e o «Aprovar» pede o Windows Hello).
             secrets = Agent()?.HasSecrets == true,

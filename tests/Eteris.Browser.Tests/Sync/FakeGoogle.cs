@@ -63,6 +63,9 @@ internal sealed class FakeGoogle : HttpMessageHandler
     // Como a Google às vezes faz: cria o ficheiro e responde 503 (o próximo envio multipart).
     public bool CreateThenFail { get; set; }
 
+    // As próximas «n» listagens respondem 200 com um corpo que não é JSON (um proxy, um portal de Wi-Fi).
+    public int GarbledLists { get; set; }
+
     // Um ficheiro posto diretamente (por exemplo um duplicado com o mesmo nome, deixado por uma versão antiga).
     public void Put(string name, byte[] data)
     {
@@ -112,6 +115,11 @@ internal sealed class FakeGoogle : HttpMessageHandler
             if (request.Method == HttpMethod.Get && path == "/drive/v3/files")
             {
                 if (query.GetValueOrDefault("spaces") != "appDataFolder") return Json(HttpStatusCode.Forbidden, new JsonObject { ["error"] = "só appDataFolder" });
+                if (GarbledLists > 0)
+                {
+                    GarbledLists--;
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>portal</html>", System.Text.Encoding.UTF8, "text/html") };
+                }
                 var all = _files.OrderBy(f => f.Key, StringComparer.Ordinal).ToList();
                 var start = int.TryParse(query.GetValueOrDefault("pageToken"), out var token) ? token : 0;
                 var size = Math.Min(PageSize, int.Parse(query.GetValueOrDefault("pageSize") ?? "100"));
