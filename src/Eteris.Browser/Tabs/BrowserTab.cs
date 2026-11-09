@@ -191,6 +191,9 @@ public partial class BrowserTab : ObservableObject
 
     public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
 
+    // A rolagem da página quando adormeceu (ajuste e13, Tabs/MemoryPressure.cs); reposta no 1.º carregamento ao acordar.
+    internal SleepScroll? SleptScroll { get; set; }
+
     // Sobe a cada mudança de endereço: uma captura em curso compara-o antes de atribuir a miniatura (MainWindow.Thumbnails.cs).
     internal int ThumbnailVersion { get; private set; }
 

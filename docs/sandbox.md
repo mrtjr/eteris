@@ -700,6 +700,14 @@ abre também nunca recebe a correção. Três camadas:
 | **(b) o processo cai antes da 1.ª página** | `Infrastructure/StartupGuard.cs` + `SandboxFallback.cs` (lógica pura) | `CefConfigurator.Prepare` grava `sandbox-fallback.json` no perfil (`Starting = true`) **antes** do `Cef.Initialize`; a 1.ª página apresentada (`MainWindow.PageVisibility`) ou um fecho normal (`App.OnExit`) limpa-o. Se no arranque seguinte o marcador ainda lá está e esse arranque era com sandbox, conta uma falha; **2 seguidas** → `DisabledFor = <versão>`: os arranques dessa versão correm sem sandbox (o mesmo que `--eteris-no-sandbox`: sem `WindowsSandboxInfo`, filhos com `--no-sandbox`, sem `NetworkServiceSandbox`) e a nova aba (normal e privada) avisa «O isolamento das páginas (sandbox) foi desligado por precaução … na próxima versão do Éteris volta a ser ligado». Uma versão nova volta a tentar do zero. |
 | **(c) filhos a morrer no arranque** | `StartupGuard.WatchChildren` e `OnRenderProcessTerminated` | Só com sandbox e só nos primeiros 30 s: uma thread de fundo vê, de 250 em 250 ms, os filhos do processo com o mesmo exe (páginas, placa gráfica, utilitários; não os do WebView2) e o código com que saem. Contam as exceções do Windows (`0xC…`), o `0x80000003` dos `CHECK` do Chromium e os códigos com que o sandbox mata um filho que não consegue fechar (`SBOX_FATAL_*` 7006–7011 e 7013; não o 7012, limite de memória); do CefSharp contam as páginas que o motor nem conseguiu lançar (`TS_LAUNCH_FAILED`/`TS_INTEGRITY_FAILURE`, 4 e 5). **3 falhas** fazem desse arranque um arranque falhado (mesmo que a página já tenha aparecido), com o mesmo limite de 2 seguidos. |
 
+- **Em dois degraus com os ajustes de desempenho (D-18 do plano de desempenho da 0.2.14):** o marcador guarda também se
+  o arranque corria com ajustes que mexem no caminho antes da 1.ª página (`WithTweaks`, `PerfTuning.AnyBeforeFirstPaint`:
+  cache dos shaders, funcionalidades do motor do E14/E15, poupança de energia do E16…). Uma falha, em (b) ou em (c),
+  de um arranque com eles desliga-os nos arranques seguintes dessa versão (`TweaksDisabledFor`; `PerfTuning.Suspend`,
+  logo no início do `Program.Main`, antes da 1.ª leitura de um ajuste, por `StartupGuard.SuspendTweaksAfterAFailedStart`)
+  e conta como a 1.ª das 2 falhas: só a 2.ª, já sem eles, desliga o sandbox. Sem esses ajustes (a configuração de
+  omissão, em que estão todos desligados) não há 1.º degrau e tudo fica como em cima; nesse caso o `Program.Main` nem
+  lê o ficheiro. Uma versão nova volta a tentar os ajustes.
 - Sem sandbox possível (publicação normal, CefSharp oficial) nada disto corre: nem ficheiro, nem vigia.
 - Uma queda **sem** sandbox (por exemplo com `--eteris-no-sandbox` manual) não conta: não é culpa dele.
 - `--eteris-no-sandbox` manual continua igual (sem aviso).

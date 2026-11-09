@@ -1,0 +1,6 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>B</title><style>html,body{margin:0;height:100%}body{font:40px sans-serif;display:flex;align-items:center;justify-content:center}</style></head><body><div id=t></div><script>
+const q=new URLSearchParams(location.search),id=q.get('id')||'x';document.body.style.background=q.get('c')||'#fff';document.body.style.color=q.get('fg')||'#000';
+document.title='B'+id;document.getElementById('t').textContent='Aba '+id;
+function b(e){fetch('/b?id='+id+'&ev='+e+'&t='+Date.now(),{cache:'no-store',keepalive:true}).catch(()=>{})}
+b('load-'+document.visibilityState);document.addEventListener('visibilitychange',()=>b(document.visibilityState));
+</script></body></html>

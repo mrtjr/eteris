@@ -27,6 +27,11 @@ public partial class MainWindow
 
     private static readonly TimeSpan GlanceTimeout = TimeSpan.FromSeconds(12);
 
+    // Ajuste e6: fechado o cartão, a aba escondida e o contexto dela vão-se ao fim deste tempo (o renderer do último site
+    // ficava vivo até a janela fechar). Reabrir antes disso reaproveita-os; depois, nascem de novo.
+    internal static readonly TimeSpan GlanceRelease = TimeSpan.FromSeconds(60);
+    private System.Windows.Threading.DispatcherTimer? _glanceReleaseTimer;
+
     private bool GlanceOpen => GlanceOverlay.Visibility == Visibility.Visible;
 
     private void ShowLinkPreview(string url)
@@ -34,6 +39,7 @@ public partial class MainWindow
         if (!PageMenu.IsWebLink(url)) return;
         var serial = ++_glanceSerial;
         _glanceUrl = url;
+        _glanceReleaseTimer?.Stop();
         ResetGlanceCard(url);
         GlanceReadLater.Visibility = IsPrivate ? Visibility.Collapsed : Visibility.Visible;
         if (!GlanceOpen)
@@ -78,6 +84,32 @@ public partial class MainWindow
         if (_glanceBrowser is { IsDisposed: false, IsBrowserInitialized: true } browser) browser.Load("about:blank");
         _ = ClearGlanceCookiesAsync();
         ReturnFocusToPage();
+        ScheduleGlanceRelease();
+    }
+
+    // Ajuste e6 (Infrastructure/PerfTuning.cs): o motor do Espreitar não fica à espera até a janela fechar.
+    private void ScheduleGlanceRelease()
+    {
+        if (!Infrastructure.PerfTuning.IsOn(Infrastructure.PerfTuning.ReleaseGlance) || _glanceBrowser is null) return;
+        _glanceReleaseTimer ??= new System.Windows.Threading.DispatcherTimer(GlanceRelease, System.Windows.Threading.DispatcherPriority.Background,
+            (_, _) => ReleaseGlance(), Dispatcher);
+        _glanceReleaseTimer.Stop();
+        _glanceReleaseTimer.Start();
+    }
+
+    private void ReleaseGlance()
+    {
+        _glanceReleaseTimer?.Stop();
+        if (GlanceOpen) return;
+        if (_glanceBrowser is { } browser)
+        {
+            _glanceBrowser = null;
+            BrowserHost.Children.Remove(browser);
+            PageScript.Release(browser);
+            if (!browser.IsDisposed) browser.Dispose();
+        }
+        _glanceContext?.Dispose();
+        _glanceContext = null;
     }
 
     private void ResetGlanceCard(string url)
@@ -176,9 +208,12 @@ public partial class MainWindow
         BrowserHost.Children.Insert(0, browser);
         Closed += (_, _) =>
         {
+            _glanceReleaseTimer?.Stop();
             PageScript.Release(browser);
-            browser.Dispose();
+            // Já largado pelo ajuste e6 (ReleaseGlance): nada a fazer com este.
+            if (!browser.IsDisposed) browser.Dispose();
             _glanceContext?.Dispose();
+            _glanceContext = null;
         };
         _glanceBrowser = browser;
         return browser;

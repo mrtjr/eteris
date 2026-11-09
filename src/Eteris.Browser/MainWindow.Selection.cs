@@ -104,8 +104,8 @@ public partial class MainWindow
         var slept = 0;
         foreach (var tab in selected.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible && !t.IsLocked))
         {
-            ReleaseBrowser(tab);
-            tab.IsSleeping = true;
+            // Pelo mesmo caminho do sono por tempo (com o ajuste e13 guarda a rolagem antes, MainWindow.Sleep.cs).
+            PutToSleep(tab);
             slept++;
         }
         ClearSelection();

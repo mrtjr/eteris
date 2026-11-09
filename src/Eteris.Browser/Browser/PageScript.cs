@@ -29,6 +29,8 @@ public static class PageScript
         bool userGesture = false, bool asyncBody = false)
     {
         if (browser.IsDisposed || !browser.IsBrowserInitialized) return ScriptResult.Failed;
+        // Braço «puro» das medições de desempenho (só com ETERIS_TEST_PURO): nenhuma sessão DevTools.
+        if (Infrastructure.PerfDiagnostics.Without(Infrastructure.PerfLayers.DevTools)) return ScriptResult.Failed;
         try
         {
             var client = Sessions.GetValue(browser, b => b.GetDevToolsClient());

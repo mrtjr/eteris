@@ -10,7 +10,8 @@ public static class CefConfigurator
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
     public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
-                                    int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false)
+                                    int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false,
+                                    bool shaderCache = false)
     {
         var settings = new CefSettings
         {
@@ -29,7 +30,10 @@ public static class CefConfigurator
         if (!sandboxOn && bootstrapExe is not null) settings.BrowserSubprocessPath = bootstrapExe;
         // Só nos testes ao vivo (TestSwitches.DevToolsPort): DevTools do motor em 127.0.0.1.
         if (devToolsPort is { } port) settings.RemoteDebuggingPort = port;
-        settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
+        // Cache dos shaders da GPU no disco (ajuste e3 do plano de desempenho, à espera da decisão D-4): sem ela, cada
+        // sessão recompila os shaders antes dos primeiros fotogramas. Apaga-se com os dados dos sites e depois de uma
+        // janela privada (ProfileCleanup.RemoveGpuCaches). Desligada por omissão, como desde a 1.ª versão.
+        if (!shaderCache) settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
         // Voltar/Avançar instantâneos (back/forward cache), como no Chrome: o CefSharp.Wpf desliga-o por omissão por
         // causa do modo fora da tela (OSR), que o Éteris não usa — a página vive numa janela própria (HwndHost).
         settings.CefCommandLineArgs.Remove("disable-back-forward-cache");
@@ -85,32 +89,48 @@ public static class CefConfigurator
         ProfileCleanup.RemoveChromiumHistory(AppPaths.Profile);
         ProfileCleanup.RemoveDownloadedWidevine(AppPaths.Profile);
         StartupTrace.Mark("limpeza");
-        if (Data.Settings.Current.ClearOnExit) ProfileCleanup.RemoveSiteData(AppPaths.Profile);
+        var shaderCache = PerfTuning.IsOn(PerfTuning.ShaderCache);
+        if (Data.Settings.Current.ClearOnExit)
+        {
+            ProfileCleanup.RemoveSiteData(AppPaths.Profile);
+            // A garantia no arranque, como para os dados dos sites; só com o ajuste ligado (regra R-2: sem ele, nada de
+            // novo antes da 1.ª página). A limpeza ao sair (App.OnExit) apaga-as sempre.
+            if (shaderCache) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
+        }
         StartupTrace.Mark("definicoes");
         var dns = Data.Settings.Current.SecureDns;
-        Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.ApplySecureDns(
-            System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty)
+        // Na mesma escrita, a poupança de energia do Chromium (ajuste e16, Infrastructure/EnergySaver.cs; nulo sem ele).
+        var energySaver = EnergySaver.StateForStartup();
+        Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.Apply(
+            System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty,
+            energySaver)
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Shields.PrivacyPreferences.SecureDnsTemplate = Shields.PrivacyPreferences.StartedWithSecureDns is null ? null : Shields.SecureDns.TemplateFor(dns);
-        StartupTrace.Mark("localstate");
+        StartupTrace.Mark("localstate", energySaver is { } state ? FormattableString.Invariant($"energia={state}") : null);
         // Rede de segurança (Infrastructure/SandboxFallback.cs): o marcador «a arrancar» fica no perfil antes do motor
-        // arrancar; dois arranques com sandbox falhados seguidos desligam-no nesta versão, como --eteris-no-sandbox.
+        // arrancar. Em dois degraus (D-18 do plano de desempenho): um arranque falhado com ajustes de desempenho antes da
+        // 1.ª página desliga-os nesta versão (já no Program.Main, StartupGuard.SuspendTweaksAfterAFailedStart); dois
+        // arranques com sandbox falhados seguidos desligam o sandbox nesta versão, como --eteris-no-sandbox.
         var args = Environment.GetCommandLineArgs();
         var available = SandboxSupported ? SandboxInfo.Available : 0;
         var guard = StartupGuard.ForProfile(AppPaths.Root);
         var start = guard.Begin(Browser.SettingsPage.Version, available != 0, SandboxInfo.Disabled(args),
-            args.Any(a => a.Equals(SandboxFallback.RetrySwitch, StringComparison.OrdinalIgnoreCase)));
+            args.Any(a => a.Equals(SandboxFallback.RetrySwitch, StringComparison.OrdinalIgnoreCase)), PerfTuning.AnyBeforeFirstPaint);
         var sandbox = start.UseSandbox ? available : 0;
         SandboxActive = sandbox != 0;
         guard.WatchChildren();
-        StartupTrace.Mark("rede.seguranca", (start.UseSandbox ? "sandbox" : "sem-sandbox") + " " + start.Notice);
+        StartupTrace.Mark("rede.seguranca", (start.UseSandbox ? "sandbox" : "sem-sandbox") + " " + start.Notice
+            + (PerfTuning.SuspendedBecause is null ? string.Empty : " sem-ajustes"));
         var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
         // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.
         _dependencyCheck = bootstrap is null;
         var networkSandbox = NetworkSandbox.Decide(sandbox != 0, Environment.ProcessPath);
         // O perfil do AppContainer que o Chromium vai criar para este caminho: a desinstalação apaga-o.
         if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
-        var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox);
+        var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox,
+            shaderCache);
+        // Só nas medições de desempenho (ETERIS_TEST_HOST_RULES; nunca numa instalação): nomes de teste para 127.0.0.1.
+        PerfDiagnostics.ConfigureEngine(settings);
         StartupTrace.Mark("cef.settings");
         return settings;
     }
@@ -127,7 +147,21 @@ public static class CefConfigurator
     // Falso quando o Éteris arrancou pelo bootstrap do sandbox (Prepare).
     private static bool _dependencyCheck = true;
 
-    public static void InitializeInBackground(CefSettings settings, Action ready)
+    public static void InitializeInBackground(CefSettings settings, Action ready) => InitializeInBackground(() => settings, ready);
+
+    // Ajuste e11 (plano de desempenho da 0.2.14, E11): também o Prepare corre na thread do motor, a partir do Main, e sai
+    // do fio da interface (pastas, limpeza do perfil, Local State, NetworkSandbox.Decide, new CefSettings: ~41 ms).
+    // A limpeza do perfil continua antes do Cef.Initialize (a mesma thread, em sequência). Uma falha do Prepare volta a
+    // ser lançada no WaitReady, como a do Cef.Initialize.
+    public static bool StartedFromMain { get; private set; }
+
+    public static void StartFromMain(Action ready)
+    {
+        StartedFromMain = true;
+        InitializeInBackground(Prepare, ready);
+    }
+
+    public static void InitializeInBackground(Func<CefSettings> prepare, Action ready)
     {
         // O fecho do motor é do Éteris (App.OnExit: PreShutdown no fio da interface, Shutdown nesta thread). Sem isto, o
         // CefSharp.Wpf prendia o seu próprio Cef.Shutdown ao fecho do Dispatcher do fio da interface, que não é a thread do
@@ -138,6 +172,7 @@ public static class CefConfigurator
         {
             try
             {
+                var settings = prepare();
                 Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null);
                 StartupTrace.Mark("cef.initialize");
                 ready();
@@ -158,9 +193,13 @@ public static class CefConfigurator
         if (_thread is null) return;
         if (!Ready.IsSet)
         {
+            var waited = System.Diagnostics.Stopwatch.StartNew();
             Ready.Wait();
             StartupTrace.Mark("cef.pronto");
+            // Quanto o fio da interface esperou pelo motor (E11: tem de ficar ~0).
+            StartupTrace.MarkOnce("cef.esperou", FormattableString.Invariant($"ms={waited.Elapsed.TotalMilliseconds:F1}"));
         }
+        else StartupTrace.MarkOnce("cef.esperou", "ms=0");
         _failure?.Throw();
     }
 

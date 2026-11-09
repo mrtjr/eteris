@@ -305,7 +305,10 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame,
             IRequest request, IRequestCallback callback)
         {
+            // Custo de cada pedido no tratador, só com ETERIS_TEST_CONTADORES (plano de desempenho 0.2.14, D10).
+            var started = Infrastructure.PerfCounters.IsOn ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             var decided = Decide(browser, frame, request, callback);
+            if (started != 0) Infrastructure.PerfCounters.AddRequest(started, decided == CefReturnValue.Cancel);
             if (decided != CefReturnValue.Continue || ShieldEngine.Loaded.IsCompleted) return decided;
             try
             {

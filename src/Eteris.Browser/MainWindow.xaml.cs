@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         StartupTrace.Mark("janela.xaml");
+        ApplyPerfDiagnostics();
         // O motor arranca numa thread própria durante o XAML (Infrastructure/CefConfigurator.cs): daqui em diante é preciso.
         CefConfigurator.WaitReady();
         if (StartupTrace.IsOn)
@@ -80,6 +81,8 @@ public partial class MainWindow : Window
         WatchForgetOnClose();
         StartBounceWatch();
         StartAudioWatch();
+        SetUpLiveDot();
+        WatchUnseen();
         WatchMiniBar();
         WatchOmniboxMenu();
         SetUpSideFilter();
@@ -277,6 +280,7 @@ public partial class MainWindow : Window
         };
         browser.TitleChanged += (_, e) =>
         {
+            NudgeMediaPoll(tab);
             var url = tab.Address;
             if (e.NewValue is not string { Length: > 0 } title)
             {
@@ -294,6 +298,7 @@ public partial class MainWindow : Window
             // A meio da troca para o motor de vídeo, o estado da aba já é o dele.
             if (_videoViews.ContainsKey(tab)) return;
             tab.IsLoading = e.IsLoading;
+            if (!e.IsLoading) NudgeMediaPoll(tab);
             tab.Crossing.MainHistoryChanged(e.CanGoBack);
             tab.CanGoBack = e.CanGoBack;
             tab.CanGoForward = tab.Crossing.CanGoForward(inVideo: false, e.CanGoForward);
@@ -302,6 +307,8 @@ public partial class MainWindow : Window
         browser.FrameLoadStart += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
+            CaptureSessions.Ended(e.Browser.Identifier);
             StartupTrace.MarkOnce("aba.1.commit");
             // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a
             // contagem do Escudo recomeça aqui, no commit.
@@ -343,6 +350,8 @@ public partial class MainWindow : Window
             if (!e.Browser.IsLoading) injector.Tidy(url);
             Dispatcher.InvokeAsync(() =>
             {
+                // Acordou de um sono com a rolagem guardada (ajuste e13, MainWindow.Sleep.cs).
+                RestoreSleptScroll(tab, browser, url);
                 DetectSiteTint(tab, browser, url);
                 DetectReaderable(tab, browser, url);
                 ApplyHiddenElements(browser, url);
@@ -571,6 +580,8 @@ public partial class MainWindow : Window
 
     private void OnWindowStateChanged()
     {
+        // Ajuste e8 (MainWindow.Unseen.cs): a página à vista esconde-se ao minimizar antes de o CefSharp a encolher a 0×0.
+        ReviewUnseen();
         var maximized = WindowState == WindowState.Maximized;
         var frame = SystemParameters.WindowResizeBorderThickness;
         // Maximizada com moldura, o Windows estende a janela para lá do ecrã; sem moldura (ecrã inteiro) não.

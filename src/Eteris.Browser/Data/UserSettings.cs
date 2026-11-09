@@ -14,6 +14,8 @@ public sealed record UserSettings
     public string SearchEngine { get; init; } = "duckduckgo";
     public string Startup { get; init; } = "restore";
     public int SleepMinutes { get; init; } = 20;
+    // Adormecer também com pouca memória (ajuste e13, Tabs/MemoryPressure.cs); desligado = só o tempo conta.
+    public bool SleepOnLowMemory { get; init; } = true;
     // Arquivo automático: abas sem visita há N dias vão para o Arquivo (0 = nunca).
     public int ArchiveDays { get; init; } = Tabs.ArchivePolicy.DefaultDays;
     // O utilizador escolheu o prazo em Definições › Abas. Até lá as abas esquecidas só desvanecem: o Éteris não
@@ -93,6 +95,7 @@ public sealed record UserSettings
         "engine" when Engines.Contains(value) => this with { SearchEngine = value },
         "startup" when value is "restore" or "newtab" => this with { Startup = value },
         "sleep" when int.TryParse(value, out var minutes) && minutes >= 0 && minutes <= 24 * 60 => this with { SleepMinutes = minutes },
+        "sleepPressure" when bool.TryParse(value, out var on) => this with { SleepOnLowMemory = on },
         "archive" when int.TryParse(value, out var days) && days >= 0 && days <= 365 => this with { ArchiveDays = days, ArchiveConfirmed = true },
 
         "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
@@ -147,9 +150,15 @@ public sealed class SettingsStore(string path)
 
     public UserSettings Load()
     {
-        try { return File.Exists(path) ? Migrate(JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(path)) ?? new()) : new(); }
+        try { return File.Exists(path) ? Migrate(Read(File.ReadAllText(path)) ?? new()) : new(); }
         catch (Exception) { return new(); }
     }
+
+    // Ajuste e12: lida com o código gerado (Data/StartupJson.cs); sem ele, por reflexão, como sempre. O mesmo resultado.
+    public static UserSettings? Read(string json)
+        => Infrastructure.PerfTuning.IsOn(Infrastructure.PerfTuning.ReadyNewTab)
+            ? JsonSerializer.Deserialize(json, StartupJsonContext.Default.UserSettings)
+            : JsonSerializer.Deserialize<UserSettings>(json);
 
     // O pt-PT que a 0.2.9 e anteriores gravavam por omissão passa à língua do Windows; o escolhido nas Definições fica.
     public static UserSettings Migrate(UserSettings settings)

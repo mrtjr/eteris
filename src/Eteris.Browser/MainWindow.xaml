@@ -1312,18 +1312,10 @@
                                     ToolTip="Multimédia: o que está a tocar nas abas">
                                 <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource IconFont}" FontSize="15" />
                             </Button>
+                            <!-- Pulsa só enquanto se vê (MainWindow.Media.cs, PulseLiveDot): uma animação eterna desde o Loaded
+                                 punha o WPF a desenhar ~60 vezes por segundo o tempo todo, com o ponto escondido (E1). -->
                             <Ellipse x:Name="MediaLiveDot" Width="7" Height="7" Fill="{DynamicResource IrisBrush}" IsHitTestVisible="False"
-                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Visibility="Collapsed">
-                                <Ellipse.Triggers>
-                                    <EventTrigger RoutedEvent="Loaded">
-                                        <BeginStoryboard>
-                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.35" Duration="0:0:0.9" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </EventTrigger>
-                                </Ellipse.Triggers>
-                            </Ellipse>
+                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Visibility="Collapsed" />
                         </Grid>
                         <Grid x:Name="DownloadsHost" Visibility="Collapsed" Margin="0,0,4,0">
                             <Button x:Name="DownloadsButton" Style="{StaticResource IconButton}" Click="Downloads_Click"

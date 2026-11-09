@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset="utf-8"><title>mem</title><script src="m.js"></script></head>
+<body style="font:16px sans-serif;max-width:900px;margin:auto"><h1>Página estática</h1>
+<script>var s='';for(var i=0;i<200;i++)s+='<p>Parágrafo '+i+': texto estático para medir memória com várias abas abertas. Lorem ipsum dolor sit amet.</p>';document.write(s);
+requestAnimationFrame(function(){requestAnimationFrame(function(){beacon('painted',Math.round(performance.now()));});});</script></body></html>
+

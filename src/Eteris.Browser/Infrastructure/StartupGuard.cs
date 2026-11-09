@@ -11,6 +11,8 @@ namespace Eteris.Browser.Infrastructure;
 //   - Healthy: a 1.ª página apareceu (MainWindow.PageVisibility) ou o Éteris fechou normalmente (App.OnExit).
 //   - ChildFailed / RenderProcessTerminated: um filho morreu com um código de falha no início do arranque (vigia dos
 //     filhos, em baixo) ou o motor não conseguiu lançar uma página; ChildFailuresToCount fazem do arranque um falhado.
+//   - SuspendTweaksAfterAFailedStart (início do Program.Main): o 1.º degrau, os ajustes de desempenho desligados depois de
+//     um arranque falhado com eles (D-18; SandboxFallback.TweaksSuspended).
 // Sem sandbox possível (publicação normal, CefSharp oficial) não faz nada: nem ficheiro, nem vigia.
 public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
 {
@@ -21,6 +23,7 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
     private SandboxFallbackState? _toWrite;
     private Outcome _outcome;
     private int _childFailures;
+    private string? _version;
 
     public static StartupGuard Current { get; private set; } = new(string.Empty, () => TimeSpan.Zero);
 
@@ -35,13 +38,14 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
         return Current = new StartupGuard(Path.Combine(root, SandboxFallback.FileName), () => DateTime.UtcNow - started);
     }
 
-    public SandboxStart Begin(string version, bool available, bool manualOff, bool retried)
+    public SandboxStart Begin(string version, bool available, bool manualOff, bool retried, bool tweaks = false)
     {
         if (!available) return new SandboxStart(new SandboxFallbackState(), false, SandboxNotice.None);
-        var start = SandboxFallback.Begin(Read(path), version, available, manualOff, retried);
+        var start = SandboxFallback.Begin(Read(path), version, available, manualOff, retried, tweaks);
         lock (_gate)
         {
             _begun = start.State;
+            _version = version;
             Notice = start.Notice;
         }
         Write(path, start.State);
@@ -83,12 +87,27 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
             if (++_childFailures < SandboxFallback.ChildFailuresToCount) return;
             // Falhado, mesmo que a 1.ª página já tenha aparecido (a contagem de antes deste arranque é a de _begun).
             _outcome = Outcome.Failed;
-            _toWrite = SandboxFallback.Failed(begun);
+            _toWrite = SandboxFallback.Failed(begun, _version);
         }
         _ = Task.Run(Flush);
     }
 
     public int ChildFailures { get { lock (_gate) return _childFailures; } }
+
+    public const string TweaksSuspendedReason = "rede de segurança: um arranque anterior desta versão falhou com eles";
+
+    // O 1.º degrau da rede de segurança (D-18), no início do Program.Main, antes da 1.ª leitura de um ajuste (o e10 lê-se
+    // logo a seguir, antes do Velopack.Run). Só lê o disco quando há ajustes antes da 1.ª página ligados e o sandbox é
+    // possível (na configuração de omissão, nenhum: nada de novo antes da 1.ª página, regra R-2 do sandbox). O perfil é o
+    // do --user-data-dir dos argumentos, como o AppPaths.UseRoot faz a seguir.
+    public static bool SuspendTweaksAfterAFailedStart(IReadOnlyList<string> args)
+    {
+        if (!PerfTuning.AnyBeforeFirstPaint || !CefConfigurator.SandboxSupported || SandboxInfo.Available == 0) return false;
+        var root = StartupArgs.UserDataDir(args) is { } dir ? Path.GetFullPath(dir) : AppPaths.DefaultRoot;
+        if (!SandboxFallback.TweaksSuspended(Read(Path.Combine(root, SandboxFallback.FileName)), Browser.SettingsPage.Version)) return false;
+        PerfTuning.Suspend(TweaksSuspendedReason);
+        return true;
+    }
 
     // Grava o que estiver por gravar (no fecho: antes de o processo sair).
     public void Flush()

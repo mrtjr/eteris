@@ -12,8 +12,8 @@ public class SandboxFallbackTests
     private const string V = "0.2.14";
 
     private static SandboxStart Start(SandboxFallbackState previous, string version = V, bool available = true,
-        bool manualOff = false, bool retried = false)
-        => SandboxFallback.Begin(previous, version, available, manualOff, retried);
+        bool manualOff = false, bool retried = false, bool tweaks = false)
+        => SandboxFallback.Begin(previous, version, available, manualOff, retried, tweaks);
 
     // Simula uma queda: o estado gravado no Begin fica no disco tal como está (Starting = true).
     private static SandboxFallbackState Crash(SandboxStart start) => start.State;
@@ -187,6 +187,102 @@ public class SandboxFallbackTests
     [InlineData(4, true)]  // TS_LAUNCH_FAILED
     [InlineData(5, true)]  // TS_INTEGRITY_FAILURE
     public void PageLaunchFailures(int status, bool counts) => Assert.Equal(counts, SandboxFallback.IsLaunchFailure(status));
+
+    // ---------- Em dois degraus (D-18 do plano de desempenho): primeiro os ajustes, só depois o sandbox ----------
+
+    // A 1.ª queda com ajustes antes da 1.ª página desliga-os nesta versão (o sandbox continua); a 2.ª, já sem eles,
+    // desliga o sandbox.
+    [Fact]
+    public void TwoSteps_FirstCrashWithTweaks_TurnsThemOff_SecondTurnsTheSandboxOff()
+    {
+        var s1 = Start(new(), tweaks: true);
+        Assert.True(s1.State.WithTweaks);
+        Assert.False(SandboxFallback.TweaksSuspended(s1.State with { Starting = false }, V));
+        // Caiu: o Program.Main do arranque seguinte vê-o antes de ler um ajuste.
+        Assert.True(SandboxFallback.TweaksSuspended(Crash(s1), V));
+        var s2 = Start(Crash(s1), tweaks: false);
+        Assert.True(s2.UseSandbox);
+        Assert.Equal(SandboxNotice.None, s2.Notice);
+        Assert.Equal(V, s2.State.TweaksDisabledFor);
+        Assert.False(s2.State.WithTweaks);
+        Assert.Equal(1, s2.State.Failures);
+        var s3 = Start(Crash(s2));
+        Assert.False(s3.UseSandbox);
+        Assert.Equal(SandboxNotice.DisabledAfterFailures, s3.Notice);
+    }
+
+    // Os ajustes desligados por precaução ficam desligados nos arranques bons seguintes desta versão (senão voltariam a
+    // cair, um arranque sim, outro não), mesmo que o chamador ainda os peça; a versão seguinte volta a tentar.
+    [Fact]
+    public void TweaksStayOffForThisVersion_AndComeBackInTheNext()
+    {
+        var s2 = Start(Crash(Start(new(), tweaks: true)));
+        var s3 = Start(SandboxFallback.Healthy(s2.State), tweaks: true);
+        Assert.Equal(0, s3.State.Failures);
+        Assert.Equal(V, s3.State.TweaksDisabledFor);
+        Assert.False(s3.State.WithTweaks);
+        Assert.True(SandboxFallback.TweaksSuspended(SandboxFallback.Healthy(s3.State), V));
+        var next = Start(SandboxFallback.Healthy(s3.State), version: "0.2.15", tweaks: true);
+        Assert.Null(next.State.TweaksDisabledFor);
+        Assert.True(next.State.WithTweaks);
+        Assert.False(SandboxFallback.TweaksSuspended(SandboxFallback.Healthy(s3.State), "0.2.15"));
+    }
+
+    // Sem ajustes antes da 1.ª página (a configuração de omissão) não há 1.º degrau: as quedas contam para o sandbox,
+    // como antes, e nada se desliga nos ajustes.
+    [Fact]
+    public void WithoutTweaks_TheCrashCountsOnlyForTheSandbox()
+    {
+        var s2 = Start(Crash(Start(new())));
+        Assert.Null(s2.State.TweaksDisabledFor);
+        Assert.False(SandboxFallback.TweaksSuspended(Crash(Start(new())), V));
+        Assert.False(Start(Crash(s2)).UseSandbox);
+        // Uma queda sem sandbox (desligado à mão) não conta para nada, nem para os ajustes.
+        var manual = Start(new(), manualOff: true, tweaks: true);
+        Assert.False(SandboxFallback.TweaksSuspended(Crash(manual), V));
+        Assert.Null(Start(Crash(manual), tweaks: true).State.TweaksDisabledFor);
+    }
+
+    // Filhos a falhar logo no arranque (por exemplo a placa gráfica com uma funcionalidade do E14): o mesmo 1.º degrau.
+    [Fact]
+    public void TwoSteps_ChildFailures_AlsoTurnTheTweaksOff()
+    {
+        var dir = TempDir();
+        try
+        {
+            var file = Path.Combine(dir, SandboxFallback.FileName);
+            var guard = new StartupGuard(file, () => TimeSpan.FromSeconds(2));
+            Assert.True(guard.Begin(V, true, false, false, tweaks: true).State.WithTweaks);
+            for (var i = 0; i < SandboxFallback.ChildFailuresToCount; i++) guard.ChildFailed(0xC0000005);
+            guard.Flush();
+            var state = StartupGuard.Read(file);
+            Assert.Equal(1, state.Failures);
+            Assert.Equal(V, state.TweaksDisabledFor);
+            Assert.True(SandboxFallback.TweaksSuspended(state, V));
+            var next = new StartupGuard(file, () => TimeSpan.Zero).Begin(V, true, false, false, tweaks: false);
+            Assert.True(next.UseSandbox);
+            Assert.False(next.State.WithTweaks);
+            // Sem ajustes, a mesma falha não desliga nada além do sandbox à 2.ª.
+            Assert.Null(SandboxFallback.Failed(new SandboxFallbackState { WithSandbox = true }, V).TweaksDisabledFor);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // O 1.º degrau decide-se no início do Program.Main, antes da 1.ª leitura de um ajuste (o e10, antes do Velopack.Run),
+    // e só lê o disco com ajustes antes da 1.ª página ligados e o sandbox possível (regra R-2: nada de novo na omissão).
+    [Fact]
+    public void TwoSteps_AreCheckedAtTheTopOfMain()
+    {
+        var main = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Program.cs"));
+        var check = main.IndexOf("StartupGuard.SuspendTweaksAfterAFailedStart(args)", StringComparison.Ordinal);
+        Assert.True(check > 0);
+        Assert.True(check < main.IndexOf("PerfTuning.IsOn(", StringComparison.Ordinal));
+        Assert.True(check < main.IndexOf("velopack.Run()", StringComparison.Ordinal));
+        var guard = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Infrastructure", "StartupGuard.cs"));
+        Assert.Matches(@"if \(!PerfTuning\.AnyBeforeFirstPaint \|\| !CefConfigurator\.SandboxSupported \|\| SandboxInfo\.Available == 0\) return false;", guard);
+        var prepare = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Infrastructure", "CefConfigurator.cs"));
+        Assert.Contains("PerfTuning.AnyBeforeFirstPaint);", prepare);
+    }
 
     // O lado com ficheiros: marcador no disco antes do motor, limpo pela 1.ª página, filhos a falhar no arranque.
     [Fact]

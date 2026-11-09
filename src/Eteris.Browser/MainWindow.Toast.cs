@@ -12,10 +12,13 @@ public partial class MainWindow
         if (!ReferenceEquals(tab, Tabs.Active) || text is null)
         {
             LinkStatusBubble.Visibility = Visibility.Collapsed;
+            SyncLinkBubble(show: false);
             return;
         }
         LinkStatusText.Text = text;
         LinkStatusBubble.Visibility = Visibility.Visible;
+        // Ajuste e5: na janela própria da bolha (MainWindow.LinkBubble.cs); sem ele, na camada.
+        SyncLinkBubble(show: true);
     }
 
     private bool _toastWired;

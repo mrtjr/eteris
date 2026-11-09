@@ -37,7 +37,8 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 Medição (2026-11-06): páginas locais `fps.html` (animação) e `scroll.html` (rolagem contínua), uma só aba,
 janela 1360×860, 10 s, soma do processador de todos os processos do navegador em percentagem de 1 núcleo; todas
 a 60 fps (confirmado pelo título da página). Éteris em build Release; Chrome e Brave com perfis temporários,
-apagados no fim. Scripts: `perf-render.ps1` (Éteris) e `perf-browser.ps1` (referências).
+apagados no fim. Scripts: `perf-render.ps1` (Éteris) e `perf-browser.ps1` (referências), que já não existem; as
+ferramentas de medição atuais estão em `build/perf/` (`README.md`: bateria padrão, A/A, rondas e intervalos de confiança).
 
 | Página | Éteris 0.2.2 (fora da tela) | Protótipo em janela própria | Éteris 0.2.3 | Chrome 156 | Brave 157 | Firefox 159 |
 |---|---|---|---|---|---|---|
@@ -241,7 +242,7 @@ Processo (montado em 2026-11-06):
 2. **Licenças.** `licenses/INDEX.md` regista a versão do CefSharp e do CEF; o teste
    `ChromiumCredits_WereGeneratedForTheCurrentEngine` falha enquanto as licenças não forem geradas para o motor novo
    (`python build/licenses/collect.py`, que extrai os créditos do Chromium da versão nova).
-3. **Verificar ao vivo** com o perfil de teste (abrir páginas, medir com `perf-render.ps1`).
+3. **Verificar ao vivo** com o perfil de teste (abrir páginas, medir com `build/perf/medir.ps1`).
 4. **Publicar.** Recompilar o motor próprio para a versão nova da CEF (`build/cef-codecs`), subir a versão (csproj,
    `build/publish.ps1`, CHANGELOG, Novidades) e publicar localmente (`docs/motor.md`, «Publicação»; a tag `v*` só põe
    o `release.yml` a verificar); o Velopack atualiza os utilizadores sozinho (pacote delta).

@@ -1,0 +1,13 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>iframes</title><script src="m.js"></script>
+<style>body{margin:0;background:#eee}iframe{width:30%;height:300px;margin:1%;border:0;background:#fff}</style></head><body>
+<script>
+// 6 iframes animados de outros sites (processos próprios com o isolamento de sites): nomes mapeados para 127.0.0.1 como
+// em pedidos.html; ?local=1 usa a mesma origem (sem processos à parte).
+var port = location.port ? ':' + location.port : '';
+for (var i = 1; i <= 6; i++) {
+  var f = document.createElement('iframe');
+  f.src = (Q.get('local') === '1' ? location.origin : 'http://f' + i + '.eteris-teste.example' + port) + '/quadro.html?i=' + i;
+  document.body.appendChild(f);
+}
+fpsMeter('iframes');
+</script></body></html>

@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
@@ -61,6 +62,8 @@ public partial class MainWindow
 
         _sleepTimer ??= new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, (_, _) => SleepIdleTabs(), Dispatcher);
         _sleepTimer.Start();
+        // Ajuste e13: o sono por pressão de memória, um só para todas as janelas (MainWindow.Pressure.cs).
+        WatchMemoryPressure();
     }
 
     private bool HasEngine(BrowserTab tab) => _browsers.ContainsKey(tab) || _videoViews.ContainsKey(tab);
@@ -76,26 +79,67 @@ public partial class MainWindow
         {
             if (!SleepPolicy.ShouldSleep(IsTabOnScreen(tab), tab.IsSleeping, tab.IsLoading, tab.IsAudible,
                     tab.LastActiveUtc, now, threshold, tab.IsLocked)) continue;
-            ReleaseBrowser(tab);
-            tab.IsSleeping = true;
+            PutToSleep(tab);
         }
         // As que ficaram acordadas noutro Espaço (com som, ou trancadas) seguem a mesma política: acabado o som,
         // adormecem como as outras; uma trancada fica.
         foreach (var tab in Tabs.AwakeOutOfView())
         {
             if (!SleepPolicy.ShouldSleep(false, false, tab.IsLoading, tab.IsAudible, tab.LastActiveUtc, now, threshold, tab.IsLocked)) continue;
-            ReleaseBrowser(tab);
-            tab.IsSleeping = true;
+            PutToSleep(tab);
         }
+        // Os sites fixados escondidos na barra lateral (ajuste e6, MainWindow.WebPanels.cs).
+        SleepIdleWebPanels(now, threshold);
     }
 
 
     private void SleepAllBackgroundTabs()
     {
         foreach (var tab in Tabs.Tabs.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible && !t.IsLocked).ToList())
+            PutToSleep(tab);
+    }
+
+    // Adormece a aba: larga o motor. Com o ajuste e13, guarda antes a rolagem da página (até meio segundo de espera) e
+    // volta a confirmar, depois da resposta, que a aba continua fora de vista, acordada e sem som; sem o ajuste, o mesmo
+    // de sempre (largar já).
+    private void PutToSleep(BrowserTab tab)
+    {
+        if (!PerfTuning.IsOn(PerfTuning.SleepUnderPressure) || !_browsers.TryGetValue(tab, out var browser) || !browser.IsBrowserInitialized)
         {
-            ReleaseBrowser(tab);
-            tab.IsSleeping = true;
+            FallAsleep(tab);
+            return;
         }
+        if (!_fallingAsleep.Add(tab)) return;
+        _ = SleepKeepingScrollAsync(tab, browser);
+    }
+
+    private readonly HashSet<BrowserTab> _fallingAsleep = [];
+
+    private async Task SleepKeepingScrollAsync(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)
+    {
+        var address = tab.Address;
+        ScriptResult result;
+        try { result = await PageScript.EvaluateAsync(browser, SleepScroll.ReadScript, TimeSpan.FromMilliseconds(500)); }
+        catch (Exception) { result = ScriptResult.Failed; }
+        _fallingAsleep.Remove(tab);
+        // Entretanto a aba pode ter fechado, ido para à vista, começado a tocar ou adormecido por outro caminho.
+        if (!_browsers.TryGetValue(tab, out var same) || !ReferenceEquals(same, browser) || tab.IsSleeping
+            || IsTabOnScreen(tab) || tab.IsAudible || tab.IsLocked) return;
+        tab.SleptScroll = result.Success && tab.Address == address ? SleepScroll.From(address, result.Result) : null;
+        FallAsleep(tab);
+    }
+
+    private void FallAsleep(BrowserTab tab)
+    {
+        ReleaseBrowser(tab);
+        tab.IsSleeping = true;
+    }
+
+    // O 1.º carregamento da página principal depois de acordar: a rolagem guardada volta, se for a mesma página.
+    private static void RestoreSleptScroll(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    {
+        if (tab.SleptScroll is not { } scroll) return;
+        tab.SleptScroll = null;
+        if (scroll.Matches(url)) PageScript.Run(browser, scroll.RestoreScript);
     }
 }

@@ -1,0 +1,29 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>entrada</title><script src="m.js"></script></head>
+<body style="font:18px sans-serif;padding:40px">
+<p>Latência da entrada até ao fotograma (B-ENTRADA).</p>
+<input id="t" style="font:18px sans-serif;width:600px" autofocus> <button id="b">Clique</button>
+<p id="s"></p>
+<script>
+// Duas medidas por entrada (teclas e cliques enviados por SendInput pelo script de medição):
+//  - «quadro»: do event.timeStamp até ao fim do fotograma seguinte ao tratamento (rAF e depois uma tarefa: o método
+//    habitual sem Event Timing). Apanha todas as entradas, também as rápidas;
+//  - «evento»: a duration do Event Timing (inclui a apresentação), mas o navegador só a dá a partir de 16 ms.
+// Lê-se a mediana e o p95 de cada uma nos 4 navegadores.
+var count = 0, channel = new MessageChannel(), pending = [];
+channel.port1.onmessage = function () { var e = pending.shift(); if (e) beacon('quadro', Math.round(performance.now() - e.t), '&tipo=' + e.n); };
+function measure(ev) {
+  var item = { t: ev.timeStamp, n: ev.type };
+  requestAnimationFrame(function () { pending.push(item); channel.port2.postMessage(0); });
+  document.getElementById('s').textContent = (++count) + ' entradas';
+}
+addEventListener('keydown', measure, true);
+addEventListener('pointerdown', measure, true);
+new PerformanceObserver(function (list) {
+  list.getEntries().forEach(function (e) {
+    if (['keydown', 'pointerdown', 'click'].indexOf(e.name) < 0) return;
+    beacon('evento', Math.round(e.duration), '&tipo=' + e.name + '&atraso=' + Math.round(e.processingStart - e.startTime));
+  });
+}).observe({ type: 'event', buffered: true, durationThreshold: 16 });
+document.getElementById('b').addEventListener('click', function () { document.getElementById('t').value = ''; });
+requestAnimationFrame(function () { requestAnimationFrame(function () { beacon('painted', Math.round(performance.now())); }); });
+</script></body></html>

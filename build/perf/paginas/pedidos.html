@@ -1,0 +1,32 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>pedidos</title><script src="m.js"></script></head>
+<body style="font:16px sans-serif">
+<h1>Pedidos</h1><p>~300 subrecursos em 20 nomes diferentes (B-CARGA, D10: custo de cada pedido no tratador).</p>
+<div id="g"></div>
+<script>
+// Abrir em http://www.eteris-teste.example:<porta>/pedidos.html?r=<etiqueta>&ciclos=6, com os nomes mapeados para
+// 127.0.0.1 (Éteris: ETERIS_TEST_HOST_RULES; Chrome e Brave: --host-resolver-rules). Sem o mapa (Firefox), ?local=1
+// usa a origem da página (um só site: mede o tratador, mas não o custo por site).
+// Cada ciclo carrega a página de novo (location.replace, ?c=<ciclo>) 1,5 s depois do load anterior e manda o sinal
+// «carregado» com o tempo do início da navegação até ao load; o script mede a CPU do 2.º ao último ciclo (o 1.º
+// apanha o arranque do navegador).
+var port = location.port ? ':' + location.port : '';
+var local = Q.get('local') === '1';
+var n = parseInt(Q.get('n') || '300', 10);
+var cycle = parseInt(Q.get('c') || '1', 10), cycles = parseInt(Q.get('ciclos') || '1', 10);
+var g = document.getElementById('g');
+for (var i = 0; i < n; i++) {
+  var h = 'h' + ('0' + (i % 20 + 1)).slice(-2) + '.eteris-teste.example';
+  var base = local ? location.origin : 'http://' + h + port;
+  var img = document.createElement('img');
+  img.width = 8; img.height = 8; img.alt = '';
+  img.src = base + '/px.svg?i=' + i + '&c=' + cycle + '&r=' + encodeURIComponent(TAG);
+  g.appendChild(img);
+}
+addEventListener('load', function () {
+  beacon('carregado', Math.round(performance.now()), '&c=' + cycle);
+  if (cycle < cycles) setTimeout(function () {
+    Q.set('c', cycle + 1);
+    location.replace(location.pathname + '?' + Q.toString());
+  }, 1500);
+});
+</script></body></html>

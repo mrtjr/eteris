@@ -56,6 +56,7 @@
   /* A descrição guarda pelo menos 240 px: sem espaço, os controlos largos (amostras de cor) passam para baixo dela */
   .item { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 18px 22px; }
   .item + .item { border-top: 1px solid var(--line); }
+  .item[hidden] { display: none; }
   .item .label { flex: 1 1 240px; min-width: 0; }
   .item .label b { display: block; font-weight: 500; font-size: 14.5px; margin-bottom: 3px; }
   .item .label span { color: var(--muted); font-size: 12.8px; line-height: 1.45; }
@@ -282,6 +283,10 @@
             <button data-value="60">1 hora</button>
             <button data-value="0">Nunca</button>
           </div>
+        </div>
+        <div class="item" id="sleepPressureItem" hidden>
+          <div class="label"><b>Adormecer também quando falta memória</b><span>Com a memória do Windows quase esgotada, adormece uma aba de cada vez, a usada há mais tempo, e ao acordar volta ao mesmo ponto da página. Nunca as fixadas, as trancadas, as que tocam som nem as que usam a câmara, o microfone ou o ecrã. Desligado, só conta o tempo acima.</span></div>
+          <label class="switch"><input type="checkbox" data-key="sleepPressure"><i></i></label>
         </div>
         <div class="item">
           <div class="label"><b>Arquivar abas esquecidas</b><span>Abas sem visita há este tempo desvanecem-se e vão para o Arquivo (Radar › Arquivo), de onde se repõem com um clique. Abas fixadas, trancadas, com nota ou a tocar som ficam. Enquanto não escolher aqui um prazo, as abas esquecidas só se desvanecem e nenhuma sai da faixa.</span></div>
@@ -701,6 +706,9 @@
       else send(key, b.dataset.value);
     });
   });
+
+  // A opção do sono por pressão só existe com o ajuste e13 (Tabs/MemoryPressure.cs).
+  document.getElementById('sleepPressureItem').hidden = data.sleepPressure === null;
 
   document.querySelectorAll('input[data-key]').forEach(input => {
     input.checked = !!data[input.dataset.key];

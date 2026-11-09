@@ -117,6 +117,8 @@ public static class EngineHardening
         Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Concat(NoGoogleAtStartup).Concat(NoGoogleOnPages).Select(a => a.Feature));
         args[WebRtcPolicySwitch] = WebRtcPolicy;
         Merge(args, "disable-blink-features", AdBlinkFeatures);
+        // As funcionalidades de desempenho, cada uma atrás do seu ajuste (Shields/EnginePerformance.cs).
+        EnginePerformance.Apply(args, Infrastructure.PerfTuning.IsOn);
         Applied = new Dictionary<string, string>(args);
     }
 
@@ -126,7 +128,7 @@ public static class EngineHardening
     public static IReadOnlyList<string> Switch(IReadOnlyDictionary<string, string> args, string name)
         => args.TryGetValue(name, out var value) ? value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [];
 
-    private static void Merge(IDictionary<string, string> args, string name, IEnumerable<string> features)
+    internal static void Merge(IDictionary<string, string> args, string name, IEnumerable<string> features)
     {
         var current = args.TryGetValue(name, out var value) ? value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [];
         args[name] = string.Join(',', current.Concat(features).Distinct(StringComparer.Ordinal));

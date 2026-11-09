@@ -249,9 +249,11 @@ public partial class MainWindow
             return;
         }
         var origin = pane.TranslatePoint(new Point(0, 0), RootBorder);
-        SplitFocusRing.Margin = new Thickness(origin.X, origin.Y, 0, 0);
-        SplitFocusRing.Width = pane.ActualWidth;
-        SplitFocusRing.Height = pane.ActualHeight;
+        // Ajuste e5: na janela principal, 2 px para fora da metade (a página tapa o resto); sem ele, na camada, por cima.
+        var ring = SplitRingBounds(origin, new Size(pane.ActualWidth, pane.ActualHeight), RingOutsideOverlay);
+        SplitFocusRing.Margin = new Thickness(ring.X, ring.Y, 0, 0);
+        SplitFocusRing.Width = ring.Width;
+        SplitFocusRing.Height = ring.Height;
         SplitFocusRing.Visibility = Visibility.Visible;
     }
 

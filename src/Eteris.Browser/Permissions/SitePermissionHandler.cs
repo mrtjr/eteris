@@ -32,8 +32,11 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
         if (requestedPermissions.HasFlag(MediaAccessPermissionType.DesktopVideoCapture)
             || requestedPermissions.HasFlag(MediaAccessPermissionType.DesktopAudioCapture)) kinds.Add(SitePermission.ScreenShare);
 
+        var browserId = browser.Identifier;
         Resolve(requestingOrigin, kinds, allowed =>
         {
+            // Com a câmara, o microfone ou o ecrã a ser usados, a página nunca se esconde com a janela (ajuste e8).
+            if (allowed) Tabs.CaptureSessions.Started(browserId);
             using (callback)
             {
                 if (allowed) callback.Continue(requestedPermissions);

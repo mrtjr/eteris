@@ -13,9 +13,13 @@ public partial class App : Application
         StartupTrace.Mark("onstartup");
         // O motor arranca numa thread própria enquanto o resto do arranque e o XAML da janela correm aqui; a janela espera
         // por ele só antes da 1.ª aba (Infrastructure/CefConfigurator.cs).
-        CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
+        // Com o ajuste e11 já arrancou a partir do Main (Program.cs).
+        if (!CefConfigurator.StartedFromMain) CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
         // As tabelas que a 1.ª aba consulta abrem-se em paralelo (Data/AppData.cs, PrewarmAsync).
         _ = Data.AppData.PrewarmAsync();
+        // Ajuste e12 (desligado por omissão; regra R-2): a 1.ª nova aba do perfil prepara-se já, em fundo
+        // (Browser/NewTabPrecompute.cs). Nunca num arranque privado.
+        if (PerfTuning.IsOn(PerfTuning.ReadyNewTab) && !StartupArgs.IsPrivate(e.Args)) Browser.NewTabPrecompute.Start(() => DateTime.Now);
         Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
         Theme.ThemeManager.FollowSystemChanges(() => Data.Settings.Current.Theme);
         Data.Settings.Changed += s => Dispatcher.InvokeAsync(() => Theme.ThemeManager.Apply(s.Theme));
@@ -58,7 +62,7 @@ public partial class App : Application
     private IDisposable? _channel;
 
     // Logo a seguir ao Cef.Initialize (na thread onde ele correu): o que precisa do contexto global do motor.
-    private static void OnCefReady()
+    internal static void OnCefReady()
     {
         // Só nos testes ao vivo: cai antes da 1.ª página (rede de segurança do sandbox).
         if (TestSwitches.CrashBeforePaint) TestSwitches.CrashNow();
@@ -102,6 +106,9 @@ public partial class App : Application
             Shields.BrowserlessRequests.Release();
             Cef.PreShutdown();
             CefConfigurator.Shutdown();
+            // Caches da GPU no disco (ajuste e3): com o motor fechado, que as tem abertas. Com «Apagar ao fechar», depois de
+            // «Apagar dados › cache» e depois de uma janela privada (Infrastructure/ProfileCleanup.cs).
+            if (ProfileCleanup.ShouldRemoveGpuCaches(Data.Settings.Current.ClearOnExit)) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
         }
         finally
         {

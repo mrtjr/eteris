@@ -17,6 +17,7 @@ public partial class MainWindow
     private readonly AutoHideBars _autoHide = new();
     private DispatcherTimer? _autoHideTimer;
     private bool _autoHideStopsOnClose;
+    private bool _autoHideResumesOnActivate;
     private readonly AltTap _altTap = new();
 
     // Modos em que as barras se escondem mas podem ser chamadas pelo rato (ver AutoHideBars.Enabled): não no ecrã
@@ -33,6 +34,12 @@ public partial class MainWindow
             {
                 _autoHideStopsOnClose = true;
                 Closed += (_, _) => StopAutoHideTimer();
+            }
+            // Com a janela inativa o temporizador pára (AutoHideTick); volta quando ela volta (ajuste e4).
+            if (!_autoHideResumesOnActivate && PerfTuning.IsOn(PerfTuning.MediaPolling))
+            {
+                _autoHideResumesOnActivate = true;
+                Activated += (_, _) => SyncAutoHide();
             }
             _autoHideTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(60) };
             _autoHideTimer.Tick += (_, _) => AutoHideTick();
@@ -53,8 +60,19 @@ public partial class MainWindow
             StopAutoHideTimer();
             return;
         }
-        if (!BarsAutoHide || WindowState == WindowState.Minimized || !IsVisible) return;
+        if (!BarsAutoHide || WindowState == WindowState.Minimized || !IsVisible)
+        {
+            // Ajuste e4: minimizada ou escondida, nada a ler de 60 em 60 ms; volta com o Activated.
+            if (_autoHideResumesOnActivate && !IsActive) StopAutoHideTimer();
+            return;
+        }
         var before = _autoHide.Revealed;
+        // Ajuste e4: com a janela inativa (outra aplicação à frente), as barras acabam de se esconder e o temporizador pára.
+        if (_autoHideResumesOnActivate && !IsActive && !before)
+        {
+            StopAutoHideTimer();
+            return;
+        }
         var (inside, cursorY) = CursorInWindow();
         var barsHeight = ChromeLayout.Resolve(VerticalTabs, CompactDensity, hidden: false).TitleHeight
                          + ChromeLayout.Resolve(VerticalTabs, CompactDensity, hidden: false).ToolbarHeight;

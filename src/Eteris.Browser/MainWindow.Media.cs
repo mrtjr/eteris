@@ -1,7 +1,9 @@
 using System.Windows;
+using System.Windows.Media.Animation;
 using CefSharp;
 using Eteris.Browser.Tabs;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser;
 
@@ -10,6 +12,43 @@ namespace Eteris.Browser;
 public partial class MainWindow
 {
     private List<BrowserTab> _mediaTabs = [];
+
+    // ---------- O ponto «a tocar» (E1 do plano de desempenho da 0.2.14) ----------
+    // Pulsa (opacidade 1 → 0,35 e de volta) só enquanto se vê: com a janela minimizada ou o ponto escondido o relógio da
+    // animação para, e o WPF deixa de enviar um lote ao compositor a cada fotograma. A 30 fotogramas por segundo chega
+    // para um pulso de 0,9 s. Com o ajuste desligado (--eteris-ajustes=-e1) volta a ser como até à 0.2.13: eterna desde
+    // o Loaded.
+    private bool _liveDotPulsing;
+
+    private void SetUpLiveDot()
+    {
+        // Braço «puro» das medições (ETERIS_TEST_PURO=animacoes; nunca numa instalação): sem animação nenhuma.
+        if (PerfDiagnostics.Without(PerfLayers.Animations)) return;
+        if (!PerfTuning.IsOn(PerfTuning.WaitingDot))
+        {
+            MediaLiveDot.Loaded += (_, _) => MediaLiveDot.BeginAnimation(OpacityProperty, LiveDotPulse(limitFrames: false));
+            return;
+        }
+        MediaLiveDot.IsVisibleChanged += (_, _) => PulseLiveDot();
+        StateChanged += (_, _) => PulseLiveDot();
+    }
+
+    private void PulseLiveDot()
+    {
+        if (!PerfTuning.IsOn(PerfTuning.WaitingDot) || PerfDiagnostics.Without(PerfLayers.Animations)) return;
+        var run = MediaLiveDot.IsVisible && WindowState != WindowState.Minimized;
+        if (run == _liveDotPulsing) return;
+        _liveDotPulsing = run;
+        // null tira a animação (e o relógio dela); a opacidade volta ao valor de base.
+        MediaLiveDot.BeginAnimation(OpacityProperty, run ? LiveDotPulse(limitFrames: true) : null);
+    }
+
+    private static DoubleAnimation LiveDotPulse(bool limitFrames)
+    {
+        var pulse = new DoubleAnimation(1, 0.35, TimeSpan.FromSeconds(0.9)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
+        if (limitFrames) Timeline.SetDesiredFrameRate(pulse, 30);
+        return pulse;
+    }
 
     private void RefreshMediaHub()
     {
