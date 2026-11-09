@@ -287,11 +287,13 @@ public sealed class VaultChannel : IDisposable
     public const string WorldName = "eteris-cofre";
 
     // O que o navegador pode pedir ao script.
-    private static readonly HashSet<string> s_methods = new(StringComparer.Ordinal) { "fill", "rect", "forget" };
+    // probe: a página nova tem outra vez um início de sessão? (erro de login depois de um envio; C4)
+    private static readonly HashSet<string> s_methods = new(StringComparer.Ordinal) { "fill", "rect", "forget", "probe" };
 
     private readonly IBrowser _browser;
     private readonly Action<VaultContext, VaultMessage> _onMessage;
     private readonly Action? _onNavigated;
+    private readonly Func<bool> _offers;
     private readonly VaultContexts _contexts = new();
     private readonly string _binding = NewBindingName();
     private readonly Lock _gate = new();
@@ -299,11 +301,13 @@ public sealed class VaultChannel : IDisposable
     private Task _started = Task.CompletedTask;
     private bool _disposed;
 
-    public VaultChannel(IBrowser browser, Action<VaultContext, VaultMessage> onMessage, Action? onNavigated = null)
+    // offers: «Oferecer para guardar palavras-passe» ligado e fora da janela privada, lido a cada documento preparado.
+    public VaultChannel(IBrowser browser, Action<VaultContext, VaultMessage> onMessage, Action? onNavigated = null, Func<bool>? offers = null)
     {
         _browser = browser;
         _onMessage = onMessage;
         _onNavigated = onNavigated;
+        _offers = offers ?? (() => false);
     }
 
     public static string NewBindingName() => "e" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
@@ -395,7 +399,7 @@ public sealed class VaultChannel : IDisposable
             var contextId = world.ExecutionContextId;
             if (!_contexts.Add(new VaultContext(contextId, frame.Id, frame.LoaderId, origin, isMain))) return;
             await DevToolsCalls.Run(() => client.Runtime.AddBindingAsync(_binding, executionContextId: contextId)).ConfigureAwait(false);
-            await DevToolsCalls.Run(() => client.Runtime.EvaluateAsync(VaultScripts.Cofre(_binding), contextId: contextId, silent: true)).ConfigureAwait(false);
+            await DevToolsCalls.Run(() => client.Runtime.EvaluateAsync(VaultScripts.Cofre(_binding, _offers()), contextId: contextId, silent: true)).ConfigureAwait(false);
         }
         catch (Exception)
         {
@@ -410,6 +414,13 @@ public sealed class VaultChannel : IDisposable
         if (_contexts.Get(e.ExecutionContextId) is not { } context) return;
         if (VaultMessages.Parse(e.Payload) is not { } message) return;
         _onMessage(context, message);
+    }
+
+    // O documento de topo que o navegador mostra agora (null: ainda não preparado, ou não é http(s)).
+    public VaultContext? MainContext()
+    {
+        var main = Origins.Normalize(SafeFrame.MainUrl(_browser));
+        return _contexts.All().Where(c => c.IsMain && c.Origin == main).OrderByDescending(c => c.Id).FirstOrDefault();
     }
 
     // O contexto continua a ser o documento que o navegador mostra, com a mesma origem.

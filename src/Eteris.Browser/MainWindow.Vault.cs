@@ -98,7 +98,9 @@ public partial class MainWindow
             if (!_vaultChannels.TryGetValue(tab, out var known) || known.IsDisposed)
                 _vaultChannels[tab] = known = new VaultChannel(cef,
                     (context, message) => Dispatcher.InvokeAsync(() => OnVaultMessage(tab, context, message)),
-                    () => Dispatcher.InvokeAsync(() => OnVaultNavigated(tab)));
+                    () => Dispatcher.InvokeAsync(() => OnVaultNavigated(tab)),
+                    // Oferecer guardar e gerar: nunca na janela privada (D-3), nem com o interruptor desligado.
+                    () => !IsPrivate && Data.Settings.Current.PasswordOffer);
             channel = known;
         }
         _ = Task.Run(channel.Refresh);
@@ -108,6 +110,8 @@ public partial class MainWindow
     private void ReleaseVaultChannel(BrowserTab tab)
     {
         VaultChannel? channel;
+        // O candidato e a oferta de guardar morrem com a aba (só existiam na memória).
+        Dispatcher.InvokeAsync(() => ForgetSaveState(tab));
         lock (_vaultChannelsGate)
         {
             if (!_vaultChannels.Remove(tab, out channel)) return;
@@ -158,6 +162,12 @@ public partial class MainWindow
                 if (message.Rect is { } rect) _vaultFocus = _vaultFocus! with { Rect = rect };
                 if (_vaultListOpen) PlaceVaultList();
                 break;
+            case VaultMessageType.Submit:
+                OnVaultSubmit(tab, context, message);
+                break;
+            case VaultMessageType.FormGone:
+                OnVaultFormGone(tab, context, message);
+                break;
         }
     }
 
@@ -165,6 +175,7 @@ public partial class MainWindow
     private void OnVaultNavigated(BrowserTab tab)
     {
         if (_vaultFocus?.Tab == tab) ForgetVaultFocus();
+        OnSaveNavigation(tab);
     }
 
     private bool IsVaultFocus(BrowserTab tab, VaultContext context, string? field)
@@ -366,6 +377,219 @@ public partial class MainWindow
         values.Clear();
         if (!result.Success || result.Result is not double filled || filled < 1)
             ShowToast("Não foi possível preencher este formulário.");
+    }
+
+    // ---- Guardar, atualizar e «Nunca neste site» (docs/palavras-passe.md, C4) ----
+
+    // O último envio de cada aba, à espera de saber se correu bem (só na memória; SavePolicy).
+    private readonly Dictionary<BrowserTab, SaveCandidate> _vaultCandidates = [];
+    // A oferta de cada aba (a bolha, ou o ícone de chave depois de «Agora não») e quando nasceu.
+    private readonly Dictionary<BrowserTab, (SaveOffer Offer, DateTime At)> _vaultOffers = [];
+    private SaveBubble? _saveBubble;
+    private bool _saveHooked;
+
+    private void OnVaultSubmit(BrowserTab tab, VaultContext context, VaultMessage message)
+    {
+        if (SavePolicy.Candidate(message, context, DateTimeOffset.UtcNow, Data.Settings.Current.PasswordOffer, IsPrivate) is { } candidate)
+            _vaultCandidates[tab] = candidate;
+    }
+
+    // O formulário enviado desapareceu sem o início de sessão voltar (SPA): correu bem.
+    private void OnVaultFormGone(BrowserTab tab, VaultContext context, VaultMessage message)
+    {
+        if (message.Form is not { } form || !_vaultCandidates.TryGetValue(tab, out var candidate)) return;
+        var outcome = SavePolicy.AfterFormGone(candidate, context.Id, form, DateTimeOffset.UtcNow);
+        if (outcome == SubmitOutcome.Pending) return;
+        _vaultCandidates.Remove(tab);
+        if (outcome == SubmitOutcome.Success) OfferSave(tab, candidate);
+    }
+
+    // O frame principal mudou de documento: a oferta antiga sai (passados os redirecionamentos) e um envio à espera
+    // fica a saber como correu — a página nova tem outra vez o início de sessão da mesma origem? Então foi um erro.
+    private void OnSaveNavigation(BrowserTab tab)
+    {
+        if (_vaultOffers.TryGetValue(tab, out var offer) && !SavePolicy.KeepsOfferAcrossNavigation(DateTime.UtcNow - offer.At))
+            DropSaveOffer(tab);
+        if (!_vaultCandidates.Remove(tab, out var candidate) || SavePolicy.Expired(candidate, DateTimeOffset.UtcNow)) return;
+        _ = JudgeAfterNavigationAsync(tab, candidate, DateTimeOffset.UtcNow);
+    }
+
+    private async Task JudgeAfterNavigationAsync(BrowserTab tab, SaveCandidate candidate, DateTimeOffset navigatedAt)
+    {
+        string? origin = null;
+        var loginAgain = false;
+        // Até 8 s para o documento novo estar pronto (se não for http(s), não há canal: correu bem).
+        for (var i = 0; i < 32; i++)
+        {
+            await Task.Delay(250);
+            if (VaultChannelOf(tab) is not { } channel) break;
+            if (channel.MainContext() is not { } main) continue;
+            var answer = await channel.CallAsync(main, "probe", null);
+            if (!answer.Success || answer.Result is not string state || state == "loading") continue;
+            origin = main.Origin;
+            loginAgain = state == "login";
+            break;
+        }
+        if (!Tabs.Tabs.Contains(tab)) return;
+        if (SavePolicy.AfterNavigation(candidate, origin, loginAgain, navigatedAt) == SubmitOutcome.Success) OfferSave(tab, candidate);
+    }
+
+    private void OfferSave(BrowserTab tab, SaveCandidate candidate)
+    {
+        if (IsPrivate || !Data.Settings.Current.PasswordOffer) return;
+        SaveOffer offer;
+        try
+        {
+            var vault = VaultService.Profile;
+            var never = vault.IsNeverSave(candidate.Origin);
+            var stored = never ? [] : vault.LoginsFor(candidate.Origin).Where(l => l.Match == OriginMatch.Exact)
+                .Select(l => vault.GetLogin(l.Id)).OfType<LoginItem>()
+                .Select(l => new StoredLogin(l.Id, l.Username, l.Password, l.Generated)).ToList();
+            offer = SavePolicy.Decide(candidate, never, stored);
+        }
+        catch (Exception) { return; }
+        switch (offer.Kind)
+        {
+            case SaveOfferKind.None:
+                return;
+            case SaveOfferKind.ConfirmGenerated:
+                ConfirmGeneratedPassword(offer);
+                return;
+        }
+        _vaultOffers[tab] = (offer, DateTime.UtcNow);
+        HookSaveBubble();
+        if (ReferenceEquals(tab, Tabs.Active)) ShowSaveBubble(tab);
+        UpdatePasswordKey();
+    }
+
+    private void ShowSaveBubble(BrowserTab tab)
+    {
+        if (!_vaultOffers.TryGetValue(tab, out var entry)) return;
+        if (_saveBubble is null)
+        {
+            _saveBubble = new SaveBubble
+            {
+                Visibility = Visibility.Collapsed,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetRowSpan(_saveBubble, 3);
+            Panel.SetZIndex(_saveBubble, 95);
+            _saveBubble.SaveRequested += SaveOfferedPassword;
+            _saveBubble.NotNowRequested += CloseSaveBubble;
+            _saveBubble.NeverRequested += NeverSaveHere;
+            AddToOverlay(_saveBubble);
+        }
+        _saveBubble.Show(entry.Offer);
+        PlaceSaveBubble();
+        _saveBubble.Visibility = Visibility.Visible;
+    }
+
+    // Por baixo do cadeado, com o bico a apontar para ele: a bolha sai da barra de endereço e passa a linha entre as
+    // barras e a página (com as barras escondidas, no topo da página).
+    private void PlaceSaveBubble()
+    {
+        if (_saveBubble is null) return;
+        var anchor = SiteInfoButton.IsVisible && SiteInfoButton.ActualHeight > 0
+            ? SiteInfoButton.TranslatePoint(new Point(SiteInfoButton.ActualWidth / 2, SiteInfoButton.ActualHeight), RootBorder)
+            : PageFrame.TranslatePoint(new Point(32, 0), RootBorder);
+        _saveBubble.Margin = new Thickness(Math.Max(8, anchor.X - 23), anchor.Y + 2, 0, 0);
+    }
+
+    // «Agora não» (ou ×, ou Esc): a bolha fecha, a oferta fica no ícone de chave até à próxima navegação.
+    private void CloseSaveBubble()
+    {
+        if (_saveBubble is null) return;
+        _saveBubble.Forget();
+        _saveBubble.Visibility = Visibility.Collapsed;
+    }
+
+    private void DropSaveOffer(BrowserTab tab)
+    {
+        _vaultOffers.Remove(tab);
+        if (ReferenceEquals(tab, Tabs.Active)) CloseSaveBubble();
+        UpdatePasswordKey();
+    }
+
+    private void ForgetSaveState(BrowserTab tab)
+    {
+        _vaultCandidates.Remove(tab);
+        if (_vaultOffers.ContainsKey(tab)) DropSaveOffer(tab);
+    }
+
+    private void SaveOfferedPassword(string username)
+    {
+        if (Tabs.Active is not { } tab || !_vaultOffers.TryGetValue(tab, out var entry)) return;
+        var offer = entry.Offer;
+        try
+        {
+            var vault = VaultService.Profile;
+            var old = offer.ExistingId is { } id ? vault.GetLogin(id) : null;
+            vault.SaveLogin(old is not null
+                ? old with { Username = username, Password = offer.Password }
+                : new LoginItem(string.Empty, offer.Origin, username, offer.Password, null, default, default, null, null, false, null));
+        }
+        catch (Exception)
+        {
+            ShowToast("Não foi possível guardar a palavra-passe.");
+            return;
+        }
+        DropSaveOffer(tab);
+        ShowToast(offer.Kind == SaveOfferKind.Update ? "Palavra-passe atualizada" : "Palavra-passe guardada");
+    }
+
+    private void NeverSaveHere()
+    {
+        if (Tabs.Active is not { } tab || !_vaultOffers.TryGetValue(tab, out var entry)) return;
+        try { VaultService.Profile.AddNeverSave(entry.Offer.Origin); }
+        catch (Exception) { return; }
+        DropSaveOffer(tab);
+        ShowToast($"Não volto a oferecer guardar palavras-passe em {Origins.DisplayHost(entry.Offer.Origin) ?? entry.Offer.Origin}");
+    }
+
+    // Uma palavra-passe gerada (C5) foi enviada com sucesso: deixa de estar «Não confirmada», com o utilizador do formulário.
+    private void ConfirmGeneratedPassword(SaveOffer offer)
+    {
+        try
+        {
+            if (offer.ExistingId is not { } id || VaultService.Profile.GetLogin(id) is not { } login) return;
+            VaultService.Profile.SaveLogin(login with { Username = offer.Username, Generated = false });
+        }
+        catch (Exception) { return; }
+        ShowToast($"Palavra-passe gerada guardada para {Origins.DisplayHost(offer.Origin) ?? offer.Origin}");
+    }
+
+    private void HookSaveBubble()
+    {
+        if (_saveHooked) return;
+        _saveHooked = true;
+        Tabs.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(TabsViewModel.Active)) return;
+            CloseSaveBubble();
+            UpdatePasswordKey();
+        };
+        SizeChanged += (_, _) => PlaceSaveBubble();
+        // Esc com a bolha aberta (o foco na janela ou na bolha) é «Agora não».
+        void OnKey(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Escape || _saveBubble is not { Visibility: Visibility.Visible }) return;
+            e.Handled = true;
+            CloseSaveBubble();
+        }
+        AddHandler(PreviewKeyDownEvent, new KeyEventHandler(OnKey), handledEventsToo: true);
+        _overlay?.AddHandler(PreviewKeyDownEvent, new KeyEventHandler(OnKey), handledEventsToo: true);
+    }
+
+    // O ícone de chave na barra de endereço: a aba à vista tem uma oferta por responder.
+    private void UpdatePasswordKey()
+        => PasswordKeyButton.Visibility = Tabs.Active is { } tab && _vaultOffers.ContainsKey(tab) ? Visibility.Visible : Visibility.Collapsed;
+
+    private void PasswordKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (Tabs.Active is not { } tab) return;
+        if (_saveBubble is { Visibility: Visibility.Visible }) CloseSaveBubble();
+        else ShowSaveBubble(tab);
     }
 }
 

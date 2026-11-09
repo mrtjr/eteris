@@ -387,7 +387,8 @@ public class CofreClassifierTests
 
     public static string? Run(string body)
     {
-        var classifier = VaultScripts.Source.Replace(VaultScripts.BindingPlaceholder, "null", StringComparison.Ordinal);
+        var classifier = VaultScripts.Source.Replace(VaultScripts.BindingPlaceholder, "null", StringComparison.Ordinal)
+            .Replace(VaultScripts.OfferPlaceholder, "false", StringComparison.Ordinal);
         var script = "const C = " + classifier.TrimEnd().TrimEnd(';') + ";\n"
                      + "const print = s => process.stdout.write(String(s));\n"
                      + "(async () => {\n" + body + "\n})().catch(e => { console.error(e); process.exit(1); });";

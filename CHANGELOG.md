@@ -19,6 +19,12 @@
   página não vê essas teclas; um clique também preenche. Só preenche quando escolhe, nunca ao carregar a página;
   funciona com o zoom, no ecrã dividido e em sites feitos com React. «Pedir o Windows Hello ao preencher
   palavras-passe» (desligado por omissão) pede a confirmação antes.
+- **Guardar e atualizar palavras-passe** (C4): depois de entrar num site (a página muda, ou numa aplicação web o
+  formulário desaparece), a bolha do Éteris sai da barra de endereço com «Guardar a palavra-passe de *site*?» — ou
+  «Atualizar…» quando a palavra-passe mudou, também num formulário de mudança de palavra-passe. O utilizador pode
+  corrigir o nome e ver a palavra-passe antes; «Agora não» deixa um ícone de chave para guardar mais tarde, e ⋯ ›
+  «Nunca neste site». Um erro de login não oferece nada; a janela privada nunca oferece; nada fica guardado sem
+  escolher «Guardar».
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

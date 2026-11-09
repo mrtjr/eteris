@@ -2,7 +2,7 @@
 // (Vault/VaultChannel.cs): partilha o DOM com a página, mas a página não vê as variáveis, os ouvintes nem a ligação dele.
 // Fala com o navegador só pela ligação do mundo isolado (mensagens JSON validadas do outro lado) e nunca escreve no DOM
 // fora do preenchimento pedido pelo navegador (guarda: VaultChannelGuardTests).
-(function (LIGACAO) {
+(function (LIGACAO, OFERECER) {
   'use strict';
 
   // ---- Classificador: funções puras sobre descritores (testadas no Node, CofreClassifierTests) ----
@@ -198,6 +198,32 @@
 
     const USERLIKE = new Set(['username', 'email']);
 
+    // O que vai para o navegador no envio de um formulário (C4): só inícios de sessão, criações de conta e mudanças, com
+    // a palavra-passe escrita (na criação e na mudança, a nova, igual na confirmação). info: {formKind, kinds, user};
+    // values: o valor de cada campo. null: nada a oferecer guardar (um código de uma utilização nunca é palavra-passe).
+    function submission(info, values) {
+      if (!info || (info.formKind !== 'login' && info.formKind !== 'signup' && info.formKind !== 'change')) return null;
+      const val = i => (typeof values[i] === 'string' ? values[i] : '');
+      const of = kind => info.kinds.map((k, i) => (k === kind ? val(i) : '')).filter(v => v !== '');
+      const current = of('password'), fresh = of('new-password');
+      const username = info.user >= 0 ? val(info.user) : '';
+      if (info.formKind === 'login') return current.length ? { formKind: 'login', username, password: current[0] } : null;
+      if (!fresh.length || fresh.some(v => v !== fresh[0])) return null;
+      const out = { formKind: info.formKind, username };
+      if (info.formKind === 'change' && current.length) out.password = current[0];
+      out.newPassword = fresh[0];
+      return out;
+    }
+
+    // As restrições que a página pôs num campo de palavra-passe nova, para o gerador (C5): só as que existem.
+    function constraints(f) {
+      const out = {};
+      if (Number.isInteger(f.minLength) && f.minLength > 0 && f.minLength <= 4096) out.minLength = f.minLength;
+      if (Number.isInteger(f.maxLength) && f.maxLength > 0 && f.maxLength <= 4096) out.maxLength = f.maxLength;
+      if (typeof f.pattern === 'string' && f.pattern !== '' && f.pattern.length <= 512) out.pattern = f.pattern;
+      return out;
+    }
+
     // O que se preenche com uma palavra-passe guardada: no formulário escolhido, o utilizador (se houver) e a palavra-passe
     // atual; nunca a nova, o CVC nem um campo sem tipo (escondido, tapado, fora do ecrã). Pares [índice, valor].
     function fillPlan(kinds, visible, values) {
@@ -239,7 +265,7 @@
 
     return Object.freeze({
       version: 1, KINDS, norm, textOf, classifyField, classifyForm, isVisible, debounce, touchesFields, USERLIKE, TEXTUAL,
-      fillPlan, fillField, focusBack,
+      fillPlan, fillField, focusBack, submission, constraints,
     });
   })();
 
@@ -387,9 +413,12 @@
   // fresh: a classificação refaz-se (a cada foco: a visibilidade dos campos muda sem o DOM mudar, por exemplo ao rolar
   // ou ao abrir uma janela de início de sessão por CSS); sem fresh serve a última (ao escrever).
   function formInfo(field, fresh) {
-    const owner = ownerOf(field);
+    return ownerInfo(ownerOf(field), fresh, field);
+  }
+
+  function ownerInfo(owner, fresh, field) {
     let info = cache.get(owner);
-    if (!fresh && info && info.fields.includes(field)) return info;
+    if (!fresh && info && (!field || info.fields.includes(field))) return info;
     const fields = fieldsOf(owner);
     const descriptors = fields.map(f => {
       const d = describe(f, undefined);
@@ -439,6 +468,13 @@
     const message = { t: 'focus', field: idOf(field, 'f'), form: info.id, kind, formKind: info.formKind, rect: topRect(field), visible: true };
     if (Classifier.USERLIKE.has(kind)) message.prefix = String(field.value || '').slice(0, 256);
     send(message);
+    // Uma palavra-passe nova: as restrições do campo, para o gerador (C5). Nunca na janela privada (D-3).
+    if (OFERECER && kind === 'new-password') send(generateMessage(field, info));
+  }
+
+  function generateMessage(field, info) {
+    const limits = Classifier.constraints({ minLength: field.minLength, maxLength: field.maxLength, pattern: field.getAttribute('pattern') });
+    return Object.assign({ t: 'generate', field: idOf(field, 'f'), form: info.id }, limits);
   }
 
   // Os ouvintes do cofre (no mundo isolado: a página não os vê). Ficam na janela e em cada raiz sombra com campos: o foco
@@ -491,6 +527,82 @@
     send(message);
   });
 
+  // ---- O envio de um formulário (C4) ----
+  // Captura do submit, do Enter num campo e do clique num botão (antes dos ouvintes da página: os valores ainda estão
+  // lá). O navegador guarda o candidato só na memória e só oferece depois de um sucesso provável: o frame principal
+  // navega sem o início de sessão voltar, ou o formulário desaparece (formGone).
+  let lastSubmit = null;
+  let goneWatch = null;
+
+  function valuesOf(info) {
+    return info.fields.map(f => (f.nodeName === 'INPUT' ? String(f.value || '') : ''));
+  }
+
+  function submitted(owner) {
+    if (!OFERECER || !owner) return;
+    let info;
+    try { info = ownerInfo(owner, true); } catch (e) { return; }
+    const sub = Classifier.submission(info, valuesOf(info));
+    if (!sub) return;
+    const key = [info.id, sub.username, sub.password || '', sub.newPassword || ''].join('|');
+    const now = performance.now();
+    if (lastSubmit && lastSubmit.key === key && now - lastSubmit.at < 1500) return;
+    lastSubmit = { key, at: now };
+    const message = { t: 'submit', form: info.id, formKind: sub.formKind };
+    if (sub.username) message.username = sub.username;
+    if (sub.password) message.password = sub.password;
+    if (sub.newPassword) message.newPassword = sub.newPassword;
+    send(message);
+    watchGone(info);
+  }
+
+  // O formulário enviado desaparece (retirado, escondido) nos 20 s seguintes sem um início de sessão voltar: correu bem.
+  function watchGone(info) {
+    if (goneWatch !== null) clearInterval(goneWatch);
+    const pw = info.fields.find((f, i) => info.kinds[i] === 'password' || info.kinds[i] === 'new-password');
+    if (!pw) return;
+    const started = performance.now();
+    const timer = setInterval(() => {
+      if (performance.now() - started > 20000) { clearInterval(timer); if (goneWatch === timer) goneWatch = null; return; }
+      if (pw.isConnected && pw.getClientRects().length > 0 && getComputedStyle(pw).visibility !== 'hidden') return;
+      clearInterval(timer);
+      if (goneWatch === timer) goneWatch = null;
+      setTimeout(() => { if (info.formKind !== 'login' || probe() !== 'login') send({ t: 'formGone', form: info.id }); }, 800);
+    }, 300);
+    goneWatch = timer;
+  }
+
+  // A página tem um início de sessão à vista? (o navegador pergunta depois de uma navegação: erro de login)
+  function probe() {
+    if (document.readyState === 'loading') return 'loading';
+    let list;
+    try { list = Array.from(document.querySelectorAll('input[type=password]')).slice(0, 50); } catch (e) { return 'none'; }
+    for (const f of list) {
+      const info = formInfo(f, true);
+      if (info.formKind === 'login' && info.kinds[info.fields.indexOf(f)] === 'password') return 'login';
+    }
+    return 'none';
+  }
+
+  const onSubmit = once((e) => {
+    const form = deepTarget(e);
+    if (form && form.nodeName === 'FORM') submitted(form);
+  });
+
+  const onEnter = once((e) => {
+    if (e.key !== 'Enter' || !e.isTrusted) return;
+    const field = deepTarget(e);
+    if (isField(field) && field.nodeName === 'INPUT') submitted(ownerOf(field));
+  });
+
+  const onButton = once((e) => {
+    if (!e.isTrusted) return;
+    const target = deepTarget(e);
+    const button = target && target.closest ? target.closest('button,input[type=submit],input[type=image],[role=button]') : null;
+    if (!button) return;
+    submitted(button.form || button.closest('form') || button.getRootNode());
+  });
+
   const listening = new WeakSet();
   function listen(target) {
     if (listening.has(target)) return;
@@ -499,6 +611,11 @@
     target.addEventListener('focusout', onFocusOut, true);
     target.addEventListener('pointerdown', onPointerDown, true);
     target.addEventListener('input', onInput, true);
+    if (OFERECER) {
+      target.addEventListener('submit', onSubmit, true);
+      target.addEventListener('keydown', onEnter, true);
+      target.addEventListener('click', onButton, true);
+    }
   }
   listen(window);
 
@@ -545,8 +662,9 @@
       return node && node.isConnected ? topRect(node) : null;
     },
     forget: () => null,
+    probe: () => probe(),
   });
   Object.defineProperty(globalThis, '__cofre', { value: api, writable: false, configurable: false, enumerable: false });
   send({ t: 'ready', v: Classifier.version });
   return undefined;
-})(__ETERIS_LIGACAO__);
+})(__ETERIS_LIGACAO__, __ETERIS_OFERECER__);

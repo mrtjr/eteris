@@ -1,9 +1,9 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o início do bloco C (na página: C1 a
-C3 — canal, classificador, sugestões e preencher palavras-passe) feitos no ramo `sync`, por publicar** (o resto do
-bloco C — guardar depois do envio, gerador, preencher contactos, pagamentos, documentos e viagens, janelas privadas — e
-os blocos D e E do desenho estão por fazer). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o bloco C até ao C4 (na página: canal,
+classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio) feitos no ramo `sync`, por
+publicar** (o resto do bloco C — gerador, preencher contactos, pagamentos, documentos e viagens, janelas privadas — e os
+blocos D e E do desenho estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -588,3 +588,62 @@ no computador; teclas e cliques reais; a página regista as teclas que lhe chega
 Por fazer neste bloco: ícones da cache de favicons na lista (por agora só a inicial), a «última utilização» (`used`) ao
 preencher, a confirmação com os dois nomes quando se escolhe à mão noutro site (o texto existe; o menu de contexto é do
 C6).
+
+## C4. Guardar, atualizar e «Nunca neste site»
+
+`Vault/SaveFlow.cs` (`SavePolicy`, decisões puras), `Vault/SaveBubble.xaml(.cs)`, `Vault/Scripts/cofre.js` (envio,
+`formGone`, `probe`), `Vault/VaultChannel.cs`, `Vault/VaultScripts.cs`, `MainWindow.Vault.cs`, `MainWindow.xaml` (o
+ícone de chave).
+
+- **O candidato** (`submit`): o script apanha, em captura e antes dos ouvintes da página, o `submit` do formulário, o
+  Enter num campo e o clique num botão, e manda o utilizador e a palavra-passe (num início de sessão), ou a nova (numa
+  criação de conta ou mudança, igual na confirmação; numa mudança também a atual). Só inícios de sessão, criações de
+  conta e mudanças: um código de uma utilização nunca é palavra-passe. O navegador guarda o candidato **só na memória**,
+  preso à aba, com a origem do documento no processo do navegador; larga-o ao fim de 5 minutos, ao fechar ou adormecer
+  a aba, ou ao ser julgado. Sem candidato: «Oferecer para guardar palavras-passe» desligado (o script nem manda o envio:
+  a preferência entra no script quando o canal prepara o documento), janela privada (D-3, idem), páginas que não são
+  `http(s)`, palavra-passe vazia ou com mais de 512 carateres.
+- **Sucesso provável**, o critério do Chrome: (1) o frame principal navega para outro documento nos 20 s seguintes e
+  a página nova **não** tem outra vez um início de sessão à vista na mesma origem (o navegador pergunta ao script dela
+  com `probe`; noutro site, num SSO ou numa página que não é `http(s)` conta como sucesso); (2) numa SPA, o formulário
+  enviado desaparece (retirado ou escondido) nos 20 s seguintes e, 0,8 s depois, não há um início de sessão à vista
+  (`formGone`). Um erro de login — a página volta com o formulário, ou o formulário fica com a mensagem de erro — não
+  oferece nada. Uma navegação muito depois do envio também não (o utilizador desistiu).
+- **O que se oferece** (`SavePolicy.Decide`, com as guardadas da mesma origem decifradas no momento): nada num site da
+  lista «nunca» ou quando a palavra-passe é igual à guardada; **«Atualizar»** quando o mesmo utilizador tem outra
+  (numa mudança sem utilizador no formulário, a guardada com a palavra-passe atual, ou a única do site); **«Guardar»**
+  nos outros casos. Uma palavra-passe gerada à espera de confirmação (C5) confirma-se sem perguntar.
+- **A bolha** sai da barra de endereço, com o bico no cadeado, e passa a linha entre as barras e a página: nada da
+  página chega lá, e a pergunta usa a origem do processo do navegador («Guardar a palavra-passe de *site*?» ou
+  «Atualizar a palavra-passe de *utilizador* em *site*?»). Utilizador editável; palavra-passe escondida, com um olho que
+  a mostra sem pedir o Windows (o utilizador acabou de a escrever) e com a janela fora das capturas enquanto está à
+  vista. «Guardar»/«Atualizar» (a anterior vai para o histórico local de 1 versão), «Agora não», ⋯ › «Nunca neste
+  site». Abre sem tirar o teclado à página. «Agora não», × ou Esc dentro da bolha fecham-na e deixam o **ícone de
+  chave** na barra de endereço até à próxima navegação (as navegações dos 3 s seguintes — redirecionamentos — não
+  contam); um clique na chave reabre a bolha. Ao mudar de aba a bolha fecha e a chave fica com a aba dela.
+
+Testes: `Vault/SaveFlowTests` (candidato só com a origem do navegador e sem segredos no `ToString`; sem candidato com
+«oferecer» desligado, na janela privada, fora de login/criação/mudança, sem palavra-passe, acima de 512, fora da web;
+prazo de 5 minutos; o candidato não aparece no código do cofre; navegação com e sem o início de sessão de volta, noutro
+site, fora da web, tarde demais; `formGone` só do formulário e documento do candidato; guardar, igual, nunca, atualizar,
+outro utilizador, criação de conta, mudança pela palavra-passe atual e com uma só guardada, confirmar uma gerada; a
+chave e os redirecionamentos), `Vault/CofreSaveTests` (no Node: o que vai no envio de um início de sessão, criação de
+conta e mudança; nada noutros formulários, sem palavra-passe, com a confirmação diferente ou num código de uma
+utilização; as restrições para o gerador; a preferência «oferecer» entra no script; o `probe` é uma chamada
+permitida), `VaultChannelGuardTests` (o script continua sem escrever na página fora do preenchimento).
+
+Prova ao vivo (`pp\vivo\c4.ps1`, `pp\vivo\c4\registo.txt` e capturas; perfil de teste novo; páginas locais em
+`127.0.0.1:8900` — início de sessão que navega, SPA que troca o formulário, mudança de palavra-passe; palavras-passe
+inventadas escritas com teclas reais; bolha, botões e chave lidos e clicados por UI Automation; o cofre lido por um
+comando de teste que diz a que texto esperado cada palavra-passe é igual, sem a mostrar):
+
+1. Palavra-passe errada (a página volta com o erro e o formulário): nenhuma bolha.
+2. Certa (navega): «Guardar a palavra-passe de 127.0.0.1?» com o utilizador e a palavra-passe escondida
+   (`1-guardar.png`); o olho mostra-a; «Guardar» → o cofre tem a palavra-passe certa.
+3. A mesma outra vez: nada.
+4. Outra palavra-passe: «Atualizar a palavra-passe de ana.c4@exemplo.test em 127.0.0.1?» (`2-atualizar.png`) →
+   o cofre tem a nova e a anterior no histórico.
+5. Mudar a palavra-passe num formulário sem utilizador: «Atualizar…» da conta certa (achada pela atual).
+6. SPA: errada (o formulário fica com o erro) não oferece; certa (o formulário sai) oferece; «Agora não» deixa a
+   chave (`3-chave.png`); a chave reabre a bolha; Esc dentro dela fecha; a navegação seguinte tira a chave.
+7. ⋯ › «Nunca neste site» (`4-nunca.png`): o login seguinte no site não oferece nada; o site está na lista «nunca».
