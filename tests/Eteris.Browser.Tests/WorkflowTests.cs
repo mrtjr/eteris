@@ -50,6 +50,30 @@ public class WorkflowTests
         Assert.Matches(@"sem_codecs:\n(\s+\w+:.*\n)*?\s+required: true\n(\s+\w+:.*\n)*?\s+type: boolean", yml);
     }
 
+    // CI instável (v0.2.11): um teste preso só se via como «Assert.True() Failure» e, sem prazo no job, um bloqueio
+    // comia as 6 h por omissão. Os jobs que correm os testes têm prazo, o dotnet test deixa um dump se algum teste ficar
+    // preso, grava o TRX (com a duração de cada teste) e, quando falha, envia os resultados.
+    [Theory]
+    [InlineData("build.yml", "build")]
+    [InlineData("release.yml", "verify")]
+    public void TestJobs_HaveTimeouts_AndKeepTheResultsWhenTheyFail(string workflow, string job)
+    {
+        var steps = Job(Workflow(workflow).Replace("\r\n", "\n"), job);
+        Assert.Contains("timeout-minutes: 30", steps);
+        var test = Regex.Match(steps, @"^\s+- run: dotnet test .*$", RegexOptions.Multiline).Value;
+        Assert.Contains("--blame-hang-timeout 5m", test);
+        Assert.Contains("--blame-hang-dump-type mini", test);
+        Assert.Contains("--logger \"trx;LogFileName=testes.trx\"", test);
+        Assert.Contains("--results-directory TestResults", test);
+        var upload = steps[steps.IndexOf(test, StringComparison.Ordinal)..];
+        Assert.Matches(@"- if: failure\(\)\n\s+uses: actions/upload-artifact@v\d+\n\s+with:\n\s+name: testes-.*\n\s+path: TestResults", upload);
+    }
+
+    // A publicação de emergência compila o Rust, publica, empacota e envia: prazo maior, mas com prazo.
+    [Fact]
+    public void Release_PublishSemCodecs_HasATimeout()
+        => Assert.Contains("timeout-minutes: 60", Job(Workflow("release.yml").Replace("\r\n", "\n"), "publish-sem-codecs"));
+
     private static string Job(string yml, string name)
         => Regex.Match(yml, "^  " + Regex.Escape(name) + @":\n(.*?)(?=^  \S|\z)", RegexOptions.Multiline | RegexOptions.Singleline).Groups[1].Value;
 }
