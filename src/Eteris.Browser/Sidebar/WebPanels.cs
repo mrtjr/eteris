@@ -5,7 +5,8 @@ namespace Eteris.Browser.Sidebar;
 
 // Um site fixado na barra lateral: abre dentro da barra, numa instância própria do motor, e persiste entre sessões.
 // Mobile = «vista móvel»: os pedidos saem com o agente de um telemóvel (sites que servem uma versão estreita por agente).
-public sealed record WebPanel(string Url, string Title, bool Mobile = false);
+// KeepAwake = «Manter acordado»: escondido na barra aberta, o site nunca adormece (um chat que tem de receber mensagens).
+public sealed record WebPanel(string Url, string Title, bool Mobile = false, bool KeepAwake = false);
 
 // Sites fixados: a lista (ordem, limite, duplicados) e a sua forma em ficheiro (paineis.json no perfil).
 // Lógica pura; a janela cria e destrói os motores (MainWindow.WebPanels.cs).
@@ -78,6 +79,16 @@ public static class WebPanels
     public static IReadOnlyList<WebPanel> SetMobile(IReadOnlyList<WebPanel> panels, string url, bool mobile)
         => IndexOf(panels, url) < 0 ? panels : panels.Select(p => p.Url == url ? p with { Mobile = mobile } : p).ToList();
 
+    // Ligar ou desligar o «Manter acordado» de um site; um site que não existe deixa a lista como está.
+    public static IReadOnlyList<WebPanel> SetKeepAwake(IReadOnlyList<WebPanel> panels, string url, bool keepAwake)
+        => IndexOf(panels, url) < 0 ? panels : panels.Select(p => p.Url == url ? p with { KeepAwake = keepAwake } : p).ToList();
+
+    // Ajuste e6 (plano de desempenho da 0.2.14): um site fixado escondido (a barra aberta noutro separador) adormece como
+    // as abas, ao fim do mesmo tempo (Definições › Abas; zero = nunca), salvo «Manter acordado». hiddenSince: quando
+    // deixou de se ver (null: está à vista).
+    public static bool ShouldSleep(bool keepAwake, DateTime? hiddenSinceUtc, DateTime nowUtc, TimeSpan threshold)
+        => threshold > TimeSpan.Zero && !keepAwake && hiddenSinceUtc is { } since && nowUtc - since > threshold;
+
     public static WebPanel? Find(IReadOnlyList<WebPanel> panels, string url)
         => IndexOf(panels, url) is var index and >= 0 ? panels[index] : null;
 
@@ -113,7 +124,7 @@ public static class WebPanels
         foreach (var panel in raw ?? [])
         {
             if (panel is null || Normalize(panel.Url) is not { } clean || result.Any(p => p.Url == clean) || result.Count >= Max) continue;
-            result.Add(new WebPanel(clean, CleanTitle(panel.Title), panel.Mobile));
+            result.Add(new WebPanel(clean, CleanTitle(panel.Title), panel.Mobile, panel.KeepAwake));
         }
         return result;
     }

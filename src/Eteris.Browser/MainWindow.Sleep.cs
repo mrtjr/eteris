@@ -86,6 +86,8 @@ public partial class MainWindow
             ReleaseBrowser(tab);
             tab.IsSleeping = true;
         }
+        // Os sites fixados escondidos na barra lateral (ajuste e6, MainWindow.WebPanels.cs).
+        SleepIdleWebPanels(now, threshold);
     }
 
 

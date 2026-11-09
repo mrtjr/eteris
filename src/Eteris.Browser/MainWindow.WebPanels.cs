@@ -21,6 +21,8 @@ public partial class MainWindow
     private IReadOnlyList<WebPanel> _webPanels = [];
     private readonly Dictionary<string, ChromiumWebBrowser> _webPanelBrowsers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ScriptletInjector> _webPanelInjectors = new(StringComparer.Ordinal);
+    // Desde quando cada site fixado com motor está escondido (ajuste e6; os à vista não estão aqui).
+    private readonly Dictionary<string, DateTime> _webPanelHiddenSince = new(StringComparer.Ordinal);
 
     private static WebPanelStore WebPanelsFile => new(Path.Combine(AppPaths.Root, "paineis.json"));
 
@@ -135,8 +137,10 @@ public partial class MainWindow
             if (other != url)
             {
                 HideWebPanel(view);
+                _webPanelHiddenSince.TryAdd(other, DateTime.UtcNow);
                 continue;
             }
+            _webPanelHiddenSince.Remove(other);
             view.Visibility = Visibility.Visible;
             if (view.IsBrowserInitialized) SetPageVisible(view, true);
         }
@@ -148,7 +152,35 @@ public partial class MainWindow
     // deixa de desenhar, mas continua a receber mensagens).
     private void HideWebPanels()
     {
-        foreach (var view in _webPanelBrowsers.Values) HideWebPanel(view);
+        foreach (var (url, view) in _webPanelBrowsers)
+        {
+            HideWebPanel(view);
+            _webPanelHiddenSince.TryAdd(url, DateTime.UtcNow);
+        }
+    }
+
+    // Ajuste e6: os sites fixados escondidos há mais do que o tempo de sono das abas adormecem (o motor vai-se; ao voltar
+    // ao separador o site carrega de novo). Corre com o sono das abas (MainWindow.Sleep.cs), de minuto a minuto.
+    private void SleepIdleWebPanels(DateTime nowUtc, TimeSpan threshold)
+    {
+        if (!PerfTuning.IsOn(PerfTuning.ReleaseGlance)) return;
+        foreach (var (url, since) in _webPanelHiddenSince.ToList())
+        {
+            if (!_webPanelBrowsers.ContainsKey(url))
+            {
+                _webPanelHiddenSince.Remove(url);
+                continue;
+            }
+            if (_sidebarOpen && _sidebarPanel?.Url == url) continue;
+            if (!WebPanels.ShouldSleep(WebPanels.Find(_webPanels, url)?.KeepAwake == true, since, nowUtc, threshold)) continue;
+            ReleaseWebPanelBrowser(url);
+        }
+    }
+
+    private void SetPinnedSiteKeepAwake(string url, bool keepAwake)
+    {
+        UpdateWebPanels(list => WebPanels.SetKeepAwake(list, url, keepAwake));
+        ShowToast(keepAwake ? "Este site fica acordado na barra lateral, mesmo escondido" : "Escondido na barra lateral, este site adormece como as abas");
     }
 
     // Minimizar primeiro, como HidePage: esconder no WPF faz o CefSharp encolher a janela do CEF a 0×0 e, com a página
@@ -321,6 +353,7 @@ public partial class MainWindow
 
     private void ReleaseWebPanelBrowser(string url)
     {
+        _webPanelHiddenSince.Remove(url);
         if (_webPanelInjectors.Remove(url, out var injector)) injector.Dispose();
         if (!_webPanelBrowsers.Remove(url, out var browser)) return;
         if (ReferenceEquals(_findPanel, browser)) CloseFind();
@@ -368,8 +401,10 @@ public partial class MainWindow
         {
             if (any) menu.Separator();
             var mobile = WebPanels.Find(_webPanels, url)?.Mobile == true;
+            var awake = WebPanels.Find(_webPanels, url)?.KeepAwake == true;
             menu.Item("", "Abrir este site numa aba", () => Tabs.NewTab(WebPanelAddress(browser, url)))
                 .Item(mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(url, !mobile))
+                .Item(awake ? "" : "", "Manter acordado", () => SetPinnedSiteKeepAwake(url, !awake))
                 .Item("", "Tirar da barra lateral", () => UnpinSite(url));
         }
         menu.Open(browser);
@@ -431,6 +466,7 @@ public partial class MainWindow
                 if (_webPanelBrowsers.TryGetValue(panel.Url, out var browser) && !browser.IsDisposed) ReloadWebPanel(browser, ignoreCache: false);
             }, enabled: _webPanelBrowsers.ContainsKey(panel.Url))
             .Item(panel.Mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(panel.Url, !panel.Mobile))
+            .Item(panel.KeepAwake ? "" : "", "Manter acordado", () => SetPinnedSiteKeepAwake(panel.Url, !panel.KeepAwake))
             .Separator()
             .Item("", "Mover para cima", () => MovePinnedSite(panel.Url, -1), enabled: index > 0)
             .Item("", "Mover para baixo", () => MovePinnedSite(panel.Url, 1), enabled: index >= 0 && index < _webPanels.Count - 1)
