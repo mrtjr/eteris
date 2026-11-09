@@ -1,8 +1,10 @@
 # Sincronização do Éteris («Entrar com o Google», opção B)
 
 Estado: **publicada na 0.2.13** (ligada ao Éteris, fora do modo experimental; opcional e desligada por omissão). A
-aplicação Google do Éteris continua «Em teste»: até ser publicada na Google (passo 7 de «O que o dono tem de fazer»),
-só as contas autorizadas pelo autor conseguem entrar. Decisão do dono
+aplicação Google do Éteris está **«Em produção»** desde 2026-11-09 (passo 7 de «O que o dono tem de fazer»): qualquer
+conta Google pode entrar, e a sessão já não expira ao fim de 7 dias. Página inicial, política de privacidade e termos
+em <https://mrtjr.github.io/eteris/> (GitHub Pages, `docs/site/`, workflow `.github/workflows/pages.yml`). A
+verificação da marca (nome e logótipo no ecrã de consentimento) continua opcional e por pedir. Decisão do dono
 (opção B): o início de sessão na Google faz-se no **navegador do sistema** (OAuth 2.0 para apps de computador, PKCE e
 redirecionamento por loopback `127.0.0.1`), os dados do Éteris ficam na **pasta oculta da aplicação** (`appDataFolder`)
 do Google Drive do utilizador, com o âmbito `https://www.googleapis.com/auth/drive.appdata` (não sensível), e vão
@@ -591,7 +593,8 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
 7. **Para sair de «Em teste»** (qualquer conta Google poder entrar, e os tokens deixarem de expirar aos 7 dias): com
    só o âmbito `drive.appdata` (não sensível), basta **Audience › Publicar aplicação** — a verificação da aplicação
    não é obrigatória e não aparece o aviso de aplicação não verificada. Depois de publicar, quem entrou em modo de
-   teste tem de entrar outra vez.
+   teste tem de entrar outra vez. **Feito em 2026-11-09:** Branding com a página inicial, a política de privacidade,
+   os termos e o domínio autorizado `mrtjr.github.io`; o único âmbito é `drive.appdata`; estado «Em produção».
    - A **verificação da marca** é opcional mas recomendada: sem ela o ecrã de consentimento não mostra o nome «Éteris»
      nem o logótipo. Pede a página inicial e a política de privacidade num domínio verificado no Google Search
      Console; as páginas estão em `docs/site/` (página inicial, política de privacidade — o que o âmbito
