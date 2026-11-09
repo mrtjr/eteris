@@ -56,6 +56,19 @@ public class InjectedScriptsSyntaxTests
         CheckSyntax("privacidade", match.Groups[1].Value);
     }
 
+    // As páginas do cofre (eteris://passwords/ e eteris://autofill/), como são servidas.
+    [Theory]
+    [InlineData("passwords")]
+    public void VaultPageScript_IsValidJavaScript(string page)
+    {
+        var html = page == "passwords"
+            ? PasswordsPage.Render(new { token = "t", logins = Array.Empty<object>(), never = Array.Empty<object>(), pwOffer = true, pwSuggest = true, pwAskHello = false })
+            : throw new ArgumentException(page);
+        var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);
+        Assert.True(match.Success);
+        CheckSyntax(page, match.Groups[1].Value);
+    }
+
     [Theory]
     [MemberData(nameof(Scripts))]
     public void InjectedScript_IsValidJavaScript(string name, string script) => CheckSyntax(name, script);

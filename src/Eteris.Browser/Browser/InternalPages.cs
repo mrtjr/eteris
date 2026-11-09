@@ -47,6 +47,18 @@ public static class InternalPages
 
     public static bool LightTheme => Theme.ThemeManager.Current == Theme.AppTheme.Light;
 
+    // Todos os parâmetros da consulta (o primeiro de cada nome).
+    public static Dictionary<string, string> QueryAll(Uri uri)
+    {
+        var all = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            all.TryAdd(parts[0], parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : string.Empty);
+        }
+        return all;
+    }
+
     public static string? Query(Uri uri, string name)
     {
         foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))

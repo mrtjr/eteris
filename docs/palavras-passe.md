@@ -1,6 +1,6 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5) e, do bloco B (interfaces de gestão), B1 feitos no ramo `sync`, por
+Estado: **bloco A (base local: A0–A5) e, do bloco B (interfaces de gestão), B1 e B2 feitos no ramo `sync`, por
 publicar** (os blocos C a E do desenho — preenchimento na página, sincronização e fecho — estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
@@ -250,3 +250,75 @@ ela; → abre o submenu com «Gestor de palavras-passe» realçado («1 de 5»);
 Enter abre outra vez com a primeira entrada realçada; Esc volta à linha; outro Esc fecha o menu. Pelo rato: um clique
 na linha abre o submenu e um clique em «Gestor de palavras-passe» abre `eteris://passwords`. Capturas: menu, submenu
 pelo teclado e pelo rato, nos dois temas, e a secção das Definições (`definicoes-dark.png`, `definicoes-light.png`).
+
+## B2. `eteris://passwords/`
+
+`Browser/PasswordsPage.cs`, `Browser/passwords.html`, `Vault/VaultRoutes.cs`, `Vault/PasswordHealth.cs`,
+`Browser/VaultResourceHandler.cs`, `MainWindow.Vault.cs` (`WindowsVaultHost`), rotas em
+`Browser/EterisSchemeHandlerFactory.cs`.
+
+- **Página** com o estilo das Definições (navegação à esquerda com realce fixo, tema claro e escuro, Cor do Éteris):
+  «Palavras-passe» (pesquisa; lista agrupada por domínio registável, com o ícone da cache de favicons ou a inicial;
+  etiquetas «Ligação não segura» para `http`, «Não confirmada» para geradas, «App Android»), «Verificação» e
+  «Definições», e atalhos para as quatro secções do preenchimento automático.
+- **Nenhum segredo no HTML inicial:** a página recebe só o site, o utilizador e as datas. A palavra-passe **e a nota**
+  chegam só por `eteris://passwords/reveal`, depois da reautenticação (Windows Hello ou palavra-passe do Windows, com a
+  janela de graça de 5 min), e ficam à vista no máximo 30 s; com um segredo à vista as janelas saem das capturas
+  (`SecretOnScreen`), até «Esconder» ou aos 30 s.
+- **Copiar:** a palavra-passe pede a reautenticação e vai pela área de transferência segura no processo do navegador
+  (A5) — nunca passa pela página; o utilizador copia-se sem pedir.
+- **Adicionar** não pede nada; **editar** um item existente pede (é ver e mudar a palavra-passe), e a anterior vai para
+  o histórico de 1 versão. Validações: endereço `http(s)`, palavra-passe não vazia, limites do Chromium (1000 carateres).
+- **Apagar com «Anular»:** o item sai logo da lista e só se apaga no cofre ao fim de 10 s (ou ao fechar o Éteris), para
+  «Anular» não precisar de guardar nenhum segredo decifrado em memória.
+- **«Mudar palavra-passe»:** nenhum pedido até ao clique; ao clicar, o processo do navegador abre numa aba nova
+  `/.well-known/change-password` da origem guardada (RFC 8615). O endereço nunca está na página.
+- **Verificação local** (`PasswordHealth`): fracas (menos de 8 carateres, das mais comuns em Portugal e no Brasil com ou
+  sem números no fim, sequências do teclado ou do alfabeto, um só carácter repetido, menos de 12 carateres de uma só
+  classe) e repetidas (SHA-256 em memória). Calculada ao abrir a secção; só os IDs saem para a página. Nenhum pedido de
+  rede (a verificação de fugas fica para depois, D-4).
+- **Definições da página:** os três interruptores de B1 (só esses: a rota recusa outras chaves), «Sites onde nunca
+  guardar» com «Remover», «Importar…», «Exportar…» e «Apagar todas as palavras-passe…».
+- **Importar:** o diálogo «Abrir» é nativo e do processo do navegador — o CSV nunca entra na página; limite de 1000 KiB
+  antes de ler; conflitos (mesmo site e utilizador, outra palavra-passe) perguntam «Ficar com as do ficheiro» (a atual
+  vai para o histórico) ou «Manter as atuais»; resumo «6 importadas, 1 substituída, 1 inválida»; no fim, «Enviar o
+  ficheiro CSV para a Reciclagem» (`SHFileOperation` com anular). A escolha «manter as duas» do desenho não existe
+  (o cofre tem um item por site e utilizador).
+- **Exportar:** dois cliques (o segundo diz «Ficheiro em claro»), reautenticação **sempre** (sem janela de graça),
+  diálogo «Guardar como» nativo, aviso nativo se a pasta for do OneDrive, do Dropbox ou do Google Drive (e nada se grava
+  se o utilizador disser que não), formato do Chrome em UTF-8.
+- **«Apagar todas as palavras-passe…»:** dois cliques e reautenticação; apaga as palavras-passe e os «nunca» (com
+  lápides para a sincronização); os pagamentos, contactos, documentos e viagens ficam.
+- **Regras das rotas:** todas as ações exigem o token desta sessão; a janela privada recebe «Abra numa janela normal»
+  e as rotas recusam; os dados vão no corpo de um POST (nunca no endereço); as respostas chegam por iframes da mesma
+  origem (a CSP da página não deixa `fetch` nem pedidos de rede); a reautenticação desiste quando a aba sai da frente
+  ou a janela fecha (e a graça dessa janela acaba). O cofre continua a abrir-se só na primeira vez que é preciso.
+- `eteris://passwords/` e `eteris://autofill/` passam a poder abrir-se como endereço de arranque (como
+  `eteris://privacy/`), só na raiz e sem parâmetros.
+
+Testes: `Vault/PasswordsPageTests` (nenhum segredo no HTML inicial; a página fechada à rede e sem o endereço
+`/.well-known`; cada ação recusada sem o token; janela privada; mostrar com e sem reautenticação, na graça e cancelado
+quando a aba sai da frente; copiar; adicionar sem pedir e editar a pedir, com histórico; validações; apagar com
+«Anular» e ao fechar; «nunca» e «Remover»; «Mudar palavra-passe» só ao clicar e da origem guardada; verificação só com
+IDs; importar com e sem conflitos, diálogo cancelado, ficheiro grande, Reciclagem; exportar sempre com reautenticação,
+diálogo nativo e aviso da nuvem; apagar tudo só as palavras-passe; interruptores; metadados da lista com IDN e
+`http`), `Vault/PasswordHealthTests`, `InjectedScriptsSyntaxTests` (o script da página no Node), `ThemedPagesTests`,
+`StartupArgsTests`.
+
+Prova ao vivo (`pp\vivo\b2`, `pp\vivo\b2-registo.txt`; perfil de teste novo; `ETERIS_TEST_REAUTH=aceitar`; CSV com
+sete palavras-passe inventadas, uma em conflito e uma linha inválida; a área de transferência do dono — uma imagem —
+guardada e reposta):
+- página vazia; nenhum segredo no HTML antes nem depois de importar;
+- importar pelo diálogo nativo (teclas reais no campo do nome): «1 palavra-passe do ficheiro é diferente da guardada…
+  Qual fica?» → «Ficar com as do ficheiro» → «6 importadas, 1 substituída, 1 inválida»; seis linhas, `intranet` com
+  «Ligação não segura»;
+- pesquisar «loja» → uma linha;
+- «Mostrar» → a palavra-passe inventada à vista e a afinidade da janela `0x11` (fora das capturas; por isso não há
+  captura desse momento); «Esconder» → `••••` e afinidade `0x0`;
+- «Copiar» → «Palavra-passe copiada. A área de transferência é limpa daqui a 60 s…», a área de transferência com a
+  palavra-passe e os três formatos de exclusão presentes;
+- «Apagar» → 5 linhas e o aviso com «Anular» → «Anular» → 6 linhas;
+- «Verificação» → «1 palavra-passe fraca · 2 repetidas» com os sites;
+- «Exportar…» (dois cliques, Hello falso, diálogo «Guardar como» nativo) → «6 palavras-passe exportadas…», ficheiro
+  com 7 linhas e o cabeçalho do Chrome;
+- `cofre.db` sem «Inventada», «loja.exemplo» nem «ana.teste» em Latin-1, UTF-8 ou UTF-16.

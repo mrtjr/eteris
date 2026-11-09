@@ -84,6 +84,8 @@ public partial class App : Application
             catch (Exception) { }
         }
         UpdateService.ApplyPendingOnExit();
+        // Palavras-passe apagadas há menos de 10 s (ainda com «Anular»): apagam-se de vez.
+        Vault.VaultRoutes.CommitPendingOnExit();
         try
         {
             // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se

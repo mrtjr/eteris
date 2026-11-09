@@ -65,6 +65,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
+        // Palavras-passe e preenchimento automático (Vault/VaultRoutes.cs): recusadas na janela privada.
+        if (uri is { Host: "passwords" or "autofill" }) return VaultRoute(uri, request, browser);
         if (uri is { Host: "settings" or "about", AbsolutePath: "/clear" }) return ClearData(uri, request.Url, browser);
         if (uri is { Host: "credits", AbsolutePath: "/" }) return Html(CreditsPage.Render());
         if (uri is { Host: "privacy", AbsolutePath: "/" })
@@ -101,6 +103,16 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 ErrorPage.IsInsecureWarning(request.Url), canRemember: !privateContext, secureDns: Settings.Current.SecureDns != "off"));
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+    }
+
+    private IResourceHandler VaultRoute(Uri uri, IRequest request, IBrowser browser)
+    {
+        Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
+        var routes = Vault.VaultRoutes.Profile!;
+        // O pedido lê-se já (o IRequest só vale durante esta chamada); a resposta vem depois, noutra thread.
+        var vaultRequest = new Vault.VaultRequest(uri.Host, uri.AbsolutePath, InternalPages.QueryAll(uri), SyncForm.Parse(request),
+            InternalPages.IsAuthorized(request.Url), privateContext, browser.Identifier);
+        return new VaultResourceHandler(() => routes.HandleAsync(vaultRequest));
     }
 
     private bool CanChangeNewTab(string url) => !privateContext && InternalPages.IsAuthorized(url);

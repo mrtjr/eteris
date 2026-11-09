@@ -9,6 +9,14 @@
   «n de N»). Na janela privada as entradas abrem numa janela normal. Também nas Definições (secção nova, com «Oferecer
   para guardar palavras-passe», «Mostrar sugestões ao clicar num campo» e «Pedir o Windows Hello ao preencher
   palavras-passe») e na paleta (Ctrl+K).
+- **`eteris://passwords/` — o gestor de palavras-passe:** lista com pesquisa, agrupada por site; «Mostrar» e «Copiar»
+  com o Windows Hello (ou a palavra-passe do Windows), com a janela fora das capturas enquanto a palavra-passe está à
+  vista e a cópia fora do histórico da área de transferência; adicionar, editar (a anterior fica no histórico) e apagar
+  com «Anular»; «Mudar palavra-passe» abre a página de mudança do site só ao clicar; verificação de palavras-passe
+  fracas e repetidas feita neste computador; «Sites onde nunca guardar»; importar o CSV do Chrome, do Brave, do
+  Firefox, do Bitwarden ou do 1Password (o ficheiro é lido pelo Éteris, não pela página, com a escolha nos conflitos e a
+  oferta de o enviar para a Reciclagem) e exportar no formato do Chrome (pede sempre o Windows Hello e avisa numa pasta
+  do OneDrive, do Dropbox ou do Google Drive). Nenhuma palavra-passe vai no HTML da página; nada sai do computador.
 - **Nada dos formulários vai para a Google:** medido ao vivo, o motor mandava o utilizador e a palavra-passe (prefixo
   de um hash) de cada início de sessão enviado a `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas do
   Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de

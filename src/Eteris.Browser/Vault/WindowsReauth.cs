@@ -112,6 +112,12 @@ public sealed class ReauthGate
 
     public static ReauthGate Shared => s_shared.Value;
 
+    // Uma janela fechou: a graça dela acaba (sem criar a porta só para isso).
+    public static void ForgetWindowIfCreated(nint window)
+    {
+        if (s_shared.IsValueCreated) s_shared.Value.WindowClosed(window);
+    }
+
     // Texto para a página quando a conta do Windows não tem proteção (null se tem).
     public string? Advice => _unprotected ? ProtectAccountAdvice : null;
 

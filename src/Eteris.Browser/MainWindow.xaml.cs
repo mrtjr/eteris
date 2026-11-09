@@ -63,6 +63,7 @@ public partial class MainWindow : Window
         Activated += (_, _) => RestoreFocusAfterBrowserMenuOnActivate();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
+        Closed += (_, _) => ForgetVaultWindow();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
         StartTabs(initialUrl);
         StartupTrace.Mark("janela.abas");
@@ -431,6 +432,8 @@ public partial class MainWindow : Window
         OnActiveTabChanging();
         OnSplitActiveChanged();
         MoveFocusOffHiddenPage();
+        // A reautenticação pedida por uma página do cofre desiste quando a aba sai da frente.
+        CancelVaultRequests();
         CloseGlanceOnTabChange();
         // O cartão do cadeado mostrava o site da aba anterior por cima da nova.
         SiteInfoPopup.IsOpen = false;
