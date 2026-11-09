@@ -66,8 +66,11 @@ public static class PerfTuning
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D-4"),
         new(MediaPolling, "a central de multimédia sonda de 2 em 2 s só as abas à vista, quentes ou com som, e as outras de 30 em 30 s; o modo foco deixa de ler o rato com a janela inativa",
             OnByDefault: true),
-        new(ReleaseGlance, "o Espreitar liberta o motor 60 s depois de fechar; os sites fixados escondidos na barra lateral adormecem como as abas (salvo «Manter acordado»)",
-            OnByDefault: true),
+        // Desligado até ao D6 (o plano: «Depende de: D6», que diz se o renderer do Espreitar fica mesmo vivo). Os sites
+        // fixados escondidos na barra aberta ficavam acordados de propósito («para um chat não perder o sítio»,
+        // MainWindow.WebPanels.cs): adormecê-los por omissão muda o produto, e isso decide-se com o D6.
+        new(ReleaseGlance, "o Espreitar liberta o motor 60 s depois de fechar; os sites fixados escondidos na barra lateral adormecem como as abas (salvo «Manter acordado», som, multimédia a tocar ou câmara/microfone/ecrã)",
+            OnByDefault: false, Waits: "D6"),
         new(SmallBackForwardCache, "Voltar/Avançar instantâneo para as 3 últimas páginas de cada aba (o Chromium guarda 6): menos renderers vivos",
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D-5", Engine: true),
         new(HideWhenUnseen, "a página à vista deixa de desenhar com a janela minimizada, noutra área de trabalho ou com a sessão bloqueada (nunca com som, multimédia, captura ou Picture-in-Picture)",

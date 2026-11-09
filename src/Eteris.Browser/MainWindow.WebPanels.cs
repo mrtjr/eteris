@@ -173,8 +173,30 @@ public partial class MainWindow
             }
             if (_sidebarOpen && _sidebarPanel?.Url == url) continue;
             if (!WebPanels.ShouldSleep(WebPanels.Find(_webPanels, url)?.KeepAwake == true, since, nowUtc, threshold)) continue;
+            _ = SleepWebPanelUnlessBusyAsync(url);
+        }
+    }
+
+    private readonly HashSet<string> _webPanelsFallingAsleep = new(StringComparer.Ordinal);
+
+    // As isenções das abas (SleepPolicy, MemoryPressure): um site fixado com som ou multimédia a tocar (música na barra) ou
+    // com a câmara, o microfone ou o ecrã (uma chamada) não adormece. Pergunta-se à página como a central de multimédia
+    // (Runtime.evaluate, sem Runtime.enable); sem resposta, fica acordado.
+    private async Task SleepWebPanelUnlessBusyAsync(string url)
+    {
+        if (!_webPanelBrowsers.TryGetValue(url, out var browser) || IsCapturing(browser) || !_webPanelsFallingAsleep.Add(url)) return;
+        try
+        {
+            var result = await PageScript.EvaluateAsync(browser, global::Eteris.Browser.Tabs.MediaInfo.Script, TimeSpan.FromSeconds(1));
+            if (!result.Success) return;
+            var media = global::Eteris.Browser.Tabs.MediaInfo.Parse(result.Result as string);
+            if (media.Audible || media.State == global::Eteris.Browser.Tabs.MediaState.Playing) return;
+            // Entretanto o site pode ter voltado à vista, começado uma chamada, sido largado ou tirado da barra.
+            if (!_webPanelBrowsers.TryGetValue(url, out var same) || !ReferenceEquals(same, browser) || !_webPanelHiddenSince.ContainsKey(url)
+                || (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser)) return;
             ReleaseWebPanelBrowser(url);
         }
+        finally { _webPanelsFallingAsleep.Remove(url); }
     }
 
     private void SetPinnedSiteKeepAwake(string url, bool keepAwake)
@@ -403,9 +425,10 @@ public partial class MainWindow
             var mobile = WebPanels.Find(_webPanels, url)?.Mobile == true;
             var awake = WebPanels.Find(_webPanels, url)?.KeepAwake == true;
             menu.Item("", "Abrir este site numa aba", () => Tabs.NewTab(WebPanelAddress(browser, url)))
-                .Item(mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(url, !mobile))
-                .Item(awake ? "" : "", "Manter acordado", () => SetPinnedSiteKeepAwake(url, !awake))
-                .Item("", "Tirar da barra lateral", () => UnpinSite(url));
+                .Item(mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(url, !mobile));
+            // «Manter acordado» só faz alguma coisa com o ajuste e6 (o sono dos sites fixados escondidos).
+            if (PerfTuning.IsOn(PerfTuning.ReleaseGlance)) menu.Item(awake ? "" : "", "Manter acordado", () => SetPinnedSiteKeepAwake(url, !awake));
+            menu.Item("", "Tirar da barra lateral", () => UnpinSite(url));
         }
         menu.Open(browser);
     }
@@ -459,15 +482,15 @@ public partial class MainWindow
     private void ShowWebPanelRailMenu(WebPanel panel, UIElement anchor)
     {
         var index = WebPanels.IndexOf(_webPanels, panel.Url);
-        new DarkMenu()
+        var menu = new DarkMenu()
             .Item("", "Abrir numa aba", () => Tabs.NewTab(panel.Url))
             .Item("", "Recarregar", () =>
             {
                 if (_webPanelBrowsers.TryGetValue(panel.Url, out var browser) && !browser.IsDisposed) ReloadWebPanel(browser, ignoreCache: false);
             }, enabled: _webPanelBrowsers.ContainsKey(panel.Url))
-            .Item(panel.Mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(panel.Url, !panel.Mobile))
-            .Item(panel.KeepAwake ? "" : "", "Manter acordado", () => SetPinnedSiteKeepAwake(panel.Url, !panel.KeepAwake))
-            .Separator()
+            .Item(panel.Mobile ? "" : "", "Vista móvel", () => SetPinnedSiteMobile(panel.Url, !panel.Mobile));
+        if (PerfTuning.IsOn(PerfTuning.ReleaseGlance)) menu.Item(panel.KeepAwake ? "" : "", "Manter acordado", () => SetPinnedSiteKeepAwake(panel.Url, !panel.KeepAwake));
+        menu.Separator()
             .Item("", "Mover para cima", () => MovePinnedSite(panel.Url, -1), enabled: index > 0)
             .Item("", "Mover para baixo", () => MovePinnedSite(panel.Url, 1), enabled: index >= 0 && index < _webPanels.Count - 1)
             .Separator()

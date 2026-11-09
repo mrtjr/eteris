@@ -58,9 +58,35 @@ public class ReleaseGlanceTests
         Assert.Same(list, WebPanels.SetKeepAwake(list, "https://outro.exemplo.pt/", true));
     }
 
+    // O plano faz o E6 depender do D6, e os sites fixados escondidos na barra aberta ficavam acordados de propósito (um chat
+    // não perde o sítio): desligado por omissão até ao D6.
     [Fact]
-    public void Tweak_IsOnByDefault()
-        => Assert.True(Assert.Single(PerfTuning.Tweaks, t => t.Id == PerfTuning.ReleaseGlance).OnByDefault);
+    public void Tweak_IsOffByDefaultUntilD6()
+    {
+        var tweak = Assert.Single(PerfTuning.Tweaks, t => t.Id == PerfTuning.ReleaseGlance);
+        Assert.False(tweak.OnByDefault);
+        Assert.Equal("D6", tweak.Waits);
+    }
+
+    // Como as abas: um site fixado com som, multimédia a tocar ou captura (uma chamada) não adormece; sem resposta da página
+    // também não; e volta a confirmar, depois da resposta, que continua escondido e é o mesmo motor.
+    [Fact]
+    public void Panels_KeepTheTabExemptions()
+    {
+        var code = Source("MainWindow.WebPanels.cs");
+        Assert.Contains("_ = SleepWebPanelUnlessBusyAsync(url);", code);
+        Assert.DoesNotMatch(@"threshold\)\) continue;\s*ReleaseWebPanelBrowser\(url\);", code);
+        Assert.Matches(@"_webPanelBrowsers\.TryGetValue\(url, out var browser\) \|\| IsCapturing\(browser\)", code);
+        Assert.Contains("if (!result.Success) return;", code);
+        Assert.Contains("if (media.Audible || media.State == global::Eteris.Browser.Tabs.MediaState.Playing) return;", code);
+        Assert.Matches(@"!ReferenceEquals\(same, browser\) \|\| !_webPanelHiddenSince\.ContainsKey\(url\)", code);
+    }
+
+    // Sem o ajuste, «Manter acordado» não faria nada: os dois menus só o mostram com ele.
+    [Fact]
+    public void KeepAwakeItem_OnlyWithTheTweak()
+        => Assert.Equal(2, Regex.Matches(Source("MainWindow.WebPanels.cs"),
+            @"if \(PerfTuning\.IsOn\(PerfTuning\.ReleaseGlance\)\) menu\.Item\([^\n]*""Manter acordado""").Count);
 
     [Fact]
     public void Glance_ReleasesAMinuteAfterClosing()
