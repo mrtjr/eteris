@@ -277,6 +277,9 @@ public partial class MainWindow
         Dispatcher.InvokeAsync(() =>
         {
             if (browser.IsDisposed) return;
+            // Com o menu do Éteris aberto, a tecla fecha-o primeiro e o teclado volta ao painel, como nas abas (onde a
+            // mesma tecla passa por ShortcutFromPage): a impressão, o Procurar e as ferramentas não abrem por baixo do menu.
+            if (BrowserMenuOpen) CloseBrowserMenu(restoreFocus: true);
             switch (command)
             {
                 case WebPanelKey.Reload: ReloadWebPanel(browser, ignoreCache: false); break;
