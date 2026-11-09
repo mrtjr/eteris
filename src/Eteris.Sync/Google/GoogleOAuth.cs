@@ -51,7 +51,12 @@ public sealed record OAuthTokens(
     [property: JsonPropertyName("expires")] long ExpiresAtMs,
     [property: JsonPropertyName("scope")] string Scope);
 
-public sealed class OAuthException(string message) : Exception(message);
+// NeedsSignIn: a autorização foi retirada ou expirou (invalid_grant, sem token de renovação, permissão desmarcada) —
+// não passa sozinha; é preciso entrar outra vez.
+public sealed class OAuthException(string message, bool needsSignIn = false) : Exception(message)
+{
+    public bool NeedsSignIn { get; } = needsSignIn;
+}
 
 // Abre um endereço no navegador do sistema (o Windows: ver Eteris.Browser/Sync/SystemBrowser.cs). Devolve false quando
 // não há navegador que possa ser usado (por exemplo o predefinido é o próprio Éteris e não há outro): a interface
@@ -264,14 +269,14 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
         if (!response.IsSuccessStatusCode || parsed?.AccessToken is not { Length: > 0 } access)
         {
             var error = parsed?.Error ?? ((int)response.StatusCode).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            throw new OAuthException(error == "invalid_grant"
-                ? "A autorização da Google expirou ou foi retirada. Entre outra vez."
-                : "A Google recusou o pedido de sessão (" + error + ").");
+            throw error == "invalid_grant"
+                ? new OAuthException("A autorização da Google expirou ou foi retirada. Entre outra vez.", needsSignIn: true)
+                : new OAuthException("A Google recusou o pedido de sessão (" + error + ").");
         }
         var scope = parsed.Scope ?? string.Empty;
         // No ecrã da Google o utilizador pode desmarcar a permissão: sem ela não há sincronização.
         if (!scope.Split(' ').Contains(GoogleEndpoints.Scope))
-            throw new OAuthException("Sem a permissão para a pasta da aplicação no Google Drive, o Éteris não consegue sincronizar.");
+            throw new OAuthException("Sem a permissão para a pasta da aplicação no Google Drive, o Éteris não consegue sincronizar.", needsSignIn: true);
         return new OAuthTokens(access, parsed.RefreshToken ?? previousRefresh, nowMs() + Math.Max(60, parsed.ExpiresIn - 60) * 1000L, scope);
     }
 
@@ -355,7 +360,7 @@ public sealed class GoogleSession(GoogleOAuth oauth, TokenStore store, Func<long
                 generation = _generation;
             }
             if (!forceRefresh && tokens.ExpiresAtMs > nowMs()) return tokens.AccessToken;
-            if (tokens.RefreshToken is not { } refresh) throw new OAuthException("A sessão da Google expirou. Entre outra vez.");
+            if (tokens.RefreshToken is not { } refresh) throw new OAuthException("A sessão da Google expirou. Entre outra vez.", needsSignIn: true);
             var renewed = await oauth.RefreshAsync(refresh, cancellationToken).ConfigureAwait(false);
             lock (_state)
             {

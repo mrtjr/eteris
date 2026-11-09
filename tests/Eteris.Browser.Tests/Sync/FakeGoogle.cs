@@ -54,6 +54,15 @@ internal sealed class FakeGoogle : HttpMessageHandler
         for (var i = 0; i < times; i++) _failures.Enqueue(status);
     }
 
+    // Como a Google às vezes faz: cria o ficheiro e responde 503 (o próximo envio multipart).
+    public bool CreateThenFail { get; set; }
+
+    // Um ficheiro posto diretamente (por exemplo um duplicado com o mesmo nome, deixado por uma versão antiga).
+    public void Put(string name, byte[] data)
+    {
+        lock (_files) _files["f" + (++_ids).ToString("D4")] = (name, data, ++_clock);
+    }
+
     // O que o ecrã de consentimento faria: regista o código para o desafio PKCE e devolve-o.
     public string Authorize(string challenge, string redirect)
     {
@@ -130,7 +139,10 @@ internal sealed class FakeGoogle : HttpMessageHandler
             if (type == "multipart")
             {
                 var (metadata, data) = await ParseMultipartAsync(request.Content!, cancellationToken);
-                return Created(metadata, data);
+                var created = Created(metadata, data);
+                if (!CreateThenFail) return created;
+                CreateThenFail = false;
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
             }
             if (type == "resumable")
             {

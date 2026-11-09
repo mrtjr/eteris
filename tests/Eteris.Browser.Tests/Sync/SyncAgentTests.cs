@@ -10,10 +10,21 @@ using Eteris.Sync.Transport;
 namespace Eteris.Browser.Tests.Sync;
 
 // Perfil local em memória (o que o navegador tem: favoritos, definições, Escudo, Espaços, notas).
-internal sealed class MemoryProfile : ILocalProfile
+internal sealed class MemoryProfile : ILocalProfileReader
 {
     private readonly Lock _gate = new();
     public readonly Dictionary<string, JsonObject> Items = new(StringComparer.Ordinal);
+
+    // Coleções que «não se conseguem ler» agora (ficheiro bloqueado, base de dados ocupada).
+    public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
+    public LocalRead Read()
+    {
+        var items = Collect();
+        string[] unreadable;
+        lock (_gate) unreadable = [.. Unreadable];
+        return new LocalRead(items.Where(i => !unreadable.Contains(i.Collection)).ToList(), unreadable);
+    }
 
     // Alterações que este «aparelho» recusa aplicar (por exemplo apagar um Espaço com abas).
     public Func<LocalChange, bool> Refuse { get; set; } = _ => false;
@@ -416,7 +427,10 @@ public sealed class SyncAgentTests : IDisposable
         Assert.True(await portatil.Agent.RunAsync());
         Assert.Equal(SyncPhase.Stopped, portatil.Agent.Status.Phase);
         Assert.False(portatil.Agent.Enabled);
-        Assert.Null(portatil.Store.Load()!.Secret);
+        // A chave antiga fica (não serve para a conta nova); o aviso não diz que os dados foram apagados.
+        Assert.NotNull(portatil.Store.Load()!.Secret);
+        Assert.Null(portatil.Store.Load()!.Engine);
+        Assert.Contains("removido noutro aparelho", portatil.Agent.Status.Notice);
         Assert.Equal(2, (await casa.Agent.RefreshDevicesAsync()).Count(d => d.LastSyncMs > 0));
     }
 
@@ -569,6 +583,354 @@ public sealed class SyncAgentTests : IDisposable
         s.Stop();
         Assert.Null(s.NextMs);
         Assert.Equal(SyncSchedule.Action.None, s.Due(10_000_000));
+    }
+
+    // ---- revisão do login completo -----------------------------------------------------------------------------------
+
+    // O «trabalho» acrescenta X, muda o título de Y e envia; a «casa» remove o portátil sem ter recebido essa ronda.
+    // X e o título novo de Y ficam em todos os aparelhos que continuam.
+    [Fact]
+    public async Task RemoveDevice_WhatAnotherDeviceSentButThisOneNeverRead_IsKept()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        casa.Profile.Bookmark("https://y.example/", "Y");
+        await Settle(casa, trabalho, portatil);
+        var devices = await casa.Agent.RefreshDevicesAsync();
+
+        _now += 1000;
+        trabalho.Profile.Bookmark("https://x.example/", "X");
+        trabalho.Profile.Bookmark("https://y.example/", "Y (trabalho)");
+        Assert.True(await trabalho.Agent.RunAsync());
+        _now += 1000;
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        await Settle(casa, trabalho);
+        foreach (var device in new[] { casa, trabalho })
+        {
+            Assert.Equal("X", device.Profile.Title("https://x.example/"));
+            Assert.Equal("Y (trabalho)", device.Profile.Title("https://y.example/"));
+        }
+    }
+
+    // A troca de chave falha a meio (o registo de chaves antigo não se apaga): a conta nova já está guardada, o outro
+    // aparelho continua na antiga sem parar, e a ronda seguinte acaba a troca — ninguém perde a chave.
+    [Fact]
+    public async Task RemoveDevice_InterruptedHalfway_FinishesOnTheNextRound_AndNobodyLosesTheKey()
+    {
+        var flaky = new FlakyTransport(new FolderTransport(_folder));
+        var casa = NewDevice("Casa", () => flaky);
+        await casa.Agent.StartAsync();
+        var trabalho = NewDevice("Trabalho");
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await Settle(casa, trabalho, portatil);
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        var oldSecret = casa.Store.Load()!.Secret;
+
+        flaky.FailDeletingKeys = true;
+        await Assert.ThrowsAsync<SyncUserException>(() => casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id));
+        var saved = casa.Store.Load()!;
+        Assert.NotEqual(oldSecret, saved.Secret);   // a conta nova ficou guardada antes de mexer na antiga
+        Assert.NotNull(saved.Rotation);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Equal(oldSecret, trabalho.Store.Load()!.Secret);
+
+        flaky.FailDeletingKeys = false;
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.Null(casa.Store.Load()!.Rotation);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+        Assert.True(await portatil.Agent.RunAsync());
+        Assert.Equal(SyncPhase.Stopped, portatil.Agent.Status.Phase);
+    }
+
+    // Duas remoções seguidas enquanto um aparelho estava desligado: ele segue as duas contas novas até à atual.
+    [Fact]
+    public async Task TwoRemovalsWhileADeviceWasOff_ItFollowsBothChanges()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        var quarto = NewDevice("Quarto");
+        await quarto.Agent.StartAsync();
+        await quarto.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await Settle(casa, trabalho, portatil, quarto);
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        Assert.Equal(4, devices.Count);
+
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        // Os que ainda não passaram para a conta nova continuam na lista (à espera da chave nova).
+        Assert.Contains(casa.Agent.Status.Devices, d => d.Name == "Quarto");
+        await casa.Agent.RemoveDeviceAsync(casa.Agent.Status.Devices.Single(d => d.Name == "Trabalho").Id);
+
+        casa.Profile.Bookmark("https://depois.example/", "Depois");
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.True(await quarto.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, quarto.Agent.Status.Phase);
+        Assert.Equal(casa.Store.Load()!.Secret, quarto.Store.Load()!.Secret);
+        await Settle(casa, quarto);
+        Assert.Equal("Depois", quarto.Profile.Title("https://depois.example/"));
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+    }
+
+    // Um aparelho que aparece na conta só depois de o utilizador ver a lista não recebe a chave nova, e o aviso diz.
+    [Fact]
+    public async Task RemoveDevice_ADeviceThatShowsUpOnlyNow_DoesNotGetTheNewKey_AndIsMentioned()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await Settle(casa, trabalho, portatil);
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        var oldChain = casa.Store.Load()!.Engine!.ChainId;
+
+        // O portátil (prestes a ser removido) inventa um aparelho na conta, com uma chave dele.
+        using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.Status.RecoveryCode!))
+        {
+            var fake = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Falso"), Now);
+            fake.Put(Collections.Bookmarks, "https://isco.example/", new JsonObject { ["title"] = "isco" });
+            await fake.SyncAsync();
+        }
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        var rekeys = Path.Combine(_folder, "eteris", oldChain, "r");
+        Assert.Single(Directory.GetDirectories(rekeys)); // só o «trabalho»
+        Assert.Contains("«Falso»", casa.Agent.Status.Notice);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+    }
+
+    // «Sair» com «apagar a chave» a meio de uma ronda: a ronda acaba depois e não volta a gravar a chave.
+    [Fact]
+    public async Task SignOut_ForgettingTheKey_DuringARound_DoesNotBringTheKeyBack()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        casa.Profile.Bookmark("https://a.example/", "A");
+        casa.Profile.DuringCycle = () => casa.Agent.SignOut(forgetKey: true);
+        await casa.Agent.RunAsync();
+        Assert.Null(casa.Store.Load());
+        Assert.False(casa.Agent.HasKey);
+        Assert.Equal(SyncPhase.Off, casa.Agent.Status.Phase);
+        await casa.Agent.StartAsync();
+        Assert.Equal(SyncPhase.Choose, casa.Agent.Status.Phase); // a conta existe, mas a chave já não está aqui
+    }
+
+    // Outra conta Google: pausa, sem apagar nada; de volta à conta certa, continua sem código.
+    [Fact]
+    public async Task OtherGoogleAccount_PausesWithoutDeletingAnything_AndResumesWithTheRightOne()
+    {
+        var account = "conta-a";
+        var store = new MemoryStore();
+        var profile = new MemoryProfile();
+        var casa = new SyncAgent(() => new FolderTransport(_folder), profile, store, "Casa", Now, Quick) { AccountKey = () => account };
+        await casa.StartAsync();
+        Assert.Equal(SyncPhase.On, casa.Status.Phase);
+        Assert.Equal("conta-a", store.Load()!.Account);
+        var secret = store.Load()!.Secret;
+
+        casa.SignOut(forgetKey: false);
+        account = "conta-b";
+        await casa.StartAsync();
+        Assert.Equal(SyncPhase.Stopped, casa.Status.Phase);
+        Assert.Contains("outra conta Google", casa.Status.Notice);
+        Assert.Equal(secret, store.Load()!.Secret);
+        Assert.NotNull(store.Load()!.Engine);
+
+        account = "conta-a";
+        await casa.StartAsync();
+        Assert.Equal(SyncPhase.On, casa.Status.Phase);
+        Assert.Equal(secret, store.Load()!.Secret);
+    }
+
+    // O registo de chaves no Drive não abre (alterado ou danificado): para sem apagar a chave; voltando ao normal, retoma.
+    [Fact]
+    public async Task KeysThatDoNotOpen_StopWithoutDeletingTheKey()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var chain = casa.Store.Load()!.Engine!.ChainId;
+        var keys = Path.Combine(_folder, "eteris", chain, "keys");
+        var good = File.ReadAllBytes(keys);
+        // JSON válido, mas a DEK embrulhada alterada: não abre com esta chave.
+        var envelope = System.Text.Json.Nodes.JsonNode.Parse(good)!.AsObject();
+        var dek = envelope["dek"]!.GetValue<string>();
+        envelope["dek"] = (dek[0] == 'A' ? "B" : "A") + dek[1..];
+        File.WriteAllBytes(keys, System.Text.Encoding.UTF8.GetBytes(envelope.ToJsonString()));
+
+        var reopened = NewDevice("Trabalho", store: trabalho.Store, profile: trabalho.Profile);
+        Assert.True(await reopened.Agent.RunAsync());
+        Assert.Equal(SyncPhase.Stopped, reopened.Agent.Status.Phase);
+        Assert.NotNull(trabalho.Store.Load()!.Secret);
+        Assert.NotNull(trabalho.Store.Load()!.Engine);
+
+        File.WriteAllBytes(keys, good);
+        await reopened.Agent.StartAsync();
+        Assert.Equal(SyncPhase.On, reopened.Agent.Status.Phase);
+    }
+
+    // Numa ronda agendada um pedido de aparelho novo só se conta (nenhuma resposta escrita no Drive); responde-se quando
+    // o utilizador abre o menu ou a secção Sincronização.
+    [Fact]
+    public async Task PairingRequests_ARoundOnlyCountsThem_TheUserOpeningTheMenuAnswers()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        var novo = NewDevice("Novo");
+        await novo.Agent.StartAsync();
+        novo.Agent.RequestPairing();
+        var pair = Path.Combine(_folder, "eteris", "pair");
+        await Until(() => Directory.Exists(pair) && Directory.EnumerateFiles(pair, "0-request", SearchOption.AllDirectories).Any(), "o pedido");
+
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.Equal(1, casa.Agent.Status.WaitingRequests);
+        Assert.Empty(Directory.EnumerateFiles(pair, "1-host", SearchOption.AllDirectories));
+
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Single(Directory.EnumerateFiles(pair, "1-host", SearchOption.AllDirectories));
+        Assert.Equal(0, casa.Agent.Status.WaitingRequests);
+        novo.Agent.CancelPairing();
+    }
+
+    // Uma coleção que não se lê nesta ronda (favoritos bloqueados) não vira «apagar tudo» nos outros aparelhos.
+    [Fact]
+    public async Task UnreadableCollection_IsNotDeletedOnTheOtherDevices()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Profile.Bookmark("https://a.example/", "A");
+        casa.Profile.Bookmark("https://b.example/", "B");
+        casa.Profile.SetNotes("as notas");
+        await Settle(casa, trabalho);
+
+        trabalho.Profile.Unreadable.Add(Collections.Bookmarks);
+        trabalho.Profile.Unreadable.Add(Collections.Notes);
+        Assert.False(trabalho.Agent.HasLocalChanges());
+        _now += 1000;
+        await Settle(trabalho, casa);
+        Assert.Equal("A", casa.Profile.Title("https://a.example/"));
+        Assert.Equal("B", casa.Profile.Title("https://b.example/"));
+        Assert.Equal("as notas", casa.Profile.Notes);
+
+        trabalho.Profile.Unreadable.Clear();
+        await Settle(trabalho, casa);
+        Assert.Equal("A", casa.Profile.Title("https://a.example/"));
+        Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
+    }
+
+    // Dois computadores criam a conta ao mesmo tempo (Drive vazio para os dois): o de identificador maior sai da sua,
+    // volta a «escolher» e junta-se à outra sem perder nada.
+    [Fact]
+    public async Task TwoComputersCreateTheAccountAtTheSameTime_OneLeaves_AndNothingIsLost()
+    {
+        var casa = NewDevice("Casa");
+        casa.Profile.Bookmark("https://casa.example/", "Casa");
+        await casa.Agent.StartAsync();
+        var hidden = new FlakyTransport(new FolderTransport(_folder)) { HideRootOnce = true };
+        var trabalho = NewDevice("Trabalho", () => hidden);
+        trabalho.Profile.Bookmark("https://trabalho.example/", "Trabalho");
+        await trabalho.Agent.StartAsync();
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.True(await trabalho.Agent.RunAsync());
+
+        var phases = new[] { casa.Agent.Status.Phase, trabalho.Agent.Status.Phase };
+        Assert.Single(phases, p => p == SyncPhase.Choose);
+        Assert.Single(phases, p => p == SyncPhase.On);
+        Assert.Single(Directory.EnumerateFiles(Path.Combine(_folder, "eteris"), "keys", SearchOption.AllDirectories));
+        var (left, stayed) = casa.Agent.Status.Phase == SyncPhase.Choose ? (casa, trabalho) : (trabalho, casa);
+        Assert.Contains("ao mesmo tempo", left.Agent.Status.Notice);
+        await left.Agent.JoinWithCodeAsync(stayed.Agent.Status.RecoveryCode!);
+        await Settle(stayed, left);
+        Assert.Equal("Casa", trabalho.Profile.Title("https://casa.example/"));
+        Assert.Equal("Trabalho", casa.Profile.Title("https://trabalho.example/"));
+    }
+
+    // A autorização da Google foi retirada: a ronda falha e fica marcado que é preciso entrar outra vez (não «tenta
+    // outra vez sozinho»).
+    [Fact]
+    public async Task RevokedAuthorization_NeedsSignIn()
+    {
+        var google = new FakeGoogle();
+        var casa = NewDevice("Casa", DriveFor(google));
+        await casa.Agent.StartAsync();
+        Assert.False(casa.Agent.Status.NeedsSignIn);
+        google.Revoked.Add(google.RefreshToken);
+        google.ExpireAccessToken();
+        _now += 3_700_000;
+        casa.Profile.Bookmark("https://x.example/", "X");
+        Assert.False(await casa.Agent.RunAsync());
+        Assert.True(casa.Agent.Status.NeedsSignIn);
+        Assert.Contains("Entre outra vez", casa.Agent.Status.Error);
+    }
+
+    // «Sair» sem apagar a chave, com o código de recuperação ainda por guardar: continua à vista ao voltar.
+    [Fact]
+    public async Task SignOut_KeepingTheKey_TheRecoveryCodeStaysUntilSaved()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        var code = casa.Agent.Status.RecoveryCode;
+        Assert.NotNull(code);
+        casa.Agent.SignOut(forgetKey: false);
+        await casa.Agent.StartAsync();
+        Assert.Equal(code, casa.Agent.Status.RecoveryCode);
+    }
+
+    // «Gerar um código de recuperação novo»: o antigo deixa de servir, ninguém sai da conta.
+    [Fact]
+    public async Task NewRecoveryCode_TheOldOneStopsWorking_EveryoneStays()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var old = casa.Agent.Status.RecoveryCode!;
+        casa.Agent.AcknowledgeCode();
+        await casa.Agent.RefreshDevicesAsync();
+        await casa.Agent.NewRecoveryCodeAsync();
+        var fresh = casa.Agent.Status.RecoveryCode;
+        Assert.NotNull(fresh);
+        Assert.NotEqual(old, fresh);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        var outro = NewDevice("Outro");
+        await outro.Agent.StartAsync();
+        await Assert.ThrowsAsync<SyncUserException>(() => outro.Agent.JoinWithCodeAsync(old));
+        await outro.Agent.JoinWithCodeAsync(fresh!);
+        Assert.Equal(SyncPhase.On, outro.Agent.Status.Phase);
+    }
+
+    // Transporte que falha de propósito: não apaga o registo de chaves (troca de chave interrompida) ou esconde a pasta
+    // na primeira listagem (dois computadores a criar a conta ao mesmo tempo).
+    private sealed class FlakyTransport(ISyncTransport inner) : ISyncTransport
+    {
+        public bool FailDeletingKeys { get; set; }
+        public bool HideRootOnce { get; set; }
+
+        public string Name => inner.Name;
+
+        public async Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+        {
+            if (HideRootOnce && prefix == SyncPaths.Root)
+            {
+                HideRootOnce = false;
+                return [];
+            }
+            return await inner.ListAsync(prefix, cancellationToken);
+        }
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default) => inner.ReadAsync(path, cancellationToken);
+
+        public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default) => inner.WriteAsync(path, data, cancellationToken);
+
+        public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+            => FailDeletingKeys && path.EndsWith("/keys", StringComparison.Ordinal) ? throw new IOException("falha de propósito") : inner.DeleteAsync(path, cancellationToken);
     }
 
     private Func<ISyncTransport> DriveFor(FakeGoogle google)

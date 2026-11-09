@@ -25,6 +25,17 @@ public interface ILocalProfile
     IReadOnlyCollection<LocalChange> Apply(IReadOnlyList<LocalChange> changes);
 }
 
+// O que se leu do perfil, e as coleções que NÃO se conseguiram ler (ficheiro bloqueado pelo antivírus, base de dados
+// ocupada, sessão ilegível). «Vazio» e «não consegui ler» são coisas diferentes: uma coleção que não se leu não prepara
+// remoções nem muda a base nessa ronda — senão uma falha de leitura apagava os favoritos em todos os aparelhos.
+public sealed record LocalRead(IReadOnlyList<LocalItem> Items, IReadOnlyCollection<string> Unreadable);
+
+// Um perfil que sabe dizer o que não conseguiu ler (o do navegador). Os outros contam como lidos por inteiro.
+public interface ILocalProfileReader : ILocalProfile
+{
+    LocalRead Read();
+}
+
 public sealed record SyncReport(int Sent, int Received, IReadOnlyDictionary<string, string> Pending, bool NeedsUpdate);
 
 // Liga o perfil local ao motor. Guarda uma «base» (como o perfil local estava no fim da última sincronização, só os
@@ -66,6 +77,10 @@ public static class ProfileSync
 
     public static string? Canonical(LocalItem? item) => item is null ? null : Canonical(item.Collection, item.Data);
 
+    private static LocalRead Read(ILocalProfile local) => local is ILocalProfileReader reader ? reader.Read() : new LocalRead(local.Collect(), []);
+
+    private static string CollectionOf(string id) => id[..id.IndexOf('\n', StringComparison.Ordinal)];
+
     private static Dictionary<string, LocalItem> Index(IEnumerable<LocalItem> items)
     {
         var index = new Dictionary<string, LocalItem>(StringComparer.Ordinal);
@@ -93,21 +108,26 @@ public static class ProfileSync
     // Alterações locais desde a base (sem rede): o agendador só sincroniza depois de uma alteração se houver alguma.
     public static int CountLocalChanges(ILocalProfile local, IReadOnlyDictionary<string, string>? baseline)
     {
-        var now = Index(local.Collect());
+        var read = Read(local);
+        var now = Index(read.Items);
         if (baseline is null) return now.Count;
         return now.Keys.Concat(baseline.Keys).Distinct(StringComparer.Ordinal)
-            .Count(id => Canonical(now.GetValueOrDefault(id)) != baseline.GetValueOrDefault(id));
+            .Count(id => !read.Unreadable.Contains(CollectionOf(id)) && Canonical(now.GetValueOrDefault(id)) != baseline.GetValueOrDefault(id));
     }
 
     public static async Task<(SyncReport Report, Dictionary<string, string> Baseline)> RunAsync(SyncEngine engine, ILocalProfile local,
         IReadOnlyDictionary<string, string>? baseline, string deviceName, CancellationToken cancellationToken = default)
     {
-        var before = Index(local.Collect());
+        var first = Read(local);
+        var before = Index(first.Items);
+        // Coleções que não se leram nesta ronda: nem remoções, nem alterações aplicadas, e a base delas fica igual.
+        var unreadable = new HashSet<string>(first.Unreadable, StringComparer.Ordinal);
         var sent = 0;
         if (baseline is not null)
         {
             foreach (var id in before.Keys.Concat(baseline.Keys).Distinct(StringComparer.Ordinal).ToList())
             {
+                if (unreadable.Contains(CollectionOf(id))) continue;
                 var now = before.GetValueOrDefault(id);
                 if (Canonical(now) == baseline.GetValueOrDefault(id)) continue;
                 if (now is not null) Stage(engine, now);
@@ -139,10 +159,13 @@ public static class ProfileSync
 
         // Aplicar aqui o que a conta tem de diferente, salvo o que o utilizador mudou durante esta ronda.
         var desired = Desired(engine);
-        var during = Index(local.Collect());
+        var second = Read(local);
+        var during = Index(second.Items);
+        unreadable.UnionWith(second.Unreadable);
         var changes = new List<LocalChange>();
         foreach (var id in desired.Keys.Concat(before.Keys).Distinct(StringComparer.Ordinal))
         {
+            if (unreadable.Contains(CollectionOf(id))) continue;
             var want = desired.GetValueOrDefault(id);
             var have = before.GetValueOrDefault(id);
             if (Canonical(want) == Canonical(have)) continue;
@@ -154,6 +177,10 @@ public static class ProfileSync
 
         var next = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (id, item) in before) next[id] = Canonical(item)!;
+        // O que não se leu fica na base como estava (a ronda seguinte, já com a leitura a funcionar, compara com ela).
+        if (baseline is not null)
+            foreach (var (id, value) in baseline)
+                if (first.Unreadable.Contains(CollectionOf(id))) next[id] = value;
         foreach (var change in applied)
         {
             var id = Id(change.Collection, change.Key);

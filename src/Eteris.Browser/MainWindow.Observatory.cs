@@ -477,7 +477,7 @@ public partial class MainWindow
         });
 
         var site = _obsSnapshot.Site;
-        var shieldOn = site is not null && Data.AppData.IsShieldOn(site);
+        var shieldOn = site is not null && ShieldOn(site);
         var actions = new WrapPanel { Margin = new Thickness(14, 8, 0, 0) };
         // «Porque é que isto passou?»: só para quem fez pedidos permitidos.
         if (domain.Allowed > 0)

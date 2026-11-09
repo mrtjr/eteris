@@ -63,9 +63,12 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   também depois de reabrir o Éteris — e nunca mais aparece.
 - **Aparelho seguinte.** Se já houver conta, a secção oferece:
   - **«Aprovar noutro computador»**: este aparelho abre um pedido (`eteris/pair/<sessão>/0-request`, só a hora) e diz
-    «abra o menu (Alt+F) ou Definições › Sincronização no outro computador». O aparelho ligado vê o pedido quando o
-    utilizador abre o menu da conta ou a secção Sincronização (e em cada ronda), responde ao protocolo de emparelhamento
-    e mostra «*nome do aparelho* quer juntar-se à sincronização» com o **código de verificação** de 6 algarismos; o
+    «abra o menu (Alt+F) ou Definições › Sincronização no outro computador». Numa ronda agendada, o aparelho ligado só
+    conta o pedido (o menu diz «Um computador novo pede para entrar»); responde ao protocolo de emparelhamento quando o
+    utilizador abre o menu do Éteris (⋯) ou tem a secção Sincronização à vista (a página volta a procurar de 5 em 5 s
+    enquanto estiver à vista, até 10 minutos depois do último gesto). Dois aparelhos ligados que respondam ao mesmo
+    pedido não se atrapalham: o aparelho novo diz a que chave de anfitrião se compromete (`for` no passo 2) e o outro
+    desiste calado. Responder mostra «*nome do aparelho* quer juntar-se à sincronização» com o **código de verificação** de 6 algarismos; o
     aparelho novo mostra o mesmo código e o botão «O outro computador mostra este código». O utilizador confirma nos
     dois («Aprovar» no ligado); só então a conta segue, cifrada para o aparelho novo. Sem QR (sem bibliotecas novas).
   - **«Usar o código de recuperação»** (no corpo de um POST, nunca no endereço).
@@ -92,19 +95,26 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 
 | Momento | Porquê |
 |---|---|
-| **30 s depois de a janela estar pronta** (1.ª página), só com a sincronização ligada | o arranque fica para a janela e as páginas; quem abre o Éteris só para ver uma coisa e o fecha logo não fala com a Google; a promessa «No arranque, nada sai para a Google» mantém-se no sentido do motor e a exceção da sincronização fica dita (ver «Promessa») |
+| **30 s depois de a janela estar pronta** (1.ª página), só com a sincronização ligada — ou antes, 10 s depois de uma alteração feita nesses 30 s | o arranque fica para a janela e as páginas; quem abre o Éteris só para ver uma coisa e o fecha logo não fala com a Google; a promessa «No arranque, nada sai para a Google» mantém-se no sentido do motor e a exceção da sincronização fica dita (ver «Promessa») |
 | **10 s depois da última alteração local** (favorito, definição, Escudo, Espaço, notas) | espera agregadora: várias alterações seguidas vão num lote; e só há rede se a comparação local (sem rede) encontrar alguma coisa por enviar |
 | **De 10 em 10 minutos** com o Éteris aberto | para receber o que os outros aparelhos mudaram |
 | **Ao entrar**, ao ligar, ao entrar num aparelho novo, e em **«Sincronizar agora»** | ação do utilizador |
-| Ao abrir o menu da conta ou a secção Sincronização (depois de um gesto, com a secção à vista) | só procura pedidos de aparelhos novos (e relê a lista de aparelhos nas Definições) |
+| Ao abrir o menu do Éteris (⋯), ou com a secção Sincronização à vista (depois de um gesto; de 5 em 5 s, até 10 min depois do último gesto) | procura pedidos de aparelhos novos e responde-lhes (e relê a lista de aparelhos nas Definições); ao responder a um pedido, acompanha-o de 2 em 2 s até ele acabar (no máximo 10 min) |
+| Numa ronda agendada | os pedidos de aparelhos novos só se **contam** (para o menu dizer «Um computador novo pede para entrar»); não se responde a nenhum sem o utilizador abrir o menu ou a secção |
+| Uma vez, depois de entrar (ou ao abrir o menu ou a secção, com a sincronização ligada, se a conta ainda não estiver guardada) | o nome e o e-mail da conta (`about.get`) |
+| Quando o token de acesso expira (cerca de 1 h), no próximo pedido | renovação da sessão em `oauth2.googleapis.com/token` |
 
-Sem rede, com a Google em baixo, com a sessão expirada ou a pasta inacessível: tenta outra vez sozinho, com espera
-crescente (30 s, 1, 2, 4, 8, 16 e depois de 30 em 30 min), sem avisos; as alterações locais não encurtam a espera; o
-que estava por enviar fica na caixa de saída (no estado guardado) e segue depois. Uma compactação (instantâneo) por dia.
+Sem rede, com a Google em baixo ou a pasta inacessível: tenta outra vez sozinho, com espera crescente (30 s, 1, 2, 4,
+8, 16 e depois de 30 em 30 min), sem avisos; as alterações locais não encurtam a espera; o que estava por enviar fica
+na caixa de saída (no estado guardado) e segue depois. Uma compactação (instantâneo) por dia. Se a **autorização da
+Google tiver expirado ou sido retirada** (`invalid_grant`, permissão desmarcada), não tenta mais: o agendador para, o
+menu diz «Sincronização em pausa: entre outra vez» e as Definições mostram «Entrar outra vez» (sem revogar nada nem
+mexer na chave), como o «Sincronização em pausa · Iniciar sessão novamente» do Chrome.
 
 **Estado visível:** Definições › Sincronização («Sincronizado há 2 min», «A sincronizar…», o erro em claro) e a linha
-da conta no menu («Sincronizado há 2 min», «A sincronizar…», «Pedido de *nome* · código 123 456», «Guarde o código de
-recuperação», «Sem sincronizar: tenta outra vez sozinho»).
+da conta no menu («Sincronizado há 2 min», «A sincronizar…», «Pedido de *nome* · código 123 456», «Um computador novo
+pede para entrar», «Guarde o código de recuperação», «Por sincronizar: o Éteris tenta outra vez sozinho»,
+«Sincronização em pausa: entre outra vez»).
 
 ## Pasta de teste (`ETERIS_TEST_SYNC_FOLDER`)
 
@@ -242,7 +252,7 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
   receber, o ecrã mostra o nome do anfitrião e o código outra vez antes de juntar o aparelho à conta.
 - **Nada do utilizador em claro no transporte:** o passo 2 leva só a chave pública e o compromisso; o nome do aparelho
   convidado segue no passo 4, cifrado com a chave da sessão (mesmo que o anfitrião feche de repente e os ficheiros
-  fiquem lá, a Google não lê «PC do Júnior»). As chaves públicas têm de ser P-256 (outra curva é recusada logo).
+  fiquem lá, a Google não lê «PC da Ana»). As chaves públicas têm de ser P-256 (outra curva é recusada logo).
 - A sessão expira em 10 minutos e os ficheiros são apagados no fim. O transporte é o mesmo da sincronização (os dois
   aparelhos com a mesma conta Google, ou a mesma pasta).
 
@@ -347,7 +357,8 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
   `/token` e `/revoke`). Sem cookies, sem redirecionamentos automáticos, sem os cabeçalhos do motor; `User-Agent`
   `Eteris-Sync/1`.
 - Só corre depois de o utilizador carregar em «Entrar com o Google»; com a sincronização ligada, nos momentos de
-  «Quando sincroniza» (nunca antes de 30 s depois de abrir).
+  «Quando sincroniza» (30 s depois de abrir, salvo se o utilizador mudar alguma coisa antes: então 10 s depois dessa
+  alteração).
 - **DNS e proxy:** por não passar pelo motor, este cliente **não usa o «DNS cifrado»** escolhido nas Definições. Os
   nomes `oauth2.googleapis.com` e `www.googleapis.com` são resolvidos pelo **DNS do Windows**, em claro: o fornecedor
   de internet (ou quem gere a rede) vê que o computador fala com a API da Google e quando — não o que diz, que vai em
@@ -382,8 +393,12 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 - **Promessa (D1):** o README diz «Sem telemetria. Por omissão tudo fica no computador; a sincronização é opcional,
   cifrada de ponta a ponta e desligada por omissão». Em `eteris://privacy/`, «No arranque, nada sai para a Google»
   continua verdadeira por omissão (é medida no motor) e, com a sincronização ligada, diz a exceção escolhida pelo
-  utilizador: só os pedidos da sincronização, cifrados, para o Drive dele, 30 s depois de abrir, 10 s depois de uma
-  alteração, de 10 em 10 minutos e ao abrir o menu da conta ou a secção Sincronização (`PrivacyPage.SyncException`; teste `NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`).
+  utilizador: os pedidos da sincronização, cifrados, para o Drive dele, 30 s depois de abrir (ou 10 s depois de uma
+  alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e ao abrir o menu do Éteris (⋯) ou com a
+  secção Sincronização à vista (pedidos de outros computadores, acompanhados de 2 em 2 s quando se responde a um), a
+  renovação da sessão em `oauth2.googleapis.com`, o nome e o e-mail da conta, e as ações que o utilizador pede
+  (`PrivacyPage.SyncException`; teste `NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`). A exceção aparece também
+  com sessão Google e a sincronização desligada (uma sessão da 0.2.10–0.2.12); aí, abrir o menu já não pede a conta.
 
 ### O que a Google vê
 

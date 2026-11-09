@@ -199,7 +199,11 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Look(devices: true);
                 break;
             case "/sync-start":
-                Sync.SyncService.Start();
+                // «Ligar a sincronização» / «Ligar outra vez» (depois de ler o porquê): também com outra conta Google.
+                Sync.SyncService.Start(switchAccount: true);
+                break;
+            case "/sync-new-code":
+                Sync.SyncService.Act("code", agent => agent.NewRecoveryCodeAsync());
                 break;
             case "/sync-now":
                 Sync.SyncService.SyncNow();
@@ -231,8 +235,12 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
                 break;
             case "/sync-remove" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
-                Sync.SyncService.Act("devices", agent => agent.RemoveDeviceAsync(id));
+            {
+                // «shown»: os aparelhos que a página mostrava quando o utilizador decidiu (só esses recebem a chave nova).
+                var shown = InternalPages.Query(uri, "shown") is { Length: > 0 } list ? list.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+                Sync.SyncService.Act("devices", agent => agent.RemoveDeviceAsync(id, shown));
                 break;
+            }
             case "/sync-delete-cloud":
                 Sync.SyncService.Act("delete", agent => agent.DeleteCloudDataAsync());
                 break;

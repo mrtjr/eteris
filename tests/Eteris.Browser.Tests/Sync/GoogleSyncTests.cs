@@ -49,6 +49,24 @@ public class GoogleSyncTests
         Assert.Contains(google.Requests, r => r.StartsWith("PATCH https://www.googleapis.com/upload/drive/v3/files/", StringComparison.Ordinal));
     }
 
+    // A Google cria o ficheiro e responde 503: o envio não se repete às cegas (ficavam dois com o mesmo nome) — lista
+    // outra vez e substitui. E apagar leva também os duplicados que já lá estejam.
+    [Fact]
+    public async Task Drive_CreateThatFailsAfterCreating_LeavesOneFile_AndDeleteRemovesDuplicates()
+    {
+        var google = new FakeGoogle();
+        var (drive, _) = Drive(google);
+        google.CreateThenFail = true;
+        await drive.WriteAsync("eteris/c/keys", [1]);
+        Assert.Single(google.Files, f => f.Name == "eteris/c/keys");
+        Assert.Equal(new byte[] { 1 }, await drive.ReadAsync("eteris/c/keys"));
+
+        google.Put("eteris/c/keys", [2]);
+        Assert.Single(await drive.ListAsync("eteris/"));
+        await drive.DeleteAsync("eteris/c/keys");
+        Assert.DoesNotContain(google.Files, f => f.Name == "eteris/c/keys");
+    }
+
     [Fact]
     public async Task Drive_LargeFiles_UseResumableUpload()
     {

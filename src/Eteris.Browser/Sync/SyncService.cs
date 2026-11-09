@@ -13,10 +13,12 @@ namespace Eteris.Browser.Sync;
 // testes ao vivo, ETERIS_TEST_SYNC_FOLDER=<pasta> troca o Drive por uma pasta local (nenhum pedido de rede); a versão
 // instalada ignora-a (TestFolder).
 //
-// Quando há rede (só com a sincronização ligada): 30 s depois de a janela estar pronta, 10 s depois de uma alteração
-// local (e só se houver alguma coisa por enviar), de 10 em 10 minutos, ao entrar e em «Sincronizar agora»; ao abrir o
-// menu da conta ou a secção Sincronização (ação do utilizador), procura pedidos de aparelhos novos. Construir o
-// serviço e ler o estado nunca faz pedidos: o arranque sem sincronização ligada não fala com a Google.
+// Quando há rede (só com a sincronização ligada): 30 s depois de a janela estar pronta (ou 10 s depois de uma
+// alteração, se for antes), 10 s depois de uma alteração local (e só se houver alguma coisa por enviar), de 10 em 10
+// minutos, ao entrar e em «Sincronizar agora»; ao abrir o menu do Éteris (⋯) ou com a secção Sincronização à vista
+// (ação do utilizador), procura pedidos de aparelhos novos e responde-lhes. Construir o serviço e ler o estado nunca
+// faz pedidos: o arranque sem sincronização ligada não fala com a Google. Se a autorização da Google tiver sido
+// retirada ou tiver expirado, o agendador para até o utilizador entrar outra vez (não «tenta outra vez sozinho»).
 internal static class SyncService
 {
     private static readonly Lock Gate = new();
@@ -73,7 +75,7 @@ internal static class SyncService
         {
             if (_agent is not null) return _agent;
             var store = new DpapiSyncStore(StatePath, new Dpapi("sync-state"));
-            _agent = new SyncAgent(Transport, new BrowserProfile(), store, DeviceName, Now);
+            _agent = new SyncAgent(Transport, new BrowserProfile(), store, DeviceName, Now) { AccountKey = AccountKey };
             _agent.Changed += () => Changed?.Invoke();
             return _agent;
         }
@@ -86,6 +88,13 @@ internal static class SyncService
     }
 
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    // A conta Google desta sessão, como impressão digital (o e-mail não vai para o estado da sincronização). Só disco.
+    private static string? AccountKey() => FolderMode ? null : AccountFingerprint(GoogleSync.Account?.Email);
+
+    public static string? AccountFingerprint(string? email)
+        => string.IsNullOrWhiteSpace(email) ? null
+            : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("eteris-account|" + email.Trim().ToLowerInvariant()))[..16]);
 
     // ---- arranque e agendador ---------------------------------------------------------------------------------------
 
@@ -114,7 +123,7 @@ internal static class SyncService
     // Uma alteração local (favorito, definição, Escudo, Espaço, notas): sincroniza 10 s depois da última.
     public static void Touch()
     {
-        if (!Enabled) return;
+        if (!Enabled || Agent()?.Status.NeedsSignIn == true) return;
         lock (Gate) Schedule.LocalChange(Now());
         Arm();
     }
@@ -171,7 +180,12 @@ internal static class SyncService
                     return;
                 }
                 var ok = await agent.RunAsync().ConfigureAwait(false);
-                lock (Gate) Schedule.Done(Now(), ok);
+                lock (Gate)
+                {
+                    Schedule.Done(Now(), ok);
+                    // A autorização da Google foi retirada ou expirou: nada se resolve sozinho, para até entrar outra vez.
+                    if (agent.Status.NeedsSignIn) Schedule.Stop();
+                }
             }
             catch (Exception)
             {
@@ -187,8 +201,9 @@ internal static class SyncService
 
     // ---- ações do utilizador ----------------------------------------------------------------------------------------
 
-    // Entrou na Google (GoogleSync) ou carregou em «Ligar a sincronização»: liga e faz a primeira ronda já.
-    public static void Start()
+    // Entrou na Google (GoogleSync) ou carregou em «Ligar a sincronização» / «Ligar outra vez»: liga e faz a primeira
+    // ronda já. «switchAccount» só no botão (o utilizador leu o aviso de que a sessão é de outra conta Google).
+    public static void Start(bool switchAccount = false)
     {
         if (Agent() is not { } agent) return;
         Hook();
@@ -197,7 +212,7 @@ internal static class SyncService
             bool ok;
             try
             {
-                await agent.StartAsync().ConfigureAwait(false);
+                await agent.StartAsync(switchAccount).ConfigureAwait(false);
                 ok = agent.Status.Error is null;
             }
             catch (Exception) { ok = false; }
@@ -205,6 +220,7 @@ internal static class SyncService
             {
                 Schedule.Now(Now());
                 Schedule.Done(Now(), ok);
+                if (agent.Status.NeedsSignIn || !agent.Enabled) Schedule.Stop();
             }
             Arm();
         });
@@ -218,8 +234,8 @@ internal static class SyncService
         Arm();
     }
 
-    // O utilizador abriu o menu da conta ou a secção Sincronização: procura pedidos de aparelhos novos (no máximo uma
-    // vez a cada 5 s) e, com «devices», relê a lista de aparelhos.
+    // O utilizador abriu o menu do Éteris (⋯) ou tem a secção Sincronização à vista: procura pedidos de aparelhos novos
+    // e responde-lhes (no máximo uma vez a cada 5 s) e, com «devices», relê a lista de aparelhos.
     public static void Look(bool devices = false)
     {
         if (!Enabled || Agent() is not { } agent) return;
@@ -282,7 +298,7 @@ internal static class SyncService
 
     public static SyncStatus? Status => Enabled || Agent()?.Status.Phase is SyncPhase.Stopped ? Agent()?.Status : null;
 
-    // «há 2 min», «há 1 h», «ontem às 14:05».
+    // «há 2 min», «há 1 h», e depois de um dia a data: «07/11 às 14:05».
     public static string Ago(long ms, long nowMs)
     {
         var seconds = Math.Max(0, (nowMs - ms) / 1000);
@@ -298,6 +314,8 @@ internal static class SyncService
     {
         if (status is null) return "Sincronização desligada";
         if (status.Requests.Count > 0) return $"Pedido de «{status.Requests[0].Name}» · código {status.Requests[0].Code}";
+        if (status.NeedsSignIn) return "Sincronização em pausa: entre outra vez";
+        if (status.WaitingRequests > 0 && status.Phase == SyncPhase.On) return "Um computador novo pede para entrar";
         return status.Phase switch
         {
             SyncPhase.Stopped => "Sincronização parada",
@@ -306,7 +324,7 @@ internal static class SyncService
             SyncPhase.Starting => "A ligar…",
             _ when status.RecoveryCode is not null => "Guarde o código de recuperação",
             _ when status.Running => "A sincronizar…",
-            _ when status.Error is not null => "Sem sincronizar: tenta outra vez sozinho",
+            _ when status.Error is not null => "Por sincronizar: o Éteris tenta outra vez sozinho",
             _ when status.NeedsUpdate => "Atualize o Éteris para sincronizar tudo",
             _ when status.LastSuccessMs > 0 => "Sincronizado " + Ago(status.LastSuccessMs, nowMs),
             _ => "Sincronização ligada",
@@ -322,6 +340,7 @@ internal static class SyncService
             last = status.LastSuccessMs,
             lastText = status.LastSuccessMs > 0 ? "Sincronizado " + Ago(status.LastSuccessMs, nowMs) + "." : null,
             error = status.Error,
+            needsSignIn = status.NeedsSignIn,
             notice = status.Notice,
             code = status.RecoveryCode,
             pairing = status.Pairing is { } p ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error } : null,

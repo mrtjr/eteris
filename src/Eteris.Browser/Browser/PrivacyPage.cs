@@ -183,11 +183,16 @@ public static class PrivacyPage
         ];
     }
 
-    // A exceção que o utilizador escolheu: com a sincronização ligada, só os pedidos dela saem para a Google — cifrados,
-    // para a pasta oculta da aplicação no Drive dele, por um cliente próprio que só fala com os endereços da Google
-    // necessários (nada pelo motor) — e nunca antes de 30 s depois de abrir.
+    // A exceção que o utilizador escolheu: com sessão Google para a sincronização, os pedidos dela (cifrados, para a pasta
+    // oculta da aplicação no Drive dele, por um cliente próprio que só fala com os endereços da Google necessários — nada
+    // pelo motor), a renovação da sessão, o nome e o e-mail da conta e as ações que o próprio utilizador pede.
     public const string SyncException =
-        "Exceção que escolheu: com a sincronização ligada, o Éteris fala com o Google Drive (só a pasta oculta da aplicação, tudo cifrado neste computador) 30 s depois de abrir, 10 s depois de uma alteração, de 10 em 10 minutos e quando abre o menu da conta ou a sincronização nas Definições (para ver pedidos de outros computadores) — e mais nada.";
+        "Exceção que escolheu: com sessão iniciada na Google para a sincronização, o Éteris fala com a Google por um cliente próprio (não pelo motor). "
+        + "Com o Google Drive — só a pasta oculta da aplicação, tudo cifrado neste computador — 30 s depois de abrir (ou 10 s depois de uma alteração, se for antes), "
+        + "10 s depois de uma alteração, de 10 em 10 minutos e quando abre o menu do Éteris (⋯) ou tem a secção Sincronização das Definições à vista, para ver pedidos de outros computadores "
+        + "(ao responder a um, acompanha-o de 2 em 2 s até acabar, no máximo 10 minutos). "
+        + "Com oauth2.googleapis.com, para renovar a sessão quando expira. Uma vez, para saber o nome e o e-mail da conta. "
+        + "E nas ações que pedir nas Definições: entrar, «Sincronizar agora», aprovar ou recusar um computador, remover um aparelho, apagar os dados do Drive e sair (que retira a autorização na Google).";
 
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
@@ -201,7 +206,7 @@ public static class PrivacyPage
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
             settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false),
-            Sync.SyncService.Enabled);
+            Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn));
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.

@@ -79,6 +79,14 @@ public class PrivacyPageTests
         Assert.EndsWith(PrivacyPage.SyncException, on.Detail);
         Assert.Contains("30 s depois de abrir", on.Detail);
         Assert.Contains("cifrado", on.Detail);
+        // A lista é a de verdade: o menu é o «⋯», a renovação da sessão e as ações do utilizador também contam, e não
+        // há um «e mais nada» que a lista não cumpra.
+        Assert.Contains("menu do Éteris (⋯)", on.Detail);
+        Assert.Contains("oauth2.googleapis.com", on.Detail);
+        Assert.Contains("nome e o e-mail", on.Detail);
+        Assert.Contains("de 2 em 2 s", on.Detail);
+        Assert.DoesNotContain("e mais nada", on.Detail);
+        Assert.DoesNotContain("menu da conta", on.Detail);
     }
 
     [Fact]

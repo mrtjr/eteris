@@ -380,10 +380,10 @@ public partial class MainWindow
             GoogleSync.AccountChanged -= changed;
             SyncService.Changed -= changed;
         });
-        // Abrir o menu (ação do utilizador): pedidos de aparelhos novos, e — se já havia sessão sem conta guardada —
-        // o nome e o e-mail, em segundo plano.
+        // Abrir o menu (ação do utilizador), com a sincronização ligada: pedidos de aparelhos novos e — se já havia
+        // sessão sem conta guardada — o nome e o e-mail, em segundo plano. Com ela desligada, nada sai para a Google.
         SyncService.Look();
-        if (GoogleSync.Account is null) GoogleSync.RequestAccount();
+        if (SyncService.Enabled && GoogleSync.Account is null) GoogleSync.RequestAccount();
         return button;
     }
 

@@ -29,6 +29,17 @@ public sealed record PendingBatch(
     [property: JsonPropertyName("notes")] List<NotesVersion> Notes,
     [property: JsonPropertyName("created")] long CreatedMs);
 
+// Uma troca de chave («nova cadeia») a meio: a conta nova já existe e está guardada neste aparelho, mas a antiga ainda
+// tem de receber as mensagens para os aparelhos que ficam e ser apagada. Guardada até acabar (SyncEngine.FinishRotationAsync),
+// para uma falha a meio continuar na ronda seguinte em vez de deixar os outros aparelhos sem a conta nova.
+public sealed record RotationPending
+{
+    [JsonPropertyName("old")] public required string OldChain { get; init; }
+    [JsonPropertyName("removed")] public string? Removed { get; init; }
+    // Aparelhos que recebem a conta nova → a chave pública fixada de cada um (só os que o utilizador viu na lista).
+    [JsonPropertyName("staying")] public required Dictionary<string, string> Staying { get; init; }
+}
+
 // Estado local de um aparelho (o anfitrião guarda-o protegido: DPAPI no Windows). Não vai para o transporte.
 public sealed class SyncState
 {

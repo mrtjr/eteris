@@ -90,7 +90,11 @@ public class SyncIntegrationTests
         Assert.Equal("Sincronizado há 2 min", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now - 125_000), now));
         Assert.Equal("Sincronizado agora mesmo", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now - 5_000), now));
         Assert.Equal("A sincronizar…", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, running: true, last: now), now));
-        Assert.Equal("Sem sincronizar: tenta outra vez sozinho", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, error: "Sem ligação"), now));
+        Assert.Equal("Por sincronizar: o Éteris tenta outra vez sozinho", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, error: "Sem ligação"), now));
+        Assert.Equal("Sincronização em pausa: entre outra vez",
+            SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, error: "A autorização da Google expirou") with { NeedsSignIn = true }, now));
+        Assert.Equal("Um computador novo pede para entrar",
+            SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now) with { WaitingRequests = 1 }, now));
         Assert.Equal("Guarde o código de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, code: "X"), now));
         Assert.Equal("Falta juntar este computador à conta", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Choose), now));
         Assert.Equal("Confirme o código 123 456", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Pairing, pairing: new("123 456", false, null)), now));

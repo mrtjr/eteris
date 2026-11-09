@@ -160,11 +160,11 @@ public partial class MainWindow
                 () => CopyText(Browser.LinkFormats.Markdown(pageTitle, cleanAddress), "Link Markdown copiado"));
             yield return new("", "Copiar título e endereço", "Para colar numa mensagem", null,
                 () => CopyText(Browser.LinkFormats.TitleAndAddress(pageTitle, cleanAddress), "Título e endereço copiados"));
-            var on = AppData.IsShieldOn(host);
+            var on = ShieldOn(host);
             yield return new("", on ? "Desligar o escudo neste site" : "Ligar o escudo neste site",
                 $"{TrackerBlocker.RegistrableDomain(host)} · {tab!.BlockedCount} bloqueados nesta página", null, () =>
                 {
-                    AppData.SetShield(host, !on);
+                    AppData.SetShield(host, !on, IsPrivate);
                     ReloadActive();
                     UpdateShieldButton();
                 });
@@ -184,7 +184,7 @@ public partial class MainWindow
                     dark ? $"Deixa de escurecer {darkSite}" : $"Modo escuro para {darkSite}, lembrado da próxima vez", null, () => ToggleDarkSite(darkSite, !dark));
             }
             yield return new("", "Esconder um elemento desta página", "Clique num anúncio, banner ou caixa para o fazer desaparecer neste site", null, PickElementToHide);
-            if (AppData.HiddenElements(pickHost).Count is > 0 and var hiddenCount)
+            if (AppData.HiddenElements(pickHost, IsPrivate).Count is > 0 and var hiddenCount)
                 yield return new("", "Repor elementos escondidos", $"{hiddenCount} escondido(s) em {pickHost}", null, ResetHiddenElements);
         }
         yield return new("", "Seguir um link pelo teclado", "Letras sobre cada link; escreva-as para o abrir", "Ctrl+Shift+L", ShowLinkHints);

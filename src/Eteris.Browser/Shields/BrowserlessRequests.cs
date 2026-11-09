@@ -75,7 +75,7 @@ public static class BrowserlessRequests
     // Os tratadores de contexto (este e o de cada janela privada, MainWindow.Private.cs): o mesmo Escudo das abas, e
     // cada bloqueio conta no total do Escudo como o de uma aba (o relatório de privacidade conta-o no Observe).
     public static BrowserlessRequestHandler Handler(bool isPrivate, Func<string, bool>? localNetworkAllowed, Action<string?, string>? onBlocked)
-        => new(() => ShieldEngine.Current, Data.AppData.IsShieldOn, isPrivate, localNetworkAllowed, (top, host) =>
+        => new(() => ShieldEngine.Current, host => Data.AppData.IsShieldOn(host, isPrivate), isPrivate, localNetworkAllowed, (top, host) =>
         {
             ShieldStats.CountBlocked(persist: !isPrivate);
             onBlocked?.Invoke(top, host);

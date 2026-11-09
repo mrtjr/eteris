@@ -10,10 +10,13 @@ public sealed class NotesStore(string path)
     // As notas foram gravadas (a sincronização compara daqui a 10 s).
     public static event Action? Saved;
 
-    public string Load()
+    public string Load() => TryLoad() ?? string.Empty;
+
+    // null = o ficheiro existe mas não se leu agora (bloqueado por outro programa): não é o mesmo que notas vazias.
+    public string? TryLoad()
     {
         try { return File.Exists(path) ? File.ReadAllText(path, Encoding.UTF8) : string.Empty; }
-        catch (IOException) { return string.Empty; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
     // Escrita atómica: um ficheiro temporário substitui o anterior, para um fecho a meio não deixar notas cortadas.

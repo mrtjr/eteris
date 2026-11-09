@@ -509,19 +509,134 @@ public class SyncEngineTests
         Assert.Single(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Chain(oldChain) + "r/", StringComparison.Ordinal));
         Assert.Null(await SyncEngine.ReceiveRekeyAsync(lab.Cloud, lost.State));
 
-        var received = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State);
+        using var received = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State);
         Assert.NotNull(received);
-        Assert.Equal(secret.ChainId, received!.Value.Secret.ChainId);
-        Assert.Equal(a.Device.Name, received.Value.FromName);
-        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, b.Device.Id), StringComparison.Ordinal));
-        var b2 = await SyncEngine.JoinAsync(lab.Cloud, received.Value.Secret, b.Device, lab.ClockOf("B"));
-        b2.AdoptDeviceKeys(b.State);
+        Assert.False(received!.Conflict);
+        Assert.Equal(secret.ChainId, received.Secret!.ChainId);
+        Assert.Equal(a.Device.Name, received.FromName);
+        Assert.Equal(new[] { a.Device.Id, b.Device.Id }.Order(StringComparer.Ordinal), received.Devices!.Order(StringComparer.Ordinal));
+        // Ler não apaga: a mensagem só sai depois de a conta nova ficar guardada (ForgetRekeysAsync).
+        Assert.Contains(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, b.Device.Id), StringComparison.Ordinal));
+        var b2 = await SyncEngine.JoinAsync(lab.Cloud, received.Secret, b.Device, lab.ClockOf("B"));
+        b2.AdoptDeviceKeys(b.State, received.Devices);
+        Assert.DoesNotContain(lost.Device.Id, b2.State.PeerKeys.Keys);   // a chave do removido não passa para a conta nova
         await b2.PullAsync();
         Assert.Equal("x", b2.Get(Collections.Bookmarks, "https://x.pt/")!.Text("title"));
+        await SyncEngine.ForgetRekeysAsync(lab.Cloud, received.Paths);
+        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, b.Device.Id), StringComparison.Ordinal));
 
         await lab.Cloud.WriteAsync(SyncPaths.Rekey(oldChain, b.Device.Id, a.Device.Id), forged);
         Assert.Null(await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State));
         _ = rotated;
+    }
+
+    // O aparelho que troca a chave não leu o último lote de outro (que acrescentou X, mudou Y e apagou Z): a cadeia
+    // antiga sai com esse lote, mas o que fica volta a pôr o que escreveu na conta nova (RestageOwn) e o LWW decide —
+    // nada se perde nem ressuscita.
+    [Fact]
+    public async Task Rotation_DoesNotLoseWhatAStayingDeviceSentButTheRotatorNeverRead()
+    {
+        using var lab = new SyncLab();
+        var (a, b, lost) = await Three(lab);
+        a.Put(Collections.Bookmarks, "https://y.pt/", Bookmark("Y"));
+        a.Put(Collections.Bookmarks, "https://z.pt/", Bookmark("Z"));
+        a.SetNotes("linha 1");
+        await SyncLab.SettleAsync(a, b, lost);
+        foreach (var device in new[] { a, b, lost }) await device.DevicesAsync();
+
+        lab.Advance(TimeSpan.FromSeconds(1));
+        b.Put(Collections.Bookmarks, "https://x.pt/", Bookmark("X"));
+        b.Put(Collections.Bookmarks, "https://y.pt/", Bookmark("Y (b)"));
+        b.Delete(Collections.Bookmarks, "https://z.pt/");
+        b.SetNotes("linha 1\nlinha 2 (b)");
+        await b.PushAsync();
+        lab.Advance(TimeSpan.FromSeconds(1));
+        var (rotated, _) = await a.RotateChainAsync(lost.Device.Id); // sem ter lido o lote do «b»
+
+        using var received = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State);
+        var b2 = await SyncEngine.JoinAsync(lab.Cloud, received!.Secret!, b.Device, lab.ClockOf("B"));
+        b2.AdoptDeviceKeys(b.State, received.Devices);
+        b2.RestageOwn(b.State);
+        await SyncLab.SettleAsync(rotated, b2);
+        foreach (var device in new[] { rotated, b2 })
+        {
+            Assert.Equal("X", device.Get(Collections.Bookmarks, "https://x.pt/")!.Text("title"));
+            Assert.Equal("Y (b)", device.Get(Collections.Bookmarks, "https://y.pt/")!.Text("title"));
+            Assert.True(device.Get(Collections.Bookmarks, "https://z.pt/") is null or { Deleted: true });
+            Assert.Equal("linha 1\nlinha 2 (b)", device.Notes);
+        }
+        Assert.Equal(rotated.Fingerprint(), b2.Fingerprint());
+    }
+
+    // O removido tinha a chave do «b» fixada: pode deixar-lhe, na cadeia antiga, uma «conta nova» dele. A mensagem do
+    // «a» diz quem foi removido, e o «b» recusa esse remetente; se os dois se acusarem, não escolhe sozinho.
+    [Fact]
+    public async Task RemovedDevice_CannotHijackTheOthers_WithAnAccountOfItsOwn()
+    {
+        using var lab = new SyncLab();
+        var (a, b, lost) = await Three(lab);
+        await SyncLab.SettleAsync(a, b, lost);
+        foreach (var device in new[] { a, b, lost }) await device.DevicesAsync();
+        var oldChain = a.ChainId;
+        var (_, secret) = await a.RotateChainAsync(lost.Device.Id);
+
+        using var hijack = AccountSecret.Create();
+        var toB = new Dictionary<string, string> { [b.Device.Id] = lost.State.PeerKeys[b.Device.Id] };
+        await SyncEngine.FinishRotationAsync(lab.Cloud, lost.State, hijack, new RotationPending { OldChain = oldChain, Staying = toB });
+        using (var received = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State))
+        {
+            Assert.False(received!.Conflict);
+            Assert.Equal(a.Device.Id, received.From);
+            Assert.Equal(secret.ChainId, received.Secret!.ChainId);
+        }
+
+        await SyncEngine.FinishRotationAsync(lab.Cloud, lost.State, hijack, new RotationPending { OldChain = oldChain, Removed = a.Device.Id, Staying = toB });
+        using var contested = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State);
+        Assert.True(contested!.Conflict);
+        Assert.Null(contested.Secret);
+    }
+
+    // A troca de chave não fixa chaves novas: um aparelho inventado pelo removido (um estado a/ escrito à pressa, com
+    // uma chave dele) não recebe a conta nova.
+    [Fact]
+    public async Task Rotation_GivesTheNewAccountOnlyToDevicesPinnedBefore()
+    {
+        using var lab = new SyncLab();
+        var (a, b, lost) = await Three(lab);
+        await SyncLab.SettleAsync(a, b, lost);
+        await a.DevicesAsync();
+        var oldChain = a.ChainId;
+        var fake = await SyncEngine.JoinAsync(lab.Cloud, AccountSecret.FromCode(lab.Secret.ToCode()), DeviceIdentity.Create("Falso"), lab.ClockOf("F"));
+        await fake.PullAsync();
+        await a.RotateChainAsync(lost.Device.Id);
+        Assert.Contains(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, b.Device.Id), StringComparison.Ordinal));
+        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, fake.Device.Id), StringComparison.Ordinal));
+        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, lost.Device.Id), StringComparison.Ordinal));
+    }
+
+    // 1.º passo sem tocar na conta antiga (quem chama guarda a conta nova antes); o 2.º escreve as mensagens antes de
+    // apagar o registo de chaves (em último lugar) e pode repetir-se depois de uma falha.
+    [Fact]
+    public async Task Rotation_InTwoSteps_OldAccountIntactUntilTheSecond_WhichCanBeRepeated()
+    {
+        using var lab = new SyncLab();
+        var (a, b, lost) = await Three(lab);
+        await SyncLab.SettleAsync(a, b, lost);
+        foreach (var device in new[] { a, b }) await device.DevicesAsync();
+        var oldChain = a.ChainId;
+        var before = lab.Cloud.Files.Keys.Where(k => k.StartsWith(SyncPaths.Chain(oldChain), StringComparison.Ordinal)).ToList();
+
+        var (rotated, secret, pending) = await a.StartRotationAsync(lost.Device.Id, a.State.PeerKeys);
+        Assert.All(before, f => Assert.Contains(f, lab.Cloud.Files.Keys));
+        Assert.Equal(oldChain, pending.OldChain);
+        Assert.Equal([b.Device.Id], pending.Staying.Keys);
+        await b.PullAsync(); // o «b» continua na conta antiga, sem erro
+
+        await SyncEngine.FinishRotationAsync(lab.Cloud, rotated.State, secret, pending);
+        await SyncEngine.FinishRotationAsync(lab.Cloud, rotated.State, secret, pending);
+        await Assert.ThrowsAsync<ChainGoneException>(() => b.PullAsync());
+        using var received = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State);
+        Assert.Equal(secret.ChainId, received!.Secret!.ChainId);
     }
 
     [Fact]

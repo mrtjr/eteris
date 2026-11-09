@@ -84,7 +84,7 @@ internal static class GoogleSync
                 var account = accounts?.Current;
                 return new("signedIn", SignedInText(account), null, account, accounts?.Pending == true);
             }
-            return new("signedOut", _error ?? "Não ligado.", null);
+            return new("signedOut", _error ?? "Não tem sessão iniciada na Google.", null);
         }
     }
 
@@ -106,8 +106,9 @@ internal static class GoogleSync
                 var oauth = new GoogleOAuth(Http(), config, Now);
                 var tokens = await oauth.SignInAsync(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, cancel.Token);
                 Session()?.Use(tokens);
-                // Logo a seguir a entrar (ação do utilizador): com que conta, e a sincronização liga-se.
-                _ = Accounts()?.AfterSignIn();
+                // Logo a seguir a entrar (ação do utilizador): com que conta (antes de ligar a sincronização, para ela
+                // saber se a sessão é da mesma conta Google de antes — com outra, fica em pausa sem apagar nada).
+                if (Accounts()?.AfterSignIn() is { } account) await account;
                 SyncService.Start();
             }
             catch (OAuthException e) { lock (Gate) _error = e.Message; }

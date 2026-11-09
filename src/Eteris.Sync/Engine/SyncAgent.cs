@@ -25,6 +25,13 @@ public sealed class SavedSync
     [JsonPropertyName("compactSeq")] public long LastCompactSeq { get; set; }
     // Porque parou (conta apagada, aparelho removido): mostrado até se ligar outra vez.
     [JsonPropertyName("stopped")] public string? Stopped { get; set; }
+    // Troca de chave a meio (a conta nova já está aqui; falta entregá-la aos outros e apagar a antiga).
+    [JsonPropertyName("rotation")] public RotationPending? Rotation { get; set; }
+    // Com que conta do transporte (a conta Google, como impressão digital) este aparelho sincroniza: com outra sessão,
+    // a sincronização fica em pausa sem apagar nada (SyncAgent.AccountKey).
+    [JsonPropertyName("account")] public string? Account { get; set; }
+    // Quando este aparelho criou a conta (0 = não a criou, ou já passou o tempo de ver se outro a criou ao mesmo tempo).
+    [JsonPropertyName("created")] public long CreatedMs { get; set; }
 }
 
 public interface ISyncStore
@@ -53,13 +60,31 @@ public sealed record GuestPairing(string? Code, bool Confirmed, string? Error);
 public sealed record DeviceInfo(string Id, string Name, string Kind, long LastSyncMs, bool IsThis);
 
 public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessMs, string? Error, string? Notice, string? RecoveryCode,
-    GuestPairing? Pairing, IReadOnlyList<HostRequest> Requests, IReadOnlyList<DeviceInfo> Devices, bool NeedsUpdate, int PendingDevices);
+    GuestPairing? Pairing, IReadOnlyList<HostRequest> Requests, IReadOnlyList<DeviceInfo> Devices, bool NeedsUpdate, int PendingDevices)
+{
+    // A autorização da Google expirou ou foi retirada: nada se resolve sozinho, é preciso entrar outra vez.
+    public bool NeedsSignIn { get; init; }
+
+    // Pedidos de aparelhos novos vistos numa ronda e ainda sem resposta: só se responde quando o utilizador abre o menu
+    // ou a secção Sincronização (CheckRequestsAsync).
+    public int WaitingRequests { get; init; }
+}
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
 // remove aparelhos e apaga os dados. Uma operação de cada vez. Construir e ler o estado nunca faz pedidos: a rede só
 // é usada quando o anfitrião chama RunAsync (o agendador), StartAsync (o utilizador entrou ou ligou) ou outra ação.
+//
+// «Sair» não espera pela ronda em curso: cada gravação confere primeiro que o estado ainda é o mesmo objeto e que a
+// sincronização continua ligada (IsCurrent). Assim uma ronda que acaba depois de «Sair» (com «apagar a chave») não
+// volta a gravar a chave que o utilizador pediu para apagar.
 public sealed class SyncAgent
 {
+    // Saltos seguidos por contas que também já desapareceram (duas remoções enquanto este aparelho estava desligado).
+    private const int MaxRekeyHops = 8;
+
+    // Depois de criar a conta, durante quanto tempo se confere se outro computador criou outra ao mesmo tempo.
+    private static readonly TimeSpan DuplicateWindow = TimeSpan.FromMinutes(30);
+
     private readonly Func<ISyncTransport> _transportFactory;
     private readonly ILocalProfile _profile;
     private readonly ISyncStore _store;
@@ -76,7 +101,9 @@ public sealed class SyncAgent
     private string? _error;
     private string? _notice;
     private bool _needsUpdate;
+    private bool _needsSignIn;
     private int _pendingDevices;
+    private int _waiting;
     private GuestFlow? _guest;
     private IReadOnlyList<DeviceInfo> _devices = [];
     // Já se leram os estados dos aparelhos (e fixaram as chaves) com o motor atual: uma vez por sessão e conta, e de
@@ -101,6 +128,10 @@ public sealed class SyncAgent
 
     // Intervalo entre perguntas ao transporte enquanto se espera pelo outro aparelho no emparelhamento.
     public TimeSpan PairingPoll { get; init; } = TimeSpan.FromSeconds(3);
+
+    // A conta do transporte com que se está agora (para o Google Drive, uma impressão digital da conta Google; null =
+    // não se sabe, ou o transporte não tem contas). Só disco: nunca faz pedidos.
+    public Func<string?>? AccountKey { get; init; }
 
     // Mudou alguma coisa no estado (para a interface se redesenhar). Chamado de qualquer thread.
     public event Action? Changed;
@@ -131,7 +162,11 @@ public sealed class SyncAgent
                 var requests = _hosts.Values.Where(h => h.Code is not null && _now() - h.Created < (long)PairingProtocol.Lifetime.TotalMilliseconds)
                     .Select(h => new HostRequest(h.Session, h.Name ?? "Aparelho sem nome", h.Code!, h.Created)).ToList();
                 var pairing = _guest is null ? null : new GuestPairing(_guest.Code, _guest.Confirm.Task.IsCompleted, _guest.Error);
-                return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, code, pairing, requests, _devices, _needsUpdate, _pendingDevices);
+                return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, code, pairing, requests, _devices, _needsUpdate, _pendingDevices)
+                {
+                    NeedsSignIn = _needsSignIn,
+                    WaitingRequests = _waiting,
+                };
             }
         }
     }
@@ -140,15 +175,30 @@ public sealed class SyncAgent
 
     // O utilizador entrou (ou carregou em «Ligar»): liga a sincronização neste aparelho e faz a primeira ronda — retoma
     // a conta guardada, cria a conta se o transporte não tiver nenhuma, ou pede para escolher como entrar.
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    // Se a sessão do transporte for de outra conta (outra conta Google), a sincronização fica em pausa sem apagar nada;
+    // só com «switchAccount» (o utilizador carregou em «Ligar outra vez» depois de ler o aviso) passa para a conta nova.
+    public async Task StartAsync(CancellationToken cancellationToken = default) => await StartAsync(switchAccount: false, cancellationToken).ConfigureAwait(false);
+
+    public async Task StartAsync(bool switchAccount, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
             _saved ??= new SavedSync();
             _saved.Enabled = true;
             _saved.Stopped = null;
+            if (switchAccount && OtherAccount(_saved))
+            {
+                // A conta guardada é de outra sessão: recomeça nesta (a chave antiga fica até haver uma conta nova).
+                _engine = null;
+                _saved.Engine = null;
+                _saved.Baseline = null;
+                _saved.Rotation = null;
+                _saved.CreatedMs = 0;
+                _saved.Account = AccountKey?.Invoke();
+            }
             _notice = null;
             _error = null;
+            _needsSignIn = false;
             _phase = SyncPhase.Starting;
             _store.Save(_saved);
         }
@@ -162,29 +212,36 @@ public sealed class SyncAgent
         if (!Enabled) return true;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         SetRunning(true);
+        SavedSync? saved;
+        lock (_gate) saved = _saved;
         try
         {
+            if (saved is not { Enabled: true }) return true;
+            if (OtherAccount(saved))
+            {
+                Stop(saved, OtherAccountText, StopKeeps.Everything);
+                return true;
+            }
             if (_engine is null)
             {
-                SavedSync saved;
-                lock (_gate) saved = _saved!;
                 if (saved is { Secret: { } secret, Engine: { } state })
                 {
-                    if (!await ResumeAsync(secret, state, cancellationToken).ConfigureAwait(false)) return true;
+                    if (!await ResumeAsync(saved, secret, state, cancellationToken).ConfigureAwait(false)) return true;
                 }
                 else
                 {
                     if (!force && _phase is SyncPhase.Choose or SyncPhase.Pairing) return true;
-                    await SetUpAsync(cancellationToken).ConfigureAwait(false);
+                    await SetUpAsync(saved, cancellationToken).ConfigureAwait(false);
                     if (_engine is null) return true;
                 }
             }
-            await CycleAsync(cancellationToken).ConfigureAwait(false);
+            if (saved.Rotation is { } rotation) await FinishRotationAsync(saved, rotation, cancellationToken).ConfigureAwait(false);
+            await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (ChainGoneException)
         {
-            await ChainGoneAsync(cancellationToken).ConfigureAwait(false);
+            await ChainGoneAsync(saved!, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception e) when (IsTransient(e))
@@ -194,6 +251,10 @@ public sealed class SyncAgent
         }
         finally
         {
+            // «Sair» a meio: o motor desta ronda já não é o deste aparelho.
+            lock (_gate)
+                if (!IsCurrent(saved))
+                    _engine = null;
             SetRunning(false);
             _run.Release();
         }
@@ -208,35 +269,46 @@ public sealed class SyncAgent
         return ProfileSync.CountLocalChanges(_profile, saved.Baseline) > 0;
     }
 
-    private async Task<bool> ResumeAsync(string secret, SyncState state, CancellationToken cancellationToken)
+    private async Task<bool> ResumeAsync(SavedSync saved, string secret, SyncState state, CancellationToken cancellationToken)
     {
         using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
         try
         {
-            _engine = await SyncEngine.ResumeAsync(Transport(), account, state, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
-            SetPhase(SyncPhase.On);
+            var engine = await SyncEngine.ResumeAsync(Transport(), account, state, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
+            lock (_gate)
+            {
+                if (!IsCurrent(saved)) return false;
+                _engine = engine;
+                _phase = SyncPhase.On;
+            }
+            Notify();
             return true;
         }
         catch (WrongCodeException)
         {
-            await StopAsync("A sincronização parou: a conta guardada neste computador não abre a do Google Drive.", cancellationToken).ConfigureAwait(false);
+            // O registo de chaves no transporte não abre com a chave guardada (alterado ou danificado): para, sem apagar
+            // nada deste computador — a chave fica, para quando o registo voltar ao normal ou para o utilizador decidir.
+            Stop(saved, WrongKeysText, StopKeeps.Everything);
             return false;
         }
     }
 
-    private async Task SetUpAsync(CancellationToken cancellationToken)
+    private async Task SetUpAsync(SavedSync saved, CancellationToken cancellationToken)
     {
         var chains = await ChainsAsync(cancellationToken).ConfigureAwait(false);
-        SavedSync saved;
-        lock (_gate) saved = _saved!;
-        // A chave ficou neste aparelho («Sair» sem a apagar) e a conta ainda existe: entra outra vez sem código.
+        // A chave ficou neste aparelho («Sair» sem a apagar, ou parou sem a apagar) e a conta ainda existe: entra outra
+        // vez sem código.
         if (saved.Secret is { } kept)
         {
             using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(kept));
             if (chains.Contains(account.ChainId))
             {
-                await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false);
-                return;
+                try
+                {
+                    await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                catch (WrongCodeException) { } // o registo dessa conta não abre: escolher como entrar
             }
         }
         if (chains.Count == 0)
@@ -246,11 +318,14 @@ public sealed class SyncAgent
                 .ConfigureAwait(false);
             lock (_gate)
             {
+                if (!IsCurrent(saved)) return;
                 _engine = engine;
                 saved.Secret = Kdf.Base64Url(account.ToBytes());
                 saved.Engine = engine.State;
                 saved.Baseline = null;
                 saved.CodePending = true;
+                saved.CreatedMs = _now();
+                saved.Account = AccountKey?.Invoke();
                 _phase = SyncPhase.On;
                 _store.Save(saved);
             }
@@ -269,11 +344,9 @@ public sealed class SyncAgent
 
     // ---- sincronizar ------------------------------------------------------------------------------------------------
 
-    private async Task CycleAsync(CancellationToken cancellationToken)
+    private async Task CycleAsync(SavedSync saved, CancellationToken cancellationToken)
     {
         var engine = _engine!;
-        SavedSync saved;
-        lock (_gate) saved = _saved!;
         SyncReport report;
         Dictionary<string, string> baseline;
         try
@@ -284,16 +357,19 @@ public sealed class SyncAgent
         {
             // O que ficou na caixa de saída (e o que já se leu) fica guardado mesmo que a ronda falhe a meio.
             lock (_gate)
-            {
-                saved.Engine = engine.State;
-                _store.Save(saved);
-            }
+                if (IsCurrent(saved) && ReferenceEquals(_engine, engine))
+                {
+                    saved.Engine = engine.State;
+                    _store.Save(saved);
+                }
         }
         lock (_gate)
         {
+            if (!IsCurrent(saved) || !ReferenceEquals(_engine, engine)) return;
             saved.Baseline = baseline;
             _store.Save(saved);
         }
+        if (await LeaveDuplicateAsync(saved, engine, cancellationToken).ConfigureAwait(false)) return;
         await engine.PushAsync(cancellationToken).ConfigureAwait(false);
         if (!ReferenceEquals(_pinnedFor, engine) || engine.HasUnpinnedPeers)
         {
@@ -307,88 +383,200 @@ public sealed class SyncAgent
             saved.LastCompactMs = now;
             saved.LastCompactSeq = engine.State.NextSeq - 1;
         }
-        await AnswerRequestsCoreAsync(cancellationToken).ConfigureAwait(false);
+        // Numa ronda, os pedidos de aparelhos novos só se contam (para o menu dizer que há um): responder-lhes faz
+        // pedidos durante minutos e só acontece quando o utilizador abre o menu ou a secção Sincronização.
+        await AnswerRequestsCoreAsync(answer: false, cancellationToken).ConfigureAwait(false);
         lock (_gate)
         {
+            if (!IsCurrent(saved) || !ReferenceEquals(_engine, engine)) return;
             saved.Engine = engine.State;
             saved.LastSuccessMs = now;
+            if (saved.Account is null && AccountKey?.Invoke() is { } account) saved.Account = account;
             _store.Save(saved);
             _error = null;
+            _needsSignIn = false;
             _needsUpdate = report.NeedsUpdate;
             _pendingDevices = report.Pending.Count;
             _phase = SyncPhase.On;
         }
     }
 
-    // A conta deste aparelho desapareceu: outro aparelho fez «nova cadeia» (e deixou-lhe a conta nova), removeu este
-    // aparelho, ou os dados foram apagados.
-    private async Task ChainGoneAsync(CancellationToken cancellationToken)
+    // Dois computadores entraram pela primeira vez quase ao mesmo tempo, com o transporte vazio, e cada um criou a sua
+    // conta. Enquanto este aparelho estiver sozinho na conta que criou (e só na primeira meia hora), confere: se houver
+    // outra conta com o identificador menor, essa fica (o mesmo critério nos dois) e este aparelho sai da sua — apaga-a
+    // do transporte e volta a «escolher como entrar», sem perder nada deste computador (a junção é sem perda).
+    private async Task<bool> LeaveDuplicateAsync(SavedSync saved, SyncEngine engine, CancellationToken cancellationToken)
     {
-        SavedSync saved;
-        lock (_gate) saved = _saved!;
-        var old = _engine?.State ?? saved.Engine;
-        _engine = null;
+        if (saved.CreatedMs == 0) return false;
+        if (_now() - saved.CreatedMs > (long)DuplicateWindow.TotalMilliseconds)
+        {
+            lock (_gate)
+                if (IsCurrent(saved))
+                {
+                    saved.CreatedMs = 0;
+                    _store.Save(saved);
+                }
+            return false;
+        }
+        var files = await Transport().ListAsync(SyncPaths.Root, cancellationToken).ConfigureAwait(false);
+        var mine = engine.ChainId;
+        if (files.Any(f => SyncPaths.TryParseState(mine, f, out var device) && device != engine.Device.Id))
+        {
+            // Já há outro aparelho nesta conta: fica.
+            lock (_gate)
+                if (IsCurrent(saved))
+                {
+                    saved.CreatedMs = 0;
+                    _store.Save(saved);
+                }
+            return false;
+        }
+        var other = files.Select(f => SyncPaths.TryParseKeys(f, out var chain) ? chain : null).OfType<string>()
+            .Where(c => c != mine).Order(StringComparer.Ordinal).FirstOrDefault();
+        if (other is null || string.CompareOrdinal(other, mine) > 0) return false;
+        await engine.DeleteEverythingAsync(cancellationToken).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (!IsCurrent(saved)) return true;
+            _engine = null;
+            _devices = [];
+            saved.Secret = null;
+            saved.Engine = null;
+            saved.Baseline = null;
+            saved.CodePending = false;
+            saved.CreatedMs = 0;
+            saved.Rotation = null;
+            _store.Save(saved);
+            _phase = SyncPhase.Choose;
+            _notice = "Outro computador criou a conta de sincronização ao mesmo tempo que este. Junte este computador a essa conta (aprovação no outro computador ou o código de recuperação dele): os dados deste computador juntam-se aos da conta, nada se perde.";
+        }
+        return true;
+    }
+
+    // A conta deste aparelho desapareceu: outro aparelho fez «nova cadeia» (e deixou-lhe a conta nova), removeu este
+    // aparelho, ou os dados foram apagados. Segue as contas novas em sequência (duas remoções seguidas enquanto este
+    // aparelho estava desligado) até uma que exista.
+    private async Task ChainGoneAsync(SavedSync saved, CancellationToken cancellationToken)
+    {
+        SyncState? old;
+        lock (_gate)
+        {
+            if (!IsCurrent(saved)) return;
+            old = _engine?.State ?? saved.Engine;
+            _engine = null;
+        }
         if (old is not null)
         {
             try
             {
-                if (await SyncEngine.ReceiveRekeyAsync(Transport(), old, cancellationToken).ConfigureAwait(false) is { } rekey)
+                var transport = Transport();
+                var chain = old.ChainId;
+                var consumed = new List<string>();
+                for (var hop = 0; hop < MaxRekeyHops; hop++)
                 {
-                    using (rekey.Secret)
+                    using var rekey = await SyncEngine.ReceiveRekeyAsync(transport, old, chain, cancellationToken).ConfigureAwait(false);
+                    if (rekey is null) break;
+                    if (rekey.Conflict)
                     {
-                        var engine = await SyncEngine.JoinAsync(Transport(), rekey.Secret, old.Device, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
-                        engine.AdoptDeviceKeys(old);
-                        lock (_gate)
-                        {
-                            _engine = engine;
-                            saved.Secret = Kdf.Base64Url(rekey.Secret.ToBytes());
-                            saved.Engine = engine.State;
-                            // Os dados deste computador não mudaram: a base continua a valer, e o que mudou desde a última
-                            // ronda segue para a conta nova.
-                            saved.LastCompactMs = 0;
-                            saved.LastCompactSeq = 0;
-                            _store.Save(saved);
-                            _notice = rekey.FromName.Length > 0
-                                ? $"A conta mudou de chave em «{rekey.FromName}» (um aparelho foi removido). Este computador continua ligado."
-                                : "A conta mudou de chave (um aparelho foi removido). Este computador continua ligado.";
-                        }
+                        Stop(saved, ConflictText, StopKeeps.Secret);
+                        return;
                     }
-                    await CycleAsync(cancellationToken).ConfigureAwait(false);
+                    consumed.AddRange(rekey.Paths);
+                    SyncEngine engine;
+                    try
+                    {
+                        engine = await SyncEngine.JoinAsync(transport, rekey.Secret!, old.Device, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (ChainGoneException)
+                    {
+                        // Esta conta nova também já foi substituída: a mensagem seguinte está dentro dela.
+                        chain = rekey.Secret!.ChainId;
+                        continue;
+                    }
+                    engine.AdoptDeviceKeys(old, rekey.Devices);
+                    engine.RestageOwn(old);
+                    lock (_gate)
+                    {
+                        if (!IsCurrent(saved)) return;
+                        _engine = engine;
+                        saved.Secret = Kdf.Base64Url(rekey.Secret!.ToBytes());
+                        saved.Engine = engine.State;
+                        saved.Rotation = null;
+                        saved.CreatedMs = 0;
+                        // Os dados deste computador não mudaram: a base continua a valer, e o que mudou desde a última
+                        // ronda segue para a conta nova; o que este aparelho tinha escrito volta a seguir com a hora
+                        // original (RestageOwn), para não ser desfeito pelo instantâneo de quem trocou a chave.
+                        saved.LastCompactMs = 0;
+                        saved.LastCompactSeq = 0;
+                        _store.Save(saved);
+                        _notice = rekey.FromName.Length > 0
+                            ? $"A conta mudou de chave em «{rekey.FromName}» (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado."
+                            : "A conta mudou de chave (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado.";
+                    }
+                    // Só agora, com a conta nova guardada, as mensagens saem do transporte (melhor esforço).
+                    try { await SyncEngine.ForgetRekeysAsync(transport, consumed, cancellationToken).ConfigureAwait(false); }
+                    catch (Exception e) when (IsTransient(e)) { }
+                    await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
             catch (ChainGoneException) { }
             catch (Exception e) when (IsTransient(e))
             {
+                // Sem rede a meio: tenta outra vez na próxima ronda (o estado antigo continua guardado).
                 Fail(e);
                 return;
             }
         }
-        await StopAsync("A sincronização parou: os dados do Éteris foram apagados do Google Drive, ou este computador foi removido noutro aparelho.",
-            cancellationToken).ConfigureAwait(false);
+        Stop(saved, GoneText, StopKeeps.Secret);
     }
 
-    private Task StopAsync(string reason, CancellationToken cancellationToken)
+    private enum StopKeeps
+    {
+        Nothing,    // os dados foram apagados por este aparelho: a chave já não serve para nada
+        Secret,     // a conta desapareceu: guarda a chave (outra sessão Google, ou para entrar outra vez sem código)
+        Everything, // pausa (outra conta, registo de chaves que não abre): nada deste computador muda
+    }
+
+    private void Stop(SavedSync saved, string reason, StopKeeps keeps)
     {
         lock (_gate)
         {
+            if (!ReferenceEquals(_saved, saved)) return;
             _engine = null;
-            if (_saved is not null)
+            saved.Enabled = false;
+            if (keeps != StopKeeps.Everything)
             {
-                _saved.Enabled = false;
-                _saved.Secret = null;
-                _saved.Engine = null;
-                _saved.Baseline = null;
-                _saved.CodePending = false;
-                _saved.Stopped = reason;
-                _store.Save(_saved);
+                saved.Engine = null;
+                saved.Baseline = null;
+                saved.Rotation = null;
+                saved.CreatedMs = 0;
             }
+            if (keeps == StopKeeps.Nothing)
+            {
+                saved.Secret = null;
+                saved.CodePending = false;
+            }
+            saved.Stopped = reason;
+            _store.Save(saved);
             _phase = SyncPhase.Stopped;
             _notice = reason;
             _devices = [];
         }
-        return Task.CompletedTask;
+        Notify();
     }
+
+    private const string GoneText =
+        "A sincronização parou: a conta de sincronização deste computador já não está neste Google Drive — os dados foram apagados, este computador foi removido noutro aparelho, ou a sessão é de outra conta Google. A chave ficou neste computador; nada daqui foi apagado.";
+
+    private const string ConflictText =
+        "A sincronização parou: dois aparelhos deixaram a este computador contas novas que não batem certo (um deles pode ter sido removido da conta). Para continuar, junte este computador outra vez à conta, com o código de recuperação novo ou por aprovação noutro computador.";
+
+    private const string WrongKeysText =
+        "A sincronização parou: o registo de chaves da conta no Google Drive não abre com a chave guardada neste computador (foi alterado ou danificou-se). A chave ficou neste computador; nada foi apagado.";
+
+    private const string OtherAccountText =
+        "A sincronização está em pausa: a sessão é de outra conta Google, diferente da que este computador usa para sincronizar. Nada foi apagado. Para continuar com a conta anterior, saia e entre com ela; para sincronizar com esta, carregue em «Ligar outra vez» (para voltar depois à anterior será preciso o código de recuperação dela ou outro computador).";
 
     // ---- entrar num aparelho novo -----------------------------------------------------------------------------------
 
@@ -404,7 +592,9 @@ public sealed class SyncAgent
             try
             {
                 await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false);
-                await CycleAsync(cancellationToken).ConfigureAwait(false);
+                SavedSync saved;
+                lock (_gate) saved = _saved!;
+                await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception e) when (e is WrongCodeException or ChainGoneException)
             {
@@ -439,6 +629,9 @@ public sealed class SyncAgent
             _saved.CodePending = false;
             _saved.LastCompactMs = 0;
             _saved.LastCompactSeq = 0;
+            _saved.Rotation = null;
+            _saved.CreatedMs = 0;
+            _saved.Account = AccountKey?.Invoke() ?? _saved.Account;
             _store.Save(_saved);
             _phase = SyncPhase.On;
             _guest = null;
@@ -489,7 +682,9 @@ public sealed class SyncAgent
                 try
                 {
                     await JoinCoreAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false);
-                    await CycleAsync(flow.Cancel.Token).ConfigureAwait(false);
+                    SavedSync saved;
+                    lock (_gate) saved = _saved!;
+                    await CycleAsync(saved, flow.Cancel.Token).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -552,25 +747,33 @@ public sealed class SyncAgent
 
     // ---- aprovar um aparelho novo -----------------------------------------------------------------------------------
 
-    // Pedidos de aparelhos novos (no menu da conta e nas Definições, por ação do utilizador; e em cada ronda): responde
-    // a cada um e, quando o aparelho novo revela o código de verificação, o pedido aparece em Status.Requests.
+    // Pedidos de aparelhos novos, por ação do utilizador (abriu o menu ou a secção Sincronização): responde a cada um e,
+    // quando o aparelho novo revela o código de verificação, o pedido aparece em Status.Requests. Responder a um pedido
+    // é acompanhá-lo (lê o Drive de 2 em 2 s até o aparelho novo responder, no máximo 10 minutos).
     public async Task CheckRequestsAsync(CancellationToken cancellationToken = default)
     {
         if (!Enabled || _engine is null) return;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try { await AnswerRequestsCoreAsync(cancellationToken).ConfigureAwait(false); }
+        try { await AnswerRequestsCoreAsync(answer: true, cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (IsTransient(e)) { }
         finally { _run.Release(); }
+        Notify();
     }
 
-    private async Task AnswerRequestsCoreAsync(CancellationToken cancellationToken)
+    private async Task AnswerRequestsCoreAsync(bool answer, CancellationToken cancellationToken)
     {
         if (_engine is null) return;
         var transport = Transport();
+        var waiting = 0;
         foreach (var session in await PairingRequests.PendingAsync(transport, _now, cancellationToken).ConfigureAwait(false))
         {
             lock (_gate)
                 if (_hosts.ContainsKey(session) || _guest?.Session == session) continue;
+            if (!answer)
+            {
+                waiting++;
+                continue;
+            }
             var host = await PairingHost.AnswerAsync(transport, session, _now, _delay, cancellationToken).ConfigureAwait(false);
             var flow = new HostFlow(session, host, _now());
             lock (_gate) _hosts[session] = flow;
@@ -594,11 +797,14 @@ public sealed class SyncAgent
             });
         }
         lock (_gate)
+        {
+            _waiting = waiting;
             foreach (var stale in _hosts.Values.Where(h => _now() - h.Created > (long)PairingProtocol.Lifetime.TotalMilliseconds).ToList())
             {
                 _hosts.Remove(stale.Session);
                 stale.Cancel.Cancel();
             }
+        }
     }
 
     // O utilizador confirmou NESTE aparelho que o aparelho novo mostra o mesmo código: entrega-lhe a conta, cifrada.
@@ -610,11 +816,18 @@ public sealed class SyncAgent
         {
             _hosts.TryGetValue(session, out flow);
             secret = _saved?.Secret;
+            // Um 2.º clique enquanto o 1.º ainda está na rede não volta a entregar a conta.
+            if (flow is { Approving: true }) return;
+            if (flow is { Code: not null } && secret is not null) flow.Approving = true;
         }
         if (flow?.Code is null || secret is null) throw new SyncUserException("Este pedido já não está à espera. Peça outra vez no outro computador.");
         using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
         try { await flow.Host.ApproveAsync(account, DeviceName, cancellationToken).ConfigureAwait(false); }
-        catch (Exception e) when (e is PairingException || IsTransient(e)) { throw new SyncUserException(e is PairingException ? e.Message : Message(e)); }
+        catch (Exception e) when (e is PairingException || IsTransient(e))
+        {
+            lock (_gate) flow.Approving = false;
+            throw new SyncUserException(e is PairingException ? e.Message : Message(e));
+        }
         lock (_gate)
         {
             _hosts.Remove(session);
@@ -660,10 +873,16 @@ public sealed class SyncAgent
             .Select(s => new DeviceInfo(s.Device, s.Name.Length > 0 ? s.Name : "Aparelho sem nome", s.Kind, s.LastSyncMs, s.Device == engine.Device.Id))
             .OrderByDescending(d => d.IsThis).ThenByDescending(d => d.LastSyncMs).ToList();
         if (!list.Any(d => d.IsThis)) list.Insert(0, new DeviceInfo(engine.Device.Id, engine.Device.Name, engine.Device.Kind, engine.State.LastPullMs, true));
+        // Depois de uma troca de chave, os aparelhos que ficaram ainda não escreveram o seu estado na conta nova: entram
+        // na lista pela chave fixada (à espera da chave nova), para continuarem à vista e receberem uma troca seguinte.
+        foreach (var peer in engine.State.PeerKeys.Keys)
+            if (!list.Any(d => d.Id == peer))
+                list.Add(new DeviceInfo(peer, engine.State.DeviceNames.TryGetValue(peer, out var name) && name.Length > 0 ? name : "Aparelho sem nome", "pc", 0, false));
         lock (_gate)
         {
+            if (!ReferenceEquals(_engine, engine)) return;
             _devices = list;
-            if (_saved is not null)
+            if (_saved is { Enabled: true })
             {
                 _saved.Engine = engine.State; // chaves fixadas
                 _store.Save(_saved);
@@ -673,32 +892,77 @@ public sealed class SyncAgent
 
     // Remove um aparelho da conta: nova cadeia (código de recuperação novo, mostrado uma vez); os aparelhos que ficam
     // recebem a conta nova sozinhos, o removido deixa de conseguir ler e escrever.
-    public async Task RemoveDeviceAsync(string device, CancellationToken cancellationToken = default)
+    // «shown»: os aparelhos que o utilizador viu na lista quando decidiu (por omissão, a última lista). Só esses, e só
+    // com a chave fixada antes desta ação, recebem a conta nova.
+    public Task RemoveDeviceAsync(string device, IReadOnlyCollection<string>? shown = null, CancellationToken cancellationToken = default)
+        => RotateAsync(device, shown, cancellationToken);
+
+    // «Gerar um código de recuperação novo»: nova cadeia sem tirar ninguém; o código antigo deixa de servir.
+    public Task NewRecoveryCodeAsync(CancellationToken cancellationToken = default) => RotateAsync(null, null, cancellationToken);
+
+    private async Task RotateAsync(string? device, IReadOnlyCollection<string>? shown, CancellationToken cancellationToken)
     {
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         SetRunning(true);
+        SavedSync? saved;
+        lock (_gate) saved = _saved;
         try
         {
-            if (_engine is not { } engine) throw new SyncUserException("A sincronização não está ligada neste computador.");
-            if (device == engine.Device.Id) throw new SyncUserException("Para tirar este computador da conta, use «Sair».");
-            var name = _devices.FirstOrDefault(d => d.Id == device)?.Name ?? "o aparelho";
-            var (rotated, secret) = await engine.RotateChainAsync(device, cancellationToken).ConfigureAwait(false);
+            if (_engine is null || saved is not { Enabled: true }) throw new SyncUserException("A sincronização não está ligada neste computador.");
+            if (device == _engine.Device.Id) throw new SyncUserException("Para tirar este computador da conta, use «Sair».");
+            if (saved.Rotation is { } unfinished) await FinishRotationAsync(saved, unfinished, cancellationToken).ConfigureAwait(false);
+            var engine = _engine;
+            // O que o utilizador viu, e as chaves fixadas ANTES desta ação: um aparelho que apareça agora não recebe nada.
+            List<string> seen;
+            string name;
+            lock (_gate)
+            {
+                seen = (shown ?? _devices.Select(d => d.Id)).ToList();
+                name = _devices.FirstOrDefault(d => d.Id == device)?.Name ?? "o aparelho";
+            }
+            var staying = engine.State.PeerKeys.Where(p => seen.Contains(p.Key) && p.Key != device && p.Key != engine.Device.Id)
+                .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+
+            // Primeiro uma ronda completa: o que os outros aparelhos enviaram e este ainda não leu entra no estado que
+            // passa para a conta nova (a cadeia antiga, com esses lotes, vai ser apagada).
+            await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
+            if (!ReferenceEquals(_engine, engine) || !IsCurrentLocked(saved)) throw new SyncUserException("A sincronização mudou entretanto. Tente outra vez.");
+            var newcomers = engine.State.DeviceNames.Keys.Concat(engine.State.PeerKeys.Keys).Concat(engine.State.Read.Keys)
+                .Where(d => d != engine.Device.Id && d != device && !seen.Contains(d)).Distinct(StringComparer.Ordinal)
+                .Select(d => engine.State.DeviceNames.TryGetValue(d, out var n) && n.Length > 0 ? $"«{n}»" : "um aparelho sem nome").ToList();
+
+            var (rotated, secret, pending) = await engine.StartRotationAsync(device, staying, cancellationToken).ConfigureAwait(false);
             using (secret)
             {
                 lock (_gate)
                 {
+                    if (!IsCurrent(saved)) throw new SyncUserException("A sincronização foi desligada entretanto.");
+                    // Guardado ANTES de mexer na conta antiga: uma falha a seguir continua na ronda seguinte.
                     _engine = rotated;
-                    _saved!.Secret = Kdf.Base64Url(secret.ToBytes());
-                    _saved.Engine = rotated.State;
-                    _saved.CodePending = true;
-                    _saved.LastCompactMs = _now();
-                    _saved.LastCompactSeq = rotated.State.NextSeq - 1;
-                    _store.Save(_saved);
-                    _notice = $"«{name}» foi removido. A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos.";
+                    saved.Secret = Kdf.Base64Url(secret.ToBytes());
+                    saved.Engine = rotated.State;
+                    saved.Rotation = pending;
+                    saved.CodePending = true;
+                    saved.CreatedMs = 0;
+                    saved.LastCompactMs = _now();
+                    saved.LastCompactSeq = rotated.State.NextSeq - 1;
+                    _store.Save(saved);
+                    var done = device is null
+                        ? "A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos."
+                        : $"«{name}» foi removido. A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos.";
+                    _notice = newcomers.Count == 0 ? done
+                        : done + $" Apareceu na conta {string.Join(", ", newcomers)}, que não estava na lista: não recebeu a chave nova. Se for seu, junte-o outra vez com o código novo ou por aprovação.";
                 }
+                await FinishRotationCoreAsync(saved, secret, pending, rotated.State, cancellationToken).ConfigureAwait(false);
             }
             await rotated.PullAsync(cancellationToken).ConfigureAwait(false);
             await RefreshDevicesCoreAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (ChainGoneException)
+        {
+            // Outro aparelho trocou a chave antes deste: recebe a conta nova (se houver) e pede para tentar outra vez.
+            if (saved is not null) await ChainGoneAsync(saved, cancellationToken).ConfigureAwait(false);
+            throw new SyncUserException("A conta mudou de chave noutro aparelho entretanto. Veja a lista outra vez e repita, se ainda for preciso.");
         }
         catch (Exception e) when (IsTransient(e))
         {
@@ -713,8 +977,29 @@ public sealed class SyncAgent
         Notify();
     }
 
+    // Acaba uma troca de chave guardada a meio (rede em baixo, Éteris fechado): entrega a conta nova aos aparelhos que
+    // ficam e apaga a conta antiga.
+    private async Task FinishRotationAsync(SavedSync saved, RotationPending rotation, CancellationToken cancellationToken)
+    {
+        if (saved.Secret is not { } secret || _engine is not { } engine) return;
+        using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
+        await FinishRotationCoreAsync(saved, account, rotation, engine.State, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task FinishRotationCoreAsync(SavedSync saved, AccountSecret secret, RotationPending rotation, SyncState state, CancellationToken cancellationToken)
+    {
+        await SyncEngine.FinishRotationAsync(Transport(), state, secret, rotation, cancellationToken).ConfigureAwait(false);
+        lock (_gate)
+            if (IsCurrent(saved) && ReferenceEquals(saved.Rotation, rotation))
+            {
+                saved.Rotation = null;
+                _store.Save(saved);
+            }
+    }
+
     // «Apagar os meus dados do Éteris»: apaga todos os ficheiros do Éteris no transporte (todas as contas, pedidos de
     // emparelhamento). Não sai da conta Google. A sincronização fica desligada neste aparelho; nos outros para.
+    // Lista outra vez depois de apagar (outro aparelho a meio de uma ronda pode ter escrito entretanto), até 4 passagens.
     public async Task DeleteCloudDataAsync(CancellationToken cancellationToken = default)
     {
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -722,11 +1007,16 @@ public sealed class SyncAgent
         try
         {
             var transport = Transport();
-            foreach (var path in await transport.ListAsync(SyncPaths.Root, cancellationToken).ConfigureAwait(false))
-                await transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
+            for (var pass = 0; pass < 4; pass++)
+            {
+                var files = await transport.ListAsync(SyncPaths.Root, cancellationToken).ConfigureAwait(false);
+                if (files.Count == 0) break;
+                foreach (var path in files) await transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
+            }
             lock (_gate) _hosts.Clear();
-            await StopAsync("Os dados do Éteris foram apagados do Google Drive. A sincronização está desligada; os dados deste computador ficaram.",
-                cancellationToken).ConfigureAwait(false);
+            SavedSync saved;
+            lock (_gate) saved = _saved ??= new SavedSync();
+            Stop(saved, "Os dados do Éteris foram apagados do Google Drive. A sincronização está desligada; os dados deste computador ficaram.", StopKeeps.Nothing);
         }
         catch (Exception e) when (IsTransient(e))
         {
@@ -742,7 +1032,9 @@ public sealed class SyncAgent
     }
 
     // «Sair»: a sincronização para neste aparelho. Com forgetKey, a cópia local da conta sai também (para voltar a
-    // entrar é preciso o código ou outro aparelho); sem ela, entrar outra vez retoma sem código.
+    // entrar é preciso o código ou outro aparelho); sem ela, entrar outra vez retoma sem código — e um código de
+    // recuperação ainda por guardar continua à vista até «Já guardei».
+    // Não espera pela ronda em curso: ela confere IsCurrent antes de gravar (e o «apagar a chave» não volta atrás).
     public void SignOut(bool forgetKey)
     {
         GuestFlow? guest;
@@ -758,16 +1050,18 @@ public sealed class SyncAgent
             _devices = [];
             _error = null;
             _notice = null;
+            _needsSignIn = false;
+            _waiting = 0;
             _phase = SyncPhase.Off;
             if (forgetKey)
             {
+                if (_saved is not null) _saved.Enabled = false; // uma ronda em curso com este objeto já não grava
                 _saved = null;
                 _store.Delete();
             }
             else if (_saved is not null)
             {
                 _saved.Enabled = false;
-                _saved.CodePending = false;
                 _store.Save(_saved);
             }
         }
@@ -788,6 +1082,17 @@ public sealed class SyncAgent
     }
 
     // ---- auxiliares -------------------------------------------------------------------------------------------------
+
+    // Chamado dentro do _gate: o estado desta operação ainda é o deste aparelho e a sincronização continua ligada.
+    private bool IsCurrent(SavedSync? saved) => saved is { Enabled: true } && ReferenceEquals(_saved, saved);
+
+    private bool IsCurrentLocked(SavedSync saved)
+    {
+        lock (_gate) return IsCurrent(saved);
+    }
+
+    // A sessão do transporte é de outra conta (só quando se sabem as duas).
+    private bool OtherAccount(SavedSync saved) => saved.Account is { } mine && AccountKey?.Invoke() is { } now && now != mine;
 
     private ISyncTransport Transport()
     {
@@ -811,13 +1116,16 @@ public sealed class SyncAgent
         lock (_gate)
         {
             _error = Message(e);
+            if (e is Google.OAuthException { NeedsSignIn: true }) _needsSignIn = true;
             if (_phase == SyncPhase.Starting) _phase = SyncPhase.On;
         }
     }
 
     private void Notify() => Changed?.Invoke();
 
-    // Falhas que passam sozinhas (rede, sessão, pasta): ficam no estado e o agendador tenta outra vez mais tarde.
+    // Falhas que passam sozinhas (rede, sessão, pasta): ficam no estado e o agendador tenta outra vez mais tarde. A
+    // autorização da Google retirada ou expirada (OAuthException.NeedsSignIn) também cai aqui, mas fica marcada em
+    // Status.NeedsSignIn: o anfitrião para o agendador até o utilizador entrar outra vez.
     public static bool IsTransient(Exception e)
         => e is HttpRequestException or IOException or TaskCanceledException { CancellationToken.IsCancellationRequested: false } or TimeoutException
             or UnauthorizedAccessException or CryptographicException or FormatException or Google.OAuthException or UnsupportedFormatException;
@@ -849,6 +1157,7 @@ public sealed class SyncAgent
         public CancellationTokenSource Cancel { get; } = new();
         public string? Name { get; set; }
         public string? Code { get; set; }
+        public bool Approving { get; set; }
     }
 }
 

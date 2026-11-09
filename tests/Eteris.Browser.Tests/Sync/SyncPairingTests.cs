@@ -86,7 +86,7 @@ public class SyncPairingTests
         var cloud = new MemoryTransport();
         using var secret = AccountSecret.Create();
         using var host = await PairingHost.StartAsync(cloud, Now, NoWait);
-        using var guest = await PairingGuest.JoinAsync(cloud, host.ShortCode, "PC do Júnior", Now, NoWait);
+        using var guest = await PairingGuest.JoinAsync(cloud, host.ShortCode, "Portátil da Inês", Now, NoWait);
         var hostCode = host.WaitForGuestAsync();
         await guest.WaitForCodeAsync();
         await hostCode;
@@ -95,11 +95,34 @@ public class SyncPairingTests
         foreach (var (_, bytes) in cloud.Files)
         {
             var text = Encoding.Latin1.GetString(bytes) + Encoding.UTF8.GetString(bytes);
-            Assert.DoesNotContain("Júnior", text);
-            Assert.DoesNotContain("J\u00FAnior", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Inês", text);
+            Assert.DoesNotContain("In\u00EAs", text, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("PC da sala", text);
         }
-        Assert.Equal("PC do Júnior", host.GuestName);
+        Assert.Equal("Portátil da Inês", host.GuestName);
+    }
+
+    // Dois aparelhos ligados respondem ao mesmo pedido (os dois o viram antes de algum escrever o passo 1): o convidado
+    // compromete-se com a chave de um; o outro desiste calado, sem a recusa que fazia falhar o emparelhamento certo.
+    [Fact]
+    public async Task TwoHostsAnswerTheSameRequest_TheOneNotChosenStepsAsideQuietly()
+    {
+        var cloud = new MemoryTransport();
+        using var secret = AccountSecret.Create();
+        var session = await PairingRequests.OpenAsync(cloud, Now);
+        using var first = await PairingHost.AnswerAsync(cloud, session, Now, NoWait);
+        using var guest = await PairingRequests.WaitForHostAsync(cloud, session, "Novo", Now, NoWait, TimeSpan.Zero);
+        using var second = await PairingHost.AnswerAsync(cloud, session, Now, NoWait); // chega depois e reescreve o passo 1
+        var secondCode = second.WaitForGuestAsync();
+        var firstCode = first.WaitForGuestAsync();
+        await Assert.ThrowsAsync<PairingAnsweredElsewhereException>(() => secondCode);
+        var guestCode = await guest.WaitForCodeAsync();
+        Assert.Equal(guestCode, await firstCode);
+        Assert.Null(await cloud.ReadAsync(SyncPaths.Pairing(session) + "x-host"));
+        guest.ConfirmCode();
+        await first.ApproveAsync(secret, "Casa");
+        using var received = await guest.WaitForSecretAsync();
+        Assert.Equal(secret.ChainId, received.ChainId);
     }
 
     [Fact]

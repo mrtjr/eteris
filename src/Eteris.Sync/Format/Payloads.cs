@@ -55,6 +55,11 @@ public sealed record RekeyPayload
     [JsonPropertyName("chain")] public required string Chain { get; init; }
     [JsonPropertyName("from")] public required string From { get; init; }
     [JsonPropertyName("name")] public string FromName { get; init; } = string.Empty;
+    // O aparelho tirado da conta nesta troca de chave (null = só um código novo). Quem recebe a mensagem recusa, a
+    // partir daí, qualquer «conta nova» que esse aparelho lhe deixe (ele tinha a chave fixada como os outros).
+    [JsonPropertyName("removed")] public string? Removed { get; init; }
+    // Os aparelhos que ficam na conta nova (o remetente incluído): só as chaves destes passam para a conta nova.
+    [JsonPropertyName("devices")] public List<string>? Devices { get; init; }
 }
 
 // Uma versão das notas: o texto e de que versões descende (hashes), para achar a base comum da fusão a três.

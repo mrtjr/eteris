@@ -20,24 +20,38 @@ namespace Eteris.Browser.Sync;
 // Nunca: histórico, abas abertas, cookies, transferências, palavras-passe (o Éteris não as guarda).
 // Ler é só disco (e a lista de Espaços da janela, na thread da interface); aplicar escreve pelos mesmos caminhos que a
 // interface usa (AppData, Settings), por isso o resto do Éteris vê as alterações como se fossem feitas aqui.
-internal sealed class BrowserProfile : ILocalProfile
+// Uma coleção que não se consegue ler (base de dados ocupada, notas bloqueadas pelo antivírus, sem janela nem sessão
+// gravada) vai em LocalRead.Unreadable, e não como vazia: vazia queria dizer «apaguei tudo» nos outros aparelhos.
+internal sealed class BrowserProfile : ILocalProfileReader
 {
-    public IReadOnlyList<LocalItem> Collect()
+    public IReadOnlyList<LocalItem> Collect() => Read().Items;
+
+    public LocalRead Read()
     {
         var items = new List<LocalItem>();
-        foreach (var mark in AppData.Bookmarks(b => b.All(100_000)))
-            items.Add(new LocalItem(Collections.Bookmarks, mark.Url, new JsonObject { ["title"] = mark.Title }));
+        var unreadable = new List<string>();
+        try
+        {
+            foreach (var mark in AppData.ReadBookmarks(b => b.All(100_000)))
+                items.Add(new LocalItem(Collections.Bookmarks, mark.Url, new JsonObject { ["title"] = mark.Title }));
+        }
+        catch (Exception) { unreadable.Add(Collections.Bookmarks); }
         foreach (var (key, value) in ProfileTransfer.SettingValues(Data.Settings.Current))
             items.Add(new LocalItem(Collections.Settings, key, new JsonObject { ["value"] = value }));
-        foreach (var key in ShieldKeys()) items.Add(new LocalItem(Collections.Shield, key, new JsonObject()));
+        if (ShieldKeys() is { } shield) foreach (var key in shield) items.Add(new LocalItem(Collections.Shield, key, new JsonObject()));
+        else unreadable.Add(Collections.Shield);
 
-        var notes = new NotesStore(Path.Combine(AppPaths.Root, "notas.md")).Load();
-        if (notes.Length > 0) items.Add(new LocalItem(Collections.Notes, Collections.NotesKey, new JsonObject { ["text"] = notes }));
+        if (new NotesStore(Path.Combine(AppPaths.Root, "notas.md")).TryLoad() is not { } notes) unreadable.Add(Collections.Notes);
+        else if (notes.Length > 0) items.Add(new LocalItem(Collections.Notes, Collections.NotesKey, new JsonObject { ["text"] = notes }));
 
-        var order = 0;
-        foreach (var (name, color, icon) in Spaces())
-            items.Add(new LocalItem(Collections.Spaces, name, SpaceData(name, color, icon, order++)));
-        return items;
+        if (Spaces() is not { } spaces) unreadable.Add(Collections.Spaces);
+        else
+        {
+            var order = 0;
+            foreach (var (name, color, icon) in spaces)
+                items.Add(new LocalItem(Collections.Spaces, name, SpaceData(name, color, icon, order++)));
+        }
+        return new LocalRead(items, unreadable);
     }
 
     public static JsonObject SpaceData(string name, int color, string? icon, int order)
@@ -47,24 +61,27 @@ internal sealed class BrowserProfile : ILocalProfile
         return data;
     }
 
-    // Decisões do Escudo por site, no formato «tipo|site|valor».
-    public static List<string> ShieldKeys()
+    // Decisões do Escudo por site, no formato «tipo|site|valor». null = uma das listas não se leu (base de dados
+    // ocupada ou danificada): o Escudo inteiro fica de fora dessa ronda.
+    public static List<string>? ShieldKeys()
     {
-        var keys = new List<string>();
-        keys.AddRange(Read(() => new ShieldExceptionStore(AppPaths.Database).All()).Select(h => $"off|{h}|"));
-        keys.AddRange(Read(() => new StrictSiteStore(AppPaths.Database).All()).Select(h => $"strict|{h}|"));
-        keys.AddRange(AppData.HttpExceptions().Select(h => $"http|{h}|"));
-        keys.AddRange(Read(() =>
+        try
         {
-            var store = new HiddenElementsStore(AppPaths.Database);
-            return store.Hosts().Keys.SelectMany(h => store.For(h).Select(selector => $"hide|{h}|{selector}")).ToList();
-        }));
-        keys.AddRange(Read(() => Shields.SiteRules.All().Select(r => $"rule|{r.Site}|{r.Domain}").ToList()));
-        return keys;
+            var keys = new List<string>();
+            keys.AddRange(new ShieldExceptionStore(AppPaths.Database).All().Select(h => $"off|{h}|"));
+            keys.AddRange(new StrictSiteStore(AppPaths.Database).All().Select(h => $"strict|{h}|"));
+            keys.AddRange(AppData.ReadHttpExceptions().Select(h => $"http|{h}|"));
+            var hidden = new HiddenElementsStore(AppPaths.Database);
+            keys.AddRange(hidden.Hosts().Keys.SelectMany(h => hidden.For(h).Select(selector => $"hide|{h}|{selector}")));
+            keys.AddRange(Shields.SiteRules.All().Select(r => $"rule|{r.Site}|{r.Domain}"));
+            return keys;
+        }
+        catch (Exception) { return null; }
     }
 
-    // Espaços da primeira janela normal (na thread da interface); sem janela, os da sessão gravada.
-    private static IReadOnlyList<(string Name, int Color, string? Icon)> Spaces()
+    // Espaços da primeira janela normal (na thread da interface); sem janela, os da sessão gravada. null = nem janela
+    // nem sessão legível (não se sabe que Espaços há).
+    private static IReadOnlyList<(string Name, int Color, string? Icon)>? Spaces()
     {
         if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
         {
@@ -75,7 +92,7 @@ internal sealed class BrowserProfile : ILocalProfile
             catch (Exception e) when (e is InvalidOperationException or TaskCanceledException) { }
         }
         var session = new SessionStore(Path.Combine(AppPaths.Root, "session.json")).Load();
-        return (session?.Spaces ?? []).Select(s => (s.Name, s.ColorIndex, s.Icon)).ToList();
+        return session is null ? null : (session.Spaces ?? []).Select(s => (s.Name, s.ColorIndex, s.Icon)).ToList();
     }
 
     public IReadOnlyCollection<LocalChange> Apply(IReadOnlyList<LocalChange> changes)
@@ -165,11 +182,5 @@ internal sealed class BrowserProfile : ILocalProfile
         if (System.Windows.Application.Current?.Dispatcher is not { } dispatcher) return false;
         try { return dispatcher.Invoke(action); }
         catch (TaskCanceledException) { return false; }
-    }
-
-    private static IReadOnlyList<string> Read(Func<IReadOnlyList<string>> read)
-    {
-        try { return read(); }
-        catch (Exception) { return []; }
     }
 }

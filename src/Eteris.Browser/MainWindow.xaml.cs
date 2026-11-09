@@ -139,7 +139,7 @@ public partial class MainWindow : Window
         // escuro (se pedido). Base, em todas as páginas web: deteção de vídeo só em H.264 e registo do último clique
         // (para distinguir um link aberto pelo utilizador de um anúncio pop-under); também nas internas, o Alt+clique.
         // Registados pelo DevTools antes da navegação (ver ScriptletInjector): não dependem do processo filho do CefSharp.
-        var injector = new ScriptletInjector(AppData.IsShieldOn, SiteEarlyScript, TabBaseScript, hostKey: SiteEarlyKey);
+        var injector = new ScriptletInjector(ShieldOn, SiteEarlyScript, TabBaseScript, hostKey: SiteEarlyKey);
         UserActivation? lastActivation = null;
         var mainHistory = new MainFrameHistory();
         var mainRequests = 0;
@@ -167,7 +167,7 @@ public partial class MainWindow : Window
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
-                AppData.IsShieldOn,
+                ShieldOn,
                 onBlocked: host =>
                 {
                     ShieldStats.CountBlocked(persist: !IsPrivate);
@@ -408,7 +408,7 @@ public partial class MainWindow : Window
     private static string SiteEarlyKey(string url) => WebHost(url) is { } host && AppData.IsDark(host) ? "escuro" : "";
 
     // Por site: regras cosméticas (escudo ligado) e modo escuro (se pedido). null quando o site não precisa de nada.
-    private static string? SiteEarlyScript(string url)
+    private string? SiteEarlyScript(string url)
     {
         var dark = DarkPages.IsCandidate(url) && WebHost(url) is { } host && AppData.IsDark(host);
         var script = SiteCosmeticScript(url) + (dark ? DarkPages.EarlyScript : "");

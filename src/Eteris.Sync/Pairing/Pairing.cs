@@ -77,6 +77,11 @@ public static class PairingProtocol
 
     internal static string SecretContext(string session, byte[] transcript) => session + "|" + Kdf.Hex(transcript);
 
+    // A que anfitrião o convidado responde (impressão digital da chave dele, que já é pública no passo 1): com dois
+    // aparelhos ligados a responder ao mesmo pedido, só aquele cuja chave o convidado usou continua; o outro desiste
+    // calado, sem escrever a recusa (que fazia falhar o emparelhamento certo).
+    internal static string HostTag(byte[] hostKey) => Kdf.Base64Url(SHA256.HashData(Concat("eteris-pair-host-v1"u8.ToArray(), hostKey)).AsSpan(0, 16).ToArray());
+
     internal static byte[] Commit(byte[] guestKey, byte[] hostKey, byte[] guestNonce)
         => SHA256.HashData(Concat("eteris-pair-commit-v1"u8.ToArray(), guestKey, hostKey, guestNonce));
 
@@ -143,7 +148,7 @@ public static class PairingProtocol
     }
 }
 
-public sealed class PairingException(string message) : Exception(message);
+public class PairingException(string message) : Exception(message);
 
 // Mensagens (JSON). Em claro só o que é público por natureza (chaves públicas, compromisso, nonces, hora); o nome do
 // convidado (passo 4) e o segredo (passo 5) vão em SealedFile, cifrados com a chave da sessão.
@@ -155,7 +160,12 @@ internal sealed record PairingMessage
     [JsonPropertyName("nonce")] public string? Nonce { get; init; }
     [JsonPropertyName("created")] public long CreatedMs { get; init; }
     [JsonPropertyName("sealedName")] public string? SealedName { get; init; }
+    // Passo 2: a que chave de anfitrião o convidado se comprometeu (PairingProtocol.HostTag).
+    [JsonPropertyName("for")] public string? For { get; init; }
 }
+
+// Outro aparelho ligado respondeu ao mesmo pedido e o convidado escolheu-o: este desiste sem recusar nada.
+public sealed class PairingAnsweredElsewhereException() : PairingException("Outro aparelho respondeu a este pedido.");
 
 internal sealed record PairingSecret
 {
@@ -253,6 +263,8 @@ public sealed class PairingHost : PairingSide
     public async Task<string> WaitForGuestAsync(CancellationToken cancellationToken = default)
     {
         var offer = await WaitAsync(PairingProtocol.GuestKey, _deadline, cancellationToken).ConfigureAwait(false);
+        // Dirigida a outro anfitrião (outro aparelho ligado respondeu ao mesmo pedido): sai sem escrever nada.
+        if (offer.For is { } target && target != PairingProtocol.HostTag(PublicKey)) throw new PairingAnsweredElsewhereException();
         _guestKey = Kdf.FromBase64Url(offer.Key ?? throw new PairingException("Mensagem do convidado incompleta."));
         using (PairingProtocol.ImportPublic(_guestKey)) { }
         var commit = Kdf.FromBase64Url(offer.Commit ?? throw new PairingException("Mensagem do convidado incompleta."));
@@ -346,9 +358,9 @@ public sealed class PairingGuest : PairingSide
         using (PairingProtocol.ImportPublic(hostKey)) { }
         var guest = new PairingGuest(transport, session, hostKey, offer.CreatedMs + (long)PairingProtocol.Lifetime.TotalMilliseconds, guestName, now, delay);
         var commit = PairingProtocol.Commit(guest.PublicKey, hostKey, guest._guestNonce);
-        // Sem o nome: no passo 2 ainda não há chave da sessão, e o transporte não pode ler «PC do Júnior».
+        // Sem o nome: no passo 2 ainda não há chave da sessão, e o transporte não pode ler «PC da Ana».
         await guest.WriteAsync(PairingProtocol.GuestKey,
-            new PairingMessage { Key = Kdf.Base64Url(guest.PublicKey), Commit = Kdf.Base64Url(commit), CreatedMs = now() },
+            new PairingMessage { Key = Kdf.Base64Url(guest.PublicKey), Commit = Kdf.Base64Url(commit), CreatedMs = now(), For = PairingProtocol.HostTag(hostKey) },
             cancellationToken).ConfigureAwait(false);
         return guest;
     }
