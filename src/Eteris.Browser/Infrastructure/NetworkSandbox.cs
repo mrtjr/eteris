@@ -166,8 +166,9 @@ public static class NetworkSandbox
         return names.Distinct(StringComparer.Ordinal).ToList();
     }
 
-    // Os ganchos só mexem em alguma coisa nas publicações com sandbox: o CefSharp do Éteris e o arranque pelo bootstrap
-    // (é o que o Update.exe arranca). Uma compilação com o CefSharp do feed mas sem o bootstrap não precisa da ACL.
+    // Os ganchos de instalação e atualização só mexem em alguma coisa nas publicações com sandbox: o CefSharp do Éteris e
+    // o arranque pelo bootstrap (é o que o Update.exe arranca). Uma compilação com o CefSharp do feed mas sem o bootstrap
+    // não precisa da ACL. O de desinstalação corre sempre (abaixo).
     private static bool HooksApply => CefConfigurator.SandboxSupported && SandboxInfo.LaunchedByBootstrap;
 
     // Ganchos do Velopack depois de instalar e de atualizar (correm na versão nova, sem janela, com poucos segundos).
@@ -189,12 +190,15 @@ public static class NetworkSandbox
     }
 
     // Gancho do Velopack antes de desinstalar: apaga os perfis de AppContainer desta instalação (pasta em
-    // %LocalAppData%\Packages e entrada em AppContainer\Mappings). Um perfil que não existe é ignorado.
-    public static void OnUninstalling() => OnUninstalling(HooksApply, Environment.ProcessPath, DeleteAppContainerProfile);
+    // %LocalAppData%\Packages e entrada em AppContainer\Mappings). Um perfil que não existe é ignorado. Corre em todas as
+    // publicações, com e sem sandbox: uma versão sem sandbox (uma publicação de emergência com -NoSandbox) instalada por
+    // cima de uma com sandbox tem de apagar os perfis que essa criou. Só fora de uma instalação do Velopack (sem o
+    // Update.exe na raiz, por exemplo o processo dos testes) não faz nada.
+    public static void OnUninstalling() => OnUninstalling(Environment.ProcessPath, DeleteAppContainerProfile);
 
-    internal static IReadOnlyList<string> OnUninstalling(bool applies, string? exePath, Func<string, int> delete)
+    internal static IReadOnlyList<string> OnUninstalling(string? exePath, Func<string, int> delete)
     {
-        if (!applies || string.IsNullOrEmpty(exePath)) return [];
+        if (string.IsNullOrEmpty(exePath) || !InVelopackInstall(exePath)) return [];
         var names = ProfilesOf(exePath);
         foreach (var name in names)
         {
@@ -207,6 +211,20 @@ public static class NetworkSandbox
             }
         }
         return names;
+    }
+
+    private static bool InVelopackInstall(string exePath)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(exePath));
+            return dir is not null
+                   && !string.Equals(InstallRoot(dir), Path.TrimEndingDirectorySeparator(dir), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SystemException)
+        {
+            return false;
+        }
     }
 
     private static string? PathForm(string path, bool longForm)

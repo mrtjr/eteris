@@ -120,7 +120,7 @@ public class SandboxBootstrapSourceTests
         Assert.Contains("configure_file(eteris_client.rc.in", cmake);
         var rc = Read("build", "sandbox", "client", "eteris_client.rc.in");
         Assert.Contains("VALUE \"ProductVersion\", \"@CEF_VERSION@\"", rc);
-        Assert.Contains("VALUE \"Comments\", \"cef_commit=@CEF_COMMIT_HASH@\"", rc);
+        Assert.Contains("VALUE \"Comments\", \"cef_commit=@CEF_COMMIT_HASH@@ETERIS_CLIENT_FLAVOR@\"", rc);
         Assert.Contains("Chromium Embedded Framework Authors", rc);
         var verify = Read("build", "sandbox", "verify-client.ps1");
         Assert.Contains("cef_commit=([0-9a-f]{40})", verify);

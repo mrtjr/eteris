@@ -108,9 +108,10 @@ public class NetworkSandboxTests
         Assert.Contains("ThirdPartyStoragePartitioning", on);
     }
 
-    // Os ganchos do Velopack só mexem em alguma coisa nas publicações com sandbox: CefSharp do Éteris E arranque pelo
-    // bootstrap. O processo dos testes nunca arranca pelo bootstrap, com o CefSharp oficial ou com o do feed
-    // (-p:EterisCefSharpFeed): os ganchos ficam inertes e não dão a ACL à pasta dos testes.
+    // Os ganchos de instalação e atualização só mexem em alguma coisa nas publicações com sandbox: CefSharp do Éteris E
+    // arranque pelo bootstrap. O processo dos testes nunca arranca pelo bootstrap, com o CefSharp oficial ou com o do feed
+    // (-p:EterisCefSharpFeed): os ganchos ficam inertes e não dão a ACL à pasta dos testes. O de desinstalação corre em
+    // qualquer publicação, mas só dentro de uma instalação do Velopack, que o processo dos testes não é.
     [Fact]
     public void Hooks_AreWiredAndInertOutsideTheBootstrap()
     {
@@ -124,7 +125,37 @@ public class NetworkSandboxTests
         NetworkSandbox.OnUninstalling();
         Assert.False(NetworkSandbox.Granted(AppContext.BaseDirectory));
         Assert.False(NetworkSandbox.OnInstalled(false, AppContext.BaseDirectory));
-        Assert.Empty(NetworkSandbox.OnUninstalling(false, Environment.ProcessPath, _ => throw new InvalidOperationException("apagou")));
+        Assert.Empty(NetworkSandbox.OnUninstalling(Environment.ProcessPath, _ => throw new InvalidOperationException("apagou")));
+    }
+
+    // Uma versão SEM sandbox (publicação de emergência com -NoSandbox, CefSharp oficial) instalada por cima de uma com
+    // sandbox tem de apagar, ao desinstalar, os perfis que essa deixou: o gancho de desinstalação não depende do sandbox.
+    [Fact]
+    public void Uninstall_DoesNotDependOnTheSandbox()
+    {
+        var source = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Infrastructure", "NetworkSandbox.cs"));
+        Assert.Contains("public static void OnUninstalling() => OnUninstalling(Environment.ProcessPath, DeleteAppContainerProfile);", source);
+        var root = Directory.CreateTempSubdirectory("eteris-netsbx-").FullName;
+        try
+        {
+            var current = Directory.CreateDirectory(Path.Combine(root, "current")).FullName;
+            var exe = Path.Combine(current, "Eteris.Browser.exe");
+            File.WriteAllText(exe, "");
+            // Fora do Velopack (sem Update.exe): nada é apagado.
+            Assert.Empty(NetworkSandbox.OnUninstalling(exe, _ => throw new InvalidOperationException("apagou")));
+            // Instalação do Velopack com o ficheiro que a versão com sandbox deixou na raiz.
+            File.WriteAllText(Path.Combine(root, "Update.exe"), "");
+            var left = NetworkSandbox.ProfileName(@"C:\Users\Outro\AppData\Local\EterisBrowser\current\Eteris.Browser.exe");
+            File.WriteAllText(Path.Combine(root, NetworkSandbox.ProfilesFile), left + "\r\n");
+            var deleted = new List<string>();
+            NetworkSandbox.OnUninstalling(exe, name => { deleted.Add(name); return 0; });
+            Assert.Contains(left, deleted);
+            Assert.Contains(NetworkSandbox.ProfileName(exe), deleted);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     // O ramo com sandbox do gancho de instalação/atualização, numa instalação do Velopack de mentira: a ACL vai para a
@@ -187,7 +218,7 @@ public class NetworkSandboxTests
                 File.ReadAllLines(file).Where(l => l.StartsWith("cr.sb.net", StringComparison.Ordinal)));
 
             var deleted = new List<string>();
-            var names = NetworkSandbox.OnUninstalling(true, exe, name => { deleted.Add(name); return 0; });
+            var names = NetworkSandbox.OnUninstalling(exe, name => { deleted.Add(name); return 0; });
             Assert.Equal(names, deleted);
             Assert.Contains(NetworkSandbox.ProfileName(exe), deleted);
             Assert.Contains(NetworkSandbox.ProfileName(other), deleted);
@@ -196,7 +227,7 @@ public class NetworkSandboxTests
 
             // Um erro a apagar um perfil não impede os outros nem a desinstalação.
             var tried = 0;
-            NetworkSandbox.OnUninstalling(true, exe, _ => { tried++; throw new ExternalException("falhou"); });
+            NetworkSandbox.OnUninstalling(exe, _ => { tried++; throw new ExternalException("falhou"); });
             Assert.Equal(names.Count, tried);
         }
         finally

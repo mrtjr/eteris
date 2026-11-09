@@ -58,6 +58,8 @@ public partial class App : Application
     // Logo a seguir ao Cef.Initialize (na thread onde ele correu): o que precisa do contexto global do motor.
     private static void OnCefReady()
     {
+        // Só nos testes ao vivo: cai antes da 1.ª página (rede de segurança do sandbox).
+        if (TestSwitches.CrashBeforePaint) TestSwitches.CrashNow();
         // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
         Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
         StartupTrace.Mark("selftest");
@@ -74,6 +76,9 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _channel?.Dispose();
+        // Fecho normal: este arranque não caiu (rede de segurança do sandbox, Infrastructure/StartupGuard.cs).
+        StartupGuard.Current.Healthy();
+        StartupGuard.Current.Flush();
         Data.AppData.FlushShieldStats();
         Data.AppData.CloseHistory();
         if (Data.Settings.Current.ClearOnExit)

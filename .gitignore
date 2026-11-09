@@ -12,3 +12,7 @@ TestResults/
 build/cef-codecs/out/
 # Sandbox: DLL cliente do bootstrap compilada por build/sandbox/client/build.cmd (docs/sandbox.md, passo D)
 build/sandbox/client/out/
+# Sandbox: CefSharp com o patch v2 (clone e feed NuGet local) e registos/testes de build/sandbox/build-all.ps1
+build/cefsharp/src/
+build/cefsharp/feed/
+build/sandbox/out/
