@@ -1038,3 +1038,40 @@ O tópico «O que passa entre PCs» diz «Chaves de acesso — Não passam: fica
 e `docs/sincronizacao.md` tem a mesma linha em «O que sincroniza». **Por provar à mão (dono):** num PC com Windows
 Hello, a mesma página pede o PIN, o rosto ou a impressão digital, e «Outro dispositivo» (telemóvel por QR) aparece na
 mesma janela.
+
+## Revisão do gestor (página, cofre e sincronização, experiência)
+
+O que mudou depois da revisão de segurança e de experiência (testes em `Vault/*Tests` e `Sync/SyncSecretProfileTests`):
+
+- **A página não dita o ritmo.** O `pattern` do campo corre sem retrocesso (`RegexOptions.NonBacktracking`); com
+  lookaheads, com retrocesso mas com 100 ms para a geração inteira, e sempre fora da thread da interface.
+- **Só com gesto.** A lista abre sozinha só depois de um botão do rato (ou toque) confiável no próprio campo ou da tecla
+  Tab; um `campo.focus()` da página manda o foco com `gesture:false` e a lista só abre com ↓. O `generate` só sai
+  depois de um gesto. `scroll`, `input` e `submit` sintéticos (`isTrusted=false`) não contam.
+- **Contra cliques roubados.** A lista fecha quando o campo se mexe (como no Chrome e no Firefox); o guarda de 300 ms
+  recomeça sempre que a lista aparece ou muda de linhas; o clique só escolhe se o botão desceu na própria linha depois
+  do guarda. As teclas da lista são só da aba do campo (um site fixado, a outra metade do ecrã ou a barra de endereço
+  esquecem o foco do cofre).
+- **Campos escondidos.** Um campo conta como visível com opacidade efetiva ≥ 0,9, pelo menos 10×10 px, texto com cor,
+  a maior parte de cinco pontos de amostra no próprio campo (um rótulo dele só não tapa se for transparente) e, num
+  iframe da mesma origem, o iframe também visível, opaco e não tapado. **Limite:** uma camada com
+  `pointer-events: none` por cima de um campo não se deteta (o `elementFromPoint`/`elementsFromPoint` ignora-a e não há
+  outra forma sem escrever no DOM); fica como no Chrome, no Firefox e no Brave.
+- **Envio.** Só vai no `submit` a palavra-passe escrita pelo utilizador (input confiável) ou preenchida pelo Éteris. Uma
+  gerada com outro utilizador no formulário pergunta na bolha em vez de confirmar em silêncio.
+- **Origens.** «De outros sites» nunca oferece uma de https numa página http e pergunta com as origens completas (com o
+  aviso numa página http); os nomes IDN fora do latim aparecem em punycode (como na barra de endereço); sem a lista de
+  sufixos públicos nativa, só a origem exata; nunca correspondência por domínio registável em google.com (como o
+  Chromium).
+- **Cofre que não abre.** A sincronização trata a coleção como ilegível nessa ronda (o resto sincroniza); importar um
+  `.eteris` com segredos deixa-os de fora e di-lo; «Preencher com…» mostra uma linha desativada; as páginas têm uma
+  página de erro própria.
+- **Reautenticação.** Desligar «Pedir o Windows Hello ao preencher palavras-passe» pede o Windows Hello (aqui e nas
+  Definições); «Novo código de recuperação» e «Remover aparelho» pedem-no com segredos em jogo; «Apagar todas» tem
+  propósito e texto próprios; a conta sem proteção volta a ser verificada passada a janela de graça ou ao bloquear.
+- **Segredos à vista.** Cada «Mostrar» e cada formulário de edição tem a sua retenção (`hold`); o `/hide` liberta só a
+  sua e o `/keep` renova a do formulário enquanto estiver aberto. Editar mostra a palavra-passe mascarada.
+- **Acessibilidade.** Bolha anunciada sem tirar o teclado à página, F6 e o ícone de chave levam o teclado para ela;
+  lista de sugestões como lista com itens e anúncios; interruptores com nome e na ordem do Tab; notas anunciadas.
+- **Outros.** Sem dois itens com o mesmo site e utilizador; apagar tira a linha de vez (sem lápides); a cópia por limpar
+  sai ao fechar o Éteris; um selo que não abre já não trava as remoções que vêm de lápides que abrem.
