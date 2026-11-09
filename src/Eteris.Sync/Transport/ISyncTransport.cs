@@ -29,6 +29,8 @@ public interface ISyncTransport
 //   eteris/<cadeia>/d/<aparelho>/<seq>      lote imutável n.º seq (12 dígitos)
 //   eteris/<cadeia>/s/<aparelho>-<seq>      instantâneo feito por um aparelho até ao seu lote seq
 //   eteris/<cadeia>/a/<aparelho>            estado do aparelho (o que já leu)
+//   eteris/<cadeia>/r/<aparelho>/<de>       conta nova para um aparelho que fica (só numa cadeia antiga, depois de
+//                                           «nova cadeia»; apagada por quem a lê)
 //   eteris/pair/<sessão>/<passo>            mensagens de um emparelhamento (apagadas no fim)
 public static partial class SyncPaths
 {
@@ -43,6 +45,17 @@ public static partial class SyncPaths
     public static string States(string chain) => $"{Root}{chain}/a/";
     public static string State(string chain, string device) => $"{Root}{chain}/a/{device}";
     public static string Pairing(string session) => $"{Root}pair/{session}/";
+    public static string Rekeys(string chain, string device) => $"{Root}{chain}/r/{device}/";
+    public static string Rekey(string chain, string device, string from) => $"{Root}{chain}/r/{device}/{from}";
+    public static string RekeyContext(string device, string from) => $"r/{device}/{from}";
+
+    // Cadeias que existem neste transporte (pelo registo de chaves): para saber se a conta já existe noutro aparelho.
+    public static bool TryParseKeys(string path, out string chain)
+    {
+        var m = KeysName().Match(path);
+        chain = m.Success ? m.Groups[1].Value : string.Empty;
+        return m.Success;
+    }
 
     // Contexto (AAD) de cada ficheiro: o nome lógico sem a cadeia, que já vai à parte.
     public static string BatchContext(string device, long seq) => $"d/{device}/{seq}";
@@ -84,6 +97,9 @@ public static partial class SyncPaths
 
     [GeneratedRegex(@"^eteris/([0-9a-f]{32})/a/([0-9a-f]{32})$")]
     private static partial Regex StateName();
+
+    [GeneratedRegex(@"^eteris/([0-9a-f]{32})/keys$")]
+    private static partial Regex KeysName();
 
     [GeneratedRegex(@"^[A-Za-z0-9_-]{1,64}$")]
     private static partial Regex SegmentName();

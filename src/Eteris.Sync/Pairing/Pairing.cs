@@ -36,6 +36,7 @@ public static class PairingProtocol
     public const string QrPrefix = "eteris-par:";
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
+    internal const string Request = "0-request";
     internal const string HostKey = "1-host";
     internal const string GuestKey = "2-guest";
     internal const string HostNonce = "3-host";
@@ -232,7 +233,14 @@ public sealed class PairingHost : PairingSide
         CancellationToken cancellationToken = default)
         => StartAsync(transport, PairingProtocol.NewSession(), now, delay, cancellationToken);
 
-    // Com uma sessão dada: só para os testes (um atacante que controla o transporte faz de anfitrião na sessão de outro).
+    // Responde a um pedido aberto por um aparelho novo (PairingRequests): o anfitrião entra na sessão que o convidado
+    // abriu. O resto do protocolo é igual (código de verificação, confirmação dos dois lados).
+    public static Task<PairingHost> AnswerAsync(ISyncTransport transport, string session, Func<long> now,
+        Func<TimeSpan, CancellationToken, Task>? delay = null, CancellationToken cancellationToken = default)
+        => StartAsync(transport, session, now, delay, cancellationToken);
+
+    // Com uma sessão dada: pedidos dos aparelhos novos (AnswerAsync) e os testes (um atacante que controla o transporte
+    // faz de anfitrião na sessão de outro).
     internal static async Task<PairingHost> StartAsync(ISyncTransport transport, string session, Func<long> now,
         Func<TimeSpan, CancellationToken, Task>? delay, CancellationToken cancellationToken)
     {

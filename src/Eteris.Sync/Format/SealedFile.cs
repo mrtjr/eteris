@@ -35,6 +35,7 @@ public static class SealedFile
     public const char DeviceState = 'A';
     public const char Archive = 'P';
     public const char Pairing = 'E';
+    public const char Rekey = 'R';
 
     public sealed record Header(char Kind, int Version, int Generation, byte Options, byte[] Public, int Length);
 

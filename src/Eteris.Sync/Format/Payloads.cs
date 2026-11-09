@@ -42,6 +42,19 @@ public sealed record DeviceStatePayload
     [JsonPropertyName("kind")] public string Kind { get; init; } = "pc";
     [JsonPropertyName("read")] public required Dictionary<string, long> Read { get; init; }
     [JsonPropertyName("last")] public long LastSyncMs { get; init; }
+    // Chave pública estática do aparelho (SPKI P-256, base64url): os outros fixam-na na primeira vez que a veem.
+    [JsonPropertyName("pub")] public string? PublicKey { get; init; }
+}
+
+// Conta nova entregue a um aparelho que fica, quando outro faz «nova cadeia» para tirar um terceiro da conta.
+// Cifrada com ECDH entre as chaves estáticas dos dois aparelhos (fixadas antes): o aparelho removido, que tem o código
+// antigo, não a abre nem a forja.
+public sealed record RekeyPayload
+{
+    [JsonPropertyName("secret")] public required string Secret { get; init; }
+    [JsonPropertyName("chain")] public required string Chain { get; init; }
+    [JsonPropertyName("from")] public required string From { get; init; }
+    [JsonPropertyName("name")] public string FromName { get; init; } = string.Empty;
 }
 
 // Uma versão das notas: o texto e de que versões descende (hashes), para achar a base comum da fusão a três.

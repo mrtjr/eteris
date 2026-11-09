@@ -47,6 +47,11 @@ public sealed class SyncState
     [JsonPropertyName("ownBatches")] public Dictionary<long, long> OwnBatchTimes { get; set; } = [];
     // Em que lote deste aparelho seguiu a última versão enviada de cada registo (até o instantâneo próprio a cobrir).
     [JsonPropertyName("sent")] public Dictionary<string, long> SentIn { get; set; } = new(StringComparer.Ordinal);
+    // Chave estática P-256 deste aparelho (PKCS#8, base64url): só serve para receber a conta nova quando outro aparelho
+    // faz «nova cadeia» ao remover um terceiro (SyncEngine.RotateChainAsync). A pública vai no estado do aparelho.
+    [JsonPropertyName("dkey")] public string? DeviceKey { get; set; }
+    // Chaves públicas dos outros aparelhos, fixadas na primeira vez que se veem (aparelho → SPKI em base64url).
+    [JsonPropertyName("peers")] public Dictionary<string, string> PeerKeys { get; set; } = new(StringComparer.Ordinal);
 
     public static string RecordKey(string collection, string id) => collection + "/" + id;
 

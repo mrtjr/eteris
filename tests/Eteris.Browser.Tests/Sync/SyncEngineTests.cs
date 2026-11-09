@@ -476,7 +476,8 @@ public class SyncEngineTests
 
         var (rotated, secret) = await a.RotateChainAsync();
         Assert.NotEqual(oldChain, rotated.ChainId);
-        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.Contains(oldChain));
+        // Da cadeia antiga só ficam as mensagens com a conta nova para os aparelhos que ficam (r/<aparelho>/<de>).
+        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.Contains(oldChain) && !k.StartsWith(SyncPaths.Chain(oldChain) + "r/", StringComparison.Ordinal));
         await Assert.ThrowsAsync<ChainGoneException>(() => lost.PullAsync());
 
         // O aparelho que fica recebe o código novo e continua com tudo.
@@ -485,6 +486,42 @@ public class SyncEngineTests
         Assert.Equal("x", b2.Get(Collections.Bookmarks, "https://x.pt/")!.Text("title"));
         Assert.Equal("notas", b2.Notes);
         await Assert.ThrowsAsync<ChainGoneException>(() => SyncEngine.JoinAsync(lab.Cloud, lab.Secret, DeviceIdentity.Create("ladrão"), lab.ClockOf("l")));
+    }
+
+    // Remover um aparelho: os que ficam recebem a conta nova sozinhos (ECDH entre chaves estáticas fixadas antes); o
+    // removido não encontra mensagem para si, e uma mensagem forjada por ele (que tem o código antigo) não abre.
+    [Fact]
+    public async Task RemovedDevice_IsLeftOut_TheOthersGetTheNewChain()
+    {
+        using var lab = new SyncLab();
+        var (a, b, lost) = await Three(lab);
+        a.Put(Collections.Bookmarks, "https://x.pt/", Bookmark("x"));
+        await SyncLab.SettleAsync(a, b, lost);
+        foreach (var device in new[] { a, b, lost }) await device.DevicesAsync(); // fixa as chaves
+        Assert.Equal(2, b.State.PeerKeys.Count);
+        var oldChain = a.ChainId;
+
+        // O removido, que tem o código antigo, tenta deixar ao «b» uma conta dele, em nome do «a».
+        var forged = Eteris.Sync.Format.SealedFile.Seal(new byte[32], Eteris.Sync.Format.SealedFile.Rekey, oldChain, 1,
+            SyncPaths.RekeyContext(b.Device.Id, a.Device.Id), "{}"u8);
+
+        var (rotated, secret) = await a.RotateChainAsync(lost.Device.Id);
+        Assert.Single(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Chain(oldChain) + "r/", StringComparison.Ordinal));
+        Assert.Null(await SyncEngine.ReceiveRekeyAsync(lab.Cloud, lost.State));
+
+        var received = await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State);
+        Assert.NotNull(received);
+        Assert.Equal(secret.ChainId, received!.Value.Secret.ChainId);
+        Assert.Equal(a.Device.Name, received.Value.FromName);
+        Assert.DoesNotContain(lab.Cloud.Files.Keys, k => k.StartsWith(SyncPaths.Rekeys(oldChain, b.Device.Id), StringComparison.Ordinal));
+        var b2 = await SyncEngine.JoinAsync(lab.Cloud, received.Value.Secret, b.Device, lab.ClockOf("B"));
+        b2.AdoptDeviceKeys(b.State);
+        await b2.PullAsync();
+        Assert.Equal("x", b2.Get(Collections.Bookmarks, "https://x.pt/")!.Text("title"));
+
+        await lab.Cloud.WriteAsync(SyncPaths.Rekey(oldChain, b.Device.Id, a.Device.Id), forged);
+        Assert.Null(await SyncEngine.ReceiveRekeyAsync(lab.Cloud, b.State));
+        _ = rotated;
     }
 
     [Fact]

@@ -5,6 +5,7 @@ using Eteris.Sync.Crypto;
 using Eteris.Sync.Format;
 using Eteris.Sync.Merge;
 using Eteris.Sync.Model;
+using Eteris.Sync.Pairing;
 using Eteris.Sync.Transport;
 
 namespace Eteris.Sync.Engine;
@@ -39,7 +40,40 @@ public sealed class SyncEngine
         _clock = new HybridClock(state.Device.Id, now);
         _clock.Restore(state.Clock);
         state.DeviceNames[state.Device.Id] = state.Device.Name;
+        if (state.DeviceKey is null)
+        {
+            using var key = PairingProtocol.NewKey();
+            state.DeviceKey = Kdf.Base64Url(key.ExportPkcs8PrivateKey());
+        }
     }
+
+    // A chave pública estática deste aparelho (vai no estado do aparelho, cifrada como o resto).
+    public string DevicePublicKey
+    {
+        get
+        {
+            using var key = OpenDeviceKey(State);
+            return Kdf.Base64Url(PairingProtocol.PublicKey(key));
+        }
+    }
+
+    private static ECDiffieHellman OpenDeviceKey(SyncState state)
+    {
+        var key = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        key.ImportPkcs8PrivateKey(Kdf.FromBase64Url(state.DeviceKey ?? throw new InvalidOperationException("Aparelho sem chave.")), out _);
+        return key;
+    }
+
+    // Depois de receber a conta nova (ReceiveRekeyAsync), o aparelho continua com a mesma chave e as chaves fixadas.
+    public void AdoptDeviceKeys(SyncState previous)
+    {
+        if (previous.DeviceKey is { } key) State.DeviceKey = key;
+        foreach (var (device, pub) in previous.PeerKeys) State.PeerKeys.TryAdd(device, pub);
+    }
+
+    // Aparelhos que já escreveram nesta conta e cuja chave pública ainda não está fixada (DevicesAsync fixa-as).
+    public bool HasUnpinnedPeers
+        => State.Read.Keys.Concat(State.DeviceNames.Keys).Any(d => d != Device.Id && !State.PeerKeys.ContainsKey(d));
 
     public SyncState State { get; }
 
@@ -544,6 +578,7 @@ public sealed class SyncEngine
             Kind = Device.Kind,
             Read = new Dictionary<string, long>(State.Read, StringComparer.Ordinal),
             LastSyncMs = State.LastPullMs,
+            PublicKey = DevicePublicKey,
         };
         var file = SealedFile.Seal(_keys.FileKey(SealedFile.DeviceState, context), SealedFile.DeviceState, ChainId, _keys.Generation, context, Json.Bytes(payload));
         await _transport.WriteAsync(SyncPaths.State(ChainId, Device.Id), file, cancellationToken).ConfigureAwait(false);
@@ -562,7 +597,18 @@ public sealed class SyncEngine
                 if (bytes is null) continue;
                 var context = SyncPaths.StateContext(device);
                 var state = Json.Parse<DeviceStatePayload>(SealedFile.Open(_keys.FileKey(SealedFile.DeviceState, context), SealedFile.DeviceState, ChainId, context, bytes));
-                if (state.Device == device) list.Add(state);
+                if (state.Device != device) continue;
+                list.Add(state);
+                // Fixada na primeira vez (TOFU): uma chave trocada depois não substitui a fixada.
+                if (device != Device.Id && state.PublicKey is { } pub && !State.PeerKeys.ContainsKey(device))
+                {
+                    try
+                    {
+                        using (PairingProtocol.ImportPublic(Kdf.FromBase64Url(pub))) { }
+                        State.PeerKeys[device] = pub;
+                    }
+                    catch (Exception e) when (e is PairingException or FormatException) { }
+                }
             }
             catch (Exception e) when (e is CryptographicException or FormatException or UnsupportedFormatException) { }
         }
@@ -621,14 +667,24 @@ public sealed class SyncEngine
         return mine;
     }
 
-    // «Nova cadeia» (aparelho perdido, código exposto): segredo novo, DEK nova, o estado todo recifrado na pasta da
-    // cadeia nova e a antiga apagada. Os outros aparelhos deixam de conseguir sincronizar até receberem o código novo.
-    public async Task<(SyncEngine Engine, AccountSecret Secret)> RotateChainAsync(CancellationToken cancellationToken = default)
+    // «Nova cadeia» (aparelho perdido ou removido, código exposto): segredo novo, DEK nova, o estado todo recifrado na
+    // pasta da cadeia nova e a antiga apagada. Os aparelhos que ficam (todos os conhecidos menos «removed») recebem a
+    // conta nova na cadeia antiga (r/<aparelho>/<este>), cifrada com ECDH entre as chaves estáticas fixadas: o
+    // removido, que tem o código antigo, não a lê nem a forja. Um aparelho sem chave fixada tem de voltar a entrar
+    // (código de recuperação novo ou aprovação).
+    public Task<(SyncEngine Engine, AccountSecret Secret)> RotateChainAsync(CancellationToken cancellationToken = default)
+        => RotateChainAsync(removed: null, cancellationToken);
+
+    public async Task<(SyncEngine Engine, AccountSecret Secret)> RotateChainAsync(string? removed, CancellationToken cancellationToken = default)
     {
         await PushAsync(cancellationToken).ConfigureAwait(false);
+        await DevicesAsync(cancellationToken).ConfigureAwait(false); // fixa as chaves que faltem
+        var staying = State.PeerKeys.Where(p => p.Key != Device.Id && p.Key != removed).ToList();
         var secret = AccountSecret.Create();
         var device = Device;
         var engine = await CreateAsync(_transport, secret, device, _now, Options, cancellationToken).ConfigureAwait(false);
+        engine.State.DeviceKey = State.DeviceKey;
+        foreach (var (peer, pub) in staying) engine.State.PeerKeys[peer] = pub;
         // Os IDs opacos dependem da DEK: os registos são reescritos com os IDs da cadeia nova.
         foreach (var record in State.Records.Values.Where(r => r.Collection != Collections.Notes))
         {
@@ -645,7 +701,63 @@ public sealed class SyncEngine
         foreach (var path in await _transport.ListAsync(SyncPaths.Chain(ChainId), cancellationToken).ConfigureAwait(false))
             if (path != SyncPaths.Keys(ChainId)) await _transport.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
         await _transport.DeleteAsync(SyncPaths.Keys(ChainId), cancellationToken).ConfigureAwait(false);
+
+        using var mine = OpenDeviceKey(State);
+        foreach (var (peer, pub) in staying)
+        {
+            var key = RekeyKey(mine, pub, ChainId, peer, Device.Id);
+            var payload = new RekeyPayload { Secret = Kdf.Base64Url(secret.ToBytes()), Chain = secret.ChainId, From = Device.Id, FromName = Device.Name };
+            var context = SyncPaths.RekeyContext(peer, Device.Id);
+            var file = SealedFile.Seal(key, SealedFile.Rekey, ChainId, 1, context, Json.Bytes(payload));
+            CryptographicOperations.ZeroMemory(key);
+            await _transport.WriteAsync(SyncPaths.Rekey(ChainId, peer, Device.Id), file, cancellationToken).ConfigureAwait(false);
+        }
         return (engine, secret);
+    }
+
+    private static byte[] RekeyKey(ECDiffieHellman mine, string otherPublic, string chain, string to, string from)
+    {
+        using var other = PairingProtocol.ImportPublic(Kdf.FromBase64Url(otherPublic));
+        var shared = mine.DeriveKeyFromHash(other.PublicKey, HashAlgorithmName.SHA256);
+        try { return Kdf.Derive(shared, $"eteris-rekey-v1|{chain}|{to}|{from}"); }
+        finally { CryptographicOperations.ZeroMemory(shared); }
+    }
+
+    // A conta deste aparelho deixou de existir (ChainGoneException): outro aparelho fez «nova cadeia» e deixou-lhe a
+    // conta nova? Só abre uma mensagem de um aparelho com chave fixada; a mensagem lida sai do transporte. Devolve o
+    // segredo novo e o nome de quem o mandou, ou null (este aparelho foi removido, ou os dados foram apagados).
+    public static async Task<(AccountSecret Secret, string FromName)?> ReceiveRekeyAsync(ISyncTransport transport, SyncState state,
+        CancellationToken cancellationToken = default)
+    {
+        if (state.DeviceKey is null) return null;
+        using var mine = OpenDeviceKey(state);
+        var folder = SyncPaths.Rekeys(state.ChainId, state.Device.Id);
+        foreach (var path in await transport.ListAsync(folder, cancellationToken).ConfigureAwait(false))
+        {
+            var from = path[folder.Length..];
+            if (!state.PeerKeys.TryGetValue(from, out var pub)) continue;
+            try
+            {
+                var bytes = await transport.ReadAsync(path, cancellationToken).ConfigureAwait(false);
+                if (bytes is null) continue;
+                var key = RekeyKey(mine, pub, state.ChainId, state.Device.Id, from);
+                RekeyPayload payload;
+                try { payload = Json.Parse<RekeyPayload>(SealedFile.Open(key, SealedFile.Rekey, state.ChainId, SyncPaths.RekeyContext(state.Device.Id, from), bytes)); }
+                finally { CryptographicOperations.ZeroMemory(key); }
+                if (payload.From != from) continue;
+                var secret = AccountSecret.FromBytes(Kdf.FromBase64Url(payload.Secret));
+                if (secret.ChainId != payload.Chain)
+                {
+                    secret.Dispose();
+                    continue;
+                }
+                foreach (var other in await transport.ListAsync(folder, cancellationToken).ConfigureAwait(false))
+                    await transport.DeleteAsync(other, cancellationToken).ConfigureAwait(false);
+                return (secret, payload.FromName);
+            }
+            catch (Exception e) when (e is CryptographicException or FormatException or ArgumentException or UnsupportedFormatException or PairingException) { }
+        }
+        return null;
     }
 
     // Apaga tudo o que esta conta tem no transporte (Definições › Sincronização › «Apagar os dados na nuvem»).
