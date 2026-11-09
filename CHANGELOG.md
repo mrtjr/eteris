@@ -13,6 +13,12 @@
   e iframes da mesma origem; campos escondidos de rastreadores ficam de fora.
 - **Correção:** os pedidos internos do Éteris ao motor (DevTools) podiam falhar de vez em quando quando dois saíam ao
   mesmo tempo (numeração fora de ordem); agora saem sempre por ordem.
+- **Preencher palavras-passe nas páginas** (C3): ao clicar (ou com Tab) no campo do utilizador ou da palavra-passe de
+  um site com palavras-passe guardadas, aparece a lista do Éteris por baixo do campo (as do próprio site primeiro, as
+  do mesmo domínio marcadas; nunca as de `https` numa página `http`). ↑ ↓ e Enter escolhem e preenchem, Esc fecha — a
+  página não vê essas teclas; um clique também preenche. Só preenche quando escolhe, nunca ao carregar a página;
+  funciona com o zoom, no ecrã dividido e em sites feitos com React. «Pedir o Windows Hello ao preencher
+  palavras-passe» (desligado por omissão) pede a confirmação antes.
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

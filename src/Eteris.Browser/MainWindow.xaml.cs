@@ -720,6 +720,9 @@ public partial class MainWindow : Window
             Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;
         }
+        // A lista de sugestões de palavras-passe aberta (ou ↓ num campo com sugestões): ↑ ↓ Enter Esc são dela e a
+        // página nunca os vê (MainWindow.Vault.cs).
+        if (SuggestionKeyFromPage(key, ctrl, shift, alt) is { } listKey) return listKey;
         if (shortcut is { } action)
         {
             Dispatcher.InvokeAsync(action);

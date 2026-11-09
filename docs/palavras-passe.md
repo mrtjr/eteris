@@ -1,8 +1,9 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o início do bloco C (na página: C1 e
-C2) feitos no ramo `sync`, por publicar** (o resto do bloco C e os blocos D e E do desenho — guardar, gerar, preencher
-o resto, sincronização e fecho — estão por fazer). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o início do bloco C (na página: C1 a
+C3 — canal, classificador, sugestões e preencher palavras-passe) feitos no ramo `sync`, por publicar** (o resto do
+bloco C — guardar depois do envio, gerador, preencher contactos, pagamentos, documentos e viagens, janelas privadas — e
+os blocos D e E do desenho estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -510,3 +511,80 @@ sessão (topo, campos soltos, raiz sombra, iframe da mesma origem e um formulár
 conta com confirmação, mudança com três campos, código de uma utilização, morada de Portugal, endereço do Brasil com
 CPF, cartão com CVC; os dois campos de rastreio escondidos (opacidade 0 e fora do ecrã) não mandam nada. Capturas
 `c2-casos.png` e `c2-fim.png`.
+
+## C3. Sugestões, teclado e preencher palavras-passe
+
+`Vault/SuggestionList.xaml(.cs)`, `Vault/SuggestionGeometry.cs`, `Vault/VaultKeys.cs`, `Vault/VaultFillPolicy.cs`,
+`Vault/Scripts/cofre.js` (`fillPlan`, `fillField` e `fill`), `MainWindow.Vault.cs`, `MainWindow.xaml.cs`
+(`ShortcutFromPage`).
+
+- **Quando aparece a lista:** num `focus` do script (clique ou Tab num campo visível; um clique num campo que já tem o
+  foco também), na aba à vista (ou numa das metades do ecrã dividido), num campo de **utilizador** ou de
+  **palavra-passe atual** de um início de sessão ou de uma mudança, se houver palavras-passe deste site. **Nunca ao
+  carregar a página.** Com «Mostrar sugestões ao clicar num campo» desligado, só ↓ a abre. O cofre abre aqui pela
+  primeira vez (o arranque continua sem o abrir).
+- **O que sugere** (`VaultFillPolicy.Suggestions`): a mesma origem primeiro, depois o mesmo domínio registável marcado
+  «de *conta.exemplo.com*», confirmado outra vez contra a origem do documento (a do processo do navegador); uma
+  credencial de `https` nunca aparece em `http`, uma de `http` numa página `http` (fora do próprio computador) leva
+  «Ligação não segura»; domínios parecidos não têm nada. No campo do utilizador, filtra pelo que já foi escrito. Cada
+  linha: a inicial, o utilizador (ou «(sem utilizador)») e de onde é; nunca a palavra-passe. Rodapé «Gerir
+  palavras-passe…» (abre `eteris://passwords/`).
+- **A lista é do Éteris:** `UserControl` WPF na camada por cima da página (`AddToOverlay`), com a moldura e a sombra do
+  Éteris, sempre a sair do campo. Posição (`SuggestionGeometry.Place`, pura): retângulo CSS × zoom da página + origem
+  da página da aba na camada; por baixo do campo, por cima sem lugar, nunca fora da página da aba (no ecrã dividido,
+  da metade dela); a escala do ecrã não entra (em DIP, CSS × zoom). Fecha quando a janela perde o foco, se mexe ou
+  muda de tamanho, a aba muda, o documento muda, o campo perde o foco ou o campo sai da página ao rolar.
+- **Teclado** (`VaultKeys`, puro, e `VaultKeyFromPage` na thread do CEF, antes de a página ver a tecla): com a lista
+  aberta, ↑ ↓ escolhem (com volta), Enter com uma linha escolhida preenche, Esc fecha — **a página não vê nenhuma
+  delas**; Tab, ou Enter sem escolha, fecham a lista e seguem para a página (enviar o formulário continua a funcionar);
+  as letras seguem para a página (filtram a lista); Ctrl e Alt nunca são da lista. Com a lista fechada num campo com
+  sugestões, ↓ abre-a com a primeira escolhida.
+- **Rato:** um clique numa linha preenche; um clique nos primeiros **300 ms** da lista não conta (cliques roubados). O
+  clique não ativa a camada (`WM_MOUSEACTIVATE` → `MA_NOACTIVATE`): o foco do teclado fica no campo da página, que não
+  recebe um `blur`. Só um rato que se mexe escolhe uma linha: a lista a aparecer por baixo de um cursor parado não tira
+  a escolha feita com as setas (encontrado na prova ao vivo).
+- **Preencher** (`FillVaultLoginAsync`): (1) a aba à vista na janela ativa, o mesmo documento (`VaultChannel.IsCurrent`:
+  o contexto ainda existe e a origem do navegador é a mesma) e uma credencial deste site (`CanFill`); (2) o Windows
+  Hello só com «Pedir o Windows Hello ao preencher palavras-passe» ligado (D-5, desligado por omissão), com a janela de
+  graça e cancelado se a aba sair da frente; depois volta a confirmar (1); (3) a palavra-passe decifra-se agora; (4)
+  `__cofre.fill({field, form, values})` no contexto desse documento; (5) o dicionário dos valores esvazia-se. No
+  script: só o formulário do campo escolhido, só os campos com tipo (visíveis) — o utilizador e a palavra-passe
+  **atual**, nunca a nova, o CVC nem campos escondidos (`fillPlan`); cada campo com o foco, o valor pelo **setter nativo
+  do protótipo** (por cima do setter que um framework como o React põe na instância) e os eventos `input` e `change` a
+  borbulhar (`fillField`, a única zona do script que escreve na página); o foco volta ao campo onde o utilizador
+  estava, e os focos causados pelo próprio preenchimento não voltam a abrir a lista. Sem nada preenchido, o aviso
+  «Não foi possível preencher este formulário.».
+
+Testes: `Vault/SuggestionTests` (`SuggestionGeometryTests`: por baixo, largura mínima, zoom 150%, escala do ecrã de
+100% a 200% sem mexer, ecrã dividido e a borda da metade, por cima sem lugar, campo fora da página, página estreita;
+`VaultKeysTests`: nada com a lista fechada, ↓ abre só num campo com sugestões, setas, Enter com e sem escolha, Esc, Tab,
+letras e atalhos para a página; `VaultFillPolicyTests`: exatas primeiro e o mesmo site marcado, `http`/`https` e o
+aviso, `localhost` seguro, domínios parecidos sem nada, filtro pelo prefixo, onde se sugere, aba escondida, janela
+inativa, documento que saiu, outro site, a pergunta com os dois nomes, os 300 ms, o Windows Hello pelo interruptor),
+`Vault/CofreFillTests` (no Node: setter nativo por cima do da instância, foco, `input` e `change` a borbulhar; recusa
+o que não tem valor nativo; o plano só com os campos do início de sessão visíveis; sem utilizador só a palavra-passe),
+`VaultChannelGuardTests` (o script só escreve na zona «preencher»).
+
+Prova ao vivo (`pp\vivo\c3.ps1`, `pp\vivo\c3\registo.txt` e capturas; perfil de teste com 3 palavras-passe inventadas
+criadas pelo `VaultService` real — duas de `http://127.0.0.1:8899` e uma de `https://127.0.0.1:8899`, que nunca
+aparece; páginas locais em HTML simples e em **React 19** com campos controlados, a partir de uma cópia que já estava
+no computador; teclas e cliques reais; a página regista as teclas que lhe chegam):
+
+1. Tab para o e-mail → a lista com as duas de `http` (a de `https` não aparece) por baixo do campo (`1-lista.png`);
+   ↓ Enter → preenchidos o utilizador e a palavra-passe (17 carateres), a página não viu nenhuma tecla, a lista fechou
+   e não voltou (`3-preenchido.png`).
+2. Esc fecha (a página não o vê); ↓ volta a abrir com a primeira escolhida (`4-reaberta.png`).
+3. Um clique (rato real) na segunda linha preenche a outra palavra-passe.
+4. Escrever «b» filtra a lista para a única que começa por b; a letra chegou à página (`5-filtro.png`).
+5. No campo da palavra-passe: ↓ ↓ Enter preenche o utilizador e a palavra-passe da segunda.
+6. Zoom a 150%: a lista sai do campo, com a largura dele × 1,5 (`6-zoom150.png`).
+7. Ecrã dividido: a lista sai do campo da metade ativa (React, à esquerda) e, depois de um clique no e-mail da metade
+   direita, desse campo, dentro da metade direita; preencher funciona nas duas (`7-ecra-dividido.png`,
+   `8-react-preenchido.png`, `9-ecra-dividido-direita.png`).
+8. React sozinho: ↓ Enter muda o estado do React (o título da página vem do estado).
+9. Com «Pedir o Windows Hello ao preencher palavras-passe» ligado e o Hello falso (`ETERIS_TEST_REAUTH`): a recusar,
+   nada se preenche; a aceitar, preenche.
+
+Por fazer neste bloco: ícones da cache de favicons na lista (por agora só a inicial), a «última utilização» (`used`) ao
+preencher, a confirmação com os dois nomes quando se escolhe à mão noutro site (o texto existe; o menu de contexto é do
+C6).

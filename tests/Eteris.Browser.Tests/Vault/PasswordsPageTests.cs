@@ -245,7 +245,8 @@ public sealed class PasswordsPageTests : IDisposable
         var reply = await _f.Get("passwords", "/health");
         var json = VaultFixture.Json(reply);
         Assert.Equal([weak], json["weak"]!.AsArray().Select(n => n!.GetValue<string>()));
-        Assert.Equal([r1, r2], json["reused"]!.AsArray().Single()!.AsArray().Select(n => n!.GetValue<string>()).Order());
+        // Os IDs são aleatórios: compara-se pela mesma ordem dos dois lados (antes, o teste falhava metade das vezes).
+        Assert.Equal(new[] { r1, r2 }.Order(), json["reused"]!.AsArray().Single()!.AsArray().Select(n => n!.GetValue<string>()).Order());
         Assert.DoesNotContain("123456", reply.Body.Replace(weak, "").Replace(r1, "").Replace(r2, ""));
         Assert.DoesNotContain("Repetida-Forte-42!", reply.Body);
         Assert.Equal(0, _f.Reauth.Prompts);

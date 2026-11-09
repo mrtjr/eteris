@@ -1,0 +1,29 @@
+<!-- A lista de sugestões do cofre (docs/palavras-passe.md, C3): na camada por cima da página, sempre a sair do campo,
+     com a moldura e a sombra do Éteris. Nada nela recebe o foco (o teclado fica no campo da página; as teclas da lista
+     chegam pelo OnPreKeyEvent). -->
+<UserControl x:Class="Eteris.Browser.Vault.SuggestionList"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True"
+             FontFamily="{DynamicResource UiFont}" Foreground="{DynamicResource TextBrush}"
+             AutomationProperties.Name="Palavras-passe guardadas">
+    <Border x:Name="Card" CornerRadius="10" Padding="4" BorderThickness="1"
+            Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="18" ShadowDepth="4" Direction="270" Opacity="0.35" Color="Black" />
+        </Border.Effect>
+        <StackPanel>
+            <StackPanel x:Name="Rows" />
+            <Border Height="1" Margin="6,4" Background="{DynamicResource SubtleBorderBrush}" />
+            <Border x:Name="Manage" Padding="10,7" CornerRadius="6" Background="Transparent" Cursor="Hand"
+                    AutomationProperties.Name="Gerir palavras-passe">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE8D7;" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="2,1,10,0"
+                               Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="Gerir palavras-passe…" FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>

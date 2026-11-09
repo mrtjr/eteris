@@ -198,7 +198,49 @@
 
     const USERLIKE = new Set(['username', 'email']);
 
-    return Object.freeze({ version: 1, KINDS, norm, textOf, classifyField, classifyForm, isVisible, debounce, touchesFields, USERLIKE, TEXTUAL });
+    // O que se preenche com uma palavra-passe guardada: no formulário escolhido, o utilizador (se houver) e a palavra-passe
+    // atual; nunca a nova, o CVC nem um campo sem tipo (escondido, tapado, fora do ecrã). Pares [índice, valor].
+    function fillPlan(kinds, visible, values) {
+      const user = values && typeof values.username === 'string' && values.username !== '' ? values.username : null;
+      const pass = values && typeof values.password === 'string' ? values.password : null;
+      const plan = [];
+      kinds.forEach((kind, i) => {
+        if (!visible[i]) return;
+        if (kind === 'username' && user !== null) plan.push([i, user]);
+        else if (kind === 'password' && pass !== null) plan.push([i, pass]);
+      });
+      return plan;
+    }
+
+    // <preencher>
+    // O único sítio onde o cofre escreve na página, e só a pedido do navegador depois de um gesto do utilizador: o foco,
+    // o valor pelo setter nativo do protótipo (não pelo da instância, que um framework da página pode ter posto para saber
+    // o último valor que viu — passar por cima dele é o que o faz reparar na mudança) e os eventos input e change.
+    function fillField(field, value) {
+      if (!field || typeof value !== 'string') return false;
+      let setter = null;
+      for (let p = Object.getPrototypeOf(field); p && !setter; p = Object.getPrototypeOf(p)) {
+        const d = Object.getOwnPropertyDescriptor(p, 'value');
+        if (d && typeof d.set === 'function') setter = d.set;
+      }
+      if (!setter) return false;
+      try { field.focus({ preventScroll: true }); } catch (e) { /* campo que não aceita foco */ }
+      setter.call(field, value);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+
+    // Depois de preencher, o foco volta ao campo onde o utilizador estava.
+    function focusBack(field) {
+      try { field.focus({ preventScroll: true }); } catch (e) { /* o campo saiu */ }
+    }
+    // </preencher>
+
+    return Object.freeze({
+      version: 1, KINDS, norm, textOf, classifyField, classifyForm, isVisible, debounce, touchesFields, USERLIKE, TEXTUAL,
+      fillPlan, fillField, focusBack,
+    });
   })();
 
   // No Node (testes) não há ligação nem DOM: só o classificador.
@@ -368,6 +410,8 @@
   // ---- Mensagens para o navegador ----
 
   let filling = false;
+  // Os focos que o próprio preenchimento causa não voltam a pedir a lista.
+  let quietUntil = 0;
   let focused = null;
   let leftWithWindow = null;
 
@@ -383,7 +427,7 @@
   }
 
   function report(field) {
-    if (!isField(field)) return;
+    if (!isField(field) || performance.now() < quietUntil) return;
     const info = formInfo(field, true);
     // Um campo escondido, tapado ou fora do ecrã não tem tipo (nada se oferece nele).
     const kind = info.kinds[info.fields.indexOf(field)];
@@ -472,8 +516,30 @@
 
   // ---- O que o navegador pode pedir ----
 
+  // Preenche o formulário do campo onde o utilizador escolheu a sugestão (arg.field, arg.form): só esse formulário, só
+  // os campos com tipo e visíveis. Devolve quantos campos preencheu.
+  function fill(arg) {
+    if (!arg || typeof arg !== 'object' || typeof arg.form !== 'string' || typeof arg.field !== 'string') return 0;
+    const owner = nodeOf(arg.form);
+    const anchor = nodeOf(arg.field);
+    if (!owner || !anchor || !anchor.isConnected || ownerOf(anchor) !== owner) return 0;
+    const info = formInfo(anchor, true);
+    const plan = Classifier.fillPlan(info.kinds, info.kinds.map(() => true), arg.values || {});
+    if (!plan.length) return 0;
+    let count = 0;
+    filling = true;
+    try {
+      for (const [i, value] of plan) if (Classifier.fillField(info.fields[i], value)) count++;
+      Classifier.focusBack(anchor);
+    } finally {
+      filling = false;
+      quietUntil = performance.now() + 150;
+    }
+    return count;
+  }
+
   const api = Object.freeze({
-    fill: () => 0,
+    fill,
     rect: (field) => {
       const node = typeof field === 'string' ? nodeOf(field) : null;
       return node && node.isConnected ? topRect(node) : null;

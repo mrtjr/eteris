@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
@@ -118,14 +120,252 @@ public partial class MainWindow
         lock (_vaultChannelsGate) return _vaultChannels.GetValueOrDefault(tab);
     }
 
+    // ---- Sugestões, teclado e preencher palavras-passe (docs/palavras-passe.md, C3) ----
+
+    // O campo com o foco numa página (o último «focus» do script): a aba, o documento e o que o script disse do campo.
+    private sealed record VaultFocus(BrowserTab Tab, VaultContext Context, string Field, string Form, string Kind, string? FormKind, VaultRect Rect)
+    {
+        public IReadOnlyList<LoginEntry> Logins { get; init; } = [];
+        public IReadOnlyList<SuggestionRow> Rows { get; init; } = [];
+        public override string ToString() => $"VaultFocus {Field}";
+    }
+
+    private VaultFocus? _vaultFocus;
+    private SuggestionList? _vaultList;
+    private DateTime _vaultShownAt;
+    private bool _vaultHooked;
+
+    // Lidos na thread do CEF (as teclas da página, SuggestionKeyFromPage); escritos só na thread da janela.
+    private volatile bool _vaultListOpen;
+    private volatile bool _vaultHasSelection;
+    private volatile bool _vaultCanOpen;
+
     // Uma mensagem validada do script (thread da janela).
     private void OnVaultMessage(BrowserTab tab, VaultContext context, VaultMessage message)
     {
+        switch (message.Type)
+        {
+            case VaultMessageType.Focus:
+                OnVaultFieldFocus(tab, context, message);
+                break;
+            case VaultMessageType.Input when IsVaultFocus(tab, context, message.Field):
+                OnVaultFieldInput(message);
+                break;
+            case VaultMessageType.Blur when IsVaultFocus(tab, context, message.Field):
+                ForgetVaultFocus();
+                break;
+            case VaultMessageType.Scroll when IsVaultFocus(tab, context, message.Field):
+                if (message.Rect is { } rect) _vaultFocus = _vaultFocus! with { Rect = rect };
+                if (_vaultListOpen) PlaceVaultList();
+                break;
+        }
     }
 
     // O frame de topo mudou de documento (thread da janela).
     private void OnVaultNavigated(BrowserTab tab)
     {
+        if (_vaultFocus?.Tab == tab) ForgetVaultFocus();
+    }
+
+    private bool IsVaultFocus(BrowserTab tab, VaultContext context, string? field)
+        => _vaultFocus is { } focus && focus.Tab == tab && focus.Context.Id == context.Id && focus.Field == field;
+
+    private void ForgetVaultFocus()
+    {
+        _vaultFocus = null;
+        _vaultCanOpen = false;
+        CloseVaultList();
+    }
+
+    // Um campo recebeu o foco (clique, Tab, ou um clique num campo que já o tinha). As sugestões só aparecem na aba à
+    // vista, num campo visível de utilizador ou de palavra-passe atual, se houver palavras-passe deste site; o cofre só
+    // abre aqui (a primeira vez que um campo destes as pede).
+    private void OnVaultFieldFocus(BrowserTab tab, VaultContext context, VaultMessage message)
+    {
+        ForgetVaultFocus();
+        if (!message.Visible || message.Field is not { } field || message.Form is not { } form || message.Kind is not { } kind
+            || message.Rect is not { } rect || !IsTabOnScreen(tab)) return;
+        if (!VaultFillPolicy.OffersLogins(kind, message.FormKind)) return;
+        IReadOnlyList<LoginEntry> logins;
+        try { logins = VaultService.Profile.LoginsFor(context.Origin); }
+        catch (Exception) { return; }
+        if (logins.Count == 0) return;
+        var rows = VaultFillPolicy.Suggestions(logins, context.Origin, kind == "username" ? message.Prefix : null);
+        _vaultFocus = new VaultFocus(tab, context, field, form, kind, message.FormKind, rect) { Logins = logins, Rows = rows };
+        HookVaultList();
+        _vaultCanOpen = rows.Count > 0;
+        if (rows.Count > 0 && Data.Settings.Current.PasswordSuggestions) ShowVaultList(selected: -1);
+    }
+
+    // O utilizador escreve: no campo do utilizador, a lista filtra pelo que já escreveu; na palavra-passe, fecha.
+    private void OnVaultFieldInput(VaultMessage message)
+    {
+        if (_vaultFocus is not { } focus) return;
+        if (focus.Kind != "username")
+        {
+            CloseVaultList();
+            return;
+        }
+        var rows = VaultFillPolicy.Suggestions(focus.Logins, focus.Context.Origin, message.Prefix);
+        _vaultFocus = focus with { Rows = rows };
+        _vaultCanOpen = rows.Count > 0;
+        if (rows.Count == 0) CloseVaultList();
+        else if (_vaultListOpen) ShowVaultList(selected: -1);
+    }
+
+    private void ShowVaultList(int selected)
+    {
+        if (_vaultFocus is not { Rows.Count: > 0 } focus) return;
+        if (_vaultList is null)
+        {
+            _vaultList = new SuggestionList
+            {
+                Visibility = Visibility.Collapsed,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetRowSpan(_vaultList, 3);
+            Panel.SetZIndex(_vaultList, 90);
+            _vaultList.Chosen += index =>
+            {
+                // Um clique logo a seguir a a lista aparecer não conta (cliques roubados).
+                if (!VaultFillPolicy.AcceptsClick(DateTime.UtcNow - _vaultShownAt)) return;
+                _vaultList.Select(index);
+                AcceptVaultSuggestion();
+            };
+            _vaultList.ManageRequested += () =>
+            {
+                CloseVaultList();
+                OpenVaultPage("eteris://passwords/");
+            };
+            AddToOverlay(_vaultList);
+        }
+        HookVaultList();
+        var wasOpen = _vaultListOpen;
+        _vaultList.Show(focus.Rows, selected);
+        _vaultList.Visibility = Visibility.Visible;
+        if (!wasOpen) _vaultShownAt = DateTime.UtcNow;
+        _vaultListOpen = true;
+        _vaultHasSelection = _vaultList.Selected >= 0;
+        PlaceVaultList();
+    }
+
+    // A lista sai sempre do campo: por baixo (ou por cima, sem lugar), dentro da página da aba.
+    private void PlaceVaultList()
+    {
+        if (_vaultList is null || _vaultFocus is not { } focus || !_browsers.TryGetValue(focus.Tab, out var browser)
+            || browser.ActualWidth <= 0 || PresentationSource.FromVisual(browser) is null)
+        {
+            CloseVaultList();
+            return;
+        }
+        var origin = browser.TranslatePoint(new Point(0, 0), RootBorder);
+        var page = new Rect(origin, new Size(browser.ActualWidth, browser.ActualHeight));
+        var zoom = Palette.ZoomSteps.ToFactor(browser.ZoomLevel);
+        var width = Math.Min(Math.Max(focus.Rect.Width * zoom, SuggestionGeometry.MinWidth), page.Width);
+        _vaultList.Width = width;
+        _vaultList.Measure(new Size(width, double.PositiveInfinity));
+        if (SuggestionGeometry.Place(page, focus.Rect, zoom, _vaultList.DesiredSize.Height) is not { } place)
+        {
+            CloseVaultList();
+            return;
+        }
+        _vaultList.Width = place.Width;
+        _vaultList.Margin = new Thickness(place.X, place.Y, 0, 0);
+    }
+
+    private void CloseVaultList()
+    {
+        _vaultListOpen = false;
+        _vaultHasSelection = false;
+        if (_vaultList is { Visibility: Visibility.Visible }) _vaultList.Visibility = Visibility.Collapsed;
+    }
+
+    // Uma vez: a lista fecha quando a janela perde o foco, se mexe ou muda de tamanho, ou a aba muda; e um clique nela
+    // não ativa a camada (o foco do teclado fica no campo da página, que não recebe um «blur»).
+    private void HookVaultList()
+    {
+        if (_vaultHooked) return;
+        _vaultHooked = true;
+        Deactivated += (_, _) => CloseVaultList();
+        LocationChanged += (_, _) => CloseVaultList();
+        SizeChanged += (_, _) => CloseVaultList();
+        Tabs.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TabsViewModel.Active)) ForgetVaultFocus();
+        };
+        if (_overlay is not null && HwndSource.FromHwnd(new WindowInteropHelper(_overlay).EnsureHandle()) is { } source)
+            source.AddHook(VaultOverlayHook);
+    }
+
+    private const int WmMouseActivate = 0x0021;
+    private const int MaNoActivate = 3;
+
+    private nint VaultOverlayHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (msg != WmMouseActivate || !_vaultListOpen || _vaultList is null || !_vaultList.IsMouseOver) return 0;
+        handled = true;
+        return MaNoActivate;
+    }
+
+    // Thread do CEF (ShortcutFromPage): as teclas da lista, decididas por VaultKeys (puro). null: não é do cofre.
+    private bool? SuggestionKeyFromPage(Key key, bool ctrl, bool shift, bool alt)
+    {
+        var action = VaultKeys.FromPage(key, ctrl, shift, alt, _vaultListOpen, _vaultHasSelection, _vaultCanOpen);
+        if (action == VaultKeyAction.None) return null;
+        Dispatcher.InvokeAsync(() => HandleVaultKey(action));
+        return VaultKeys.Consumes(action);
+    }
+
+    private void HandleVaultKey(VaultKeyAction action)
+    {
+        switch (action)
+        {
+            case VaultKeyAction.Open when _vaultFocus is { } focus && IsTabOnScreen(focus.Tab):
+                ShowVaultList(selected: 0);
+                break;
+            case VaultKeyAction.Previous or VaultKeyAction.Next when _vaultList is not null && _vaultListOpen:
+                _vaultList.Move(action == VaultKeyAction.Next ? 1 : -1);
+                _vaultHasSelection = _vaultList.Selected >= 0;
+                break;
+            case VaultKeyAction.Accept:
+                AcceptVaultSuggestion();
+                break;
+            case VaultKeyAction.Close or VaultKeyAction.CloseAndPass:
+                CloseVaultList();
+                break;
+        }
+    }
+
+    private void AcceptVaultSuggestion()
+    {
+        if (_vaultFocus is not { } focus || _vaultList?.SelectedRow is not { } row) return;
+        CloseVaultList();
+        _ = FillVaultLoginAsync(focus, row);
+    }
+
+    // Preencher (desenho, secção 3.6): a aba à vista na janela ativa, o mesmo documento e uma palavra-passe deste site;
+    // o Windows Hello se o interruptor pedir (D-5); a palavra-passe decifra-se agora e atravessa o DevTools uma vez, só
+    // para o contexto do documento que pediu.
+    private async Task FillVaultLoginAsync(VaultFocus focus, SuggestionRow row)
+    {
+        if (VaultChannelOf(focus.Tab) is not { } channel || focus.Logins.FirstOrDefault(l => l.Id == row.Id) is not { } entry) return;
+        bool Allowed() => VaultFillPolicy.CanFill(new VaultFillPolicy.FillCheck(IsTabOnScreen(focus.Tab), IsActive || _overlay?.IsActive == true,
+            channel.IsCurrent(focus.Context), entry.Origin, focus.Context.Origin)) == FillVerdict.Allowed;
+        if (!Allowed()) return;
+        if (VaultFillPolicy.NeedsReauth(Data.Settings.Current.PasswordAskHello)
+            && !await ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, ReauthPurpose.FillPassword, VaultFrontToken()))
+            return;
+        if (!Allowed()) return;
+        LoginItem? login;
+        try { login = VaultService.Profile.GetLogin(entry.Id); }
+        catch (Exception) { return; }
+        if (login is null) return;
+        var values = new Dictionary<string, string> { ["username"] = login.Username, ["password"] = login.Password };
+        var result = await channel.CallAsync(focus.Context, "fill", new { field = focus.Field, form = focus.Form, values });
+        values.Clear();
+        if (!result.Success || result.Result is not double filled || filled < 1)
+            ShowToast("Não foi possível preencher este formulário.");
     }
 }
 
