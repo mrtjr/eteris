@@ -83,6 +83,23 @@ public sealed class VaultClearDataTests : IDisposable
 
     // A promessa nova, lida do estado real: o gestor do Chromium desligado no perfil, sem verificação de fugas e sem o
     // servidor de formulários da Google no motor.
+    // Com a sincronização (bloco D), a promessa diz para onde vão: só para os outros computadores do utilizador, pela
+    // pasta dele no Drive, com uma segunda cifra; sem ela, ficam neste computador.
+    [Fact]
+    public void Promise_PasswordsGoToNoOne_SaysWhatTheSyncDoes()
+    {
+        var args = new Dictionary<string, string> { ["disable-features"] = string.Join(',', EngineHardening.NoGoogleOnPages.Select(f => f.Feature)) };
+        PrivacyPage.Promise Find(PrivacyPage.State s) => PrivacyPage.Promises(s).Single(p => p.Id == "passwords");
+        var off = Find(State(args));
+        var on = Find(State(args) with { SyncOn = true });
+        Assert.True(off.Kept);
+        Assert.True(on.Kept);
+        Assert.Contains("Com a sincronização desligada, não saem deste computador", off.Detail);
+        Assert.Contains("segunda cifra", on.Detail);
+        Assert.Contains("O que passa entre PCs", on.Detail);
+        Assert.DoesNotContain("ainda não sincroniza", off.Detail + on.Detail);
+    }
+
     [Fact]
     public void Promise_PasswordsGoToNoOne()
     {

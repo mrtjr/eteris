@@ -1009,7 +1009,11 @@ real; só dados inventados.
 preenchimento automático ainda não existe»; agora cada secção (Pagamentos, Informações de contacto, Documentos,
 Viagens) e as Definições das Palavras-passe têm «Sincronizar entre computadores» com o que passa e a ligação para o
 tópico (`12-b-preenchimento-textos.png`). O texto da conta em Definições › Sincronização passou a incluir as
-palavras-passe e o preenchimento automático (`13-b-definicoes-conta.png`).
+palavras-passe e o preenchimento automático (`13-b-definicoes-conta.png`). A promessa «As suas palavras-passe não vão
+para ninguém» em `eteris://privacy/` dizia «o cofre … ainda não sincroniza»; agora diz que, com a sincronização ligada,
+só as linhas escolhidas em «O que passa entre PCs» passam para os outros computadores do utilizador, pela pasta dele
+no Drive, com uma segunda cifra (e, desligada, que não saem deste computador; teste
+`VaultClearDataTests.Promise_PasswordsGoToNoOne_SaysWhatTheSyncDoes`).
 
 ## E2. Chaves de acesso pelo Windows (prova)
 

@@ -121,7 +121,10 @@ public static class PrivacyPage
                     : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para a Google."
                     : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
                     : "O gestor de palavras-passe e o preenchimento automático do Chromium estão desligados (lidos no perfil: credentials_enable_service, autofill.profile_enabled e autofill.credit_card_enabled a falso), sem a verificação de fugas da Google e sem o servidor de formulários dela (AutofillServerCommunication desligado no motor). "
-                      + "As palavras-passe, os cartões e os documentos ficam no cofre do Éteris, cifrado neste computador (AES-256-GCM, com a chave protegida pelo Windows): o cofre não faz nenhum pedido de rede e ainda não sincroniza.",
+                      + "As palavras-passe, os cartões e os documentos ficam no cofre do Éteris, cifrado neste computador (AES-256-GCM, com a chave protegida pelo Windows), e o cofre não faz nenhum pedido de rede. "
+                      + (s.SyncOn
+                          ? "Com a sincronização ligada, só as linhas escolhidas em «O que passa entre PCs» passam para os seus outros computadores, pela pasta da aplicação no seu Google Drive, cifradas neste computador e com uma segunda cifra própria: a Google não as consegue ler."
+                          : "Com a sincronização desligada, não saem deste computador."),
                 s.ChromiumPasswordsOff && s.LeakCheckOff && formsToGoogle.Count == 0),
             new("no-google", "No arranque, nada sai para a Google",
                 googleStillOn.Count == 0
