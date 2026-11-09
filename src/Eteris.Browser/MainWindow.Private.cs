@@ -121,6 +121,8 @@ public partial class MainWindow
 
     internal static void OpenWindow(bool isPrivate, string? url = null)
     {
+        // Uma janela nova (normal ou privada) fecha o menu do Éteris que esteja aberto noutra.
+        foreach (var other in Application.Current?.Windows.OfType<MainWindow>() ?? []) other.CloseBrowserMenu();
         var window = new MainWindow(url, isPrivate);
         window.Show();
         window.Activate();

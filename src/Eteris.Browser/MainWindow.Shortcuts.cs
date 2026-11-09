@@ -38,6 +38,9 @@ public partial class MainWindow
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.97, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.97, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
+        // Aberta com o foco na página, as teclas iam para o Chromium: as setas e o Espaço rolavam a página por baixo e o
+        // Esc chegava-lhe também. A camada ativa-se e a lista da folha fica com o teclado (as setas rolam-na a ela).
+        if (card is Border { Child: UIElement list }) FocusInOverlay(list);
     }
 
     // As cores são lidas quando a folha é construída: com outro tema, constrói-se de novo.
@@ -115,7 +118,7 @@ public partial class MainWindow
             Background = Res("SurfaceRaisedBrush"), BorderBrush = Res("IrisBrush"), BorderThickness = new Thickness(1.5),
             Effect = new DropShadowEffect { BlurRadius = 60, ShadowDepth = 18, Direction = 270, Opacity = 0.6, Color = Colors.Black },
             RenderTransformOrigin = new Point(0.5, 0), RenderTransform = new ScaleTransform(),
-            Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content },
+            Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content, Focusable = true, FocusVisualStyle = null },
         };
         overlay.Children.Add(card);
         AddToOverlay(overlay);

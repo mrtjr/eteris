@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -20,6 +21,12 @@ public partial class MainWindow
 {
     private Popup? _browserMenu;
     private List<Button> _browserMenuButtons = [];
+    // Quem tinha o teclado quando o menu abriu (a página, a barra de endereço, o «⋯»…): recebe-o de volta ao fechar.
+    private BrowserMenuReturn? _browserMenuReturn;
+    // Lido na thread do CEF (ShortcutFromPage): o menu está aberto. Atualizado só na thread da janela, ao abrir e ao fechar.
+    private volatile bool _browserMenuOpenForPage;
+
+    private sealed record BrowserMenuReturn(IInputElement? Element, nint ChildWindow);
 
     private bool BrowserMenuOpen => _browserMenu is { IsOpen: true };
 
@@ -29,10 +36,9 @@ public partial class MainWindow
 
     private void ToggleBrowserMenu(bool byKeyboard)
     {
-        if (_browserMenu is { IsOpen: true } open)
+        if (BrowserMenuOpen)
         {
-            open.IsOpen = false;
-            MenuButton.Focus();
+            CloseBrowserMenu(restoreFocus: true);
             return;
         }
         if (!MenuButton.IsVisible)
@@ -61,12 +67,21 @@ public partial class MainWindow
             StaysOpen = false,
         };
         var buttons = new List<Button>();
-        popup.Child = BuildBrowserMenu(popup, buttons, out var hasAccountRow);
-        // As teclas premidas no menu não ficam nele: o Popup não tem pai, por isso encaminha-as pelo MenuButton até à
-        // janela, e é Window_PreviewKeyDown que as entrega a HandleBrowserMenuKey.
+        var frame = BuildBrowserMenu(popup, buttons, out var hasAccountRow);
+        popup.Child = frame;
+        // As teclas premidas no menu ficam na árvore do Popup (sem pai, não sobem até à janela — nem pelo MenuButton):
+        // a raiz do menu entrega-as às mesmas funções da janela, e é Window_PreviewKeyDown que chama HandleBrowserMenuKey.
+        // A linha da conta está em buttons (a primeira): as setas, Home e End também passam por ela.
+        frame.PreviewKeyDown += Window_PreviewKeyDown;
+        frame.PreviewKeyUp += (_, e) => AltKeyUp(e.Key == Key.System ? e.SystemKey : e.Key);
         popup.Opened += (_, _) => Dispatcher.InvokeAsync(() =>
         {
-            if (popup.IsOpen) FocusBrowserMenuButton(buttons[BrowserMenuFirstFocus(byKeyboard, hasAccountRow)]);
+            if (!popup.IsOpen) return;
+            // Com o foco na página, o foco do Win32 está na janela do Chromium (filha, noutra thread) e o Focus() do WPF
+            // não o tira de lá: as teclas iam para a página. Pede-se o foco do Win32 para a janela do WPF.
+            if (_browserMenuReturn is { ChildWindow: not 0 }) SetFocus(new WindowInteropHelper(this).Handle);
+            var first = buttons[BrowserMenuFirstFocus(byKeyboard, hasAccountRow)];
+            FocusBrowserMenuButton(first.IsEnabled ? first : buttons.FirstOrDefault(button => button.IsEnabled) ?? first);
         }, DispatcherPriority.Input);
         popup.Closed += (_, _) =>
         {
@@ -74,16 +89,65 @@ public partial class MainWindow
             if (!ReferenceEquals(_browserMenu, popup)) return;
             _browserMenu = null;
             _browserMenuButtons = [];
+            _browserMenuOpenForPage = false;
+            // Fechado por um clique fora ou por a janela perder a ativação: se o teclado ficou preso no menu que fechou,
+            // volta a quem o tinha (sem roubar a ativação a outra janela).
+            var back = _browserMenuReturn;
+            _browserMenuReturn = null;
+            if (back is not null && (frame.IsKeyboardFocusWithin || Keyboard.FocusedElement is null) && IsActive) RestoreFocusAfterBrowserMenu(back);
         };
+        _browserMenuReturn = CaptureBrowserMenuReturn();
         _browserMenu = popup;
         _browserMenuButtons = buttons;
+        _browserMenuOpenForPage = true;
         popup.IsOpen = true;
     }
 
-    private void CloseBrowserMenu()
+    // Fecha o menu. restoreFocus (Esc, Alt+F): o teclado volta a quem o tinha quando o menu abriu, como no Chrome.
+    private void CloseBrowserMenu(bool restoreFocus = false)
     {
-        if (_browserMenu is { IsOpen: true } open) open.IsOpen = false;
+        _browserMenuOpenForPage = false;
+        if (_browserMenu is not { IsOpen: true } open) return;
+        var back = _browserMenuReturn;
+        _browserMenuReturn = null;
+        open.IsOpen = false;
+        if (restoreFocus && back is not null) RestoreFocusAfterBrowserMenu(back);
     }
+
+    private BrowserMenuReturn CaptureBrowserMenuReturn()
+    {
+        var window = new WindowInteropHelper(this).Handle;
+        var focus = GetFocus();
+        // Foco numa janela filha (a página, um painel web, o motor de vídeo): o WPF não sabe dela, guarda-se a janela.
+        var child = focus != 0 && focus != window && IsChild(window, focus) ? focus : 0;
+        return new BrowserMenuReturn(child != 0 ? null : Keyboard.FocusedElement, child);
+    }
+
+    private void RestoreFocusAfterBrowserMenu(BrowserMenuReturn back)
+    {
+        if (back.ChildWindow != 0)
+        {
+            if (ActiveBrowser is { } browser && browser.Handle != 0 && (browser.Handle == back.ChildWindow || IsChild(browser.Handle, back.ChildWindow)))
+            {
+                ReturnFocusToPage();
+                // O Keyboard.Focus do WPF não basta se ele já achar que a página tem o foco: pede-se ao Win32.
+                if (IsWindow(back.ChildWindow) && GetFocus() != back.ChildWindow) SetFocus(back.ChildWindow);
+            }
+            else if (IsWindow(back.ChildWindow)) SetFocus(back.ChildWindow);
+            else ReturnFocusToPage();
+            return;
+        }
+        if (back.Element is UIElement { IsVisible: true, IsEnabled: true } element && element.Focus()) return;
+        MenuButton.Focus();
+    }
+
+    // (IsChild está em MainWindow.PageVisibility.)
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    private static partial nint GetFocus();
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static partial bool IsWindow(nint window);
 
     private static CustomPopupPlacement[] BrowserMenuPlacement(Size popup, Size target, Point offset) =>
     [
@@ -436,36 +500,27 @@ public partial class MainWindow
 
     private void RunBrowserMenuAction(Popup popup, Action action)
     {
+        if (ReferenceEquals(_browserMenu, popup)) _browserMenuReturn = null;
+        _browserMenuOpenForPage = false;
         popup.IsOpen = false;
         ReturnFocusToPage();
         action();
     }
 
-    // Tecla premida com o menu aberto (vem de Window_PreviewKeyDown, como as do radar). O Esc fecha o menu — não para
+    // Tecla premida com o menu aberto (vem de Window_PreviewKeyDown, pela raiz do menu). O Esc fecha o menu — não para
     // o carregamento — e um atalho fecha-o antes de abrir o que quer que abra (paleta, radar, transferências, aba…).
+    // Enter, Espaço e Tab ficam com o WPF (o botão ativa-se, Tab percorre em ciclo).
     private bool HandleBrowserMenuKey(Key key, bool ctrl, bool shift, bool alt)
     {
         if (_browserMenu is not { IsOpen: true } popup) return false;
-        if (key == Key.Escape || (alt && !ctrl && !shift && key == Key.F))
+        switch (BrowserMenuKeys.Resolve(key, ctrl, shift, alt))
         {
-            popup.IsOpen = false;
-            MenuButton.Focus();
-            return true;
-        }
-        if (!ctrl && !shift && !alt && key is Key.Up or Key.Down or Key.Home or Key.End or Key.Left or Key.Right)
-        {
-            var enabled = _browserMenuButtons.Where(button => button.IsEnabled).ToArray();
-            if (enabled.Length == 0) return true;
-            var current = Array.FindIndex(enabled, button => button.IsKeyboardFocusWithin);
-            var next = key switch
-            {
-                Key.Home => 0,
-                Key.End => enabled.Length - 1,
-                Key.Up or Key.Left => current <= 0 ? enabled.Length - 1 : current - 1,
-                _ => (current + 1) % enabled.Length,
-            };
-            FocusBrowserMenuButton(enabled[next]);
-            return true;
+            case BrowserMenuKey.Close:
+                CloseBrowserMenu(restoreFocus: true);
+                return true;
+            case (BrowserMenuKey.Previous or BrowserMenuKey.Next or BrowserMenuKey.First or BrowserMenuKey.Last) and var move:
+                MoveBrowserMenuFocus(move);
+                return true;
         }
         if (Shortcut(key, ctrl, shift, alt) is { } action)
         {
@@ -473,6 +528,47 @@ public partial class MainWindow
             return true;
         }
         return false;
+    }
+
+    // Tecla que chegou à página com o menu aberto (o foco do Win32 ainda lá estava), já decidida na thread do CEF por
+    // BrowserMenuKeys.FromPage: aqui só se faz, na thread da janela.
+    private void HandleBrowserMenuKeyFromPage(BrowserMenuKey decision, Action? shortcut)
+    {
+        if (_browserMenu is not { IsOpen: true } popup)
+        {
+            // O menu fechou entretanto: o atalho corre na mesma (a tecla já não chegou à página).
+            shortcut?.Invoke();
+            return;
+        }
+        switch (decision)
+        {
+            case BrowserMenuKey.Close:
+                CloseBrowserMenu(restoreFocus: true);
+                break;
+            case BrowserMenuKey.Previous or BrowserMenuKey.Next or BrowserMenuKey.First or BrowserMenuKey.Last:
+                MoveBrowserMenuFocus(decision);
+                break;
+            case BrowserMenuKey.Activate:
+                if (_browserMenuButtons.FirstOrDefault(button => button.IsKeyboardFocused) is { IsEnabled: true } focused)
+                    focused.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, focused));
+                break;
+            case BrowserMenuKey.NextField or BrowserMenuKey.PreviousField:
+                if (_browserMenuButtons.Any(button => button.IsKeyboardFocused))
+                    (Keyboard.FocusedElement as UIElement)?.MoveFocus(new TraversalRequest(
+                        decision == BrowserMenuKey.NextField ? FocusNavigationDirection.Next : FocusNavigationDirection.Previous));
+                else MoveBrowserMenuFocus(BrowserMenuKey.First);
+                break;
+            case BrowserMenuKey.Shortcut when shortcut is not null:
+                RunBrowserMenuAction(popup, shortcut);
+                break;
+        }
+    }
+
+    private void MoveBrowserMenuFocus(BrowserMenuKey move)
+    {
+        var enabled = _browserMenuButtons.Where(button => button.IsEnabled).ToArray();
+        var next = BrowserMenuKeys.Move(move, Array.FindIndex(enabled, button => button.IsKeyboardFocusWithin), enabled.Length);
+        if (next >= 0) FocusBrowserMenuButton(enabled[next]);
     }
 
     private static void FocusBrowserMenuButton(Button button)
