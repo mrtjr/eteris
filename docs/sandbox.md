@@ -71,7 +71,14 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
    marca o bootstrap (`brand-bootstrap.ps1`, com o `rc.exe` do Windows SDK) e no fim confirma a forma publicada:
    `Eteris.Browser.exe` = bootstrap com a versão pedida, `Eteris.Browser.dll` = DLL cliente (o SHA256 da testada),
    `Eteris.App.dll`, `CefSharp.Core.dll` e `CefSharp.Core.Runtime.dll` com o SHA256 do `eteris-cefsharp.json` (a cache
-   do NuGet ganha sempre ao feed: um N reutilizado daria outros binários) e sem `CefSharp.BrowserSubprocess.exe`. Por
+   do NuGet ganha sempre ao feed: um N reutilizado daria outros binários) e sem `CefSharp.BrowserSubprocess.exe`. Nos
+   dois modos recusa também os binários nossos publicados (`Eteris*`, `eteris_*`, `CefSharp*` e os `.pdb`; o
+   `libcef.dll` fica de fora) que levem o caminho do perfil de quem compila (`\Users\<utilizador>\`, na forma longa
+   ou na curta 8.3): o .NET fica limpo pelo `PathMap` do `Directory.Build.props` (em Release) e o Escudo pelo
+   `--remap-path-prefix` do csproj, mas a DLL cliente e o `CefSharp.Core.Runtime.dll` que o `build-all.ps1` compila
+   hoje pelo nome curto do repositório ainda o levam (caminho do PDB e `__FILE__` do `libcef_dll_wrapper`). **Até as
+   peças nativas serem compiladas numa raiz neutra (arrumação 0.2.14, fase S4, por fazer), a publicação com sandbox
+   de um repositório dentro do perfil é recusada.** Por
    último grava `publish\eteris-build.json` (versão, modo, commit, o `eteris-cefsharp.json` com o SHA256 das montagens
    trocadas, SHA256 da DLL cliente, hora dos testes): vai na instalação e liga cada release ao CefSharp que leva — o N
    só é único na máquina que o compilou (vem da cache do NuGet) e os binários não são idênticos byte a byte entre
