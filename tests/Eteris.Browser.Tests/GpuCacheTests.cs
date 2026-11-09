@@ -75,11 +75,12 @@ public class GpuCacheTests
         Assert.Contains("ProfileCleanup.ShouldRemoveGpuCaches(Data.Settings.Current.ClearOnExit)", code);
     }
 
-    // Uma janela privada (qualquer contexto privado) e «Apagar dados › cache» marcam as caches para apagar ao sair.
+    // Uma janela privada (qualquer contexto dela, também o do Espreitar) e «Apagar dados › cache» marcam as caches para
+    // apagar ao sair. O Espreitar de uma janela normal não: o que mostra não é privado.
     [Fact]
     public void PrivateWindowAndClearData_MarkThemForExit()
     {
-        Assert.Matches(@"private IRequestContext CreatePrivateContext\([\s\S]*?ProfileCleanup\.RemoveGpuCachesAtExit\(\);[\s\S]*?return context;", Source("MainWindow.Private.cs"));
+        Assert.Matches(@"private IRequestContext CreatePrivateContext\([\s\S]*?if \(IsPrivate\) Infrastructure\.ProfileCleanup\.RemoveGpuCachesAtExit\(\);[\s\S]*?return context;", Source("MainWindow.Private.cs"));
         Assert.Matches(@"if \(request\.Cache\) Infrastructure\.ProfileCleanup\.RemoveGpuCachesAtExit\(\);", Source(Path.Combine("Browser", "EterisSchemeHandlerFactory.cs")));
     }
 
