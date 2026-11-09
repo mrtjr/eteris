@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><title>webgl</title><script src="m.js"></script></head>
+<body style="margin:0;background:#101018"><canvas id="c" width="640" height="400"></canvas>
+<script>
+// E3: compila um programa WebGL (vai para a GPUCache da partição, se a cache estiver ligada) e desenha um triângulo;
+// sinal «painted» depois de 2 fotogramas (v = 1 com WebGL, 0 sem).
+var gl = document.getElementById('c').getContext('webgl');
+function shader(type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; }
+if (gl) {
+  var p = gl.createProgram();
+  gl.attachShader(p, shader(gl.VERTEX_SHADER, 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'));
+  gl.attachShader(p, shader(gl.FRAGMENT_SHADER, 'precision mediump float;uniform float t;void main(){gl_FragColor=vec4(.5+.5*sin(t),.3,.8,1.);}'));
+  gl.linkProgram(p); gl.useProgram(p);
+  var b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.8, -.8, .8, -.8, 0, .8]), gl.STATIC_DRAW);
+  var a = gl.getAttribLocation(p, 'a'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  var t = gl.getUniformLocation(p, 't');
+  (function draw(now) { gl.uniform1f(t, now / 500); gl.drawArrays(gl.TRIANGLES, 0, 3); requestAnimationFrame(draw); })(0);
+}
+requestAnimationFrame(function () { requestAnimationFrame(function () { beacon('painted', gl ? 1 : 0); }); });
+</script></body></html>

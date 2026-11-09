@@ -24,10 +24,13 @@ public static class PerfTuning
     public const string TestVariable = "ETERIS_TEST_AJUSTES";
 
     public const string WaitingDot = "e1";
+    public const string ShaderCache = "e3";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
         new(WaitingDot, "o ponto «a tocar» da central de multimédia só anima enquanto se vê", OnByDefault: true),
+        new(ShaderCache, "cache dos shaders da GPU no disco (apagada com os dados dos sites e depois de uma janela privada)",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D-4"),
     ];
 
     private static readonly Lazy<IReadOnlySet<string>> Resolved = new(()

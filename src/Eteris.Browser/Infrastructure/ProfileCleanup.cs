@@ -17,6 +17,40 @@ public static class ProfileCleanup
 
     private static readonly string[] CookieFiles = ["Cookies", "Cookies-journal"];
 
+    // Caches da GPU no disco (ajuste e3, Infrastructure/PerfTuning.cs; lista verificada no Chromium 156). As globais, na
+    // raiz dos dados (chrome_content_browser_client.cc): shaders do Skia, do compositor e do Graphite, de todas as
+    // janelas, também da privada. As da partição, no perfil (gpu_disk_cache_type.cc): programas do WebGL e do WebGPU,
+    // não separados por site.
+    public static readonly string[] GlobalGpuCaches = ["ShaderCache", "GrShaderCache", "GraphiteDawnCache"];
+    public static readonly string[] PartitionGpuCaches = ["GPUCache", "DawnWebGPUCache", "DawnGraphiteCache"];
+
+    private static volatile bool _gpuCachesAtExit;
+
+    // Apagar as caches da GPU ao sair: depois de «Apagar dados › cache» (com o motor aberto o processo da GPU tem-nas
+    // abertas) e depois de usar uma janela privada (as caches globais não são por janela).
+    public static void RemoveGpuCachesAtExit() => _gpuCachesAtExit = true;
+
+    public static bool ShouldRemoveGpuCaches(bool clearOnExit) => clearOnExit || _gpuCachesAtExit;
+
+    // Devolve quantas pastas apagou. Com o motor fechado (App.OnExit) ou antes de ele arrancar.
+    public static int RemoveGpuCaches(string profileRoot)
+    {
+        var removed = 0;
+        foreach (var path in GlobalGpuCaches.Select(f => Path.Combine(profileRoot, f))
+                     .Concat(PartitionGpuCaches.Select(f => Path.Combine(profileRoot, "Default", f))))
+        {
+            try
+            {
+                if (!Directory.Exists(path)) continue;
+                Directory.Delete(path, recursive: true);
+                removed++;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return removed;
+    }
+
     // «Apagar cookies e dados de sites ao fechar»: garantia no arranque seguinte, mesmo que o fecho tenha falhado.
     // Versões antigas deixavam o «component updater» do Chrome descarregar o módulo Widevine (DRM) da Google.
     // Já não é descarregado; apaga-se o que tiver ficado no perfil. Devolve true se havia alguma coisa.

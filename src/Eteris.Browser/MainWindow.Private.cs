@@ -26,6 +26,8 @@ public partial class MainWindow
         // motor arrancou, que é a que vai no Accept-Language de todos os pedidos — a das Definições só vale depois de
         // reiniciar, e navigator.languages diferente do cabeçalho distinguia quem a mudou.
         var language = Shields.EngineHardening.StartedWithLanguage is { Length: > 0 } started ? started : Shields.PrivacyPreferences.SiteLanguage;
+        // As caches globais da GPU não são por janela: os shaders das páginas privadas podiam ficar nelas (ajuste e3).
+        Infrastructure.ProfileCleanup.RemoveGpuCachesAtExit();
         var context = new RequestContext(new RequestContextSettings { AcceptLanguageList = language },
             Shields.BrowserlessRequests.Handler(isPrivate: true, IsLocalNetworkAllowed, onBlocked));
         // As fábricas de esquemas são por contexto: sem isto eteris:// dá ERR_UNKNOWN_URL_SCHEME na janela privada.

@@ -10,7 +10,8 @@ public static class CefConfigurator
     public const string NoUpdateServer = "http://127.0.0.1:9/";
 
     public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
-                                    int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false)
+                                    int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false,
+                                    bool shaderCache = false)
     {
         var settings = new CefSettings
         {
@@ -29,7 +30,10 @@ public static class CefConfigurator
         if (!sandboxOn && bootstrapExe is not null) settings.BrowserSubprocessPath = bootstrapExe;
         // Só nos testes ao vivo (TestSwitches.DevToolsPort): DevTools do motor em 127.0.0.1.
         if (devToolsPort is { } port) settings.RemoteDebuggingPort = port;
-        settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
+        // Cache dos shaders da GPU no disco (ajuste e3 do plano de desempenho, à espera da decisão D-4): sem ela, cada
+        // sessão recompila os shaders antes dos primeiros fotogramas. Apaga-se com os dados dos sites e depois de uma
+        // janela privada (ProfileCleanup.RemoveGpuCaches). Desligada por omissão, como desde a 1.ª versão.
+        if (!shaderCache) settings.CefCommandLineArgs["disable-gpu-shader-disk-cache"] = "1";
         // Voltar/Avançar instantâneos (back/forward cache), como no Chrome: o CefSharp.Wpf desliga-o por omissão por
         // causa do modo fora da tela (OSR), que o Éteris não usa — a página vive numa janela própria (HwndHost).
         settings.CefCommandLineArgs.Remove("disable-back-forward-cache");
@@ -85,7 +89,14 @@ public static class CefConfigurator
         ProfileCleanup.RemoveChromiumHistory(AppPaths.Profile);
         ProfileCleanup.RemoveDownloadedWidevine(AppPaths.Profile);
         StartupTrace.Mark("limpeza");
-        if (Data.Settings.Current.ClearOnExit) ProfileCleanup.RemoveSiteData(AppPaths.Profile);
+        var shaderCache = PerfTuning.IsOn(PerfTuning.ShaderCache);
+        if (Data.Settings.Current.ClearOnExit)
+        {
+            ProfileCleanup.RemoveSiteData(AppPaths.Profile);
+            // A garantia no arranque, como para os dados dos sites; só com o ajuste ligado (regra R-2: sem ele, nada de
+            // novo antes da 1.ª página). A limpeza ao sair (App.OnExit) apaga-as sempre.
+            if (shaderCache) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
+        }
         StartupTrace.Mark("definicoes");
         var dns = Data.Settings.Current.SecureDns;
         Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.ApplySecureDns(
@@ -100,7 +111,8 @@ public static class CefConfigurator
         var networkSandbox = NetworkSandbox.Decide(sandbox != 0, Environment.ProcessPath);
         // O perfil do AppContainer que o Chromium vai criar para este caminho: a desinstalação apaga-o.
         if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
-        var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox);
+        var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox,
+            shaderCache);
         // Só nas medições de desempenho (ETERIS_TEST_HOST_RULES; nunca numa instalação): nomes de teste para 127.0.0.1.
         PerfDiagnostics.ConfigureEngine(settings);
         StartupTrace.Mark("cef.settings");

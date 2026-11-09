@@ -158,6 +158,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             AppData.TryWrite(h => h.DeleteSince(since));
             MainWindow.ForgetBounceVisits(since);
         }
+        // As caches da GPU (shaders, programas WebGL) só se apagam com o motor fechado: ao sair (ajuste e3).
+        if (request.Cache) Infrastructure.ProfileCleanup.RemoveGpuCachesAtExit();
         if (request.Cookies || request.Cache)
         {
             _ = Task.Run(async () =>

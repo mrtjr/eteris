@@ -88,6 +88,8 @@ public static class PrivacyPage
         var webRtcQuiet = EngineHardening.NoListeningSockets.All(f => disabled.Contains(f.Feature));
         var googleStillOn = EngineHardening.NoGoogleAtStartup.Where(f => !disabled.Contains(f.Feature)).Select(f => f.Feature).ToList();
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
+        // Cache dos shaders da GPU no disco (ajuste e3 do plano de desempenho): ligada quando o motor arrancou sem o interruptor.
+        var gpuCache = !s.EngineArgs.ContainsKey("disable-gpu-shader-disk-cache");
 
         return
         [
@@ -178,6 +180,11 @@ public static class PrivacyPage
                     : $"Só {s.HiddenWindows} de {s.VisibleWindows} janela(s) aceitaram ficar escondidas.",
                 !s.HideFromCapture ? null : s.HiddenWindows >= s.VisibleWindows && s.VisibleWindows > 0,
                 Fix: "eteris://settings/#privacidade"),
+            new("gpu-cache", "A cache da GPU vai-se com os seus dados",
+                gpuCache
+                    ? "Os shaders da GPU ficam no disco para as páginas abrirem mais depressa, como no Chrome. Não são separados por site: apagam-se ao sair com «Apagar ao fechar», depois de apagar a cache em «Apagar dados» e depois de usar uma janela privada."
+                    : "Os shaders da GPU não ficam no disco: o motor volta a prepará-los em cada sessão.",
+                true),
         ];
     }
 

@@ -90,6 +90,9 @@ public partial class App : Application
             Shields.BrowserlessRequests.Release();
             Cef.PreShutdown();
             CefConfigurator.Shutdown();
+            // Caches da GPU no disco (ajuste e3): com o motor fechado, que as tem abertas. Com «Apagar ao fechar», depois de
+            // «Apagar dados › cache» e depois de uma janela privada (Infrastructure/ProfileCleanup.cs).
+            if (ProfileCleanup.ShouldRemoveGpuCaches(Data.Settings.Current.ClearOnExit)) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
         }
         finally
         {

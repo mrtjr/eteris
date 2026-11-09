@@ -56,6 +56,7 @@ precisa também de `numpy` e `Pillow`). Os navegadores de referência nos sítio
 | `ambiente.ps1` | regista o ambiente da máquina (só leitura) | — |
 | `abas\bateria.ps1`, `abas\sessao.ps1`, `abas\Captura.cs`, `abas\analisar.py` | B-ABAS: troca de abas a 60 fps no Éteris, no Chrome e no Brave com os mesmos casos e o mesmo critério | `abas\abasrun.ps1`, `abas\battery.ps1`, `abas\swap.py`, `flash\flashcap.ps1`, e do Brave `brun2.ps1`, `bbattery2.ps1`, `bcap.ps1`, `BraveCap.cs`, `bswap.py`, `blaunch.ps1`, `bclose.ps1` |
 | `abas\cpu-escondida.ps1` | CPU de uma aba animada escondida e à vista (E8, P1) | `abas\cpu.ps1` |
+| `e3-cache-gpu.ps1` | E3: a cache dos shaders da GPU liga e desliga com o ajuste; a janela privada não escreve na partição do perfil e as caches apagam-se ao sair depois dela | — |
 
 Ficou de fora: o amostrador da thread da interface (`smp.py`), porque o lado do Éteris (`ETERIS_TRACE_SAMPLE`) era de
 um build de diagnóstico e não está em nenhum ramo; o A/B do sandbox (`sbx\ab-startup.ps1`), que o plano do sandbox
@@ -76,6 +77,7 @@ vídeos já existentes na máquina, servidos a partir de uma pasta própria).
 | `entrada.html` | B-ENTRADA: latência da entrada até ao fotograma (`quadro`, todas as entradas; `evento`, Event Timing ≥ 16 ms) |
 | `ocl.html` | B-OCL: animação, fps e `document.visibilityState` por sinal |
 | `fecho.html` | link para o Espreitar (Alt+clique) |
+| `webgl.html` | E3: compila um programa WebGL e desenha (sinal `painted`, `v=1` com WebGL) |
 | `abas\*.html` | B-ABAS: páginas claras e escuras, animada, vídeo de canvas, painel |
 
 Os nomes `*.eteris-teste.example` vão para 127.0.0.1: no Éteris por `ETERIS_TEST_HOST_RULES`, no Chrome e no Brave por
@@ -93,8 +95,10 @@ Os nomes `*.eteris-teste.example` vão para 127.0.0.1: no Éteris por `ETERIS_TE
 | `ETERIS_TEST_HOST_RULES=MAP *.eteris-teste.example 127.0.0.1` | `--host-resolver-rules`, só nomes `.example`, `.test`, `.invalid`, `.localhost` para 127.0.0.1 | `Infrastructure/PerfDiagnostics.cs` |
 | `ETERIS_TRACE_STARTUP=1` ou `=<caminho>` | rastro das fases do arranque e da memória; com as linhas `filho` (hora de criação de cada processo filho; o 1.º renderer = `renderer.processo`, D8) | `Infrastructure/StartupTrace.cs`, `StartupTrace.Children.cs` |
 | `ETERIS_TRACE_GC_AT=20,60` | GC completo antes das fotografias da memória desses segundos | idem |
+| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`) | liga e desliga os ajustes de desempenho da fase 1 (braços A/B com o mesmo binário); o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, e `--eteris-sem-ajustes` desliga todos (também numa instalação: é o recuo) | `Infrastructure/PerfTuning.cs` |
 
-`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES` e `ETERIS_TEST_HOST_RULES` são inertes numa instalação. O contador
+`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`, `ETERIS_TEST_HOST_RULES` e `ETERIS_TEST_AJUSTES` são inertes numa
+instalação. O contador
 `wpf.lotes` ouve o `MediaContext.CommittingBatch` interno do WPF, nunca o `CompositionTarget.Rendering` (um ouvinte
 nesse evento obriga o WPF a desenhar todos os fotogramas e estragaria a prova). Se uma versão do WPF não tiver o evento,
 o ficheiro diz `wpf.lotes=indisponivel`.
