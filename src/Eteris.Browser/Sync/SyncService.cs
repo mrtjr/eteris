@@ -225,6 +225,8 @@ internal static class SyncService
     {
         if (Agent() is not { } agent) return;
         Hook();
+        // Uma ação nova: a mensagem da anterior (por exemplo, um apagar que falhou) sai da página.
+        lock (Gate) _message = null;
         if (abandonDeletion) agent.AbandonCloudDeletion();
         _ = Task.Run(async () =>
         {
