@@ -1,12 +1,16 @@
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 using Eteris.Browser.Sync;
 using Eteris.Sync.Google;
 
@@ -18,16 +22,19 @@ public class GoogleAccountTests
 {
     private long _now = 1_762_560_000_000;
 
+    private string _tokenPath = "";
+
     private long Now() => _now;
 
     private static string TempFile(string name) => Path.Combine(Path.GetTempPath(), "eteris-account-tests", Guid.NewGuid().ToString("N"), name);
 
     // Uma sessão com a Google já iniciada (tokens no disco) e o serviço da conta, como o Éteris os monta ao arrancar.
-    private (GoogleSession Session, GoogleAccountService Accounts, GoogleAccountStore Store) Signed(FakeGoogle google, ISecretProtector? protector = null)
+    private (GoogleSession Session, GoogleAccountService Accounts, GoogleAccountStore Store) Signed(FakeGoogle google, ISecretProtector? protector = null, ISecretProtector? tokenProtector = null)
     {
         var http = GoogleEndpoints.CreateClient(google);
         var oauth = new GoogleOAuth(http, new OAuthClientConfig(google.ClientId, null), Now);
-        var tokens = new TokenStore(TempFile("google.tokens"), new Xor());
+        _tokenPath = TempFile("google.tokens");
+        var tokens = new TokenStore(_tokenPath, tokenProtector ?? new Xor());
         tokens.Save(new OAuthTokens(google.ValidAccessToken, google.RefreshToken, _now + 3_600_000, GoogleEndpoints.Scope));
         var session = new GoogleSession(oauth, tokens, Now);
         var store = new GoogleAccountStore(TempFile("google.account"), protector ?? new Xor());
@@ -222,28 +229,51 @@ public class GoogleAccountTests
     // ---- a linha do menu ---------------------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(false, false, true, "None")]     // sem a opção experimental: o menu fica como está
-    [InlineData(false, false, false, "None")]
-    [InlineData(true, false, false, "SignIn")]   // opção ligada, sem sessão
-    [InlineData(true, false, true, "Account")]   // opção ligada, com sessão
-    [InlineData(true, true, true, "None")]       // janela privada: nada da conta
-    [InlineData(true, true, false, "None")]
-    public void MenuRow_ThreeSituations_AndNothingInPrivateWindows(bool syncPreview, bool isPrivate, bool signedIn, string expected)
-        => Assert.Equal(expected, MainWindow.BrowserMenuAccountRow(syncPreview, isPrivate, signedIn).ToString());
+    [InlineData(false, false, true, true, "None")]     // sem a opção experimental: o menu fica como está
+    [InlineData(false, false, true, false, "None")]
+    [InlineData(true, false, true, false, "SignIn")]   // opção ligada, sem sessão
+    [InlineData(true, false, true, true, "Account")]   // opção ligada, com sessão
+    [InlineData(true, true, true, true, "None")]       // janela privada: nada da conta
+    [InlineData(true, true, true, false, "None")]
+    [InlineData(true, false, false, false, "None")]    // sem google-oauth.json: «Entrar com o Google» não se pode cumprir
+    [InlineData(true, false, false, true, "None")]
+    public void MenuRow_ThreeSituations_AndNothingInPrivateWindows(bool syncPreview, bool isPrivate, bool configured, bool signedIn, string expected)
+        => Assert.Equal(expected, MainWindow.BrowserMenuAccountRow(syncPreview, isPrivate, configured, signedIn).ToString());
+
+    // A linha da conta não empurra «Atalhos de teclado» e «Fechar janela» para fora do menu: sem teto fixo, o menu
+    // cresce até à altura da janela (o menu inteiro com a linha da conta tem ~740 px; a janela das capturas, 860).
+    // Ao abrir com o rato, o foco (e o realce) vai para «Nova aba», não para o convite da conta.
+    [Fact]
+    public void Menu_FitsWithTheAccountRow_AndTheMouseDoesNotHighlightTheInvitation()
+    {
+        Assert.Equal(860 - 74, MainWindow.BrowserMenuMaxHeight(860));
+        Assert.Equal(1040 - 74, MainWindow.BrowserMenuMaxHeight(1040));
+        Assert.Equal(254, MainWindow.BrowserMenuMaxHeight(200));
+
+        Assert.Equal(0, MainWindow.BrowserMenuFirstFocus(byKeyboard: true, hasAccountRow: true));   // Alt+F: a conta, primeira no ecrã
+        Assert.Equal(1, MainWindow.BrowserMenuFirstFocus(byKeyboard: false, hasAccountRow: true));  // rato: Nova aba
+        Assert.Equal(0, MainWindow.BrowserMenuFirstFocus(byKeyboard: false, hasAccountRow: false));
+
+        var menu = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.BrowserMenu.cs"));
+        // A barra de deslocamento, se a janela for baixa, tem as cores do tema; a letra do avatar usa a tinta do destaque.
+        Assert.Contains("body.Resources.Add(typeof(ScrollBar), theme[\"BrowserMenuScrollBar\"]);", menu);
+        Assert.Contains("mark.SetResourceReference(TextBlock.ForegroundProperty, \"AccentInkBrush\");", menu);
+        Assert.DoesNotContain("Color.FromRgb(0x0B, 0x0D, 0x13)", menu);
+    }
 
     [Fact]
     public void MenuRow_ShowsInitialNameEmailAndState_WithAnAccessibleName()
     {
         var (texts, name) = OnSta(() => Row(MainWindow.MenuAccountRow.Account, new GoogleAccount("ana Teste", "ana.teste@example.com")));
         Assert.Equal(new[] { "A", "ana Teste", "ana.teste@example.com", "Ligado ao Google Drive" }, texts);
-        Assert.Equal("Conta Google: ana Teste (ana.teste@example.com). Ligado ao Google Drive. Abrir a sincronização nas Definições", name);
+        Assert.Equal("Conta Google: ana Teste (ana.teste@example.com). Ligado ao Google Drive. Abre a sincronização nas Definições", name);
 
         // Sessão sem conta ainda (pedido em curso ou falhado): sem nome, mas diz que está ligada.
         var (pending, _) = OnSta(() => Row(MainWindow.MenuAccountRow.Account, null));
         Assert.Equal(new[] { "", "Conta Google ligada", "Ligado ao Google Drive" }, pending);
 
         var (signIn, signInName) = OnSta(() => Row(MainWindow.MenuAccountRow.SignIn, null));
-        Assert.Equal("Entrar com o Google", signIn[1]);
+        Assert.Equal("Entrar com o Google…", signIn[1]);
         Assert.Equal("Entrar com o Google. Abre a sincronização nas Definições", signInName);
     }
 
@@ -253,6 +283,169 @@ public class GoogleAccountTests
         var menu = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.BrowserMenu.cs"));
         Assert.Contains("buttons.Insert(0, account);", menu);
         Assert.Contains("OpenInternal(SettingsPage.Url + \"#sincronizacao\")", menu);
+    }
+
+    // ---- «Sair» a meio de um pedido ----------------------------------------------------------------------------------
+
+    // Sessão antiga sem conta e token de acesso expirado: o pedido da conta renova o token e, a meio da renovação,
+    // carrega-se em «Sair». A renovação que chega depois não volta a pôr a sessão nem grava google.tokens.
+    [Fact]
+    public async Task SignOut_DuringTokenRefresh_DoesNotBringTheTokensBack()
+    {
+        var google = new FakeGoogle();
+        var (session, _, _) = Signed(google);
+        _now += 7_200_000; // mais de 1 h: o token de acesso expirou
+        var (arrived, release) = google.Hold("/token");
+        var refresh = session.AccessTokenAsync(false, CancellationToken.None);
+        await arrived.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // A revogação fica pendurada: a Google ainda responde à renovação pedida antes (o caso mais difícil).
+        var (_, releaseRevoke) = google.Hold("/revoke");
+        var signOut = session.SignOutAsync(CancellationToken.None);
+        Assert.False(session.IsSignedIn); // os tokens deste aparelho saem logo, antes da resposta da Google
+        Assert.False(File.Exists(_tokenPath));
+
+        release();
+        var error = await Assert.ThrowsAsync<OAuthException>(() => refresh.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Contains("terminou", error.Message, StringComparison.Ordinal);
+        Assert.Equal(1, google.Refreshes); // a Google renovou, mas a resposta já não é desta sessão
+        Assert.False(session.IsSignedIn);
+        Assert.False(File.Exists(_tokenPath));
+        releaseRevoke();
+        await signOut.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(File.Exists(_tokenPath));
+    }
+
+    // O pedido da conta está na rede quando se carrega em «Sair»: a resposta que chega depois não grava o nome e o
+    // e-mail (o ficheiro fica apagado), não muda a conta e não conta como tentativa falhada da sessão seguinte.
+    [Fact]
+    public async Task SignOut_DuringTheAccountRequest_LeavesNothingOnDisk()
+    {
+        var google = new FakeGoogle();
+        var (session, accounts, store) = Signed(google);
+        var (arrived, release) = google.Hold("/drive/v3/about");
+        var fetch = accounts.RequestIfMissing(session.IsSignedIn)!;
+        await arrived.WaitAsync(TimeSpan.FromSeconds(10));
+
+        accounts.Forget();
+        await session.SignOutAsync(CancellationToken.None);
+        var notified = false;
+        accounts.Changed += _ => notified = true;
+        release();
+        await fetch.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(File.Exists(store.Path));
+        Assert.Null(accounts.Current);
+        Assert.False(accounts.Failed);
+        Assert.False(notified);
+        Assert.False(File.Exists(_tokenPath));
+    }
+
+    // Sair e entrar com outra conta enquanto o pedido antigo está pendurado: fica a conta nova.
+    [Fact]
+    public async Task OldRequest_DoesNotOverwriteTheAccountOfTheNextSession()
+    {
+        var google = new FakeGoogle();
+        var (session, accounts, store) = Signed(google);
+        var (arrived, release) = google.Hold("/drive/v3/about");
+        var old = accounts.RequestIfMissing(session.IsSignedIn)!;
+        await arrived.WaitAsync(TimeSpan.FromSeconds(10));
+
+        accounts.Forget();
+        google.AccountName = "Outra Pessoa";
+        google.AccountEmail = "outra@example.com";
+        await accounts.AfterSignIn().WaitAsync(TimeSpan.FromSeconds(10));
+        release();
+        await old.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(new GoogleAccount("Outra Pessoa", "outra@example.com"), accounts.Current);
+        Assert.Equal(new GoogleAccount("Outra Pessoa", "outra@example.com"), store.Load());
+        Assert.False(accounts.Failed);
+    }
+
+    // A renovação do token falha ao gravar (DPAPI ou ficheiro só de leitura/bloqueado): conta como a tentativa
+    // falhada da sessão, e abrir o menu outra vez não volta à rede.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TokenSaveFailure_CountsAsTheFailedAttempt(bool cryptographic)
+    {
+        var google = new FakeGoogle();
+        var failing = new FailingProtector();
+        var (session, accounts, _) = Signed(google, tokenProtector: failing);
+        _now += 7_200_000;
+        failing.Fail = cryptographic ? new CryptographicException("DPAPI") : new UnauthorizedAccessException("só de leitura");
+        await accounts.RequestIfMissing(session.IsSignedIn)!.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(accounts.Failed);
+        Assert.Null(accounts.RequestIfMissing(true));
+        Assert.Equal(1, google.Refreshes);
+        Assert.Equal(new[] { "POST https://oauth2.googleapis.com/token" }, google.Requests);
+    }
+
+    // O menu pede a conta no fio da interface: o pedido (token, proxy do Windows, rede) corre noutro fio, mesmo com o
+    // fio da interface ocupado.
+    [Fact]
+    public void Request_RunsOffTheInterfaceThread()
+    {
+        var google = new FakeGoogle();
+        var (session, _, store) = Signed(google);
+        bool? onPool = null;
+        var accounts = new GoogleAccountService(GoogleEndpoints.CreateClient(google), (force, ct) =>
+        {
+            onPool = Thread.CurrentThread.IsThreadPoolThread;
+            return session.AccessTokenAsync(force, ct);
+        }, store);
+        var done = OnSta(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
+            var fetch = accounts.RequestIfMissing(true)!;
+            return fetch.Wait(TimeSpan.FromSeconds(10)); // o Dispatcher não corre aqui: só termina se não depender dele
+        });
+        Assert.True(done);
+        Assert.True(onPool);
+        Assert.Equal("Ana Teste", accounts.Current?.Name);
+    }
+
+    // ---- Definições ---------------------------------------------------------------------------------------------------
+
+    // Definições abertas numa janela privada: nem nome nem e-mail; a secção Sincronização fica indisponível.
+    [Fact]
+    public void PrivateWindow_SettingsShowNoAccount()
+    {
+        var account = new GoogleAccount("Ana Teste", "ana.teste@example.com");
+        var status = new GoogleSync.Status("signedIn", GoogleSync.SignedInText(account), null, account);
+        var normal = JsonSerializer.Serialize(SettingsPage.SyncGoogleData(status, isPrivate: false));
+        Assert.Contains("Ana Teste", normal);
+        Assert.Contains("\"account\":true", normal);
+        var hidden = JsonSerializer.Serialize(SettingsPage.SyncGoogleData(status, isPrivate: true));
+        foreach (var leak in new[] { "Ana", "ana.teste", "example.com" }) Assert.DoesNotContain(leak, hidden, StringComparison.Ordinal);
+        Assert.Contains("\"account\":false", hidden);
+        Assert.Contains("Ligado ao Google Drive", hidden);
+
+        Assert.Contains("\"syncPrivate\":true", SettingsPage.Render(new UserSettings(), isPrivate: true));
+        Assert.Contains("\"syncPrivate\":false", SettingsPage.Render(new UserSettings()));
+        var factory = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("return SettingsRoute(uri, request.Url, privateContext);", factory);
+        Assert.Contains("isPrivate: privateContext", factory);
+        var page = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.Matches(new Regex(@"if \(data\.syncPrivate\) \{[^}]*body\.hidden = true; toggle\.disabled = true;[^}]*return;", RegexOptions.Singleline), page);
+    }
+
+    // Cada pedido da secção tem o seu iframe (um sync-status automático não leva a resposta da exportação); só a
+    // resposta mais recente do Google desenha; o gesto de «Sair» não pede a conta; com sessão, a linha chama-se «Conta
+    // Google» e o botão diz de que se sai.
+    [Fact]
+    public void SettingsPage_RequestsDoNotShareAReply_AndSignOutIsLabelled()
+    {
+        var page = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.DoesNotContain("onReply", page, StringComparison.Ordinal);
+        Assert.Contains("const sinkFor = handler =>", page, StringComparison.Ordinal);
+        Assert.Contains("form.target = sinkFor(importReply).name;", page, StringComparison.Ordinal);
+        Assert.Contains("if (seq < googlePainted) return;", page, StringComparison.Ordinal);
+        Assert.Contains("if (!isSignOut(e)) askAccount();", page, StringComparison.Ordinal);
+        Assert.Contains("googleTitle.textContent = g.state === 'signedIn' ? 'Conta Google' : 'Entrar com o Google';", page, StringComparison.Ordinal);
+        Assert.Contains("googleButton.setAttribute('aria-label', 'Sair da conta Google');", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"googleButton\" aria-describedby=\"googleNote\"", page, StringComparison.Ordinal);
     }
 
     private static (string[] Texts, string Name) Row(MainWindow.MenuAccountRow kind, GoogleAccount? account)
@@ -283,6 +476,14 @@ public class GoogleAccountTests
         Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
         if (error is not null) throw new Xunit.Sdk.XunitException(error.ToString());
         return result;
+    }
+
+    // Grava como a Xor, mas a gravação pode falhar como o DPAPI (CryptographicException) ou um ficheiro bloqueado.
+    private sealed class FailingProtector : ISecretProtector
+    {
+        public Exception? Fail { get; set; }
+        public byte[] Protect(byte[] data) => Fail is { } e ? throw e : data.Select(b => (byte)(b ^ 0x5A)).ToArray();
+        public byte[] Unprotect(byte[] data) => data.Select(b => (byte)(b ^ 0x5A)).ToArray();
     }
 
     // «Cifra» de teste: muda todos os bytes (o texto não fica legível no ficheiro).

@@ -37,6 +37,10 @@ public static class GoogleEndpoints
 
     public static readonly IReadOnlyList<string> HttpHosts = ["oauth2.googleapis.com", "www.googleapis.com"];
 
+    // O about.get só passa com esta query exata: um pedido futuro com outros «fields» (foto, quota, permissões…) é
+    // recusado pelo GoogleOnlyHandler em vez de trazer mais dados da conta.
+    private static readonly string AboutUserQuery = new Uri(AboutUser).Query;
+
     // O que o cliente HTTP da sincronização pode pedir.
     public static bool IsAllowedRequest(Uri uri)
     {
@@ -46,7 +50,7 @@ public static class GoogleEndpoints
         return host switch
         {
             "oauth2.googleapis.com" => path is "/token" or "/revoke",
-            "www.googleapis.com" => path == "/drive/v3/about" || path == "/drive/v3/files" || path.StartsWith("/drive/v3/files/", StringComparison.Ordinal)
+            "www.googleapis.com" => (path == "/drive/v3/about" && uri.Query == AboutUserQuery) || path == "/drive/v3/files" || path.StartsWith("/drive/v3/files/", StringComparison.Ordinal)
                                     || path == "/upload/drive/v3/files" || path.StartsWith("/upload/drive/v3/files/", StringComparison.Ordinal),
             _ => false,
         };

@@ -84,7 +84,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         // Definições › Sincronização (perfil cifrado, «Entrar com o Google»): nunca a partir da janela privada.
         if (uri is { Host: "settings" } && uri.AbsolutePath.StartsWith("/sync-", StringComparison.Ordinal))
             return privateContext ? Text("recusado") : SyncRoute(uri, request);
-        if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url);
+        if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url, privateContext);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
         if (uri is { Host: "error", AbsolutePath: "/continue" })
@@ -105,7 +105,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private bool CanChangeNewTab(string url) => !privateContext && InternalPages.IsAuthorized(url);
 
-    private static IResourceHandler SettingsRoute(Uri uri, string url)
+    private static IResourceHandler SettingsRoute(Uri uri, string url, bool privateContext)
     {
         if (uri.AbsolutePath == "/set")
         {
@@ -135,7 +135,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
         return uri.AbsolutePath == "/"
             ? Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: uri.Host == "about",
-                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), AppData.SiteSummaries()))
+                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), AppData.SiteSummaries(),
+                isPrivate: privateContext))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 

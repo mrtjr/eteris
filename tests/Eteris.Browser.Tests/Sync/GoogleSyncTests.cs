@@ -248,6 +248,10 @@ public class GoogleSyncTests
     [InlineData("https://www.googleapis.com/gmail/v1/users/me/messages", false)]    // nada além do Drive
     [InlineData("https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)", true)] // nome e e-mail da conta
     [InlineData("https://www.googleapis.com/drive/v3/about/x", false)]
+    [InlineData("https://www.googleapis.com/drive/v3/about", false)]                                    // about só com os dois campos
+    [InlineData("https://www.googleapis.com/drive/v3/about?fields=*", false)]
+    [InlineData("https://www.googleapis.com/drive/v3/about?fields=user(photoLink,permissionId),storageQuota", false)]
+    [InlineData("https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)&x=1", false)]
     [InlineData("https://www.googleapis.com/drive/v3/changes", false)]
     [InlineData("https://oauth2.googleapis.com/tokeninfo", false)]
     [InlineData("https://accounts.google.com/o/oauth2/v2/auth", false)]            // esse só no navegador do sistema

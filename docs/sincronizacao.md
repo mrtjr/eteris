@@ -192,14 +192,24 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
   Definições reposta no arranque não pede nada). Em segundo plano; a linha do menu atualiza-se se ainda estiver aberta.
   **Nunca no arranque** (a promessa da 0.2.11, «No arranque, nada sai para a Google», mantém-se), nunca num
   temporizador, e **no máximo uma tentativa falhada por sessão** (depois de falhar, só volta a tentar depois de sair e
-  entrar, ou de reabrir o Éteris). Enquanto não há conta, o menu diz «Conta Google ligada».
+  entrar, ou de reabrir o Éteris; qualquer falha conta, também a de gravar o token renovado). Enquanto não há conta, o
+  menu diz «Conta Google ligada». O pedido corre fora do fio da interface (abrir o menu nunca espera pela rede nem
+  pelo proxy do Windows), e o gesto que é o próprio clique em «Sair» não o lança.
 - **Onde fica:** `<perfil>\sync\google.account`, cifrado com DPAPI do utilizador do Windows (como os tokens, com outra
   «entropia»). **Apagado ao «Sair».** O texto que vem da rede é limpo (sem caracteres de controlo, até 200 caracteres)
-  antes de ir para a interface.
-- **No menu**, só com a opção experimental ligada e numa janela normal (nas janelas privadas não aparece nada da conta;
-  sem a opção, o menu fica como estava): com sessão, avatar, nome em negrito, e-mail e «Ligado ao Google Drive»; sem
-  sessão, «Entrar com o Google». As duas abrem `eteris://settings/#sincronizacao`, são a primeira paragem do teclado no
-  menu e têm nome para leitores de ecrã.
+  antes de ir para a interface. «Sair» a meio de um pedido: o pedido da conta é cancelado e a sessão e a conta mudam de
+  geração, por isso uma resposta que chegue depois (a renovação do token ou o `about.get`) já não grava `google.tokens`
+  nem `google.account`, nem mostra a conta antiga depois de se entrar com outra.
+- **No menu**, só com a opção experimental ligada, numa janela normal e com o identificador da aplicação
+  (`google-oauth.json`; sem ele o botão das Definições está «Por configurar» e o menu não oferece o que não se pode
+  cumprir). Nas janelas privadas não aparece nada da conta; sem a opção, o menu fica como estava. Com sessão, avatar
+  (a letra com a tinta da cor de destaque), nome em negrito, e-mail e «Ligado ao Google Drive»; sem sessão, «Entrar com
+  o Google…». As duas abrem `eteris://settings/#sincronizacao` e têm nome para leitores de ecrã. Pelo teclado (Alt+F) a
+  linha da conta é a primeira paragem; aberto com o rato, o foco fica em «Nova aba», para o convite não aparecer
+  realçado em cada abertura. O menu cresce até à altura da janela (sem o antigo teto fixo de 665 px, o menu inteiro
+  com a linha da conta cabe numa janela normal) e, numa janela baixa, a barra de deslocamento tem as cores do tema.
+- **Nas Definições**, com sessão a linha chama-se «Conta Google» e o botão «Sair» anuncia-se como «Sair da conta
+  Google». Numa janela privada as Definições não mostram nada da conta e a secção Sincronização fica indisponível.
 
 ### Perfil cifrado num ficheiro
 

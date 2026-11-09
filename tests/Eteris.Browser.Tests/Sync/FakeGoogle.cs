@@ -38,6 +38,17 @@ internal sealed class FakeGoogle : HttpMessageHandler
 
     public void ExpireAccessToken() => ValidAccessToken = "acesso-" + Guid.NewGuid().ToString("N")[..6];
 
+    // Segura o próximo pedido a este caminho (por exemplo «/token» ou «/drive/v3/about») até o teste o libertar:
+    // serve para meter «Sair» a meio de uma renovação ou de um pedido da conta. «Arrived» completa quando o pedido chega.
+    private readonly Dictionary<string, (TaskCompletionSource Arrived, TaskCompletionSource Release)> _holds = new(StringComparer.Ordinal);
+
+    public (Task Arrived, Action Release) Hold(string path)
+    {
+        var hold = (new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously), new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        lock (_holds) _holds[path] = hold;
+        return (hold.Item1.Task, () => hold.Item2.TrySetResult());
+    }
+
     public void FailNext(HttpStatusCode status, int times = 1)
     {
         for (var i = 0; i < times; i++) _failures.Enqueue(status);
@@ -54,7 +65,15 @@ internal sealed class FakeGoogle : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var uri = request.RequestUri!;
-        Requests.Add($"{request.Method} {uri.GetLeftPart(UriPartial.Path)}");
+        lock (Requests) Requests.Add($"{request.Method} {uri.GetLeftPart(UriPartial.Path)}");
+        (TaskCompletionSource Arrived, TaskCompletionSource Release) hold;
+        bool held;
+        lock (_holds) held = _holds.Remove(uri.AbsolutePath, out hold);
+        if (held)
+        {
+            hold.Arrived.TrySetResult();
+            await hold.Release.Task.WaitAsync(cancellationToken);
+        }
         if (_failures.Count > 0 && uri.Host == "www.googleapis.com") return new HttpResponseMessage(_failures.Dequeue());
 
         if (uri.Host == "oauth2.googleapis.com") return await OAuthAsync(request, uri, cancellationToken);

@@ -76,8 +76,11 @@ public sealed class GoogleAccountStore(string path, ISecretProtector protector)
 //    Sincronização) ou AfterSignIn (logo a seguir a um início de sessão bem-sucedido);
 //  - só com sessão e sem conta guardada; um pedido de cada vez;
 //  - no máximo uma tentativa falhada por sessão com a Google: depois de falhar, só volta a tentar depois de sair e
-//    entrar outra vez (ou de reabrir o Éteris).
-// Construir isto e ler a conta guardada não faz pedido nenhum (o arranque não fala com a Google).
+//    entrar outra vez (ou de reabrir o Éteris);
+//  - «Sair» (Forget) cancela o pedido em curso e muda a geração: uma resposta que chegue depois já não grava a conta
+//    nem conta como tentativa falhada da sessão seguinte.
+// Construir isto e ler a conta guardada não faz pedido nenhum (o arranque não fala com a Google). O pedido corre no
+// conjunto de fios (Task.Run): quem o lança (o menu, no fio da interface) não espera pela rede nem pelo proxy.
 public sealed class GoogleAccountService(HttpClient http, Func<bool, CancellationToken, Task<string>> accessToken, GoogleAccountStore store)
 {
     private readonly Lock _gate = new();
@@ -85,6 +88,8 @@ public sealed class GoogleAccountService(HttpClient http, Func<bool, Cancellatio
     private bool _loaded;
     private bool _failed;
     private Task? _pending;
+    private long _generation;
+    private CancellationTokenSource _cancel = new();
 
     // Chamado (de qualquer thread) quando a conta muda: obtida, ou apagada ao sair.
     public event Action<GoogleAccount?>? Changed;
@@ -123,7 +128,7 @@ public sealed class GoogleAccountService(HttpClient http, Func<bool, Cancellatio
         lock (_gate)
         {
             if (_failed || _pending is { IsCompleted: false }) return null;
-            return _pending = FetchAndStoreAsync();
+            return _pending = Start();
         }
     }
 
@@ -131,41 +136,59 @@ public sealed class GoogleAccountService(HttpClient http, Func<bool, Cancellatio
     public Task AfterSignIn()
     {
         Forget(notify: false);
-        lock (_gate) return _pending = FetchAndStoreAsync();
+        lock (_gate) return _pending = Start();
     }
 
-    // «Sair»: apaga a conta deste aparelho e volta a permitir uma tentativa na próxima sessão.
+    // «Sair»: apaga a conta deste aparelho, cancela o pedido em curso e volta a permitir uma tentativa na próxima sessão.
     public void Forget() => Forget(notify: true);
 
     private void Forget(bool notify)
     {
+        CancellationTokenSource old;
         lock (_gate)
         {
+            _generation++;
+            old = _cancel;
+            _cancel = new CancellationTokenSource();
+            _pending = null;
             _account = null;
             _loaded = true;
             _failed = false;
+            try { store.Delete(); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
-        try { store.Delete(); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        old.Cancel();
         if (notify) Changed?.Invoke(null);
     }
 
-    private async Task FetchAndStoreAsync()
+    // Chamado dentro do _gate: o pedido leva a geração e o cancelamento desta sessão.
+    private Task Start()
     {
-        await Task.Yield();
+        var generation = _generation;
+        var cancellation = _cancel.Token;
+        return Task.Run(() => FetchAndStoreAsync(generation, cancellation));
+    }
+
+    private async Task FetchAndStoreAsync(long generation, CancellationToken cancellationToken)
+    {
         GoogleAccount? account = null;
-        try { account = await FetchAsync(http, accessToken, CancellationToken.None).ConfigureAwait(false); }
+        // Qualquer falha (rede, Google, renovação do token que não se consegue gravar — DPAPI ou ficheiro bloqueado,
+        // cancelamento ao sair) conta como a tentativa falhada desta sessão.
+        try { account = await FetchAsync(http, accessToken, cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (e is HttpRequestException or IOException or OAuthException or JsonException
-                                      or TaskCanceledException or InvalidOperationException) { }
-        if (account is null || account.IsEmpty)
-        {
-            lock (_gate) _failed = true;
-            return;
-        }
-        try { store.Save(account); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or CryptographicException) { }
+                                      or OperationCanceledException or InvalidOperationException
+                                      or CryptographicException or UnauthorizedAccessException) { }
         lock (_gate)
         {
+            // Saiu-se (ou entrou-se outra vez) enquanto o pedido estava na rede: a resposta já não é desta sessão.
+            if (generation != _generation) return;
+            if (account is null || account.IsEmpty)
+            {
+                _failed = true;
+                return;
+            }
+            try { store.Save(account); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or CryptographicException) { }
             _account = account;
             _loaded = true;
         }

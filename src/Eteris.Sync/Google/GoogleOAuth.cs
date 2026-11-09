@@ -317,17 +317,29 @@ public sealed class TokenStore(string path, ISecretProtector protector)
 }
 
 // Sessão com a Google: devolve sempre um token de acesso válido, renovando-o quando expira.
+// «Sair» pode chegar a meio de uma renovação (o pedido da conta renova o token): cada sessão tem uma geração, que
+// SignOutAsync e Use (um novo início de sessão) mudam, e uma renovação só fica com os tokens novos — e só os grava —
+// se a geração ainda for a mesma de quando começou. Sem isto os tokens voltavam ao disco depois de «Sair».
 public sealed class GoogleSession(GoogleOAuth oauth, TokenStore store, Func<long> nowMs)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Lock _state = new();
     private OAuthTokens? _tokens = store.Load();
+    private long _generation;
 
-    public bool IsSignedIn => _tokens is not null;
+    public bool IsSignedIn
+    {
+        get { lock (_state) return _tokens is not null; }
+    }
 
     public void Use(OAuthTokens tokens)
     {
-        _tokens = tokens;
-        store.Save(tokens);
+        lock (_state)
+        {
+            _generation++;
+            _tokens = tokens;
+            store.Save(tokens);
+        }
     }
 
     public async Task<string> AccessTokenAsync(bool forceRefresh, CancellationToken cancellationToken)
@@ -335,22 +347,40 @@ public sealed class GoogleSession(GoogleOAuth oauth, TokenStore store, Func<long
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var tokens = _tokens ?? throw new OAuthException("Sem sessão iniciada na Google.");
+            OAuthTokens tokens;
+            long generation;
+            lock (_state)
+            {
+                tokens = _tokens ?? throw new OAuthException("Sem sessão iniciada na Google.");
+                generation = _generation;
+            }
             if (!forceRefresh && tokens.ExpiresAtMs > nowMs()) return tokens.AccessToken;
             if (tokens.RefreshToken is not { } refresh) throw new OAuthException("A sessão da Google expirou. Entre outra vez.");
             var renewed = await oauth.RefreshAsync(refresh, cancellationToken).ConfigureAwait(false);
-            Use(renewed);
+            lock (_state)
+            {
+                // Saiu-se (ou entrou-se com outra conta) durante a renovação: estes tokens já não são desta sessão.
+                if (generation != _generation) throw new OAuthException("A sessão da Google terminou entretanto.");
+                _tokens = renewed;
+                store.Save(renewed);
+            }
             return renewed.AccessToken;
         }
         finally { _gate.Release(); }
     }
 
-    // Sair: revoga na Google (melhor esforço) e apaga os tokens deste aparelho.
+    // Sair: apaga os tokens deste aparelho (já, e de modo que nenhuma renovação em curso os volte a gravar) e revoga
+    // na Google (melhor esforço).
     public async Task SignOutAsync(CancellationToken cancellationToken)
     {
-        var tokens = _tokens;
-        _tokens = null;
-        store.Delete();
+        OAuthTokens? tokens;
+        lock (_state)
+        {
+            _generation++;
+            tokens = _tokens;
+            _tokens = null;
+            store.Delete();
+        }
         if (tokens is not null) await oauth.RevokeAsync(tokens.RefreshToken ?? tokens.AccessToken, cancellationToken).ConfigureAwait(false);
     }
 }

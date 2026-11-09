@@ -23,7 +23,11 @@ public partial class MainWindow
 
     private bool BrowserMenuOpen => _browserMenu is { IsOpen: true };
 
-    private void ToggleBrowserMenu()
+    // O botão do menu: Enter/Espaço nele abrem-no pelo teclado, um clique pelo rato. (Alt+F chama ToggleBrowserMenu(true)
+    // diretamente: vindo da página, a tecla não passa pelo InputManager do WPF.)
+    private void ToggleBrowserMenu() => ToggleBrowserMenu(byKeyboard: InputManager.Current.MostRecentInputDevice is KeyboardDevice);
+
+    private void ToggleBrowserMenu(bool byKeyboard)
     {
         if (_browserMenu is { IsOpen: true } open)
         {
@@ -57,12 +61,12 @@ public partial class MainWindow
             StaysOpen = false,
         };
         var buttons = new List<Button>();
-        popup.Child = BuildBrowserMenu(popup, buttons);
+        popup.Child = BuildBrowserMenu(popup, buttons, out var hasAccountRow);
         // As teclas premidas no menu não ficam nele: o Popup não tem pai, por isso encaminha-as pelo MenuButton até à
         // janela, e é Window_PreviewKeyDown que as entrega a HandleBrowserMenuKey.
         popup.Opened += (_, _) => Dispatcher.InvokeAsync(() =>
         {
-            if (popup.IsOpen) FocusBrowserMenuButton(buttons[0]);
+            if (popup.IsOpen) FocusBrowserMenuButton(buttons[BrowserMenuFirstFocus(byKeyboard, hasAccountRow)]);
         }, DispatcherPriority.Input);
         popup.Closed += (_, _) =>
         {
@@ -87,7 +91,17 @@ public partial class MainWindow
         new(new Point(target.Width - popup.Width, -popup.Height - 6), PopupPrimaryAxis.Vertical),
     ];
 
-    private Border BuildBrowserMenu(Popup popup, List<Button> buttons)
+    // Que linha recebe o foco ao abrir. Pelo teclado, a primeira (a da conta, se houver: está primeiro no ecrã). Pelo
+    // rato, a primeira ação (Nova aba), como antes da linha da conta: o convite «Entrar com o Google» não fica realçado
+    // em cada abertura (no Chrome e no Firefox a conta só se realça ao passar o rato ou com o teclado).
+    internal static int BrowserMenuFirstFocus(bool byKeyboard, bool hasAccountRow) => !byKeyboard && hasAccountRow ? 1 : 0;
+
+    // Altura máxima do menu: a da janela, menos a barra de cima (como no Chrome e no Firefox, o menu cresce o que
+    // precisar). Antes havia também um teto fixo de 665 px, a altura do menu sem a linha da conta: com ela,
+    // «Atalhos de teclado» e «Fechar janela» ficavam escondidos atrás de uma barra de deslocamento.
+    internal static double BrowserMenuMaxHeight(double windowHeight) => Math.Max(254, windowHeight - 74);
+
+    private Border BuildBrowserMenu(Popup popup, List<Button> buttons, out bool hasAccountRow)
     {
         var theme = new ResourceDictionary { Source = new Uri($"pack://application:,,,/{typeof(MainWindow).Assembly.GetName().Name};component/Theme/BrowserMenu.xaml", UriKind.Absolute) };
         var rowStyle = (Style)theme["BrowserMenuRow"];
@@ -151,12 +165,15 @@ public partial class MainWindow
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Focusable = false,
         };
+        body.Resources.Add(typeof(ScrollBar), theme["BrowserMenuScrollBar"]);
         var content = new DockPanel();
         var heading = BrowserMenuHeading(IsPrivate);
         DockPanel.SetDock(heading, Dock.Top);
         content.Children.Add(heading);
+        hasAccountRow = false;
         if (BuildBrowserMenuAccount(popup, rowStyle) is { } account)
         {
+            hasAccountRow = true;
             // Primeira na ordem do teclado, como está primeiro no ecrã.
             buttons.Insert(0, account);
             var holder = new StackPanel { Margin = new Thickness(6, 0, 6, 0) };
@@ -168,7 +185,7 @@ public partial class MainWindow
         content.Children.Add(body);
         KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
 
-        var frame = BrowserMenuFrame(content, Math.Clamp(ActualHeight - 74, 254, 665));
+        var frame = BrowserMenuFrame(content, BrowserMenuMaxHeight(ActualHeight));
         frame.Resources.MergedDictionaries.Add(theme);
         return frame;
     }
@@ -195,17 +212,20 @@ public partial class MainWindow
     }
 
     // A linha da conta no topo do menu (como no Chrome, no Firefox e no Brave), só com a sincronização experimental
-    // ligada e numa janela normal: nas janelas privadas não aparece nada da conta.
+    // ligada, numa janela normal e com o identificador da aplicação (google-oauth.json): nas janelas privadas não
+    // aparece nada da conta, e sem identificador «Entrar com o Google» não se pode cumprir (o botão das Definições fica
+    // «Por configurar»), por isso o menu não o oferece.
     internal enum MenuAccountRow { None, SignIn, Account }
 
-    internal static MenuAccountRow BrowserMenuAccountRow(bool syncPreview, bool isPrivate, bool signedIn)
-        => !syncPreview || isPrivate ? MenuAccountRow.None : signedIn ? MenuAccountRow.Account : MenuAccountRow.SignIn;
+    internal static MenuAccountRow BrowserMenuAccountRow(bool syncPreview, bool isPrivate, bool configured, bool signedIn)
+        => !syncPreview || isPrivate || !configured ? MenuAccountRow.None : signedIn ? MenuAccountRow.Account : MenuAccountRow.SignIn;
 
     private Button? BuildBrowserMenuAccount(Popup popup, Style rowStyle)
     {
         var syncPreview = Settings.Current.SyncPreview;
         // Só lê o disco (tokens cifrados) com a opção ligada; nada sai daqui para a Google.
-        var kind = BrowserMenuAccountRow(syncPreview, IsPrivate, syncPreview && !IsPrivate && GoogleSync.SignedIn);
+        var configured = syncPreview && !IsPrivate && GoogleSync.Config is not null;
+        var kind = BrowserMenuAccountRow(syncPreview, IsPrivate, configured, configured && GoogleSync.SignedIn);
         if (kind == MenuAccountRow.None) return null;
         var button = BrowserMenuAccountButton(kind, kind == MenuAccountRow.Account ? GoogleSync.Account : null, rowStyle);
         button.Click += (_, _) => RunBrowserMenuAction(popup, () => OpenInternal(SettingsPage.Url + "#sincronizacao"));
@@ -237,7 +257,9 @@ public partial class MainWindow
     {
         var signedIn = kind == MenuAccountRow.Account;
         var known = signedIn && account is { IsEmpty: false };
-        var title = !signedIn ? "Entrar com o Google"
+        // Sem sessão, a linha abre a secção Sincronização das Definições (onde o início de sessão mostra o estado e, sem
+        // outro navegador, o endereço para copiar): as reticências dizem que há mais um passo.
+        var title = !signedIn ? "Entrar com o Google…"
             : known ? (string.IsNullOrWhiteSpace(account!.Name) ? account.Email! : account.Name!) : "Conta Google ligada";
         var detail = known && !string.IsNullOrWhiteSpace(account!.Name) && !string.IsNullOrWhiteSpace(account.Email) ? account.Email : null;
         var state = signedIn ? "Ligado ao Google Drive" : "Sincronização cifrada (experimental)";
@@ -257,7 +279,8 @@ public partial class MainWindow
             mark.Text = account!.Initial;
             mark.FontSize = 15;
             mark.FontWeight = FontWeights.SemiBold;
-            mark.Foreground = new SolidColorBrush(Color.FromRgb(0x0B, 0x0D, 0x13));
+            // A tinta sobre a cor de destaque (grafite ou branco, conforme a cor e o tema), como o resto da interface.
+            mark.SetResourceReference(TextBlock.ForegroundProperty, "AccentInkBrush");
         }
         else
         {
@@ -289,7 +312,7 @@ public partial class MainWindow
         row.Children.Add(lines);
         button.Content = row;
         AutomationProperties.SetName(button, signedIn
-            ? $"Conta Google: {(known ? account!.Label : "ligada")}. {state}. Abrir a sincronização nas Definições"
+            ? $"Conta Google: {(known ? account!.Label : "ligada")}. {state}. Abre a sincronização nas Definições"
             : "Entrar com o Google. Abre a sincronização nas Definições");
     }
 

@@ -35,8 +35,16 @@ public static class SettingsPage
         return $"{lists.Count} listas · {rules.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("pt-PT"))} regras · {when}";
     }
 
+    // O estado do Google para a página. Numa janela privada só o estado, sem a conta: o texto «Ligado como Nome
+    // (e-mail)…» passa a «Ligado ao Google Drive…» e não vai endereço nenhum.
+    internal static object SyncGoogleData(Sync.GoogleSync.Status g, bool isPrivate) => isPrivate
+        ? new { state = g.State, text = g.State == "signedIn" ? Sync.GoogleSync.SignedInText(null) : g.Text, url = (string?)null, account = false, pending = false }
+        : new { state = g.State, text = g.Text, url = g.Url, account = g.Account is not null, pending = g.AccountPending };
+
+    // isPrivate: as Definições abertas numa janela privada não mostram nada da conta Google (nem nome nem e-mail) e a
+    // secção Sincronização fica indisponível (as rotas sync-* também recusam nesse contexto).
     public static string Render(UserSettings settings, About? about = null, bool focusAbout = false,
-        IReadOnlyList<ImportSource>? imports = null, IReadOnlyList<SiteSummary>? sites = null)
+        IReadOnlyList<ImportSource>? imports = null, IReadOnlyList<SiteSummary>? sites = null, bool isPrivate = false)
     {
         var data = new
         {
@@ -81,7 +89,8 @@ public static class SettingsPage
                     }.Where(d => d is not null).Concat(s.Flags).Concat(s.Permissions),
             }),
             syncPreview = settings.SyncPreview,
-            syncGoogle = Sync.GoogleSync.Current() is var g ? new { state = g.State, text = g.Text, url = g.Url, account = g.Account is not null, pending = g.AccountPending } : null,
+            syncPrivate = isPrivate,
+            syncGoogle = SyncGoogleData(Sync.GoogleSync.Current(), isPrivate),
             tabs = settings.VerticalTabs ? "side" : "top",
             density = settings.Density,
             accent = settings.Accent,

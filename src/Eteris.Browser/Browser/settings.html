@@ -386,7 +386,8 @@
       <h2>Sincronização</h2>
       <div class="card">
         <div class="item">
-          <div class="label"><b>Experimentar a sincronização (em desenvolvimento)</b><span>Desligada, nada disto existe. Ligada, aparecem as opções em baixo — e mesmo assim nada sai deste computador sem carregar num botão. Os dados vão sempre cifrados neste computador: a chave nunca vai para a Google nem para ninguém.</span></div>
+          <div class="label"><b>Experimentar a sincronização (em desenvolvimento)</b><span>Desligada, nada disto existe. Ligada, aparecem as opções em baixo — e mesmo assim nada sai deste computador sem carregar num botão. Os dados vão sempre cifrados neste computador: a chave nunca vai para a Google nem para ninguém.</span>
+            <span class="syncnote" id="syncPrivateNote" hidden>Numa janela privada a sincronização não está disponível e a conta não aparece: abra as Definições numa janela normal.</span></div>
           <label class="switch"><input type="checkbox" data-key="syncPreview" id="syncPreview"><i></i></label>
         </div>
         <div class="syncbody" id="syncBody" hidden>
@@ -412,10 +413,10 @@
             </form>
           </div>
           <div class="item">
-            <div class="label"><b>Entrar com o Google</b><span>Guarda os dados cifrados na pasta oculta da aplicação no seu Google Drive (a Google só vê ficheiros cifrados, os tamanhos e as horas). O início de sessão abre no navegador do sistema. Depois, o Éteris pede à Google só o nome e o e-mail da conta, para os mostrar aqui e no menu.</span>
+            <div class="label"><b id="googleTitle">Entrar com o Google</b><span>Guarda os dados cifrados na pasta oculta da aplicação no seu Google Drive (a Google só vê ficheiros cifrados, os tamanhos e as horas). O início de sessão abre no navegador do sistema. Depois, o Éteris pede à Google só o nome e o e-mail da conta, para os mostrar aqui e no menu.</span>
               <span class="syncnote" id="googleNote"></span>
               <div class="code" id="googleUrl" hidden></div></div>
-            <button class="action" id="googleButton">Entrar com o Google</button>
+            <button class="action" id="googleButton" aria-describedby="googleNote">Entrar com o Google</button>
           </div>
         </div>
       </div>
@@ -592,21 +593,34 @@
   (() => {
     const body = document.getElementById('syncBody');
     const toggle = document.getElementById('syncPreview');
+    if (data.syncPrivate) {
+      // Janela privada: nada da sincronização nem da conta (as rotas sync-* também recusam aqui).
+      body.hidden = true; toggle.disabled = true;
+      document.getElementById('syncPrivateNote').hidden = false;
+      return;
+    }
     const show = () => { body.hidden = !toggle.checked; };
     show();
     toggle.addEventListener('change', show);
-    const sink = document.createElement('iframe');
-    sink.name = 'syncSink'; sink.hidden = true;
-    document.body.append(sink);
-    let onReply = null;
-    sink.addEventListener('load', () => {
-      const text = sink.contentDocument && sink.contentDocument.body ? sink.contentDocument.body.textContent.trim() : '';
-      let reply = null;
-      try { reply = JSON.parse(text); } catch (e) { reply = text ? { ok: false, message: text === 'recusado' ? 'Ligue primeiro a opção em cima.' : text } : null; }
-      // Cada resposta vai só para quem a pediu (uma vez): uma carga tardia do iframe não cai noutro botão.
-      if (reply && onReply) { const handler = onReply; onReply = null; handler(reply); }
-    });
-    const ask = (path, handler) => { onReply = handler; sink.src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}`; };
+    // Cada pedido tem o seu iframe e o seu tratador: uma resposta só vai para quem a pediu. Com um iframe partilhado,
+    // um «sync-status» automático podia levar a resposta da exportação (e o código, que só aparece uma vez), ou um
+    // clique podia substituir o pedido da conta antes de ele responder.
+    let sinks = 0;
+    const sinkFor = handler => {
+      const frame = document.createElement('iframe');
+      frame.name = 'syncSink' + (++sinks); frame.hidden = true;
+      frame.addEventListener('load', () => {
+        const text = frame.contentDocument && frame.contentDocument.body ? frame.contentDocument.body.textContent.trim() : '';
+        if (!text) return; // o about:blank inicial
+        let reply;
+        try { reply = JSON.parse(text); } catch (e) { reply = { ok: false, message: text === 'recusado' ? 'Ligue primeiro a opção em cima.' : text }; }
+        frame.remove();
+        handler(reply);
+      });
+      document.body.append(frame);
+      return frame;
+    };
+    const ask = (path, handler) => { sinkFor(handler).src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}`; };
     const note = (el, text, bad) => { el.hidden = !text; el.textContent = text || ''; el.classList.toggle('bad', !!bad); };
 
     const exportButton = document.getElementById('exportButton');
@@ -651,7 +665,7 @@
       reader.onload = () => {
         document.getElementById('syncData').value = String(reader.result).replace(/^data:[^,]*,/, '');
         weakerField.value = '0'; importHeld.hidden = true; importWeaker.hidden = true;
-        onReply = importReply;
+        form.target = sinkFor(importReply).name;
         form.submit();
       };
       reader.readAsDataURL(chosen);
@@ -659,41 +673,54 @@
     importWeaker.addEventListener('click', () => {
       if (!document.getElementById('syncData').value) return;
       weakerField.value = '1';
-      onReply = reply => { importReply(reply); if (reply.ok) clearImport(); };
+      form.target = sinkFor(reply => { importReply(reply); if (reply.ok) clearImport(); }).name;
       form.submit();
     });
 
     const googleButton = document.getElementById('googleButton');
+    const googleTitle = document.getElementById('googleTitle');
     const googleNote = document.getElementById('googleNote');
     const googleUrl = document.getElementById('googleUrl');
-    let poll = 0;
+    let poll = 0, googleAsked = 0, googlePainted = 0;
+    // Pedidos do estado do Google (estado, conta, entrar, sair): só a resposta mais recente desenha. Uma resposta
+    // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
+    const askGoogle = path => {
+      const seq = ++googleAsked;
+      ask(path, g => { if (seq < googlePainted) return; googlePainted = seq; paintGoogle(g); });
+    };
     // Nome e e-mail da conta: se há sessão sem conta guardada, pedem-se uma vez quando a secção fica à vista DEPOIS de
     // um gesto da pessoa na página (clique, tecla, roda, toque). Uma aba de Definições reposta no arranque não pede nada.
     let accountKnown = !!(data.syncGoogle && data.syncGoogle.account), accountAsked = false, touched = false, seen = false;
     const askAccount = () => {
       if (!touched || !seen || accountKnown || accountAsked || googleButton.dataset.state !== 'signedIn') return;
       accountAsked = true;
-      ask('sync-account', paintGoogle);
+      askGoogle('sync-account');
     };
     const paintGoogle = g => {
       googleNote.textContent = g.text;
       googleUrl.hidden = !g.url; googleUrl.textContent = g.url || '';
       googleButton.disabled = g.state === 'unconfigured';
       googleButton.textContent = g.state === 'signedIn' ? 'Sair' : g.state === 'waiting' ? 'Cancelar' : 'Entrar com o Google';
+      // Com sessão, a linha é a da conta e o botão diz de que se sai (o leitor de ecrã lê também a nota, com a conta).
+      googleTitle.textContent = g.state === 'signedIn' ? 'Conta Google' : 'Entrar com o Google';
+      if (g.state === 'signedIn') googleButton.setAttribute('aria-label', 'Sair da conta Google');
+      else googleButton.removeAttribute('aria-label');
       googleButton.dataset.state = g.state;
       accountKnown = !!g.account;
       clearTimeout(poll);
       // À espera do início de sessão, ou da conta logo a seguir a entrar: volta a perguntar daqui a pouco.
-      if (g.state === 'waiting' || (g.state === 'signedIn' && g.pending)) poll = setTimeout(() => ask('sync-status', paintGoogle), 1500);
+      if (g.state === 'waiting' || (g.state === 'signedIn' && g.pending)) poll = setTimeout(() => askGoogle('sync-status'), 1500);
       if (g.state !== 'signedIn') accountAsked = false;
     };
     paintGoogle(data.syncGoogle);
+    // O gesto que é o próprio «Sair» não pede a conta: o pedido sairia para a Google no instante em que se sai.
+    const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && googleButton.contains(e.target);
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
-      addEventListener(type, () => { touched = true; askAccount(); }, { passive: true, capture: true });
+      addEventListener(type, e => { touched = true; if (!isSignOut(e)) askAccount(); }, { passive: true, capture: true });
     new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); }).observe(googleButton);
     googleButton.addEventListener('click', () => {
       const state = googleButton.dataset.state;
-      ask(state === 'signedIn' ? 'sync-google-out' : state === 'waiting' ? 'sync-google-cancel' : 'sync-google', paintGoogle);
+      askGoogle(state === 'signedIn' ? 'sync-google-out' : state === 'waiting' ? 'sync-google-cancel' : 'sync-google');
     });
   })();
 
