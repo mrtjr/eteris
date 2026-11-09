@@ -30,8 +30,9 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
      que vai à rede (GitHub); `-CefSharpSource <pasta>` usa um clone local, e o `origin` passa sempre a ser o oficial
      (o SourceLink do `CefSharp.Core.Runtime` precisa dele, senão a ligação falha com LNK1104);
    - `build/cefsharp/prepare-source.ps1` (patch v2, SDK 9, net8.0, `packages\` da cache do NuGet e
-     `Directory.Build.props`/`.targets` vazios na raiz do clone — sem eles o clone, por estar dentro do repositório,
-     apanhava o `TreatWarningsAsErrors` do Éteris e não compilava), `build-cefsharp.cmd` e `pack-local.ps1` para o feed
+     `Directory.Build.props`/`.targets` próprios na raiz do clone — sem eles o clone, por estar dentro do repositório,
+     apanhava o `TreatWarningsAsErrors` do Éteris e não compilava; só trazem as opções de «Caminhos de quem compila»,
+     em baixo), `build-cefsharp.cmd` e `pack-local.ps1` para o feed
      local `build/cefsharp/feed` (`156.0.150-eteris.N`; N por omissão = o maior da cache do NuGet + 1, porque a cache
      guarda cada versão para sempre e um N reutilizado com binários novos restauraria os antigos — o script recusa-o);
    - verificação dos pacotes (versão, dependência `[156.0.150-eteris.N]`, assinatura do repositório removida,
@@ -39,6 +40,9 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
      SHA256 do patch e das montagens), que o `publish.ps1` lê;
    - DLL cliente (`build/sandbox/client/build.cmd`) contra a distribuição do passo 1, conferida antes contra o runtime
      (commit da CEF no `cef_version.h` e SHA256 do `libcef.dll`), e `verify-client.ps1`;
+   - o caminho do perfil de quem compila: a DLL cliente e o `CefSharp.Core.dll`/`CefSharp.Core.Runtime.dll` do feed
+     não o podem levar (`build/profile-paths.ps1`, a mesma procura do `publish.ps1`). Confere também com
+     `-SkipCefSharp` e `-SkipClient`, e pára antes dos testes (ver «Caminhos de quem compila», a seguir);
    - a bateria de testes com o CefSharp do feed (o modo **com** sandbox: a constante `ETERIS_CEFSHARP_SANDBOX` vem do
      csproj por causa do `-p:EterisCefSharpFeed` que o script passa), confirmando que o CefSharp restaurado e carregado é
      o do feed. A CI (`build.yml`, `release.yml`) continua a correr o modo **sem** sandbox, com o CefSharp oficial: os
@@ -61,7 +65,8 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
    trabalha pelo nome curto 8.3 da pasta (o cmd.exe,
    o C++/CLI, o CMake e o SourceLink só foram provados com caminhos ASCII); sem nomes curtos no disco pára e pede uma
    cópia num caminho ASCII. Provado com `-SkipCefSharp -SkipClient` pelo caminho com acentos do worktree (testes e
-   marca); a compilação completa do CefSharp e da DLL por esse caminho ainda não foi corrida.
+   marca); a compilação completa do CefSharp e da DLL por esse caminho ainda não foi corrida. O nome curto ainda é o
+   do utilizador, mas as opções de «Caminhos de quem compila» tiram-no dos binários.
 3. **Publicar**: `.\build\publish.ps1 -Version X.Y.Z`. Limpa `publish\`, verifica o motor (manifesto), lê o N do
    `eteris-cefsharp.json` (um `-CefSharpN` diferente é recusado), recusa a falta do feed, da DLL cliente ou do
    bootstrap (com a indicação do `build-all.ps1` e do `-NoSandbox`) e recusa publicar sem a marca dos testes
@@ -74,11 +79,11 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
    do NuGet ganha sempre ao feed: um N reutilizado daria outros binários) e sem `CefSharp.BrowserSubprocess.exe`. Nos
    dois modos recusa também os binários nossos publicados (`Eteris*`, `eteris_*`, `CefSharp*` e os `.pdb`; o
    `libcef.dll` fica de fora) que levem o caminho do perfil de quem compila (`\Users\<utilizador>\`, na forma longa
-   ou na curta 8.3): o .NET fica limpo pelo `PathMap` do `Directory.Build.props` (em Release) e o Escudo pelo
-   `--remap-path-prefix` do csproj, mas a DLL cliente e o `CefSharp.Core.Runtime.dll` que o `build-all.ps1` compila
-   hoje pelo nome curto do repositório ainda o levam (caminho do PDB e `__FILE__` do `libcef_dll_wrapper`). **Até as
-   peças nativas serem compiladas numa raiz neutra (arrumação 0.2.14, fase S4, por fazer), a publicação com sandbox
-   de um repositório dentro do perfil é recusada.** Por
+   ou na curta 8.3, e também dentro do PDB portátil embutido nas montagens .NET): o .NET fica limpo pelo `PathMap` do
+   `Directory.Build.props` (em Release), o Escudo pelo `--remap-path-prefix` do csproj e as peças do `build-all.ps1`
+   pelas opções de «Caminhos de quem compila» (arrumação 0.2.14, fase S4). **Um feed ou uma DLL cliente compilados
+   antes dessas opções levam o caminho e são recusados**: é preciso o `build-all.ps1` completo (sem `-SkipCefSharp`
+   nem `-SkipClient`). Por
    último grava `publish\eteris-build.json` (versão, modo, commit, o `eteris-cefsharp.json` com o SHA256 das montagens
    trocadas, SHA256 da DLL cliente, hora dos testes): vai na instalação e liga cada release ao CefSharp que leva — o N
    só é único na máquina que o compilou (vem da cache do NuGet) e os binários não são idênticos byte a byte entre
@@ -96,6 +101,69 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
 **Assinatura:** o Éteris não é assinado, e o bootstrap aceita o exe, o `chrome_elf.dll` e a DLL cliente os três sem
 assinatura. Se um dia passar a ser assinado, têm de ser os três com o mesmo certificado (senão o arranque pára), assinados
 depois do `brand-bootstrap.ps1` e antes do `vpk pack` (ver «Falta», item 1).
+
+### Caminhos de quem compila (arrumação 0.2.14, fase S4)
+
+Os binários publicados não podem levar o caminho do perfil de quem compila (`C:\Users\<utilizador>\…`, nem a forma
+curta 8.3 `C:\Users\ABCDEF~1\…`): quem descarrega o instalador lê-o com `strings`. O `publish.ps1` recusa-os, e o
+`build-all.ps1` confere as peças nativas logo depois de as compilar, com a mesma procura (`build/profile-paths.ps1`).
+
+**O que as peças do sandbox levavam** (compiladas pelo `build-all.ps1` no ramo `rede-seguranca`, repositório dentro do
+perfil; contagem das cadeias com o nome, nas formas longa e curta, em UTF-8 e UTF-16LE):
+
+| Peça | Cadeias | De onde vêm |
+|---|---|---|
+| DLL cliente `Eteris.Browser.dll` (CMake, `/MT`) | 34 | `__FILE__` dos `LOG`/`CHECK` do `libcef_dll_wrapper` (`libcef_dll\ctocpp`, `cpptoc`, `wrapper`), todas debaixo da distribuição da CEF. Sem PDB: a CEF só liga com `/DEBUG` em Debug |
+| `CefSharp.Core.Runtime.dll` (C++/CLI) | 1 | caminho completo do `.pdb` na entrada CodeView |
+| `CefSharp.Core.dll` (C#) | 0 à vista, 2 dentro | o PDB portátil embutido (`DebugType embedded`) vai comprimido: caminhos das fontes e `sourcelink.json` |
+| bootstrap `Eteris.Browser.exe`, `libcef.dll` | 0 | compilados em `C:\cef` |
+
+**O que se faz** (sem mudar a raiz de compilação; o `build-all.ps1` continua a trabalhar pelo nome curto 8.3 quando o
+caminho tem acentos):
+
+| Peça | Opção | Onde |
+|---|---|---|
+| DLL cliente | `/d1trimfile:<CEF_ROOT>` no compilador (só C++): o front-end do MSVC corta esse prefixo do `__FILE__` | `build/sandbox/client/CMakeLists.txt`, antes do `add_subdirectory` do wrapper |
+| `CefSharp.Core.Runtime.dll` | `/PDBALTPATH:%_PDB%` no linker: a entrada CodeView fica só com o nome do `.pdb` | `Directory.Build.targets` que o `prepare-source.ps1` escreve no clone (só no `.vcxproj`) |
+| `CefSharp.Core.dll` | `DeterministicSourcePaths`: o Roslyn troca a raiz do clone (o `SourceRoot` do SourceLink) por `/_/` nos documentos e no `sourcelink.json` | `Directory.Build.props` que o `prepare-source.ps1` escreve no clone (só nos `.csproj`) |
+| todas | verificação depois de compilar, antes dos testes e da marca; também com `-SkipCefSharp`/`-SkipClient` | `build/sandbox/build-all.ps1` com `build/profile-paths.ps1` |
+
+O `/PDBALTPATH` e o `DeterministicSourcePaths` estão documentados. O `/d1trimfile` não está (é uma opção do front-end,
+`c1xx.dll`, que o `cl.exe` passa sem a mostrar no `cl /?`). Está nas Build Tools 2022 (MSVC 14.44, as que o
+`build-all.ps1` usa) e no Visual Studio 2026 Insiders (14.50). Por isso a verificação do `build-all.ps1` é a garantia: se
+o compilador o ignorar, o script pára antes dos testes e diz qual é a peça.
+
+**O que se pôs de lado, e porquê:**
+- `/pathmap:<de>=<para>` do MSVC: também não aparece no `cl /?` (14.44 e 14.50) nem na documentação da Microsoft, e só
+  vale com `/experimental:deterministic`, que acrescenta avisos de determinismo (C5048 com `__DATE__`/`__TIME__`, por
+  exemplo); a CEF compila com `/W4 /WX`, por isso qualquer aviso parava a compilação.
+- Mexer no `__FILE__` do `libcef_dll_wrapper`: as macros de `include/base/cef_logging.h` usam o `__FILE__` diretamente,
+  sem opção para o tirar, e redefinir o `__FILE__` não é permitido (aviso C4117, erro com `/WX`).
+- Raiz neutra (letra `subst` ou junção) dentro do script: resolve tudo de uma vez, mas obriga a mexer no sistema de
+  ficheiros durante a compilação e a garantir a limpeza, e algumas ferramentas resolvem o caminho real. Fica como plano B,
+  à mão, se a verificação parar mesmo com as opções.
+
+**Plano B (raiz neutra, à mão).** O `build-all.ps1` trabalha pelo caminho por onde é chamado (`$PSScriptRoot`), por isso
+basta chamá-lo por uma junção fora do perfil. Uma junção não precisa de administrador nem muda letras de unidade, e os
+utilizadores autenticados podem criar pastas na raiz do disco por omissão:
+
+```bat
+mklink /J C:\eb "<pasta do repositório>"
+powershell -ExecutionPolicy Bypass -File C:\eb\build\sandbox\build-all.ps1
+rmdir C:\eb
+```
+
+O `rmdir` **sem** `/s` tira só a junção; com `/s` apagaria o repositório. Uma distribuição da CEF fora do repositório
+(`-CefDistrib`) precisa da sua própria junção (por exemplo `mklink /J C:\eb-cef "<distribuição>"` e
+`-CefDistrib C:\eb-cef`), que também resolve o limite de 260 caracteres. O `publish.ps1` corre depois pelo caminho
+normal: lê as mesmas peças.
+
+**Por provar** (o `build-all.ps1` completo ainda não correu com estas opções; só depois da 0.2.13):
+1. A DLL cliente compilada com o `/d1trimfile` sai sem as 34 cadeias, e o `verify-client.ps1` continua a passar.
+2. O `CefSharp.Core.Runtime.dll` sai com `CefSharp.Core.Runtime.pdb` (só o nome) na entrada CodeView.
+3. O `CefSharp.Core.dll` sai com `/_/` no PDB embutido, e o SourceLink continua a gerar o `sourcelink.json`.
+4. A verificação nova do `build-all.ps1` passa, e o `publish.ps1` com sandbox também, num repositório dentro do perfil.
+5. Contraprova: um feed antigo com `-SkipCefSharp` tem de parar na verificação do `build-all.ps1`.
 
 ## Como o sandbox funciona hoje no CEF (Windows)
 
