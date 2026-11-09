@@ -9,9 +9,16 @@
 import os
 import sys
 
-target = os.path.abspath(sys.argv[1])
-repo = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
-if os.path.commonpath([target, repo]) == repo:
+# realpath dá o caminho final (nomes longos em vez dos curtos 8.3, e as maiúsculas do disco) e normcase compara sem
+# maiúsculas: «c:\users\…» ou o nome curto do repositório também são o repositório. Noutro disco o commonpath dá
+# ValueError, e aí é de certeza uma cópia.
+target = os.path.normcase(os.path.realpath(sys.argv[1]))
+repo = os.path.normcase(os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")))
+try:
+    inside = os.path.commonpath([target, repo]) == repo
+except ValueError:
+    inside = False
+if inside:
     sys.exit("recusado: o patch de teste só se aplica a uma cópia fora deste repositório")
 
 s = open(target, encoding="utf-8-sig").read()
