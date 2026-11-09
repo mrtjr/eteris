@@ -280,7 +280,7 @@ acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o es
 `SyncIntegrationTests.Startup_OnlySchedulesTheFirstRound_ThirtySecondsAfterTheWindow`). Com ela ligada — escolha do
 utilizador —, a exceção é dita em `eteris://privacy/` (`PrivacyPage.SyncException`): só os pedidos da sincronização,
 cifrados, para a pasta oculta da aplicação no Drive dele, **30 s depois de a janela estar pronta**, 10 s depois de uma
-alteração e de 10 em 10 minutos, por um cliente próprio que só fala com `oauth2.googleapis.com` (`/token`, `/revoke`) e
+alteração, de 10 em 10 minutos e ao abrir o menu da conta ou a secção Sincronização (pedidos de outros computadores), por um cliente próprio que só fala com `oauth2.googleapis.com` (`/token`, `/revoke`) e
 `www.googleapis.com` (`/drive/v3/files`, `/upload/drive/v3/files`, `/drive/v3/about`) — nada pelo motor
 (`GoogleSyncTests.HttpClient_OnlyReachesGoogleOAuthAndDrive`, varrimento `SyncLibrary_HttpOnlyInTheGoogleFolder…` e
 `BrowserSyncFolder_HttpOnlyThroughTheGoogleClient`). Prova ao vivo com a pasta de teste: a 1.ª escrita chega 31,6 s
