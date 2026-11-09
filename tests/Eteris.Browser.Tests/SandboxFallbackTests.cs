@@ -74,6 +74,33 @@ public class SandboxFallbackTests
         Assert.Equal("0.2.15", again.State.DisabledFor);
     }
 
+    // O ETERIS_TEST_CRASH_BEFORE_PAINT só serve as provas numa cópia portátil: numa instalação (Update.exe na pasta de
+    // cima) é ignorado, para uma variável esquecida não fazer cair o Éteris instalado duas vezes e desligar o sandbox até
+    // à versão seguinte.
+    [Theory]
+    [InlineData("1", false, true)]
+    [InlineData(" 1 ", false, true)]
+    [InlineData("1", true, false)]
+    [InlineData("0", false, false)]
+    [InlineData(null, false, false)]
+    [InlineData(null, true, false)]
+    public void CrashBeforePaint_IsInertInAnInstall(string? value, bool installed, bool expected)
+        => Assert.Equal(expected, TestSwitches.CrashBeforePaintFor(value, installed));
+
+    [Fact]
+    public void CrashBeforePaint_ReadsTheInstallFromTheSwitches()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Infrastructure", "TestSwitches.cs"));
+        Assert.Matches(@"CrashBeforePaint\s*=>\s*CrashBeforePaintFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_CRASH_BEFORE_PAINT""\),\s*\w*\.?IsInstalled\)", source);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
+
     // Uma queda sem sandbox (manual) não é culpa dele: não conta.
     [Fact]
     public void CrashesWithoutTheSandbox_DoNotCount()

@@ -11,8 +11,17 @@ public static class TestSwitches
     public static int? DevToolsPort => Port(Environment.GetEnvironmentVariable("ETERIS_TEST_DEVTOOLS_PORT"));
 
     // ETERIS_TEST_CRASH_BEFORE_PAINT=1: o processo termina de repente logo a seguir ao Cef.Initialize, antes da 1.ª página
-    // (como uma queda), para provar a rede de segurança do sandbox (Infrastructure/SandboxFallback.cs).
-    public static bool CrashBeforePaint => IsOn(Environment.GetEnvironmentVariable("ETERIS_TEST_CRASH_BEFORE_PAINT"));
+    // (como uma queda), para provar a rede de segurança do sandbox (Infrastructure/SandboxFallback.cs). Só numa cópia
+    // portátil: a versão instalada ignora-a, porque uma variável esquecida no PC de alguém fazia cair o Éteris instalado
+    // duas vezes, e isso desligava o sandbox até à versão seguinte.
+    public static bool CrashBeforePaint => CrashBeforePaintFor(Environment.GetEnvironmentVariable("ETERIS_TEST_CRASH_BEFORE_PAINT"), IsInstalled);
+
+    public static bool CrashBeforePaintFor(string? value, bool installed) => !installed && IsOn(value);
+
+    // Instalação do Velopack: o Update.exe está na pasta de cima (%LOCALAPPDATA%\<pacote>\current\Eteris.Browser.exe).
+    // Com o sandbox, o AppContext.BaseDirectory é a pasta do Eteris.App.dll, a mesma do bootstrap (current\).
+    // É a regra do Sync.SyncService.IsInstalled da 0.2.13; ao fundir a 0.2.13 fica uma só.
+    public static bool IsInstalled => System.IO.File.Exists(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "Update.exe"));
 
     // Como uma queda: sem fecho, sem relatório do Windows (TerminateProcess), com um código de saída próprio.
     public const uint CrashExitCode = 0xE7E50001;

@@ -637,7 +637,9 @@ abre também nunca recebe a correção. Três camadas:
   partido, guarda inerte sem sandbox, aviso na nova aba normal e privada, interruptores iguais nos dois lados);
   `SandboxBootstrapSourceTests` (recurso de versão com a marca das DLLs de teste).
 - Ganchos só de teste: `ETERIS_TEST_CRASH_BEFORE_PAINT=1` (`TestSwitches`: `TerminateProcess` logo a seguir ao
-  `Cef.Initialize`, código `0xE7E50001`, sem relatório do Windows) e, só numa DLL cliente compilada com
+  `Cef.Initialize`, código `0xE7E50001`, sem relatório do Windows; desde a 0.2.14 ignorado numa instalação do Velopack,
+  com o `Update.exe` na pasta de cima, para uma variável esquecida não desligar o sandbox de ninguém: a prova (b) faz-se
+  numa cópia portátil) e, só numa DLL cliente compilada com
   `cmake -DETERIS_TEST_HOOKS=ON`, `ETERIS_TEST_DOTNET_FAILS_WITH_SANDBOX=1`. Essa DLL leva `test_hooks` no recurso de
   versão e `verify-client.ps1` recusa-a na publicação («é uma DLL de teste»), também pela cadeia `ETERIS_TEST_` no binário
   (verificado: a DLL normal passa, a de teste é recusada).
@@ -775,8 +777,11 @@ Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo
 - JavaScript nas páginas só por `Browser/PageScript.cs` (`PageScript.EvaluateAsync`/`PageScript.Run`, DevTools
   `Runtime.evaluate`) ou registado antes dos scripts da página pelo `ScriptletInjector`
   (`Page.addScriptToEvaluateOnNewDocument`). `userGesture: true` só em ações pedidas pelo utilizador.
+- Também não: a propriedade `RenderProcessMessageHandler` do browser nem `IJavascriptCallback`; e, nas páginas
+  internas (`.html` e `.js`), o objeto `CefSharp.` (`CefSharp.PostMessage`, `CefSharp.BindObjectAsync`), que só existe
+  com o processo filho .NET.
 - O teste `tests/Eteris.Browser.Tests/SandboxRulesTests.cs` percorre `src/Eteris.Browser/**/*.cs` e falha se algum
-  destes nomes aparecer fora de comentários.
+  destes nomes aparecer fora de comentários; e percorre `src/Eteris.Browser/**/*.html` e `*.js` à procura de `CefSharp.`.
 
 ## Alternativas consideradas
 

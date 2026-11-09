@@ -13,7 +13,13 @@ public class SandboxRulesTests
     [
         "EvaluateScriptAsync", "ExecuteScriptAsync", "ExecuteJavaScriptAsync", "EvaluateScriptAsPromiseAsync",
         "IRenderProcessMessageHandler", "JavascriptObjectRepository", "JavascriptMessageReceived", "RegisterJsObject",
+        // A propriedade do browser (sem o «I» da interface) e as funções JavaScript devolvidas ao .NET.
+        "RenderProcessMessageHandler =", "IJavascriptCallback",
     ];
+
+    // Nas páginas internas (src/Eteris.Browser/**/*.html e *.js): o objeto CefSharp que o processo filho .NET injeta
+    // (CefSharp.PostMessage, CefSharp.BindObjectAsync…) não existe com o processo filho nativo.
+    public const string PageScriptCefSharpObject = "CefSharp.";
 
     // Parte do próprio ficheiro de código: os testes podem correr a partir de uma pasta de compilação fora do repositório.
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
@@ -23,8 +29,8 @@ public class SandboxRulesTests
         return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
     }
 
-    private static IEnumerable<string> SourceFiles()
-        => Directory.EnumerateFiles(Path.Combine(Root, "src", "Eteris.Browser"), "*.cs", SearchOption.AllDirectories)
+    private static IEnumerable<string> SourceFiles(string pattern = "*.cs")
+        => Directory.EnumerateFiles(Path.Combine(Root, "src", "Eteris.Browser"), pattern, SearchOption.AllDirectories)
             .Where(f => !Path.GetRelativePath(Root, f).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Any(part => part is "obj" or "bin" or "publish"));
 
@@ -75,6 +81,33 @@ public class SandboxRulesTests
             .ToList();
         Assert.True(offenders.Count == 0,
             "APIs do processo filho do CefSharp no código (docs/sandbox.md, «Regras para o código»; usar Browser/PageScript.cs):\n"
+            + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void Violations_FlagTheHandlerPropertyAndJavascriptCallbacks()
+    {
+        var found = Violations(
+        [
+            "browser.RenderProcessMessageHandler = new Handler();",
+            "async Task Done(IJavascriptCallback callback) { }",
+            "// browser.RenderProcessMessageHandler = null; só num comentário",
+        ]).ToList();
+        Assert.Equal([(1, "RenderProcessMessageHandler ="), (2, "IJavascriptCallback")], found);
+    }
+
+    [Fact]
+    public void InternalPages_NeverUseTheCefSharpObject()
+    {
+        var pages = SourceFiles("*.html").Concat(SourceFiles("*.js")).ToList();
+        Assert.Contains(pages, f => Path.GetFileName(f) == "newtab.html");
+        var offenders = pages
+            .SelectMany(file => File.ReadLines(file).Select((line, i) => (Line: i + 1, Text: line))
+                .Where(l => l.Text.Contains(PageScriptCefSharpObject, StringComparison.Ordinal))
+                .Select(l => $"{Path.GetRelativePath(Root, file)}:{l.Line}"))
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "Objeto CefSharp do processo filho .NET nas páginas internas (docs/sandbox.md, «Regras para o código»):\n"
             + string.Join("\n", offenders));
     }
 

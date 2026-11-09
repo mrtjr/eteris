@@ -23,8 +23,9 @@ public class PrivacyEntriesTests
     [Fact]
     public void WhatsNew_AnnouncesTheObservatoryAndTheReportAmongTheHighlights()
     {
-        // Entre os destaques da 0.2.9 (os 8 a seguir aos 2 da 0.2.12, aos 2 da 0.2.11 e aos 5 da 0.2.10), o Observatório seguido do relatório.
-        var top = WhatsNewPage.Highlights.Skip(9).Take(8).ToList();
+        // Entre os destaques da 0.2.9 (os 8 a seguir ao da 0.2.14, aos 2 da 0.2.12, aos 2 da 0.2.11 e aos 5 da 0.2.10), o
+        // Observatório seguido do relatório.
+        var top = WhatsNewPage.Highlights.Skip(10).Take(8).ToList();
         var observatory = top.FindIndex(h => h.Title == "Observatório do site");
         Assert.True(observatory >= 0);
         Assert.Equal("Ctrl+Shift+U", top[observatory].Keys);

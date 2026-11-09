@@ -11,8 +11,14 @@ public static class WhatsNewPage
 {
     public const string Url = "eteris://whatsnew/";
 
+    // Destaque do isolamento das páginas (docs/sandbox.md). Só aparece enquanto o build/publish.ps1 publicar com o
+    // sandbox por omissão: uma versão de recuo sem ele tira-o (WhatsNewTests.Highlights_AnnounceTheSandboxOnlyWhen…).
+    public const string SandboxTitle = "Páginas isoladas (sandbox)";
+
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.14
+        new("🔐", SandboxTitle, "Como no Chrome, no Firefox e no Brave: cada página corre fechada, sem acesso aos seus ficheiros nem ao sistema. Se o isolamento falhar neste PC, o Éteris abre sem ele e avisa."),
         // 0.2.12
         new("⌨", "Menu do Éteris pelo teclado", "Como no Chrome, no Firefox e no Brave: setas, Home, End e a inicial escolhem a linha, Enter ativa, Esc fecha e devolve o foco, e as teclas já não chegam à página.", "Alt+F · Alt+E"),
         new("☰", "Menu legível", "O título, o subtítulo e o «Zoom» do menu já não aparecem em quadrados, e nas Definições a secção escolhida na navegação fica realçada."),

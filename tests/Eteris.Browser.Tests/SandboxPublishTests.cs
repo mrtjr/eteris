@@ -19,11 +19,43 @@ public class SandboxPublishTests
 
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([Root(), .. parts]));
 
+    // O param(...) do início do publish.ps1, numa linha ou em várias (a 0.2.13 acrescenta o -GoogleOAuthJson).
+    public static string PublishParam(string publish)
+    {
+        var match = Regex.Match(publish, @"^param\(([^)]*)\)", RegexOptions.Multiline);
+        Assert.True(match.Success, "publish.ps1 sem param(...)");
+        return match.Groups[1].Value;
+    }
+
+    // Sem argumentos, o publish.ps1 publica com o sandbox: só há o -NoSandbox para sair dele, e não ligado por omissão.
+    public static bool DefaultIsSandbox(string param)
+        => Regex.IsMatch(param, @"\[switch\]\$NoSandbox(?!\s*=\s*\$true)", RegexOptions.IgnoreCase)
+           && !Regex.IsMatch(param, @"\[switch\]\$Sandbox\b", RegexOptions.IgnoreCase);
+
+    [Theory]
+    [InlineData("[string]$Version = \"0.2.14\", [switch]$NoSandbox, [string]$CefSharpFeed = \"\"", true)]
+    [InlineData("[string]$Version = \"0.2.14\", [switch]$NoSandbox = $true", false)]
+    [InlineData("[string]$Version = \"0.2.12\", [switch]$Sandbox, [string]$CefSharpFeed = \"\"", false)]
+    [InlineData("[string]$Version = \"0.2.12\"", false)]
+    public void DefaultIsSandbox_ReadsTheParamOfPublish(string param, bool expected)
+        => Assert.Equal(expected, DefaultIsSandbox(param));
+
+    [Fact]
+    public void PublishParam_ReadsAParamOverSeveralLines()
+    {
+        var param = PublishParam("# cabeçalho\r\nparam([string]$Version = \"0.2.14\", [switch]$NoSandbox, [string]$CefSharpFeed = \"\",\r\n"
+                                 + "  [string]$SandboxClientDll = \"\", [string]$GoogleOAuthJson = \"\")\r\n$ErrorActionPreference = \"Stop\"\r\n");
+        Assert.Contains("[switch]$NoSandbox", param);
+        Assert.Contains("$GoogleOAuthJson", param);
+        Assert.DoesNotContain("ErrorActionPreference", param);
+    }
+
     [Fact]
     public void Publish_IsWithSandboxByDefault_AndNoSandboxIsTheEmergencyExit()
     {
         var publish = Read("build", "publish.ps1");
-        var param = Regex.Match(publish, @"^param\((.*)\)\r?$", RegexOptions.Multiline).Groups[1].Value;
+        var param = PublishParam(publish);
+        Assert.True(DefaultIsSandbox(param), param);
         Assert.Contains("[switch]$NoSandbox", param);
         Assert.DoesNotContain("[switch]$Sandbox", param);
         // O sandbox é o ramo «else» do -NoSandbox: sem argumentos, publica com ele.
