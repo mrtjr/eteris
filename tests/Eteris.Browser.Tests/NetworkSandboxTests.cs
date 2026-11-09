@@ -180,13 +180,15 @@ public class NetworkSandboxTests
         }
     }
 
-    // Como o Chromium (GetAppContainerProfileName): «cr.sb.net» + SHA1 do caminho em UTF-8, maiúsculas. O valor é o do
-    // perfil que a instalação de teste do Velopack deixou nesta máquina (2026-11-08), com o «ú» de «Júnior».
+    // Como o Chromium (GetAppContainerProfileName): «cr.sb.net» + SHA1 do caminho em UTF-8, maiúsculas. Caminho fictício
+    // com um carácter fora do ASCII («á»: UTF-8, UTF-16 e ANSI dão bytes diferentes); o valor esperado foi calculado fora
+    // do Éteris (SHA1 dos bytes UTF-8, em Python e no PowerShell). A fórmula foi conferida com um perfil real criado pelo
+    // Chromium na prova do Velopack de 2026-11-08 (docs/sandbox.md).
     [Fact]
     public void ProfileName_IsTheChromiumOne()
     {
-        Assert.Equal("cr.sb.netB382764A951831BB0A76C124F3484E6BDFFFB515",
-            NetworkSandbox.ProfileName(@"C:\Users\Júnior\AppData\Local\EterisBrowserSbxTest\current\Eteris.Browser.exe"));
+        Assert.Equal("cr.sb.net5B29C3D47D470C8D99DC5CDBA6858F55CEBD46A3",
+            NetworkSandbox.ProfileName(@"C:\Users\Usuário\AppData\Local\EterisBrowser\current\Eteris.Browser.exe"));
         Assert.Equal(49, NetworkSandbox.ProfileName(@"C:\a.exe").Length); // o Chromium corta aos 50
         Assert.NotEqual(NetworkSandbox.ProfileName(@"C:\Eteris\Eteris.Browser.exe"), NetworkSandbox.ProfileName(@"c:\eteris\eteris.browser.exe"));
     }
