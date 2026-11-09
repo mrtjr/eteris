@@ -77,17 +77,21 @@ public class BrowserMenuKeysTests
     [InlineData(Key.RightShift, false, true, false, false, BrowserMenuKey.Ignore)]
     [InlineData(Key.LWin, false, false, false, false, BrowserMenuKey.Ignore)]
     [InlineData(Key.System, false, false, true, false, BrowserMenuKey.Ignore)]
-    // AltGr (Ctrl+Alt) sozinho e AltGr+2 («@»): com o menu aberto nada escreve na página.
-    [InlineData(Key.LeftAlt, true, false, true, false, BrowserMenuKey.Ignore)]
+    // AltGr (para o Windows, Ctrl da esquerda + Alt da direita) sozinho e AltGr+2 («@»): com o menu aberto nada escreve
+    // na página.
+    [InlineData(Key.LeftCtrl, true, false, true, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.RightAlt, true, false, true, false, BrowserMenuKey.Ignore)]
     [InlineData(Key.D2, true, false, true, false, BrowserMenuKey.Ignore)]
     public void FromPage_WithMenuOpen_ConsumesMenuKeysAndRunsShortcuts(Key key, bool ctrl, bool shift, bool alt, bool isShortcut, BrowserMenuKey expected)
         => Assert.Equal(expected, BrowserMenuKeys.FromPage(key, ctrl, shift, alt, isShortcut));
 
     // Com o menu aberto, nenhuma tecla vinda da página fica por decidir: ou é do menu, ou é um atalho, ou é consumida
     // (ShortcutFromPage devolve sempre «tratada» com o menu aberto). Todas as teclas, com e sem Ctrl, Shift e Alt.
+    // Já não há decisão que deixe a tecla seguir para a página (era o PassToPage, dos modificadores sozinhos).
     [Fact]
     public void FromPage_WithMenuOpen_NothingReachesThePage()
     {
+        Assert.DoesNotContain("PassToPage", Enum.GetNames<BrowserMenuKey>());
         var keys = Enum.GetValues<Key>().Where(k => k != Key.None).Distinct();
         foreach (var key in keys)
             foreach (var ctrl in new[] { false, true })

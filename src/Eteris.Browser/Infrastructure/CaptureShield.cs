@@ -29,8 +29,9 @@ public static class CaptureShield
 
     private static uint Current => WantedOverride?.Invoke() ?? Wanted;
 
-    // O gancho fica vivo enquanto o processo existir (o delegado não pode ser recolhido).
-    private static WinEventProc? s_hook;
+    // O gancho fica vivo enquanto o processo existir (o delegado não pode ser recolhido). Um só delegado para todos os
+    // ganchos: se houver dois ao mesmo tempo (ver HookNewWindows), o primeiro continua a chamar um delegado vivo.
+    private static readonly WinEventProc s_hook = OnWinEvent;
     private static nint s_hookHandle;
     // A thread que instalou o gancho: os eventos só chegam por ela, e o Windows desfaz o gancho quando ela termina.
     private static Thread? s_hookThread;
@@ -69,7 +70,6 @@ public static class CaptureShield
         lock (s_hookLock)
         {
             if (s_hookHandle != 0 && s_hookThread == Thread.CurrentThread) return;
-            s_hook = OnWinEvent;
             s_hookHandle = SetWinEventHook(EventObjectCreate, EventObjectShow, 0, s_hook, (uint)Environment.ProcessId, 0, WinEventOutOfContext);
             s_hookThread = Thread.CurrentThread;
         }

@@ -12,28 +12,44 @@ public static class InstanceChannel
 
     private static string PipeName(string name) => name + ".pipe";
 
-    // O primeiro pipe é criado aqui, antes de devolver (menos de 1 ms): quem chega logo a seguir já o encontra. Antes
-    // era criado dentro do Task.Run e, com o pool de threads ocupado, um envio feito nesse intervalo esgotava o prazo e
-    // perdia o link. Os seguintes são criados no ciclo, depois de cada mensagem. Se o primeiro não se puder criar já
-    // (o nome ainda ocupado), o ciclo tenta de novo como antes, sem deitar abaixo o arranque.
+    // O primeiro pipe é criado aqui, antes de devolver (menos de 1 ms), e fica logo à espera de ligação: quem chega a
+    // seguir já o encontra. Antes era criado dentro do Task.Run e, com o pool de threads ocupado, um envio feito nesse
+    // intervalo esgotava o prazo e perdia o link. A espera (ConnectNamedPipe) também começa aqui, e não no ciclo: um
+    // cliente que se liga, escreve e fecha antes de o servidor esperar faz o ConnectNamedPipe falhar (ERROR_NO_DATA) e
+    // a mensagem perdia-se, com o Send a dizer que entregou. Os seguintes são criados no ciclo, depois de cada mensagem.
+    // Se o primeiro não se puder criar já (o nome ainda ocupado), o ciclo tenta de novo como antes, sem deitar abaixo o
+    // arranque.
     public static IDisposable Listen(string name, Action<string[]> onArgs)
     {
         var stop = new CancellationTokenSource();
         NamedPipeServerStream? first = null;
-        try { first = NewServer(name); }
-        catch (Exception) { }
+        Task? firstConnection = null;
+        try
+        {
+            first = NewServer(name);
+            firstConnection = first.WaitForConnectionAsync(stop.Token);
+        }
+        catch (Exception)
+        {
+            first?.Dispose();
+            first = null;
+            firstConnection = null;
+        }
         _ = Task.Run(async () =>
         {
             var next = first;
+            var nextConnection = firstConnection;
             while (!stop.IsCancellationRequested)
             {
                 try
                 {
                     var server = next ?? NewServer(name);
+                    var connection = nextConnection;
                     next = null;
+                    nextConnection = null;
                     await using (server)
                     {
-                        await server.WaitForConnectionAsync(stop.Token);
+                        await (connection ?? server.WaitForConnectionAsync(stop.Token));
                         using var reader = new StreamReader(server);
                         var buffer = new char[MaxMessage];
                         var length = await reader.ReadBlockAsync(buffer, stop.Token);
