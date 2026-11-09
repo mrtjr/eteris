@@ -167,6 +167,9 @@ public class SyncIntegrationTests
         Assert.Contains("note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);", page, StringComparison.Ordinal);
         Assert.DoesNotContain("note($('syncDeleteNote'), msg && msg.area === 'delete' ? msg.text : '', true);", page, StringComparison.Ordinal);
         Assert.Contains("$('syncStart').disabled = !!s.deleting && !!s.running;", page, StringComparison.Ordinal);
+        // Reaberta com o apagar por acabar (ainda sem «running»): a página pergunta de 1,5 em 1,5 s até acabar (ou até
+        // dizer porque não acabou), em vez de ficar 20 s em «A apagar…» (visto na prova ao vivo).
+        Assert.Contains("|| (s.deleting && !(d.message && d.message.area === 'delete'))", page, StringComparison.Ordinal);
 
         var now = 1_762_560_000_000L;
         var deleting = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, true, 0, null, "A apagar", null, null, [], [], false, 0) { Deleting = true };

@@ -1075,10 +1075,12 @@
       paintGoogle(d.google);
       const s = paintSync(d);
       clearTimeout(poll);
-      // À espera do início de sessão, da conta, de uma ronda ou do outro computador: volta a perguntar daqui a pouco.
-      // Senão, de 20 em 20 s (só o estado guardado: nenhum pedido à rede), para «há 2 min» e pedidos novos.
+      // À espera do início de sessão, da conta, de uma ronda, do outro computador ou de acabar de apagar do Drive (também
+      // quando o Éteris reabre e acaba o apagar sozinho): volta a perguntar daqui a pouco. Senão, de 20 em 20 s (só o
+      // estado guardado: nenhum pedido à rede), para «há 2 min» e pedidos novos.
       const busy = d.google.state === 'waiting' || (d.google.state === 'signedIn' && d.google.pending) || s.running || joining
-        || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil;
+        || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil
+        || (s.deleting && !(d.message && d.message.area === 'delete'));
       poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
       askLook();
       // Depois de uma ação que muda o que está à vista, o foco vai para o que apareceu (o leitor de ecrã diz o quê).
