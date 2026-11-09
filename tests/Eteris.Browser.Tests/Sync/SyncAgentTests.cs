@@ -465,6 +465,29 @@ public sealed class SyncAgentTests : IDisposable
 
     // ---- quando há rede ----------------------------------------------------------------------------------------------
 
+    // Sem a sincronização ligada (nunca se entrou, ou «Sair»): nem o arranque, nem uma ronda do agendador, nem o menu
+    // (procurar pedidos, ler aparelhos) fazem pedido nenhum.
+    [Fact]
+    public async Task WithoutSync_NothingIsEverSent()
+    {
+        var google = new FakeGoogle();
+        var casa = NewDevice("Casa", DriveFor(google));
+        Assert.False(casa.Agent.Enabled);
+        Assert.Equal(SyncPhase.Off, casa.Agent.Status.Phase);
+        Assert.False(casa.Agent.HasLocalChanges());
+        Assert.True(await casa.Agent.RunAsync());
+        await casa.Agent.CheckRequestsAsync();
+        await casa.Agent.RefreshDevicesAsync();
+        Assert.Empty(google.Requests);
+
+        await casa.Agent.StartAsync();
+        casa.Agent.SignOut(forgetKey: false);
+        var after = google.Requests.Count;
+        Assert.True(await casa.Agent.RunAsync());
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Equal(after, google.Requests.Count);
+    }
+
     // Montar o agente com sessão e ler o estado (o arranque, o menu, as Definições) não faz pedido nenhum à Google;
     // só RunAsync / StartAsync falam com o Drive.
     [Fact]

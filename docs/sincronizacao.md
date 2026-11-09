@@ -383,7 +383,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
   cifrada de ponta a ponta e desligada por omissão». Em `eteris://privacy/`, «No arranque, nada sai para a Google»
   continua verdadeira por omissão (é medida no motor) e, com a sincronização ligada, diz a exceção escolhida pelo
   utilizador: só os pedidos da sincronização, cifrados, para o Drive dele, 30 s depois de abrir, 10 s depois de uma
-  alteração e de 10 em 10 minutos (`PrivacyPage.SyncException`; teste `NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`).
+  alteração, de 10 em 10 minutos e ao abrir o menu da conta ou a secção Sincronização (`PrivacyPage.SyncException`; teste `NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`).
 
 ### O que a Google vê
 

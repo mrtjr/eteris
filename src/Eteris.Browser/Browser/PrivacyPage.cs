@@ -187,7 +187,7 @@ public static class PrivacyPage
     // para a pasta oculta da aplicação no Drive dele, por um cliente próprio que só fala com os endereços da Google
     // necessários (nada pelo motor) — e nunca antes de 30 s depois de abrir.
     public const string SyncException =
-        "Exceção que escolheu: com a sincronização ligada, o Éteris fala com o Google Drive (só a pasta oculta da aplicação, tudo cifrado neste computador) 30 s depois de abrir, 10 s depois de uma alteração e de 10 em 10 minutos — e mais nada.";
+        "Exceção que escolheu: com a sincronização ligada, o Éteris fala com o Google Drive (só a pasta oculta da aplicação, tudo cifrado neste computador) 30 s depois de abrir, 10 s depois de uma alteração, de 10 em 10 minutos e quando abre o menu da conta ou a sincronização nas Definições (para ver pedidos de outros computadores) — e mais nada.";
 
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
