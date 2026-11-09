@@ -43,8 +43,8 @@ public partial class MainWindow
 
         var host = (Grid)RootBorder.Child;
         // Ajuste e5 (MainWindow.LinkBubble.cs): a bolha do link numa janela própria e o contorno do ecrã dividido na
-        // janela principal; a camada já não fica ligada por causa deles.
-        SetUpLinkBubble(host);
+        // janela principal; a camada já não fica ligada por causa deles. A janela da bolha só se cria no 1.º link (regra
+        // R-2: nada de novo antes da 1.ª página; isto corre no ContentRendered).
         var ownBubble = Infrastructure.PerfTuning.IsOn(Infrastructure.PerfTuning.OwnLinkBubble);
         foreach (var name in OverlayElementNames)
         {

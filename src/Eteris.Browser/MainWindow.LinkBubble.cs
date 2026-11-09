@@ -38,7 +38,7 @@ public partial class MainWindow
     {
         if (_linkBubble is not null || !PerfTuning.IsOn(PerfTuning.OwnLinkBubble)) return;
         _linkBubbleOffset = LinkStatusBubble.Margin;
-        host.Children.Remove(LinkStatusBubble);
+        (LinkStatusBubble.Parent as Panel ?? host).Children.Remove(LinkStatusBubble);
         LinkStatusBubble.Margin = new Thickness(0);
         LinkStatusBubble.HorizontalAlignment = HorizontalAlignment.Left;
         LinkStatusBubble.VerticalAlignment = VerticalAlignment.Top;
@@ -76,9 +76,12 @@ public partial class MainWindow
         _linkBubble = bubble;
     }
 
-    // O texto já está na bolha: mostra-a (sem ativar) ou esconde-a.
+    // O texto já está na bolha: mostra-a (sem ativar) ou esconde-a. A janela nasce aqui, no 1.º link a mostrar, e não ao
+    // criar a camada (ContentRendered, antes da 1.ª página: regra R-2). Até lá a bolha fica na janela principal, escondida;
+    // sem a camada (braço «puro») fica lá sempre, como até à 0.2.13.
     private void SyncLinkBubble(bool show)
     {
+        if (_linkBubble is null && show && _overlay is not null) SetUpLinkBubble((Grid)RootBorder.Child);
         if (_linkBubble is null) return;
         if (!show || WindowState == WindowState.Minimized || !IsVisible)
         {

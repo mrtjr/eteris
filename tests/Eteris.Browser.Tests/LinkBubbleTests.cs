@@ -82,6 +82,17 @@ public class LinkBubbleTests
         Assert.Contains("SyncLinkBubble(show: false);", toast);
     }
 
+    // Regra R-2 do sandbox: a camada cria-se no ContentRendered, antes da 1.ª página; a janela da bolha não nasce aí, mas no
+    // 1.º link a mostrar (e só com a camada: no braço «puro» sem ela, a bolha fica na janela principal).
+    [Fact]
+    public void BubbleWindow_IsCreatedOnTheFirstLinkNotAtStartup()
+    {
+        Assert.DoesNotContain("SetUpLinkBubble(", Source("MainWindow.Overlay.cs"));
+        var code = Source("MainWindow.LinkBubble.cs");
+        Assert.Matches(@"private void SyncLinkBubble\(bool show\)\s*\{\s*if \(_linkBubble is null && show && _overlay is not null\) SetUpLinkBubble\(", code);
+        Assert.Single(Regex.Matches(code, @"SetUpLinkBubble\(\(Grid\)"));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
