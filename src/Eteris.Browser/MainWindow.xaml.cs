@@ -59,6 +59,8 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => CloseSuggestions();
         // Como os menus do Chrome, do Firefox e do Brave: a janela perde a ativação (outra janela, Alt+Tab), o menu fecha.
         Deactivated += (_, _) => CloseBrowserMenu();
+        // Fechado assim, com o teclado no menu: ao voltar à janela, o teclado volta a quem o tinha (a página…).
+        Activated += (_, _) => RestoreFocusAfterBrowserMenuOnActivate();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
@@ -645,7 +647,8 @@ public partial class MainWindow : Window
         // A exceção: Ctrl+Alt+1…9 e Ctrl+Alt+←/→ mudam de Espaço — mas só com o Alt da esquerda físico (o AltGr é
         // Ctrl+Alt da direita para o Windows, e AltGr+2 tem de continuar a escrever «@»).
         if (ctrl && alt) return WorkspaceShortcut.Resolve(key, shift, IsLeftAltDown()) is { } move ? () => RunWorkspaceShortcut(move) : null;
-        if (alt && !ctrl && !shift && key == Key.F) return () => ToggleBrowserMenu(byKeyboard: true);
+        // Alt+F e Alt+E, como no Chrome e no Brave.
+        if (alt && !ctrl && !shift && key is Key.F or Key.E) return () => ToggleBrowserMenu(byKeyboard: true);
         if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) return ToggleShortcuts;
         if (ctrl && shift && key == Key.A) return ToggleRadar;
         if (ctrl && key == Key.K) return TogglePalette;
@@ -707,7 +710,7 @@ public partial class MainWindow : Window
         {
             var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null);
             if (decision == BrowserMenuKey.PassToPage) return false;
-            Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut));
+            Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;
         }
         if (shortcut is { } action)

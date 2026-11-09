@@ -242,7 +242,8 @@ public class GoogleAccountTests
 
     // A linha da conta não empurra «Atalhos de teclado» e «Fechar janela» para fora do menu: sem teto fixo, o menu
     // cresce até à altura da janela (o menu inteiro com a linha da conta tem ~740 px; a janela das capturas, 860).
-    // Ao abrir com o rato, o foco (e o realce) vai para «Nova aba», não para o convite da conta.
+    // Ao abrir com o rato nenhuma linha fica realçada (nem o convite da conta, nem «Nova aba»), como no Chrome, no
+    // Firefox e no Brave; pelo teclado, a primeira (a da conta, primeira no ecrã).
     [Fact]
     public void Menu_FitsWithTheAccountRow_AndTheMouseDoesNotHighlightTheInvitation()
     {
@@ -250,13 +251,14 @@ public class GoogleAccountTests
         Assert.Equal(1040 - 74, MainWindow.BrowserMenuMaxHeight(1040));
         Assert.Equal(254, MainWindow.BrowserMenuMaxHeight(200));
 
-        Assert.Equal(0, MainWindow.BrowserMenuFirstFocus(byKeyboard: true, hasAccountRow: true));   // Alt+F: a conta, primeira no ecrã
-        Assert.Equal(1, MainWindow.BrowserMenuFirstFocus(byKeyboard: false, hasAccountRow: true));  // rato: Nova aba
-        Assert.Equal(0, MainWindow.BrowserMenuFirstFocus(byKeyboard: false, hasAccountRow: false));
+        Assert.Equal(0, MainWindow.BrowserMenuFirstFocus(byKeyboard: true));    // Alt+F: a conta, primeira no ecrã
+        Assert.Equal(-1, MainWindow.BrowserMenuFirstFocus(byKeyboard: false));  // rato: nenhuma linha (a raiz do menu)
 
         var menu = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.BrowserMenu.cs"));
         // A barra de deslocamento, se a janela for baixa, tem as cores do tema; a letra do avatar usa a tinta do destaque.
         Assert.Contains("body.Resources.Add(typeof(ScrollBar), theme[\"BrowserMenuScrollBar\"]);", menu);
+        // A linha da conta é um item de menu como as outras (leitor de ecrã, «1 de N»).
+        Assert.Contains("var button = new BrowserMenuItemButton { Style = rowStyle, Padding = new Thickness(8, 6, 8, 6) };", menu);
         Assert.Contains("mark.SetResourceReference(TextBlock.ForegroundProperty, \"AccentInkBrush\");", menu);
         Assert.DoesNotContain("Color.FromRgb(0x0B, 0x0D, 0x13)", menu);
     }

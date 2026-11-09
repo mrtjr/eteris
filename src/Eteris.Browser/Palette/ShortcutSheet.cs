@@ -35,7 +35,7 @@ public static class ShortcutSheet
             new("Alt+clique num link", "Espreitar o link num cartão, sem abrir aba"),
         ]),
         new("Ferramentas", [
-            new("Alt+F", "Menu do Éteris"),
+            new("Alt+F · Alt+E", "Menu do Éteris"),
             new("Ctrl+K", "Paleta de comandos"),
             new("Ctrl+F · F3", "Procurar na página"),
             new("Ctrl+Shift+L", "Seguir link pelo teclado"),

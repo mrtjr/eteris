@@ -1345,6 +1345,7 @@
                         <Button Content="&#xE71D;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Radar_Click"
                                 AutomationProperties.Name="Radar de abas" ToolTip="Radar de abas (Ctrl+Shift+A)" />
                         <Button x:Name="MenuButton" Content="&#xE712;" Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="Menu_Click"
+                                PreviewMouseLeftButtonDown="MenuButton_PreviewMouseLeftButtonDown"
                                 Focusable="True" ToolTip="Menu do Éteris (Alt+F)" />
                     </StackPanel>
 

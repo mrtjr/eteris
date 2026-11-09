@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -111,6 +112,11 @@ public partial class MainWindow
         content.Children.Add(title);
         content.Children.Add(columns);
 
+        // A lista recebe o teclado ao abrir (FocusInOverlay): com nome, o leitor de ecrã diz «Atalhos de teclado» e não
+        // só um painel de deslocamento.
+        var list = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content, Focusable = true, FocusVisualStyle = null };
+        AutomationProperties.SetName(list, "Atalhos de teclado");
+        AutomationProperties.SetHelpText(list, "Esc para fechar");
         var card = new Border
         {
             MaxWidth = 1000, Margin = new Thickness(40, 70, 40, 40), VerticalAlignment = VerticalAlignment.Top,
@@ -118,7 +124,7 @@ public partial class MainWindow
             Background = Res("SurfaceRaisedBrush"), BorderBrush = Res("IrisBrush"), BorderThickness = new Thickness(1.5),
             Effect = new DropShadowEffect { BlurRadius = 60, ShadowDepth = 18, Direction = 270, Opacity = 0.6, Color = Colors.Black },
             RenderTransformOrigin = new Point(0.5, 0), RenderTransform = new ScaleTransform(),
-            Child = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content, Focusable = true, FocusVisualStyle = null },
+            Child = list,
         };
         overlay.Children.Add(card);
         AddToOverlay(overlay);
