@@ -341,6 +341,10 @@ public static class ProfileSync
         {
             // Só agora, e só este item, se decifra.
             if (secrets?.ReadSecret(item.Collection, item.Key) is not { } content || !SecretSchemas.IsValid(item.Collection, content.Data)) return false;
+            // Na conta há um registo vivo com esta chave que este Éteris não abre (de um Éteris mais recente, por
+            // exemplo): não se escreve por cima dele.
+            if (engine.Get(item.Collection, engine.SecretKey(item.Collection, content.NaturalKey)) is { Deleted: false } current
+                && engine.OpenSecret(current) is null) return false;
             try { engine.PutSecret(item.Collection, content); }
             catch (ArgumentException) { return false; } // campo proibido ou grande demais: não sai
             return true;

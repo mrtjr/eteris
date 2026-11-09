@@ -112,6 +112,8 @@ public sealed class SyncAgent
     private int _waiting;
     private GuestFlow? _guest;
     private IReadOnlyList<DeviceInfo> _devices = [];
+    // A conta tem registos secretos vivos (visto no fim da última ronda; o motor só se lê dentro de uma ronda).
+    private bool _secretsInAccount;
     // Já se leram os estados dos aparelhos (e fixaram as chaves) com o motor atual: uma vez por sessão e conta, e de
     // novo quando aparece um aparelho desconhecido. Um aparelho que ainda não enviou nada só se conhece por aqui.
     private SyncEngine? _pinnedFor;
@@ -194,9 +196,7 @@ public sealed class SyncAgent
     {
         get
         {
-            lock (_gate)
-                return EnabledOf(_saved).Any(Model.Collections.IsSecret)
-                       || _engine?.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)) == true;
+            lock (_gate) return EnabledOf(_saved).Any(Model.Collections.IsSecret) || _secretsInAccount;
         }
     }
 
@@ -443,6 +443,7 @@ public sealed class SyncAgent
             saved.Baseline = baseline;
             saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
             _store.Save(saved);
+            _secretsInAccount = engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection));
             if (_profile is ILocalNotices notices && notices.TakeNotice() is { } notice) _notice = notice;
         }
         if (await LeaveDuplicateAsync(saved, engine, cancellationToken).ConfigureAwait(false)) return;

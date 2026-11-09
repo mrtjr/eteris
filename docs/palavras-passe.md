@@ -855,7 +855,8 @@ Prova ao vivo: nenhuma (biblioteca pura).
   `LocalChange.Secret` (com a impressão em `Data`), para o cofre o voltar a cifrar com a chave local. Um selo que não
   abre ou com campos de tipo errado fica de fora, conta em `SyncReport.SecretErrors`, e nessa ronda **nada se apaga**
   dessa coleção aqui (o que falta pode ser só um registo que este Éteris não abre). Um item que não se consegue selar
-  (campo proibido, grande demais) fica de fora e volta a ser tentado (a base dele não muda).
+  (campo proibido, grande demais) fica de fora e volta a ser tentado (a base dele não muda). Um item local nunca é
+  escrito por cima de um registo vivo da conta que este Éteris não abre (de um Éteris mais recente, por exemplo).
 - **Conflitos:** LWW por registo (HLC). Quem perde aplica a versão nova e o cofre guarda a palavra-passe anterior no
   **histórico local** (1 versão), com um aviso no estado (`ILocalNotices`): «… mudaram noutro computador; as anteriores
   ficaram no histórico». Na **primeira junção**, o que só existe aqui sobe e, com a mesma chave natural, vale a versão
@@ -866,7 +867,8 @@ Prova ao vivo: nenhuma (biblioteca pura).
   a **primeira junção só dessa coleção** (`SavedSync.Joined`, `ProfileSyncOptions.Fresh`). Omissões (D-1): tudo ligado
   menos Pagamentos (`cards`, `ibans`) e Documentos de identificação (`idDocs`). Um estado de antes destas linhas conta
   como já juntado nas coleções que existiam (favoritos, Espaços, definições, Escudo, notas); as secretas juntam-se na
-  primeira ronda. `SyncAgent.HasSecrets` diz se aprovar um aparelho novo lhe entrega segredos (D4).
+  primeira ronda. `SyncAgent.HasSecrets` diz se aprovar um aparelho novo lhe entrega segredos (D4): linhas do cofre ligadas aqui, ou
+  registos secretos na conta (visto no fim de cada ronda, sem ler o motor fora dela).
 
 Testes: `Sync/SyncSecretProfileTests` (um perfil em memória com cofre e chave local própria por aparelho) — omissões da
 decisão D-1 e escolha guardada; **nenhum segredo nem site em claro** no transporte, no estado do motor, na base nem nos

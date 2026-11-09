@@ -413,6 +413,31 @@ public sealed class SyncSecretProfileTests : IDisposable
         Assert.True(report.SecretErrors > 0);
         Assert.Equal("1", profile.Password(Site, "u1"));
         Assert.Equal("2", profile.Password(Site, "u2"));
+
+        // Nem uma primeira junção (outro aparelho, a mesma chave) escreve por cima do registo que não abre.
+        var broken = engine.Get(Collections.Logins, engine.SecretKey(Collections.Logins, SecretMemoryProfile.LoginKey(Site, "u1")))!;
+        var other = new SecretMemoryProfile();
+        other.Login(Site, "u1", "outra");
+        await ProfileSync.RunAsync(engine, other, null, "B");
+        Assert.Equal(broken, engine.Get(Collections.Logins, engine.SecretKey(Collections.Logins, SecretMemoryProfile.LoginKey(Site, "u1"))));
+    }
+
+    // Aprovar um aparelho novo com segredos na conta pede o Windows Hello mesmo com as linhas do cofre desligadas aqui
+    // (o aparelho novo recebe a conta inteira).
+    [Fact]
+    public async Task HasSecrets_CountsTheAccount_EvenWithTheVaultLinesOffHere()
+    {
+        var casa = NewDevice("Casa");
+        casa.Profile.Login(Site, "u1", "1");
+        await casa.Agent.StartAsync();
+        var trabalho = NewDevice("Trabalho");
+        trabalho.Agent.SetCollections(Collections.Secret, on: false);
+        Assert.False(trabalho.Agent.HasSecrets);
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Null(trabalho.Profile.Password(Site, "u1"));
+        Assert.True(trabalho.Agent.HasSecrets);
     }
 
     [Fact]
