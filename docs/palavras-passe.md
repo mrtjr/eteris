@@ -147,3 +147,31 @@ Ao vivo (sem pedir nada a ninguém): `CheckAvailabilityAsync` neste PC de testes
 Windows (CredUI). **Provas manuais que ficam para o dono** (precisam do PIN ou da palavra-passe dele): a janela do
 Windows Hello real (`RequestVerificationForWindowAsync`) num PC com Hello, a janela da palavra-passe do Windows
 (CredUI + `LogonUser`), e o recomeço da graça depois de bloquear o Windows.
+
+## A4. CSV: importar e exportar (núcleo)
+
+`Vault/PasswordCsv.cs` (sem interface: os diálogos nativos, a confirmação do Windows ao exportar e a proposta de enviar
+o CSV para a Reciclagem chegam com `eteris://passwords`, B2). Nunca se leem os ficheiros de senhas de outros
+navegadores (o `v20` App-Bound do Chrome, o `key4.db` do Firefox): só o CSV que o utilizador exportou.
+
+- **Ler** como o Chromium e o Firefox leem: RFC 4180 (aspas, `""`, quebras de linha dentro das aspas, CRLF ou LF, BOM),
+  cabeçalho na primeira linha não vazia, nomes de coluna sem maiúsculas e espaços — origem `url|website|origin|
+  hostname|login_uri`, utilizador `username|user|login|account|login_username`, palavra-passe `password|
+  login_password`, nota `note > notes > comment > comments`, e do Firefox `httpRealm`, `formActionOrigin` e as horas
+  (`timeCreated`, `timeLastUsed`, `timePasswordChanged`). Assim entram os CSV do **Chrome, Brave, Firefox, Bitwarden e
+  1Password**.
+- **Limites do Chromium:** ficheiro ≤ 1000 KiB e ≤ 3000 palavras-passe (senão nada entra); palavra-passe, utilizador e
+  nota ≤ 1000 carateres, endereço ≤ 2048. Linhas recusadas (sem palavra-passe, sem endereço, endereço que não é `http(s)`
+  nem `android://`, demasiado longas, aspas por fechar) contam-se com o número da linha, o endereço e o utilizador —
+  nunca a palavra-passe. `android://` guarda-se sem sugestão; `httpRealm` guarda-se (autenticação HTTP, v2).
+- **Importar para o cofre:** duplicado igual (no cofre ou antes no próprio ficheiro) ignora-se; a mesma origem e
+  utilizador com outra palavra-passe é um **conflito** que o utilizador decide — «a do ficheiro» (a atual fica no
+  histórico do item, por isso nenhuma se perde) ou «a atual». Resumo: «312 importadas, 4 em conflito, 2 inválidas»
+  (e «N já existiam», «N substituídas»).
+- **Exportar** no formato do Chrome (`name,url,username,password,note`, ordenado como o Chromium), que o Chrome, o Brave
+  e o Firefox importam. `CloudFolder` reconhece pastas do OneDrive (pelas variáveis do Windows e pelo nome), do Dropbox e
+  do Google Drive («O meu disco», «Meu Drive», «My Drive») para o aviso antes de gravar.
+
+Testes: `Vault/PasswordCsvTests` (um ficheiro sintético de cada um dos cinco, aspas, quebras de linha, BOM e CRLF,
+prioridade das notas, linhas recusadas sem a palavra-passe, limites, ida e volta, importação com duplicados, conflitos e
+resumo, pastas da nuvem).

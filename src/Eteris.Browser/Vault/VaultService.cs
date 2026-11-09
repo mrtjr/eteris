@@ -125,7 +125,8 @@ public sealed class VaultService : IDisposable
 
     public string? PreviousPassword(string id) => Store.ReadPrevious(VaultCollection.Logins, id) is { } prev ? Text(prev, "password") : null;
 
-    private string? FindLogin(string origin, string username)
+    // O item com esta origem e este utilizador (para importar), ou null.
+    public string? FindLogin(string origin, string username)
     {
         var candidates = Origins.IsAndroid(origin)
             ? Store.List(VaultCollection.Logins).Where(e => Text(e.Meta, "origin") == origin).Select(e => e.Id)
