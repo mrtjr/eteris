@@ -100,8 +100,8 @@ public partial class MainWindow
                 _vaultChannels[tab] = known = new VaultChannel(cef,
                     (context, message) => Dispatcher.InvokeAsync(() => OnVaultMessage(tab, context, message)),
                     () => Dispatcher.InvokeAsync(() => OnVaultNavigated(tab)),
-                    // Oferecer guardar e gerar: nunca na janela privada (D-3), nem com o interruptor desligado.
-                    () => !IsPrivate && Data.Settings.Current.PasswordOffer);
+                    // Oferecer guardar e gerar: nunca na janela privada (D-3, C7), nem com o interruptor desligado.
+                    () => VaultWindowPolicy.Allows(VaultAction.OfferSave, IsPrivate) && Data.Settings.Current.PasswordOffer);
             channel = known;
         }
         _ = Task.Run(channel.Refresh);
@@ -252,7 +252,8 @@ public partial class MainWindow
     // As restrições do campo chegaram: o gerador propõe uma palavra-passe que as cumpre (ou nada, se não der).
     private void OnVaultGenerate(VaultMessage message)
     {
-        if (_vaultFocus is not { Mode: VaultListMode.Generate } focus || IsPrivate || !Data.Settings.Current.PasswordOffer) return;
+        if (_vaultFocus is not { Mode: VaultListMode.Generate } focus || !VaultWindowPolicy.Allows(VaultAction.Generate, IsPrivate)
+            || !Data.Settings.Current.PasswordOffer) return;
         if (PasswordGenerator.Generate(new PasswordRules(message.MinLength, message.MaxLength, message.Pattern)) is not { } password) return;
         _vaultFocus = focus with { Generated = password, Rows = [GeneratorPolicy.Row(password)] };
         _vaultCanOpen = true;
@@ -523,6 +524,14 @@ public partial class MainWindow
         values?.Clear();
         if (!result.Success || result.Result is not double filled || filled < 1)
             ShowToast("Não foi possível preencher este campo.");
+        else RecordVaultUse(category switch
+        {
+            FillCategory.Contact => VaultCollection.Contacts,
+            FillCategory.Card => VaultCollection.Cards,
+            FillCategory.Iban => VaultCollection.Ibans,
+            FillCategory.Document => VaultCollection.IdDocs,
+            _ => VaultCollection.Travel,
+        }, id);
     }
 
     // «Preencher com… ›» no menu de contexto de um campo: palavra-passe, contacto, cartão (e IBAN), documento, viagem. Cada
@@ -611,6 +620,7 @@ public partial class MainWindow
         values.Clear();
         if (!result.Success || result.Result is not double filled || filled < 1)
             ShowToast("Não foi possível preencher este campo.");
+        else RecordVaultUse(VaultCollection.Logins, id);
     }
 
     // ---- O gerador (docs/palavras-passe.md, C5) ----
@@ -620,7 +630,8 @@ public partial class MainWindow
     // sucesso confirma-a (C4). Nunca na janela privada (D-3).
     private async Task FillGeneratedAsync(VaultFocus focus, bool onlyThisField)
     {
-        if (focus.Generated is not { } password || IsPrivate || !Data.Settings.Current.PasswordOffer || VaultChannelOf(focus.Tab) is not { } channel) return;
+        if (focus.Generated is not { } password || !VaultWindowPolicy.Allows(VaultAction.Generate, IsPrivate) || !Data.Settings.Current.PasswordOffer
+            || VaultChannelOf(focus.Tab) is not { } channel) return;
         if (VaultFillPolicy.CanFill(new VaultFillPolicy.FillCheck(IsTabOnScreen(focus.Tab), IsActive || _overlay?.IsActive == true,
                 channel.IsCurrent(focus.Context), focus.Context.Origin, focus.Context.Origin)) != FillVerdict.Allowed) return;
         try { VaultService.Profile.SaveGenerated(focus.Context.Origin, password); }
@@ -649,7 +660,8 @@ public partial class MainWindow
         if (FreshVaultContext(tab, asked) is not { } field) return context;
         return context with
         {
-            Vault = new VaultFieldInfo(field.Message.Kind is "password" or "new-password", !IsPrivate && Data.Settings.Current.PasswordOffer),
+            Vault = new VaultFieldInfo(field.Message.Kind is "password" or "new-password",
+                VaultWindowPolicy.Allows(VaultAction.Generate, IsPrivate) && Data.Settings.Current.PasswordOffer),
         };
     }
 
@@ -692,6 +704,17 @@ public partial class MainWindow
         values.Clear();
         if (!result.Success || result.Result is not double filled || filled < 1)
             ShowToast("Não foi possível preencher este formulário.");
+        else RecordVaultUse(VaultCollection.Logins, entry.Id);
+    }
+
+    // ---- Janelas privadas (docs/palavras-passe.md, C7) ----
+
+    // A «última utilização» do item preenchido; nunca na janela privada (não deixa rasto).
+    private void RecordVaultUse(VaultCollection collection, string id)
+    {
+        if (!VaultWindowPolicy.Allows(VaultAction.RecordUse, IsPrivate)) return;
+        try { VaultService.Profile.MarkUsed(collection, id); }
+        catch (Exception) { }
     }
 
     // ---- Guardar, atualizar e «Nunca neste site» (docs/palavras-passe.md, C4) ----
@@ -751,7 +774,7 @@ public partial class MainWindow
 
     private void OfferSave(BrowserTab tab, SaveCandidate candidate)
     {
-        if (IsPrivate || !Data.Settings.Current.PasswordOffer) return;
+        if (!VaultWindowPolicy.Allows(VaultAction.OfferSave, IsPrivate) || !Data.Settings.Current.PasswordOffer) return;
         SaveOffer offer;
         try
         {

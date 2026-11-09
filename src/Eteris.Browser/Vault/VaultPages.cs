@@ -24,5 +24,5 @@ public static class VaultPages
         => url is not null && (url.StartsWith(PasswordsUrl, StringComparison.OrdinalIgnoreCase) || url.StartsWith(AutofillUrl, StringComparison.OrdinalIgnoreCase));
 
     // As páginas recusam-se na janela privada (como a secção Sincronização): o menu abre-as numa janela normal.
-    public static bool OpensInNormalWindow(bool isPrivate) => isPrivate;
+    public static bool OpensInNormalWindow(bool isPrivate) => !VaultWindowPolicy.Allows(VaultAction.ManagementPages, isPrivate);
 }

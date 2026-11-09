@@ -58,8 +58,12 @@ public sealed class VaultStore : IDisposable
                 PRIMARY KEY (collection, id));
             CREATE INDEX IF NOT EXISTS items_origin ON items(collection, origin_key);
             CREATE INDEX IF NOT EXISTS items_site ON items(collection, site_key);
-            PRAGMA user_version = 1;
             """);
+        // A versão do esquema só se escreve num cofre novo: abrir para ler não muda o ficheiro (escrever a mesma versão
+        // mudava o contador do cabeçalho; C7: a janela privada lê o cofre sem deixar rasto).
+        using var version = connection.CreateCommand();
+        version.CommandText = "PRAGMA user_version;";
+        if (Convert.ToInt64(version.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 0) Execute(connection, "PRAGMA user_version = 1;");
     }
 
     public void Dispose()

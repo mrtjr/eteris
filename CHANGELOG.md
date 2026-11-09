@@ -36,6 +36,9 @@
   NIF/CPF, os seus números fiscais. Cartões, IBAN e documentos só em ligações seguras e com o Windows Hello. Passaporte,
   carta de condução/CNH, Cartão de Cidadão/RG, matrícula/placa e fidelidade: pelo menu de contexto do campo,
   «Preencher com… ›», que também deixa usar uma palavra-passe de outro site (com confirmação).
+- **Janela privada** (C7): preenche palavras-passe, moradas, cartões e documentos quando escolhe, mas não guarda nada:
+  nem a «última utilização», nem a oferta de guardar, nem o gerador; o gestor abre numa janela normal. Medido: o
+  ficheiro do cofre fica exatamente igual depois de uma janela privada o usar.
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

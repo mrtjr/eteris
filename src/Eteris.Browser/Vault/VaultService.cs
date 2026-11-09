@@ -292,6 +292,15 @@ public sealed class VaultService : IDisposable
 
     // ---- Comum ----
 
+    // A «última utilização» de um item, ao preencher numa janela normal (nunca na privada: C7). Só o metadado muda.
+    public void MarkUsed(VaultCollection collection, string id)
+    {
+        if (Store.Get(collection, id) is not { } entry) return;
+        var meta = (JsonObject)entry.Meta.DeepClone();
+        meta["used"] = Time(Now);
+        Store.UpdateMeta(collection, id, meta, Now);
+    }
+
     public IReadOnlyList<VaultEntry> List(VaultCollection collection) => Store.List(collection);
 
     public bool Delete(VaultCollection collection, string id) => Store.Delete(collection, id, Now);

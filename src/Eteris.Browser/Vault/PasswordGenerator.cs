@@ -172,7 +172,8 @@ public static class GeneratorPolicy
     public const int PreviewLength = 4;
 
     // Só numa palavra-passe nova, com «Oferecer para guardar palavras-passe» ligado e fora da janela privada (D-3).
-    public static bool Offers(string? kind, bool offerEnabled, bool isPrivate) => kind == "new-password" && offerEnabled && !isPrivate;
+    public static bool Offers(string? kind, bool offerEnabled, bool isPrivate)
+        => kind == "new-password" && offerEnabled && VaultWindowPolicy.Allows(VaultAction.Generate, isPrivate);
 
     // A pré-visualização é parcial: os primeiros carateres e reticências (a palavra-passe inteira só vai para o campo).
     public static SuggestionRow Row(string password)

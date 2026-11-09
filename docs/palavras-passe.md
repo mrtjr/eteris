@@ -1,9 +1,9 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o bloco C até ao C6 (na página: canal,
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e bloco C (na página: C1–C7 — canal,
 classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador, preencher contactos,
-pagamentos, documentos e viagens) feitos no ramo `sync`, por publicar** (o C7 — janelas privadas — e os blocos D e E do
-desenho estão por fazer). O gestor é próprio, em
+pagamentos, documentos e viagens, janelas privadas) feitos no ramo `sync`, por publicar** (os blocos D — sincronização
+— e E — fecho — do desenho estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -586,7 +586,7 @@ no computador; teclas e cliques reais; a página regista as teclas que lhe chega
    nada se preenche; a aceitar, preenche.
 
 Por fazer neste bloco: ícones da cache de favicons na lista (por agora só a inicial), a «última utilização» (`used`) ao
-preencher (feita no C7). A confirmação com os dois nomes quando se escolhe à mão noutro site chegou com o menu de
+preencher chegou no C7. A confirmação com os dois nomes quando se escolhe à mão noutro site chegou com o menu de
 contexto (C6).
 
 ## C4. Guardar, atualizar e «Nunca neste site»
@@ -767,3 +767,48 @@ teclas reais; listas e menus lidos e clicados por UI Automation; a página mostr
 
 Não provado ao vivo: a recusa em `http` fora do próprio computador (as páginas de teste só podem estar em `127.0.0.1`,
 que conta como seguro); fica nos testes.
+
+## C7. Janelas privadas
+
+`Vault/VaultWindowPolicy.cs` (a tabela, pura), `Vault/VaultService.cs` (`MarkUsed`), `Vault/VaultStore.cs` (abrir sem
+escrever), `Vault/SaveFlow.cs`, `Vault/PasswordGenerator.cs`, `Vault/VaultPages.cs`, `MainWindow.Vault.cs`
+(`RecordVaultUse`).
+
+| | Janela normal | Janela privada |
+|---|---|---|
+| Preencher a pedido (lista ao clicar, menu de contexto) | sim | **sim**: lê o cofre do perfil, como o Chrome e o Firefox |
+| «Última utilização» (`used`) ao preencher | sim | **não** (não fica rasto) |
+| Candidatos, bolha de guardar, ícone de chave | sim | **não** (D-3; o script nem manda o envio) |
+| Gerador (lista e «Gerar palavra-passe forte») | sim | **não** (D-3; uma palavra-passe criada na privada guarda-se à mão depois) |
+| `eteris://passwords` e `eteris://autofill` | sim | recusadas («Abra numa janela normal»; o menu abre-as numa janela normal) |
+
+- **Uma só tabela** (`VaultWindowPolicy.Allows`) decide tudo isto, e as decisões das outras tarefas passam por ela: o
+  candidato (`SavePolicy`), o gerador (`GeneratorPolicy`), as páginas (`VaultPages`), a preferência «oferecer» que
+  entra no script quando o canal prepara o documento, e a «última utilização» (`RecordVaultUse`, o único sítio da
+  janela que a grava — guarda nos testes).
+- **«Última utilização»** (que faltava do C3): depois de um preenchimento que preencheu alguma coisa numa janela
+  normal, o `used` do item (palavra-passe, contacto, cartão, IBAN, documento, viagem) passa a agora; só o metadado muda
+  (nem a palavra-passe nem o histórico).
+- **Correção encontrada na prova ao vivo:** abrir o cofre escrevia a versão do esquema (`PRAGMA user_version = 1`) a
+  cada abertura, e isso mudava o contador do cabeçalho do `cofre.db` mesmo sem mudar nada — o ficheiro mudava só por
+  uma janela privada ler o cofre. Agora a versão só se escreve num cofre novo: ler não muda o ficheiro.
+
+Testes: `Vault/PrivateVaultTests` (a tabela; sem candidato, sem gerador e as páginas noutra janela; no menu de contexto
+«Preencher com…» sim e «Gerar palavra-passe forte» não; as páginas de gestão recusadas; ler o cofre — abrir, sugerir,
+decifrar — deixa o `cofre.db` igual, byte a byte; `MarkUsed` só muda o `used`; guarda: a janela só grava o `used` por
+`RecordVaultUse`, que pergunta à tabela, e o script recebe «oferecer» pela tabela).
+
+Prova ao vivo (`pp\vivo\c7.ps1`, `pp\vivo\c7\registo.txt` e capturas; perfil de teste com uma palavra-passe,
+contactos, cartão e documentos inventados; páginas locais em `127.0.0.1:8903`; Windows Hello falso a aceitar; a
+«última utilização» de cada item lida por um comando de teste):
+
+1. Ctrl+Shift+N; na janela privada, o foco no e-mail mostra a palavra-passe guardada (`1-privada-lista.png`); ↓ Enter
+   preenche.
+2. Enviar com sucesso (navega): nenhuma bolha nem ícone de chave.
+3. Criação de conta: a palavra-passe nova não mostra o gerador; Shift+F10 tem «Preencher com…» e não tem «Gerar
+   palavra-passe forte» (`2-privada-menu.png`).
+4. O cartão preenche a pedido (com o Windows a aceitar), com o CVV vazio e o foco nele.
+5. `eteris://passwords/` na janela privada: «Abra numa janela normal» (`3-privada-gestor.png`).
+6. Fechada a janela privada: o `cofre.db` tem **o mesmo SHA-256 de antes** e todos os itens continuam «usada=nunca».
+   (Antes da correção acima, o hash mudava sem nenhum item mudar.)
+7. Na janela normal, o mesmo preenchimento grava a «última utilização» da palavra-passe (o hash muda).

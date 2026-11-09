@@ -47,7 +47,7 @@ public static class SavePolicy
     // privada (D-3), num início de sessão, criação de conta ou mudança, com uma palavra-passe que não seja gigante.
     public static SaveCandidate? Candidate(VaultMessage message, VaultContext context, DateTimeOffset now, bool offerEnabled, bool isPrivate)
     {
-        if (!offerEnabled || isPrivate || message.Type != VaultMessageType.Submit) return null;
+        if (!offerEnabled || !VaultWindowPolicy.Allows(VaultAction.OfferSave, isPrivate) || message.Type != VaultMessageType.Submit) return null;
         if (Origins.Normalize(context.Origin) is not { } origin || Origins.IsAndroid(origin)) return null;
         if (message.FormKind is not { } formKind || !s_formKinds.Contains(formKind) || message.Form is not { } form) return null;
         var candidate = new SaveCandidate(origin, formKind, form, context.Id, message.Username ?? string.Empty, message.Password, message.NewPassword, now);
