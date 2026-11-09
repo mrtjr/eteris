@@ -278,6 +278,7 @@ public partial class MainWindow : Window
         };
         browser.TitleChanged += (_, e) =>
         {
+            NudgeMediaPoll(tab);
             var url = tab.Address;
             if (e.NewValue is not string { Length: > 0 } title)
             {
@@ -295,6 +296,7 @@ public partial class MainWindow : Window
             // A meio da troca para o motor de vídeo, o estado da aba já é o dele.
             if (_videoViews.ContainsKey(tab)) return;
             tab.IsLoading = e.IsLoading;
+            if (!e.IsLoading) NudgeMediaPoll(tab);
             tab.Crossing.MainHistoryChanged(e.CanGoBack);
             tab.CanGoBack = e.CanGoBack;
             tab.CanGoForward = tab.Crossing.CanGoForward(inVideo: false, e.CanGoForward);
