@@ -224,16 +224,16 @@
       return out;
     }
 
-    // O que se preenche com uma palavra-passe guardada: no formulário escolhido, o utilizador (se houver) e a palavra-passe
-    // atual; nunca a nova, o CVC nem um campo sem tipo (escondido, tapado, fora do ecrã). Pares [índice, valor].
+    // O que se preenche no formulário escolhido: cada campo visível com tipo recebe o valor desse tipo, se o navegador o
+    // mandou (uma palavra-passe guardada manda o utilizador e a atual; o gerador, a nova). Nunca o CVC nem um código de
+    // uma utilização; nunca um campo sem tipo (escondido, tapado, fora do ecrã). Pares [índice, valor].
+    const NEVER_FILL = new Set(['cc-csc', 'one-time-code']);
     function fillPlan(kinds, visible, values) {
-      const user = values && typeof values.username === 'string' && values.username !== '' ? values.username : null;
-      const pass = values && typeof values.password === 'string' ? values.password : null;
       const plan = [];
       kinds.forEach((kind, i) => {
-        if (!visible[i]) return;
-        if (kind === 'username' && user !== null) plan.push([i, user]);
-        else if (kind === 'password' && pass !== null) plan.push([i, pass]);
+        if (!visible[i] || !kind || NEVER_FILL.has(kind)) return;
+        const v = values && Object.prototype.hasOwnProperty.call(values, kind) ? values[kind] : null;
+        if (typeof v === 'string' && v !== '') plan.push([i, v]);
       });
       return plan;
     }
@@ -603,6 +603,22 @@
     submitted(button.form || button.closest('form') || button.getRootNode());
   });
 
+  // Clique direito num campo (ou a tecla de menu): o navegador põe no menu «Preencher com…» e, numa palavra-passe,
+  // «Gerar palavra-passe forte» (C5, C6). Só o que o menu precisa; nada se preenche sem a escolha.
+  const onContext = once((e) => {
+    if (!e.isTrusted) return;
+    const field = deepTarget(e);
+    if (!isField(field) || field.nodeName === 'SELECT') return;
+    const info = formInfo(field, true);
+    const kind = info.kinds[info.fields.indexOf(field)];
+    const message = { t: 'context', field: idOf(field, 'f'), form: info.id, rect: topRect(field) };
+    const password = String(field.type || '').toLowerCase() === 'password';
+    if (kind) message.kind = kind;
+    else if (password) message.kind = 'password';
+    if (OFERECER && password) Object.assign(message, Classifier.constraints({ minLength: field.minLength, maxLength: field.maxLength, pattern: field.getAttribute('pattern') }));
+    send(message);
+  });
+
   const listening = new WeakSet();
   function listen(target) {
     if (listening.has(target)) return;
@@ -611,6 +627,7 @@
     target.addEventListener('focusout', onFocusOut, true);
     target.addEventListener('pointerdown', onPointerDown, true);
     target.addEventListener('input', onInput, true);
+    target.addEventListener('contextmenu', onContext, true);
     if (OFERECER) {
       target.addEventListener('submit', onSubmit, true);
       target.addEventListener('keydown', onEnter, true);
@@ -641,7 +658,10 @@
     const anchor = nodeOf(arg.field);
     if (!owner || !anchor || !anchor.isConnected || ownerOf(anchor) !== owner) return 0;
     const info = formInfo(anchor, true);
-    const plan = Classifier.fillPlan(info.kinds, info.kinds.map(() => true), arg.values || {});
+    // value: só o campo escolhido (menu de contexto: documento, viagem, palavra-passe gerada num campo qualquer).
+    const plan = typeof arg.value === 'string'
+      ? (arg.value !== '' ? [[info.fields.indexOf(anchor), arg.value]] : [])
+      : Classifier.fillPlan(info.kinds, info.kinds.map(() => true), arg.values || {});
     if (!plan.length) return 0;
     let count = 0;
     filling = true;

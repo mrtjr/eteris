@@ -126,13 +126,24 @@ public partial class MainWindow
 
     // ---- Sugestões, teclado e preencher palavras-passe (docs/palavras-passe.md, C3) ----
 
+    // O que a lista mostra para o campo: palavras-passe guardadas (C3) ou o gerador (C5).
+    private enum VaultListMode { Logins, Generate }
+
     // O campo com o foco numa página (o último «focus» do script): a aba, o documento e o que o script disse do campo.
+    // Generated: a palavra-passe que o gerador propõe (só na memória, até ser aceite ou o foco sair).
     private sealed record VaultFocus(BrowserTab Tab, VaultContext Context, string Field, string Form, string Kind, string? FormKind, VaultRect Rect)
     {
+        public VaultListMode Mode { get; init; }
         public IReadOnlyList<LoginEntry> Logins { get; init; } = [];
         public IReadOnlyList<SuggestionRow> Rows { get; init; } = [];
-        public override string ToString() => $"VaultFocus {Field}";
+        public string? Generated { get; init; }
+        public override string ToString() => $"VaultFocus {Mode} {Field}";
     }
+
+    // O último clique direito num campo (mensagem «context»), para o menu de contexto (C5, C6).
+    private sealed record VaultContextField(BrowserTab Tab, VaultContext Context, VaultMessage Message, DateTime At);
+
+    private VaultContextField? _vaultContextField;
 
     private VaultFocus? _vaultFocus;
     private SuggestionList? _vaultList;
@@ -161,6 +172,12 @@ public partial class MainWindow
             case VaultMessageType.Scroll when IsVaultFocus(tab, context, message.Field):
                 if (message.Rect is { } rect) _vaultFocus = _vaultFocus! with { Rect = rect };
                 if (_vaultListOpen) PlaceVaultList();
+                break;
+            case VaultMessageType.Generate when IsVaultFocus(tab, context, message.Field):
+                OnVaultGenerate(message);
+                break;
+            case VaultMessageType.Context:
+                _vaultContextField = new VaultContextField(tab, context, message, DateTime.UtcNow);
                 break;
             case VaultMessageType.Submit:
                 OnVaultSubmit(tab, context, message);
@@ -196,6 +213,13 @@ public partial class MainWindow
         ForgetVaultFocus();
         if (!message.Visible || message.Field is not { } field || message.Form is not { } form || message.Kind is not { } kind
             || message.Rect is not { } rect || !IsTabOnScreen(tab)) return;
+        // Uma palavra-passe nova: o gerador (C5), quando chegarem as restrições do campo (mensagem «generate»).
+        if (GeneratorPolicy.Offers(kind, Data.Settings.Current.PasswordOffer, IsPrivate))
+        {
+            _vaultFocus = new VaultFocus(tab, context, field, form, kind, message.FormKind, rect) { Mode = VaultListMode.Generate };
+            HookVaultList();
+            return;
+        }
         if (!VaultFillPolicy.OffersLogins(kind, message.FormKind)) return;
         IReadOnlyList<LoginEntry> logins;
         try { logins = VaultService.Profile.LoginsFor(context.Origin); }
@@ -208,11 +232,21 @@ public partial class MainWindow
         if (rows.Count > 0 && Data.Settings.Current.PasswordSuggestions) ShowVaultList(selected: -1);
     }
 
+    // As restrições do campo chegaram: o gerador propõe uma palavra-passe que as cumpre (ou nada, se não der).
+    private void OnVaultGenerate(VaultMessage message)
+    {
+        if (_vaultFocus is not { Mode: VaultListMode.Generate } focus || IsPrivate || !Data.Settings.Current.PasswordOffer) return;
+        if (PasswordGenerator.Generate(new PasswordRules(message.MinLength, message.MaxLength, message.Pattern)) is not { } password) return;
+        _vaultFocus = focus with { Generated = password, Rows = [GeneratorPolicy.Row(password)] };
+        _vaultCanOpen = true;
+        if (Data.Settings.Current.PasswordSuggestions) ShowVaultList(selected: -1);
+    }
+
     // O utilizador escreve: no campo do utilizador, a lista filtra pelo que já escreveu; na palavra-passe, fecha.
     private void OnVaultFieldInput(VaultMessage message)
     {
         if (_vaultFocus is not { } focus) return;
-        if (focus.Kind != "username")
+        if (focus.Kind != "username" || focus.Mode != VaultListMode.Logins)
         {
             CloseVaultList();
             return;
@@ -253,6 +287,7 @@ public partial class MainWindow
         }
         HookVaultList();
         var wasOpen = _vaultListOpen;
+        _vaultList.Heading = focus.Mode == VaultListMode.Generate ? "Palavra-passe forte" : "Palavras-passe guardadas";
         _vaultList.Show(focus.Rows, selected);
         _vaultList.Visibility = Visibility.Visible;
         if (!wasOpen) _vaultShownAt = DateTime.UtcNow;
@@ -352,7 +387,65 @@ public partial class MainWindow
     {
         if (_vaultFocus is not { } focus || _vaultList?.SelectedRow is not { } row) return;
         CloseVaultList();
-        _ = FillVaultLoginAsync(focus, row);
+        if (focus.Mode == VaultListMode.Generate) _ = FillGeneratedAsync(focus, onlyThisField: false);
+        else _ = FillVaultLoginAsync(focus, row);
+    }
+
+    // ---- O gerador (docs/palavras-passe.md, C5) ----
+
+    // Aceitar a palavra-passe forte: guarda-se logo no cofre, «Não confirmada» (para não se perder se a página falhar),
+    // e preenche a nova e a confirmação desse formulário (ou, pelo menu de contexto noutro campo, só esse). O envio com
+    // sucesso confirma-a (C4). Nunca na janela privada (D-3).
+    private async Task FillGeneratedAsync(VaultFocus focus, bool onlyThisField)
+    {
+        if (focus.Generated is not { } password || IsPrivate || !Data.Settings.Current.PasswordOffer || VaultChannelOf(focus.Tab) is not { } channel) return;
+        if (VaultFillPolicy.CanFill(new VaultFillPolicy.FillCheck(IsTabOnScreen(focus.Tab), IsActive || _overlay?.IsActive == true,
+                channel.IsCurrent(focus.Context), focus.Context.Origin, focus.Context.Origin)) != FillVerdict.Allowed) return;
+        try { VaultService.Profile.SaveGenerated(focus.Context.Origin, password); }
+        catch (Exception)
+        {
+            ShowToast("Não foi possível guardar a palavra-passe gerada.");
+            return;
+        }
+        object argument = onlyThisField
+            ? new { field = focus.Field, form = focus.Form, value = password }
+            : new { field = focus.Field, form = focus.Form, values = new Dictionary<string, string> { ["new-password"] = password } };
+        var result = await channel.CallAsync(focus.Context, "fill", argument);
+        if (!result.Success || result.Result is not double filled || filled < 1)
+            ShowToast("Não foi possível preencher este campo. A palavra-passe gerada ficou em «Palavras-passe», por confirmar.");
+    }
+
+    // O clique direito acabou de chegar deste campo (o menu espera por ele até ~250 ms: a mensagem vem por outro canal).
+    private VaultContextField? FreshVaultContext(BrowserTab tab, DateTime asked)
+        => _vaultContextField is { } f && ReferenceEquals(f.Tab, tab) && f.At >= asked - TimeSpan.FromSeconds(1) ? f : null;
+
+    private async Task<PageContext> WithVaultField(BrowserTab tab, PageContext context)
+    {
+        if (!context.IsEditable || !context.IsWebPage || VaultChannelOf(tab) is null) return context;
+        var asked = DateTime.UtcNow;
+        for (var i = 0; i < 8 && FreshVaultContext(tab, asked) is null; i++) await Task.Delay(30);
+        if (FreshVaultContext(tab, asked) is not { } field) return context;
+        return context with
+        {
+            Vault = new VaultFieldInfo(field.Message.Kind is "password" or "new-password", !IsPrivate && Data.Settings.Current.PasswordOffer),
+        };
+    }
+
+    // «Gerar palavra-passe forte» (menu de contexto num campo de palavra-passe).
+    private async Task GenerateFromMenuAsync(BrowserTab tab)
+    {
+        if (_vaultContextField is not { } f || !ReferenceEquals(f.Tab, tab) || f.Message is not { Field: { } field, Form: { } form } m) return;
+        if (PasswordGenerator.Generate(new PasswordRules(m.MinLength, m.MaxLength, m.Pattern)) is not { } password)
+        {
+            ShowToast("Este campo não aceita uma palavra-passe gerada.");
+            return;
+        }
+        var focus = new VaultFocus(tab, f.Context, field, form, m.Kind ?? "password", null, m.Rect ?? new VaultRect(0, 0, 0, 0))
+        {
+            Mode = VaultListMode.Generate,
+            Generated = password,
+        };
+        await FillGeneratedAsync(focus, onlyThisField: m.Kind != "new-password");
     }
 
     // Preencher (desenho, secção 3.6): a aba à vista na janela ativa, o mesmo documento e uma palavra-passe deste site;

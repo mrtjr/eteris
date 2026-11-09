@@ -123,6 +123,48 @@ public sealed class VaultService : IDisposable
             Text(m, "formAction"), m["generated"]?.GetValue<bool>() ?? false, Text(m, "realm"));
     }
 
+    // Uma palavra-passe gerada pelo Éteris (C5): guarda-se logo, «Não confirmada», para não se perder se a página falhar
+    // (como o Chrome). Uma gerada por confirmar do mesmo site e utilizador é substituída (a anterior fica no histórico);
+    // uma confirmada nunca: a gerada fica ao lado até o envio correr bem (ConfirmGenerated).
+    public string SaveGenerated(string url, string password, string? username = null)
+    {
+        var origin = Origins.Normalize(url) ?? throw new ArgumentException("Origem inválida para uma palavra-passe.", nameof(url));
+        var user = username ?? string.Empty;
+        var pending = LoginIds(origin, user).FirstOrDefault(id => GetLogin(id)?.Generated == true);
+        var id = pending ?? VaultIds.New();
+        var old = pending is null ? null : GetLogin(pending);
+        var now = Now;
+        var meta = new JsonObject
+        {
+            ["origin"] = origin, ["username"] = user, ["created"] = Time(old?.Created ?? now), ["changed"] = Time(now),
+            ["used"] = null, ["formAction"] = null, ["generated"] = true, ["realm"] = null,
+        };
+        Store.Put(VaultCollection.Logins, id, origin, meta, new JsonObject { ["password"] = password, ["note"] = null }, now, keepPrevious: old is not null);
+        return id;
+    }
+
+    // O envio com a palavra-passe gerada correu bem: deixa de estar «Não confirmada», com o utilizador do formulário. Se
+    // esse utilizador já tinha uma palavra-passe guardada neste site, é essa que muda (a antiga vai para o histórico) e a
+    // gerada sai. Devolve o item que ficou.
+    public string ConfirmGenerated(string id, string username)
+    {
+        if (GetLogin(id) is not { Generated: true } generated) return id;
+        if (LoginIds(generated.Origin, username).FirstOrDefault(other => other != id && GetLogin(other)?.Generated == false) is { } existing
+            && GetLogin(existing) is { } account)
+        {
+            SaveLogin(account with { Password = generated.Password });
+            Store.Delete(VaultCollection.Logins, id, Now);
+            return existing;
+        }
+        SaveLogin(generated with { Username = username, Generated = false });
+        return id;
+    }
+
+    private IEnumerable<string> LoginIds(string origin, string username)
+        => Store.FindByOrigin(VaultCollection.Logins, origin)
+            .Where(id => Store.Get(VaultCollection.Logins, id) is { } e && Text(e.Meta, "origin") == origin && Text(e.Meta, "username") == username)
+            .ToList();
+
     public string? PreviousPassword(string id) => Store.ReadPrevious(VaultCollection.Logins, id) is { } prev ? Text(prev, "password") : null;
 
     // O item com esta origem e este utilizador (para importar), ou null.

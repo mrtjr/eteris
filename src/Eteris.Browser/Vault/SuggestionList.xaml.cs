@@ -34,6 +34,13 @@ public partial class SuggestionList : UserControl
 
     public int Selected { get; private set; } = -1;
 
+    // O nome da lista para o leitor de ecrã («Palavras-passe guardadas», «Palavra-passe forte»…).
+    public string Heading
+    {
+        get => AutomationProperties.GetName(this);
+        set => AutomationProperties.SetName(this, value);
+    }
+
     public int Count => _rows.Count;
 
     public SuggestionRow? SelectedRow => Selected >= 0 && Selected < _rows.Count ? _rows[Selected].Row : null;
@@ -77,7 +84,8 @@ public partial class SuggestionList : UserControl
         initial.Children.Add(new Ellipse { Fill = (Brush)FindResource(row.Insecure ? "DangerBrush" : "IrisBrush"), Opacity = 0.18 });
         initial.Children.Add(new TextBlock
         {
-            Text = Initial(row),
+            Text = row.Glyph ?? Initial(row),
+            FontFamily = row.Glyph is null ? FontFamily : (FontFamily)FindResource("IconFont"),
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,

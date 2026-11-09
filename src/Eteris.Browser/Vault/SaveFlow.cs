@@ -80,7 +80,13 @@ public static class SavePolicy
         if (neverSite || string.IsNullOrEmpty(password) || password.Length > MaxPassword) return SaveOffer.Nothing(c.Origin);
         // Uma gerada pelo Éteris à espera deste envio: confirma-se (com o utilizador do formulário, se o tiver).
         if (sameOrigin.FirstOrDefault(s => s.Generated && s.Password == password) is { } generated)
-            return new(SaveOfferKind.ConfirmGenerated, c.Origin, c.Username.Length > 0 ? c.Username : generated.Username, password, generated.Id);
+        {
+            // Numa mudança sem utilizador no formulário, é da conta que tinha a palavra-passe atual.
+            var owner = c.Username.Length > 0 ? c.Username
+                : c.FormKind == "change" && sameOrigin.FirstOrDefault(s => !s.Generated && !string.IsNullOrEmpty(c.Password) && s.Password == c.Password) is { } account
+                    ? account.Username : generated.Username;
+            return new(SaveOfferKind.ConfirmGenerated, c.Origin, owner, password, generated.Id);
+        }
 
         StoredLogin? existing;
         if (c.FormKind == "change")

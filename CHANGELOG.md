@@ -25,6 +25,11 @@
   corrigir o nome e ver a palavra-passe antes; «Agora não» deixa um ícone de chave para guardar mais tarde, e ⋯ ›
   «Nunca neste site». Um erro de login não oferece nada; a janela privada nunca oferece; nada fica guardado sem
   escolher «Guardar».
+- **Gerador de palavras-passe** (C5): num campo de palavra-passe nova (criar conta, mudar a palavra-passe), a lista do
+  Éteris propõe «Usar palavra-passe forte» — 20 carateres aleatórios sem carateres que se confundem, a respeitar o
+  tamanho e o formato que o site pede. Também no menu de contexto: «Gerar palavra-passe forte». A palavra-passe fica
+  logo guardada («Não confirmada») para não se perder e é confirmada quando o formulário é enviado com sucesso. Nunca
+  na janela privada.
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

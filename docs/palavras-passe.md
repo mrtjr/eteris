@@ -1,8 +1,8 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o bloco C até ao C4 (na página: canal,
-classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio) feitos no ramo `sync`, por
-publicar** (o resto do bloco C — gerador, preencher contactos, pagamentos, documentos e viagens, janelas privadas — e os
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o bloco C até ao C5 (na página: canal,
+classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador) feitos no ramo `sync`,
+por publicar** (o resto do bloco C — preencher contactos, pagamentos, documentos e viagens, janelas privadas — e os
 blocos D e E do desenho estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
@@ -647,3 +647,53 @@ comando de teste que diz a que texto esperado cada palavra-passe é igual, sem a
 6. SPA: errada (o formulário fica com o erro) não oferece; certa (o formulário sai) oferece; «Agora não» deixa a
    chave (`3-chave.png`); a chave reabre a bolha; Esc dentro dela fecha; a navegação seguinte tira a chave.
 7. ⋯ › «Nunca neste site» (`4-nunca.png`): o login seguinte no site não oferece nada; o site está na lista «nunca».
+
+## C5. Gerador
+
+`Vault/PasswordGenerator.cs` (`PasswordGenerator`, `GeneratorPolicy`), `Vault/VaultService.cs` (`SaveGenerated`,
+`ConfirmGenerated`), `Vault/Scripts/cofre.js` (`generate`, `context`, preencher por tipo), `Browser/PageMenu.cs`,
+`MainWindow.PageMenu.cs`, `MainWindow.Vault.cs`.
+
+- **A palavra-passe:** `RandomNumberGenerator`, **20 carateres** por omissão, com minúsculas, maiúsculas, algarismos e
+  símbolos (`-_.!@#$%*+=?`), sem os que se confundem (`l I O 0 o 1`): 68 carateres, ~121 bits. Respeita `minlength` e
+  `maxlength` (até 64) e um subconjunto de `pattern`: uma sequência de classes (`[…]`, `\d`, `\w`, `.`, letras) com
+  quantificadores gera-se peça a peça; outro padrão (lookaheads, grupos) aceita a palavra-passe normal se ela o
+  cumprir. A palavra-passe inteira tem de cumprir o padrão (como o HTML: `^(?:padrão)$`); um padrão impossível, sem
+  nada aleatório (só texto fixo) ou inválido não dá nada, e o gerador não se oferece.
+- **Onde aparece:** no foco de um campo de **palavra-passe nova** (criação de conta, mudança), com «Oferecer para
+  guardar palavras-passe» ligado e **nunca na janela privada** (D-3; o script nem manda as restrições). O script manda
+  as restrições do campo (mensagem `generate`) e a lista do Éteris mostra «Usar palavra-passe forte» com uma
+  **pré-visualização parcial** (os 4 primeiros carateres e «…»); a palavra-passe inteira fica só na memória do
+  navegador até ser aceite ou o foco sair. Escrever no campo fecha a lista; ↓ volta a abri-la. Também no menu de
+  contexto de qualquer campo de palavra-passe: **«Gerar palavra-passe forte»** (o clique direito manda a mensagem
+  `context` com o campo, o formulário, o tipo e as restrições; o menu espera por ela até ~250 ms).
+- **Ao aceitar** (Enter, clique, ou o menu): (1) a aba à vista na janela ativa e o mesmo documento; (2) a palavra-passe
+  **guarda-se logo** no cofre, marcada «gerada, à espera de confirmação», para não se perder se a página falhar (como o
+  Chrome); uma gerada por confirmar do mesmo site e utilizador é substituída (a anterior fica no histórico), uma
+  confirmada nunca; (3) preenche a nova e a confirmação desse formulário (pelo menu num campo que não é de palavra-passe
+  nova, só esse campo), nunca a atual. Na lista do gestor fica com a etiqueta **«Não confirmada»**.
+- **Depois do envio com sucesso** (o critério do C4): a gerada é confirmada **sem perguntar**, com o utilizador do
+  formulário (numa mudança sem utilizador, o da conta que tinha a palavra-passe atual); se esse utilizador já tinha
+  uma palavra-passe guardada no site, é essa que muda (a antiga vai para o histórico) e a gerada sai. Aviso «Palavra-
+  passe gerada guardada para *site*». Sem envio, fica «Não confirmada» até o utilizador a apagar.
+
+Testes: `Vault/PasswordGeneratorTests` (20 carateres com as quatro classes e nada ambíguo; mais de 100 bits; 2000 sem
+repetir; distribuição uniforme dentro de cada classe em 3000 palavras-passe; `minlength`/`maxlength` e limites
+impossíveis; `pattern` simples, de várias peças e com lookaheads, cumprido 30 vezes cada; padrões impossíveis ou
+inválidos sem nada; onde se oferece, nunca na janela privada; a pré-visualização parcial; «Gerar palavra-passe forte»
+no menu de contexto só em campos de palavra-passe e fora da janela privada; guardada antes do envio como «Não
+confirmada», substituída por outra gerada, confirmada pelo envio; numa conta que já existe só a substitui ao
+confirmar), `Vault/SaveFlowTests` (a gerada numa mudança sem utilizador é da conta com a palavra-passe atual),
+`Vault/CofreFillTests` (no Node: a gerada preenche a nova e a confirmação, nunca a atual; a mensagem do menu de
+contexto com o campo e as restrições).
+
+Prova ao vivo (`pp\vivo\c5.ps1`, `pp\vivo\c5\registo.txt` e capturas; perfil de teste novo; página local de
+criação de conta em `127.0.0.1:8901` com `minlength=12`, `maxlength=16` e `pattern=[A-Za-z0-9]+`; teclas reais):
+
+1. Tab para a palavra-passe nova: a lista «Usar palavra-passe forte» com 4 carateres e «…» (`1-gerador.png`).
+2. ↓ Enter: a nova e a confirmação com 16 carateres, iguais e a cumprir o padrão (`2-preenchido.png`); no cofre, uma
+   palavra-passe de 16 carateres sem utilizador, `gerada=True`.
+3. `eteris://passwords/` noutra aba: a linha com a etiqueta «Não confirmada» (`3-nao-confirmada.png`).
+4. Enviar (navega): no cofre, a mesma palavra-passe com o e-mail do formulário e `gerada=False`.
+5. Shift+F10 na palavra-passe nova: «Gerar palavra-passe forte» no menu (`4-menu.png`); escolhida, preenche os dois
+   campos e fica por confirmar (sem envio).

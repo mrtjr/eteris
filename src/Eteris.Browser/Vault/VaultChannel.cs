@@ -75,7 +75,9 @@ public static class VaultMessages
         ["submit"] = new(VaultMessageType.Submit, ["form", "formKind"], ["username", "password", "newPassword"]),
         ["formGone"] = new(VaultMessageType.FormGone, ["form"], []),
         ["generate"] = new(VaultMessageType.Generate, ["field", "form"], ["minLength", "maxLength", "pattern"]),
-        ["context"] = new(VaultMessageType.Context, ["field", "kind"], ["form", "rect"]),
+        // Clique direito num campo (C5, C6): o campo e o formulário; o tipo se o classificador o conhece; numa palavra-passe,
+        // as restrições para «Gerar palavra-passe forte».
+        ["context"] = new(VaultMessageType.Context, ["field", "form"], ["kind", "rect", "minLength", "maxLength", "pattern"]),
     };
 
     public static VaultMessage? Parse(string? payload)

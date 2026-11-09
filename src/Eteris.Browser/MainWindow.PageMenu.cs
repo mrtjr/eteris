@@ -13,8 +13,11 @@ public partial class MainWindow
     private PageMenuHandler NewPageMenuHandler(BrowserTab tab, ChromiumWebBrowser browser)
         => new(IsPrivate, (context, x, y) => Dispatcher.InvokeAsync(() => ShowPageMenu(tab, browser, context, x, y)));
 
-    private void ShowPageMenu(BrowserTab tab, ChromiumWebBrowser browser, PageContext context, int x, int y)
+    private async void ShowPageMenu(BrowserTab tab, ChromiumWebBrowser browser, PageContext context, int x, int y)
     {
+        if (!ReferenceEquals(tab, Tabs.Active)) return;
+        // Num campo de uma página http(s): o que o script do cofre viu nele (MainWindow.Vault.cs).
+        context = await WithVaultField(tab, context);
         if (!ReferenceEquals(tab, Tabs.Active)) return;
         // O Avançar também volta ao vídeo de onde se regressou com o Voltar (Tabs/EngineCrossing.cs).
         context = context with { CanGoForward = tab.Crossing.CanGoForward(inVideo: false, context.CanGoForward) };
@@ -60,6 +63,7 @@ public partial class MainWindow
             case PageCommand.SavePdf: SaveAsPdf(); break;
             case PageCommand.ReadLater: SaveForLater(); break;
             case PageCommand.PlayInVideoEngine: PlayInVideoEngine(tab); break;
+            case PageCommand.GeneratePassword: _ = GenerateFromMenuAsync(tab); break;
             case PageCommand.SearchSelection: Tabs.NewTab(Engine.UrlFor(context.Selection.Trim())); break;
             case PageCommand.CopyHighlightLink:
                 if (TextFragment.Link(tab.Address, context.Selection) is { } highlight)

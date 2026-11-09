@@ -3,6 +3,9 @@ namespace Eteris.Browser.Vault;
 // Uma linha da lista de sugestões: o utilizador e de onde é (nunca a palavra-passe).
 public sealed record SuggestionRow(string Id, string Title, string Detail, bool Insecure, OriginMatch Match)
 {
+    // Um ícone (gerador, contacto, cartão…) no lugar da inicial do utilizador.
+    public string? Glyph { get; init; }
+
     public override string ToString() => $"SuggestionRow {Id}";
 }
 

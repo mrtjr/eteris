@@ -1,3 +1,5 @@
+using Eteris.Browser.Vault;
+
 namespace Eteris.Browser.Tests.Vault;
 
 // C3 (docs/palavras-passe.md): o preenchimento no script do cofre, corrido no Node sobre um campo de imitação. O valor
@@ -58,6 +60,29 @@ public class CofreFillTests
             """);
         if (output is null) return;
         Assert.Equal("""[[0,"ana"],[1,"Inventada-1!"]]""", output);
+    }
+
+    // O gerador (C5): a palavra-passe nova e a confirmação, nunca a atual.
+    [Fact]
+    public void Plan_Generated_FillsTheNewPasswordAndItsConfirmation()
+    {
+        var output = CofreClassifierTests.Run("""
+            print(JSON.stringify(C.fillPlan(['username', 'password', 'new-password', 'new-password'], [true, true, true, true], { 'new-password': 'Gerada-1' })));
+            """);
+        if (output is null) return;
+        Assert.Equal("""[[2,"Gerada-1"],[3,"Gerada-1"]]""", output);
+    }
+
+    // O menu de contexto (C5, C6): a mensagem diz o campo, o formulário e, numa palavra-passe, as restrições.
+    [Fact]
+    public void ContextMessage_CarriesTheFieldAndTheLimits()
+    {
+        var message = VaultMessages.Parse("""{"t":"context","field":"f1","form":"m1","kind":"new-password","rect":[1,2,3,4],"minLength":8,"maxLength":16,"pattern":"[a-z]+"}""");
+        Assert.NotNull(message);
+        Assert.Equal(VaultMessageType.Context, message.Type);
+        Assert.Equal((8, 16, "[a-z]+"), (message.MinLength, message.MaxLength, message.Pattern));
+        Assert.NotNull(VaultMessages.Parse("""{"t":"context","field":"f1","form":"m1"}"""));
+        Assert.Null(VaultMessages.Parse("""{"t":"context","field":"f1"}"""));
     }
 
     [Fact]

@@ -191,6 +191,17 @@ public class SaveFlowTests
         Assert.Equal("ana@exemplo.test", offer.Username);
     }
 
+    // Numa mudança de palavra-passe sem utilizador no formulário, a gerada é da conta que tinha a palavra-passe atual.
+    [Fact]
+    public void GeneratedPassword_OnAChangeForm_BelongsToTheAccountWithTheCurrentPassword()
+    {
+        var c = Candidate("change", user: "", password: "Antiga-0!", newPassword: "Gerada-Xk7aQ9");
+        var offer = SavePolicy.Decide(c, false, [Stored("ana@exemplo.test", "Antiga-0!", id: "ana"), Stored("", "Gerada-Xk7aQ9", generated: true, id: "g1")]);
+        Assert.Equal(SaveOfferKind.ConfirmGenerated, offer.Kind);
+        Assert.Equal("g1", offer.ExistingId);
+        Assert.Equal("ana@exemplo.test", offer.Username);
+    }
+
     // O ícone de chave fica até à próxima navegação; a que trouxe a oferta (e um redirecionamento logo a seguir) não conta.
     [Fact]
     public void Offer_SurvivesOnlyTheNavigationsRightAfterIt()
