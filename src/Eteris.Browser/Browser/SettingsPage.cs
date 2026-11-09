@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using Eteris.Browser.Data;
+using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser.Browser;
 
@@ -51,6 +52,8 @@ public static class SettingsPage
             engine = settings.SearchEngine,
             startup = settings.Startup,
             sleep = settings.SleepMinutes,
+            // Só com o ajuste e13 (sem ele a opção não faria nada): null esconde-a.
+            sleepPressure = PerfTuning.IsOn(PerfTuning.SleepUnderPressure) ? settings.SleepOnLowMemory : (bool?)null,
             archive = settings.ArchiveDays,
             archiveConfirmed = settings.ArchiveConfirmed,
             httpsFirst = settings.HttpsFirst,

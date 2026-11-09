@@ -34,6 +34,8 @@ public enum PerfLayers
 //   ETERIS_TEST_CONTADORES=1|<caminho>     contadores dos mecanismos por segundo (Infrastructure/PerfCounters.cs);
 //   ETERIS_TEST_HOST_RULES=<regras>        nomes de teste mapeados para 127.0.0.1 (--host-resolver-rules), só
 //                                          «MAP <nome>.example|.test|.invalid|.localhost 127.0.0.1[:porta]».
+//   ETERIS_TEST_PRESSAO=1                  sinal simulado de pouca memória para o sono por pressão (ajuste e13,
+//                                          Tabs/MemoryPressure.cs), em vez de reservar ~25 GB (decisão D-16).
 //
 // Fora do caminho antes da 1.ª pintura (regra R-2 do plano do sandbox): sem as variáveis, a 1.ª consulta lê o ambiente
 // (nada no disco) e as seguintes são um campo estático; o HOST_RULES só acrescenta um argumento à linha de comandos do
@@ -43,11 +45,13 @@ public static class PerfDiagnostics
     public const string PureVariable = "ETERIS_TEST_PURO";
     public const string CountersVariable = "ETERIS_TEST_CONTADORES";
     public const string HostRulesVariable = "ETERIS_TEST_HOST_RULES";
+    public const string PressureVariable = "ETERIS_TEST_PRESSAO";
 
     private static readonly Lazy<bool> Installed = new(() => DetectInstalled(AppContext.BaseDirectory));
     // Sem a variável não se olha sequer para o disco (a pasta da instalação): só a leitura do ambiente.
     private static readonly Lazy<PerfLayers> Pure = new(() => Read(PureVariable) is { } value ? ParsePure(value, Installed.Value) : PerfLayers.None);
     private static readonly Lazy<string?> Rules = new(() => Read(HostRulesVariable) is { } value ? ParseHostRules(value, Installed.Value) : null);
+    private static readonly Lazy<bool> Pressure = new(() => Read(PressureVariable) is { } value && ParsePressure(value, Installed.Value));
 
     private static string? Read(string variable)
         => Environment.GetEnvironmentVariable(variable) is { } value && !string.IsNullOrWhiteSpace(value) ? value : null;
@@ -64,6 +68,11 @@ public static class PerfDiagnostics
     public static bool Without(PerfLayers layer) => (Pure.Value & layer) != 0;
 
     public static string? HostRules => Rules.Value;
+
+    // Pouca memória simulada (ETERIS_TEST_PRESSAO=1): o sono por pressão age como se o Windows a assinalasse.
+    public static bool SimulatedPressure => Pressure.Value;
+
+    public static bool ParsePressure(string? value, bool installed) => !installed && value?.Trim() == "1";
 
     public static PerfLayers ParsePure(string? value, bool installed)
     {

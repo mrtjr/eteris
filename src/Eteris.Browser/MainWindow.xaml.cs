@@ -345,6 +345,8 @@ public partial class MainWindow : Window
             if (!e.Browser.IsLoading) injector.Tidy(url);
             Dispatcher.InvokeAsync(() =>
             {
+                // Acordou de um sono com a rolagem guardada (ajuste e13, MainWindow.Sleep.cs).
+                RestoreSleptScroll(tab, browser, url);
                 DetectSiteTint(tab, browser, url);
                 DetectReaderable(tab, browser, url);
                 ApplyHiddenElements(browser, url);

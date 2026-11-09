@@ -16,7 +16,8 @@ namespace Eteris.Browser.Infrastructure;
 //   wpf.lotes            lotes que o WPF enviou ao fio de composição (≈ fotogramas do WPF; 0 em repouso) — E1, D5;
 //   camada.mostrar/esconder   a janela em camadas por cima da página aparece/desaparece — E5;
 //   midia.sondagem       Runtime.evaluate da central de multimédia, um por aba — E4;
-//   pedidos, pedidos.us, pedidos.cancelados   pedidos vistos pelo tratador e tempo gasto nele (µs) — D10.
+//   pedidos, pedidos.us, pedidos.cancelados   pedidos vistos pelo tratador e tempo gasto nele (µs) — D10;
+//   sono.pressao         abas adormecidas por pouca memória (uma por intervalo) — E13.
 // Sem a variável, Add é a leitura de um campo estático.
 public static class PerfCounters
 {

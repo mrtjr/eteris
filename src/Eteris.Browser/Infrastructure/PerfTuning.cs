@@ -33,6 +33,7 @@ public static class PerfTuning
     public const string UpdatesOnExitOnly = "e10";
     public const string EngineThreadStartup = "e11";
     public const string ReadyNewTab = "e12";
+    public const string SleepUnderPressure = "e13";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -53,6 +54,8 @@ public static class PerfTuning
             OnByDefault: false, BeforeFirstPaint: true, Waits: "E9"),
         new(ReadyNewTab, "a 1.ª nova aba prepara-se em fundo durante o arranque; as definições e a sessão leem-se sem reflexão",
             OnByDefault: false, BeforeFirstPaint: true),
+        new(SleepUnderPressure, "com pouca memória, adormece uma aba de cada vez (a usada há mais tempo, com as isenções) e a rolagem volta ao acordar",
+            OnByDefault: false, Waits: "D-6"),
         new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
     ];
