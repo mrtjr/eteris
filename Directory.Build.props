@@ -6,4 +6,18 @@
     <!-- Avisos de auditoria do NuGet não podem partir a build quando sai um alerta novo para uma dependência. -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
   </PropertyGroup>
+  <!-- Os binários publicados não levam o caminho da máquina de quem compila, que tem o nome do utilizador do Windows: o
+       PathMap troca a raiz do repositório por /_/ no PDB, no caminho do PDB da entrada CodeView do PE e nos caminhos das
+       fontes. Vale para todos os projetos de src (Eteris.Browser, que no modo com sandbox é o Eteris.App.dll, e os que
+       vierem), só em Release (a publicação e o CI). Os projetos de teste ficam de fora: acham a raiz do repositório pelo
+       CallerFilePath, que o PathMap trocaria por /_/; o Contains apanha também o projeto temporário do WPF
+       (<projeto>_<sufixo>_wpftmp). O MSBuildThisFileDirectory é a raiz na forma em que o MSBuild a recebe (longa ou
+       curta 8.3, a mesma que chega ao compilador) e já acaba em \. O publish.ps1 confere o resultado.
+       DeterministicSourcePaths (o que o ContinuousIntegrationBuild liga): o SourceLink que o SDK mete no PDB também
+       passa a dizer /_/* em vez da pasta local do repositório, e as pastas dos pacotes NuGet também são trocadas. Só com
+       o repositório git presente: sem ele não há SourceRoot e o SDK dá erro. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' And !$(MSBuildProjectName.Contains('.Tests'))">
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <DeterministicSourcePaths Condition="Exists('$(MSBuildThisFileDirectory).git')">true</DeterministicSourcePaths>
+  </PropertyGroup>
 </Project>

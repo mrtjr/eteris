@@ -21,10 +21,18 @@
     <ShieldsDir>$(MSBuildThisFileDirectory)..\Eteris.Shields\</ShieldsDir>
     <CargoExe Condition="'$(CargoExe)' == '' And Exists('$(USERPROFILE)\.cargo\bin\cargo.exe')">$(USERPROFILE)\.cargo\bin\cargo.exe</CargoExe>
     <CargoExe Condition="'$(CargoExe)' == ''">cargo</CargoExe>
+    <!-- As mensagens de panic! das crates do registo levam o caminho do CARGO_HOME (por omissão %USERPROFILE%\.cargo,
+         com o nome do utilizador): a opção remap-path-prefix do rustc troca-o por /cargo no eteris_shields.dll. -->
+    <CargoHome Condition="'$(CargoHome)' == '' And '$(CARGO_HOME)' != ''">$(CARGO_HOME)</CargoHome>
+    <CargoHome Condition="'$(CargoHome)' == ''">$(USERPROFILE)\.cargo</CargoHome>
   </PropertyGroup>
 
+  <!-- O CARGO_ENCODED_RUSTFLAGS leva uma só opção (sem o separador 0x1F, aceita espaços no caminho) e ganha a um RUSTFLAGS
+       do ambiente; mudar as opções faz o cargo recompilar as dependências uma vez, e um cargo build à mão sem elas também. -->
   <Target Name="BuildShields" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
-    <Exec Command="&quot;$(CargoExe)&quot; build --release --quiet --manifest-path &quot;$(ShieldsDir)Cargo.toml&quot;" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="&quot;$(CargoExe)&quot; build --release --quiet --manifest-path &quot;$(ShieldsDir)Cargo.toml&quot;"
+          EnvironmentVariables="CARGO_ENCODED_RUSTFLAGS=--remap-path-prefix=$(CargoHome)=/cargo"
+          IgnoreStandardErrorWarningFormat="true" />
   </Target>
 
   <ItemGroup>
