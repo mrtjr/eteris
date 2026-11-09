@@ -13,7 +13,8 @@ public partial class App : Application
         StartupTrace.Mark("onstartup");
         // O motor arranca numa thread própria enquanto o resto do arranque e o XAML da janela correm aqui; a janela espera
         // por ele só antes da 1.ª aba (Infrastructure/CefConfigurator.cs).
-        CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
+        // Com o ajuste e11 já arrancou a partir do Main (Program.cs).
+        if (!CefConfigurator.StartedFromMain) CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
         // As tabelas que a 1.ª aba consulta abrem-se em paralelo (Data/AppData.cs, PrewarmAsync).
         _ = Data.AppData.PrewarmAsync();
         Theme.ThemeManager.Apply(Data.Settings.Current.Theme);
@@ -56,7 +57,7 @@ public partial class App : Application
     private IDisposable? _channel;
 
     // Logo a seguir ao Cef.Initialize (na thread onde ele correu): o que precisa do contexto global do motor.
-    private static void OnCefReady()
+    internal static void OnCefReady()
     {
         // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
         Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());

@@ -49,6 +49,15 @@ public static class Program
         // O JIT do arranque passa a correr também noutros núcleos, guiado pelo arranque anterior (Infrastructure/StartupJit.cs);
         // um arranque privado não o grava.
         if (StartupJit.ShouldRecord(args)) StartupJit.Start(AppPaths.Root);
+        // Ajuste e11 (desligado por omissão; regra R-2 e depois do E9): o motor prepara-se e arranca já, na sua thread,
+        // enquanto os recursos da aplicação e a janela se carregam aqui. As pastas antes de tudo: a base de dados
+        // (App.OnStartup, PrewarmAsync) já não espera pelo Prepare.
+        if (PerfTuning.IsOn(PerfTuning.EngineThreadStartup))
+        {
+            AppPaths.EnsureDirectories();
+            CefConfigurator.StartFromMain(App.OnCefReady);
+            StartupTrace.Mark("motor.lancado");
+        }
         // O motor de composição do WPF arranca já, numa thread à parte (Infrastructure/CompositionWarmup.cs).
         CompositionWarmup.Start();
 

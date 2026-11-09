@@ -38,13 +38,25 @@ public static class PrivacyPreferences
     // A língua que os sites recebem, já resolvida («system» → a do Windows).
     public static string SiteLanguage => RequestIdentity.Language(Data.Settings.Current.SiteLanguage);
 
-    // Fornecedor de DNS cifrado em vigor desde o arranque (null = DNS do sistema).
-    public static string? StartedWithSecureDns { get; set; }
+    // Fornecedor de DNS cifrado em vigor desde o arranque (null = DNS do sistema). Escritos no Prepare, que com o ajuste e11
+    // corre na thread do motor (Infrastructure/CefConfigurator.cs): publicados com Volatile.
+    private static string? _startedWithSecureDns;
+    private static string? _secureDnsTemplate;
+
+    public static string? StartedWithSecureDns
+    {
+        get => Volatile.Read(ref _startedWithSecureDns);
+        set => Volatile.Write(ref _startedWithSecureDns, value);
+    }
 
     public static string? SecureDnsProvider => StartedWithSecureDns;
 
     // O modelo DoH desse fornecedor (https://…/dns-query), para o motor perguntar ele próprio (Shields/CnameUncloak.cs).
-    public static string? SecureDnsTemplate { get; set; }
+    public static string? SecureDnsTemplate
+    {
+        get => Volatile.Read(ref _secureDnsTemplate);
+        set => Volatile.Write(ref _secureDnsTemplate, value);
+    }
 
     public static Task ApplyAsync(IRequestContext? context = null) => Cef.UIThreadTaskFactory.StartNew(() =>
     {

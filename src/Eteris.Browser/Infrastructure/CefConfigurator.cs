@@ -131,7 +131,21 @@ public static class CefConfigurator
     // Falso quando o Éteris arrancou pelo bootstrap do sandbox (Prepare).
     private static bool _dependencyCheck = true;
 
-    public static void InitializeInBackground(CefSettings settings, Action ready)
+    public static void InitializeInBackground(CefSettings settings, Action ready) => InitializeInBackground(() => settings, ready);
+
+    // Ajuste e11 (plano de desempenho da 0.2.14, E11): também o Prepare corre na thread do motor, a partir do Main, e sai
+    // do fio da interface (pastas, limpeza do perfil, Local State, NetworkSandbox.Decide, new CefSettings: ~41 ms).
+    // A limpeza do perfil continua antes do Cef.Initialize (a mesma thread, em sequência). Uma falha do Prepare volta a
+    // ser lançada no WaitReady, como a do Cef.Initialize.
+    public static bool StartedFromMain { get; private set; }
+
+    public static void StartFromMain(Action ready)
+    {
+        StartedFromMain = true;
+        InitializeInBackground(Prepare, ready);
+    }
+
+    public static void InitializeInBackground(Func<CefSettings> prepare, Action ready)
     {
         // O fecho do motor é do Éteris (App.OnExit: PreShutdown no fio da interface, Shutdown nesta thread). Sem isto, o
         // CefSharp.Wpf prendia o seu próprio Cef.Shutdown ao fecho do Dispatcher do fio da interface, que não é a thread do
@@ -142,6 +156,7 @@ public static class CefConfigurator
         {
             try
             {
+                var settings = prepare();
                 Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null);
                 StartupTrace.Mark("cef.initialize");
                 ready();
@@ -162,9 +177,13 @@ public static class CefConfigurator
         if (_thread is null) return;
         if (!Ready.IsSet)
         {
+            var waited = System.Diagnostics.Stopwatch.StartNew();
             Ready.Wait();
             StartupTrace.Mark("cef.pronto");
+            // Quanto o fio da interface esperou pelo motor (E11: tem de ficar ~0).
+            StartupTrace.MarkOnce("cef.esperou", FormattableString.Invariant($"ms={waited.Elapsed.TotalMilliseconds:F1}"));
         }
+        else StartupTrace.MarkOnce("cef.esperou", "ms=0");
         _failure?.Throw();
     }
 

@@ -31,6 +31,7 @@ public static class PerfTuning
     public const string SmallBackForwardCache = "e7";
     public const string HideWhenUnseen = "e8";
     public const string UpdatesOnExitOnly = "e10";
+    public const string EngineThreadStartup = "e11";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -47,6 +48,8 @@ public static class PerfTuning
             OnByDefault: false, Waits: "D4"),
         new(UpdatesOnExitOnly, "as atualizações aplicam-se só ao sair do Éteris, nunca no arranque", OnByDefault: false,
             BeforeFirstPaint: true, Waits: "D-7"),
+        new(EngineThreadStartup, "o motor prepara-se (pastas, limpeza do perfil, Local State, definições) e arranca na sua thread logo a seguir à instância única, em paralelo com a interface",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "E9"),
         new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
     ];
