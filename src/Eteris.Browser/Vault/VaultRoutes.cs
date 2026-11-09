@@ -63,6 +63,9 @@ public interface IVaultHost
     bool SetSetting(string key, string value);
 
     IDisposable Schedule(TimeSpan delay, Action run);
+
+    // A sincronização está ligada neste computador com a linha «Palavras-passe».
+    bool SyncsPasswords => false;
 }
 
 // As rotas das páginas do cofre (docs/palavras-passe.md, B2–B3). Regras: nenhum segredo no HTML inicial; mostrar,
@@ -79,7 +82,9 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
     private readonly Dictionary<string, PendingDelete> _pending = new(StringComparer.Ordinal);
     private PendingImport? _import;
     private string? _lastImportFile;
-    private IDisposable? _onScreen;
+    // Os segredos à vista (cada «Mostrar» ou formulário de edição tem a sua retenção): o /hide liberta só a sua, para a
+    // resposta atrasada de um «Mostrar» não libertar a de outro. Sem nenhuma, as janelas voltam às capturas.
+    private readonly Dictionary<string, IDisposable> _onScreen = new(StringComparer.Ordinal);
 
     private sealed record PendingDelete(VaultCollection Collection, string Id, IDisposable Timer);
 
@@ -138,13 +143,15 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
             {
                 if (!await AskAsync(r, ReauthPurpose.Reveal).ConfigureAwait(false)) return NotConfirmed();
                 if (vault.GetLogin(id) is not { } login) return Gone();
-                HoldSecretOnScreen();
+                var hold = HoldSecretOnScreen();
                 // A anterior (histórico local de 1 versão: mudada aqui, ou substituída por outro computador) vem junto.
-                return VaultReply.Json(new { ok = true, password = login.Password, note = login.Note ?? string.Empty, previous = vault.PreviousPassword(id) ?? string.Empty });
+                return VaultReply.Json(new { ok = true, password = login.Password, note = login.Note ?? string.Empty, previous = vault.PreviousPassword(id) ?? string.Empty, hold });
             }
             case "/hide":
-                ReleaseSecretOnScreen();
+                ReleaseSecretOnScreen(r.Q("h"));
                 return VaultReply.Json(new { ok = true });
+            case "/keep" when r.Q("h") is { } keep:
+                return VaultReply.Json(new { ok = KeepSecretOnScreen(keep) });
             case "/copy" when r.Q("id") is { } id:
             {
                 var password = r.Q("what") != "username";
@@ -194,14 +201,21 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
                 return await ExportAsync(r).ConfigureAwait(false);
             case "/erase-all":
             {
-                if (!await AskAsync(r, ReauthPurpose.EraseVault).ConfigureAwait(false)) return NotConfirmed();
+                if (!await AskAsync(r, ReauthPurpose.ErasePasswords).ConfigureAwait(false)) return NotConfirmed();
                 var count = 0;
                 foreach (var login in vault.Logins()) count += vault.Delete(VaultCollection.Logins, login.Id) ? 1 : 0;
                 foreach (var entry in vault.List(VaultCollection.LoginsNever)) vault.Delete(VaultCollection.LoginsNever, entry.Id);
                 return VaultReply.Json(new { ok = true, message = count == 1 ? "1 palavra-passe apagada." : $"{count} palavras-passe apagadas." });
             }
             case "/set" when r.Q("k") is { } key && r.Q("v") is { } value:
-                return VaultReply.Text(key is "pwOffer" or "pwSuggest" or "pwAskHello" && host.SetSetting(key, value) ? "ok" : "recusado");
+            {
+                if (key is not ("pwOffer" or "pwSuggest" or "pwAskHello")) return VaultReply.Refused;
+                // Desligar «Pedir o Windows Hello ao preencher palavras-passe» também pede o Windows Hello (senão quem tem
+                // o PC desbloqueado anulava a proteção com um clique).
+                if (Data.UserSettings.NeedsReauth(key, value) && !await AskAsync(r, ReauthPurpose.ChangePasswordSetting).ConfigureAwait(false))
+                    return VaultReply.Refused;
+                return VaultReply.Text(host.SetSetting(key, value) ? "ok" : "recusado");
+            }
             default:
                 return VaultReply.Refused;
         }
@@ -222,6 +236,8 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
             pwSuggest = settings.PasswordSuggestions,
             pwAskHello = settings.PasswordAskHello,
             advice = gate.Advice,
+            // A linha «Palavras-passe» da sincronização está ligada aqui: apagar apaga também nos outros computadores.
+            synced = host.SyncsPasswords,
         };
     }
 
@@ -369,22 +385,41 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
         return await gate.RequestAsync(window, purpose, host.WhileInFront(r.BrowserId)).ConfigureAwait(false);
     }
 
-    private void HoldSecretOnScreen()
+    private string HoldSecretOnScreen()
     {
-        lock (_lock)
-        {
-            _onScreen?.Dispose();
-            _onScreen = host.ShowSecret();
-        }
+        var id = VaultIds.New();
+        lock (_lock) _onScreen[id] = host.ShowSecret();
+        return id;
     }
 
-    private void ReleaseSecretOnScreen()
+    // id null: todas (a página saiu).
+    private void ReleaseSecretOnScreen(string? id)
     {
+        List<IDisposable> release;
         lock (_lock)
         {
-            _onScreen?.Dispose();
-            _onScreen = null;
+            if (id is null)
+            {
+                release = [.. _onScreen.Values];
+                _onScreen.Clear();
+            }
+            else release = _onScreen.Remove(id, out var one) ? [one] : [];
         }
+        foreach (var hold in release) hold.Dispose();
+    }
+
+    // Um formulário de edição continua aberto com o segredo: a retenção recomeça (sem largar a anterior antes de a nova
+    // estar posta, para as janelas não piscarem para as capturas).
+    private bool KeepSecretOnScreen(string id)
+    {
+        IDisposable old;
+        lock (_lock)
+        {
+            if (!_onScreen.TryGetValue(id, out old!)) return false;
+            _onScreen[id] = host.ShowSecret();
+        }
+        old.Dispose();
+        return true;
     }
 
     // Apagar: some já das listas e só se apaga no cofre ao fim de 10 s (ou ao fechar o Éteris), para «Anular» não

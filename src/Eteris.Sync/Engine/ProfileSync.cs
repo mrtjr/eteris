@@ -146,6 +146,8 @@ public static class ProfileSync
         // Coleções com algum selo que não abriu: nesta ronda não se apaga nada delas aqui (o registo que falta pode ser
         // só um que este Éteris não consegue abrir — de um Éteris mais recente, por exemplo).
         public HashSet<string> Broken { get; } = new(StringComparer.Ordinal);
+        // Coleções que o cofre deste computador não deixou ver (não abre agora): ilegíveis nesta ronda.
+        public HashSet<string> Unavailable { get; } = new(StringComparer.Ordinal);
         public int Errors { get; set; }
     }
 
@@ -165,9 +167,21 @@ public static class ProfileSync
                     view.Broken.Add(record.Collection);
                     continue;
                 }
-                var key = secrets.LocalKey(record.Collection, item.NaturalKey);
+                if (view.Unavailable.Contains(record.Collection)) continue;
+                string key, print;
+                try
+                {
+                    key = secrets.LocalKey(record.Collection, item.NaturalKey);
+                    print = secrets.Fingerprint(record.Collection, item);
+                }
+                catch (SecretSourceUnavailableException)
+                {
+                    view.Unavailable.Add(record.Collection);
+                    view.Broken.Add(record.Collection);
+                    continue;
+                }
                 var id = Id(record.Collection, key);
-                view.Items[id] = new LocalItem(record.Collection, key, Print(secrets.Fingerprint(record.Collection, item)));
+                view.Items[id] = new LocalItem(record.Collection, key, Print(print));
                 view.Secrets[id] = item;
                 continue;
             }
@@ -217,6 +231,9 @@ public static class ProfileSync
         var unreadable = new HashSet<string>(first.Unreadable, StringComparer.Ordinal);
         // Itens secretos que não se conseguiram selar (ou ler) agora: a base deles fica como estava (tenta outra vez).
         var failed = new HashSet<string>(StringComparer.Ordinal);
+        // Coleções secretas que o cofre deste computador não deixou ver a meio da ronda: como as ilegíveis, a base delas
+        // fica como estava.
+        var lost = new HashSet<string>(StringComparer.Ordinal);
         var errors = 0;
         var sent = 0;
         if (baseline is not null)
@@ -240,7 +257,15 @@ public static class ProfileSync
                 }
                 else
                 {
-                    if (Collections.IsSecret(collection)) current ??= Account(engine, secrets, options);
+                    if (Collections.IsSecret(collection))
+                    {
+                        current ??= Account(engine, secrets, options);
+                        if (current.Unavailable.Contains(collection))
+                        {
+                            lost.Add(collection);
+                            continue;
+                        }
+                    }
                     StageRemoval(engine, id, current);
                     sent++;
                 }
@@ -253,6 +278,8 @@ public static class ProfileSync
         if (baseline is null || options.Fresh is { Count: > 0 })
         {
             var account = Account(engine, secrets, options);
+            lost.UnionWith(account.Unavailable);
+            unreadable.UnionWith(account.Unavailable);
             foreach (var (id, item) in before)
             {
                 if (unreadable.Contains(item.Collection) || !IsFresh(item.Collection, baseline, options)) continue;
@@ -279,6 +306,8 @@ public static class ProfileSync
         var second = Read(local);
         var during = Index(second.Items, options);
         unreadable.UnionWith(second.Unreadable);
+        lost.UnionWith(desired.Unavailable);
+        unreadable.UnionWith(lost);
         var changes = new List<LocalChange>();
         foreach (var id in desired.Items.Keys.Concat(before.Keys).Distinct(StringComparer.Ordinal))
         {
@@ -307,7 +336,7 @@ public static class ProfileSync
             foreach (var (id, value) in baseline)
             {
                 var collection = CollectionOf(id);
-                if (first.Unreadable.Contains(collection) || !options.IsEnabled(collection)) next[id] = value;
+                if (first.Unreadable.Contains(collection) || lost.Contains(collection) || !options.IsEnabled(collection)) next[id] = value;
             }
         foreach (var change in applied)
         {

@@ -426,7 +426,7 @@ public class GoogleAccountTests
         Assert.Contains("\"syncPrivate\":true", SettingsPage.Render(new UserSettings(), isPrivate: true));
         Assert.Contains("\"syncPrivate\":false", SettingsPage.Render(new UserSettings()));
         var factory = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
-        Assert.Contains("return SettingsRoute(uri, request.Url, privateContext);", factory);
+        Assert.Contains("return SettingsRoute(uri, request.Url, privateContext, browser.Identifier);", factory);
         Assert.Contains("isPrivate: privateContext", factory);
         var page = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
         Assert.Matches(new Regex(@"if \(data\.syncPrivate\) \{[^}]*body\.hidden = true; googleButton\.disabled = true;[^}]*return;", RegexOptions.Singleline), page);

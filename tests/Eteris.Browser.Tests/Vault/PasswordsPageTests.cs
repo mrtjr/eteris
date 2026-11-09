@@ -106,11 +106,77 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.Equal("nota-secreta-xyz", shown["note"]!.GetValue<string>());
         // Com o segredo à vista, as janelas saem das capturas até o esconder.
         Assert.Equal(1, _f.Host.Shown);
-        await _f.Get("passwords", "/hide");
+        await _f.Get("passwords", "/hide", "h=" + shown["hold"]!.GetValue<string>());
         Assert.Equal(1, _f.Host.Hidden);
         // Na janela de graça (5 min) não volta a pedir.
         await _f.Get("passwords", "/reveal", "id=" + id);
         Assert.Equal(2, _f.Reauth.Prompts);
+    }
+
+    // Revisão: «Mostrar» na A e logo na B — a resposta da B faz a página esconder a A, e esse /hide larga só a retenção
+    // da A (a B continua fora das capturas). O formulário de edição renova a sua (/keep) enquanto estiver aberto.
+    [Fact]
+    public async Task Hide_ReleasesOnlyItsOwnHold_AndKeepRenewsIt()
+    {
+        var a = Seed();
+        var b = Seed("https://outro.exemplo.test", "u2", "Senha-Forte-2!", null);
+        var ha = VaultFixture.Json(await _f.Get("passwords", "/reveal", "id=" + a))["hold"]!.GetValue<string>();
+        var hb = VaultFixture.Json(await _f.Get("passwords", "/reveal", "id=" + b))["hold"]!.GetValue<string>();
+        Assert.NotEqual(ha, hb);
+        Assert.Equal(2, _f.Host.Shown);
+        await _f.Get("passwords", "/hide", "h=" + ha);
+        Assert.Equal(1, _f.Host.Hidden);
+        await _f.Get("passwords", "/hide", "h=" + ha); // repetido: nada
+        Assert.Equal(1, _f.Host.Hidden);
+        Assert.True(VaultFixture.Json(await _f.Get("passwords", "/keep", "h=" + hb))["ok"]!.GetValue<bool>());
+        Assert.Equal(3, _f.Host.Shown);
+        Assert.Equal(2, _f.Host.Hidden);
+        Assert.False(VaultFixture.Json(await _f.Get("passwords", "/keep", "h=" + ha))["ok"]!.GetValue<bool>());
+        await _f.Get("passwords", "/hide"); // a página saiu: todas
+        Assert.Equal(3, _f.Host.Hidden);
+    }
+
+    // Revisão: o formulário de edição traz a palavra-passe mascarada, renova a retenção e larga-a ao fechar; um segundo
+    // «Editar» troca o formulário em vez de abrir outro.
+    [Fact]
+    public async Task EditForm_KeepsTheHold_IsMasked_AndThereIsOnlyOne()
+    {
+        var html = (await _f.Get("passwords", "/")).Body;
+        Assert.Contains("ask('keep', { h: reply.hold })", html);
+        Assert.Contains("mk('Palavra-passe', 'password', reply.password)", html);
+        Assert.Contains("detail.querySelector('.form')", html);
+        Assert.DoesNotContain("mk('Palavra-passe', 'text'", html);
+    }
+
+    // Revisão: com a sincronização a levar as palavras-passe, «Apagar todas» diz que apaga também nos outros PCs.
+    [Fact]
+    public async Task EraseAll_SaysItAlsoErasesOnTheOtherComputers_WhenSynced()
+    {
+        Assert.False(VaultFixture.Json(await _f.Get("passwords", "/list"))["synced"]!.GetValue<bool>());
+        _f.Host.Synced = true;
+        Assert.True(VaultFixture.Json(await _f.Get("passwords", "/list"))["synced"]!.GetValue<bool>());
+        var html = (await _f.Get("passwords", "/")).Body;
+        Assert.Contains("também dos outros computadores da sincronização", html);
+        Assert.Contains("com a sincronização ligada, apaga também nos outros computadores", SettingsPage.Render(new Eteris.Browser.Data.UserSettings()));
+    }
+
+    // Revisão: desligar «Pedir o Windows Hello ao preencher palavras-passe» pede o Windows Hello (e, recusado, fica
+    // ligado), aqui e nas Definições; ligar não pede.
+    [Fact]
+    public async Task PasswordHelloSwitch_TurningOffNeedsReauth()
+    {
+        _f.Host.Current = _f.Host.Current with { PasswordAskHello = true };
+        _f.Reauth.Outcome = ReauthOutcome.Canceled;
+        Assert.Equal("recusado", (await _f.Get("passwords", "/set", "k=pwAskHello&v=false")).Body);
+        Assert.True(_f.Host.Current.PasswordAskHello);
+        Assert.Equal(ReauthPolicy.Message(ReauthPurpose.ChangePasswordSetting), _f.Reauth.Messages.Single());
+        _f.Reauth.Outcome = ReauthOutcome.Verified;
+        Assert.Equal("ok", (await _f.Get("passwords", "/set", "k=pwAskHello&v=false")).Body);
+        Assert.False(_f.Host.Current.PasswordAskHello);
+        Assert.Equal("ok", (await _f.Get("passwords", "/set", "k=pwAskHello&v=true")).Body);
+        Assert.Equal(2, _f.Reauth.Prompts);
+        Assert.False(SettingsPage.CanSetFromPage("pwAskHello", "false"));
+        Assert.True(SettingsPage.CanSetFromPage("pwAskHello", "true"));
     }
 
     // A aba saiu da frente enquanto o Windows perguntava: o pedido é cancelado e nada se mostra.
@@ -359,7 +425,8 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.Empty(_f.Vault.Logins());
         Assert.Empty(_f.Vault.NeverSaveSites());
         Assert.NotNull(_f.Vault.GetCard(card));
-        Assert.Equal(ReauthPolicy.Message(ReauthPurpose.EraseVault), _f.Reauth.Messages[^1]);
+        Assert.Equal(ReauthPolicy.Message(ReauthPurpose.ErasePasswords), _f.Reauth.Messages[^1]);
+        Assert.Equal("O Éteris quer apagar todas as palavras-passe guardadas.", _f.Reauth.Messages[^1]);
     }
 
     // Os interruptores da página: só os das palavras-passe.

@@ -19,6 +19,8 @@ internal sealed class FakeVaultHost : IVaultHost
     public readonly List<string> Opened = [];
     public readonly List<(TimeSpan Delay, Action Run)> Scheduled = [];
     public int ImportDialogs, ExportDialogs, Shown, Hidden;
+    public bool Synced;
+    public bool SyncsPasswords => Synced;
     public UserSettings Current = new();
     public CancellationTokenSource Front = new();
 

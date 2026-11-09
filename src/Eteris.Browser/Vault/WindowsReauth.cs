@@ -38,7 +38,11 @@ public enum ReauthPurpose
     FillDocument,
     // Desligar «Pedir o Windows Hello ao preencher pagamentos» também pede.
     ChangePaymentSetting,
+    // Desligar «Pedir o Windows Hello ao preencher palavras-passe» também pede.
+    ChangePasswordSetting,
     EraseVault,
+    // «Apagar todas as palavras-passe» (eteris://passwords): só as palavras-passe e os sites onde nunca guardar.
+    ErasePasswords,
     // Sempre, sem janela de graça:
     Export,
     ExportProfileSecrets,
@@ -70,7 +74,9 @@ public static class ReauthPolicy
         ReauthPurpose.FillPayment => "O Éteris quer preencher um cartão ou um IBAN.",
         ReauthPurpose.FillDocument => "O Éteris quer preencher um documento de identificação.",
         ReauthPurpose.ChangePaymentSetting => "O Éteris quer deixar de pedir confirmação ao preencher pagamentos.",
+        ReauthPurpose.ChangePasswordSetting => "O Éteris quer deixar de pedir confirmação ao preencher palavras-passe.",
         ReauthPurpose.EraseVault => "O Éteris quer apagar as palavras-passe e o preenchimento automático.",
+        ReauthPurpose.ErasePasswords => "O Éteris quer apagar todas as palavras-passe guardadas.",
         ReauthPurpose.Export => "O Éteris quer exportar as suas palavras-passe para um ficheiro.",
         ReauthPurpose.ExportProfileSecrets => "O Éteris quer pôr as palavras-passe, os pagamentos e os documentos no perfil exportado.",
         ReauthPurpose.SyncSecrets => "O Éteris quer sincronizar pagamentos ou documentos com os seus outros computadores.",

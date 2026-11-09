@@ -33,12 +33,14 @@ public sealed partial class VaultRoutes
             {
                 if (c != VaultCollection.Contacts && !await AskAsync(r, ReauthPurpose.Reveal).ConfigureAwait(false)) return NotConfirmed();
                 if (FullItem(c, id) is not { } item) return Gone();
-                if (c != VaultCollection.Contacts) HoldSecretOnScreen();
-                return VaultReply.Json(new { ok = true, item });
+                var hold = c != VaultCollection.Contacts ? HoldSecretOnScreen() : null;
+                return VaultReply.Json(new { ok = true, item, hold });
             }
             case "/hide":
-                ReleaseSecretOnScreen();
+                ReleaseSecretOnScreen(r.Q("h"));
                 return VaultReply.Json(new { ok = true });
+            case "/keep" when r.Q("h") is { } keep:
+                return VaultReply.Json(new { ok = KeepSecretOnScreen(keep) });
             case "/save" when collection is { } c:
                 return await SaveItemAsync(r, c).ConfigureAwait(false);
             case "/delete" when collection is { } c && r.Q("id") is { } id:

@@ -286,9 +286,13 @@
   const SECRET = { cards: 1, ibans: 1, idDocs: 1, vehicle: 1, loyalty: 1 };
 
   // Formulário em linha (adicionar ou editar).
-  const openForm = (kind, holder, values, id) => {
-    document.querySelectorAll('.form').forEach(f => f.remove());
+  // hold: a retenção do segredo à vista (editar um cartão, IBAN, documento ou viagem): renova-se de 20 em 20 s enquanto o
+  // formulário estiver aberto e larga-se ao fechar (incluindo quando outro formulário o substitui).
+  const openForm = (kind, holder, values, id, hold) => {
+    document.querySelectorAll('.form').forEach(f => (f.close ? f.close() : f.remove()));
     const form = el('div', 'form');
+    const keeper = hold ? setInterval(() => ask('keep', { h: hold }), 20000) : 0;
+    form.close = () => { clearInterval(keeper); form.remove(); if (hold) ask('hide', { h: hold }); };
     form.setAttribute('role', 'group');
     const grid = el('div', 'grid'); form.append(grid);
     const inputs = {};
@@ -318,7 +322,7 @@
     draw();
     const error = el('div', 'note bad'); error.setAttribute('role', 'alert'); form.append(error);
     const buttons = el('div', 'buttons');
-    buttons.append(button('Cancelar', 'action', () => { form.remove(); if (id && SECRET[kind]) ask('hide'); }));
+    buttons.append(button('Cancelar', 'action', () => form.close()));
     buttons.append(button('Guardar', 'action primary', () => {
       const payload = {};
       for (const [k, i] of Object.entries(inputs)) payload[k] = i.value;
@@ -326,7 +330,7 @@
       if (id) payload.id = id;
       post('save', { c: COLLECTION[kind] }, payload, r => {
         if (!r.ok) { error.textContent = r.message; return; }
-        if (id && SECRET[kind]) ask('hide');
+        form.close();
         toast(r.message); refresh();
       });
     }));
@@ -338,7 +342,7 @@
 
   // Uma linha: título, pormenor e os botões (o número completo só com o Windows Hello e no máximo 30 s à vista).
   let shown = null;
-  const hideShown = () => { if (!shown) return; clearTimeout(shown.timer); shown.restore(); shown = null; ask('hide'); };
+  const hideShown = () => { if (!shown) return; clearTimeout(shown.timer); shown.restore(); const hold = shown.hold; shown = null; if (hold) ask('hide', { h: hold }); };
   const row = (kind, item, title, detail, canReveal, extraTag) => {
     const r = el('div', 'row static');
     const who = el('div', 'who');
@@ -358,13 +362,13 @@
         sub.textContent = [detail, full].filter(Boolean).join(' · ');
         sub.classList.add('secret');
         e.target.textContent = 'Esconder';
-        shown = { id: item.id, timer: setTimeout(hideShown, 30000), restore: () => { sub.textContent = before; sub.classList.remove('secret'); e.target.textContent = 'Mostrar'; } };
+        shown = { id: item.id, hold: reply.hold, timer: setTimeout(hideShown, 30000), restore: () => { sub.textContent = before; sub.classList.remove('secret'); e.target.textContent = 'Mostrar'; } };
       });
     }));
     buttons.append(button('Editar', 'action', () => {
       const holder = r.parentElement;
       if (!SECRET[kind]) { openForm(kind, holder, Object.assign({}, item), item.id); return; }
-      ask('reveal', { c: COLLECTION[kind], id: item.id }, reply => { if (!reply.ok) { toast(reply.message || 'Não foi confirmado.'); return; } openForm(kind, holder, reply.item, item.id); });
+      ask('reveal', { c: COLLECTION[kind], id: item.id }, reply => { if (!reply.ok) { toast(reply.message || 'Não foi confirmado.'); return; } openForm(kind, holder, reply.item, item.id, reply.hold); });
     }));
     buttons.append(button('Apagar', 'action danger', () => ask('delete', { c: COLLECTION[kind], id: item.id }, reply => {
       if (!reply.ok) { toast(reply.message); return; }
@@ -411,7 +415,8 @@
   };
   addEventListener('scroll', mark, { passive: true });
   addEventListener('hashchange', () => { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); mark(); });
-  addEventListener('pagehide', () => { if (shown) ask('hide'); });
+  // A página saiu: todas as retenções dela saem.
+  addEventListener('pagehide', () => ask('hide'));
   render();
   if (location.hash) { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); }
   mark();

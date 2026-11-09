@@ -32,6 +32,10 @@ internal static class ProfileTransfer
         public int Vault { get; init; }
 
         public int VaultReplaced { get; init; }
+
+        // Itens do cofre do ficheiro que não entraram porque o cofre deste computador não abre (chave em falta, DPAPI,
+        // base de dados ocupada ou estragada).
+        public int VaultLeftOut { get; init; }
     }
 
     // Todos os itens do cofre deste perfil, no formato da sincronização (só depois do Windows Hello; nunca sem o cofre
@@ -57,6 +61,30 @@ internal static class ProfileTransfer
             if (result.PasswordReplaced) replaced++;
         }
         return (applied, replaced);
+    }
+
+    public sealed record SecretsApplied(int Applied, int Replaced, int LeftOut);
+
+    // Como ApplySecrets, mas um cofre que não abre (ou que deixa de abrir a meio) não deita abaixo a importação: o que
+    // não entrou conta-se em LeftOut.
+    public static SecretsApplied TryApplySecrets(Func<Vault.VaultService> vault, IReadOnlyList<ArchiveSecret> secrets)
+    {
+        int applied = 0, replaced = 0, done = 0;
+        try
+        {
+            var service = vault();
+            foreach (var s in secrets)
+            {
+                if (Vault.VaultCollections.Parse(s.Collection) is { } collection && service.ApplySynced(collection, s.Item) is { } result)
+                {
+                    applied++;
+                    if (result.PasswordReplaced) replaced++;
+                }
+                done++;
+            }
+        }
+        catch (Exception e) when (Vault.VaultSyncProfile.IsVaultFailure(e)) { }
+        return new SecretsApplied(applied, replaced, secrets.Count - done);
     }
 
     // Definições em que «true» protege mais: desligá-las baixa a proteção.
@@ -239,8 +267,11 @@ internal static class ProfileTransfer
             .OrderBy(r => r.Data!["order"]?.GetValue<int>() ?? 0)
             .Select(r => (Name: r.Text("name")!, Color: r.Data!["color"]?.GetValue<int>() ?? 0, Icon: r.Text("icon"))).ToList();
         addSpaces?.Invoke(spaces);
-        var (vault, replaced) = vaultItems.Count == 0 ? (0, 0) : ApplySecrets(Vault.VaultService.Profile, vaultItems);
-        return new Imported(bookmarks, settings, shield, spaces.Count, notesChanged, archive.DeviceName) { Held = held, Vault = vault, VaultReplaced = replaced };
+        var secrets = vaultItems.Count == 0 ? new SecretsApplied(0, 0, 0) : TryApplySecrets(() => Vault.VaultService.Profile, vaultItems);
+        return new Imported(bookmarks, settings, shield, spaces.Count, notesChanged, archive.DeviceName)
+        {
+            Held = held, Vault = secrets.Applied, VaultReplaced = secrets.Replaced, VaultLeftOut = secrets.LeftOut,
+        };
     }
 
     // As notas do ficheiro entram por baixo das atuais, com um título (nada se perde nem se sobrepõe).
@@ -267,6 +298,10 @@ internal static class ProfileTransfer
             text += r.VaultReplaced == 1
                 ? " 1 palavra-passe mudou: a anterior ficou no histórico."
                 : $" {r.VaultReplaced} palavras-passe mudaram: as anteriores ficaram no histórico.";
+        if (r.VaultLeftOut > 0)
+            text += r.VaultLeftOut == 1
+                ? " 1 item do cofre não entrou: o cofre deste computador não abre (nada foi apagado)."
+                : $" {r.VaultLeftOut} itens do cofre não entraram: o cofre deste computador não abre (nada foi apagado).";
         if (r.Held.Count > 0)
             text += r.Held.Count == 1
                 ? " 1 alteração baixaria a proteção deste computador e ficou por aplicar."

@@ -174,11 +174,20 @@ public class VaultMenuTests
     {
         Assert.True(UserSettings.NeedsReauth("payAskHello", "false"));
         Assert.False(UserSettings.NeedsReauth("payAskHello", "true"));
-        Assert.False(UserSettings.NeedsReauth("pwAskHello", "false"));
+        // Revisão: desligar o das palavras-passe também pede (senão anulava-se com um clique num PC desbloqueado).
+        Assert.True(UserSettings.NeedsReauth("pwAskHello", "false"));
+        Assert.False(UserSettings.NeedsReauth("pwAskHello", "true"));
         Assert.False(UserSettings.NeedsReauth("engine", "brave"));
         Assert.False(SettingsPage.CanSetFromPage("payAskHello", "false"));
         Assert.True(SettingsPage.CanSetFromPage("payAskHello", "true"));
         Assert.True(SettingsPage.CanSetFromPage("pwOffer", "false"));
+        // Nas Definições, desligar o das palavras-passe passa pela confirmação do Windows (e a página volta a ligar o
+        // interruptor se não for confirmado).
+        var routes = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("Data.UserSettings.NeedsReauth(guarded, off)", routes);
+        Assert.Contains("Vault.ReauthPurpose.ChangePasswordSetting", routes);
+        var html = SettingsPage.Render(new UserSettings());
+        Assert.Contains("if (reply !== 'ok') input.checked = true;", html);
     }
 
     // A secção das Definições: as cinco ligações e os interruptores gerais, com os valores atuais.

@@ -58,8 +58,12 @@ internal static class SyncChoices
     public static async Task<bool> MayApproveAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm)
         => !agent.HasSecrets || await confirm(ReauthPurpose.ApproveDevice).ConfigureAwait(false);
 
+    // Um código de recuperação novo (pedido ou depois de remover um aparelho) também abre o cofre: com segredos em jogo,
+    // quem o vê pode juntar outro computador e receber tudo. Pede o Windows Hello como aprovar um aparelho (sempre).
+    public static Task<bool> MayRenewKeyAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm) => MayApproveAsync(agent, confirm);
+
     public const string ApproveWarning =
-        "Este computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.";
+        "Esse computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.";
 
     // Os itens do cofre para um perfil exportado: sem eles por omissão; com eles só depois do Windows Hello (sempre).
     // (Ok = false: não foi confirmado e nada se exporta.)

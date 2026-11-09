@@ -365,7 +365,7 @@
             <label class="check"><input type="checkbox" value="history" checked> Histórico de navegação</label>
             <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões)</small></label>
             <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache</label>
-            <label class="check"><input type="checkbox" value="vault"> Palavras-passe e preenchimento automático <small>(tudo, desde sempre; pede o Windows Hello)</small></label>
+            <label class="check"><input type="checkbox" value="vault"> Palavras-passe e preenchimento automático <small>(tudo, desde sempre; pede o Windows Hello; com a sincronização ligada, apaga também nos outros computadores)</small></label>
             <div class="seg" id="clearRange" style="margin-top:12px">
               <button data-value="hour" class="on">Última hora</button>
               <button data-value="today">Hoje</button>
@@ -704,7 +704,22 @@
 
   document.querySelectorAll('input[data-key]').forEach(input => {
     input.checked = !!data[input.dataset.key];
-    input.addEventListener('change', () => send(input.dataset.key, input.checked));
+    input.addEventListener('change', () => {
+      // Desligar «Pedir o Windows Hello ao preencher palavras-passe» pede o Windows Hello: sem confirmação, fica ligado.
+      if (input.dataset.key === 'pwAskHello' && !input.checked) {
+        const frame = document.createElement('iframe'); frame.hidden = true;
+        frame.addEventListener('load', () => {
+          const reply = frame.contentDocument && frame.contentDocument.body ? frame.contentDocument.body.textContent.trim() : '';
+          if (!reply) return;
+          frame.remove();
+          if (reply !== 'ok') input.checked = true;
+        });
+        frame.src = `eteris://${location.host}/set?k=pwAskHello&v=false&t=${data.token}&n=${Date.now()}`;
+        document.body.append(frame);
+        return;
+      }
+      send(input.dataset.key, input.checked);
+    });
   });
 
   // ---------- Sincronização ----------
@@ -945,7 +960,7 @@
           const title = document.createElement('b'); title.textContent = `«${r.name}» quer juntar-se à sincronização`;
           const text = document.createElement('span');
           text.textContent = 'Só aprove se estiver a ligar esse computador agora e ele mostrar este mesmo código. Aprovado, recebe a chave da conta (cifrada só para ele).'
-            + (s.secrets ? ' Este computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.' : '');
+            + (s.secrets ? ' Esse computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.' : '');
           const code = document.createElement('div'); code.className = 'code big'; code.textContent = r.code;
           label.append(title, text, code);
           const buttons = document.createElement('div'); buttons.className = 'stack';

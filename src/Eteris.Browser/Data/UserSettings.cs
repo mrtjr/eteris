@@ -81,8 +81,9 @@ public sealed record UserSettings
     public bool AutofillDocuments { get; init; } = true;
     public bool AutofillTravel { get; init; } = true;
 
-    // Desligar «Pedir o Windows Hello ao preencher pagamentos» também pede o Windows Hello (ReauthPurpose.ChangePaymentSetting).
-    public static bool NeedsReauth(string key, string value) => key == "payAskHello" && value == "false";
+    // Desligar «Pedir o Windows Hello ao preencher pagamentos» ou «… palavras-passe» também pede o Windows Hello
+    // (ReauthPurpose.ChangePaymentSetting / ChangePasswordSetting): só se mudam nas páginas do cofre.
+    public static bool NeedsReauth(string key, string value) => key is "payAskHello" or "pwAskHello" && value == "false";
     // (A opção experimental «SyncPreview» da 0.2.10–0.2.12 saiu: a secção Sincronização e a conta aparecem sempre que
     // há o identificador da aplicação Google. Um settings.json antigo com ela continua a abrir; o valor é ignorado e a
     // sessão Google e o resto ficam como estavam.)

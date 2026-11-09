@@ -1008,6 +1008,8 @@ internal sealed class WindowsVaultHost : IVaultHost
     public bool SetSetting(string key, string value) => Data.Settings.Set(key, value);
 
     public IDisposable Schedule(TimeSpan delay, Action run) => Timers.Schedule(delay, run);
+
+    public bool SyncsPasswords => Sync.SyncService.Agent() is { } agent && agent.EnabledCollections.Contains(Eteris.Sync.Model.Collections.Logins);
 }
 
 // «Enviar o ficheiro CSV para a Reciclagem» depois de importar (o ficheiro tem todas as palavras-passe em claro).

@@ -118,6 +118,12 @@ public sealed class SyncChoicesTests : IDisposable
         _answer = true;
         Assert.True(await SyncChoices.MayApproveAsync(agent, Confirm));
         Assert.True(ReauthPolicy.IsAlways(ReauthPurpose.ApproveDevice));
+        // O código novo segue a mesma regra.
+        _answer = false;
+        _asked.Clear();
+        Assert.False(await SyncChoices.MayRenewKeyAsync(agent, Confirm));
+        Assert.Equal([ReauthPurpose.ApproveDevice], _asked);
+        _answer = true;
 
         // Sem nenhuma coleção do cofre ligada nem segredos na conta: aprova sem pedir.
         agent.SetCollections(Collections.Secret, on: false);
@@ -240,6 +246,10 @@ public sealed class SyncChoicesTests : IDisposable
         var routes = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
         Assert.Contains("SyncChoices.ChooseAsync(agent, group, on, purpose => ConfirmWithWindows(browserId, purpose))", routes);
         Assert.Contains("SyncChoices.MayApproveAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))", routes);
+        // Revisão: um código novo e remover um aparelho (que mostra um código novo) também pedem o Windows com segredos.
+        Assert.Equal(2, routes.Split("SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))").Length - 1);
+        Assert.DoesNotContain("case \"/sync-new-code\":\n                Sync.SyncService.Act", routes.Replace("\r\n", "\n"));
+        Assert.StartsWith("Esse computador vai receber", SyncChoices.ApproveWarning);
         Assert.Contains("SyncChoices.SecretsForExportAsync(true, purpose => ConfirmWithWindows(browserId, purpose)", routes);
         Assert.DoesNotContain("case \"/sync-approve\" when InternalPages.Query(uri, \"id\") is { Length: > 0 } id:\n                Sync.SyncService.Act", routes);
     }

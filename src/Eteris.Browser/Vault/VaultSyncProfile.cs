@@ -66,9 +66,19 @@ public sealed class VaultSyncProfile : ISecretSource, ILocalNotices
         catch (Exception e) when (IsVaultFailure(e)) { return null; }
     }
 
-    public string LocalKey(string collection, string naturalKey) => _vault().SyncLocalKey(CollectionOf(collection), naturalKey);
+    // Um cofre que não abre (chave em falta, DPAPI, base de dados ocupada ou estragada) faz a coleção ilegível nessa ronda
+    // (SecretSourceUnavailableException), em vez de deitar abaixo a ronda inteira.
+    public string LocalKey(string collection, string naturalKey)
+    {
+        try { return _vault().SyncLocalKey(CollectionOf(collection), naturalKey); }
+        catch (Exception e) when (IsVaultFailure(e)) { throw new SecretSourceUnavailableException(collection, e); }
+    }
 
-    public string Fingerprint(string collection, SecretItem item) => _vault().SyncFingerprint(CollectionOf(collection), item);
+    public string Fingerprint(string collection, SecretItem item)
+    {
+        try { return _vault().SyncFingerprint(CollectionOf(collection), item); }
+        catch (Exception e) when (IsVaultFailure(e)) { throw new SecretSourceUnavailableException(collection, e); }
+    }
 
     // Aplica as alterações das coleções do cofre e devolve as que aplicou.
     public IReadOnlyCollection<LocalChange> Apply(IEnumerable<LocalChange> changes)

@@ -19,6 +19,15 @@ public interface ISecretSource
     string Fingerprint(string collection, SecretItem item);
 }
 
+// O cofre deste computador não abre agora (chave em falta, DPAPI que recusa, base de dados ocupada ou estragada): a
+// chave local e a impressão de um selo da conta não se calculam. A coleção fica ilegível nessa ronda, como na leitura
+// (nada se apaga nem se aplica), e o resto do perfil sincroniza na mesma.
+public sealed class SecretSourceUnavailableException(string collection, Exception? inner = null)
+    : Exception("O cofre deste computador não abre: «" + collection + "» fica para a próxima ronda.", inner)
+{
+    public string Collection { get; } = collection;
+}
+
 // Um perfil que tem avisos para o estado da sincronização (por exemplo, «a palavra-passe de … mudou noutro computador;
 // a anterior ficou no histórico»). Lido no fim de cada ronda.
 public interface ILocalNotices

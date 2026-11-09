@@ -86,7 +86,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         // Definições › Sincronização (perfil cifrado, «Entrar com o Google»): nunca a partir da janela privada.
         if (uri is { Host: "settings" } && uri.AbsolutePath.StartsWith("/sync-", StringComparison.Ordinal))
             return privateContext ? Text("recusado") : SyncRoute(uri, request, browser.Identifier);
-        if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url, privateContext);
+        if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url, privateContext, browser.Identifier);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
         if (uri is { Host: "error", AbsolutePath: "/continue" })
@@ -117,8 +117,17 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private bool CanChangeNewTab(string url) => !privateContext && InternalPages.IsAuthorized(url);
 
-    private static IResourceHandler SettingsRoute(Uri uri, string url, bool privateContext)
+    private static IResourceHandler SettingsRoute(Uri uri, string url, bool privateContext, int browserId)
     {
+        // Desligar «Pedir o Windows Hello ao preencher palavras-passe» (ou pagamentos) pede o Windows Hello primeiro.
+        if (uri.AbsolutePath == "/set" && !privateContext && InternalPages.IsAuthorized(url)
+            && InternalPages.Query(uri, "k") is { } guarded && InternalPages.Query(uri, "v") is { } off && Data.UserSettings.NeedsReauth(guarded, off))
+            return new VaultResourceHandler(async () =>
+            {
+                var purpose = guarded == "pwAskHello" ? Vault.ReauthPurpose.ChangePasswordSetting : Vault.ReauthPurpose.ChangePaymentSetting;
+                var ok = await ConfirmWithWindows(browserId, purpose).ConfigureAwait(false) && Settings.Set(guarded, off);
+                return Vault.VaultReply.Text(ok ? "ok" : "recusado");
+            });
         if (uri.AbsolutePath == "/set")
         {
             var ok = InternalPages.IsAuthorized(url)
@@ -224,6 +233,12 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 catch (FormatException e) { return Json(new { ok = false, message = e.Message }); }
                 catch (Eteris.Sync.Crypto.WrongCodeException e) { return Json(new { ok = false, message = e.Message }); }
                 catch (Eteris.Sync.Crypto.UnsupportedFormatException e) { return Json(new { ok = false, message = e.Message }); }
+                // Nada pode sair para o CEF (thread de E/S): o que falhar a meio diz-se na página.
+                catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException
+                    or Microsoft.Data.Sqlite.SqliteException or System.Security.Cryptography.CryptographicException or System.Text.Json.JsonException)
+                {
+                    return Json(new { ok = false, message = "A importação parou a meio: o que já entrou ficou; tente outra vez." });
+                }
             }
             case "/sync-google":
                 // Na pasta de teste não há conta: «Ligar» liga a sincronização por ela.
@@ -254,8 +269,18 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Start(switchAccount: true);
                 break;
             case "/sync-new-code":
-                Sync.SyncService.Act("code", agent => agent.NewRecoveryCodeAsync());
-                break;
+                // Um código novo abre também o cofre (palavras-passe…): com segredos em jogo, o Windows confirma primeiro
+                // (sempre), como ao aprovar um aparelho.
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is { } agent)
+                    {
+                        if (await Sync.SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                            Sync.SyncService.Act("code", a => a.NewRecoveryCodeAsync());
+                        else Sync.SyncService.Say("code", Sync.SyncChoices.NotConfirmed("o código continua o mesmo"));
+                    }
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
             case "/sync-now":
                 Sync.SyncService.SyncNow();
                 break;
@@ -298,8 +323,18 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             {
                 // «shown»: os aparelhos que a página mostrava quando o utilizador decidiu (só esses recebem a chave nova).
                 var shown = InternalPages.Query(uri, "shown") is { Length: > 0 } list ? list.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-                Sync.SyncService.Act("devices", agent => agent.RemoveDeviceAsync(id, shown));
-                break;
+                // Remover um aparelho faz uma cadeia nova e mostra o código novo (que abre o cofre): com segredos em jogo,
+                // o Windows confirma primeiro (sempre).
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is { } agent)
+                    {
+                        if (await Sync.SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                            Sync.SyncService.Act("devices", a => a.RemoveDeviceAsync(id, shown));
+                        else Sync.SyncService.Say("devices", Sync.SyncChoices.NotConfirmed("o aparelho continua na conta"));
+                    }
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
             }
             case "/sync-delete-cloud":
                 Sync.SyncService.Act("delete", agent => agent.DeleteCloudDataAsync());

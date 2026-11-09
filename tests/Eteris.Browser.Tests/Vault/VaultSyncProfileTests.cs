@@ -273,6 +273,76 @@ public sealed class VaultSyncProfileTests : IDisposable
             Assert.Empty(store.SyncEntries(VaultCollection.Logins));
     }
 
+    // Revisão: importar um .eteris com segredos num computador onde o cofre não abre não deita a importação abaixo (o
+    // resto já entrou): os itens do cofre ficam de fora e o resumo di-lo.
+    [Fact]
+    public void ImportingSecrets_IntoAVaultThatDoesNotOpen_LeavesThemOut_AndSaysSo()
+    {
+        var v = Vault("imp");
+        v.SaveLogin(Login("x"));
+        v.Dispose();
+        SqliteConnection.ClearAllPools();
+        File.Delete(Path.Combine(_root, "imp", VaultKey.FileName));
+        var broken = new VaultService(Path.Combine(_root, "imp"), new Dpapi(VaultKey.Purpose));
+        _open.Add(broken);
+        var items = new List<Eteris.Sync.Format.ArchiveSecret>
+        {
+            new("logins", new SecretItem("https://a.exemplo.test\nu", new JsonObject { ["origin"] = "https://a.exemplo.test", ["username"] = "u", ["password"] = "Inventada-Imp-1" })),
+            new("logins", new SecretItem("https://b.exemplo.test\nu", new JsonObject { ["origin"] = "https://b.exemplo.test", ["username"] = "u", ["password"] = "Inventada-Imp-2" })),
+        };
+        var result = ProfileTransfer.TryApplySecrets(() => broken, items);
+        Assert.Equal(0, result.Applied);
+        Assert.Equal(2, result.LeftOut);
+        var summary = ProfileTransfer.Summary(new ProfileTransfer.Imported(1, 0, 0, 0, false, "A") { VaultLeftOut = result.LeftOut });
+        Assert.Contains("1 favorito", summary);
+        Assert.Contains("2 itens do cofre não entraram: o cofre deste computador não abre", summary);
+    }
+
+    // Revisão: a conta tem palavras-passe de outro PC e o cofre deste não abre (a chave desapareceu, com o cofre.db lá).
+    // A chave local e a impressão de cada selo não se calculam: a coleção fica ilegível nessa ronda, em vez de a ronda
+    // inteira cair (os favoritos continuam a passar), e o que já estava na base não vira «apagado».
+    [Theory]
+    [InlineData(true)]   // a leitura vê o cofre.db e diz que não o lê
+    [InlineData(false)]  // sem cofre.key, a leitura acha que não há cofre
+    public async Task AVaultThatDoesNotOpenHere_DoesNotStopTheRound(bool dbSeen)
+    {
+        long now = 1_762_560_000_000;
+        var folder = Path.Combine(_root, "pasta");
+        var a = Vault("A");
+        a.SaveLogin(Login("Inventada-A"));
+        var plainA = new MemoryProfile();
+        SyncAgent? agentA = null;
+        agentA = new SyncAgent(() => new FolderTransport(folder), new ProfileWithVault(plainA, Profile(a), () => agentA?.EnabledCollections),
+            new MemoryStore(), "A", () => now, (_, ct) => Task.Delay(5, ct));
+        await agentA.StartAsync();
+        Assert.True(await agentA.RunAsync());
+
+        var broken = Vault("B");
+        broken.SaveLogin(Login("Local-B", user: "local"));
+        broken.Dispose();
+        SqliteConnection.ClearAllPools();
+        File.Delete(Path.Combine(_root, "B", VaultKey.FileName));
+        var b = new VaultService(Path.Combine(_root, "B"), new Dpapi(VaultKey.Purpose));
+        _open.Add(b);
+        var plainB = new MemoryProfile();
+        SyncAgent? agentB = null;
+        var vaultB = new VaultSyncProfile(() => b, () => dbSeen);
+        agentB = new SyncAgent(() => new FolderTransport(folder), new ProfileWithVault(plainB, vaultB, () => agentB?.EnabledCollections),
+            new MemoryStore(), "B", () => now, (_, ct) => Task.Delay(5, ct));
+        await agentB.StartAsync();
+        await agentB.JoinWithCodeAsync(agentA.Status.RecoveryCode!);
+
+        plainB.Set(Collections.Bookmarks, "https://favorito.exemplo.test/", new JsonObject { ["title"] = "Favorito de teste", ["folder"] = "" });
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.True(await agentB.RunAsync());
+            Assert.True(await agentA.RunAsync());
+        }
+        Assert.Contains(plainA.Collect(), item => item.Collection == Collections.Bookmarks && item.Key == "https://favorito.exemplo.test/");
+        // Nada se apagou na conta por o cofre do B não abrir.
+        Assert.Single(a.Logins());
+    }
+
     // Dois computadores pela pasta local, com o cofre real: guardar num aparece no outro, apagar some, mudar nos dois
     // deixa a anterior no histórico; e Pagamentos só passa depois de ligado nos dois.
     [Fact]
