@@ -19,13 +19,15 @@ public partial class MainWindow
     // Ctrl+Shift+E: abre a barra lateral nas notas (ou fecha-a, se já é o que está à vista).
     private void ToggleNotes() => ToggleSidebar(SidebarPanels.Notes);
 
+    private static string NotesWhere => Sync.SyncService.Enabled ? "Guardado e sincronizado (cifrado)" : "Guardado só neste computador";
+
     private void LoadNotes()
     {
         _notesLoading = true;
         NotesText.Text = Notes.Load();
         _notesLoading = false;
         NotesText.CaretIndex = NotesText.Text.Length;
-        NotesStatus.Text = "Guardado só neste computador";
+        NotesStatus.Text = NotesWhere;
     }
 
     private void NotesText_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -46,7 +48,7 @@ public partial class MainWindow
         try
         {
             Notes.Save(NotesText.Text);
-            NotesStatus.Text = $"Guardado às {DateTime.Now:HH:mm} · só neste computador";
+            NotesStatus.Text = $"Guardado às {DateTime.Now:HH:mm} · {(Sync.SyncService.Enabled ? "sincronizado, cifrado" : "só neste computador")}";
         }
         catch (Exception) { NotesStatus.Text = "Não foi possível guardar as notas"; }
     }

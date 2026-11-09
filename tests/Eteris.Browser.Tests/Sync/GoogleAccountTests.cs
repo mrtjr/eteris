@@ -229,16 +229,14 @@ public class GoogleAccountTests
     // ---- a linha do menu ---------------------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(false, false, true, true, "None")]     // sem a opção experimental: o menu fica como está
-    [InlineData(false, false, true, false, "None")]
-    [InlineData(true, false, true, false, "SignIn")]   // opção ligada, sem sessão
-    [InlineData(true, false, true, true, "Account")]   // opção ligada, com sessão
-    [InlineData(true, true, true, true, "None")]       // janela privada: nada da conta
-    [InlineData(true, true, true, false, "None")]
-    [InlineData(true, false, false, false, "None")]    // sem google-oauth.json: «Entrar com o Google» não se pode cumprir
-    [InlineData(true, false, false, true, "None")]
-    public void MenuRow_ThreeSituations_AndNothingInPrivateWindows(bool syncPreview, bool isPrivate, bool configured, bool signedIn, string expected)
-        => Assert.Equal(expected, MainWindow.BrowserMenuAccountRow(syncPreview, isPrivate, configured, signedIn).ToString());
+    [InlineData(false, true, false, "SignIn")]   // sem sessão (sem a opção experimental, que saiu)
+    [InlineData(false, true, true, "Account")]   // com sessão
+    [InlineData(true, true, true, "None")]       // janela privada: nada da conta
+    [InlineData(true, true, false, "None")]
+    [InlineData(false, false, false, "None")]    // sem google-oauth.json: «Entrar com o Google» não se pode cumprir
+    [InlineData(false, false, true, "None")]
+    public void MenuRow_ThreeSituations_AndNothingInPrivateWindows(bool isPrivate, bool available, bool connected, string expected)
+        => Assert.Equal(expected, MainWindow.BrowserMenuAccountRow(isPrivate, available, connected).ToString());
 
     // A linha da conta não empurra «Atalhos de teclado» e «Fechar janela» para fora do menu: sem teto fixo, o menu
     // cresce até à altura da janela (o menu inteiro com a linha da conta tem ~740 px; a janela das capturas, 860).
@@ -266,13 +264,14 @@ public class GoogleAccountTests
     [Fact]
     public void MenuRow_ShowsInitialNameEmailAndState_WithAnAccessibleName()
     {
+        // O estado é o da sincronização (aqui, sem ela ligada neste perfil de testes).
         var (texts, name) = OnSta(() => Row(MainWindow.MenuAccountRow.Account, new GoogleAccount("ana Teste", "ana.teste@example.com")));
-        Assert.Equal(new[] { "A", "ana Teste", "ana.teste@example.com", "Ligado ao Google Drive" }, texts);
-        Assert.Equal("Conta Google: ana Teste (ana.teste@example.com). Ligado ao Google Drive. Abre a sincronização nas Definições", name);
+        Assert.Equal(new[] { "A", "ana Teste", "ana.teste@example.com", "Sincronização desligada" }, texts);
+        Assert.Equal("Conta Google: ana Teste (ana.teste@example.com). Sincronização desligada. Abre a sincronização nas Definições", name);
 
         // Sessão sem conta ainda (pedido em curso ou falhado): sem nome, mas diz que está ligada.
         var (pending, _) = OnSta(() => Row(MainWindow.MenuAccountRow.Account, null));
-        Assert.Equal(new[] { "", "Conta Google ligada", "Ligado ao Google Drive" }, pending);
+        Assert.Equal(new[] { "", "Conta Google ligada", "Sincronização desligada" }, pending);
 
         var (signIn, signInName) = OnSta(() => Row(MainWindow.MenuAccountRow.SignIn, null));
         Assert.Equal("Entrar com o Google…", signIn[1]);
@@ -430,7 +429,7 @@ public class GoogleAccountTests
         Assert.Contains("return SettingsRoute(uri, request.Url, privateContext);", factory);
         Assert.Contains("isPrivate: privateContext", factory);
         var page = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
-        Assert.Matches(new Regex(@"if \(data\.syncPrivate\) \{[^}]*body\.hidden = true; toggle\.disabled = true;[^}]*return;", RegexOptions.Singleline), page);
+        Assert.Matches(new Regex(@"if \(data\.syncPrivate\) \{[^}]*body\.hidden = true; googleButton\.disabled = true;[^}]*return;", RegexOptions.Singleline), page);
     }
 
     // Cada pedido da secção tem o seu iframe (um sync-status automático não leva a resposta da exportação); só a
@@ -444,9 +443,9 @@ public class GoogleAccountTests
         Assert.Contains("const sinkFor = handler =>", page, StringComparison.Ordinal);
         Assert.Contains("form.target = sinkFor(importReply).name;", page, StringComparison.Ordinal);
         Assert.Contains("if (seq < googlePainted) return;", page, StringComparison.Ordinal);
-        Assert.Contains("if (!isSignOut(e)) askAccount();", page, StringComparison.Ordinal);
-        Assert.Contains("googleTitle.textContent = g.state === 'signedIn' ? 'Conta Google' : 'Entrar com o Google';", page, StringComparison.Ordinal);
-        Assert.Contains("googleButton.setAttribute('aria-label', 'Sair da conta Google');", page, StringComparison.Ordinal);
+        Assert.Contains("if (!isSignOut(e)) { askAccount(); askLook(); }", page, StringComparison.Ordinal);
+        Assert.Contains("googleTitle.textContent = g.state === 'signedIn' ? (g.folder ? 'Pasta de teste' : 'Conta Google') : g.folder ? 'Pasta de teste' : 'Entrar com o Google';", page, StringComparison.Ordinal);
+        Assert.Contains("googleButton.setAttribute('aria-label', g.folder ? 'Desligar da pasta de teste' : 'Sair da conta Google');", page, StringComparison.Ordinal);
         Assert.Contains("id=\"googleButton\" aria-describedby=\"googleNote\"", page, StringComparison.Ordinal);
     }
 

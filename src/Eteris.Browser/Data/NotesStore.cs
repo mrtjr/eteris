@@ -3,9 +3,13 @@ using System.Text;
 
 namespace Eteris.Browser.Data;
 
-// Bloco de notas do Éteris: um único texto, guardado só neste computador (notas.md no perfil).
+// Bloco de notas do Éteris: um único texto, guardado neste computador (notas.md no perfil) e, com a sincronização
+// ligada, nos outros aparelhos da conta (cifrado).
 public sealed class NotesStore(string path)
 {
+    // As notas foram gravadas (a sincronização compara daqui a 10 s).
+    public static event Action? Saved;
+
     public string Load()
     {
         try { return File.Exists(path) ? File.ReadAllText(path, Encoding.UTF8) : string.Empty; }
@@ -18,6 +22,7 @@ public sealed class NotesStore(string path)
         var temp = path + ".tmp";
         File.WriteAllText(temp, text, new UTF8Encoding(false));
         File.Move(temp, path, overwrite: true);
+        Saved?.Invoke();
     }
 
     // Linha para «Inserir esta página»: título e endereço, numa linha nova no fim (ou onde estiver o cursor).

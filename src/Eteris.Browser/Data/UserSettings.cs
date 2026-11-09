@@ -67,9 +67,9 @@ public sealed record UserSettings
     public string ReaderTheme { get; init; } = "dark";
     public int ReaderSize { get; init; } = 20;
     public bool ReaderSerif { get; init; } = true;
-    // Definições › Sincronização: mostra as opções experimentais (perfil cifrado num ficheiro, «Entrar com o Google»).
-    // Desligado por omissão; mesmo ligado, nada sai do computador sem o utilizador carregar num botão.
-    public bool SyncPreview { get; init; }
+    // (A opção experimental «SyncPreview» da 0.2.10–0.2.12 saiu: a secção Sincronização e a conta aparecem sempre que
+    // há o identificador da aplicação Google. Um settings.json antigo com ela continua a abrir; o valor é ignorado e a
+    // sessão Google e o resto ficam como estavam.)
 
     public UserSettings? With(string key, string value) => key switch
     {
@@ -112,7 +112,6 @@ public sealed record UserSettings
         "readerTheme" when value is "dark" or "sepia" or "light" => this with { ReaderTheme = value },
         "readerSize" when int.TryParse(value, out var px) && px >= 15 && px <= 28 => this with { ReaderSize = px },
         "readerSerif" when bool.TryParse(value, out var on) => this with { ReaderSerif = on },
-        "syncPreview" when bool.TryParse(value, out var on) => this with { SyncPreview = on },
         _ => null,
     };
 }

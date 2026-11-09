@@ -349,36 +349,41 @@ public partial class MainWindow
         return frame;
     }
 
-    // A linha da conta no topo do menu (como no Chrome, no Firefox e no Brave), só com a sincronização experimental
-    // ligada, numa janela normal e com o identificador da aplicação (google-oauth.json): nas janelas privadas não
-    // aparece nada da conta, e sem identificador «Entrar com o Google» não se pode cumprir (o botão das Definições fica
-    // «Por configurar»), por isso o menu não o oferece.
+    // A linha da conta no topo do menu (como no Chrome, no Firefox e no Brave), numa janela normal e com o
+    // identificador da aplicação (google-oauth.json): nas janelas privadas não aparece nada da conta, e sem
+    // identificador «Entrar com o Google» não se pode cumprir (as Definições dizem «indisponível nesta compilação»),
+    // por isso o menu não o oferece.
     internal enum MenuAccountRow { None, SignIn, Account }
 
-    internal static MenuAccountRow BrowserMenuAccountRow(bool syncPreview, bool isPrivate, bool configured, bool signedIn)
-        => !syncPreview || isPrivate || !configured ? MenuAccountRow.None : signedIn ? MenuAccountRow.Account : MenuAccountRow.SignIn;
+    internal static MenuAccountRow BrowserMenuAccountRow(bool isPrivate, bool available, bool connected)
+        => isPrivate || !available ? MenuAccountRow.None : connected ? MenuAccountRow.Account : MenuAccountRow.SignIn;
 
     private Button? BuildBrowserMenuAccount(Popup popup, Style rowStyle)
     {
-        var syncPreview = Settings.Current.SyncPreview;
-        // Só lê o disco (tokens cifrados) com a opção ligada; nada sai daqui para a Google.
-        var configured = syncPreview && !IsPrivate && GoogleSync.Config is not null;
-        var kind = BrowserMenuAccountRow(syncPreview, IsPrivate, configured, configured && GoogleSync.SignedIn);
+        // Só lê o disco (tokens e estado cifrados); nada sai daqui para a Google.
+        var available = !IsPrivate && SyncService.Available;
+        var kind = BrowserMenuAccountRow(IsPrivate, available, available && SyncService.Connected);
         if (kind == MenuAccountRow.None) return null;
         var button = BrowserMenuAccountButton(kind, kind == MenuAccountRow.Account ? GoogleSync.Account : null, rowStyle);
         button.Click += (_, _) => RunBrowserMenuAction(popup, () => OpenInternal(SettingsPage.Url + "#sincronizacao"));
-        if (kind == MenuAccountRow.Account && GoogleSync.Account is null)
+        if (kind != MenuAccountRow.Account) return button;
+        // A linha atualiza-se se o menu ainda estiver aberto: a conta chegou, a sincronização acabou uma ronda, ou um
+        // aparelho novo pediu para entrar.
+        Action changed = () => Dispatcher.BeginInvoke(() =>
         {
-            // Já havia sessão sem conta guardada: abrir o menu (ação do utilizador) pede o nome e o e-mail, em segundo
-            // plano, e a linha atualiza-se se o menu ainda estiver aberto.
-            Action changed = () => Dispatcher.BeginInvoke(() =>
-            {
-                if (popup.IsOpen) FillBrowserMenuAccount(button, MenuAccountRow.Account, GoogleSync.Account);
-            });
-            GoogleSync.AccountChanged += changed;
-            popup.Tag = (Action)(() => GoogleSync.AccountChanged -= changed);
-            GoogleSync.RequestAccount();
-        }
+            if (popup.IsOpen) FillBrowserMenuAccount(button, MenuAccountRow.Account, GoogleSync.Account);
+        });
+        GoogleSync.AccountChanged += changed;
+        SyncService.Changed += changed;
+        popup.Tag = (Action)(() =>
+        {
+            GoogleSync.AccountChanged -= changed;
+            SyncService.Changed -= changed;
+        });
+        // Abrir o menu (ação do utilizador): pedidos de aparelhos novos, e — se já havia sessão sem conta guardada —
+        // o nome e o e-mail, em segundo plano.
+        SyncService.Look();
+        if (GoogleSync.Account is null) GoogleSync.RequestAccount();
         return button;
     }
 
@@ -398,10 +403,14 @@ public partial class MainWindow
         var known = signedIn && account is { IsEmpty: false };
         // Sem sessão, a linha abre a secção Sincronização das Definições (onde o início de sessão mostra o estado e, sem
         // outro navegador, o endereço para copiar): as reticências dizem que há mais um passo.
-        var title = !signedIn ? "Entrar com o Google…"
+        var folder = SyncService.FolderMode;
+        var title = !signedIn ? (folder ? "Ligar à pasta de teste…" : "Entrar com o Google…")
+            : folder ? "Pasta de teste"
             : known ? (string.IsNullOrWhiteSpace(account!.Name) ? account.Email! : account.Name!) : "Conta Google ligada";
-        var detail = known && !string.IsNullOrWhiteSpace(account!.Name) && !string.IsNullOrWhiteSpace(account.Email) ? account.Email : null;
-        var state = signedIn ? "Ligado ao Google Drive" : "Sincronização cifrada (experimental)";
+        var detail = !folder && known && !string.IsNullOrWhiteSpace(account!.Name) && !string.IsNullOrWhiteSpace(account.Email) ? account.Email : null;
+        // Com sessão, o estado da sincronização («Sincronizado há 2 min», «A sincronizar…», um pedido de um aparelho
+        // novo com o código); sem ela, o convite.
+        var state = signedIn ? SyncService.Summary(SyncService.Status, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : "Sincronização cifrada de ponta a ponta";
 
         var avatar = new Border
         {
@@ -451,8 +460,8 @@ public partial class MainWindow
         row.Children.Add(lines);
         button.Content = row;
         AutomationProperties.SetName(button, signedIn
-            ? $"Conta Google: {(known ? account!.Label : "ligada")}. {state}. Abre a sincronização nas Definições"
-            : "Entrar com o Google. Abre a sincronização nas Definições");
+            ? $"{(folder ? "Pasta de teste" : $"Conta Google: {(known ? account!.Label : "ligada")}")}. {state}. Abre a sincronização nas Definições"
+            : $"{(folder ? "Ligar à pasta de teste" : "Entrar com o Google")}. Abre a sincronização nas Definições");
     }
 
     internal static Border BrowserMenuHeading(bool isPrivate)

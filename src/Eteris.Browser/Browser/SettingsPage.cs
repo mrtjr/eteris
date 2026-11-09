@@ -41,6 +41,37 @@ public static class SettingsPage
         ? new { state = g.State, text = g.State == "signedIn" ? Sync.GoogleSync.SignedInText(null) : g.Text, url = (string?)null, account = false, pending = false }
         : new { state = g.State, text = g.Text, url = g.Url, account = g.Account is not null, pending = g.AccountPending };
 
+    // A conta e a sincronização para a página (ao abrir e em cada resposta das rotas sync-*). Só disco: nenhum pedido.
+    // Na pasta de teste (ETERIS_TEST_SYNC_FOLDER) a «conta» é a pasta: «Ligar» e «Sair» sem Google.
+    internal static object SyncData(bool isPrivate)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        object google;
+        if (Sync.SyncService.FolderMode)
+        {
+            var on = Sync.SyncService.Connected;
+            google = new
+            {
+                state = on ? "signedIn" : "signedOut",
+                text = on ? $"Ligado à pasta de teste {Sync.SyncService.TestFolder} (ETERIS_TEST_SYNC_FOLDER; nenhum pedido de rede)."
+                    : "Pasta de teste (ETERIS_TEST_SYNC_FOLDER): carregue em «Ligar» para sincronizar por ela.",
+                url = (string?)null, account = false, pending = false, folder = true,
+            };
+        }
+        else google = SyncGoogleData(Sync.GoogleSync.Current(), isPrivate);
+        return new
+        {
+            ok = true,
+            google,
+            available = Sync.SyncService.Available,
+            sync = isPrivate ? new { phase = "off" } : Sync.SyncService.StatusData(Sync.SyncService.Status, now),
+            connected = !isPrivate && Sync.SyncService.Available && Sync.SyncService.Connected,
+            enabled = !isPrivate && Sync.SyncService.Enabled,
+            hasKey = !isPrivate && Sync.SyncService.Agent()?.HasKey == true,
+            message = isPrivate ? null : Sync.SyncService.Message,
+        };
+    }
+
     // isPrivate: as Definições abertas numa janela privada não mostram nada da conta Google (nem nome nem e-mail) e a
     // secção Sincronização fica indisponível (as rotas sync-* também recusam nesse contexto).
     public static string Render(UserSettings settings, About? about = null, bool focusAbout = false,
@@ -88,9 +119,10 @@ public static class SettingsPage
                         s.HiddenElements > 0 ? $"{s.HiddenElements} elemento(s) escondido(s)" : null,
                     }.Where(d => d is not null).Concat(s.Flags).Concat(s.Permissions),
             }),
-            syncPreview = settings.SyncPreview,
             syncPrivate = isPrivate,
-            syncGoogle = SyncGoogleData(Sync.GoogleSync.Current(), isPrivate),
+            syncWhat = Sync.SyncService.WhatSyncs,
+            syncStays = Sync.SyncService.WhatStays,
+            syncInitial = SyncData(isPrivate),
             tabs = settings.VerticalTabs ? "side" : "top",
             density = settings.Density,
             accent = settings.Accent,

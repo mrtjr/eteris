@@ -42,6 +42,8 @@ public partial class App : Application
         FirstPaint.App.SignalAfter(FirstPaint.Fallback);
         FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
         FirstPaint.App.Then(CompositionWarmup.Stop);
+        // Sincronização: nada aqui sai para a rede. Só com ela ligada, a primeira ronda fica para 30 s depois.
+        FirstPaint.App.Then(Sync.SyncService.AfterFirstPaint);
         // O perfil do JIT só grava o arranque (Infrastructure/StartupJit.cs): para pouco depois da 1.ª página.
         FirstPaint.App.Then(() => _ = Task.Delay(StartupJit.RecordAfterFirstPaint).ContinueWith(_ => StartupJit.Stop(), TaskScheduler.Default));
         FirstPaint.App.Then(() =>

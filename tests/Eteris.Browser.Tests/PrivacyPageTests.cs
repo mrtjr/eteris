@@ -66,6 +66,21 @@ public class PrivacyPageTests
         Assert.Contains(feature, promise.Detail);
     }
 
+    // Por omissão (sincronização desligada) a promessa é só a do motor; com a sincronização ligada (escolha do
+    // utilizador) continua cumprida e diz a exceção: só os pedidos da sincronização, cifrados, para o Drive dele, e quando.
+    [Fact]
+    public void NoGoogle_WithSyncOn_StaysKept_AndStatesTheException()
+    {
+        var off = Find(Good(), "no-google");
+        Assert.True(off.Kept);
+        Assert.DoesNotContain("sincronização", off.Detail);
+        var on = Find(Good() with { SyncOn = true }, "no-google");
+        Assert.True(on.Kept);
+        Assert.EndsWith(PrivacyPage.SyncException, on.Detail);
+        Assert.Contains("30 s depois de abrir", on.Detail);
+        Assert.Contains("cifrado", on.Detail);
+    }
+
     [Fact]
     public void Quiet_WithoutBackgroundNetworkingSwitch_IsBroken()
     {

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Sync;
@@ -8,30 +9,117 @@ using Eteris.Sync.Model;
 
 namespace Eteris.Browser.Tests.Sync;
 
-// A ligação da biblioteca ao Éteris: desligada por omissão, definições que viajam, DPAPI, navegador do sistema.
+// A ligação da biblioteca ao Éteris: sem a opção experimental, definições que viajam, DPAPI, navegador do sistema.
 public class SyncIntegrationTests
 {
+    // A opção experimental saiu: um settings.json antigo com ela continua a abrir (o valor é ignorado, nada se perde),
+    // e a página já não a oferece.
     [Fact]
-    public void SyncPreview_IsOffByDefault_AndOnlyTheSwitchTurnsItOn()
+    public void SyncPreview_IsGone_AndAnOldSettingsFileStillOpens()
     {
-        Assert.False(new UserSettings().SyncPreview);
-        Assert.True(new UserSettings().With("syncPreview", "true")!.SyncPreview);
-        Assert.Null(new UserSettings().With("syncPreview", "talvez"));
+        Assert.Null(new UserSettings().With("syncPreview", "true"));
+        var path = Path.Combine(Path.GetTempPath(), "eteris-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, "{\"SyncPreview\": true, \"Theme\": \"light\", \"Density\": \"compact\"}");
+        try
+        {
+            var loaded = new SettingsStore(path).Load();
+            Assert.Equal("light", loaded.Theme);
+            Assert.Equal("compact", loaded.Density);
+        }
+        finally { File.Delete(path); }
+        Assert.DoesNotContain("syncPreview", SettingsPage.Render(new UserSettings()), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void SettingsPage_HasTheSyncSection_HiddenUntilTheSwitch()
+    public void SettingsPage_HasTheSyncSection_AndWithoutTheClientSaysUnavailable()
     {
         var html = SettingsPage.Render(new UserSettings());
         Assert.Contains("<section id=\"sincronizacao\">", html);
         Assert.Contains("href=\"#sincronizacao\"", html);
         Assert.Contains("id=\"syncBody\" hidden", html);
-        Assert.Contains("\"syncPreview\":false", html);
-        // Sem google-oauth.json: «por configurar», e o botão fica desativado.
+        // Sem google-oauth.json: «indisponível nesta compilação», e o botão fica desativado.
         Assert.Contains("\"state\":\"unconfigured\"", html);
+        Assert.StartsWith("Indisponível nesta compilação", GoogleSync.UnavailableText);
+        // O que sincroniza (e o que não) está dito na página.
+        Assert.Contains("\"syncWhat\":", html);
+        Assert.Contains("O que sincroniza", html);
+        Assert.Contains("Não sincroniza: histórico, abas abertas", SyncService.WhatStays);
         // O código e o ficheiro do perfil vão no corpo de um POST, nunca no endereço.
         Assert.Contains("method=\"post\"", html);
         Assert.DoesNotContain("sync-import?code", html);
+    }
+
+    // O arranque: a sincronização só se marca depois da 1.ª página, e a primeira ronda fica para 30 s depois (sem
+    // sincronização ligada, nada). Nada de rede ao montar o serviço nem ao ler o estado (SyncAgentTests prova-o com o
+    // Drive falso); aqui, que o arranque só chama AfterFirstPaint e que ele só marca o agendador.
+    [Fact]
+    public void Startup_OnlySchedulesTheFirstRound_ThirtySecondsAfterTheWindow()
+    {
+        var src = Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser");
+        var app = File.ReadAllText(Path.Combine(src, "App.xaml.cs"));
+        Assert.Contains("FirstPaint.App.Then(Sync.SyncService.AfterFirstPaint);", app);
+        Assert.DoesNotContain("GoogleSync", app);
+        Assert.DoesNotContain("SyncService", File.ReadAllText(Path.Combine(src, "MainWindow.xaml.cs")));
+        var service = File.ReadAllText(Path.Combine(src, "Sync", "SyncService.cs"));
+        var body = Regex.Match(service, @"public static void AfterFirstPaint\(\)\s*\{(?<b>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["b"].Value;
+        Assert.Contains("if (!Enabled) return;", body);
+        Assert.Contains("Schedule.Startup(Now());", body);
+        foreach (var network in new[] { "RunAsync", "StartAsync", "Look(", "CheckRequests", "Refresh", "Task.Run" })
+            Assert.DoesNotContain(network, body);
+        Assert.Equal(TimeSpan.FromSeconds(30), Eteris.Sync.Engine.SyncSchedule.StartupDelay);
+    }
+
+    // A pasta de teste (ETERIS_TEST_SYNC_FOLDER) é só para os testes ao vivo: a versão instalada ignora-a.
+    [Fact]
+    public void TestFolder_OnlyOutsideTheInstalledVersion()
+    {
+        Assert.Null(SyncService.TestFolderFor(null, installed: false));
+        Assert.Null(SyncService.TestFolderFor("  ", installed: false));
+        Assert.Null(SyncService.TestFolderFor(@"C:\pasta", installed: true));
+        Assert.Equal(@"C:\pasta", SyncService.TestFolderFor(@" C:\pasta ", installed: false));
+    }
+
+    [Fact]
+    public void MenuSummary_SaysWhereTheSyncIs()
+    {
+        var now = 1_762_560_000_000L;
+        Eteris.Sync.Engine.SyncStatus Status(Eteris.Sync.Engine.SyncPhase phase, bool running = false, long last = 0, string? error = null, string? code = null,
+            IReadOnlyList<Eteris.Sync.Engine.HostRequest>? requests = null, Eteris.Sync.Engine.GuestPairing? pairing = null)
+            => new(phase, running, last, error, null, code, pairing, requests ?? [], [], false, 0);
+        Assert.Equal("Sincronização desligada", SyncService.Summary(null, now));
+        Assert.Equal("Sincronizado há 2 min", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now - 125_000), now));
+        Assert.Equal("Sincronizado agora mesmo", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now - 5_000), now));
+        Assert.Equal("A sincronizar…", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, running: true, last: now), now));
+        Assert.Equal("Sem sincronizar: tenta outra vez sozinho", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, error: "Sem ligação"), now));
+        Assert.Equal("Guarde o código de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, code: "X"), now));
+        Assert.Equal("Falta juntar este computador à conta", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Choose), now));
+        Assert.Equal("Confirme o código 123 456", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Pairing, pairing: new("123 456", false, null)), now));
+        Assert.Equal("Pedido de «Portátil» · código 654 321",
+            SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, requests: [new("s", "Portátil", "654 321", now)]), now));
+        Assert.Equal("Sincronização parada", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Stopped), now));
+    }
+
+    // O estado da sincronização tem o segredo da conta: no disco só cifrado com DPAPI (nada legível no ficheiro).
+    [Fact]
+    public void SyncState_IsSavedWithDpapi()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "eteris-sync-state-" + Guid.NewGuid().ToString("N"), "sync.state");
+        try
+        {
+            var store = new DpapiSyncStore(path, new Dpapi("sync-state"));
+            store.Save(new Eteris.Sync.Engine.SavedSync { Secret = "segredo-da-conta", Enabled = true, Stopped = "nota legível" });
+            var bytes = File.ReadAllBytes(path);
+            foreach (var text in new[] { "segredo", "nota", "secret" })
+                Assert.DoesNotContain(text, Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+            Assert.Equal("segredo-da-conta", store.Load()!.Secret);
+            Assert.Null(new DpapiSyncStore(path, new Dpapi("google-tokens")).Load()); // outra «entropia» não abre
+            store.Delete();
+            Assert.Null(store.Load());
+        }
+        finally
+        {
+            try { Directory.Delete(Path.GetDirectoryName(path)!, recursive: true); } catch (IOException) { }
+        }
     }
 
     [Fact]
@@ -43,7 +131,7 @@ public class SyncIntegrationTests
         foreach (var (key, value) in values)
             Assert.True(settings.With(key, value) == settings, $"{key}={value} não volta igual");
         // Nunca viajam: o que é deste computador.
-        foreach (var local in new[] { "mica", "hideFromCapture", "sidebar", "sidebarWidth", "sidebarSide", "sidebarPanel", "sidebarCollapsed", "syncPreview" })
+        foreach (var local in new[] { "mica", "hideFromCapture", "sidebar", "sidebarWidth", "sidebarSide", "sidebarPanel", "sidebarCollapsed" })
             Assert.DoesNotContain(local, Collections.SyncableSettings);
     }
 

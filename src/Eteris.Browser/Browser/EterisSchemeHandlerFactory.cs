@@ -142,7 +142,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private static IResourceHandler SyncRoute(Uri uri, IRequest request)
     {
-        if (!InternalPages.IsAuthorized(request.Url) || !Settings.Current.SyncPreview) return Text("recusado");
+        if (!InternalPages.IsAuthorized(request.Url)) return Text("recusado");
         switch (uri.AbsolutePath)
         {
             case "/sync-export":
@@ -176,27 +176,72 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 catch (Eteris.Sync.Crypto.UnsupportedFormatException e) { return Json(new { ok = false, message = e.Message }); }
             }
             case "/sync-google":
-                Sync.GoogleSync.BeginSignIn();
+                // Na pasta de teste não há conta: «Ligar» liga a sincronização por ela.
+                if (Sync.SyncService.FolderMode) Sync.SyncService.Start();
+                else Sync.GoogleSync.BeginSignIn();
                 break;
             case "/sync-google-cancel":
                 Sync.GoogleSync.CancelSignIn();
                 break;
             case "/sync-google-out":
-                // Os tokens deste computador saem já; a revogação na Google segue em segundo plano.
-                _ = Sync.GoogleSync.SignOutAsync();
+                // A sincronização para já neste computador (com «forget=1», a cópia local da chave sai também); os
+                // tokens saem já e a revogação na Google segue em segundo plano.
+                Sync.SyncService.SignOut(InternalPages.Query(uri, "forget") == "1");
+                if (!Sync.SyncService.FolderMode) _ = Sync.GoogleSync.SignOutAsync();
                 break;
             case "/sync-account":
                 // A secção Sincronização ficou à vista depois de um gesto do utilizador na página: se há sessão sem
                 // conta guardada, pede o nome e o e-mail ao Drive (uma vez; nunca no arranque).
                 Sync.GoogleSync.RequestAccount();
                 break;
+            case "/sync-look":
+                // Também só depois de um gesto, com a secção à vista: aparelhos da conta e pedidos de aparelhos novos.
+                Sync.SyncService.Look(devices: true);
+                break;
+            case "/sync-start":
+                Sync.SyncService.Start();
+                break;
+            case "/sync-now":
+                Sync.SyncService.SyncNow();
+                break;
+            case "/sync-code-saved":
+                Sync.SyncService.Agent()?.AcknowledgeCode();
+                break;
+            case "/sync-pair":
+                Sync.SyncService.Agent()?.RequestPairing();
+                break;
+            case "/sync-pair-confirm":
+                Sync.SyncService.Agent()?.ConfirmPairing();
+                break;
+            case "/sync-pair-cancel":
+                Sync.SyncService.Agent()?.CancelPairing();
+                break;
+            case "/sync-join":
+            {
+                // O código de recuperação vai no corpo de um POST (nunca no endereço).
+                var form = SyncForm.Parse(request);
+                if (form.GetValueOrDefault("code") is not { Length: > 0 } code) return Json(new { ok = false, message = "Escreva o código de recuperação." });
+                Sync.SyncService.Act("join", agent => agent.JoinWithCodeAsync(code));
+                break;
+            }
+            case "/sync-approve" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+                Sync.SyncService.Act("approve", agent => agent.ApproveAsync(id));
+                break;
+            case "/sync-refuse" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+                Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
+                break;
+            case "/sync-remove" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+                Sync.SyncService.Act("devices", agent => agent.RemoveDeviceAsync(id));
+                break;
+            case "/sync-delete-cloud":
+                Sync.SyncService.Act("delete", agent => agent.DeleteCloudDataAsync());
+                break;
             case "/sync-status":
                 break;
             default:
                 return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
         }
-        var status = Sync.GoogleSync.Current();
-        return Json(new { ok = true, state = status.State, text = status.Text, url = status.Url, account = status.Account is not null, pending = status.AccountPending });
+        return Json(SettingsPage.SyncData(isPrivate: false));
     }
 
     private static IResourceHandler Json(object value)

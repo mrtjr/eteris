@@ -4,6 +4,11 @@ namespace Eteris.Browser.Data;
 
 public static class AppData
 {
+    // Um dado que sincroniza mudou (favoritos, Escudo por site): a sincronização compara daqui a 10 s (Sync/SyncService).
+    public static event Action? SyncableChanged;
+
+    public static void NotifySyncableChanged() => SyncableChanged?.Invoke();
+
     private static readonly Lazy<HistoryStore> LazyHistory = StartupTrace.Lazy<HistoryStore>("LazyHistory", () => new HistoryStore(AppPaths.Database));
     private static readonly Lazy<ShieldExceptionStore?> LazyShieldExceptions = StartupTrace.Lazy<ShieldExceptionStore?>("LazyShieldExceptions", () =>
     {
@@ -54,12 +59,21 @@ public static class AppData
     {
         try { LazyHidden.Value?.Add(host, selector); }
         catch (Exception) { }
+        NotifySyncableChanged();
+    }
+
+    public static void UnhideElement(string host, string selector)
+    {
+        try { LazyHidden.Value?.Remove(host, selector); }
+        catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     public static void ClearHiddenElements(string host)
     {
         try { LazyHidden.Value?.Clear(host); }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     private static readonly Lazy<DailyStatsStore?> LazyDaily = StartupTrace.Lazy<DailyStatsStore?>("LazyDaily", () =>
@@ -172,6 +186,7 @@ public static class AppData
             else store.Add(host);
         }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     // O histórico é conveniência: uma falha da base de dados nunca pode interromper a navegação.
@@ -405,6 +420,7 @@ public static class AppData
     {
         try { return BookmarkImport.Import(LazyBookmarks.Value, marks, DateTime.UtcNow); }
         catch (Exception) { return 0; }
+        finally { NotifySyncableChanged(); }
     }
 
     private static readonly Lazy<Permissions.SitePermissionStore?> LazyPermissions = StartupTrace.Lazy<Permissions.SitePermissionStore?>("LazyPermissions", () =>
@@ -470,6 +486,7 @@ public static class AppData
             else LazyStrict.Value?.Remove(host);
         }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyDark = StartupTrace.Lazy<StrictSiteStore?>("LazyDark", () =>
@@ -509,6 +526,7 @@ public static class AppData
             else LazyHttp.Value?.Remove(host);
         }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     // «Esquecer este site ao fechar»: sites (domínio registável) cujos dados se apagam ao fechar a última aba.
@@ -590,12 +608,14 @@ public static class AppData
             return saved;
         }
         catch (Exception) { return null; }
+        finally { NotifySyncableChanged(); }
     }
 
     public static bool RestoreBookmark(SavedBookmark saved)
     {
         try { return LazyBookmarks.Value.Restore(saved); }
         catch (Exception) { return false; }
+        finally { NotifySyncableChanged(); }
     }
 
     // Sites que o utilizador mandou voltar ao motor principal (botão «Motor de vídeo»): nunca trocam sozinhos, nem os da
@@ -622,12 +642,14 @@ public static class AppData
     {
         try { LazyBookmarks.Value.Remove(url); }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     public static void RenameBookmark(string url, string title)
     {
         try { LazyBookmarks.Value.Rename(url, title); }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     public static bool IsBookmarked(string url)
@@ -640,5 +662,6 @@ public static class AppData
     {
         try { return LazyBookmarks.Value.Toggle(url, title, DateTime.UtcNow); }
         catch (Exception) { return false; }
+        finally { NotifySyncableChanged(); }
     }
 }

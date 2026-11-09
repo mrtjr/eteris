@@ -43,7 +43,8 @@ public static class PrivacyPage
         long CnameBlocked = 0,
         long CnameDecisions = 0,
         double CnameMicros = 0,
-        CnameSource CnameSource = CnameSource.WindowsDns);
+        CnameSource CnameSource = CnameSource.WindowsDns,
+        bool SyncOn = false);
 
     // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
     public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
@@ -110,6 +111,7 @@ public static class PrivacyPage
             new("no-google", "No arranque, nada sai para a Google",
                 googleStillOn.Count == 0
                     ? "Nem o relógio de rede do Chromium (clients2.google.com) nem a verificação do «Modo IA» da pesquisa Google (www.google.com, com os cookies da Google): a Google só recebe um pedido quando pesquisa nela ou abre um site dela."
+                      + (s.SyncOn ? " " + SyncException : "")
                     : "Ainda ligados no motor: " + string.Join(", ", googleStillOn) + ".",
                 googleStillOn.Count == 0),
             new("cookies", "Cookies de terceiros bloqueados",
@@ -181,6 +183,12 @@ public static class PrivacyPage
         ];
     }
 
+    // A exceção que o utilizador escolheu: com a sincronização ligada, só os pedidos dela saem para a Google — cifrados,
+    // para a pasta oculta da aplicação no Drive dele, por um cliente próprio que só fala com os endereços da Google
+    // necessários (nada pelo motor) — e nunca antes de 30 s depois de abrir.
+    public const string SyncException =
+        "Exceção que escolheu: com a sincronização ligada, o Éteris fala com o Google Drive (só a pasta oculta da aplicação, tudo cifrado neste computador) 30 s depois de abrir, 10 s depois de uma alteração e de 10 em 10 minutos — e mais nada.";
+
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
     public static State Current()
@@ -192,7 +200,8 @@ public static class PrivacyPage
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
-            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false));
+            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false),
+            Sync.SyncService.Enabled);
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.

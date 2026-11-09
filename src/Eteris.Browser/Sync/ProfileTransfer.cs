@@ -237,7 +237,7 @@ internal static class ProfileTransfer
     private static bool IsWebAddress(string url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
 
-    private static bool IsHost(string host)
+    internal static bool IsHost(string host)
         => host.Length is > 0 and < 254 && host.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or ':' or '[' or ']');
 
     private static IReadOnlyList<string> Read(Func<IReadOnlyList<string>> read)

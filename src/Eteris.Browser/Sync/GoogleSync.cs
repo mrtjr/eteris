@@ -5,10 +5,11 @@ using Eteris.Sync.Google;
 
 namespace Eteris.Browser.Sync;
 
-// «Entrar com o Google» (Definições › Sincronização, atrás da opção experimental desligada): início de sessão no
-// navegador do sistema (PKCE + loopback), tokens guardados com DPAPI no perfil e revogados ao «Sair».
-// Sem o identificador da aplicação (google-oauth.json, criado pelo dono na Google Cloud) fica «por configurar» e não
-// faz pedido nenhum. Ligado, ainda não envia dados: a sincronização automática pelo Drive chega numa próxima fase.
+// «Entrar com o Google» (Definições › Sincronização e menu da conta): início de sessão no navegador do sistema
+// (PKCE + loopback), tokens guardados com DPAPI no perfil e revogados ao «Sair». Sem o identificador da aplicação
+// (google-oauth.json, criado pelo dono na Google Cloud e copiado pelo build/publish.ps1) fica «indisponível nesta
+// compilação» e não faz pedido nenhum. Depois de entrar, a sincronização (SyncService) liga-se e usa o Drive
+// (DriveTransport: só a pasta oculta da aplicação).
 // A conta (nome e e-mail, para o menu e as Definições) pede-se ao Drive logo a seguir a entrar, ou — se já havia sessão
 // sem conta guardada — quando o utilizador abre o menu ou a secção Sincronização (RequestAccount). Nunca no arranque.
 internal static class GoogleSync
@@ -58,12 +59,18 @@ internal static class GoogleSync
     // O texto do estado com sessão: com a conta, «Ligado como Nome (e-mail)…».
     internal static string SignedInText(GoogleAccount? account)
         => (account is { IsEmpty: false } ? $"Ligado como {account.Label} ao Google Drive" : "Ligado ao Google Drive")
-           + " (pasta oculta da aplicação). Ainda nada é enviado: a sincronização automática chega numa próxima versão.";
+           + " (pasta oculta da aplicação). Tudo vai cifrado neste computador: a Google só vê ficheiros cifrados, os tamanhos e as horas.";
+
+    public const string UnavailableText = "Indisponível nesta compilação: falta o identificador da aplicação Google (google-oauth.json). Nada é pedido à Google.";
+
+    // O transporte da sincronização: a pasta oculta da aplicação no Drive desta sessão (null sem sessão).
+    internal static Eteris.Sync.Transport.ISyncTransport? DriveTransport()
+        => Session() is { IsSignedIn: true } session ? new GoogleDriveTransport(Http(), session.AccessTokenAsync) : null;
 
     public static Status Current()
     {
         if (Config is null)
-            return new("unconfigured", "Por configurar: falta o identificador da aplicação Google (google-oauth.json). Nada é pedido à Google.", null);
+            return new("unconfigured", UnavailableText, null);
         var signedIn = Session()?.IsSignedIn == true;
         var accounts = signedIn ? Accounts() : null;
         lock (Gate)
@@ -99,8 +106,9 @@ internal static class GoogleSync
                 var oauth = new GoogleOAuth(Http(), config, Now);
                 var tokens = await oauth.SignInAsync(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, cancel.Token);
                 Session()?.Use(tokens);
-                // Logo a seguir a entrar (ação do utilizador): com que conta.
+                // Logo a seguir a entrar (ação do utilizador): com que conta, e a sincronização liga-se.
                 _ = Accounts()?.AfterSignIn();
+                SyncService.Start();
             }
             catch (OAuthException e) { lock (Gate) _error = e.Message; }
             catch (OperationCanceledException) { lock (Gate) _error = null; }
