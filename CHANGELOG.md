@@ -7,6 +7,12 @@
   mundo isolado de cada página `http(s)` (a página não o vê nem à ligação com o Éteris), fala com o Éteris por
   mensagens validadas, nunca escreve na página por si e não usa o `Runtime.enable` que os anti-robôs procuram (medido:
   0 deteções, com controlo positivo). Ainda sem nada visível: a lista de sugestões chega com as tarefas seguintes.
+- **Classificador de formulários** (C2): reconhece inícios de sessão, criação de conta, mudança de palavra-passe,
+  códigos de uma utilização (nunca se guardam), moradas de Portugal e do Brasil, cartões (o CVC só para nunca o tocar),
+  IBAN, NIF/CPF, documentos e matrícula/placa, em português, inglês e espanhol, também em campos soltos, raízes sombra
+  e iframes da mesma origem; campos escondidos de rastreadores ficam de fora.
+- **Correção:** os pedidos internos do Éteris ao motor (DevTools) podiam falhar de vez em quando quando dois saíam ao
+  mesmo tempo (numeração fora de ordem); agora saem sempre por ordem.
 - **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
   Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
   como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,

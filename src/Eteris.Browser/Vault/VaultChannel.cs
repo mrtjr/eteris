@@ -352,7 +352,7 @@ public sealed class VaultChannel : IDisposable
         _client.Page.FrameNavigated += OnFrameNavigated;
         _client.Runtime.BindingCalled += OnBindingCalled;
         var client = _client;
-        _started = Quietly(() => client.Page.EnableAsync());
+        _started = Quietly(() => DevToolsCalls.Run(() => client.Page.EnableAsync()));
         return true;
     }
 
@@ -360,7 +360,7 @@ public sealed class VaultChannel : IDisposable
     {
         await _started.ConfigureAwait(false);
         FrameTree? tree;
-        try { tree = (await client.Page.GetFrameTreeAsync().ConfigureAwait(false)).FrameTree; }
+        try { tree = (await DevToolsCalls.Run(() => client.Page.GetFrameTreeAsync()).ConfigureAwait(false)).FrameTree; }
         catch (Exception) { return; }
         if (tree is null) return;
         var pending = new Stack<(FrameTree Node, bool IsMain)>();
@@ -391,11 +391,11 @@ public sealed class VaultChannel : IDisposable
         if (!_contexts.TryClaim(frame.Id, frame.LoaderId)) return;
         try
         {
-            var world = await client.Page.CreateIsolatedWorldAsync(frame.Id, WorldName, grantUniveralAccess: false).ConfigureAwait(false);
+            var world = await DevToolsCalls.Run(() => client.Page.CreateIsolatedWorldAsync(frame.Id, WorldName, grantUniveralAccess: false)).ConfigureAwait(false);
             var contextId = world.ExecutionContextId;
             if (!_contexts.Add(new VaultContext(contextId, frame.Id, frame.LoaderId, origin, isMain))) return;
-            await client.Runtime.AddBindingAsync(_binding, executionContextId: contextId).ConfigureAwait(false);
-            await client.Runtime.EvaluateAsync(VaultScripts.Cofre(_binding), contextId: contextId, silent: true).ConfigureAwait(false);
+            await DevToolsCalls.Run(() => client.Runtime.AddBindingAsync(_binding, executionContextId: contextId)).ConfigureAwait(false);
+            await DevToolsCalls.Run(() => client.Runtime.EvaluateAsync(VaultScripts.Cofre(_binding), contextId: contextId, silent: true)).ConfigureAwait(false);
         }
         catch (Exception)
         {
@@ -425,7 +425,7 @@ public sealed class VaultChannel : IDisposable
         if (client is null || !IsCurrent(context)) return ScriptResult.Failed;
         try
         {
-            var call = client.Runtime.EvaluateAsync(expression, contextId: context.Id, returnByValue: true, silent: true);
+            var call = DevToolsCalls.Run(() => client.Runtime.EvaluateAsync(expression, contextId: context.Id, returnByValue: true, silent: true));
             if (await Task.WhenAny(call, Task.Delay(timeout ?? TimeSpan.FromSeconds(5))).ConfigureAwait(false) != call)
                 return new ScriptResult(false, null, "tempo esgotado");
             var response = await call.ConfigureAwait(false);

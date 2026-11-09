@@ -1,8 +1,8 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o início do bloco C (na página: C1)
-feitos no ramo `sync`, por publicar** (o resto do bloco C e os blocos D e E do desenho — guardar, gerar, preencher o
-resto, sincronização e fecho — estão por fazer). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e o início do bloco C (na página: C1 e
+C2) feitos no ramo `sync`, por publicar** (o resto do bloco C e os blocos D e E do desenho — guardar, gerar, preencher
+o resto, sincronização e fecho — estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -455,3 +455,58 @@ Prova ao vivo (`pp\vivo\c1.ps1`, `pp\vivo\c1b.ps1`, `pp\vivo\c1\`; perfil de tes
 - **Custo, 20 carregamentos** (`medir.html`, primeiro carregamento frio fora da conta, duas rondas): fim do
   carregamento com o canal 11,8 e 12,3 ms de média (mediana 10 e 11), sem o canal 10,3 e 10,2 (mediana 10 e 10); o
   script fica pronto ~5 ms (mediana) depois do commit.
+
+## C2. Classificador de formulários
+
+`Vault/Scripts/cofre.js` (o `Classifier`, funções puras sobre descritores, e a leitura do DOM, só leitura),
+`Browser/DevToolsCalls.cs` (correção encontrada aqui, abaixo).
+
+- **Campo a campo** (`classifyField`): o `autocomplete=` manda primeiro (secções e modificadores como `shipping`,
+  `billing`, `home` não contam; `off` e símbolos desconhecidos passam às heurísticas; nas palavras-passe o `off` é
+  ignorado, como no Chrome e no Firefox). Depois, heurísticas por `name`, `id`, rótulo (`<label>`, `aria-labelledby` ou
+  o texto logo antes), `placeholder` e `aria-label`, normalizados (sem acentos, camelCase separado, «Nº» → número), em
+  português de Portugal e do Brasil, inglês e espanhol: CVC (só para nunca o preencher nem guardar), código de uma
+  utilização, cartão (número, titular, validade, mês, ano), IBAN, **NIF/CPF** (e CNPJ, NIPC), documentos (passaporte,
+  carta de condução/CNH, Cartão de Cidadão/RG), matrícula/placa, código postal/CEP, telefone, e-mail, bairro,
+  complemento, utilizador, nome próprio, apelido/sobrenome, empresa, cidade/localidade, distrito/estado, país, número da
+  porta, morada/endereço, nome. Ignora pesquisas, cupões, estado civil e datas de nascimento. `type=tel` sem texto de
+  telefone só conta se o texto disser CEP, CPF, cartão… (os sites usam-no para teclados numéricos).
+- **Formulário inteiro** (`classifyForm`): `login`, `signup`, `change`, `address`, `payment` ou `other`. Só contam os
+  campos visíveis. O utilizador é o campo de texto visível mais próximo antes da 1.ª palavra-passe (de preferência um
+  utilizador ou e-mail), e só há um. Uma palavra-passe: início de sessão (ou criação de conta com `new-password`); duas:
+  atual + nova → mudança, palavra-passe + confirmação → criação de conta (ou mudança sem utilizador); três → mudança.
+  Os campos de cartão só contam com um número de cartão no mesmo formulário. Campos soltos (sem `<form>`) formam um
+  formulário por documento ou raiz sombra.
+- **Visibilidade** (`isVisible`): pelo menos 5×5 px, `display`, `visibility`, opacidade com a dos antepassados ≥ 0,1,
+  dentro do ecrã e não tapado (`elementFromPoint` no centro devolve o campo, um descendente ou o rótulo dele). Os
+  campos escondidos de rastreadores não têm tipo: nada se oferece neles.
+- **Mensagens** (só depois de um foco do utilizador ou da página num campo com tipo, medido no fotograma seguinte, já
+  com o campo à vista): `focus` (campo, formulário, tipos, retângulo na página de topo — os iframes da mesma origem
+  somam a posição deles — e, num campo de utilizador ou e-mail, o texto já escrito), `input`, `blur` (não quando o foco
+  só saiu da janela; ao voltar, o mesmo campo não pede outra vez), `scroll`; um clique num campo que já tem o foco volta
+  a pedir. A classificação refaz-se a cada foco; um `MutationObserver` (só depois do 1.º foco, debounce de 250 ms, só
+  mudanças que mexem em campos) invalida a usada ao escrever. As raízes sombra com campos ganham os mesmos ouvintes
+  (no mundo isolado): o foco de um campo para outro da mesma raiz sombra não chega à janela.
+- **Correção no motor (`Browser/DevToolsCalls.cs`):** os pedidos DevTools de um browser partilham a numeração do
+  CefSharp e o CEF só aceita números crescentes. Com o canal do cofre a pedir no commit de cada página, ao mesmo tempo
+  que os scripts precoces e a miniatura, um pedido numerado numa thread e executado depois de outro mais novo falhava
+  («Generated MessageId 14 doesn't match returned Message Id 12», medido): a preparação do cofre perdia-se de vez em
+  quando (e, mais raramente, já antes, um registo de scripts ou uma avaliação). Agora todos os pedidos DevTools do Éteris
+  passam por `DevToolsCalls.Run`: numerar e pôr na fila da thread do CEF acontecem juntos e por ordem, nunca diretamente
+  na thread do CEF. Guarda: `DevToolsCallsTests` (nenhuma chamada fora do portão).
+
+Testes: `Vault/CofreClassifierTests` (no Node: **37 formulários** — GitHub, Google, Microsoft, Mercado Livre, gov.br,
+Portal das Finanças, bancos PT e BR, Amazon, Facebook, Reddit, login com telefone, com campos de rastreio escondidos,
+sem `<form>`, criação de conta, mudança de palavra-passe, códigos de uma utilização, moradas de Portugal e do Brasil,
+checkout com CPF e com NIF, cartões com e sem autocomplete, IBAN, matrícula, passaporte; os descritores seguem os
+atributos públicos destes formulários, sem os visitar; o autocomplete primeiro; a visibilidade; o debounce e as mudanças
+que contam; a normalização; os tipos do script estão no esquema do navegador), `DevToolsCallsTests`,
+`VaultChannelGuardTests` (o script continua sem escrever no DOM).
+
+Prova ao vivo (`pp\vivo\c2.ps1`, `pp\vivo\c2\`; perfil de teste novo, página local `127.0.0.1:8898/casos.html` com 12
+casos, foco a percorrer os campos com Tab em teclas reais, registo **temporário** das mensagens com o `name` do campo,
+que não foi para o código): todos os campos classificados como nos testes (`classificado-completo.txt`): início de
+sessão (topo, campos soltos, raiz sombra, iframe da mesma origem e um formulário que chega 1,5 s depois), criação de
+conta com confirmação, mudança com três campos, código de uma utilização, morada de Portugal, endereço do Brasil com
+CPF, cartão com CVC; os dois campos de rastreio escondidos (opacidade 0 e fora do ecrã) não mandam nada. Capturas
+`c2-casos.png` e `c2-fim.png`.

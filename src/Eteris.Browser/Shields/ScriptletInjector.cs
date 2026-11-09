@@ -1,5 +1,6 @@
 using CefSharp;
 using CefSharp.DevTools;
+using Eteris.Browser.Browser;
 
 namespace Eteris.Browser.Shields;
 
@@ -112,7 +113,7 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
         catch (Exception) { return false; }
         // O Chromium só corre os scripts registados se o domínio Page estiver ativo na sessão.
         var created = _client;
-        _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.EnableAsync())).Unwrap();
+        _queue = _queue.ContinueWith(_ => Quietly(() => DevToolsCalls.Run(() => created.Page.EnableAsync()))).Unwrap();
         // Dicas do cliente de alta entropia reduzidas no motor (página, frames, workers dedicados e cabeçalhos). Antes do
         // onSession: a vista móvel de um site fixado troca-as pelas dela.
         _queue = _queue.ContinueWith(_ => Quietly(() => ReducedClientHints.Apply(created))).Unwrap();
@@ -120,9 +121,9 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
         // O GPC visível ao JavaScript vale em todas as páginas, com ou sem escudo: registado uma vez por sessão e nunca
         // retirado, não depende do script de cada site nem da corrida de cada navegação. A lista de dispositivos sem
         // permissão (PrivacySignals.DevicesScript) vai no mesmo registo.
-        _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript))).Unwrap();
+        _queue = _queue.ContinueWith(_ => Quietly(() => DevToolsCalls.Run(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript)))).Unwrap();
         if (!string.IsNullOrEmpty(baseScript))
-            _queue = _queue.ContinueWith(_ => Quietly(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(baseScript))).Unwrap();
+            _queue = _queue.ContinueWith(_ => Quietly(() => DevToolsCalls.Run(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(baseScript)))).Unwrap();
         return true;
     }
 
@@ -139,7 +140,7 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
         if (change.Script is null) return;
         try
         {
-            var response = await client.Page.AddScriptToEvaluateOnNewDocumentAsync(change.Script);
+            var response = await DevToolsCalls.Run(() => client.Page.AddScriptToEvaluateOnNewDocumentAsync(change.Script));
             string? stale;
             lock (_gate) stale = _hosts.Registered(change.Host, change.Script, response.Identifier);
             if (stale is not null) await Remove(client, stale);
@@ -149,7 +150,7 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
 
     private static async Task Remove(DevToolsClient client, string id)
     {
-        try { await client.Page.RemoveScriptToEvaluateOnNewDocumentAsync(id); }
+        try { await DevToolsCalls.Run(() => client.Page.RemoveScriptToEvaluateOnNewDocumentAsync(id)); }
         catch (Exception) { }
     }
 

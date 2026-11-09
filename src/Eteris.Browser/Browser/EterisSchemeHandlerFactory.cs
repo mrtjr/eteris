@@ -314,8 +314,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 try
                 {
                     using var client = browser.GetDevToolsClient();
-                    if (request.Cookies) await client.Network.ClearBrowserCookiesAsync();
-                    if (request.Cache) await client.Network.ClearBrowserCacheAsync();
+                    if (request.Cookies) await DevToolsCalls.Run(() => client.Network.ClearBrowserCookiesAsync());
+                    if (request.Cache) await DevToolsCalls.Run(() => client.Network.ClearBrowserCacheAsync());
                 }
                 catch (Exception) { }
             });

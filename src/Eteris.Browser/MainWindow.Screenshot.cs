@@ -44,7 +44,7 @@ public partial class MainWindow
             using var client = browser.GetDevToolsClient();
             var png = fullPage
                 ? await CaptureFullPageAsync(browser, client)
-                : (await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png)).Data;
+                : (await DevToolsCalls.Run(() => client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png))).Data;
 
             Directory.CreateDirectory(ScreenshotNames.Folder);
             var path = Path.Combine(ScreenshotNames.Folder, ScreenshotNames.For(tab.Address, DateTime.Now));
@@ -83,7 +83,7 @@ public partial class MainWindow
             {
                 var top = await Eval($"scrollTo({{ top: {y}, behavior: 'instant' }}); scrollY");
                 await Task.Delay(160);
-                var shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png);
+                var shot = await DevToolsCalls.Run(() => client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Png));
                 chunks.Add((top, Decode(shot.Data)));
                 if (chunks.Count == 1) await PageScript.EvaluateAsync(browser, HideFixedScript);
                 if (top + view >= total - 1) break;

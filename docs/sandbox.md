@@ -509,6 +509,9 @@ Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo
 - **O script do cofre** (preenchimento de palavras-passe, `Vault/Scripts/cofre.js`) só entra por um **mundo isolado**:
   `Page.createIsolatedWorld` + `Runtime.addBinding` com o `executionContextId` desse mundo + `Runtime.evaluate` com o
   `contextId` (`Vault/VaultChannel.cs`). Nunca pelo `Page.addScriptToEvaluateOnNewDocument` (seria o mundo da página).
+- **Todos os pedidos DevTools passam por `Browser/DevToolsCalls.Run`** (`DevToolsCallsTests`): os pedidos de um browser
+  partilham a numeração do CefSharp e o CEF só aceita números crescentes; o portão numera e põe na fila juntos, por
+  ordem, e nunca diretamente na thread do CEF.
 - **Nunca `Runtime.enable`** em lado nenhum: as páginas conseguem detetá-lo (medido no motor 156: com ele ligado, a
   consola lê outra vez o `name` de um `Error` registado). Guardas: `Vault/VaultChannelGuardTests` (nenhum
   `Runtime.EnableAsync`; o `cofre.js` só passa pelo canal; o script não escreve no DOM fora do preenchimento pedido).

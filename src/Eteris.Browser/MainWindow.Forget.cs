@@ -230,7 +230,7 @@ public partial class MainWindow
             foreach (var origin in origins)
             {
                 // Uma origem recusada pelo motor não impede as outras.
-                try { await client.Storage.ClearDataForOriginAsync(origin, "all"); }
+                try { await DevToolsCalls.Run(() => client.Storage.ClearDataForOriginAsync(origin, "all")); }
                 catch (Exception) { }
             }
             return (cookies, true);

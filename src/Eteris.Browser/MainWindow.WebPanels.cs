@@ -253,7 +253,7 @@ public partial class MainWindow
     }
 
     private static Task ApplyMobileUserAgent(CefSharp.DevTools.DevToolsClient client)
-        => client.Emulation.SetUserAgentOverrideAsync(WebPanels.MobileUserAgent, null, WebPanels.MobileNavigatorPlatform,
+        => DevToolsCalls.Run(() => client.Emulation.SetUserAgentOverrideAsync(WebPanels.MobileUserAgent, null, WebPanels.MobileNavigatorPlatform,
             new CefSharp.DevTools.Emulation.UserAgentMetadata
             {
                 Brands =
@@ -266,7 +266,7 @@ public partial class MainWindow
                 Architecture = string.Empty,
                 Model = WebPanels.MobileModel,
                 Mobile = true,
-            });
+            }));
 
     // Tecla premida com o foco num site fixado (thread do CEF).
     private bool ShortcutFromWebPanel(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt)
