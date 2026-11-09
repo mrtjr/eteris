@@ -197,7 +197,8 @@ public class BrowserlessRequestsTests
         }
         Assert.Equal(2, contexts);
         var app = File.ReadAllText(Path.Combine(src, "App.xaml.cs"));
-        var ready = app[app.IndexOf("private static void OnCefReady()", StringComparison.Ordinal)..];
+        // internal desde o E11 (o Program.Main entrega-o ao motor que arranca na sua thread).
+        var ready = app[app.IndexOf("internal static void OnCefReady()", StringComparison.Ordinal)..];
         Assert.Contains("Shields.BrowserlessRequests.Install();", ready[..ready.IndexOf("\n    }", StringComparison.Ordinal)]);
         Assert.True(app.IndexOf("Shields.BrowserlessRequests.Release();", StringComparison.Ordinal)
                     < app.IndexOf("Cef.PreShutdown();", StringComparison.Ordinal));

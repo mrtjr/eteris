@@ -27,7 +27,10 @@ public class UpdatesOnExitTests
         Assert.True(code.IndexOf("SetAutoApplyOnStartup(false)", StringComparison.Ordinal) < code.IndexOf("velopack.Run();", StringComparison.Ordinal));
         foreach (var hook in new[] { "OnAfterInstallFastCallback", "OnAfterUpdateFastCallback", "OnBeforeUninstallFastCallback" })
             Assert.Contains(hook, code);
-        Assert.Single(Regex.Matches(code, @"\.Run\(\)"));
+        // Um só Run do Velopack; o outro .Run() do Main é o da aplicação WPF (app.Run()).
+        Assert.Single(Regex.Matches(code, @"velopack\.Run\(\)"));
+        Assert.Equal(2, Regex.Matches(code, @"\.Run\(\)").Count);
+        Assert.Contains("app.Run();", code);
     }
 
     // O que o ajuste pressupõe: as atualizações aplicam-se ao sair.
