@@ -11,7 +11,7 @@
 #>
 param([Parameter(Mandatory)] [string]$Source)
 $ErrorActionPreference = 'Stop'
-# Caminhos curtos (JNIOR~1) e acentos: so -LiteralPath e caminhos completos.
+# Caminhos curtos 8.3 (ABCDEF~1) e acentos: so -LiteralPath e caminhos completos.
 $Source = [IO.Path]::GetFullPath($Source)
 $patch = Join-Path $PSScriptRoot 'windows-sandbox-info.patch'
 Push-Location -LiteralPath $Source

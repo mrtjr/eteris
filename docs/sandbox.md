@@ -57,7 +57,8 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
    com os registos em `build/sandbox/out/logs`). A compilação completa só é preciso repetir quando mudar o motor, o
    CefSharp, o patch ou `build/sandbox/client`; **os testes, em cada release**: depois do commit da versão,
    `build-all.ps1 -SkipCefSharp -SkipClient` (alguns minutos), porque o `publish.ps1` exige a marca para o HEAD atual.
-   Num caminho com acentos (a cópia em `C:\Users\Júnior\…`) o script trabalha pelo nome curto 8.3 da pasta (o cmd.exe,
+   Num caminho com acentos (por exemplo uma cópia em `%USERPROFILE%\Desktop` com «ú» no nome do utilizador) o script
+   trabalha pelo nome curto 8.3 da pasta (o cmd.exe,
    o C++/CLI, o CMake e o SourceLink só foram provados com caminhos ASCII); sem nomes curtos no disco pára e pede uma
    cópia num caminho ASCII. Provado com `-SkipCefSharp -SkipClient` pelo caminho com acentos do worktree (testes e
    marca); a compilação completa do CefSharp e da DLL por esse caminho ainda não foi corrida.
@@ -366,15 +367,15 @@ Notas para a publicação:
    `cr.sb.net` + SHA1 em hexadecimal maiúsculo do caminho UTF-8 do programa dos filhos, que é o `GetModuleFileName` do
    processo principal), com a pasta `%LOCALAPPDATA%\Packages\<nome>` e a chave
    `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppContainer\Mappings\<SID>`.
-   Confirmado: `ProfileName(C:\Users\Júnior\AppData\Local\EterisBrowserSbxTest\current\Eteris.Browser.exe)` =
-   `cr.sb.netB382764A951831BB0A76C124F3484E6BDFFFB515`, e esse perfil continuava lá depois da 1.ª desinstalação.
+   Confirmado: `ProfileName(%LOCALAPPDATA%\EterisBrowserSbxTest\current\Eteris.Browser.exe, expandido)` =
+   `cr.sb.netB382764A…`, e esse perfil continuava lá depois da 1.ª desinstalação.
    **Correção:** gancho `OnBeforeUninstallFastCallback` → `NetworkSandbox.OnUninstalling` (na altura só nas publicações
    com sandbox e pelo bootstrap; desde a revisão da 0.2.12, que sai na 0.2.14, em todas, dentro de uma instalação do Velopack, para uma
    versão sem sandbox instalada por cima de uma com sandbox também os apagar) → `DeleteAppContainerProfile` para os
    perfis desta instalação: os que o arranque guardou em
    `<raiz do Velopack>\network-sandbox-profiles.txt` (`NetworkSandbox.Remember`, só quando o serviço de rede vai mesmo
    para o AppContainer e só se o nome ainda lá não estiver) e os do próprio caminho do gancho nas formas dada, longa e
-   curta. O nome depende do caminho exato: arrancar pela forma curta 8.3 (`C:\Users\JNIOR~1\…`) cria **outro** perfil
+   curta. O nome depende do caminho exato: arrancar pela forma curta 8.3 (`C:\Users\ABCDEF~1\…`) cria **outro** perfil
    (visto nos testes: `sbx\d0\cefsimple.exe` tem dois), por isso o arranque guarda o nome de cada caminho usado.
    Para cópias à mão: `build/sandbox/appcontainer-profiles.ps1` (lista; com `-Exe … -Remove` apaga só os desses exes).
 2. **Atualização a partir da 0.2.9 pelo caminho real do Éteris** (não por um atualizador externo): 0.2.9 compilada do
@@ -430,8 +431,8 @@ as pastas `cr.sb.*` em `Packages` e as entradas `cr.sb.*` em `AppContainer\Mappi
 
 | Perfil | Criado | Exe de teste (caminho tal como foi arrancado) |
 |---|---|---|
-| `cr.sb.net379F5396…` | 05:34 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma longa, `Júnior`) |
-| `cr.sb.net66206779…` | 05:46 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma curta, `JNIOR~1`) |
+| `cr.sb.net379F5396…` | 05:34 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma longa, com o «ú») |
+| `cr.sb.net66206779…` | 05:46 | `…\scratchpad\sbx\d0\cefsimple.exe` (forma curta 8.3) |
 | `cr.sb.net2F6D58F6…` | 05:47 | `…\scratchpad\sbx\d9-acl\cefsimple.exe` (curta) |
 | `cr.sb.netAB446901…` | 06:17 | `…\scratchpad\sbx\app-d9\Eteris.Browser.exe` (curta) |
 | `cr.sb.net6C9F810C…` | 09:27 | `…\scratchpad\sbx\app-d5i\Eteris.Browser.exe` (curta) |
@@ -720,7 +721,7 @@ JavaScript funciona (deteção do modo de leitura). Sem `WindowsSandboxInfo` o c
 
 O que foi preciso (receita em `build/cefsharp/build-cefsharp.cmd`):
 - Build Tools do Visual Studio 2022 com os componentes **C++/CLI** e **.NET SDK** (instalados nesta máquina).
-- Não usar o `build.ps1` oficial: estraga os caminhos com nomes de utilizador acentuados («Júnior»).
+- Não usar o `build.ps1` oficial: estraga os caminhos com nomes de utilizador acentuados (como o «ú» no `%USERPROFILE%`).
 - SDK 9 (`global.json`) e alvo `net8.0` em vez de `net6.0` (falta o pacote Apphost do .NET 6, de que o C++/CLI precisa).
 - Sem a assinatura de nome forte (`/p:LinkKeyFile=`): assinar precisa do repositório de chaves do Windows, que as
   ferramentas desta sessão não podem usar; numa linha de comandos normal ou no GitHub Actions assina-se normalmente.

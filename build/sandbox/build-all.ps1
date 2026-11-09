@@ -21,9 +21,9 @@
   Tudo o que produz fica em pastas ignoradas pelo git: build/cefsharp/src, build/cefsharp/feed,
   build/sandbox/client/out e build/sandbox/out (registos, testes e a marca).
 
-  Caminho com acentos (por exemplo C:\Users\Júnior\...): o cmd.exe, o C++/CLI, o CMake e o SourceLink só foram provados
-  com caminhos ASCII, por isso o script trabalha pelo nome curto 8.3 da pasta do repositório (JNIOR~1); sem nomes curtos
-  no disco, pára e pede uma cópia num caminho ASCII.
+  Caminho com acentos (por exemplo %USERPROFILE%\... com «ú» no nome do utilizador): o cmd.exe, o C++/CLI, o CMake e o
+  SourceLink só foram provados com caminhos ASCII, por isso o script trabalha pelo nome curto 8.3 da pasta do
+  repositório (por exemplo ABCDEF~1); sem nomes curtos no disco, pára e pede uma cópia num caminho ASCII.
 
   Requisitos: git, CMake, Build Tools do Visual Studio 2022 com C++/CLI (VC.CLI.Support) e o SDK do .NET 9 (além do 10);
   o motor próprio já compilado (build/cef-codecs/out/runtime e a distribuição em build/cef-codecs/out/distrib, ou
@@ -54,7 +54,7 @@ $CefSharpTag = 'v156.0.150'
 $CefSharpCommit = 'f4cd42eb4043d67a4a8153a4c6b66a315a2da0b3'   # git rev-parse v156.0.150^{commit}
 $Official = '156.0.150'
 
-# Caminhos curtos (JNIOR~1) e acentos: só caminhos completos e -LiteralPath. Para apagar ficheiros, [IO.File]::Delete: o
+# Caminhos curtos 8.3 (ABCDEF~1) e acentos: só caminhos completos e -LiteralPath. Para apagar ficheiros, [IO.File]::Delete: o
 # Remove-Item do PowerShell 5.1, com o caminho literal, não encontra um caminho 8.3 («Não existe um objeto no caminho»).
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if ($repo -match '[^\x00-\x7F]') {
