@@ -45,7 +45,8 @@ public static class PrivacyPage
         double CnameMicros = 0,
         CnameSource CnameSource = CnameSource.WindowsDns,
         bool SyncOn = false,
-        bool LeakCheckOff = true);
+        bool LeakCheckOff = true,
+        bool ChromiumPasswordsOff = true);
 
     // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
     public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
@@ -115,6 +116,13 @@ public static class PrivacyPage
                     : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
                     : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com).",
                 quiet && formsQuiet),
+            new("passwords", "As suas palavras-passe não vão para ninguém",
+                !s.ChromiumPasswordsOff ? "O gestor de palavras-passe e o preenchimento automático do Chromium não ficaram desligados no perfil (credentials_enable_service, autofill.profile_enabled, autofill.credit_card_enabled)."
+                    : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para a Google."
+                    : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
+                    : "O gestor de palavras-passe e o preenchimento automático do Chromium estão desligados (lidos no perfil: credentials_enable_service, autofill.profile_enabled e autofill.credit_card_enabled a falso), sem a verificação de fugas da Google e sem o servidor de formulários dela (AutofillServerCommunication desligado no motor). "
+                      + "As palavras-passe, os cartões e os documentos ficam no cofre do Éteris, cifrado neste computador (AES-256-GCM, com a chave protegida pelo Windows): o cofre não faz nenhum pedido de rede e ainda não sincroniza.",
+                s.ChromiumPasswordsOff && s.LeakCheckOff && formsToGoogle.Count == 0),
             new("no-google", "No arranque, nada sai para a Google",
                 googleStillOn.Count == 0
                     ? "Nem o relógio de rede do Chromium (clients2.google.com) nem a verificação do «Modo IA» da pesquisa Google (www.google.com, com os cookies da Google): a Google só recebe um pedido quando pesquisa nela ou abre um site dela."
@@ -213,7 +221,8 @@ public static class PrivacyPage
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
             settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false),
-            Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn), PrivacyPreferences.LeakCheckOff);
+            Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn), PrivacyPreferences.LeakCheckOff,
+            PrivacyPreferences.ChromiumPasswordsOff);
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.

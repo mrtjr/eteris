@@ -23,6 +23,10 @@
   e programas de fidelidade. Números sempre mascarados; vê-los ou editá-los pede o Windows Hello. Validações com o
   dígito de controlo (cartão, IBAN, NIF, CPF) e os formatos de cada país. «Pedir o Windows Hello ao preencher
   pagamentos» ligado por omissão (desligá-lo também pede).
+- **«Apagar dados de navegação» › «Palavras-passe e preenchimento automático»**, desmarcada por omissão e com o
+  Windows Hello (recusado, nada se apaga). «Esquecer este site», «Triturar» e «Apagar ao fechar» não tocam nas
+  palavras-passe. **Promessa nova em `eteris://privacy/`: «As suas palavras-passe não vão para ninguém»**, verificada no
+  estado real (gestor do Chromium desligado no perfil, sem verificação de fugas nem servidor de formulários da Google).
 - **Nada dos formulários vai para a Google:** medido ao vivo, o motor mandava o utilizador e a palavra-passe (prefixo
   de um hash) de cada início de sessão enviado a `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas do
   Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de

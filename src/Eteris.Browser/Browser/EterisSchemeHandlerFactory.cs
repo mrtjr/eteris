@@ -278,12 +278,29 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
 
-    // Apaga histórico (no período escolhido), cookies e cache do perfil desta aba.
-    private static IResourceHandler ClearData(Uri uri, string url, IBrowser browser)
+    // Apaga histórico (no período escolhido), cookies e cache do perfil desta aba e, só com a caixa marcada e depois do
+    // Windows Hello, o cofre das palavras-passe e do preenchimento automático (nunca a partir da janela privada).
+    private IResourceHandler ClearData(Uri uri, string url, IBrowser browser)
     {
         if (!InternalPages.IsAuthorized(url)
             || ClearDataRequest.Parse(InternalPages.Query(uri, "what") ?? "", InternalPages.Query(uri, "range") ?? "", DateTime.Now) is not { } request)
             return Text("recusado");
+        if (request.Vault)
+        {
+            if (privateContext) return Text("recusado");
+            Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
+            var routes = Vault.VaultRoutes.Profile!;
+            var browserId = browser.Identifier;
+            // Primeiro a confirmação: recusada, nada se apaga (nem o histórico, nem os cookies).
+            return new VaultResourceHandler(async () => await routes.EraseVaultAsync(browserId).ConfigureAwait(false)
+                ? Vault.VaultReply.Text(ClearBrowsingData(request, browser))
+                : Vault.VaultReply.Text("Não foi confirmado com o Windows: nada foi apagado."));
+        }
+        return Text(ClearBrowsingData(request, browser));
+    }
+
+    private static string ClearBrowsingData(ClearDataRequest request, IBrowser browser)
+    {
         if (request.History)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
@@ -303,7 +320,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 catch (Exception) { }
             });
         }
-        return Text(request.Summary);
+        return request.Summary;
     }
 
     private static IResourceHandler BookmarksRoute(Uri uri, string url, int browserId)

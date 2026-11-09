@@ -340,7 +340,7 @@
           <label class="switch"><input type="checkbox" data-key="autoplay"><i></i></label>
         </div>
         <div class="item">
-          <div class="label"><b>Apagar cookies e dados de sites ao fechar</b><span>Cada vez que fecha o Éteris, os sites esquecem-no: termina as sessões iniciadas e apaga o que os sites guardaram.</span></div>
+          <div class="label"><b>Apagar cookies e dados de sites ao fechar</b><span>Cada vez que fecha o Éteris, os sites esquecem-no: termina as sessões iniciadas e apaga o que os sites guardaram. As palavras-passe e o preenchimento automático ficam.</span></div>
           <label class="switch"><input type="checkbox" data-key="clearOnExit"><i></i></label>
         </div>
         <div class="item">
@@ -356,6 +356,7 @@
             <label class="check"><input type="checkbox" value="history" checked> Histórico de navegação</label>
             <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões)</small></label>
             <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache</label>
+            <label class="check"><input type="checkbox" value="vault"> Palavras-passe e preenchimento automático <small>(tudo, desde sempre; pede o Windows Hello)</small></label>
             <div class="seg" id="clearRange" style="margin-top:12px">
               <button data-value="hour" class="on">Última hora</button>
               <button data-value="today">Hoje</button>
@@ -590,8 +591,10 @@
   clearProbe.addEventListener('load', () => {
     const text = clearProbe.contentDocument && clearProbe.contentDocument.body ? clearProbe.contentDocument.body.textContent.trim() : '';
     if (!text) return;
-    document.getElementById('clearResult').textContent = '✓ ' + text;
-    clearPanel.hidden = true;
+    // Recusado (sem o token, ou o Windows Hello do cofre não confirmado): sem ✓ e com as escolhas à vista.
+    const done = text !== 'recusado' && !text.startsWith('Não foi');
+    document.getElementById('clearResult').textContent = (done ? '✓ ' : '') + (text === 'recusado' ? 'Pedido recusado.' : text);
+    if (done) clearPanel.hidden = true;
   });
   document.getElementById('clearGo').addEventListener('click', () => {
     const what = [...clearPanel.querySelectorAll('input:checked')].map(i => i.value).join(',');

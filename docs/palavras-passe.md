@@ -1,7 +1,8 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5) e, do bloco B (interfaces de gestão), B1 a B3 feitos no ramo `sync`, por
-publicar** (os blocos C a E do desenho — preenchimento na página, sincronização e fecho — estão por fazer). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5) e bloco B (interfaces de gestão: B1–B4) feitos no ramo `sync`, por publicar**
+(os blocos C a E do desenho — preenchimento na página, sincronização e fecho — estão por fazer: por enquanto o cofre
+gere-se nas páginas, mas nada se preenche nem se oferece guardar nas páginas dos sites). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -22,7 +23,9 @@ Decisões do dono em vigor (as recomendadas no desenho):
 - **Nada dos formulários vai para a Google** (A0, abaixo): nem a verificação de fugas do Chromium nem o servidor de
   previsões de formulários.
 - **Os segredos aparecem o mínimo possível:** cifrados no disco campo a campo, decifrados só para usar, nunca em
-  registos nem diagnósticos.
+  registos nem diagnósticos, nunca no HTML inicial das páginas de gestão.
+- **As suas palavras-passe não vão para ninguém** (B4): promessa própria em `eteris://privacy/`, verificada no estado
+  real.
 
 ## A0. Nada dos formulários vai para a Google
 
@@ -368,3 +371,35 @@ fidelidade, todos «Guardado.»; nenhum número completo no HTML; «Mostrar» o 
 «Apagado [Anular]» → «Anular» → de volta; desligar o Hello dos pagamentos (Hello falso) → «Guardado»; `cofre.db` sem
 números, nomes nem moradas em claro. Capturas das quatro secções (`dark-pagamentos.png`, `dark-contacto.png`,
 `dark-documentos.png`, `dark-viagens.png`), sem nenhum número completo à vista.
+
+## B4. Apagar dados e a promessa nova
+
+`Browser/ClearDataRequest.cs`, `Browser/settings.html`, `Browser/EterisSchemeHandlerFactory.cs`,
+`Browser/PrivacyPage.cs`, `Shields/PrivacyPreferences.cs`, `MainWindow.Forget.cs`, `README.md`.
+
+- **«Apagar dados de navegação»** ganha a caixa **«Palavras-passe e preenchimento automático»**, desmarcada por omissão
+  («tudo, desde sempre; pede o Windows Hello»). Marcada, primeiro pede a reautenticação: recusada, **nada** se apaga
+  (nem o histórico nem os cookies) e o resultado diz «Não foi confirmado com o Windows: nada foi apagado.», sem ✓ e com
+  as escolhas à vista; confirmada, apaga o resto do que foi escolhido e o cofre inteiro (as cinco áreas, `EraseAll`
+  com `secure_delete` e `VACUUM`). Nunca a partir da janela privada.
+- **«Esquecer este site ao fechar», «Triturar» e «Apagar cookies e dados de sites ao fechar» não mexem no cofre**, e os
+  textos dizem-no («As palavras-passe guardadas ficam», «As palavras-passe e o preenchimento automático ficam»).
+- **Promessa nova em `eteris://privacy/`: «As suas palavras-passe não vão para ninguém»**, verificada no estado real:
+  as quatro preferências do gestor do Chromium (`credentials_enable_service`, `credentials_enable_autosignin`,
+  `autofill.profile_enabled`, `autofill.credit_card_enabled`) lidas de volta do perfil a falso
+  (`PrivacyPreferences.ChromiumPasswordsOff`), a verificação de fugas desligada (A0) e `AutofillServerCommunication`
+  no `disable-features` do motor; diz que o cofre está cifrado neste computador, não faz pedidos de rede e ainda não
+  sincroniza. Falha (✘) com o motivo se uma das três coisas não se verificar.
+- `README.md`: o gestor de palavras-passe e o preenchimento automático na lista do que o Éteris faz.
+
+Testes: `Vault/VaultClearDataTests` (a caixa só quando pedida; o resumo; a caixa desmarcada e os textos nas
+Definições; recusado sem ✓; apagar o cofre pede a reautenticação e, recusada, nada se apaga; esquecer e apagar ao fechar
+nunca chamam o apagar do cofre; a promessa cumprida e as três maneiras de falhar; as quatro preferências lidas de volta),
+`ClearDataTests`, `PrivacyPageTests`.
+
+Prova ao vivo (`pp\vivo\b4`, `pp\vivo\b4-registo.txt`; cópia do perfil de teste do B2, com seis palavras-passe
+inventadas): `eteris://privacy/` com «As suas palavras-passe não vão para ninguém» ✔ (`privacy-promessa.png`); com o
+Hello falso a recusar, «Apagar agora» com histórico, cache e a caixa nova → «Não foi confirmado com o Windows: nada foi
+apagado.» e as seis palavras-passe continuam lá; com o Hello falso a aceitar → «✓ Histórico e cache apagados ·
+palavras-passe e preenchimento automático também» e `eteris://passwords/` vazio (`passwords-vazio.png`). Captura da
+caixa nas Definições: `apagar-history-cache-vault.png`.

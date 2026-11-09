@@ -31,6 +31,15 @@ public static class PrivacyPreferences
 
     public static bool ThirdPartyCookiesBlocked { get; private set; }
 
+    // O gestor de palavras-passe e o preenchimento automático do Chromium (o Éteris tem o seu cofre): lidos de volta do
+    // perfil depois de aplicados (eteris://privacy/ › «As suas palavras-passe não vão para ninguém»).
+    public static readonly IReadOnlyList<string> ChromiumPasswordPreferences =
+        ["credentials_enable_service", "credentials_enable_autosignin", "autofill.profile_enabled", "autofill.credit_card_enabled"];
+
+    public static bool AreOff(IEnumerable<object?> values) => values.All(v => v is false);
+
+    public static bool ChromiumPasswordsOff { get; private set; }
+
     // password_manager::prefs::kPasswordLeakDetectionEnabled.
     public const string LeakCheckPreference = "profile.password_manager_leak_detection";
 
@@ -71,7 +80,9 @@ public static class PrivacyPreferences
         target.SetPreference(WebRtcPreference, EngineHardening.WebRtcPolicy, out _);
         var webRtc = IsWebRtcProtected(target.GetPreference(WebRtcPreference));
         var leakOff = IsLeakCheckOff(target.GetPreference(LeakCheckPreference));
+        var passwordsOff = AreOff(ChromiumPasswordPreferences.Select(target.GetPreference));
         if (context is not null) return;
+        ChromiumPasswordsOff = passwordsOff;
         ThirdPartyCookiesBlocked = cookies;
         WebRtcIpProtected = webRtc;
         LeakCheckOff = leakOff;

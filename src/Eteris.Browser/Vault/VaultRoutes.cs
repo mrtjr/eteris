@@ -423,6 +423,22 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
         catch (VaultUnavailableException) { }
     }
 
+    // «Apagar dados de navegação» › «Palavras-passe e preenchimento automático»: o cofre inteiro (as cinco áreas), depois
+    // da reautenticação. Os apagamentos à espera de «Anular» deixam de ter o que anular.
+    public async Task<bool> EraseVaultAsync(int browserId)
+    {
+        var window = await host.WindowAsync(browserId).ConfigureAwait(false);
+        if (!await gate.RequestAsync(window, ReauthPurpose.EraseVault, host.WhileInFront(browserId)).ConfigureAwait(false)) return false;
+        lock (_lock)
+        {
+            foreach (var pending in _pending.Values) pending.Timer.Dispose();
+            _pending.Clear();
+            _import = null;
+        }
+        vault.EraseAll();
+        return true;
+    }
+
     public void CommitPending()
     {
         List<string> tokens;

@@ -263,7 +263,7 @@ public partial class MainWindow
         SiteInfoForgetRow.Visibility = site is null || IsPrivate ? Visibility.Collapsed : Visibility.Visible;
         if (site is null) return;
         SiteInfoForgetToggle.IsChecked = AppData.IsForgetOnClose(site);
-        SiteInfoForgetHint.Text = $"Quando deixar de ter abas de {site} (fechá-las, ir para outro site ou sair do Éteris), apagam-se os cookies, o armazenamento, o histórico e as permissões.";
+        SiteInfoForgetHint.Text = $"Quando deixar de ter abas de {site} (fechá-las, ir para outro site ou sair do Éteris), apagam-se os cookies, o armazenamento, o histórico e as permissões. As palavras-passe guardadas ficam.";
     }
 
     private void SiteInfoForgetToggle_Click(object sender, RoutedEventArgs e)
