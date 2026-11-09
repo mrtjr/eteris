@@ -2,7 +2,9 @@ using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser.Tests;
 
-// O motor de composição do WPF arranca numa thread à parte e essa thread termina depois da 1.ª página.
+// O motor de composição do WPF arranca numa thread à parte e essa thread termina depois da 1.ª página. Arranca e para o
+// motor de propósito: corre sozinho, com os outros testes de janelas WPF.
+[Collection(WpfCollection.Name)]
 public class CompositionWarmupTests
 {
     [Fact]

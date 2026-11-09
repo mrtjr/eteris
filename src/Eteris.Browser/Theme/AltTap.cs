@@ -45,6 +45,15 @@ public sealed class AltTap
         return tap;
     }
 
+    // O menu do navegador fechou: os keyup das teclas que ele consumiu na página nunca chegam (o Chromium descarta-os
+    // depois de um keydown tratado pelo navegador), por isso o Alt que estava em baixo deixa de contar como premido.
+    public void Reset()
+    {
+        _armed = false;
+        _held = false;
+        PressedAtUtc = null;
+    }
+
     // Clique do rato, perda de foco: o gesto já não é «Alt sozinho».
     public void Cancel()
     {

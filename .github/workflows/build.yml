@@ -7,6 +7,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # Hoje leva 4 a 5 min: um bloqueio não pode comer as 6 h por omissão.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -16,4 +18,10 @@ jobs:
         run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
-      - run: dotnet test -c Release --no-build
+      # Um teste preso deixa um dump (5 min); o TRX guarda a duração de cada teste; se falhar, os resultados ficam no job.
+      - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults

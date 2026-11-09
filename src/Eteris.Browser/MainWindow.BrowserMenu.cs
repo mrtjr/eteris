@@ -112,6 +112,7 @@ public partial class MainWindow
             _browserMenu = null;
             _browserMenuButtons = [];
             _browserMenuOpenForPage = false;
+            _altTap.Reset();
             // Fechado sem Esc nem Alt+F (clique fora, mudança de aba, perda de ativação): se o teclado ficou preso no menu
             // que fechou, volta a quem o tinha. Com a janela (ou a camada) ativa, já; inativa, quando voltar a ser ativada
             // (sem roubar a ativação a outra janela).

@@ -12,29 +12,61 @@ public static class InstanceChannel
 
     private static string PipeName(string name) => name + ".pipe";
 
+    // O primeiro pipe é criado aqui, antes de devolver (menos de 1 ms), e fica logo à espera de ligação: quem chega a
+    // seguir já o encontra. Antes era criado dentro do Task.Run e, com o pool de threads ocupado, um envio feito nesse
+    // intervalo esgotava o prazo e perdia o link. A espera (ConnectNamedPipe) também começa aqui, e não no ciclo: um
+    // cliente que se liga, escreve e fecha antes de o servidor esperar faz o ConnectNamedPipe falhar (ERROR_NO_DATA) e
+    // a mensagem perdia-se, com o Send a dizer que entregou. Os seguintes são criados no ciclo, depois de cada mensagem.
+    // Se o primeiro não se puder criar já (o nome ainda ocupado), o ciclo tenta de novo como antes, sem deitar abaixo o
+    // arranque.
     public static IDisposable Listen(string name, Action<string[]> onArgs)
     {
         var stop = new CancellationTokenSource();
+        NamedPipeServerStream? first = null;
+        Task? firstConnection = null;
+        try
+        {
+            first = NewServer(name);
+            firstConnection = first.WaitForConnectionAsync(stop.Token);
+        }
+        catch (Exception)
+        {
+            first?.Dispose();
+            first = null;
+            firstConnection = null;
+        }
         _ = Task.Run(async () =>
         {
+            var next = first;
+            var nextConnection = firstConnection;
             while (!stop.IsCancellationRequested)
             {
                 try
                 {
-                    await using var server = new NamedPipeServerStream(PipeName(name), PipeDirection.In, 1,
-                        PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                    await server.WaitForConnectionAsync(stop.Token);
-                    using var reader = new StreamReader(server);
-                    var buffer = new char[MaxMessage];
-                    var length = await reader.ReadBlockAsync(buffer, stop.Token);
-                    if (JsonSerializer.Deserialize<string[]>(new string(buffer, 0, length)) is { } args) onArgs(args);
+                    var server = next ?? NewServer(name);
+                    var connection = nextConnection;
+                    next = null;
+                    nextConnection = null;
+                    await using (server)
+                    {
+                        await (connection ?? server.WaitForConnectionAsync(stop.Token));
+                        using var reader = new StreamReader(server);
+                        var buffer = new char[MaxMessage];
+                        var length = await reader.ReadBlockAsync(buffer, stop.Token);
+                        if (JsonSerializer.Deserialize<string[]>(new string(buffer, 0, length)) is { } args) onArgs(args);
+                    }
                 }
                 catch (OperationCanceledException) { return; }
                 catch (Exception) { await Task.Delay(100); }
             }
+            // Parado antes de o ciclo usar o primeiro pipe: fecha-o na mesma.
+            if (next is not null) await next.DisposeAsync();
         });
         return stop;
     }
+
+    private static NamedPipeServerStream NewServer(string name) => new(PipeName(name), PipeDirection.In, 1,
+        PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
     public static bool Send(string name, string[] args, int timeoutMs = 2000)
     {

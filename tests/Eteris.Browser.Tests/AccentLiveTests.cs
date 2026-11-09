@@ -9,17 +9,11 @@ namespace Eteris.Browser.Tests;
 
 // A «Cor do Éteris» muda ao vivo: o WPF congela os pincéis que servem de valor a Setters de estilos selados, por
 // isso o IrisBrush é substituído por um pincel animado (impossível de congelar) e lido sempre por DynamicResource.
+[Collection(WpfCollection.Name)]
 public class AccentLiveTests
 {
-    private static void OnSta(Action action)
-    {
-        Exception? error = null;
-        var thread = new Thread(() => { try { action(); } catch (Exception e) { error = e; } });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (error is not null) throw new Xunit.Sdk.XunitException(error.ToString());
-    }
+    private static void OnSta(Action action, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
+        => StaRunner.Run(action, nameof(AccentLiveTests) + "." + test);
 
     [Fact]
     public void RecoloredBrush_SurvivesASealedStyle_AndStillTakesNewColours()

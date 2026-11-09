@@ -25,10 +25,9 @@ public enum BrowserMenuKey
     PreviousField,
     // Atalho do Éteris: fecha o menu e corre.
     Shortcut,
-    // Vinda da página, consumida sem fazer nada (PgUp/PgDn, Espaço com modificadores…): nunca chega à página.
+    // Vinda da página, consumida sem fazer nada (PgUp/PgDn, Espaço com modificadores, Alt/Ctrl/Shift/Win sozinhos…):
+    // nunca chega à página.
     Ignore,
-    // Vinda da página e deixada passar: só os modificadores sozinhos (não fazem nada na página, e o «Alt sozinho» precisa deles).
-    PassToPage,
 }
 
 public static class BrowserMenuKeys
@@ -58,15 +57,14 @@ public static class BrowserMenuKeys
     }
 
     // Tecla premida com o foco Win32 ainda na página (thread do CEF) e o menu aberto: o que o menu usa é feito pelo menu,
-    // um atalho do Éteris fecha o menu e corre, e tudo o resto é consumido — as setas, o Esc, o Enter, o Espaço e as
-    // letras nunca chegam à página enquanto o menu está aberto (nem a rolam, nem param o carregamento, nem escrevem).
+    // um atalho do Éteris fecha o menu e corre, e tudo o resto é consumido — as setas, o Esc, o Enter, o Espaço, as
+    // letras e até os modificadores sozinhos (Alt, Ctrl, Shift, Win) nunca chegam à página enquanto o menu está aberto,
+    // como nos menus do Chrome, do Firefox e do Brave. O «Alt sozinho» vê o keydown na mesma (ShortcutFromPage), e o
+    // keyup que o Chromium descarta é compensado quando o menu fecha (AltTap.Reset).
     public static BrowserMenuKey FromPage(Key key, bool ctrl, bool shift, bool alt, bool isShortcut)
     {
         if (Resolve(key, ctrl, shift, alt) is var menu and not BrowserMenuKey.None) return menu;
-        if (isShortcut) return BrowserMenuKey.Shortcut;
-        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt
-            or Key.LWin or Key.RWin or Key.System) return BrowserMenuKey.PassToPage;
-        return BrowserMenuKey.Ignore;
+        return isShortcut ? BrowserMenuKey.Shortcut : BrowserMenuKey.Ignore;
     }
 
     // Próxima linha (índice em linhas ativas) para Previous/Next/First/Last, com volta ao início e ao fim.

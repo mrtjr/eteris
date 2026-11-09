@@ -5,7 +5,6 @@ using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Threading;
 
 namespace Eteris.Browser.Tests;
 
@@ -13,6 +12,7 @@ namespace Eteris.Browser.Tests;
 // Home, End e a seta para cima não mexiam; aberto com o foco na página, as setas rolavam a página e o Esc chegava-lhe.
 // Duas causas: (1) as teclas de um Popup sem pai não sobem até à janela (nem pelo PlacementTarget); (2) com o foco na
 // página, o foco do Win32 fica no Chromium e as teclas vão para ShortcutFromPage, que não sabia do menu.
+[Collection(WpfCollection.Name)]
 public class BrowserMenuKeysTests
 {
     [Theory]
@@ -49,6 +49,8 @@ public class BrowserMenuKeysTests
 
     // A decisão de ShortcutFromPage (thread do CEF) com o menu aberto: as setas, o Esc, o Enter e o Espaço nunca chegam à
     // página (o Esc fecha o menu, não para o carregamento); os atalhos do Éteris continuam a correr (fechando o menu).
+    // Os modificadores sozinhos também são consumidos (0.2.14): o Alt que fechava o menu chegava à página como keydown,
+    // e nos menus do Chrome, do Firefox e do Brave a página não recebe nada enquanto o menu está aberto.
     [Theory]
     [InlineData(Key.Escape, false, false, false, false, BrowserMenuKey.Close)]
     [InlineData(Key.F, false, false, true, true, BrowserMenuKey.Close)]
@@ -70,18 +72,36 @@ public class BrowserMenuKeysTests
     [InlineData(Key.Right, false, false, false, false, BrowserMenuKey.NextInGroup)]
     [InlineData(Key.D1, false, false, false, false, BrowserMenuKey.Ignore)]
     [InlineData(Key.Down, false, true, false, false, BrowserMenuKey.Ignore)]
-    [InlineData(Key.LeftAlt, false, false, true, false, BrowserMenuKey.PassToPage)]
-    [InlineData(Key.LeftCtrl, true, false, false, false, BrowserMenuKey.PassToPage)]
-    [InlineData(Key.RightShift, false, true, false, false, BrowserMenuKey.PassToPage)]
+    [InlineData(Key.LeftAlt, false, false, true, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.LeftCtrl, true, false, false, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.RightShift, false, true, false, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.LWin, false, false, false, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.System, false, false, true, false, BrowserMenuKey.Ignore)]
+    // AltGr (para o Windows, Ctrl da esquerda + Alt da direita) sozinho e AltGr+2 («@»): com o menu aberto nada escreve
+    // na página.
+    [InlineData(Key.LeftCtrl, true, false, true, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.RightAlt, true, false, true, false, BrowserMenuKey.Ignore)]
+    [InlineData(Key.D2, true, false, true, false, BrowserMenuKey.Ignore)]
     public void FromPage_WithMenuOpen_ConsumesMenuKeysAndRunsShortcuts(Key key, bool ctrl, bool shift, bool alt, bool isShortcut, BrowserMenuKey expected)
         => Assert.Equal(expected, BrowserMenuKeys.FromPage(key, ctrl, shift, alt, isShortcut));
 
+    // Com o menu aberto, nenhuma tecla vinda da página fica por decidir: ou é do menu, ou é um atalho, ou é consumida
+    // (ShortcutFromPage devolve sempre «tratada» com o menu aberto). Todas as teclas, com e sem Ctrl, Shift e Alt.
+    // Já não há decisão que deixe a tecla seguir para a página (era o PassToPage, dos modificadores sozinhos).
     [Fact]
-    public void FromPage_ArrowsEscEnterSpace_NeverPassToPage()
+    public void FromPage_WithMenuOpen_NothingReachesThePage()
     {
-        foreach (var key in new[] { Key.Up, Key.Down, Key.Left, Key.Right, Key.Home, Key.End, Key.Escape, Key.Enter, Key.Space, Key.PageUp, Key.PageDown, Key.Tab })
-            foreach (var shift in new[] { false, true })
-                Assert.NotEqual(BrowserMenuKey.PassToPage, BrowserMenuKeys.FromPage(key, false, shift, false, isShortcut: false));
+        Assert.DoesNotContain("PassToPage", Enum.GetNames<BrowserMenuKey>());
+        var keys = Enum.GetValues<Key>().Where(k => k != Key.None).Distinct();
+        foreach (var key in keys)
+            foreach (var ctrl in new[] { false, true })
+                foreach (var shift in new[] { false, true })
+                    foreach (var alt in new[] { false, true })
+                        foreach (var isShortcut in new[] { false, true })
+                        {
+                            var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, isShortcut);
+                            Assert.True(decision != BrowserMenuKey.None, $"{key} ctrl={ctrl} shift={shift} alt={alt} atalho={isShortcut}");
+                        }
     }
 
     [Theory]
@@ -240,6 +260,10 @@ public class BrowserMenuKeysTests
         Assert.Contains("private volatile bool _browserMenuOpenForPage;", menu);
         Assert.Contains("if (_browserMenuOpenForPage)", window);
         Assert.Contains("BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null)", window);
+        // Com o menu aberto nada passa para a página (nem os modificadores sozinhos), e o «Alt sozinho» é reposto
+        // quando o menu fecha: o Chromium descarta os keyup das teclas que o menu consumiu.
+        Assert.DoesNotContain("return false;", ShortcutFromPageMenuBranch(window));
+        Assert.Contains("_browserMenuOpenForPage = false;\n            _altTap.Reset();", menu.Replace("\r\n", "\n"));
         Assert.Contains("Deactivated += (_, _) => CloseBrowserMenu();", window);
         Assert.Contains("return;\n        CloseBrowserMenu();\n        OnActiveTabChanging();", window.Replace("\r\n", "\n"));
         Assert.Contains("other.CloseBrowserMenu();", File.ReadAllText(Path.Combine(src, "MainWindow.Private.cs")));
@@ -276,21 +300,19 @@ public class BrowserMenuKeysTests
         Assert.Contains("if (alt && !ctrl && !shift && key is Key.F or Key.E) return () => ToggleBrowserMenu(byKeyboard: true);", window);
     }
 
-    private static T OnSta<T>(Func<T> work)
+    private static T OnSta<T>(Func<T> work, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
+        => StaRunner.Run(work, nameof(BrowserMenuKeysTests) + "." + test);
+
+    // O bloco «if (_browserMenuOpenForPage) { … }» de ShortcutFromPage.
+    private static string ShortcutFromPageMenuBranch(string window)
     {
-        T result = default!;
-        Exception? error = null;
-        var thread = new Thread(() =>
-        {
-            try { result = work(); }
-            catch (Exception e) { error = e; }
-            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
-        if (error is not null) throw new Xunit.Sdk.XunitException(error.ToString());
-        return result;
+        var method = window.IndexOf("private bool ShortcutFromPage(", StringComparison.Ordinal);
+        Assert.True(method >= 0, "ShortcutFromPage não encontrado");
+        var start = window.IndexOf("if (_browserMenuOpenForPage)", method, StringComparison.Ordinal);
+        Assert.True(start >= 0, "ramo do menu não encontrado em ShortcutFromPage");
+        var end = window.IndexOf("if (shortcut is { } action)", start, StringComparison.Ordinal);
+        Assert.True(end > start, "fim do ramo do menu não encontrado em ShortcutFromPage");
+        return window[start..end];
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")

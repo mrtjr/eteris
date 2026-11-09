@@ -709,7 +709,7 @@ public partial class MainWindow : Window
         if (_browserMenuOpenForPage)
         {
             var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null);
-            if (decision == BrowserMenuKey.PassToPage) return false;
+            // Nenhuma tecla chega à página com o menu aberto, nem os modificadores sozinhos (como no Chrome).
             Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;
         }
