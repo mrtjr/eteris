@@ -21,7 +21,7 @@ public class PerfTuningTests
         Assert.All(PerfTuning.Tweaks.Where(t => t.Id.Contains('.')), t => Assert.DoesNotContain(PerfTuning.Tweaks, o => o.Id == t.Id.Split('.')[0]));
     }
 
-    // Fase 2: as funcionalidades do motor (E14, E15) ficam todas desligadas até ao seu A/B,
+    // Fase 2: as funcionalidades do motor (E14, E15) e a poupança de energia (E16) ficam todas desligadas até ao seu A/B,
     // marcadas como do motor e antes da 1.ª página; cada uma à espera do diagnóstico ou da decisão do plano.
     [Theory]
     [InlineData("e14.1", "D3/D5")]
@@ -35,6 +35,7 @@ public class PerfTuningTests
     [InlineData("e15.3", "D9")]
     [InlineData("e15.4", "D9")]
     [InlineData("e15.5", "D9")]
+    [InlineData("e16", "D-8")]
     public void PhaseTwo_IsOffUntilMeasured(string id, string waits)
     {
         var tweak = Assert.Single(PerfTuning.Tweaks, t => t.Id == id);
@@ -49,7 +50,7 @@ public class PerfTuningTests
     [Fact]
     public void EngineGroup_IsTheBackForwardCacheAndPhaseTwo()
         => Assert.Equal(
-            ["e7", "e14.1", "e14.2", "e14.3", "e14.4", "e14.5", "e14.6", "e15.1", "e15.2", "e15.3", "e15.4", "e15.5"],
+            ["e7", "e14.1", "e14.2", "e14.3", "e14.4", "e14.5", "e14.6", "e15.1", "e15.2", "e15.3", "e15.4", "e15.5", "e16"],
             PerfTuning.EngineIds);
 
     [Fact]

@@ -36,6 +36,8 @@ public enum PerfLayers
 //                                          «MAP <nome>.example|.test|.invalid|.localhost 127.0.0.1[:porta]».
 //   ETERIS_TEST_PRESSAO=1                  sinal simulado de pouca memória para o sono por pressão (ajuste e13,
 //                                          Tabs/MemoryPressure.cs), em vez de reservar ~25 GB (decisão D-16).
+//   ETERIS_TEST_ENERGIA=0|1|3              estado da poupança de energia do Chromium escrito no Local State com o ajuste
+//                                          e16 (Infrastructure/EnergySaver.cs): o passo A do E16 (3 contra 0, na tomada).
 //
 // Fora do caminho antes da 1.ª pintura (regra R-2 do plano do sandbox): sem as variáveis, a 1.ª consulta lê o ambiente
 // (nada no disco) e as seguintes são um campo estático; o HOST_RULES só acrescenta um argumento à linha de comandos do
@@ -46,12 +48,14 @@ public static class PerfDiagnostics
     public const string CountersVariable = "ETERIS_TEST_CONTADORES";
     public const string HostRulesVariable = "ETERIS_TEST_HOST_RULES";
     public const string PressureVariable = "ETERIS_TEST_PRESSAO";
+    public const string EnergyVariable = "ETERIS_TEST_ENERGIA";
 
     private static readonly Lazy<bool> Installed = new(() => DetectInstalled(AppContext.BaseDirectory));
     // Sem a variável não se olha sequer para o disco (a pasta da instalação): só a leitura do ambiente.
     private static readonly Lazy<PerfLayers> Pure = new(() => Read(PureVariable) is { } value ? ParsePure(value, Installed.Value) : PerfLayers.None);
     private static readonly Lazy<string?> Rules = new(() => Read(HostRulesVariable) is { } value ? ParseHostRules(value, Installed.Value) : null);
     private static readonly Lazy<bool> Pressure = new(() => Read(PressureVariable) is { } value && ParsePressure(value, Installed.Value));
+    private static readonly Lazy<int?> Energy = new(() => Read(EnergyVariable) is { } value ? ParseEnergy(value, Installed.Value) : null);
 
     private static string? Read(string variable)
         => Environment.GetEnvironmentVariable(variable) is { } value && !string.IsNullOrWhiteSpace(value) ? value : null;
@@ -73,6 +77,17 @@ public static class PerfDiagnostics
     public static bool SimulatedPressure => Pressure.Value;
 
     public static bool ParsePressure(string? value, bool installed) => !installed && value?.Trim() == "1";
+
+    // Estado da poupança de energia forçado para o passo A do E16 (só 0, 1 e 3: o 2 foi descontinuado no M121).
+    public static int? EnergyState => Energy.Value;
+
+    public static int? ParseEnergy(string? value, bool installed) => installed ? null : value?.Trim() switch
+    {
+        "0" => EnergySaver.Off,
+        "1" => EnergySaver.LowBattery,
+        "3" => EnergySaver.Always,
+        _ => null,
+    };
 
     public static PerfLayers ParsePure(string? value, bool installed)
     {

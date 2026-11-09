@@ -6,7 +6,7 @@ namespace Eteris.Browser.Infrastructure;
 //   BeforeFirstPaint mexe no caminho antes da 1.ª página (regra R-2 do sandbox): fica desligado por omissão até a rede de
 //                    segurança saber desligar os ajustes antes do sandbox (D-18, gancho Suspend);
 //   Waits            a decisão do dono ou o diagnóstico de que depende (D-4, D4…); com ela, desligado por omissão;
-//   Engine           muda a configuração do motor (Shields/EnginePerformance.cs): o grupo
+//   Engine           muda a configuração do motor (Shields/EnginePerformance.cs, ou o Local State no e16): o grupo
 //                    «motor» e o --eteris-sem-ajustes-motor ligam-nos e desligam-nos todos de uma vez.
 public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool BeforeFirstPaint = false, string? Waits = null,
                                bool Engine = false);
@@ -14,7 +14,7 @@ public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool Be
 // Interruptores dos ajustes de desempenho, para os desligar (ou ligar, nas medições) sem compilar de novo:
 //
 //   --eteris-sem-ajustes                  todos desligados (recuo; vale também numa instalação, por um atalho);
-//   --eteris-sem-ajustes-motor            só os do motor desligados (o grupo «motor»: E7, E14, E15), os outros como
+//   --eteris-sem-ajustes-motor            só os do motor desligados (o grupo «motor»: E7, E14, E15, E16), os outros como
 //                                         estiverem: o recuo de uma funcionalidade do motor que falhe, sem perder o resto;
 //   --eteris-ajustes=e3,-e5               liga o e3 e desliga o e5; também «tudo», «nada», «motor» (os do motor) e o
 //                                         número de uma experiência para as suas entradas («e14» = e14.1…e14.6);
@@ -44,7 +44,8 @@ public static class PerfTuning
     public const string ReadyNewTab = "e12";
     public const string SleepUnderPressure = "e13";
     // Fase 2 (sem recompilar o motor): funcionalidades que o Chrome estável recebe por variações e a nossa CEF nunca liga
-    // (Shields/EnginePerformance.cs, com o que faz cada uma, o risco, a medição e a prova no Chromium 156).
+    // (Shields/EnginePerformance.cs, com o que faz cada uma, o risco, a medição e a prova no Chromium 156), e a poupança de
+    // energia do próprio Chromium (Infrastructure/EnergySaver.cs).
     public const string NoDamageThrottle = "e14.1";
     public const string BeginFrameRunOrPost = "e14.2";
     public const string SingleVideoThrottle = "e14.3";
@@ -56,6 +57,7 @@ public static class PerfTuning
     public const string SpareCriticalPressure = "e15.3";
     public const string SortActiveSlotSpans = "e15.4";
     public const string V8SqrtLimits = "e15.5";
+    public const string EnergySaver = "e16";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -104,6 +106,8 @@ public static class PerfTuning
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
         new(V8SqrtLimits, "os limites do heap do V8 crescem pela raiz quadrada do tamanho (menos memória nas páginas grandes)",
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
+        new(EnergySaver, "a poupança de energia do próprio Chromium (tudo a 30 fps, despertares alinhados), com o estado escrito no Local State antes de o motor arrancar",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D-8", Engine: true),
     ];
 
     private static readonly Lazy<IReadOnlySet<string>> Resolved = new(()

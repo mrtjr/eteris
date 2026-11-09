@@ -99,11 +99,14 @@ public static class CefConfigurator
         }
         StartupTrace.Mark("definicoes");
         var dns = Data.Settings.Current.SecureDns;
-        Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.ApplySecureDns(
-            System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty)
+        // Na mesma escrita, a poupança de energia do Chromium (ajuste e16, Infrastructure/EnergySaver.cs; nulo sem ele).
+        var energySaver = EnergySaver.StateForStartup();
+        Shields.PrivacyPreferences.StartedWithSecureDns = LocalState.Apply(
+            System.IO.Path.Combine(AppPaths.Profile, "Local State"), Shields.SecureDns.ModeFor(dns), Shields.SecureDns.TemplateFor(dns) ?? string.Empty,
+            energySaver)
             && Shields.SecureDns.Providers.TryGetValue(dns, out var provider) ? provider.Name : null;
         Shields.PrivacyPreferences.SecureDnsTemplate = Shields.PrivacyPreferences.StartedWithSecureDns is null ? null : Shields.SecureDns.TemplateFor(dns);
-        StartupTrace.Mark("localstate");
+        StartupTrace.Mark("localstate", energySaver is { } state ? FormattableString.Invariant($"energia={state}") : null);
         var sandbox = SandboxEnabled ? SandboxInfo.Pointer : 0;
         var bootstrap = SandboxInfo.LaunchedByBootstrap ? Environment.ProcessPath : null;
         // Pelo bootstrap não há processo filho .NET (CefSharp.BrowserSubprocess): o DependencyChecker procurá-lo-ia.

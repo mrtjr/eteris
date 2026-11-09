@@ -154,7 +154,8 @@ public class PerfDiagnosticsTests
     [Fact]
     public void DiagnosticVariables_AreReadOnlyThroughPerfDiagnostics()
     {
-        string[] names = [PerfDiagnostics.PureVariable, PerfDiagnostics.CountersVariable, PerfDiagnostics.HostRulesVariable];
+        string[] names = [PerfDiagnostics.PureVariable, PerfDiagnostics.CountersVariable, PerfDiagnostics.HostRulesVariable, PerfDiagnostics.PressureVariable,
+            PerfDiagnostics.EnergyVariable];
         var readers = SourceFiles()
             .Where(f => names.Any(n => File.ReadAllText(f).Contains('"' + n + '"', StringComparison.Ordinal)))
             .Select(f => Path.GetFileName(f))

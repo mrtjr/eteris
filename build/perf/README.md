@@ -96,10 +96,11 @@ Os nomes `*.eteris-teste.example` vão para 127.0.0.1: no Éteris por `ETERIS_TE
 | `ETERIS_TRACE_STARTUP=1` ou `=<caminho>` | rastro das fases do arranque e da memória; com as linhas `filho` (hora de criação de cada processo filho; o 1.º renderer = `renderer.processo`, D8) | `Infrastructure/StartupTrace.cs`, `StartupTrace.Children.cs` |
 | `ETERIS_TRACE_GC_AT=20,60` | GC completo antes das fotografias da memória desses segundos | idem |
 | `ETERIS_TEST_PRESSAO=1` | pouca memória simulada para o sono por pressão (E13, com `ETERIS_TEST_AJUSTES=e13`): uma aba adormece a cada 15 s, a usada há mais tempo; a pressão real (~25 GB reservados) só com a decisão D-16 | `Infrastructure/PerfDiagnostics.cs`, `Tabs/MemoryPressure.cs` |
-| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`, `motor`, `e14`) | liga e desliga os ajustes de desempenho das fases 1 e 2 (braços A/B com o mesmo binário); `motor` são os do motor (E7, E14, E15) e `e14` as entradas e14.1…e14.6; o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, `--eteris-sem-ajustes-motor` desliga só os do motor e `--eteris-sem-ajustes` desliga todos (os dois valem também numa instalação: são o recuo) | `Infrastructure/PerfTuning.cs` |
+| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`, `motor`, `e14`) | liga e desliga os ajustes de desempenho das fases 1 e 2 (braços A/B com o mesmo binário); `motor` são os do motor (E7, E14, E15, E16) e `e14` as entradas e14.1…e14.6; o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, `--eteris-sem-ajustes-motor` desliga só os do motor e `--eteris-sem-ajustes` desliga todos (os dois valem também numa instalação: são o recuo) | `Infrastructure/PerfTuning.cs` |
+| `ETERIS_TEST_ENERGIA=0`, `=1` ou `=3` | com o ajuste e16, o estado da poupança de energia do Chromium escrito no Local State (passo A do E16: 3 contra 0, na tomada); sem a variável, o e16 escreve 1 («com bateria baixa») | `Infrastructure/PerfDiagnostics.cs`, `Infrastructure/EnergySaver.cs` |
 
-`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`, `ETERIS_TEST_HOST_RULES`, `ETERIS_TEST_PRESSAO` e `ETERIS_TEST_AJUSTES`
-são inertes numa instalação. O contador
+`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`, `ETERIS_TEST_HOST_RULES`, `ETERIS_TEST_PRESSAO`, `ETERIS_TEST_ENERGIA` e
+`ETERIS_TEST_AJUSTES` são inertes numa instalação. O contador
 `wpf.lotes` ouve o `MediaContext.CommittingBatch` interno do WPF, nunca o `CompositionTarget.Rendering` (um ouvinte
 nesse evento obriga o WPF a desenhar todos os fotogramas e estragaria a prova). Se uma versão do WPF não tiver o evento,
 o ficheiro diz `wpf.lotes=indisponivel`.
@@ -241,7 +242,7 @@ no popup do Escudo (a decisão é pelo site de topo). Brave com os Escudos ligad
 Resultados em `resultados\abas\<etiqueta>.total.txt` (linha `TOTAL`: capturas, fotogramas errados por tipo, latência da
 tecla à página à vista). Capturas em que a janela perdeu o primeiro plano são descartadas.
 
-## Fase 2 — funcionalidades do motor (E14, E15)
+## Fase 2 — funcionalidades do motor (E14, E15) e poupança de energia (E16)
 
 A nossa CEF compila com `is_official_build`, que força `disable_fieldtrial_testing_config`: tudo o que o Chrome estável
 liga por variações (Finch) fica desligado no Éteris. A fase 2 liga-as **uma de cada vez**, sem recompilar, pela lista
@@ -271,10 +272,16 @@ e confirma-se em `chrome://gpu` / `chrome://version` (com `ETERIS_TEST_DEVTOOLS_
 | `e15.3` | `SpareRPHUseCriticalMemoryPressure` | o renderer de reserva só cede à pressão crítica | o mesmo, ao contrário | idem |
 | `e15.4` | `PartitionAllocSortActiveSlotSpans` | o PartitionAlloc ordena os blocos ativos ao purgar (o `PartitionAllocMemoryReclaimer` do plano já está ligado na 156; os braços do estudo só diferem nisto) | CPU a mais em cada purga | D9 (PartitionAlloc por renderer) em C3/C5; só se o D9 mostrar peso |
 | `e15.5` | `V8Flag_sqrt_allocation_limits` | os limites do heap do V8 crescem pela raiz quadrada (os fatores do estudo são os do código) | mais recolhas de lixo nas páginas grandes | D9 (V8 por renderer), Speedometer; só se o D9 mostrar peso |
+| `e16` | `performance_tuning.battery_saver_mode.state` no Local State | a poupança de energia do Chromium: 30 fps, despertares alinhados, sem pré-carregamento | nunca provado na CEF; 30 fps vê-se na rolagem | **passo A**: `ETERIS_TEST_AJUSTES=e16` com `ETERIS_TEST_ENERGIA=3` contra `=0`, na tomada: `fps.html` a 30 contra 60 fps no título e −30% de CPU de desenho |
 
 Critérios (plano): E14 entra se baixar a soma ≥ 0,5 p.p. sem regressão de fps, 0 fotogramas errados (T1/T6, miniaturas,
 ecrã dividido) e 0 falhas da GPU num dia de uso; E15 com −≥ 1 MB por renderer ou −≥ 4 MB de GPU por aba WebGL escondida.
 Cada uma recua tirando o ajuste (`--eteris-ajustes=-e14.1`), e todas com `--eteris-sem-ajustes-motor`.
+
+O E16 só tem o passo A: se a CEF não cair para 30 fps com o estado 3, a ideia cai e fica o P5 (patch, fase 3). Se cair,
+a definição «Poupar energia na bateria» e o padrão vêm com a D-8. Mudar o estado em tempo real (tomada ↔ bateria) pedia o
+gestor de preferências globais da CEF, que o CefSharp 156 não expõe (só o `IRequestContext.SetPreference`, do perfil):
+fica o valor do arranque. Sem o ajuste, uma chave escrita antes sai do Local State na mesma escrita do DNS cifrado.
 
 ## Resultados
 
