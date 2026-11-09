@@ -12,7 +12,7 @@ nossa marca.
 
 - Navegador: **Éteris** (Éter + Íris — luz celestial + mensageira/arco-íris).
 - Motor de busca: **Atenix** (Atena + Nike — sabedoria + vitória).
-- Pasta do projeto: `C:\Users\Júnior\Desktop\navegador` (repositório git próprio).
+- Pasta do projeto: `%USERPROFILE%\Desktop\navegador` (repositório git próprio).
 
 Referências de produto: Chrome (omnibox, abas), Firefox (privacidade por
 defeito), Brave (Shields com contador, bloqueio em Rust). **São as únicas
