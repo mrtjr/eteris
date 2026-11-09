@@ -2,6 +2,37 @@
 
 ## Por publicar
 
+## 0.2.12 — 2026-11-08
+
+Uma versão de correções no **menu do navegador**: volta a ler-se (o título, o subtítulo e o «Zoom» saíam em
+quadrados) e **funciona pelo teclado como no Chrome, no Firefox e no Brave** — `Alt`+`F` ou `Alt`+`E` abrem-no,
+as setas, `Home`, `End` e a inicial escolhem a linha, `Enter` ativa, `Esc` fecha e devolve o foco, e as teclas já não
+chegam à página. Nas Definições, a secção escolhida na navegação fica realçada.
+
+### Menu do navegador
+- O título «Éteris», o subtítulo e «Zoom» deixam de sair em quadrados: o menu, criado em código e sem pai, herdava a
+  fonte de ícones do botão «⋯»; passa a fixar a fonte da interface, também no popup de mudar o nome do grupo e nos
+  menus de contexto escuros.
+- O teclado volta a funcionar no menu: `Esc`, `Alt`+`F` e `Alt`+`E` fecham-no e devolvem o foco a quem o tinha
+  (página, barra de endereço ou «⋯»); `↑`, `↓`, `Home` e `End` movem entre as linhas (com volta ao início e ao fim);
+  `Enter` e `Espaço` ativam; `Tab` e `Shift`+`Tab` percorrem; uma letra salta para a linha com essa inicial; `←` e `→`
+  só andam dentro da linha do zoom, que `↑` e `↓` contam uma vez. Com o foco na página, as teclas do menu deixavam de chegar à janela e iam para a página (as setas
+  rolavam-na): agora ficam no menu e nunca chegam à página.
+- Como no Chrome, no Firefox e no Brave: aberto pelo rato, nenhuma linha fica realçada até se usar o teclado, e o rato
+  que se mexe leva o realce consigo (uma só seleção).
+- O menu fecha ao perder a ativação (`Alt`+`Tab`, clique noutra aplicação), ao mudar de aba ou fechar a aba e ao abrir outra
+  janela, e o teclado volta a quem o tinha — nunca a uma página escondida.
+- Folha de atalhos (`F1`) aberta a partir da página: fica com o teclado e as setas já não rolam a página.
+- Leitor de ecrã: o menu anuncia-se como «Menu do Éteris», cada linha como item de menu com a posição («2 de 17»), e a
+  lista da folha de atalhos chama-se «Atalhos de teclado».
+
+### Definições
+- O item clicado na navegação fica realçado até se rolar a página à mão (as últimas secções são curtas e o realce pela
+  posição escolhia outra); também com `#âncora`. O realce solta-se quando uma rolagem tira a secção da vista (`Tab`,
+  Procurar na página), segue o foco do teclado e já não se perde com um clique num botão ou interruptor.
+- Na pesquisa, o realce só conta as secções à vista e, no fim da página, realça a última delas.
+- O item realçado é anunciado ao leitor de ecrã como a secção atual (`aria-current`).
+
 ## 0.2.11 — 2026-11-08
 
 Uma versão de privacidade: **no arranque, nada sai para a Google** — o «relógio de rede» do Chromium e a pergunta

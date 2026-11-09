@@ -13,6 +13,9 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.12
+        new("⌨", "Menu do Éteris pelo teclado", "Como no Chrome, no Firefox e no Brave: setas, Home, End e a inicial escolhem a linha, Enter ativa, Esc fecha e devolve o foco, e as teclas já não chegam à página.", "Alt+F · Alt+E"),
+        new("☰", "Menu legível", "O título, o subtítulo e o «Zoom» do menu já não aparecem em quadrados, e nas Definições a secção escolhida na navegação fica realçada."),
         // 0.2.11
         new("🔒", "No arranque, nada sai para a Google", "Abrir o Éteris já não pede a hora à Google nem pergunta pelo «Modo IA»: 0 pedidos no arranque, medido com um proxy, e a promessa à vista em eteris://privacy/."),
         new("🛡", "Escudo também nos service workers", "Os pedidos sem aba — service workers, shared workers e extensões — passam pelo Escudo como os da página e contam no Escudo do site."),

@@ -1,6 +1,6 @@
 ﻿# -Sandbox (docs/sandbox.md, passo D6): processos das paginas isolados. Precisa do feed local do CefSharp com o patch v2
 # (build/cefsharp/pack-local.ps1) e da DLL cliente (build/sandbox/client/build.cmd); sem -Sandbox, nada muda.
-param([string]$Version = "0.2.11", [switch]$Sandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "")
+param([string]$Version = "0.2.12", [switch]$Sandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
