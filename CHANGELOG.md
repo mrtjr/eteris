@@ -1,12 +1,115 @@
 # Alterações
 
-## Por publicar
+## 0.2.13 — 2026-11-09
+
+A versão do **login completo**. Com **«Entrar com o Google»** (opcional e desligado por omissão), os favoritos, os
+Espaços, as definições, as decisões do Escudo, as notas e as palavras-passe passam de um computador para o outro, como
+no Chrome, no Firefox e no Brave — mas **cifrados de ponta a ponta no computador** antes de irem para a pasta oculta da
+aplicação no Google Drive do utilizador: a chave nunca sai dos seus aparelhos e a Google só guarda ficheiros que não
+consegue ler. Um computador novo entra pela aprovação noutro computador (o mesmo código nos dois ecrãs) ou pelo código
+de recuperação; nas Definições há a lista de aparelhos, «Sair» e «Apagar os meus dados do Éteris no Google Drive».
+Chega também o **gestor de palavras-passe e preenchimento automático** do próprio Éteris: guardar, preencher, gerar,
+importar (Chrome, Brave, Firefox, Bitwarden, 1Password) e exportar palavras-passe; pagamentos (nunca o código de
+segurança), informações de contacto, documentos de identificação e viagens; o Windows Hello para ver, copiar e
+exportar. E fica cortado um pedido que o motor fazia à Google sempre que se entrava num site.
+
+### Privacidade
+- **Para o Google Drive só vai alguma coisa se ligar a sincronização.** Por omissão está desligada e nada muda: no
+  arranque continuam a sair 0 pedidos para a Google (a promessa da 0.2.11). Sem `google-oauth.json` na instalação, a
+  sincronização fica «indisponível nesta compilação» e nada é pedido à Google.
+- **O que vai, com ela ligada:** favoritos, Espaços (nome, cor, emoji e ordem — não as abas), as definições que fazem
+  sentido noutro computador, as decisões do Escudo por site e as notas; e, por omissão, palavras-passe, sites onde
+  nunca guardar, informações de contacto e viagens. **Pagamentos e Documentos de identificação ficam desligados por
+  omissão** e ligá-los pede o Windows Hello. Cada linha desliga-se em Definições › Sincronização › «O que passa entre
+  PCs». **Não vão:** histórico, abas abertas, cookies, chaves de acesso, zoom e permissões dos sites.
+- **Tudo é cifrado no computador antes de sair** (AES-256-GCM), e o que vem do cofre leva uma segunda cifra própria
+  por registo. A chave fica só nos seus aparelhos — nem a Google nem o Éteris a têm; sem o código de recuperação e sem
+  outro computador ligado, a cópia no Drive não se recupera. O Éteris só pede acesso à pasta oculta da aplicação
+  (`drive.appdata`): não vê nem toca nos outros ficheiros do seu Drive.
+- **O que a Google vê:** que a sua conta autorizou o Éteris, quando há pedidos (hora e endereço IP), quantos ficheiros
+  há, com nomes opacos, e o tamanho aproximado de cada um; nunca o conteúdo. O Éteris pede à Google o nome e o e-mail
+  da conta, uma vez depois de entrar, para os mostrar no menu (ficam cifrados neste computador). Com a sincronização
+  ligada, a 1.ª ronda sai 30 s depois de abrir, e `eteris://privacy/` diz tudo o que sai e quando. O Éteris não tem
+  servidor: não recebe nada.
+- **Sair e apagar:** «Sair» revoga a sessão Google; «Apagar os meus dados do Éteris no Google Drive» apaga os ficheiros
+  da pasta da aplicação; o acesso também se retira em *myaccount.google.com/permissions*.
+- **O gestor de palavras-passe nunca envia nada à Google** (nem a ninguém): não faz pedidos de rede, o cofre está
+  cifrado neste computador (AES-256-GCM, chave protegida pelo Windows) e o gestor do Chromium continua desligado.
+  Importar e exportar são ficheiros locais. Só a sincronização, se a ligar, leva o cofre — cifrado como acima. Promessa
+  nova em `eteris://privacy/`: «As suas palavras-passe não vão para ninguém», verificada no estado real.
+- **Cortado: o motor mandava à Google cada início de sessão.** Medido com um proxy: ao enviar um formulário de início
+  de sessão, o Chromium mandava o utilizador e a palavra-passe (um prefixo do hash dos dois) a
+  `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas corria mesmo com o gestor dele desligado. Desligada
+  no perfil; o servidor de previsões de formulários (`content-autofill.googleapis.com`) fica também cortado no motor.
+  Depois: 0 pedidos (`docs/paridade.md`, secção 7).
+- O isolamento das páginas (sandbox) continua desligado nesta versão.
+
+### Sincronização entre computadores («Entrar com o Google»)
+- **Login completo:** entra-se com a conta Google no navegador do sistema e os **favoritos, Espaços (nome, cor, emoji
+  e ordem), definições que viajam, decisões do Escudo por site (desligado, modo estrito, elementos escondidos,
+  bloqueios por site, exceções ao HTTPS primeiro) e notas** passam de um computador para o outro, como no Chrome, no
+  Firefox e no Brave — mas **sempre cifrados de ponta a ponta**: os dados vão para a pasta oculta da aplicação no
+  Google Drive do utilizador (âmbito `drive.appdata`), a chave nunca sai dos aparelhos e a Google só vê ficheiros
+  cifrados, os tamanhos e as horas. As palavras-passe e o preenchimento passam também, com uma segunda cifra (ver
+  «Palavras-passe e preenchimento automático»). Histórico, abas abertas, cookies e chaves de acesso não sincronizam.
+- **Primeiro computador:** a conta cria-se sozinha e aparece o **código de recuperação** com «Copiar» e «Já guardei» e
+  o aviso de que, sem ele e sem outro computador, os dados na nuvem não se recuperam.
+- **Computador seguinte:** «Aprovar noutro computador» (este mostra um código; o outro mostra o pedido com o nome do
+  computador e o mesmo código, no menu da conta e nas Definições, e aprova-se lá) ou «Usar o código de recuperação».
+  Os dados juntam-se sem se perder nada: o que só existia nesse computador também sobe.
+- **Quando:** 30 s depois de abrir (só com a sincronização ligada), 10 s depois de uma alteração, de 10 em 10 minutos
+  e em «Sincronizar agora»; sem rede, volta a tentar sozinho com espera crescente. O estado está nas Definições
+  («Sincronizado há 2 min», «A sincronizar…», o erro) e na linha da conta do menu.
+- **Aparelhos:** lista nas Definições com «Remover» — troca as chaves (código de recuperação novo), os outros
+  computadores continuam sozinhos e o removido deixa de ler e escrever.
+- **«Sair»** para a sincronização neste computador, apaga e revoga a sessão Google e, se se escolher, apaga também a
+  chave deste computador. **«Apagar os meus dados do Éteris no Google Drive»** apaga os ficheiros da pasta da
+  aplicação (com confirmação), sem sair da conta. A sincronização fica desligada (gravado no disco) **antes** de se
+  apagar o primeiro ficheiro: se o Éteris fechar a meio, ao abrir continua desligada, nada volta a ser enviado e o
+  apagar acaba sozinho («Ligar outra vez» também o acaba primeiro); uma ronda que estava a correr já não grava nem
+  envia depois do apagar; «A apagar os dados do Éteris do Google Drive…» fica à vista enquanto corre. Se o apagar
+  não acabar (sem rede, sessão da Google acabada ou um erro inesperado), as Definições e o menu dizem porquê, com
+  **«Tentar de novo»**, em vez de ficarem em «A apagar…»; «Ligar outra vez» passa a **«Ligar sem acabar de apagar»**
+  (o que ficou no Drive fica lá), para nunca ficar preso. As «cópias em conflito» que um cliente de nuvem deixe na
+  pasta do Éteris («keys (1)») também saem, e uma entrada (com o código ou com a chave guardada) que esteja a meio
+  quando se carrega em «Apagar…» já não volta a ligar a sincronização nem a gravar a chave.
+- A secção Sincronização e a conta no menu deixam de estar atrás da opção experimental: aparecem sempre que a
+  compilação tem o identificador da aplicação Google (sem ele: «indisponível nesta compilação»).
+- `eteris://privacy/`: «No arranque, nada sai para a Google» continua verdadeira por omissão e, com a sincronização
+  ligada, diz a exceção escolhida (só os pedidos da sincronização, cifrados, para o seu Drive, e quando).
+- Publicação: `build/publish.ps1 -GoogleOAuthJson <ficheiro>` põe o identificador da aplicação Google na instalação
+  (verificado; nunca no repositório); sem ele publica sem login e avisa.
+- **Mais seguro ao remover um aparelho:** antes de trocar a chave faz uma ronda completa e os outros computadores
+  voltam a pôr na conta nova o que tinham mudado, por isso nada do que já tinham enviado se perde; a troca resiste a
+  uma falha de rede a meio (acaba na ronda seguinte); o aparelho removido não consegue desviar os outros para uma conta
+  dele, e só recebem a chave nova os aparelhos que estavam na lista. «Gerar um código de recuperação novo» nas
+  Definições.
+- **Parar nunca apaga a chave:** dados apagados noutro aparelho, um registo de chaves danificado ou entrar com outra
+  conta Google param (ou põem em pausa) a sincronização sem apagar a chave deste computador; de volta à conta certa,
+  continua sem código.
+- **Uma leitura que falha não apaga nada** nos outros computadores (favoritos, Escudo, notas ou Espaços que não se
+  conseguiram ler ficam de fora dessa ronda).
+- **Janela privada:** desligar o Escudo num site, o modo estrito e esconder um elemento ficam só nessa sessão privada
+  (não vão para o perfil nem sincronizam), como no Chrome, no Firefox e no Brave.
+- **Autorização da Google retirada ou expirada:** «Sincronização em pausa: entre outra vez» no menu e «Entrar outra
+  vez» nas Definições, em vez de tentar para sempre.
+- **Pedidos de computadores novos:** respondidos só quando abre o menu (⋯) ou com a secção Sincronização à vista (que
+  agora os mostra sem recarregar); dois computadores ligados a responder ao mesmo pedido já não o fazem falhar.
+- **Definições › Sincronização mais fáceis de usar pelo teclado e com leitor de ecrã:** os pedidos e a lista de
+  aparelhos já não perdem o foco a cada atualização; «Remover» anuncia a confirmação; as mensagens são anunciadas;
+  depois de cada ação o foco vai para o que apareceu; «Escolher ficheiro…» é um botão. Um código de recuperação com uma
+  gralha deixa tentar outra vez sem o escrever de novo. «Apagar…» e «Remover» não se confirmam com um duplo clique, e
+  «Apagar…» tem «Cancelar». «Sair» com «apagar a chave» pede confirmação se o código ainda não foi guardado. Quem perdeu
+  o código e não tem outro computador vê a saída («apagar os dados do Éteris no Drive e começar de novo»).
+- `eteris://privacy/`: a exceção da sincronização diz tudo o que sai para a Google (o menu ⋯, a renovação da sessão, o
+  nome e o e-mail da conta e as ações que pede) e aparece também com sessão Google e a sincronização desligada; com ela
+  desligada, abrir o menu já não pede nada à Google.
 
 ### Palavras-passe e preenchimento automático
 - **Canal do gestor com as páginas, sem deixar rasto** (`docs/palavras-passe.md`, C1): o script do gestor corre num
   mundo isolado de cada página `http(s)` (a página não o vê nem à ligação com o Éteris), fala com o Éteris por
   mensagens validadas, nunca escreve na página por si e não usa o `Runtime.enable` que os anti-robôs procuram (medido:
-  0 deteções, com controlo positivo). Ainda sem nada visível: a lista de sugestões chega com as tarefas seguintes.
+  0 deteções, com controlo positivo).
 - **Classificador de formulários** (C2): reconhece inícios de sessão, criação de conta, mudança de palavra-passe,
   códigos de uma utilização (nunca se guardam), moradas de Portugal e do Brasil, cartões (o CVC só para nunca o tocar),
   IBAN, NIF/CPF, documentos e matrícula/placa, em português, inglês e espanhol, também em campos soltos, raízes sombra
@@ -82,7 +185,7 @@
   Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de
   formulários da Google (`content-autofill.googleapis.com`) fica também cortado no motor. `eteris://privacy/` › «Nada
   sai do computador sem um pedido seu» diz os dois e verifica-os no estado real (`docs/palavras-passe.md`).
-- **Gestor de palavras-passe próprio, base local** (ainda sem interface; `docs/palavras-passe.md`, tarefas A1–A5):
+- **Gestor de palavras-passe próprio, base local** (`docs/palavras-passe.md`, A1–A5):
   cofre `cofre.db` com cada item cifrado em AES-256-GCM (metadados e segredo em separado) e a chave protegida pela DPAPI
   do Windows, aberto só quando é preciso (o arranque não muda); palavras-passe, cartões (nunca o código de segurança),
   IBAN, contactos, documentos de identificação (passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF) e
@@ -92,67 +195,6 @@
   pede sempre); importar CSV do Chrome, Brave, Firefox, Bitwarden e 1Password e exportar no formato do Chrome; copiar
   um segredo fica fora do histórico da área de transferência (Win+V) e da nuvem e é limpo ao fim de 60 s; com um
   segredo à vista, o Éteris sai das capturas de ecrã.
-
-### Sincronização entre computadores («Entrar com o Google»)
-- **Login completo:** entra-se com a conta Google no navegador do sistema e os **favoritos, Espaços (nome, cor, emoji
-  e ordem), definições que viajam, decisões do Escudo por site (desligado, modo estrito, elementos escondidos,
-  bloqueios por site, exceções ao HTTPS primeiro) e notas** passam de um computador para o outro, como no Chrome, no
-  Firefox e no Brave — mas **sempre cifrados de ponta a ponta**: os dados vão para a pasta oculta da aplicação no
-  Google Drive do utilizador (âmbito `drive.appdata`), a chave nunca sai dos aparelhos e a Google só vê ficheiros
-  cifrados, os tamanhos e as horas. Histórico, abas abertas, cookies e palavras-passe (o cofre novo ainda fica só no computador) não
-  sincronizam.
-- **Primeiro computador:** a conta cria-se sozinha e aparece o **código de recuperação** com «Copiar» e «Já guardei» e
-  o aviso de que, sem ele e sem outro computador, os dados na nuvem não se recuperam.
-- **Computador seguinte:** «Aprovar noutro computador» (este mostra um código; o outro mostra o pedido com o nome do
-  computador e o mesmo código, no menu da conta e nas Definições, e aprova-se lá) ou «Usar o código de recuperação».
-  Os dados juntam-se sem se perder nada: o que só existia nesse computador também sobe.
-- **Quando:** 30 s depois de abrir (só com a sincronização ligada), 10 s depois de uma alteração, de 10 em 10 minutos
-  e em «Sincronizar agora»; sem rede, volta a tentar sozinho com espera crescente. O estado está nas Definições
-  («Sincronizado há 2 min», «A sincronizar…», o erro) e na linha da conta do menu.
-- **Aparelhos:** lista nas Definições com «Remover» — troca as chaves (código de recuperação novo), os outros
-  computadores continuam sozinhos e o removido deixa de ler e escrever.
-- **«Sair»** para a sincronização neste computador, apaga e revoga a sessão Google e, se se escolher, apaga também a
-  chave deste computador. **«Apagar os meus dados do Éteris no Google Drive»** apaga os ficheiros da pasta da
-  aplicação (com confirmação), sem sair da conta. A sincronização fica desligada (gravado no disco) **antes** de se
-  apagar o primeiro ficheiro: se o Éteris fechar a meio, ao abrir continua desligada, nada volta a ser enviado e o
-  apagar acaba sozinho («Ligar outra vez» também o acaba primeiro); uma ronda que estava a correr já não grava nem
-  envia depois do apagar; «A apagar os dados do Éteris do Google Drive…» fica à vista enquanto corre. Se o apagar
-  não acabar (sem rede, sessão da Google acabada ou um erro inesperado), as Definições e o menu dizem porquê, com
-  **«Tentar de novo»**, em vez de ficarem em «A apagar…»; «Ligar outra vez» passa a **«Ligar sem acabar de apagar»**
-  (o que ficou no Drive fica lá), para nunca ficar preso. As «cópias em conflito» que um cliente de nuvem deixe na
-  pasta do Éteris («keys (1)») também saem, e uma entrada (com o código ou com a chave guardada) que esteja a meio
-  quando se carrega em «Apagar…» já não volta a ligar a sincronização nem a gravar a chave.
-- A secção Sincronização e a conta no menu deixam de estar atrás da opção experimental: aparecem sempre que a
-  compilação tem o identificador da aplicação Google (sem ele: «indisponível nesta compilação»).
-- `eteris://privacy/`: «No arranque, nada sai para a Google» continua verdadeira por omissão e, com a sincronização
-  ligada, diz a exceção escolhida (só os pedidos da sincronização, cifrados, para o seu Drive, e quando).
-- Publicação: `build/publish.ps1 -GoogleOAuthJson <ficheiro>` põe o identificador da aplicação Google na instalação
-  (verificado; nunca no repositório); sem ele publica sem login e avisa.
-- **Mais seguro ao remover um aparelho:** antes de trocar a chave faz uma ronda completa e os outros computadores
-  voltam a pôr na conta nova o que tinham mudado, por isso nada do que já tinham enviado se perde; a troca resiste a
-  uma falha de rede a meio (acaba na ronda seguinte); o aparelho removido não consegue desviar os outros para uma conta
-  dele, e só recebem a chave nova os aparelhos que estavam na lista. «Gerar um código de recuperação novo» nas
-  Definições.
-- **Parar nunca apaga a chave:** dados apagados noutro aparelho, um registo de chaves danificado ou entrar com outra
-  conta Google param (ou põem em pausa) a sincronização sem apagar a chave deste computador; de volta à conta certa,
-  continua sem código.
-- **Uma leitura que falha não apaga nada** nos outros computadores (favoritos, Escudo, notas ou Espaços que não se
-  conseguiram ler ficam de fora dessa ronda).
-- **Janela privada:** desligar o Escudo num site, o modo estrito e esconder um elemento ficam só nessa sessão privada
-  (não vão para o perfil nem sincronizam), como no Chrome, no Firefox e no Brave.
-- **Autorização da Google retirada ou expirada:** «Sincronização em pausa: entre outra vez» no menu e «Entrar outra
-  vez» nas Definições, em vez de tentar para sempre.
-- **Pedidos de computadores novos:** respondidos só quando abre o menu (⋯) ou com a secção Sincronização à vista (que
-  agora os mostra sem recarregar); dois computadores ligados a responder ao mesmo pedido já não o fazem falhar.
-- **Definições › Sincronização mais fáceis de usar pelo teclado e com leitor de ecrã:** os pedidos e a lista de
-  aparelhos já não perdem o foco a cada atualização; «Remover» anuncia a confirmação; as mensagens são anunciadas;
-  depois de cada ação o foco vai para o que apareceu; «Escolher ficheiro…» é um botão. Um código de recuperação com uma
-  gralha deixa tentar outra vez sem o escrever de novo. «Apagar…» e «Remover» não se confirmam com um duplo clique, e
-  «Apagar…» tem «Cancelar». «Sair» com «apagar a chave» pede confirmação se o código ainda não foi guardado. Quem perdeu
-  o código e não tem outro computador vê a saída («apagar os dados do Éteris no Drive e começar de novo»).
-- `eteris://privacy/`: a exceção da sincronização diz tudo o que sai para a Google (o menu ⋯, a renovação da sessão, o
-  nome e o e-mail da conta e as ações que pede) e aparece também com sessão Google e a sincronização desligada; com ela
-  desligada, abrir o menu já não pede nada à Google.
 
 ## 0.2.12 — 2026-11-08
 

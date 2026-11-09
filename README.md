@@ -22,11 +22,14 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - DNS cifrado, links sem rastreio, modo rigoroso por site, notificações recusadas sem perguntar, apagar dados ao fechar.
 
 **Palavras-passe e preenchimento automático**
-- Gestor de palavras-passe e preenchimento automático próprios (`eteris://passwords/`, `eteris://autofill/`): nada vai para a Google, o cofre fica cifrado neste computador, mostrar, copiar e exportar pedem o Windows Hello; importa o CSV do Chrome, do Brave e do Firefox; cartões (nunca o código de segurança), IBAN, moradas de Portugal e do Brasil, documentos (passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF) e viagens. O preenchimento nas páginas e a sincronização cifrada ponta a ponta vêm a seguir (`docs/palavras-passe.md`).
+- Gestor de palavras-passe e preenchimento automático próprios (`eteris://passwords/`, `eteris://autofill/`), com o gestor do Chromium desligado: nada vai para a Google, o cofre fica cifrado neste computador, mostrar, copiar e exportar pedem o Windows Hello.
+- Nas páginas: a lista do Éteris por baixo do campo preenche só quando escolhe; oferece guardar ou atualizar depois de entrar num site; gera palavras-passe fortes nos formulários de conta nova; na janela privada preenche mas não guarda nada.
+- Importa o CSV do Chrome, do Brave, do Firefox, do Bitwarden e do 1Password e exporta no formato do Chrome; cartões (nunca o código de segurança), IBAN, moradas de Portugal e do Brasil, documentos (passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF) e viagens.
+- Com a sincronização ligada, passa para os outros computadores com uma segunda cifra por registo; Pagamentos e Documentos de identificação ficam de fora até os ligar (`docs/palavras-passe.md`).
 
 **Sincronização (opcional)**
-- «Entrar com o Google» (no navegador do sistema): favoritos, Espaços, definições, decisões do Escudo por site e notas passam de um computador para o outro, **cifrados de ponta a ponta** — a chave nunca sai dos seus aparelhos e a Google só vê ficheiros cifrados, os tamanhos e as horas, na pasta oculta da aplicação no seu Google Drive. Histórico e abas abertas não sincronizam.
-- Um computador novo entra por aprovação noutro (o mesmo código nos dois ecrãs) ou pelo código de recuperação; remover um aparelho troca as chaves. Desligada, nada sai para a Google (`docs/sincronizacao.md`).
+- «Entrar com o Google» (no navegador do sistema): favoritos, Espaços, definições, decisões do Escudo por site, notas e o cofre de palavras-passe passam de um computador para o outro, **cifrados de ponta a ponta** — a chave nunca sai dos seus aparelhos e a Google só vê ficheiros cifrados, os tamanhos e as horas, na pasta oculta da aplicação no seu Google Drive. Histórico, abas abertas, cookies e chaves de acesso não sincronizam.
+- Um computador novo entra por aprovação noutro (o mesmo código nos dois ecrãs) ou pelo código de recuperação; remover um aparelho troca as chaves; «Apagar os meus dados do Éteris no Google Drive» apaga a cópia na nuvem. Desligada, nada sai para a Google (`docs/sincronizacao.md`).
 
 **Barra de endereço**
 - Contas e conversões instantâneas (`(12+8)*1,5`, `10 km em milhas`, `30 °C em F`).

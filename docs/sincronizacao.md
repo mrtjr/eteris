@@ -1,6 +1,8 @@
 # Sincronização do Éteris («Entrar com o Google», opção B)
 
-Estado: **sincronização ligada ao Éteris, fora do modo experimental (ramo `sync`, por publicar).** Decisão do dono
+Estado: **publicada na 0.2.13** (ligada ao Éteris, fora do modo experimental; opcional e desligada por omissão). A
+aplicação Google do Éteris continua «Em teste»: até ser publicada na Google (passo 7 de «O que o dono tem de fazer»),
+só as contas autorizadas pelo autor conseguem entrar. Decisão do dono
 (opção B): o início de sessão na Google faz-se no **navegador do sistema** (OAuth 2.0 para apps de computador, PKCE e
 redirecionamento por loopback `127.0.0.1`), os dados do Éteris ficam na **pasta oculta da aplicação** (`appDataFolder`)
 do Google Drive do utilizador, com o âmbito `https://www.googleapis.com/auth/drive.appdata` (não sensível), e vão
@@ -584,16 +586,18 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
 6. **Clients › Criar cliente › Tipo de aplicação «App para computador»** (nome, por exemplo, «Éteris para Windows») →
    **Descarregar JSON** → guardar como **`google-oauth.json`**:
    - para testar: na pasta do perfil de teste (`--user-data-dir`), ou ao lado do `Eteris.Browser.exe` da compilação;
-   - para publicar: junto do programa na instalação (decidir no `publish.ps1`; o `client_id` passa a ser público).
-7. **Para sair de «Em teste»** (qualquer pessoa poder entrar): **verificação da marca** da Google:
-   - **página inicial** num domínio **verificado no Google Search Console**, que descreva o Éteris e a sincronização
-     (não só um botão de entrar) — sugestão: **GitHub Pages** (`<utilizador>.github.io/eteris`, verificável no Search
-     Console por meta-tag; um domínio próprio pode vir depois);
-   - **política de privacidade** na mesma página/domínio, com link na página inicial e no ecrã de consentimento:
-     o que o âmbito `drive.appdata` permite, que tudo é cifrado no PC com uma chave que a Google e o Éteris não têm, o
-     que a Google vê (secção acima), como apagar, e a declaração de conformidade com a *Google API Services User Data
-     Policy* (incluindo os requisitos de «Limited Use»);
-   - **Publicar aplicação** e pedir a verificação (âmbitos não sensíveis: só a verificação da marca, sem CASA).
+   - para publicar: `build/publish.ps1 -GoogleOAuthJson` põe-no junto do programa na instalação (passo 8; o `client_id`
+     passa a ser público).
+7. **Para sair de «Em teste»** (qualquer conta Google poder entrar, e os tokens deixarem de expirar aos 7 dias): com
+   só o âmbito `drive.appdata` (não sensível), basta **Audience › Publicar aplicação** — a verificação da aplicação
+   não é obrigatória e não aparece o aviso de aplicação não verificada. Depois de publicar, quem entrou em modo de
+   teste tem de entrar outra vez.
+   - A **verificação da marca** é opcional mas recomendada: sem ela o ecrã de consentimento não mostra o nome «Éteris»
+     nem o logótipo. Pede a página inicial e a política de privacidade num domínio verificado no Google Search
+     Console; as páginas estão em `docs/site/` (página inicial, política de privacidade — o que o âmbito
+     `drive.appdata` permite, a cifra no PC com uma chave que a Google e o Éteris não têm, o que a Google vê, como
+     apagar, e a declaração de conformidade com a *Google API Services User Data Policy*, incluindo os requisitos de
+     «Limited Use» — e termos), para o GitHub Pages.
 8. Publicar com o login: `.\build\publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho do google-oauth.json>`
    (`docs/motor.md`, «Como publicar»). O ficheiro **não entra no repositório** (`.gitignore`); o `client_id` passa a
    ir com o programa (é público por natureza nas apps de computador; quem protege a troca é o PKCE).

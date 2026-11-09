@@ -13,6 +13,10 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.13
+        new("☁", "Conta Google e sincronização cifrada", "Opcional: favoritos, Espaços, definições, Escudo, notas e palavras-passe passam entre computadores, cifrados no PC antes de irem para a pasta oculta do seu Google Drive."),
+        new("🔑", "Palavras-passe e preenchimento", "Guardar, preencher e gerar palavras-passe, importar do Chrome, do Brave ou do Firefox; moradas, cartões (nunca o CVV), documentos e viagens, com o Windows Hello."),
+        new("✂", "Formulários sem pedidos à Google", "Ao entrar num site, o motor mandava à Google um prefixo do hash do utilizador e da palavra-passe (verificação de fugas do Chromium). Cortado: 0 pedidos, medido."),
         // 0.2.12
         new("⌨", "Menu do Éteris pelo teclado", "Como no Chrome, no Firefox e no Brave: setas, Home, End e a inicial escolhem a linha, Enter ativa, Esc fecha e devolve o foco, e as teclas já não chegam à página.", "Alt+F · Alt+E"),
         new("☰", "Menu legível", "O título, o subtítulo e o «Zoom» do menu já não aparecem em quadrados, e nas Definições a secção escolhida na navegação fica realçada."),

@@ -4,7 +4,8 @@ Objetivo: diminuir a distância — ou empatar — com as três referências do 
 o Edge não é referência) antes de oferecer o navegador a outras pessoas. Cada lacuna tem uma forma de medir e um
 critério de «feito»; nada passa a «resolvido» sem número ou teste.
 
-Estado em 2026-11-06, versão 0.2.2.
+Tabela atualizada em 2026-11-09, versão 0.2.13 (cada secção diz quando e em que versão foi medida; a 1.ª medição
+foi a 0.2.2, em 2026-11-06).
 
 ## Critérios para começar a distribuir
 
@@ -12,22 +13,24 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 
 | # | Lacuna | Chrome | Firefox | Brave | Éteris hoje | Prioridade |
 |---|---|---|---|---|---|---|
-| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** no `main` (era 28–36% na 0.2.2) | ✅ resolvido (por publicar) |
-| 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** no `main` (era ~30% por aba animada na 0.2.2) | ✅ resolvido (por publicar) |
+| 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** desde a 0.2.3 (era 28–36% na 0.2.2) | ✅ resolvido (0.2.3) |
+| 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** desde a 0.2.3 (era ~30% por aba animada na 0.2.2) | ✅ resolvido (0.2.3) |
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **no `main`, atrás da opção `EterisSandbox` (desligada por omissão)**: com `build/publish.ps1 -Sandbox`, páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, atualização pelo Velopack provada, e de novo depois de fundir com o arranque (secção 2). A publicação oficial continua com `--no-sandbox`: falta a assinatura conjunta, a CI com o CefSharp próprio e os casos de rede por ver (`docs/sandbox.md`) | **[bloqueia]** até ser publicado |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
-| 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (por publicar) |
-| 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | ramo `motor`: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido no ramo `motor` (por integrar) |
+| 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (0.2.3) |
+| 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | desde a 0.2.9: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido (0.2.9) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | **medido** (secção 6): a 0.2.9 era *mais* identificável do que o Chrome; no `main` (R0) deixou de o ser — dispositivos, língua, DNT e dicas do cliente como o Chrome. Canvas, WebGL e áudio continuam fixos (F1/F2) | alta |
-| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | `main`, publicação como a da release: **625 ms** (0.2.9: 1132 ms na mesma sessão); **207 MB** com 1 aba e **320 MB** com 5 (0.2.9: 254 e 376 MB); ver secção 1c | ✅ arranque melhor do que o Firefox e a ~1,3× do Chrome; memória principal −47 MB, filhos iguais (por publicar) |
-| 4c | Vídeo H.264/AAC (Twitch, Vimeo, MP4 direto, HLS…) | sim | sim (codecs do Windows) | sim | **no motor principal**, como o Firefox: compilação própria da CEF com os codecs do Windows (H.264/HEVC pela placa gráfica, AAC pelo Media Foundation, nenhum descodificador com patentes; MP4, Twitch, g1, BBC, Reddit, TikTok, Dailymotion, HLS, `.m4a` e `.aac` validados, ~2,4% de CPU a 1080p). Sem descodificação por hardware ou num Windows N, uma sonda no arranque devolve tudo ao motor de vídeo (WebView2), como antes. Por publicar: o CI não compila este motor (`docs/motor.md`, «Motor com codecs») | ✅ resolvido (por publicar) |
+| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | 0.2.10, publicação como a da release: **625 ms** (0.2.9: 1132 ms na mesma sessão); **207 MB** com 1 aba e **320 MB** com 5 (0.2.9: 254 e 376 MB); ver secção 1c | ✅ arranque melhor do que o Firefox e a ~1,3× do Chrome; memória principal −47 MB, filhos iguais (0.2.10) |
+| 4c | Vídeo H.264/AAC (Twitch, Vimeo, MP4 direto, HLS…) | sim | sim (codecs do Windows) | sim | **no motor principal**, como o Firefox: compilação própria da CEF com os codecs do Windows (H.264/HEVC pela placa gráfica, AAC pelo Media Foundation, nenhum descodificador com patentes; MP4, Twitch, g1, BBC, Reddit, TikTok, Dailymotion, HLS, `.m4a` e `.aac` validados, ~2,4% de CPU a 1080p). Sem descodificação por hardware ou num Windows N, uma sonda no arranque devolve tudo ao motor de vídeo (WebView2), como antes. Publicado desde a 0.2.9; o CI não compila este motor (`docs/motor.md`, «Motor com codecs») | ✅ resolvido (0.2.9) |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | via motor de vídeo, **sempre com pergunta** (botão «Tocar no motor de vídeo»); o motor principal continua sem Widevine. Com DRM o site fala com o seu servidor de licenças e o CDM (Google/Microsoft) pode fazer provisionamento — inerente ao DRM, só depois de o utilizador aceitar | média |
 | 8 | Extensões | sim | sim | sim | não | média |
 | 9 | Tradução de páginas | sim (servidor) | sim (local) | sim | não (planeada: local) | média |
-| 10 | Sincronização entre aparelhos | sim | sim | sim | não | baixa |
-| 11 | Pedidos à Google no arranque, sem ação do utilizador | não medido | não medido | não medido | **0** no `main` (0.2.10: 2 por arranque — a hora e o «Modo IA», com os cookies da Google); ver secção 7 | ✅ resolvido (por publicar) |
-| 12 | Escudo nos pedidos sem aba (service workers, shared workers, extensões) | — (sem bloqueador) | sim | sim | **sim** no `main` (0.2.10: o fetch de um service worker ou shared worker, o reencaminhamento `respondWith(fetch(e.request))` de um pedido da página, o `importScripts` de um service worker e o service worker de uma extensão chegavam ao rastreador, sem GPC); ver secção 8 | ✅ resolvido (por publicar) |
+| 10 | Sincronização entre aparelhos | sim | sim | sim | **sim** desde a 0.2.13, opcional e desligada por omissão: «Entrar com o Google», favoritos, Espaços, definições, decisões do Escudo, notas e o cofre de palavras-passe, cifrados ponta a ponta no PC e guardados na pasta oculta da aplicação no Google Drive (`docs/sincronizacao.md`); sem histórico nem abas abertas, e sem telemóvel | ✅ resolvido (0.2.13) |
+| 11 | Pedidos à Google no arranque, sem ação do utilizador | não medido | não medido | não medido | **0** desde a 0.2.11 (0.2.10: 2 por arranque — a hora e o «Modo IA», com os cookies da Google); ver secção 7 | ✅ resolvido (0.2.11) |
+| 12 | Escudo nos pedidos sem aba (service workers, shared workers, extensões) | — (sem bloqueador) | sim | sim | **sim** desde a 0.2.11 (0.2.10: o fetch de um service worker ou shared worker, o reencaminhamento `respondWith(fetch(e.request))` de um pedido da página, o `importScripts` de um service worker e o service worker de uma extensão chegavam ao rastreador, sem GPC); ver secção 8 | ✅ resolvido (0.2.11) |
+| 13 | Gestor de palavras-passe e preenchimento automático | sim | sim | sim | **sim** desde a 0.2.13: próprio (o do Chromium desligado), cofre cifrado no PC, guardar, preencher, gerar, importar e exportar, pagamentos sem o código de segurança, contactos, documentos e viagens, Windows Hello; nada vai para a Google (`docs/palavras-passe.md`). Sem chaves de acesso próprias (o WebAuthn segue para o Windows, secção 9) nem verificação de fugas | ✅ resolvido (0.2.13) |
+| 14 | Pedidos à Google ao enviar formulários | — | — | — | **0** desde a 0.2.13 (antes: o utilizador e a palavra-passe, um prefixo do hash, a `passwordsleakcheck-pa.googleapis.com` em cada início de sessão); ver secção 7 | ✅ resolvido (0.2.13) |
 
 ## 1. Desenho das páginas — medido
 
@@ -63,7 +66,7 @@ volta «visible» e é redimensionada para a área da aba. Exceção (T6 em `doc
 deixadas há menos tempo ficam «quentes» (tapadas, sem minimizar) durante 8 s, para voltar a elas sem esperar; uma
 página animada quente gasta como à vista (~9–11 % de 1 núcleo) só nesses 8 s, e nunca com vídeo a tocar ou som.
 
-Feito (no `main`, por publicar):
+Feito (publicado na 0.2.3):
 1. Avisos, paleta, pesquisa na página, notas, permissões, código QR, minibarra, bolha do link, folha de atalhos e
    barra de carregamento numa janela transparente presa à principal (`MainWindow.Overlay.cs`), visível só enquanto
    algum deles está à vista.
@@ -176,7 +179,7 @@ são os do ramo: renderers e armazenamento Untrusted (restritos), placa gráfica
 
 ## 2. Sandbox — no `main`, atrás da opção `EterisSandbox` e desligado por omissão (2026-11-08)
 
-A publicação oficial (0.2.9) corre os processos do motor com `--no-sandbox`. No `main` (fundido do ramo `sandbox`), com
+A publicação oficial (da 0.2.9 à 0.2.13) corre os processos do motor com `--no-sandbox`. No `main` (fundido do ramo `sandbox`), com
 `build/publish.ps1 -Sandbox` (CefSharp próprio com a informação do sandbox, DLL cliente do bootstrap da CEF, opção B:
 `Eteris.Browser.exe` = bootstrap, `.NET` = `Eteris.App`), `chrome://sandbox` mostra o mesmo que o Chrome 156 com a
 experiência de rede ligada: renderers Renderer/Lockdown/Untrusted, GPU Limited/Low, Storage Service Untrusted e
@@ -274,7 +277,7 @@ nas páginas de erro de certificado passa a vir só da data da compilação do m
 Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
 pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
 
-**Formulários (ramo `sync`, por publicar; `docs/palavras-passe.md`, A0).** Com o mesmo método, numa página local
+**Formulários (0.2.13; `docs/palavras-passe.md`, A0).** Com o mesmo método, numa página local
 com um início de sessão, uma morada e um cartão enviados (dados inventados): o motor mandava o par utilizador/palavra-
 passe (prefixo de um hash) a `passwordsleakcheck-pa.googleapis.com/v1/leaks:lookupSingle` logo depois do envio do
 início de sessão, apesar de `credentials_enable_service=false` — a verificação de fugas do Chromium corre sem o gestor.
@@ -283,7 +286,7 @@ pedidos medidos), `--disable-features=AutofillServerCommunication` contra o serv
 (`content-autofill.googleapis.com`). Depois: **0 pedidos** no proxy e 0 linhas `googleapis` no NetLog. A promessa
 «Nada sai do computador sem um pedido seu» em `eteris://privacy/` diz também os formulários.
 
-**Sincronização (ramo `sync`, por publicar).** Por omissão está desligada e a promessa fica exatamente como medida
+**Sincronização (0.2.13).** Por omissão está desligada e a promessa fica exatamente como medida
 acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o estado só leem o disco; testes
 `SyncAgentTests.Startup_BuildingTheAgentAndReadingTheState_SendsNothing` e
 `SyncIntegrationTests.Startup_OnlySchedulesTheFirstRound_ThirtySecondsAfterTheWindow`). Com ela ligada — escolha do
@@ -375,4 +378,5 @@ pede o PIN/rosto/impressão digital, e o «Outro dispositivo» (telemóvel por Q
 
 ## Restantes
 
-Ordem depois dos três bloqueadores: #5, #6 (medir primeiro com testes públicos de fingerprinting), #9, #7, #8, #10.
+Ordem depois dos três bloqueadores: #5, #6 (medir primeiro com testes públicos de fingerprinting), #9, #7, #8 (a #10, a
+sincronização, chegou na 0.2.13).

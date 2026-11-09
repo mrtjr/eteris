@@ -1,9 +1,9 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4) e bloco C (na página: C1–C7 — canal,
-classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador, preencher contactos,
-pagamentos, documentos e viagens, janelas privadas) e bloco D (sincronização: D1–D5) feitos no ramo `sync`, por
-publicar** (o bloco E — fecho — do desenho está por fazer, salvo a prova E2 das chaves de acesso). O gestor é próprio, em
+Estado: **publicado na 0.2.13** — bloco A (base local: A0–A5), bloco B (interfaces de gestão: B1–B4), bloco C (na
+página: C1–C7 — canal, classificador, sugestões, preencher palavras-passe, guardar e atualizar depois do envio, gerador,
+preencher contactos, pagamentos, documentos e viagens, janelas privadas) e bloco D (sincronização: D1–D5). O bloco E
+— fecho — do desenho está por fazer, salvo a prova E2 das chaves de acesso. O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.

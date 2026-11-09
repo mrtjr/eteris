@@ -3,7 +3,7 @@
 # -GoogleOAuthJson <caminho> (docs/sincronizacao.md): o identificador da aplicação Google («App para computador»,
 # descarregado da Google Cloud) vai para a pasta publish e o «Entrar com o Google» fica disponível. Nunca no repositório
 # (.gitignore). Sem ele publica sem login: a secção Sincronização diz «indisponível nesta compilação».
-param([string]$Version = "0.2.12", [switch]$Sandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "",
+param([string]$Version = "0.2.13", [switch]$Sandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "",
   [string]$GoogleOAuthJson = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
