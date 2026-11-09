@@ -1,0 +1,8 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>Video</title><style>html,body{margin:0;height:100%;background:#fff}video{width:640px;height:360px;margin:60px;background:#000}</style></head><body><video id=v muted autoplay loop playsinline></video><div id=s></div><script>
+const id='vid';function b(e){fetch('/b?id='+id+'&ev='+e+'&t='+Date.now(),{cache:'no-store',keepalive:true}).catch(()=>{})}
+const c=document.createElement('canvas');c.width=320;c.height=180;const x=c.getContext('2d');let n=0;
+setInterval(()=>{n++;x.fillStyle='hsl('+(n*7%360)+',70%,50%)';x.fillRect(0,0,320,180);x.fillStyle='#fff';x.font='40px sans-serif';x.fillText(n,20,100)},33);
+const v=document.getElementById('v');v.srcObject=c.captureStream(30);v.play().then(()=>b('play-ok')).catch(e=>b('play-err-'+e.name));
+b('load-'+document.visibilityState);document.addEventListener('visibilitychange',()=>b(document.visibilityState+'-paused='+v.paused));
+setInterval(()=>{document.getElementById('s').textContent='paused='+v.paused+' rs='+v.readyState},500);
+</script></body></html>

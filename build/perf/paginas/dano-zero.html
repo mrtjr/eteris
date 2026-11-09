@@ -1,0 +1,10 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>dano-zero</title><script src="m.js"></script>
+<style>body{margin:0;font:16px sans-serif;background:#f4f4f4}.b{width:200px;height:200px;margin:80px;background:#36c}</style></head><body>
+<div class="b" id="b"></div><p style="margin:0 80px">requestAnimationFrame a cada fotograma sem mudar nada à vista (E14: ThrottleRepeatedNoDamageFrames).</p>
+<script>
+// Cada fotograma escreve o mesmo valor (o estilo não muda: nenhum dano). O Chromium pode deixar de produzir fotogramas
+// repetidos sem dano; o Éteris sem essa funcionalidade continua a desenhá-los.
+var b = document.getElementById('b'), n = 0;
+function step() { n++; b.style.transform = 'translateX(0px)'; requestAnimationFrame(step); }
+requestAnimationFrame(step); fpsMeter('dano-zero');
+</script></body></html>

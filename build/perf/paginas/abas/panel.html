@@ -1,0 +1,3 @@
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>Painel</title><style>html,body{margin:0;height:100%;background:#ffe600}#f{position:fixed;inset:0;border:6px solid #e00;box-sizing:border-box}#t{font:20px sans-serif;padding:20px}</style></head><body><div id=f></div><div id=t></div><script>
+function u(){document.getElementById('t').textContent=innerWidth+'x'+innerHeight;fetch('/b?id=panel&ev=size-'+innerWidth+'x'+innerHeight+'&t='+Date.now()).catch(()=>{})}u();addEventListener('resize',u);
+</script></body></html>
