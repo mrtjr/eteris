@@ -2,6 +2,158 @@
 
 ## Por publicar
 
+### Palavras-passe e preenchimento automático
+- **Canal do gestor com as páginas, sem deixar rasto** (`docs/palavras-passe.md`, C1): o script do gestor corre num
+  mundo isolado de cada página `http(s)` (a página não o vê nem à ligação com o Éteris), fala com o Éteris por
+  mensagens validadas, nunca escreve na página por si e não usa o `Runtime.enable` que os anti-robôs procuram (medido:
+  0 deteções, com controlo positivo). Ainda sem nada visível: a lista de sugestões chega com as tarefas seguintes.
+- **Classificador de formulários** (C2): reconhece inícios de sessão, criação de conta, mudança de palavra-passe,
+  códigos de uma utilização (nunca se guardam), moradas de Portugal e do Brasil, cartões (o CVC só para nunca o tocar),
+  IBAN, NIF/CPF, documentos e matrícula/placa, em português, inglês e espanhol, também em campos soltos, raízes sombra
+  e iframes da mesma origem; campos escondidos de rastreadores ficam de fora.
+- **Correção:** os pedidos internos do Éteris ao motor (DevTools) podiam falhar de vez em quando quando dois saíam ao
+  mesmo tempo (numeração fora de ordem); agora saem sempre por ordem.
+- **Preencher palavras-passe nas páginas** (C3): ao clicar (ou com Tab) no campo do utilizador ou da palavra-passe de
+  um site com palavras-passe guardadas, aparece a lista do Éteris por baixo do campo (as do próprio site primeiro, as
+  do mesmo domínio marcadas; nunca as de `https` numa página `http`). ↑ ↓ e Enter escolhem e preenchem, Esc fecha — a
+  página não vê essas teclas; um clique também preenche. Só preenche quando escolhe, nunca ao carregar a página;
+  funciona com o zoom, no ecrã dividido e em sites feitos com React. «Pedir o Windows Hello ao preencher
+  palavras-passe» (desligado por omissão) pede a confirmação antes.
+- **Guardar e atualizar palavras-passe** (C4): depois de entrar num site (a página muda, ou numa aplicação web o
+  formulário desaparece), a bolha do Éteris sai da barra de endereço com «Guardar a palavra-passe de *site*?» — ou
+  «Atualizar…» quando a palavra-passe mudou, também num formulário de mudança de palavra-passe. O utilizador pode
+  corrigir o nome e ver a palavra-passe antes; «Agora não» deixa um ícone de chave para guardar mais tarde, e ⋯ ›
+  «Nunca neste site». Um erro de login não oferece nada; a janela privada nunca oferece; nada fica guardado sem
+  escolher «Guardar».
+- **Gerador de palavras-passe** (C5): num campo de palavra-passe nova (criar conta, mudar a palavra-passe), a lista do
+  Éteris propõe «Usar palavra-passe forte» — 20 carateres aleatórios sem carateres que se confundem, a respeitar o
+  tamanho e o formato que o site pede. Também no menu de contexto: «Gerar palavra-passe forte». A palavra-passe fica
+  logo guardada («Não confirmada») para não se perder e é confirmada quando o formulário é enviado com sucesso. Nunca
+  na janela privada.
+- **Preencher moradas, cartões, IBAN, NIF/CPF, documentos e viagens** (C6): num formulário de morada aparece a lista
+  das suas informações de contacto (Portugal e Brasil: código postal/CEP, bairro, distrito/estado, país em listas…);
+  num formulário de pagamento, os cartões (nunca o código de segurança: o CVC fica vazio e com o cursor); num campo de
+  NIF/CPF, os seus números fiscais. Cartões, IBAN e documentos só em ligações seguras e com o Windows Hello. Passaporte,
+  carta de condução/CNH, Cartão de Cidadão/RG, matrícula/placa e fidelidade: pelo menu de contexto do campo,
+  «Preencher com… ›», que também deixa usar uma palavra-passe de outro site (com confirmação).
+- **Janela privada** (C7): preenche palavras-passe, moradas, cartões e documentos quando escolhe, mas não guarda nada:
+  nem a «última utilização», nem a oferta de guardar, nem o gerador; o gestor abre numa janela normal. Medido: o
+  ficheiro do cofre fica exatamente igual depois de uma janela privada o usar.
+- **As palavras-passe passam entre computadores** (D1–D5): com a sincronização ligada, as palavras-passe, os sites onde
+  nunca guardar, as informações de contacto e as viagens passam para os outros computadores da conta, cada registo com
+  uma **segunda cifra própria** por dentro da cifra de sempre (nem dentro do Éteris, nem no Google Drive, nem num perfil
+  exportado há um site ou uma palavra-passe fora desse selo). Pagamentos e Documentos de identificação vêm desligados
+  e ligá-los pede o Windows Hello. Se a mesma palavra-passe mudar em dois computadores, fica a mais recente e a outra
+  vai para o histórico desse computador (o «Mostrar» das Palavras-passe mostra-a) com um aviso.
+- **Definições › Sincronização › «O que passa entre PCs»**: uma linha por tipo de dado (Favoritos, Espaços, Definições,
+  Decisões do Escudo, Notas, Palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação, Viagens)
+  com o interruptor deste computador, e as que não passam (abas abertas, chaves de acesso). Desligar não apaga nada;
+  ligar outra vez junta sem perder nada.
+- **Aprovar um computador novo** com palavras-passe na conta diz que ele as vai receber e pede o Windows Hello;
+  **remover um computador** volta a selar tudo com chaves novas e lembra de mudar as palavras-passe dos sites
+  importantes; **exportar o perfil cifrado** pode levar o cofre (caixa «Incluir palavras-passe, pagamentos e
+  documentos», com o Windows Hello); o código de recuperação diz que também abre o cofre.
+- **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
+  Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
+  como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,
+  «n de N»). Na janela privada as entradas abrem numa janela normal. Também nas Definições (secção nova, com «Oferecer
+  para guardar palavras-passe», «Mostrar sugestões ao clicar num campo» e «Pedir o Windows Hello ao preencher
+  palavras-passe») e na paleta (Ctrl+K).
+- **`eteris://passwords/` — o gestor de palavras-passe:** lista com pesquisa, agrupada por site; «Mostrar» e «Copiar»
+  com o Windows Hello (ou a palavra-passe do Windows), com a janela fora das capturas enquanto a palavra-passe está à
+  vista e a cópia fora do histórico da área de transferência; adicionar, editar (a anterior fica no histórico) e apagar
+  com «Anular»; «Mudar palavra-passe» abre a página de mudança do site só ao clicar; verificação de palavras-passe
+  fracas e repetidas feita neste computador; «Sites onde nunca guardar»; importar o CSV do Chrome, do Brave, do
+  Firefox, do Bitwarden ou do 1Password (o ficheiro é lido pelo Éteris, não pela página, com a escolha nos conflitos e a
+  oferta de o enviar para a Reciclagem) e exportar no formato do Chrome (pede sempre o Windows Hello e avisa numa pasta
+  do OneDrive, do Dropbox ou do Google Drive). Nenhuma palavra-passe vai no HTML da página; nada sai do computador.
+- **`eteris://autofill/` — Pagamentos, Informações de contacto, Documentos de identificação e Viagens:** cartões
+  (nunca o código de segurança) e IBAN, moradas com os campos de Portugal (código postal, distrito) e do Brasil (CEP,
+  bairro, estado), passaporte, carta de condução/CNH, Cartão de Cidadão/RG e NIF/CPF, veículos (matrícula/placa, VIN)
+  e programas de fidelidade. Números sempre mascarados; vê-los ou editá-los pede o Windows Hello. Validações com o
+  dígito de controlo (cartão, IBAN, NIF, CPF) e os formatos de cada país. «Pedir o Windows Hello ao preencher
+  pagamentos» ligado por omissão (desligá-lo também pede).
+- **«Apagar dados de navegação» › «Palavras-passe e preenchimento automático»**, desmarcada por omissão e com o
+  Windows Hello (recusado, nada se apaga). «Esquecer este site», «Triturar» e «Apagar ao fechar» não tocam nas
+  palavras-passe. **Promessa nova em `eteris://privacy/`: «As suas palavras-passe não vão para ninguém»**, verificada no
+  estado real (gestor do Chromium desligado no perfil, sem verificação de fugas nem servidor de formulários da Google).
+- **Nada dos formulários vai para a Google:** medido ao vivo, o motor mandava o utilizador e a palavra-passe (prefixo
+  de um hash) de cada início de sessão enviado a `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas do
+  Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de
+  formulários da Google (`content-autofill.googleapis.com`) fica também cortado no motor. `eteris://privacy/` › «Nada
+  sai do computador sem um pedido seu» diz os dois e verifica-os no estado real (`docs/palavras-passe.md`).
+- **Gestor de palavras-passe próprio, base local** (ainda sem interface; `docs/palavras-passe.md`, tarefas A1–A5):
+  cofre `cofre.db` com cada item cifrado em AES-256-GCM (metadados e segredo em separado) e a chave protegida pela DPAPI
+  do Windows, aberto só quando é preciso (o arranque não muda); palavras-passe, cartões (nunca o código de segurança),
+  IBAN, contactos, documentos de identificação (passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF) e
+  viagens, com as validações de cada um (Luhn, IBAN, NIF e CPF, código postal/CEP); sugestões só para a mesma origem
+  ou o mesmo domínio registável, nunca entre domínios, `http` e `https` separados; confirmação com o Windows Hello ou a
+  palavra-passe do Windows (janela de graça de 5 minutos por janela, que recomeça ao bloquear o Windows; exportar
+  pede sempre); importar CSV do Chrome, Brave, Firefox, Bitwarden e 1Password e exportar no formato do Chrome; copiar
+  um segredo fica fora do histórico da área de transferência (Win+V) e da nuvem e é limpo ao fim de 60 s; com um
+  segredo à vista, o Éteris sai das capturas de ecrã.
+
+### Sincronização entre computadores («Entrar com o Google»)
+- **Login completo:** entra-se com a conta Google no navegador do sistema e os **favoritos, Espaços (nome, cor, emoji
+  e ordem), definições que viajam, decisões do Escudo por site (desligado, modo estrito, elementos escondidos,
+  bloqueios por site, exceções ao HTTPS primeiro) e notas** passam de um computador para o outro, como no Chrome, no
+  Firefox e no Brave — mas **sempre cifrados de ponta a ponta**: os dados vão para a pasta oculta da aplicação no
+  Google Drive do utilizador (âmbito `drive.appdata`), a chave nunca sai dos aparelhos e a Google só vê ficheiros
+  cifrados, os tamanhos e as horas. Histórico, abas abertas, cookies e palavras-passe (o cofre novo ainda fica só no computador) não
+  sincronizam.
+- **Primeiro computador:** a conta cria-se sozinha e aparece o **código de recuperação** com «Copiar» e «Já guardei» e
+  o aviso de que, sem ele e sem outro computador, os dados na nuvem não se recuperam.
+- **Computador seguinte:** «Aprovar noutro computador» (este mostra um código; o outro mostra o pedido com o nome do
+  computador e o mesmo código, no menu da conta e nas Definições, e aprova-se lá) ou «Usar o código de recuperação».
+  Os dados juntam-se sem se perder nada: o que só existia nesse computador também sobe.
+- **Quando:** 30 s depois de abrir (só com a sincronização ligada), 10 s depois de uma alteração, de 10 em 10 minutos
+  e em «Sincronizar agora»; sem rede, volta a tentar sozinho com espera crescente. O estado está nas Definições
+  («Sincronizado há 2 min», «A sincronizar…», o erro) e na linha da conta do menu.
+- **Aparelhos:** lista nas Definições com «Remover» — troca as chaves (código de recuperação novo), os outros
+  computadores continuam sozinhos e o removido deixa de ler e escrever.
+- **«Sair»** para a sincronização neste computador, apaga e revoga a sessão Google e, se se escolher, apaga também a
+  chave deste computador. **«Apagar os meus dados do Éteris no Google Drive»** apaga os ficheiros da pasta da
+  aplicação (com confirmação), sem sair da conta. A sincronização fica desligada (gravado no disco) **antes** de se
+  apagar o primeiro ficheiro: se o Éteris fechar a meio, ao abrir continua desligada, nada volta a ser enviado e o
+  apagar acaba sozinho («Ligar outra vez» também o acaba primeiro); uma ronda que estava a correr já não grava nem
+  envia depois do apagar; «A apagar os dados do Éteris do Google Drive…» fica à vista enquanto corre. Se o apagar
+  não acabar (sem rede, sessão da Google acabada ou um erro inesperado), as Definições e o menu dizem porquê, com
+  **«Tentar de novo»**, em vez de ficarem em «A apagar…»; «Ligar outra vez» passa a **«Ligar sem acabar de apagar»**
+  (o que ficou no Drive fica lá), para nunca ficar preso. As «cópias em conflito» que um cliente de nuvem deixe na
+  pasta do Éteris («keys (1)») também saem, e uma entrada (com o código ou com a chave guardada) que esteja a meio
+  quando se carrega em «Apagar…» já não volta a ligar a sincronização nem a gravar a chave.
+- A secção Sincronização e a conta no menu deixam de estar atrás da opção experimental: aparecem sempre que a
+  compilação tem o identificador da aplicação Google (sem ele: «indisponível nesta compilação»).
+- `eteris://privacy/`: «No arranque, nada sai para a Google» continua verdadeira por omissão e, com a sincronização
+  ligada, diz a exceção escolhida (só os pedidos da sincronização, cifrados, para o seu Drive, e quando).
+- Publicação: `build/publish.ps1 -GoogleOAuthJson <ficheiro>` põe o identificador da aplicação Google na instalação
+  (verificado; nunca no repositório); sem ele publica sem login e avisa.
+- **Mais seguro ao remover um aparelho:** antes de trocar a chave faz uma ronda completa e os outros computadores
+  voltam a pôr na conta nova o que tinham mudado, por isso nada do que já tinham enviado se perde; a troca resiste a
+  uma falha de rede a meio (acaba na ronda seguinte); o aparelho removido não consegue desviar os outros para uma conta
+  dele, e só recebem a chave nova os aparelhos que estavam na lista. «Gerar um código de recuperação novo» nas
+  Definições.
+- **Parar nunca apaga a chave:** dados apagados noutro aparelho, um registo de chaves danificado ou entrar com outra
+  conta Google param (ou põem em pausa) a sincronização sem apagar a chave deste computador; de volta à conta certa,
+  continua sem código.
+- **Uma leitura que falha não apaga nada** nos outros computadores (favoritos, Escudo, notas ou Espaços que não se
+  conseguiram ler ficam de fora dessa ronda).
+- **Janela privada:** desligar o Escudo num site, o modo estrito e esconder um elemento ficam só nessa sessão privada
+  (não vão para o perfil nem sincronizam), como no Chrome, no Firefox e no Brave.
+- **Autorização da Google retirada ou expirada:** «Sincronização em pausa: entre outra vez» no menu e «Entrar outra
+  vez» nas Definições, em vez de tentar para sempre.
+- **Pedidos de computadores novos:** respondidos só quando abre o menu (⋯) ou com a secção Sincronização à vista (que
+  agora os mostra sem recarregar); dois computadores ligados a responder ao mesmo pedido já não o fazem falhar.
+- **Definições › Sincronização mais fáceis de usar pelo teclado e com leitor de ecrã:** os pedidos e a lista de
+  aparelhos já não perdem o foco a cada atualização; «Remover» anuncia a confirmação; as mensagens são anunciadas;
+  depois de cada ação o foco vai para o que apareceu; «Escolher ficheiro…» é um botão. Um código de recuperação com uma
+  gralha deixa tentar outra vez sem o escrever de novo. «Apagar…» e «Remover» não se confirmam com um duplo clique, e
+  «Apagar…» tem «Cancelar». «Sair» com «apagar a chave» pede confirmação se o código ainda não foi guardado. Quem perdeu
+  o código e não tem outro computador vê a saída («apagar os dados do Éteris no Drive e começar de novo»).
+- `eteris://privacy/`: a exceção da sincronização diz tudo o que sai para a Google (o menu ⋯, a renovação da sessão, o
+  nome e o e-mail da conta e as ações que pede) e aparece também com sessão Google e a sincronização desligada; com ela
+  desligada, abrir o menu já não pede nada à Google.
+
 ## 0.2.12 — 2026-11-08
 
 Uma versão de correções no **menu do navegador**: volta a ler-se (o título, o subtítulo e o «Zoom» saíam em

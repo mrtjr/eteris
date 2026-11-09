@@ -1074,7 +1074,13 @@
                                     </Button.Template>
                                     <TextBlock x:Name="ZoomBadgeText" FontSize="11.5" Foreground="{DynamicResource TextBrush}" />
                                 </Button>
-                                                            <Button x:Name="StarButton" Style="{StaticResource IconButton}" Width="28" Height="28"
+                                <Button x:Name="PasswordKeyButton" Style="{StaticResource IconButton}" Width="28" Height="28"
+                                        Margin="0,0,2,0" Click="PasswordKey_Click" Visibility="Collapsed"
+                                        ToolTip="Guardar a palavra-passe…" AutomationProperties.Name="Guardar a palavra-passe">
+                                    <TextBlock Text="&#xE8D7;" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                               Foreground="{DynamicResource IrisBrush}" />
+                                </Button>
+                                <Button x:Name="StarButton" Style="{StaticResource IconButton}" Width="28" Height="28"
                                     Margin="0,0,4,0" Click="Star_Click" ToolTip="Adicionar aos favoritos (Ctrl+D)" Visibility="Collapsed">
                                 <TextBlock x:Name="StarGlyph" Text="&#xE734;" FontFamily="{StaticResource IconFont}" FontSize="14" />
                             </Button>

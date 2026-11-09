@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Sincronização do Éteris (docs/sincronizacao.md): modelo, cifra, fusão, formato, transportes e emparelhamento.
+       Só .NET (net10.0, sem WPF nem APIs de um sistema operativo) e só a biblioteca padrão — nenhum pacote —, para ser
+       partilhada com a versão Android. O que é do PC (DPAPI, navegador do sistema) fica no Eteris.Browser, atrás de
+       interfaces (ISecretProtector, IExternalBrowser). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Eteris.Sync</AssemblyName>
+    <RootNamespace>Eteris.Sync</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Eteris.Browser.Tests" />
+  </ItemGroup>
+
+</Project>

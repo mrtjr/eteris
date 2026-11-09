@@ -25,6 +25,7 @@ public partial class MainWindow
             UpdateSpaceStrip();
             ApplyTint();
             ScheduleSessionSave();
+            if (!IsPrivate) Sync.SyncService.Touch();
         };
         UpdateSpaceStrip();
     }
@@ -32,7 +33,11 @@ public partial class MainWindow
     // Nome, cor e emoji vão para a sessão; a cor do Espaço à vista tinge a barra na hora.
     private void OnWorkspacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Workspace.Name) or nameof(Workspace.ColorIndex) or nameof(Workspace.Icon)) ScheduleSessionSave();
+        if (e.PropertyName is nameof(Workspace.Name) or nameof(Workspace.ColorIndex) or nameof(Workspace.Icon))
+        {
+            ScheduleSessionSave();
+            if (!IsPrivate) Sync.SyncService.Touch();
+        }
         if (e.PropertyName == nameof(Workspace.ColorIndex) && sender is Workspace { IsCurrent: true }) ApplyTint();
     }
 

@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; frame-src eteris:; form-action eteris:">
+<meta name="color-scheme" content="dark">
+<title>Preenchimento automático</title>
+<style>
+  :root {
+    --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
+    --line: rgba(255, 255, 255, .08); --card: rgba(255, 255, 255, .03); --field: rgba(0, 0, 0, .3);
+    --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+    --accent: #8b5cf6; --accent-2: #22d3ee; --bad: #ffb3c1; --warn: #ffd8a8; --good: #34d399;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .glow { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(40vmax 30vmax at 0% 0%, rgba(139, 92, 246, .2), transparent 70%), radial-gradient(40vmax 30vmax at 100% 100%, rgba(52, 211, 153, .1), transparent 70%); }
+  .layout { position: relative; width: min(980px, 94vw); margin: 0 auto; display: grid; grid-template-columns: 220px 1fr; gap: 40px; padding: 44px 0 90px; }
+  nav { position: sticky; top: 44px; align-self: start; }
+  h1 { font-size: 30px; font-weight: 300; margin-bottom: 26px; line-height: 1.15; }
+  h1 b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  nav a { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; margin-bottom: 4px; color: var(--muted); text-decoration: none; font-size: 14px; transition: background .15s, color .15s; }
+  nav a:hover { background: var(--card); color: var(--text); }
+  nav a.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
+  nav svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav .count { margin-left: auto; font-size: 12px; color: var(--faint); }
+  nav .other { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+  section { margin-bottom: 34px; scroll-margin-top: 30px; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px 4px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+  .item { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 18px 22px; }
+  .item + .item, .card > * + * { border-top: 1px solid var(--line); }
+  .item .label { flex: 1 1 240px; min-width: 0; }
+  .item .label b { display: block; font-weight: 500; font-size: 14.5px; margin-bottom: 3px; }
+  .item .label span { color: var(--muted); font-size: 12.8px; line-height: 1.45; }
+  .tools { display: flex; gap: 10px; align-items: center; margin: -8px 0 16px; }
+  .find { position: relative; flex: 1; }
+  .find svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2; }
+  input[type=text], input[type=password], input[type=search], input[type=url], textarea, select {
+    width: 100%; font: inherit; font-size: 13.5px; color: var(--text); background: var(--field); border: 1px solid var(--line);
+    border-radius: 12px; padding: 9px 12px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .find input { padding-left: 36px; height: 38px; background: var(--card); }
+  input:focus, textarea:focus, select:focus { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  input[readonly] { color: var(--muted); }
+  textarea { min-height: 64px; resize: vertical; }
+  button.action { font: inherit; font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); }
+  button.action:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
+  button.action:disabled { opacity: .45; cursor: default; }
+  button.action.primary { border: 0; color: #0b0d13; font-weight: 600; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 50%, #fff), color-mix(in srgb, var(--accent-2) 60%, #fff)); }
+  button.action.danger { border-color: rgba(255, 122, 144, .4); color: var(--bad); }
+  button.action.danger:hover { background: rgba(255, 122, 144, .14); }
+  button.link { font: inherit; font-size: 13px; border: 0; background: none; color: #67e8f9; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+  button.link:hover { text-decoration: underline; }
+  .site { padding: 0; }
+  .site > .head { display: flex; align-items: center; gap: 12px; padding: 12px 22px 4px; color: var(--muted); font-size: 12.5px; }
+  .row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 22px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .row:hover, .row.open { background: rgba(255, 255, 255, .03); }
+  .row:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -2px; border-radius: 12px; }
+  .badge { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 600; font-size: 13px; color: #fff; flex: none; overflow: hidden; }
+  .badge img { width: 18px; height: 18px; }
+  .row .who { flex: 1; min-width: 0; }
+  .row .who b { display: block; font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .who span { color: var(--muted); font-size: 12.8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--warn); white-space: nowrap; }
+  .tag.bad { color: var(--bad); }
+  .chev { color: var(--faint); transition: transform .15s; }
+  .row.open .chev { transform: rotate(90deg); }
+  .detail { padding: 6px 22px 18px 64px; display: grid; gap: 12px; }
+  .detail[hidden], .form[hidden], [hidden] { display: none !important; }
+  .field { display: grid; grid-template-columns: 120px 1fr auto; gap: 10px; align-items: center; }
+  .field > span:first-child { color: var(--muted); font-size: 12.8px; }
+  .value { font-size: 14px; overflow-wrap: anywhere; }
+  .secret { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .06em; }
+  .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .meta { color: var(--faint); font-size: 12px; }
+  .form { padding: 18px 22px; display: grid; gap: 12px; background: rgba(0, 0, 0, .14); }
+  .form label { display: grid; gap: 6px; font-size: 12.8px; color: var(--muted); }
+  .form .buttons { justify-content: flex-end; }
+  .note { color: var(--muted); font-size: 12.8px; line-height: 1.45; }
+  .note.bad { color: var(--bad); }
+  .empty { padding: 34px 22px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .switch { position: relative; width: 46px; height: 26px; flex: none; cursor: pointer; }
+  /* O checkbox fica por cima do interruptor, transparente: entra na ordem do Tab e no leitor de ecrã (aria-label). */
+  .switch input { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a.link { color: #67e8f9; text-decoration: none; font-size: 13.5px; white-space: nowrap; }
+  a.link:hover { text-decoration: underline; }
+  .switch i { position: absolute; inset: 0; border-radius: 13px; background: #2c3042; transition: background .2s; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #e9ebf2; transition: transform .2s cubic-bezier(.3, 1.4, .6, 1); }
+  .switch input:checked + i { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .switch input:checked + i::after { transform: translateX(20px); }
+  ul.plain { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+  ul.plain li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+  ul.plain li small { color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 12px;
+    background: #1b1e2a; border: 1px solid var(--line); border-radius: 18px; padding: 9px 12px 9px 18px; font-size: 13px; box-shadow: 0 12px 40px rgba(0, 0, 0, .5); transition: opacity .2s, transform .2s; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  iframe { display: none; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; } .field { grid-template-columns: 1fr; } .detail { padding-left: 22px; } }
+
+  html.light { --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0; --line: rgba(20, 24, 40, .1); --card: rgba(255, 255, 255, .8); --field: rgba(20, 24, 40, .05); --bad: #b4233c; --warn: #9a4a00; }
+  html.light nav a:hover { background: rgba(20, 24, 40, .05); }
+  html.light nav a.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  html.light .switch input:not(:checked) + i { background: #cfd3de; }
+  html.light button.action { background: #fff; }
+  html.light button.action:hover:not(:disabled) { background: #eef0f6; }
+  html.light button.action.danger { border-color: rgba(180, 35, 60, .35); }
+  html.light button.link, html.light a.link { color: #0e7490; }
+  html.light .row:hover, html.light .row.open { background: rgba(20, 24, 40, .03); }
+  html.light .form { background: rgba(20, 24, 40, .03); }
+  html.light .toast { background: #fff; box-shadow: 0 12px 40px rgba(20, 24, 40, .18); }
+
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .grid label.wide { grid-column: 1 / -1; }
+  .row.static { cursor: default; }
+  .row.static:hover { background: none; }
+  .row .buttons { flex: none; }
+  .row .who span.secret { color: var(--text); }
+  .empty.small { padding: 4px 22px 16px; text-align: left; font-size: 12.8px; }
+  #list-cards, #list-ibans, #list-contacts, #list-idDocs, #list-vehicle, #list-loyalty { border-top: 0; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="layout">
+  <nav aria-label="Secções">
+    <h1><b>Preenchimento</b> automático</h1>
+    <a href="#pagamentos" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>Pagamentos<span class="count" id="countPagamentos"></span></a>
+    <a href="#contacto"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Informações de contacto<span class="count" id="countContacto"></span></a>
+    <a href="#documentos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="12" r="2"/><path d="M14 10h4M14 14h4"/></svg>Documentos de identificação<span class="count" id="countDocumentos"></span></a>
+    <a href="#viagens"><svg viewBox="0 0 24 24"><path d="M2 16l20-6-20-6 4 6z"/><path d="M6 10h8"/></svg>Viagens<span class="count" id="countViagens"></span></a>
+    <div class="other">
+      <a href="eteris://passwords/"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/></svg>Palavras-passe</a>
+    </div>
+  </nav>
+  <main>
+    <div class="note bad" id="advice" hidden></div>
+
+    <section id="pagamentos">
+      <h2>Pagamentos</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b>Cartões</b><span>O código de segurança do cartão nunca se guarda: escreve-se no momento de pagar. O número completo só com o Windows Hello.</span></div>
+          <button class="action primary" data-add="cards">Adicionar cartão</button>
+        </div>
+        <div id="list-cards"></div>
+        <div class="item">
+          <div class="label"><b>IBAN</b><span>Contas bancárias para transferências e débitos diretos.</span></div>
+          <button class="action primary" data-add="ibans">Adicionar IBAN</button>
+        </div>
+        <div id="list-ibans"></div>
+        <div class="item">
+          <div class="label"><b>Preencher automaticamente pagamentos</b><span>Sugere os cartões e o IBAN nos formulários de pagamento. Nada se preenche sem escolher, e só em ligações seguras (https).</span></div>
+          <label class="switch"><input type="checkbox" data-key="afPayments"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Pedir o Windows Hello ao preencher pagamentos</b><span id="payHelloNote">Só neste computador. Desligar também pede o Windows Hello.</span></div>
+          <label class="switch"><input type="checkbox" data-key="payAskHello"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, os cartões e o IBAN passam para os outros computadores só se ligar «Pagamentos» em «O que passa entre PCs» (desligado por omissão; ligar pede o Windows Hello). Vão com uma segunda cifra própria e nunca com o código de segurança.</span></div>
+          <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="contacto">
+      <h2>Informações de contacto</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b>Moradas</b><span>Nome, morada, e-mail e telefone para preencher formulários, com os campos de Portugal (código postal, distrito) e do Brasil (CEP, bairro, estado).</span></div>
+          <button class="action primary" data-add="contacts">Adicionar morada</button>
+        </div>
+        <div id="list-contacts"></div>
+        <div class="item">
+          <div class="label"><b>Preencher automaticamente moradas</b><span>Sugere as moradas guardadas. Nada se preenche sem escolher.</span></div>
+          <label class="switch"><input type="checkbox" data-key="afContacts"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, as moradas passam para os outros computadores (linha «Informações de contacto» em «O que passa entre PCs», ligada por omissão), com uma segunda cifra própria.</span></div>
+          <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="documentos">
+      <h2>Documentos de identificação</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b>Documentos</b><span>Passaporte, carta de condução/CNH, Cartão de Cidadão/RG e o número fiscal (NIF/CPF). Os números ficam mascarados; vê-los pede o Windows Hello.</span></div>
+          <button class="action primary" data-add="idDocs">Adicionar documento</button>
+        </div>
+        <div id="list-idDocs"></div>
+        <div class="item">
+          <div class="label"><b>Preencher automaticamente documentos</b><span>Só o NIF/CPF é reconhecido sozinho nos formulários; os outros preenchem-se com o botão direito › «Preencher com…».</span></div>
+          <label class="switch"><input type="checkbox" data-key="afDocuments"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, os documentos só passam para os outros computadores se ligar «Documentos de identificação» em «O que passa entre PCs» (desligado por omissão; ligar pede o Windows Hello). Vão com uma segunda cifra própria.</span></div>
+          <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="viagens">
+      <h2>Viagens</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b>Veículos</b><span>Marca, modelo, ano, matrícula/placa e VIN, para seguros, portagens e parques.</span></div>
+          <button class="action primary" data-add="vehicle">Adicionar veículo</button>
+        </div>
+        <div id="list-vehicle"></div>
+        <div class="item">
+          <div class="label"><b>Programas de fidelidade</b><span>Companhias aéreas e de viagem: o número de cliente fica mascarado.</span></div>
+          <button class="action primary" data-add="loyalty">Adicionar programa</button>
+        </div>
+        <div id="list-loyalty"></div>
+        <div class="item">
+          <div class="label"><b>Preencher automaticamente viagens</b><span>Os veículos e os programas preenchem-se com o botão direito › «Preencher com…» › «Viagem». Desligado, essa entrada sai do menu.</span></div>
+          <label class="switch"><input type="checkbox" data-key="afTravel"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, os veículos e os programas passam para os outros computadores (linha «Viagens» em «O que passa entre PCs», ligada por omissão), com uma segunda cifra própria.</span></div>
+          <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status"><span id="toastText"></span><button class="link" id="toastUndo" hidden>Anular</button></div>
+<script>
+  let data = {{DATA}};
+  const $ = id => document.getElementById(id);
+  let sinks = 0;
+  const sinkFor = handler => {
+    const frame = document.createElement('iframe');
+    frame.name = 'sink' + (++sinks); frame.hidden = true;
+    frame.addEventListener('load', () => {
+      const text = frame.contentDocument && frame.contentDocument.body ? frame.contentDocument.body.textContent.trim() : '';
+      if (!text) return;
+      let reply;
+      try { reply = JSON.parse(text); } catch (e) { reply = { ok: text === 'ok', message: text === 'recusado' ? 'Não foi confirmado.' : text }; }
+      frame.remove();
+      handler(reply);
+    });
+    document.body.append(frame);
+    return frame;
+  };
+  const query = params => Object.entries(params || {}).map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('');
+  const ask = (path, params, handler) => { sinkFor(handler || (() => {})).src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}${query(params)}`; };
+  // Os dados vão no corpo de um POST (nunca no endereço).
+  const post = (path, params, fields, handler) => {
+    const frame = sinkFor(handler);
+    const form = document.createElement('form');
+    form.method = 'post'; form.target = frame.name; form.enctype = 'application/x-www-form-urlencoded';
+    form.action = `eteris://${location.host}/${path}?t=${data.token}${query(params)}`;
+    for (const [k, v] of Object.entries(fields)) { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v == null ? '' : v; form.append(i); }
+    document.body.append(form); form.submit(); form.remove();
+  };
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.textContent = text; return e; };
+  const button = (text, cls, onClick) => { const b = el('button', cls || 'action', text); b.type = 'button'; b.addEventListener('click', onClick); return b; };
+  let toastTimer = 0;
+  const toast = (text, undo) => {
+    $('toastText').textContent = text;
+    $('toastUndo').hidden = !undo;
+    $('toastUndo').onclick = () => { $('toast').classList.remove('show'); undo && undo(); };
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), undo ? 10000 : 4000);
+  };
+
+  const COUNTRIES = [['PT', 'Portugal'], ['BR', 'Brasil'], ['', 'Outro país']];
+  const docName = (code, country) => { const t = data.docTypes.find(x => x.code === code); return !t ? code : country === 'PT' ? t.pt : country === 'BR' ? t.br : t.name; };
+  // Os formulários de cada coleção (a morada muda com o país).
+  const fields = {
+    cards: () => [['name', 'Nome no cartão'], ['number', 'Número do cartão', { mono: 1, placeholder: '0000 0000 0000 0000' }], ['exp', 'Validade', { placeholder: 'MM/AA' }], ['nickname', 'Alcunha', { placeholder: 'Pessoal, Trabalho…' }]],
+    ibans: () => [['iban', 'IBAN', { mono: 1, wide: 1, placeholder: 'PT50 0000 0000 0000 0000 0000 0' }], ['nickname', 'Alcunha']],
+    contacts: v => [['label', 'Etiqueta', { placeholder: 'Casa, Trabalho…' }], ['country', 'País', { select: COUNTRIES, rerender: 1 }]]
+      .concat((data.addressForms[(v.country || '').toUpperCase() === 'PT' ? 'PT' : (v.country || '').toUpperCase() === 'BR' ? 'BR' : ''] || []).map(f => [f.key, f.label, { placeholder: f.placeholder, wide: f.wide }])),
+    idDocs: v => [['type', 'Tipo', { select: data.docTypes.map(t => [t.code, docName(t.code, (v.country || '').toUpperCase())]), rerender: 1 }], ['country', 'País', { select: COUNTRIES, rerender: 1 }],
+      ['number', (v.type === 'taxId' ? docName('taxId', (v.country || '').toUpperCase()) : 'Número'), { mono: 1 }], ['name', 'Nome'], ['issuer', 'Emissor'],
+      ['issued', 'Emissão', { type: 'date' }], ['expires', 'Validade', { type: 'date' }], ['note', 'Nota', { textarea: 1, wide: 1 }]],
+    vehicle: () => [['make', 'Marca'], ['model', 'Modelo'], ['year', 'Ano', { placeholder: '2019' }], ['owner', 'Proprietário'],
+      ['plateRegion', 'País da matrícula/placa', { select: COUNTRIES }], ['plate', 'Matrícula/placa', { mono: 1, placeholder: 'AA-00-AA · ABC1D23' }], ['vin', 'VIN (número do quadro)', { mono: 1, wide: 1 }]],
+    loyalty: () => [['company', 'Companhia'], ['program', 'Programa'], ['number', 'Número de cliente', { mono: 1 }], ['name', 'Nome']],
+  };
+  const COLLECTION = { cards: 'cards', ibans: 'ibans', contacts: 'contacts', idDocs: 'idDocs', vehicle: 'travel', loyalty: 'travel' };
+  const SECRET = { cards: 1, ibans: 1, idDocs: 1, vehicle: 1, loyalty: 1 };
+
+  // Formulário em linha (adicionar ou editar).
+  // hold: a retenção do segredo à vista (editar um cartão, IBAN, documento ou viagem): renova-se de 20 em 20 s enquanto o
+  // formulário estiver aberto e larga-se ao fechar (incluindo quando outro formulário o substitui).
+  const openForm = (kind, holder, values, id, hold) => {
+    document.querySelectorAll('.form').forEach(f => (f.close ? f.close() : f.remove()));
+    const form = el('div', 'form');
+    const keeper = hold ? setInterval(() => ask('keep', { h: hold }), 20000) : 0;
+    form.close = () => { clearInterval(keeper); form.remove(); if (hold) ask('hide', { h: hold }); };
+    form.setAttribute('role', 'group');
+    const grid = el('div', 'grid'); form.append(grid);
+    const inputs = {};
+    const draw = () => {
+      for (const [k, i] of Object.entries(inputs)) values[k] = i.value;
+      grid.textContent = '';
+      for (const k of Object.keys(inputs)) delete inputs[k];
+      for (const [key, label, o] of fields[kind](values)) {
+        const opts = o || {};
+        const l = el('label', opts.wide ? 'wide' : '', label);
+        let input;
+        if (opts.select) {
+          input = document.createElement('select');
+          for (const [v, t] of opts.select) { const op = el('option', '', t); op.value = v; input.append(op); }
+          if (opts.rerender) input.addEventListener('change', draw);
+        } else if (opts.textarea) input = document.createElement('textarea');
+        else { input = document.createElement('input'); input.type = opts.type || 'text'; }
+        input.autocomplete = 'off';
+        input.dataset.key = key;
+        if (opts.placeholder) input.placeholder = opts.placeholder;
+        if (opts.mono) input.classList.add('secret');
+        input.value = values[key] == null ? '' : values[key];
+        if (opts.select && values[key] == null) input.value = opts.select[0][0];
+        inputs[key] = input; l.append(input); grid.append(l);
+      }
+    };
+    draw();
+    const error = el('div', 'note bad'); error.setAttribute('role', 'alert'); form.append(error);
+    const buttons = el('div', 'buttons');
+    buttons.append(button('Cancelar', 'action', () => form.close()));
+    buttons.append(button('Guardar', 'action primary', () => {
+      const payload = {};
+      for (const [k, i] of Object.entries(inputs)) payload[k] = i.value;
+      if (kind === 'vehicle' || kind === 'loyalty') payload.type = kind;
+      if (id) payload.id = id;
+      post('save', { c: COLLECTION[kind] }, payload, r => {
+        if (!r.ok) { error.textContent = r.message; return; }
+        form.close();
+        toast(r.message); refresh();
+      });
+    }));
+    form.append(buttons);
+    holder.prepend(form);
+    const first = grid.querySelector('input, select'); if (first) first.focus();
+  };
+  document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => openForm(b.dataset.add, $('list-' + b.dataset.add), {})));
+
+  // Uma linha: título, pormenor e os botões (o número completo só com o Windows Hello e no máximo 30 s à vista).
+  let shown = null;
+  const hideShown = () => { if (!shown) return; clearTimeout(shown.timer); shown.restore(); const hold = shown.hold; shown = null; if (hold) ask('hide', { h: hold }); };
+  const row = (kind, item, title, detail, canReveal, extraTag) => {
+    const r = el('div', 'row static');
+    const who = el('div', 'who');
+    who.append(el('b', '', title));
+    const sub = el('span', '', detail || '');
+    who.append(sub);
+    r.append(who);
+    if (extraTag) r.append(el('span', 'tag bad', extraTag));
+    const buttons = el('div', 'buttons');
+    if (SECRET[kind] && canReveal) buttons.append(button('Mostrar', 'action', e => {
+      if (shown && shown.id === item.id) { hideShown(); return; }
+      ask('reveal', { c: COLLECTION[kind], id: item.id }, reply => {
+        if (!reply.ok) { toast(reply.message || 'Não foi confirmado.'); return; }
+        hideShown();
+        const full = reply.item.number || reply.item.iban || reply.item.vin || '';
+        const before = sub.textContent;
+        sub.textContent = [detail, full].filter(Boolean).join(' · ');
+        sub.classList.add('secret');
+        e.target.textContent = 'Esconder';
+        shown = { id: item.id, hold: reply.hold, timer: setTimeout(hideShown, 30000), restore: () => { sub.textContent = before; sub.classList.remove('secret'); e.target.textContent = 'Mostrar'; } };
+      });
+    }));
+    buttons.append(button('Editar', 'action', () => {
+      const holder = r.parentElement;
+      if (!SECRET[kind]) { openForm(kind, holder, Object.assign({}, item), item.id); return; }
+      ask('reveal', { c: COLLECTION[kind], id: item.id }, reply => { if (!reply.ok) { toast(reply.message || 'Não foi confirmado.'); return; } openForm(kind, holder, reply.item, item.id, reply.hold); });
+    }));
+    buttons.append(button('Apagar', 'action danger', () => ask('delete', { c: COLLECTION[kind], id: item.id }, reply => {
+      if (!reply.ok) { toast(reply.message); return; }
+      r.remove();
+      toast('Apagado', reply.undo ? () => ask('undo', { u: reply.undo }, () => refresh()) : null);
+    })));
+    r.append(buttons);
+    return r;
+  };
+  const fill = (id, items, make, empty) => {
+    const box = $(id); box.textContent = '';
+    if (!items.length) { box.append(el('div', 'empty small', empty)); return; }
+    items.forEach(i => box.append(make(i)));
+  };
+  const render = () => {
+    fill('list-cards', data.cards, c => row('cards', c, `${c.brand} ${c.masked}`, [c.exp && 'validade ' + c.exp, c.name, c.nickname].filter(Boolean).join(' · '), true, c.expired ? 'Fora da validade' : null), 'Nenhum cartão guardado.');
+    fill('list-ibans', data.ibans, i => row('ibans', i, i.masked, i.nickname || '', true), 'Nenhum IBAN guardado.');
+    fill('list-contacts', data.contacts, c => row('contacts', c, c.summary || c.label || '(sem nome)', [c.label, c.postalCode, c.email, c.phone].filter(Boolean).join(' · '), false), 'Nenhuma morada guardada.');
+    fill('list-idDocs', data.docs, d => row('idDocs', d, `${d.typeName} ${d.masked || ''}`, [d.name, d.expires && 'validade ' + d.expires].filter(Boolean).join(' · '), true, d.expired ? 'Fora da validade' : null), 'Nenhum documento guardado.');
+    fill('list-vehicle', data.travel.filter(t => t.type === 'vehicle'), t => row('vehicle', t, t.title || t.plate || 'Veículo', [t.plate, t.owner].filter(Boolean).join(' · '), true), 'Nenhum veículo guardado.');
+    fill('list-loyalty', data.travel.filter(t => t.type === 'loyalty'), t => row('loyalty', t, t.title || 'Programa', [t.masked, t.owner].filter(Boolean).join(' · '), true), 'Nenhum programa guardado.');
+    $('countPagamentos').textContent = (data.cards.length + data.ibans.length) || '';
+    $('countContacto').textContent = data.contacts.length || '';
+    $('countDocumentos').textContent = data.docs.length || '';
+    $('countViagens').textContent = data.travel.length || '';
+  };
+  const refresh = () => ask('list', {}, reply => { if (reply.cards) { data = Object.assign(data, reply); render(); } });
+
+  // Cada interruptor tem o nome da linha (o <b> ao lado) para o leitor de ecrã.
+  document.querySelectorAll('.switch input').forEach(input => {
+    const name = input.closest('.item') && input.closest('.item').querySelector('.label b');
+    if (name) input.setAttribute('aria-label', name.textContent);
+  });
+  document.querySelectorAll('input[data-key]').forEach(input => {
+    input.checked = !!data[input.dataset.key];
+    input.addEventListener('change', () => ask('set', { k: input.dataset.key, v: input.checked }, r => {
+      if (!r.ok) { input.checked = !input.checked; toast(r.message || 'Não foi possível mudar.'); return; }
+      toast('Guardado');
+    }));
+  });
+  if (data.advice) { $('advice').textContent = data.advice; $('advice').hidden = false; }
+
+  // Realce da secção à vista; a secção pedida no endereço (#pagamentos, #contacto, #documentos, #viagens).
+  const links = [...document.querySelectorAll('nav > a')];
+  const mark = () => {
+    let current = 'pagamentos';
+    for (const s of document.querySelectorAll('main section')) if (s.getBoundingClientRect().top < 140) current = s.id;
+    links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + current));
+  };
+  addEventListener('scroll', mark, { passive: true });
+  addEventListener('hashchange', () => { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); mark(); });
+  // A página saiu: todas as retenções dela saem.
+  addEventListener('pagehide', () => ask('hide'));
+  render();
+  if (location.hash) { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); }
+  mark();
+</script>
+</body>
+</html>

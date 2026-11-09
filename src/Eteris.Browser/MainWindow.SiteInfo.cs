@@ -146,7 +146,7 @@ public partial class MainWindow
         var referrer = Shields.ReferrerCap.Decide(tab.Address, "https://outro-site.example/") is { Kind: not Shields.ReferrerCap.Kind.Strip } cap
             ? cap.Value ?? info.Origin + "/" : null;
         // O limite do referrer só se aplica com o Escudo ligado no site (PrivacyRequestHandler).
-        var shieldOff = Uri.TryCreate(tab.Address, UriKind.Absolute, out var page) && !Data.AppData.IsShieldOn(page.Host);
+        var shieldOff = Uri.TryCreate(tab.Address, UriKind.Absolute, out var page) && !ShieldOn(page.Host);
         SiteKnowledge.Facts Facts(IReadOnlyList<DateTime?> cookies, long? storage) => new(cookies, storage, snap.ThirdParties.Count,
             groups.Count(g => g.Known), snap.ThirdParties.Count(d => d.Blocked > 0), referrer, tab.LocalNetworkBlocked.Sum(p => p.Value), DateTime.Now,
             shieldOff);
@@ -194,17 +194,17 @@ public partial class MainWindow
         {
             try
             {
-                total += (long)(await client.Storage.GetUsageAndQuotaAsync(origin)).Usage;
+                total += (long)(await DevToolsCalls.Run(() => client.Storage.GetUsageAndQuotaAsync(origin))).Usage;
                 answered = true;
             }
             catch (Exception) { }
             try
             {
                 // Pelo método em bruto: o tipo gerado do CefSharp lê «entries» (pares chave/valor) como uma lista simples.
-                var response = await client.ExecuteDevToolsMethodAsync("DOMStorage.getDOMStorageItems", new Dictionary<string, object>
+                var response = await DevToolsCalls.Run(() => client.ExecuteDevToolsMethodAsync("DOMStorage.getDOMStorageItems", new Dictionary<string, object>
                 {
                     ["storageId"] = new Dictionary<string, object> { ["securityOrigin"] = origin, ["isLocalStorage"] = true },
-                });
+                }));
                 if (response.Success)
                 {
                     using var json = System.Text.Json.JsonDocument.Parse(response.ResponseAsJsonString);
@@ -257,7 +257,7 @@ public partial class MainWindow
             var context = PrivateContext ?? Cef.GetGlobalRequestContext();
             await context.GetCookieManager(null).DeleteCookiesAsync(info.Origin + "/");
             using var client = browser.GetDevToolsClient();
-            await client.Storage.ClearDataForOriginAsync(info.Origin, "all");
+            await DevToolsCalls.Run(() => client.Storage.ClearDataForOriginAsync(info.Origin, "all"));
             ShowToast($"Dados de {info.Host} apagados");
             ReloadActive();
         }

@@ -104,7 +104,7 @@
   button.action.danger:hover { background: rgba(255, 122, 144, .14); }
   .clearpanel { background: rgba(0, 0, 0, .18); align-items: flex-end; }
   .clearpanel[hidden] { display: none; }
-  .check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--fg, #e9ebf2); margin: 6px 0; cursor: pointer; }
+  .check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); margin: 6px 0; cursor: pointer; }
   .check input { accent-color: var(--accent); width: 16px; height: 16px; }
   .check small { color: var(--faint); }
   .about b { font-size: 17px; font-weight: 600; }
@@ -116,6 +116,40 @@
   }
   .saved.show { opacity: 1; transform: translate(-50%, 0); }
   .saved::before { content: "✓"; color: #34d399; margin-right: 8px; }
+  .syncbody[hidden] { display: none; }
+  .code { font: 600 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; word-spacing: .3em; user-select: all;
+    background: rgba(0, 0, 0, .3); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-top: 8px; overflow-wrap: anywhere; }
+  .code[hidden], .syncnote[hidden] { display: none; }
+  .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
+  .syncnote.bad { color: #ffb3c1; }
+  .syncheld { margin: 6px 0 0; padding-left: 18px; color: #ffd8a8; font-size: 12.8px; line-height: 1.45; }
+  .syncheld[hidden], #importWeaker[hidden], #syncDeleteCancel[hidden], #syncDeleteRetry[hidden], #syncReauth[hidden] { display: none; }
+  #importWeaker { margin-top: 8px; }
+  /* «O que passa entre PCs»: uma linha por grupo, com o interruptor deste computador (o checkbox continua focável). */
+  .topic { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
+  .topic li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .topic li:first-child { border-top: 0; }
+  .topic .rowtext b { display: block; font-weight: 600; font-size: 13.5px; }
+  .topic .rowtext small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+  .topic .info { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .switch.kb input { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .switch.kb input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .syncform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+  .syncform input[type=text] { font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
+    border-radius: 12px; padding: 9px 12px; width: min(100%, 420px); }
+  .syncform .filename { color: var(--muted); font-size: 12.5px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .syncform.left { justify-content: flex-start; margin-top: 10px; }
+  .stack { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .stack[hidden], .item[hidden] { display: none; }
+  .code.big { font-size: 22px; letter-spacing: .12em; text-align: center; max-width: 220px; }
+  .syncalert { background: rgba(124, 92, 255, .1); }
+  #syncState.bad { color: #ffb3c1; }
+  ul.devices { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  ul.devices li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  ul.devices .devname { font-weight: 600; color: var(--text); }
+  ul.devices small { color: var(--muted); flex: 1; }
+  .label strong { color: var(--text); }
+  #syncWhat, #syncStays, #syncWhen { display: block; margin-top: 4px; }
   iframe { display: none; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; } }
 
@@ -134,6 +168,11 @@
   html.light button.action { background: #fff; }
   html.light button.action:hover:not(:disabled) { background: #eef0f6; }
   html.light .clearpanel { background: rgba(20, 24, 40, .03); }
+  html.light .code, html.light .syncform input[type=text] { background: rgba(20, 24, 40, .05); }
+  html.light .syncalert { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  html.light .syncnote.bad, html.light #syncState.bad { color: #b4233c; }
+  html.light .syncheld { color: #9a4a00; }
+  html.light button.action.danger { color: #b4233c; border-color: rgba(180, 35, 60, .35); }
   html.light .saved { background: #fff; box-shadow: 0 12px 40px rgba(20, 24, 40, .18); }
   html.light .logo::after { background: #f3f4f9; box-shadow: inset 0 0 0 5px #1b1f2a; }
   html.light a.link { color: #0e7490; }
@@ -153,8 +192,10 @@
     <a href="#arranque"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Arranque</a>
     <a href="#abas"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="3"/><path d="M3 10h18"/></svg>Abas</a>
     <a href="#privacidade"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg>Privacidade</a>
+    <a href="#palavras-passe"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/></svg>Palavras-passe</a>
     <a href="#sites"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Sites</a>
     <a href="#importar"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Importar</a>
+    <a href="#sincronizacao"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></svg>Sincronização</a>
     <a href="#sobre"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Sobre</a>
   </nav>
   <main>
@@ -308,7 +349,7 @@
           <label class="switch"><input type="checkbox" data-key="autoplay"><i></i></label>
         </div>
         <div class="item">
-          <div class="label"><b>Apagar cookies e dados de sites ao fechar</b><span>Cada vez que fecha o Éteris, os sites esquecem-no: termina as sessões iniciadas e apaga o que os sites guardaram.</span></div>
+          <div class="label"><b>Apagar cookies e dados de sites ao fechar</b><span>Cada vez que fecha o Éteris, os sites esquecem-no: termina as sessões iniciadas e apaga o que os sites guardaram. As palavras-passe e o preenchimento automático ficam.</span></div>
           <label class="switch"><input type="checkbox" data-key="clearOnExit"><i></i></label>
         </div>
         <div class="item">
@@ -324,6 +365,7 @@
             <label class="check"><input type="checkbox" value="history" checked> Histórico de navegação</label>
             <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões)</small></label>
             <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache</label>
+            <label class="check"><input type="checkbox" value="vault"> Palavras-passe e preenchimento automático <small>(tudo, desde sempre; pede o Windows Hello; com a sincronização ligada, apaga também nos outros computadores)</small></label>
             <div class="seg" id="clearRange" style="margin-top:12px">
               <button data-value="hour" class="on">Última hora</button>
               <button data-value="today">Hoje</button>
@@ -347,6 +389,44 @@
       </div>
     </section>
 
+    <section id="palavras-passe">
+      <h2>Palavras-passe e preenchimento automático</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b>Gestor de palavras-passe</b><span>As palavras-passe ficam cifradas neste computador e nada vai para a Google. Ver, copiar, importar do Chrome, Brave ou Firefox e exportar.</span></div>
+          <a class="link" href="eteris://passwords/">Abrir →</a>
+        </div>
+        <div class="item">
+          <div class="label"><b>Pagamentos</b><span>Cartões (sem o código de segurança, nunca) e IBAN.</span></div>
+          <a class="link" href="eteris://autofill/#pagamentos">Abrir →</a>
+        </div>
+        <div class="item">
+          <div class="label"><b>Informações de contacto</b><span>Nomes, moradas, e-mails e telefones para preencher formulários.</span></div>
+          <a class="link" href="eteris://autofill/#contacto">Abrir →</a>
+        </div>
+        <div class="item">
+          <div class="label"><b>Documentos de identificação</b><span>Passaporte, carta de condução/CNH, Cartão de Cidadão/RG e NIF/CPF.</span></div>
+          <a class="link" href="eteris://autofill/#documentos">Abrir →</a>
+        </div>
+        <div class="item">
+          <div class="label"><b>Viagens</b><span>Veículos e programas de fidelidade.</span></div>
+          <a class="link" href="eteris://autofill/#viagens">Abrir →</a>
+        </div>
+        <div class="item">
+          <div class="label"><b>Oferecer para guardar palavras-passe</b><span>Depois de iniciar sessão num site, o Éteris pergunta se quer guardar a palavra-passe. Nunca na janela privada.</span></div>
+          <label class="switch kb"><input type="checkbox" data-key="pwOffer" aria-label="Oferecer para guardar palavras-passe"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Mostrar sugestões ao clicar num campo</b><span>Uma lista do Éteris por cima da página. Nada é preenchido sem escolher, e nunca ao carregar a página.</span></div>
+          <label class="switch kb"><input type="checkbox" data-key="pwSuggest" aria-label="Mostrar sugestões ao clicar num campo"><i></i></label>
+        </div>
+        <div class="item">
+          <div class="label"><b>Pedir o Windows Hello ao preencher palavras-passe</b><span>Só neste computador. Mostrar, copiar e exportar pedem sempre; os pagamentos e os documentos também (muda-se em Pagamentos).</span></div>
+          <label class="switch kb"><input type="checkbox" data-key="pwAskHello" aria-label="Pedir o Windows Hello ao preencher palavras-passe"><i></i></label>
+        </div>
+      </div>
+    </section>
+
     <section id="sites">
       <h2>Sites</h2>
       <div class="card" id="sitesCard">
@@ -361,6 +441,99 @@
       <div class="card" id="importCard">
         <div class="item">
           <div class="label"><b>Trazer favoritos de outro navegador</b><span id="importStatus">Os favoritos são copiados para o Éteris; o outro navegador não é alterado.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sincronizacao">
+      <h2>Sincronização</h2>
+      <div class="card">
+        <div class="item">
+          <div class="label"><b id="googleTitle">Entrar com o Google</b><span>Os favoritos, os Espaços, as definições, as decisões do Escudo, as notas e — com uma segunda cifra própria — as palavras-passe e o preenchimento automático que escolher em «O que passa entre PCs» passam de um computador para o outro, sempre cifrados neste computador: a chave nunca sai dos seus aparelhos e a Google só vê ficheiros cifrados, os tamanhos e as horas (na pasta oculta da aplicação no seu Google Drive). O início de sessão abre no navegador do sistema; depois, o Éteris pede à Google só o nome e o e-mail da conta, para os mostrar aqui e no menu.</span>
+            <span class="syncnote" id="syncPrivateNote" hidden>Numa janela privada a sincronização não está disponível e a conta não aparece: abra as Definições numa janela normal.</span>
+            <span class="syncnote" id="googleNote"></span>
+            <div class="code" id="googleUrl" hidden></div>
+            <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o código de recuperação ou outro computador)</small></label>
+            <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span></div>
+          <button class="action" id="googleButton" aria-describedby="googleNote">Entrar com o Google</button>
+        </div>
+        <div class="syncbody" id="syncBody" hidden>
+          <div class="item syncalert" id="syncCodeItem" hidden>
+            <div class="label"><b>Código de recuperação — guarde-o agora</b><span>É a chave da sua conta de sincronização. Com este código abre-se também o cofre de palavras-passe (e os pagamentos e documentos, se os sincronizar). <strong>Sem este código e sem outro computador ligado, os dados na nuvem não se recuperam</strong>: nem a Google nem o Éteris os conseguem abrir. Guarde-o num lugar seguro ou em papel (não só no próprio cofre do Éteris). Só aparece até carregar em «Já guardei».</span>
+              <div class="code" id="syncCode" aria-label="Código de recuperação"></div>
+              <span class="syncnote" id="syncCodeNote" role="status" hidden></span></div>
+            <div class="stack"><button class="action" id="syncCodeCopy">Copiar</button><button class="action" id="syncCodeSaved">Já guardei</button></div>
+          </div>
+          <div class="item" id="syncStateItem" hidden>
+            <div class="label"><b>Estado</b><span id="syncState" role="status">—</span>
+              <span class="syncnote" id="syncNotice" role="status" hidden></span></div>
+            <div class="stack"><button class="action" id="syncReauth" hidden>Entrar outra vez</button><button class="action" id="syncNow">Sincronizar agora</button></div>
+          </div>
+          <div class="item" id="syncOffItem" hidden>
+            <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
+            <button class="action" id="syncStart">Ligar a sincronização</button>
+          </div>
+          <div class="item" id="syncChooseItem" hidden>
+            <div class="label"><b>Este Google Drive já tem dados do Éteris</b><span>Junte este computador à sua conta de sincronização: aprove-o noutro computador onde o Éteris já sincroniza, ou use o código de recuperação. Os dados deste computador juntam-se aos da conta — nada se perde.</span>
+              <span class="syncnote">Perdeu o código e não tem outro computador ligado? Pode <a href="#syncDeleteItem" id="syncLostLink">apagar os dados do Éteris no Drive</a> e começar de novo com uma conta nova (perde-se o que só estava na nuvem; os dados deste computador ficam).</span>
+              <form class="syncform left" id="syncJoinForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
+                <input type="text" name="code" id="syncJoinCode" placeholder="Código de recuperação (14 grupos de 4)" spellcheck="false" aria-label="Código de recuperação">
+                <button class="action" type="submit" id="syncJoinButton">Usar o código de recuperação</button>
+              </form>
+              <span class="syncnote" id="syncJoinNote" role="status" hidden></span></div>
+            <button class="action" id="syncPair">Aprovar noutro computador</button>
+          </div>
+          <div class="item" id="syncPairItem" hidden>
+            <div class="label"><b>Aprovar noutro computador</b><span id="syncPairText" tabindex="-1" role="status">A preparar o pedido…</span>
+              <div class="code big" id="syncPairCode" hidden aria-label="Código de verificação"></div></div>
+            <div class="stack"><button class="action" id="syncPairConfirm" hidden>O outro computador mostra este código</button><button class="action" id="syncPairCancel">Cancelar</button></div>
+          </div>
+          <div id="syncRequests"></div>
+          <div class="item" id="syncDevicesItem" hidden>
+            <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e aparece aqui um código de recuperação novo.</span>
+              <ul class="devices" id="syncDevices"></ul>
+              <span class="syncnote" id="syncDevicesNote" role="status" hidden></span></div>
+          </div>
+          <div class="item" id="syncNewCodeItem" hidden>
+            <div class="label"><b>Código de recuperação</b><span>Perdeu o código, ou alguém o pode ter visto? Gere um novo: a conta muda de chave, o código antigo deixa de servir e os outros computadores continuam ligados sozinhos. O código novo aparece aqui uma vez.</span>
+              <span class="syncnote" id="syncNewCodeNote" role="status" hidden></span></div>
+            <button class="action" id="syncNewCode">Gerar um código novo…</button>
+          </div>
+          <div class="item" id="syncTopicItem">
+            <div class="label"><b id="syncTopicTitle">O que passa entre PCs</b><span id="syncTopicIntro"></span>
+              <ul class="topic" id="syncTopic" aria-labelledby="syncTopicTitle"></ul>
+              <span class="syncnote" id="syncTopicNote" role="status" hidden></span></div>
+          </div>
+          <div class="item">
+            <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris (ou 10 s depois de uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora»; com esta secção à vista ou ao abrir o menu (⋯), procura pedidos de outros computadores. Sem rede, volta a tentar sozinho.</span></div>
+          </div>
+          <div class="item" id="syncDeleteItem">
+            <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
+              <span class="syncnote" id="syncDeleteNote" role="status" hidden></span></div>
+            <div class="stack"><button class="action" id="syncDeleteRetry" hidden>Tentar de novo</button><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="label"><b>Exportar perfil cifrado</b><span>Favoritos, Espaços, definições, decisões do Escudo e notas num ficheiro .eteris em Transferências, para levar para outro computador sem conta (as abas abertas não vão). O código para o abrir aparece uma única vez: guarde-o.</span>
+            <label class="check"><input type="checkbox" id="exportSecrets"> Incluir palavras-passe, pagamentos e documentos <small>(o cofre inteiro, selado dentro do ficheiro; pede o Windows Hello)</small></label>
+            <span class="syncnote" id="exportNote" hidden></span>
+            <div class="code" id="exportCode" hidden></div></div>
+          <button class="action" id="exportButton">Exportar…</button>
+        </div>
+        <div class="item">
+          <div class="label"><b>Importar perfil cifrado</b><span>Junta um perfil exportado a este: o que falta entra, as definições do ficheiro passam a valer e as notas ficam por baixo das atuais. O que baixaria a proteção deste computador só entra se confirmar.</span>
+            <span class="syncnote" id="importNote" role="status" hidden></span>
+            <ul class="syncheld" id="importHeld" hidden></ul>
+            <button class="action" type="button" id="importWeaker" hidden>Aplicar também estas alterações</button></div>
+          <form class="syncform" id="syncImportForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
+            <span class="filename" id="syncFileName">Nenhum ficheiro escolhido</span>
+            <button class="action" type="button" id="syncFileButton" aria-describedby="syncFileName">Escolher ficheiro…</button>
+            <input type="file" id="syncFile" accept=".eteris" hidden>
+            <input type="text" name="code" id="syncCode2" placeholder="Código (14 grupos de 4)" spellcheck="false" aria-label="Código do perfil exportado">
+            <input type="hidden" name="data" id="syncData">
+            <input type="hidden" name="weaker" id="syncWeaker" value="0">
+            <button class="action" type="submit" id="importButton">Importar</button>
+          </form>
         </div>
       </div>
     </section>
@@ -433,8 +606,10 @@
   clearProbe.addEventListener('load', () => {
     const text = clearProbe.contentDocument && clearProbe.contentDocument.body ? clearProbe.contentDocument.body.textContent.trim() : '';
     if (!text) return;
-    document.getElementById('clearResult').textContent = '✓ ' + text;
-    clearPanel.hidden = true;
+    // Recusado (sem o token, ou o Windows Hello do cofre não confirmado): sem ✓ e com as escolhas à vista.
+    const done = text !== 'recusado' && !text.startsWith('Não foi');
+    document.getElementById('clearResult').textContent = (done ? '✓ ' : '') + (text === 'recusado' ? 'Pedido recusado.' : text);
+    if (done) clearPanel.hidden = true;
   });
   document.getElementById('clearGo').addEventListener('click', () => {
     const what = [...clearPanel.querySelectorAll('input:checked')].map(i => i.value).join(',');
@@ -529,8 +704,514 @@
 
   document.querySelectorAll('input[data-key]').forEach(input => {
     input.checked = !!data[input.dataset.key];
-    input.addEventListener('change', () => send(input.dataset.key, input.checked));
+    input.addEventListener('change', () => {
+      // Desligar «Pedir o Windows Hello ao preencher palavras-passe» pede o Windows Hello: sem confirmação, fica ligado.
+      if (input.dataset.key === 'pwAskHello' && !input.checked) {
+        const frame = document.createElement('iframe'); frame.hidden = true;
+        frame.addEventListener('load', () => {
+          const reply = frame.contentDocument && frame.contentDocument.body ? frame.contentDocument.body.textContent.trim() : '';
+          if (!reply) return;
+          frame.remove();
+          if (reply !== 'ok') input.checked = true;
+        });
+        frame.src = `eteris://${location.host}/set?k=pwAskHello&v=false&t=${data.token}&n=${Date.now()}`;
+        document.body.append(frame);
+        return;
+      }
+      send(input.dataset.key, input.checked);
+    });
   });
+
+  // ---------- Sincronização ----------
+  (() => {
+    const body = document.getElementById('syncBody');
+    const googleButton = document.getElementById('googleButton');
+    const initial = data.syncInitial || {};
+    if (data.syncPrivate) {
+      // Janela privada: nada da sincronização nem da conta (as rotas sync-* também recusam aqui).
+      body.hidden = true; googleButton.disabled = true;
+      document.getElementById('syncPrivateNote').hidden = false;
+      document.getElementById('googleNote').textContent = '';
+      return;
+    }
+    document.getElementById('syncWhat').textContent = 'Sincroniza: ' + data.syncWhat;
+    document.getElementById('syncStays').textContent = data.syncStays;
+    // Cada pedido tem o seu iframe e o seu tratador: uma resposta só vai para quem a pediu. Com um iframe partilhado,
+    // um «sync-status» automático podia levar a resposta da exportação (e o código, que só aparece uma vez), ou um
+    // clique podia substituir o pedido da conta antes de ele responder.
+    let sinks = 0;
+    const sinkFor = handler => {
+      const frame = document.createElement('iframe');
+      frame.name = 'syncSink' + (++sinks); frame.hidden = true;
+      frame.addEventListener('load', () => {
+        const text = frame.contentDocument && frame.contentDocument.body ? frame.contentDocument.body.textContent.trim() : '';
+        if (!text) return; // o about:blank inicial
+        let reply;
+        try { reply = JSON.parse(text); } catch (e) { reply = { ok: false, message: text === 'recusado' ? 'Pedido recusado.' : text }; }
+        frame.remove();
+        handler(reply);
+      });
+      document.body.append(frame);
+      return frame;
+    };
+    const ask = (path, handler, extra) => { sinkFor(handler).src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}${extra || ''}`; };
+    // As notas são regiões vivas: um erro é anunciado já (alert), o resto quando o leitor de ecrã puder (status). Só se
+    // mexe no texto quando muda (as sondagens repetidas não voltam a anunciar o mesmo).
+    const note = (el, text, bad) => {
+      const value = text || '';
+      if (el.textContent !== value) el.textContent = value;
+      el.hidden = !value; el.classList.toggle('bad', !!bad);
+      if (value) el.setAttribute('role', bad ? 'alert' : 'status');
+    };
+    const $ = id => document.getElementById(id);
+    // Confirmação em dois passos: o 2.º clique só conta meio segundo depois do 1.º (um duplo clique não confirma).
+    const ARM_GUARD = 500;
+
+    const exportButton = $('exportButton');
+    exportButton.addEventListener('click', () => {
+      exportButton.disabled = true;
+      const withSecrets = $('exportSecrets').checked;
+      ask('sync-export', reply => {
+        exportButton.disabled = false;
+        const code = $('exportCode');
+        if (!reply.ok) { note($('exportNote'), reply.message, true); code.hidden = true; return; }
+        const vault = reply.secrets ? `, dos quais ${reply.secrets} do cofre de palavras-passe` : '';
+        note($('exportNote'), `✓ Guardado em Transferências › ${reply.file} (${reply.records} registos${vault}). Código para o abrir — só aparece agora:`);
+        code.textContent = reply.code; code.hidden = false;
+        $('exportSecrets').checked = false;
+      }, withSecrets ? '&secrets=1' : '');
+    });
+
+    const form = $('syncImportForm');
+    const file = $('syncFile');
+    // O <input type=file> fica escondido; o botão abre o mesmo seletor e entra na ordem do Tab.
+    $('syncFileButton').addEventListener('click', () => file.click());
+    file.addEventListener('change', () => {
+      $('syncFileName').textContent = file.files && file.files[0] ? file.files[0].name : 'Nenhum ficheiro escolhido';
+    });
+    const importNote = $('importNote');
+    const importHeld = $('importHeld');
+    const importWeaker = $('importWeaker');
+    const weakerField = $('syncWeaker');
+    const clearImport = () => {
+      $('syncCode2').value = ''; $('syncData').value = '';
+      weakerField.value = '0'; importHeld.hidden = true; importHeld.replaceChildren(); importWeaker.hidden = true;
+    };
+    const importReply = reply => {
+      note(importNote, (reply.ok ? '✓ ' : '') + reply.message, !reply.ok);
+      const held = reply.ok && Array.isArray(reply.held) ? reply.held : [];
+      if (!held.length) { if (reply.ok) clearImport(); return; }
+      // O ficheiro baixaria proteções: mostra quais e só as aplica se o utilizador carregar no botão.
+      importHeld.replaceChildren(...held.map(text => { const li = document.createElement('li'); li.textContent = text; return li; }));
+      importHeld.hidden = false; importWeaker.hidden = false;
+    };
+    form.action = `eteris://${location.host}/sync-import?t=${data.token}`;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const chosen = file.files && file.files[0];
+      if (!chosen) { note(importNote, 'Escolha primeiro o ficheiro .eteris.', true); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        $('syncData').value = String(reader.result).replace(/^data:[^,]*,/, '');
+        weakerField.value = '0'; importHeld.hidden = true; importWeaker.hidden = true;
+        form.target = sinkFor(importReply).name;
+        form.submit();
+      };
+      reader.readAsDataURL(chosen);
+    });
+    importWeaker.addEventListener('click', () => {
+      if (!$('syncData').value) return;
+      weakerField.value = '1';
+      form.target = sinkFor(reply => { importReply(reply); if (reply.ok) clearImport(); }).name;
+      form.submit();
+    });
+
+    // ---- conta e sincronização ----
+    const googleTitle = $('googleTitle');
+    const googleNote = $('googleNote');
+    const googleUrl = $('googleUrl');
+    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null;
+    // Pedidos do estado (estado, conta, entrar, sair, ações): só a resposta mais recente desenha. Uma resposta
+    // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
+    const askGoogle = (path, extra, quiet) => {
+      const seq = ++googleAsked;
+      // Depois de uma ação (entrar, ligar, aprovar, procurar pedidos…), o resultado chega em segundo plano: pergunta
+      // amiúde durante uns segundos. A procura periódica de pedidos (quiet) não conta como ação.
+      if (path !== 'sync-status' && !quiet) quickUntil = Date.now() + 15000;
+      ask(path, d => { if (seq < googlePainted) return; googlePainted = seq; paint(d); }, extra);
+    };
+    // Nome e e-mail da conta: se há sessão sem conta guardada, pedem-se uma vez quando a secção fica à vista DEPOIS de
+    // um gesto da pessoa na página (clique, tecla, roda, toque). Uma aba de Definições reposta no arranque não pede nada.
+    let accountKnown = !!(initial.google && initial.google.account), accountAsked = false, touched = false, seen = false, looked = false;
+    const askAccount = () => {
+      if (!touched || !seen || accountKnown || accountAsked || googleButton.dataset.state !== 'signedIn') return;
+      accountAsked = true;
+      askGoogle('sync-account');
+    };
+    // Aparelhos da conta e pedidos de aparelhos novos: também só depois de um gesto, com a secção à vista.
+    const askLook = () => {
+      if (!touched || !seen || looked || !lastState || !lastState.enabled) return;
+      looked = true;
+      askGoogle('sync-look');
+    };
+    // Enquanto a secção está à vista (e a página também), com a sincronização ligada, volta a procurar pedidos de 5 em
+    // 5 s — o pedido de um computador novo aparece aqui sem recarregar — até 10 minutos depois do último gesto.
+    // A lista de aparelhos relê-se de 30 em 30 s (cada vez lê o estado de todos os aparelhos).
+    let lastGesture = 0, looks = 0;
+    const lookAgain = () => {
+      setTimeout(lookAgain, 5000);
+      if (!looked || !seen || document.visibilityState !== 'visible' || !lastState || !lastState.enabled) return;
+      if (Date.now() - lastGesture > 10 * 60 * 1000) return;
+      askGoogle('sync-look', ++looks % 6 === 0 ? '' : '&devices=0', true);
+    };
+    setTimeout(lookAgain, 5000);
+    const paintGoogle = g => {
+      googleNote.textContent = g.text;
+      googleUrl.hidden = !g.url; googleUrl.textContent = g.url || '';
+      googleButton.disabled = g.state === 'unconfigured';
+      googleButton.textContent = g.state === 'signedIn' ? 'Sair' : g.state === 'waiting' ? 'Cancelar' : g.folder ? 'Ligar' : 'Entrar com o Google';
+      // Com sessão, a linha é a da conta e o botão diz de que se sai (o leitor de ecrã lê também a nota, com a conta).
+      googleTitle.textContent = g.state === 'signedIn' ? (g.folder ? 'Pasta de teste' : 'Conta Google') : g.folder ? 'Pasta de teste' : 'Entrar com o Google';
+      if (g.state === 'signedIn') googleButton.setAttribute('aria-label', g.folder ? 'Desligar da pasta de teste' : 'Sair da conta Google');
+      else googleButton.removeAttribute('aria-label');
+      googleButton.dataset.state = g.state;
+      $('syncForgetRow').hidden = g.state !== 'signedIn';
+      accountKnown = !!g.account;
+      if (g.state !== 'signedIn') accountAsked = false;
+    };
+    const show = (id, on) => { $(id).hidden = !on; };
+    // Pedidos e aparelhos: só se reconstroem quando a lista muda (as sondagens de 1,5 s não tiram o foco do teclado, não
+    // desarmam um «Remover» à espera da confirmação nem voltam a ativar um «Aprovar» já carregado).
+    let requestsKey = null, devicesKey = null;
+    const approving = new Set();            // pedidos com «Aprovar» ou «Recusar» já carregado
+    const armed = new Map();                // aparelho → hora em que «Remover» ficou à espera da confirmação
+    const keyOfFocus = box => box.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+    const refocus = (box, key) => { if (key) box.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus(); };
+    const paintRemove = (button, dev) => {
+      const on = armed.has(dev.id);
+      button.textContent = on ? 'Confirmar: remover e trocar a chave' : 'Remover';
+      button.setAttribute('aria-label', on ? `Confirmar: remover ${dev.name} e trocar a chave da conta` : `Remover ${dev.name} da sincronização`);
+    };
+    const paintSync = d => {
+      const s = d.sync || { phase: 'off' };
+      const phase = s.phase;
+      body.hidden = !d.connected;
+      show('syncStateItem', d.enabled && (phase === 'on' || phase === 'starting'));
+      show('syncOffItem', d.connected && (phase === 'off' || phase === 'stopped'));
+      show('syncChooseItem', d.enabled && phase === 'choose');
+      show('syncPairItem', d.enabled && phase === 'pairing');
+      show('syncDevicesItem', d.enabled && phase === 'on' && (s.devices || []).length > 0);
+      show('syncDeleteItem', d.connected);
+      // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
+      $('syncOffTitle').textContent = phase === 'stopped' ? 'A sincronização parou neste computador' : 'A sincronização está desligada neste computador';
+      // Um apagar do Drive que não acabou (e já não está a correr): diz o que fazer, e «Ligar» passa a «Ligar sem acabar
+      // de apagar» (nunca fica preso num apagar que não acaba).
+      const deleteStuck = !!s.deleting && !!s.deleteError && !s.running;
+      $('syncOffText').textContent = deleteStuck
+        ? 'Ainda há dados do Éteris por apagar do Drive (o porquê está em «Apagar os meus dados…», mais abaixo). Pode tentar de novo, ou ligar já a sincronização sem acabar de apagar: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o código de recuperação dela.'
+        : phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
+        : d.hasKey ? 'Ligue-a para continuar com a mesma conta (a chave ficou neste computador).'
+        : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';
+      $('syncStart').textContent = deleteStuck ? 'Ligar sem acabar de apagar' : phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';
+      $('syncStart').dataset.anyway = deleteStuck ? '1' : '';
+      // A apagar do Drive: «Ligar» espera que acabe (com o apagar interrompido, «Ligar» acaba-o primeiro). «Apagar…» fica
+      // ativo (tem o foco depois de confirmar; carregar outra vez só volta a tentar acabar).
+      $('syncStart').disabled = !!s.deleting && !!s.running;
+      // Estado.
+      const state = s.running ? 'A sincronizar…' : s.error ? s.error : s.update ? 'Há dados de um Éteris mais recente: atualize o Éteris para os receber.'
+        : s.lastText || (phase === 'starting' ? 'A ligar…' : 'Ligada. A primeira sincronização está a caminho.');
+      $('syncState').textContent = state;
+      $('syncState').classList.toggle('bad', !!s.error && !s.running);
+      note($('syncNotice'), phase === 'on' ? s.notice : '');
+      $('syncNow').disabled = !!s.running;
+      // A autorização da Google expirou ou foi retirada: não passa sozinho — entrar outra vez (sem sair nem mexer na chave).
+      show('syncReauth', !!s.needsSignIn && !d.google.folder);
+      // Gerar um código novo (com a conta ligada e sem um código ainda por guardar).
+      show('syncNewCodeItem', d.enabled && phase === 'on' && !s.code);
+      note($('syncNewCodeNote'), msg0(d, 'code'), true);
+      // Código de recuperação (só no aparelho que criou a conta, ou depois de remover um aparelho).
+      show('syncCodeItem', d.enabled && !!s.code);
+      if (s.code && $('syncCode').textContent !== s.code) $('syncCode').textContent = s.code;
+      // Entrar num aparelho novo. O botão volta quando a junção acabou: deu certo (a fase muda), deu erro (a mensagem
+      // «join»), ou a ronda acabou sem nada (por exemplo sem rede). O código só sai do campo quando deu certo.
+      const msg = d.message || null;
+      if (joining) {
+        if (phase !== 'choose') { joining = false; $('syncJoinCode').value = ''; }
+        else if (msg && msg.area === 'join') joining = false;
+        else if (!s.running && Date.now() - joinSent > 4000) joining = false;
+      }
+      $('syncJoinButton').disabled = joining || !!s.running;
+      const joinError = msg && msg.area === 'join' ? msg.text : (s.pairing && s.pairing.error) || '';
+      note($('syncJoinNote'), joinError || (phase === 'choose' && !joining ? s.notice : '') || (joining ? 'A abrir a conta e a juntar os dados…' : ''), !!joinError);
+      if (phase === 'pairing') {
+        const p = s.pairing || {};
+        const code = p.code;
+        $('syncPairText').textContent = !code
+          ? 'Agora, no outro computador onde o Éteris já sincroniza, abra o menu (Alt+F) ou Definições › Sincronização. O pedido aparece lá com um código.'
+          : p.confirmed ? 'À espera da aprovação no outro computador…'
+          : 'Confirme que o outro computador mostra exatamente este código, e aprove lá:';
+        $('syncPairCode').hidden = !code;
+        $('syncPairCode').textContent = code || '';
+        $('syncPairConfirm').hidden = !code || !!p.confirmed;
+      }
+      // Pedidos de aparelhos novos (este computador aprova).
+      const box = $('syncRequests');
+      const requests = d.enabled ? s.requests || [] : [];
+      for (const id of [...approving]) if (!requests.some(r => r.id === id)) approving.delete(id);
+      const rKey = JSON.stringify([s.secrets, requests.map(r => [r.id, r.name, r.code])]);
+      if (rKey !== requestsKey) {
+        requestsKey = rKey;
+        const focused = keyOfFocus(box);
+        box.replaceChildren(...requests.map(r => {
+          const item = document.createElement('div');
+          item.className = 'item syncalert';
+          const label = document.createElement('div'); label.className = 'label';
+          const title = document.createElement('b'); title.textContent = `«${r.name}» quer juntar-se à sincronização`;
+          const text = document.createElement('span');
+          text.textContent = 'Só aprove se estiver a ligar esse computador agora e ele mostrar este mesmo código. Aprovado, recebe a chave da conta (cifrada só para ele).'
+            + (s.secrets ? ' Esse computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.' : '');
+          const code = document.createElement('div'); code.className = 'code big'; code.textContent = r.code;
+          label.append(title, text, code);
+          const buttons = document.createElement('div'); buttons.className = 'stack';
+          const yes = document.createElement('button'); yes.className = 'action'; yes.textContent = 'Aprovar'; yes.dataset.key = r.id + ':yes';
+          yes.setAttribute('aria-label', `Aprovar «${r.name}», código ${r.code}`);
+          const no = document.createElement('button'); no.className = 'action'; no.textContent = 'Recusar'; no.dataset.key = r.id + ':no';
+          no.setAttribute('aria-label', `Recusar «${r.name}»`);
+          yes.disabled = no.disabled = approving.has(r.id);
+          const act = path => { if (approving.has(r.id)) return; approving.add(r.id); yes.disabled = no.disabled = true; askGoogle(path, `&id=${encodeURIComponent(r.id)}`); };
+          yes.addEventListener('click', () => act('sync-approve'));
+          no.addEventListener('click', () => act('sync-refuse'));
+          buttons.append(yes, no);
+          item.append(label, buttons);
+          return item;
+        }));
+        refocus(box, focused);
+      }
+      if (msg && msg.area === 'approve') {
+        note($('syncNotice'), msg.text, true);
+        approving.clear(); requestsKey = null; // a aprovação falhou: os botões voltam
+      }
+      // Aparelhos.
+      const list = $('syncDevices');
+      const devices = s.devices || [];
+      for (const id of [...armed.keys()]) if (!devices.some(dev => dev.id === id)) armed.delete(id);
+      const dKey = JSON.stringify(devices.map(dev => [dev.id, dev.name, dev.me, dev.last]));
+      if (dKey !== devicesKey) {
+        devicesKey = dKey;
+        const focused = keyOfFocus(list);
+        list.replaceChildren(...devices.map(dev => {
+          const li = document.createElement('li');
+          const name = document.createElement('span'); name.className = 'devname'; name.textContent = dev.name;
+          const info = document.createElement('small'); info.textContent = (dev.me ? 'este computador · ' : '') + dev.last;
+          li.append(name, info);
+          if (!dev.me) {
+            const remove = document.createElement('button'); remove.className = 'action danger'; remove.dataset.key = dev.id;
+            paintRemove(remove, dev);
+            remove.addEventListener('click', () => {
+              const since = armed.get(dev.id);
+              if (since === undefined) {
+                armed.set(dev.id, Date.now());
+                paintRemove(remove, dev);
+                setTimeout(() => { if (armed.get(dev.id) !== undefined && Date.now() - armed.get(dev.id) >= 5900) { armed.delete(dev.id); paintRemove(remove, dev); } }, 6000);
+                return;
+              }
+              if (Date.now() - since < ARM_GUARD) return; // 2.º clique de um duplo clique: não confirma
+              armed.delete(dev.id);
+              remove.disabled = true;
+              // Os aparelhos que esta lista mostra: só esses (com a chave já fixada) recebem a chave nova.
+              askGoogle('sync-remove', `&id=${encodeURIComponent(dev.id)}&shown=${encodeURIComponent(devices.map(x => x.id).join(','))}`);
+            });
+            li.append(remove);
+          }
+          return li;
+        }));
+        refocus(list, focused);
+      }
+      paintTopic(d);
+      note($('syncDevicesNote'), msg && msg.area === 'devices' ? msg.text : '', true);
+      // O porquê de um apagar que não acabou: a mensagem da última ação ou, depois de reabrir, o estado (deleteError).
+      const deleteError = (msg && msg.area === 'delete' ? msg.text : '') || (s.deleting && !s.running ? s.deleteError || '' : '');
+      note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);
+      show('syncDeleteRetry', !!s.deleting && !!deleteError && !s.running);
+      return s;
+    };
+    const msg0 = (d, area) => d.message && d.message.area === area ? d.message.text : '';
+    // «O que passa entre PCs»: as linhas só se reconstroem quando mudam (uma sondagem não tira o foco do teclado).
+    let topicKey = null;
+    const choosing = new Set();
+    const paintTopic = d => {
+      const c = d.choices;
+      if (!c) return;
+      $('syncTopicIntro').textContent = c.intro;
+      const tKey = JSON.stringify(c.rows.map(r => [r.id, r.on]));
+      note($('syncTopicNote'), msg0(d, 'choices'), true);
+      if (tKey === topicKey) return;
+      topicKey = tKey;
+      const list = $('syncTopic');
+      const focused = keyOfFocus(list);
+      list.replaceChildren(...c.rows.map(r => {
+        const li = document.createElement('li');
+        const text = document.createElement('div'); text.className = 'rowtext';
+        const title = document.createElement('b'); title.textContent = r.title;
+        const small = document.createElement('small'); small.textContent = r.text;
+        text.append(title, small);
+        li.append(text);
+        if (r.on === null) {
+          const info = document.createElement('span'); info.className = 'info'; info.textContent = 'Fica neste computador';
+          li.append(info);
+          return li;
+        }
+        const sw = document.createElement('label'); sw.className = 'switch kb';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!r.on; input.dataset.key = r.id;
+        input.setAttribute('aria-label', r.title + (r.ask ? ' (ligar pede o Windows Hello)' : ''));
+        input.disabled = choosing.has(r.id);
+        input.addEventListener('change', () => {
+          choosing.add(r.id); input.disabled = true;
+          // A resposta chega depois da confirmação do Windows (ou logo, nas linhas que não a pedem).
+          ask(`sync-choose`, reply => { choosing.delete(r.id); topicKey = null; paint(reply); }, `&g=${encodeURIComponent(r.id)}&on=${input.checked ? 1 : 0}`);
+        });
+        const knob = document.createElement('i');
+        sw.append(input, knob);
+        li.append(sw);
+        return li;
+      }));
+      refocus(list, focused);
+    };
+    const paint = d => {
+      if (!d || !d.google) return;
+      lastState = d;
+      paintGoogle(d.google);
+      const s = paintSync(d);
+      clearTimeout(poll);
+      // À espera do início de sessão, da conta, de uma ronda, do outro computador ou de acabar de apagar do Drive (também
+      // quando o Éteris reabre e acaba o apagar sozinho): volta a perguntar daqui a pouco. Senão, de 20 em 20 s (só o
+      // estado guardado: nenhum pedido à rede), para «há 2 min» e pedidos novos.
+      const busy = d.google.state === 'waiting' || (d.google.state === 'signedIn' && d.google.pending) || s.running || joining
+        || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil
+        || (s.deleting && !s.deleteError && !(d.message && d.message.area === 'delete'));
+      poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
+      askLook();
+      // Depois de uma ação que muda o que está à vista, o foco vai para o que apareceu (o leitor de ecrã diz o quê).
+      if (focusAfterPaint && !$(focusAfterPaint).hidden && $(focusAfterPaint).closest('[hidden]') === null) {
+        $(focusAfterPaint).focus();
+        focusAfterPaint = null;
+      }
+    };
+    paint(initial);
+    // O gesto que é o próprio «Sair» não pede a conta: o pedido sairia para a Google no instante em que se sai.
+    const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && googleButton.contains(e.target);
+    for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
+      addEventListener(type, e => { touched = true; lastGesture = Date.now(); if (!isSignOut(e)) { askAccount(); askLook(); } }, { passive: true, capture: true });
+    new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); askLook(); }).observe(googleButton);
+    // «Sair» com «apagar a chave» e o código de recuperação ainda por guardar: a conta ficava irrecuperável se este for o
+    // único computador. Pede confirmação (2.º clique, meio segundo depois, nos 8 s seguintes).
+    let signOutArmed = 0;
+    const disarmSignOut = () => {
+      signOutArmed = 0;
+      note($('syncForgetNote'), '');
+      if (googleButton.dataset.state === 'signedIn') googleButton.textContent = 'Sair';
+    };
+    $('syncForget').addEventListener('change', disarmSignOut);
+    googleButton.addEventListener('click', () => {
+      const state = googleButton.dataset.state;
+      if (state === 'signedIn') {
+        const forget = $('syncForget').checked;
+        const codePending = !!(lastState && lastState.sync && lastState.sync.code);
+        if (forget && codePending) {
+          if (!signOutArmed) {
+            signOutArmed = Date.now();
+            googleButton.textContent = 'Confirmar: sair e apagar a chave';
+            note($('syncForgetNote'), 'O código de recuperação ainda não foi guardado. Se este for o único computador ligado, sair e apagar a chave torna os dados na nuvem irrecuperáveis. Guarde o código primeiro, ou carregue outra vez para confirmar.', true);
+            setTimeout(() => { if (signOutArmed && Date.now() - signOutArmed >= 7900) disarmSignOut(); }, 8000);
+            return;
+          }
+          if (Date.now() - signOutArmed < ARM_GUARD) return;
+        }
+        signOutArmed = 0;
+        note($('syncForgetNote'), '');
+        askGoogle('sync-google-out', forget ? '&forget=1' : '');
+      }
+      else askGoogle(state === 'waiting' ? 'sync-google-cancel' : 'sync-google');
+    });
+    $('syncStart').addEventListener('click', () => askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : ''));
+    // «Tentar de novo» (um apagar do Drive que não acabou): volta a tentar já; o foco fica na nota que diz o resultado.
+    $('syncDeleteRetry').addEventListener('click', () => {
+      note($('syncDeleteNote'), 'A apagar os dados do Éteris do Google Drive…');
+      $('syncDelete').focus();
+      askGoogle('sync-delete-retry');
+    });
+    $('syncNow').addEventListener('click', () => askGoogle('sync-now'));
+    $('syncReauth').addEventListener('click', () => askGoogle('sync-google'));
+    let newCodeArmed = 0;
+    $('syncNewCode').addEventListener('click', () => {
+      const button = $('syncNewCode');
+      if (!newCodeArmed) {
+        newCodeArmed = Date.now();
+        button.textContent = 'Confirmar: gerar um código novo';
+        setTimeout(() => { if (newCodeArmed && Date.now() - newCodeArmed >= 7900) { newCodeArmed = 0; button.textContent = 'Gerar um código novo…'; } }, 8000);
+        return;
+      }
+      if (Date.now() - newCodeArmed < ARM_GUARD) return;
+      newCodeArmed = 0; button.textContent = 'Gerar um código novo…';
+      focusAfterPaint = 'syncCodeSaved';
+      askGoogle('sync-new-code');
+    });
+    $('syncPair').addEventListener('click', () => { focusAfterPaint = 'syncPairCancel'; askGoogle('sync-pair'); });
+    $('syncPairConfirm').addEventListener('click', () => { $('syncPairCancel').focus(); askGoogle('sync-pair-confirm'); });
+    $('syncPairCancel').addEventListener('click', () => askGoogle('sync-pair-cancel'));
+    $('syncCodeSaved').addEventListener('click', () => askGoogle('sync-code-saved'));
+    $('syncCodeCopy').addEventListener('click', () => {
+      // A página interna não tem a API da área de transferência: copia pela seleção.
+      const area = document.createElement('textarea');
+      area.value = $('syncCode').textContent; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0';
+      document.body.append(area); area.select();
+      const ok = document.execCommand('copy');
+      area.remove();
+      note($('syncCodeNote'), ok ? '✓ Copiado. Guarde-o já num sítio seguro.' : 'Não foi possível copiar: selecione o código e copie-o.', !ok);
+    });
+    const joinForm = $('syncJoinForm');
+    joinForm.action = `eteris://${location.host}/sync-join?t=${data.token}`;
+    joinForm.addEventListener('submit', e => {
+      e.preventDefault();
+      if (!$('syncJoinCode').value.trim()) { note($('syncJoinNote'), 'Escreva o código de recuperação.', true); return; }
+      if (joining) return;
+      joining = true; joinSent = Date.now();
+      quickUntil = Date.now() + 15000;
+      $('syncJoinButton').disabled = true;
+      note($('syncJoinNote'), 'A abrir a conta e a juntar os dados…');
+      const seq = ++googleAsked;
+      joinForm.target = sinkFor(d => {
+        if (d && d.google) { if (seq >= googlePainted) { googlePainted = seq; paint(d); } }
+        else { joining = false; $('syncJoinButton').disabled = false; note($('syncJoinNote'), d.message || 'Pedido recusado.', true); }
+      }).name;
+      joinForm.submit();
+      // O código fica no campo até a junção dar certo (uma gralha corrige-se sem escrever os 56 carateres outra vez).
+    });
+    // «Apagar…»: a confirmação aparece por baixo, com «Cancelar» no lugar onde se carregou (um duplo clique cai no
+    // «Cancelar», não no «Sim»), não aceita um clique no primeiro meio segundo e desarma-se sozinha ao fim de 10 s.
+    let deleteArmed = 0;
+    const disarmDelete = focus => {
+      deleteArmed = 0;
+      $('syncDeleteConfirm').hidden = true; $('syncDeleteCancel').hidden = true; $('syncDelete').hidden = false;
+      if (focus) $('syncDelete').focus();
+    };
+    $('syncDelete').addEventListener('click', () => {
+      deleteArmed = Date.now();
+      $('syncDelete').hidden = true; $('syncDeleteCancel').hidden = false; $('syncDeleteConfirm').hidden = false;
+      $('syncDeleteCancel').focus();
+      setTimeout(() => { if (deleteArmed && Date.now() - deleteArmed >= 9900) disarmDelete(false); }, 10000);
+    });
+    $('syncDeleteCancel').addEventListener('click', () => disarmDelete(true));
+    $('syncDeleteConfirm').addEventListener('click', () => {
+      if (!deleteArmed || Date.now() - deleteArmed < ARM_GUARD) return;
+      disarmDelete(false);
+      note($('syncDeleteNote'), 'A apagar os dados do Éteris do Google Drive…');
+      $('syncDelete').focus();
+      askGoogle('sync-delete-cloud');
+    });
+    // «Perdeu o código?»: leva a «Apagar os meus dados…» e põe lá o foco.
+    $('syncLostLink').addEventListener('click', e => { e.preventDefault(); $('syncDeleteItem').scrollIntoView({ block: 'center' }); $('syncDelete').focus(); });
+  })();
 
   // Realce da navegação. As últimas secções são curtas e a página não as consegue pôr no topo: pela posição, um clique
   // em «Sobre» realçava outra. Por isso a secção escolhida (clique, #âncora, data.focus) fica realçada enquanto estiver

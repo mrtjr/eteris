@@ -65,6 +65,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
+        // Palavras-passe e preenchimento automático (Vault/VaultRoutes.cs): recusadas na janela privada.
+        if (uri is { Host: "passwords" or "autofill" }) return VaultRoute(uri, request, browser);
         if (uri is { Host: "settings" or "about", AbsolutePath: "/clear" }) return ClearData(uri, request.Url, browser);
         if (uri is { Host: "credits", AbsolutePath: "/" }) return Html(CreditsPage.Render());
         if (uri is { Host: "privacy", AbsolutePath: "/" })
@@ -81,7 +83,10 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));
-        if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url);
+        // Definições › Sincronização (perfil cifrado, «Entrar com o Google»): nunca a partir da janela privada.
+        if (uri is { Host: "settings" } && uri.AbsolutePath.StartsWith("/sync-", StringComparison.Ordinal))
+            return privateContext ? Text("recusado") : SyncRoute(uri, request, browser.Identifier);
+        if (uri is { Host: "settings" or "about" or "welcome" }) return SettingsRoute(uri, request.Url, privateContext, browser.Identifier);
         if (uri is { Host: "bookmarks" }) return BookmarksRoute(uri, request.Url, browser.Identifier);
 
         if (uri is { Host: "error", AbsolutePath: "/continue" })
@@ -100,15 +105,34 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
 
+    private IResourceHandler VaultRoute(Uri uri, IRequest request, IBrowser browser)
+    {
+        Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
+        var routes = Vault.VaultRoutes.Profile!;
+        // O pedido lê-se já (o IRequest só vale durante esta chamada); a resposta vem depois, noutra thread.
+        var vaultRequest = new Vault.VaultRequest(uri.Host, uri.AbsolutePath, InternalPages.QueryAll(uri), SyncForm.Parse(request),
+            InternalPages.IsAuthorized(request.Url), privateContext, browser.Identifier);
+        return new VaultResourceHandler(() => routes.HandleAsync(vaultRequest));
+    }
+
     private bool CanChangeNewTab(string url) => !privateContext && InternalPages.IsAuthorized(url);
 
-    private static IResourceHandler SettingsRoute(Uri uri, string url)
+    private static IResourceHandler SettingsRoute(Uri uri, string url, bool privateContext, int browserId)
     {
+        // Desligar «Pedir o Windows Hello ao preencher palavras-passe» (ou pagamentos) pede o Windows Hello primeiro.
+        if (uri.AbsolutePath == "/set" && !privateContext && InternalPages.IsAuthorized(url)
+            && InternalPages.Query(uri, "k") is { } guarded && InternalPages.Query(uri, "v") is { } off && Data.UserSettings.NeedsReauth(guarded, off))
+            return new VaultResourceHandler(async () =>
+            {
+                var purpose = guarded == "pwAskHello" ? Vault.ReauthPurpose.ChangePasswordSetting : Vault.ReauthPurpose.ChangePaymentSetting;
+                var ok = await ConfirmWithWindows(browserId, purpose).ConfigureAwait(false) && Settings.Set(guarded, off);
+                return Vault.VaultReply.Text(ok ? "ok" : "recusado");
+            });
         if (uri.AbsolutePath == "/set")
         {
             var ok = InternalPages.IsAuthorized(url)
                      && InternalPages.Query(uri, "k") is { } key && InternalPages.Query(uri, "v") is { } value
-                     && Settings.Set(key, value);
+                     && SettingsPage.CanSetFromPage(key, value) && Settings.Set(key, value);
             return ResourceHandler.FromString(ok ? "ok" : "recusado", Encoding.UTF8, false, "text/plain");
         }
         if (uri.AbsolutePath == "/update" && InternalPages.IsAuthorized(url))
@@ -132,9 +156,203 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
         return uri.AbsolutePath == "/"
             ? Html(SettingsPage.Render(Settings.Current, AboutInfo(), focusAbout: uri.Host == "about",
-                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), AppData.SiteSummaries()))
+                BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), AppData.SiteSummaries(),
+                isPrivate: privateContext))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }
+
+    // A confirmação do Windows (Windows Hello ou a palavra-passe do Windows), com a janela desta aba como dona.
+    private static Task<bool> ConfirmWithWindows(int browserId, Vault.ReauthPurpose purpose)
+    {
+        Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
+        return Vault.VaultRoutes.Profile!.ConfirmAsync(browserId, purpose);
+    }
+
+    private static IResourceHandler SyncRoute(Uri uri, IRequest request, int browserId)
+    {
+        if (!InternalPages.IsAuthorized(request.Url)) return Text("recusado");
+        switch (uri.AbsolutePath)
+        {
+            case "/sync-export" when InternalPages.Query(uri, "secrets") == "1":
+                // Com as palavras-passe, os pagamentos e os documentos: só depois do Windows Hello (sempre, sem graça).
+                return new VaultResourceHandler(async () =>
+                {
+                    var (ok, secrets) = await Sync.SyncChoices.SecretsForExportAsync(true, purpose => ConfirmWithWindows(browserId, purpose),
+                        () => Sync.ProfileTransfer.CollectSecrets(Vault.VaultService.Profile, () => System.IO.File.Exists(System.IO.Path.Combine(Infrastructure.AppPaths.Root, Vault.VaultKey.FileName))))
+                        .ConfigureAwait(false);
+                    if (!ok) return Vault.VaultReply.Json(new { ok = false, message = Sync.SyncChoices.NotConfirmed("nada foi exportado") });
+                    try
+                    {
+                        var exported = Sync.ProfileTransfer.Export(Environment.MachineName, DateTime.Now, secrets);
+                        return Vault.VaultReply.Json(new { ok = true, file = System.IO.Path.GetFileName(exported.Path), code = exported.Code, records = exported.Records, secrets = secrets?.Count ?? 0 });
+                    }
+                    catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+                    {
+                        return Vault.VaultReply.Json(new { ok = false, message = "Não foi possível gravar o ficheiro em Transferências." });
+                    }
+                });
+            case "/sync-choose" when InternalPages.Query(uri, "g") is { Length: > 0 } group:
+            {
+                // Uma linha do tópico «O que passa entre PCs» neste computador (Pagamentos e Documentos pedem o Windows).
+                var on = InternalPages.Query(uri, "on") == "1";
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is not { } agent) return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                    var error = await Sync.SyncChoices.ChooseAsync(agent, group, on, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false);
+                    Sync.SyncService.Say("choices", error);
+                    if (error is null && on) Sync.SyncService.SyncNow();
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
+            case "/sync-export":
+                try
+                {
+                    var exported = Sync.ProfileTransfer.Export(Environment.MachineName, DateTime.Now);
+                    return Json(new { ok = true, file = System.IO.Path.GetFileName(exported.Path), code = exported.Code, records = exported.Records });
+                }
+                catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+                {
+                    return Json(new { ok = false, message = "Não foi possível gravar o ficheiro em Transferências." });
+                }
+            case "/sync-import":
+            {
+                // Formulário enviado por POST (o código e o ficheiro não vão no endereço).
+                var form = SyncForm.Parse(request);
+                if (form.GetValueOrDefault("code") is not { Length: > 0 } code || form.GetValueOrDefault("data") is not { Length: > 0 } data)
+                    return Json(new { ok = false, message = "Escolha o ficheiro e escreva o código." });
+                try
+                {
+                    List<(string Name, int Color, string? Icon)> spaces = [];
+                    // «weaker=1» só depois de o utilizador ver a lista do que baixa a proteção e carregar em «Aplicar também».
+                    var allowWeaker = form.GetValueOrDefault("weaker") == "1";
+                    var result = Sync.ProfileTransfer.Import(Convert.FromBase64String(data), code, s => spaces = s.ToList(), allowWeaker);
+                    var summary = Sync.ProfileTransfer.Summary(result);
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.AfterProfileImport(spaces, summary));
+                    return Json(new { ok = true, message = summary, held = result.Held });
+                }
+                catch (FormatException e) { return Json(new { ok = false, message = e.Message }); }
+                catch (Eteris.Sync.Crypto.WrongCodeException e) { return Json(new { ok = false, message = e.Message }); }
+                catch (Eteris.Sync.Crypto.UnsupportedFormatException e) { return Json(new { ok = false, message = e.Message }); }
+                // Nada pode sair para o CEF (thread de E/S): o que falhar a meio diz-se na página.
+                catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException
+                    or Microsoft.Data.Sqlite.SqliteException or System.Security.Cryptography.CryptographicException or System.Text.Json.JsonException)
+                {
+                    return Json(new { ok = false, message = "A importação parou a meio: o que já entrou ficou; tente outra vez." });
+                }
+            }
+            case "/sync-google":
+                // Na pasta de teste não há conta: «Ligar» liga a sincronização por ela.
+                if (Sync.SyncService.FolderMode) Sync.SyncService.Start();
+                else Sync.GoogleSync.BeginSignIn();
+                break;
+            case "/sync-google-cancel":
+                Sync.GoogleSync.CancelSignIn();
+                break;
+            case "/sync-google-out":
+                // A sincronização para já neste computador (com «forget=1», a cópia local da chave sai também); os
+                // tokens saem já e a revogação na Google segue em segundo plano.
+                Sync.SyncService.SignOut(InternalPages.Query(uri, "forget") == "1");
+                if (!Sync.SyncService.FolderMode) _ = Sync.GoogleSync.SignOutAsync();
+                break;
+            case "/sync-account":
+                // A secção Sincronização ficou à vista depois de um gesto do utilizador na página: se há sessão sem
+                // conta guardada, pede o nome e o e-mail ao Drive (uma vez; nunca no arranque).
+                Sync.GoogleSync.RequestAccount();
+                break;
+            case "/sync-look":
+                // Também só depois de um gesto, com a secção à vista: aparelhos da conta e pedidos de aparelhos novos.
+                // A página repete-o de 5 em 5 s enquanto a secção estiver à vista («devices=0»: só os pedidos).
+                Sync.SyncService.Look(devices: InternalPages.Query(uri, "devices") != "0");
+                break;
+            case "/sync-start":
+                // «Ligar a sincronização» / «Ligar outra vez» (depois de ler o porquê): também com outra conta Google.
+                // «anyway=1»: «Ligar sem acabar de apagar», depois de um apagar do Drive que não acabou.
+                Sync.SyncService.Start(switchAccount: true, abandonDeletion: InternalPages.Query(uri, "anyway") == "1");
+                break;
+            case "/sync-new-code":
+                // Um código novo abre também o cofre (palavras-passe…): com segredos em jogo, o Windows confirma primeiro
+                // (sempre), como ao aprovar um aparelho.
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is { } agent)
+                    {
+                        if (await Sync.SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                            Sync.SyncService.Act("code", a => a.NewRecoveryCodeAsync());
+                        else Sync.SyncService.Say("code", Sync.SyncChoices.NotConfirmed("o código continua o mesmo"));
+                    }
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            case "/sync-now":
+                Sync.SyncService.SyncNow();
+                break;
+            case "/sync-code-saved":
+                Sync.SyncService.Agent()?.AcknowledgeCode();
+                break;
+            case "/sync-pair":
+                Sync.SyncService.Agent()?.RequestPairing();
+                break;
+            case "/sync-pair-confirm":
+                Sync.SyncService.Agent()?.ConfirmPairing();
+                break;
+            case "/sync-pair-cancel":
+                Sync.SyncService.Agent()?.CancelPairing();
+                break;
+            case "/sync-join":
+            {
+                // O código de recuperação vai no corpo de um POST (nunca no endereço).
+                var form = SyncForm.Parse(request);
+                if (form.GetValueOrDefault("code") is not { Length: > 0 } code) return Json(new { ok = false, message = "Escreva o código de recuperação." });
+                Sync.SyncService.Act("join", agent => agent.JoinWithCodeAsync(code));
+                break;
+            }
+            case "/sync-approve" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+                // Com segredos em jogo, o aparelho novo recebe-os: o Windows confirma primeiro (sempre).
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is { } agent)
+                    {
+                        if (await Sync.SyncChoices.MayApproveAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                            Sync.SyncService.Act("approve", a => a.ApproveAsync(id));
+                        else Sync.SyncService.Say("approve", Sync.SyncChoices.NotConfirmed("o pedido continua à espera"));
+                    }
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            case "/sync-refuse" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+                Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
+                break;
+            case "/sync-remove" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+            {
+                // «shown»: os aparelhos que a página mostrava quando o utilizador decidiu (só esses recebem a chave nova).
+                var shown = InternalPages.Query(uri, "shown") is { Length: > 0 } list ? list.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+                // Remover um aparelho faz uma cadeia nova e mostra o código novo (que abre o cofre): com segredos em jogo,
+                // o Windows confirma primeiro (sempre).
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is { } agent)
+                    {
+                        if (await Sync.SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                            Sync.SyncService.Act("devices", a => a.RemoveDeviceAsync(id, shown));
+                        else Sync.SyncService.Say("devices", Sync.SyncChoices.NotConfirmed("o aparelho continua na conta"));
+                    }
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
+            case "/sync-delete-cloud":
+                Sync.SyncService.DeleteCloud();
+                break;
+            case "/sync-delete-retry":
+                Sync.SyncService.RetryDeleteCloud();
+                break;
+            case "/sync-status":
+                break;
+            default:
+                return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+        }
+        return Json(SettingsPage.SyncData(isPrivate: false));
+    }
+
+    private static IResourceHandler Json(object value)
+        => ResourceHandler.FromString(System.Text.Json.JsonSerializer.Serialize(value), Encoding.UTF8, false, "text/plain");
 
     private static SettingsPage.About AboutInfo() => new(
         Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,
@@ -146,12 +364,29 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private static IResourceHandler Text(string text) => ResourceHandler.FromString(text, Encoding.UTF8, false, "text/plain");
 
-    // Apaga histórico (no período escolhido), cookies e cache do perfil desta aba.
-    private static IResourceHandler ClearData(Uri uri, string url, IBrowser browser)
+    // Apaga histórico (no período escolhido), cookies e cache do perfil desta aba e, só com a caixa marcada e depois do
+    // Windows Hello, o cofre das palavras-passe e do preenchimento automático (nunca a partir da janela privada).
+    private IResourceHandler ClearData(Uri uri, string url, IBrowser browser)
     {
         if (!InternalPages.IsAuthorized(url)
             || ClearDataRequest.Parse(InternalPages.Query(uri, "what") ?? "", InternalPages.Query(uri, "range") ?? "", DateTime.Now) is not { } request)
             return Text("recusado");
+        if (request.Vault)
+        {
+            if (privateContext) return Text("recusado");
+            Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
+            var routes = Vault.VaultRoutes.Profile!;
+            var browserId = browser.Identifier;
+            // Primeiro a confirmação: recusada, nada se apaga (nem o histórico, nem os cookies).
+            return new VaultResourceHandler(async () => await routes.EraseVaultAsync(browserId).ConfigureAwait(false)
+                ? Vault.VaultReply.Text(ClearBrowsingData(request, browser))
+                : Vault.VaultReply.Text("Não foi confirmado com o Windows: nada foi apagado."));
+        }
+        return Text(ClearBrowsingData(request, browser));
+    }
+
+    private static string ClearBrowsingData(ClearDataRequest request, IBrowser browser)
+    {
         if (request.History)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
@@ -165,13 +400,13 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 try
                 {
                     using var client = browser.GetDevToolsClient();
-                    if (request.Cookies) await client.Network.ClearBrowserCookiesAsync();
-                    if (request.Cache) await client.Network.ClearBrowserCacheAsync();
+                    if (request.Cookies) await DevToolsCalls.Run(() => client.Network.ClearBrowserCookiesAsync());
+                    if (request.Cache) await DevToolsCalls.Run(() => client.Network.ClearBrowserCacheAsync());
                 }
                 catch (Exception) { }
             });
         }
-        return Text(request.Summary);
+        return request.Summary;
     }
 
     private static IResourceHandler BookmarksRoute(Uri uri, string url, int browserId)

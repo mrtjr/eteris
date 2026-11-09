@@ -27,8 +27,8 @@ public partial class MainWindow
                 ShowToast("Não foi possível esconder este elemento");
                 return;
             }
-            AppData.HideElement(host, selector);
-            ShowToast("Elemento escondido — fica assim neste site");
+            AppData.HideElement(host, selector, IsPrivate);
+            ShowToast(IsPrivate ? "Elemento escondido nesta sessão privada" : "Elemento escondido — fica assim neste site");
         }
         catch (Exception) { }
         finally
@@ -37,17 +37,17 @@ public partial class MainWindow
         }
     }
 
-    private static void ApplyHiddenElements(ChromiumWebBrowser browser, string url)
+    private void ApplyHiddenElements(ChromiumWebBrowser browser, string url)
     {
         if (WebHost(url) is not { } host) return;
-        var css = HiddenElements.Css(AppData.HiddenElements(host));
+        var css = HiddenElements.Css(AppData.HiddenElements(host, IsPrivate));
         if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
     }
 
     private void ResetHiddenElements()
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.ClearHiddenElements(host);
+        AppData.ClearHiddenElements(host, IsPrivate);
         ReloadActive();
         ShowToast("Elementos escondidos neste site repostos");
     }

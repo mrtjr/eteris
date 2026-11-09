@@ -52,6 +52,7 @@ public partial class MainWindow
                 Shields.ShieldEngine.Https.ForgetPrivate();
                 Shields.LocalNetworkGrants.ForgetPrivate();
                 Shields.SiteRules.ForgetPrivate();
+                Data.AppData.ForgetPrivateShield();
                 Shields.Cname.PrivateCache.Clear();
                 Shields.PartitionedCookieJar.Private.Clear();
             }
@@ -112,6 +113,7 @@ public partial class MainWindow
         Shields.ShieldEngine.Https.ForgetPrivate();
         Shields.LocalNetworkGrants.ForgetPrivate();
         Shields.SiteRules.ForgetPrivate();
+        Data.AppData.ForgetPrivateShield();
         Shields.Cname.PrivateCache.Clear();
         Shields.PartitionedCookieJar.Private.Clear();
         // O aviso do fim aparece numa janela normal que fique.

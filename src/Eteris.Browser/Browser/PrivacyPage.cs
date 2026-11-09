@@ -43,7 +43,10 @@ public static class PrivacyPage
         long CnameBlocked = 0,
         long CnameDecisions = 0,
         double CnameMicros = 0,
-        CnameSource CnameSource = CnameSource.WindowsDns);
+        CnameSource CnameSource = CnameSource.WindowsDns,
+        bool SyncOn = false,
+        bool LeakCheckOff = true,
+        bool ChromiumPasswordsOff = true);
 
     // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
     public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
@@ -64,6 +67,10 @@ public static class PrivacyPage
             .Concat(EngineHardening.AdBlinkFeatures.Where(f => !hiddenFromJs.Contains(f))).Distinct().ToList();
         var quiet = s.EngineArgs.ContainsKey("disable-background-networking") && s.EngineArgs.ContainsKey("disable-component-update")
                     && s.EngineArgs.TryGetValue("component-updater", out var updater) && updater.Contains(Infrastructure.CefConfigurator.NoUpdateServer, StringComparison.Ordinal);
+        // Os formulários enviados aos sites: sem a verificação de fugas do Chromium (preferência lida do perfil) e sem o
+        // servidor de previsões de formulários da Google (interruptor do motor).
+        var formsToGoogle = EngineHardening.NoGoogleOnPages.Where(f => !disabled.Contains(f.Feature)).Select(f => f.Feature).ToList();
+        var formsQuiet = s.LeakCheckOff && formsToGoogle.Count == 0;
         // Só o GPC: o «DNT: 1» saiu porque distinguia quem o envia (docs/paridade.md #6).
         var gpcHeader = s.Headers.Contains(("Sec-GPC", "1")) && !s.Headers.Any(h => h.Name == "DNT");
         var enabled = EngineHardening.Switch(s.EngineArgs, "enable-features");
@@ -104,12 +111,25 @@ public static class PrivacyPage
                     : "Ainda ligadas no motor: " + string.Join(", ", missingAds) + ".",
                 missingAds.Count == 0, Live: "ads"),
             new("quiet", "Nada sai do computador sem um pedido seu",
-                quiet ? "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium."
-                    : "O motor arrancou sem os interruptores que cortam o tráfego de fundo.",
-                quiet),
+                !quiet ? "O motor arrancou sem os interruptores que cortam o tráfego de fundo."
+                    : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para passwordsleakcheck-pa.googleapis.com."
+                    : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
+                    : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com).",
+                quiet && formsQuiet),
+            new("passwords", "As suas palavras-passe não vão para ninguém",
+                !s.ChromiumPasswordsOff ? "O gestor de palavras-passe e o preenchimento automático do Chromium não ficaram desligados no perfil (credentials_enable_service, autofill.profile_enabled, autofill.credit_card_enabled)."
+                    : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para a Google."
+                    : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
+                    : "O gestor de palavras-passe e o preenchimento automático do Chromium estão desligados (lidos no perfil: credentials_enable_service, autofill.profile_enabled e autofill.credit_card_enabled a falso), sem a verificação de fugas da Google e sem o servidor de formulários dela (AutofillServerCommunication desligado no motor). "
+                      + "As palavras-passe, os cartões e os documentos ficam no cofre do Éteris, cifrado neste computador (AES-256-GCM, com a chave protegida pelo Windows), e o cofre não faz nenhum pedido de rede. "
+                      + (s.SyncOn
+                          ? "Com a sincronização ligada, só as linhas escolhidas em «O que passa entre PCs» passam para os seus outros computadores, pela pasta da aplicação no seu Google Drive, cifradas neste computador e com uma segunda cifra própria: a Google não as consegue ler."
+                          : "Com a sincronização desligada, não saem deste computador."),
+                s.ChromiumPasswordsOff && s.LeakCheckOff && formsToGoogle.Count == 0),
             new("no-google", "No arranque, nada sai para a Google",
                 googleStillOn.Count == 0
                     ? "Nem o relógio de rede do Chromium (clients2.google.com) nem a verificação do «Modo IA» da pesquisa Google (www.google.com, com os cookies da Google): a Google só recebe um pedido quando pesquisa nela ou abre um site dela."
+                      + (s.SyncOn ? " " + SyncException : "")
                     : "Ainda ligados no motor: " + string.Join(", ", googleStillOn) + ".",
                 googleStillOn.Count == 0),
             new("cookies", "Cookies de terceiros bloqueados",
@@ -181,6 +201,17 @@ public static class PrivacyPage
         ];
     }
 
+    // A exceção que o utilizador escolheu: com sessão Google para a sincronização, os pedidos dela (cifrados, para a pasta
+    // oculta da aplicação no Drive dele, por um cliente próprio que só fala com os endereços da Google necessários — nada
+    // pelo motor), a renovação da sessão, o nome e o e-mail da conta e as ações que o próprio utilizador pede.
+    public const string SyncException =
+        "Exceção que escolheu: com sessão iniciada na Google para a sincronização, o Éteris fala com a Google por um cliente próprio (não pelo motor). "
+        + "Com o Google Drive — só a pasta oculta da aplicação, tudo cifrado neste computador — 30 s depois de abrir (ou 10 s depois de uma alteração, se for antes), "
+        + "10 s depois de uma alteração, de 10 em 10 minutos e quando abre o menu do Éteris (⋯) ou tem a secção Sincronização das Definições à vista, para ver pedidos de outros computadores "
+        + "(ao responder a um, acompanha-o de 2 em 2 s até acabar, no máximo 10 minutos). "
+        + "Com oauth2.googleapis.com, para renovar a sessão quando expira. Uma vez, para saber o nome e o e-mail da conta. "
+        + "E nas ações que pedir nas Definições: entrar, «Sincronizar agora», aprovar ou recusar um computador, remover um aparelho, apagar os dados do Drive e sair (que retira a autorização na Google).";
+
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
     public static State Current()
@@ -192,7 +223,9 @@ public static class PrivacyPage
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
-            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false));
+            settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false),
+            Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn), PrivacyPreferences.LeakCheckOff,
+            PrivacyPreferences.ChromiumPasswordsOff);
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.

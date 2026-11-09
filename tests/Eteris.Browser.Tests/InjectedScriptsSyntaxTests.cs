@@ -42,6 +42,7 @@ public class InjectedScriptsSyntaxTests
         { "auto-teste de privacidade (falha)", SelfTest.FailedScript("tempo esgotado") },
         { "scripts de um site (guarda do topo)", HostScriptRegistry.Guard("www.publico.pt",
             ScriptletScripts.Wrap("testMark(1)", "https://www.publico.pt/") + "\n;\n" + CosmeticScripts.InjectEarly(".a { display: none }") + DarkPages.EarlyScript)! },
+        { "cofre (mundo isolado)", Eteris.Browser.Vault.VaultScripts.Cofre("eabc123") },
         { "script base (por protocolo)", HostScriptRegistry.ForProtocols(["http:", "https:"], VideoEngine.WatchScript + "\n;\n" + PopupPolicy.ActivationScript) },
     };
 
@@ -54,6 +55,24 @@ public class InjectedScriptsSyntaxTests
         var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);
         Assert.True(match.Success);
         CheckSyntax("privacidade", match.Groups[1].Value);
+    }
+
+    // As páginas do cofre (eteris://passwords/ e eteris://autofill/), como são servidas.
+    [Theory]
+    [InlineData("passwords")]
+    [InlineData("autofill")]
+    public void VaultPageScript_IsValidJavaScript(string page)
+    {
+        var html = page == "passwords"
+            ? PasswordsPage.Render(new { token = "t", logins = Array.Empty<object>(), never = Array.Empty<object>(), pwOffer = true, pwSuggest = true, pwAskHello = false })
+            : AutofillPage.Render(new
+            {
+                token = "t", cards = Array.Empty<object>(), ibans = Array.Empty<object>(), contacts = Array.Empty<object>(), docs = Array.Empty<object>(),
+                travel = Array.Empty<object>(), docTypes = Array.Empty<object>(), addressForms = new Dictionary<string, object>(), afPayments = true,
+            });
+        var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);
+        Assert.True(match.Success);
+        CheckSyntax(page, match.Groups[1].Value);
     }
 
     [Theory]

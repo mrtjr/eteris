@@ -67,6 +67,26 @@ public sealed record UserSettings
     public string ReaderTheme { get; init; } = "dark";
     public int ReaderSize { get; init; } = 20;
     public bool ReaderSerif { get; init; } = true;
+    // Palavras-passe e preenchimento automático (docs/palavras-passe.md, B1). Oferecer para guardar e as sugestões ao
+    // clicar num campo viajam entre computadores; «Pedir o Windows Hello…» é deste computador (D-5: desligado para as
+    // palavras-passe, como o Chrome e o Firefox; ligado para pagamentos e documentos).
+    public bool PasswordOffer { get; init; } = true;
+    public bool PasswordSuggestions { get; init; } = true;
+    public bool PasswordAskHello { get; init; } = Vault.ReauthPolicy.DefaultAskWhenFillingPasswords;
+    public bool PaymentsAskHello { get; init; } = Vault.ReauthPolicy.DefaultAskWhenFillingPayments;
+    // «Preencher automaticamente…» de cada secção de eteris://autofill: só controla as sugestões (nada se preenche sem
+    // o utilizador escolher).
+    public bool AutofillPayments { get; init; } = true;
+    public bool AutofillContacts { get; init; } = true;
+    public bool AutofillDocuments { get; init; } = true;
+    public bool AutofillTravel { get; init; } = true;
+
+    // Desligar «Pedir o Windows Hello ao preencher pagamentos» ou «… palavras-passe» também pede o Windows Hello
+    // (ReauthPurpose.ChangePaymentSetting / ChangePasswordSetting): só se mudam nas páginas do cofre.
+    public static bool NeedsReauth(string key, string value) => key is "payAskHello" or "pwAskHello" && value == "false";
+    // (A opção experimental «SyncPreview» da 0.2.10–0.2.12 saiu: a secção Sincronização e a conta aparecem sempre que
+    // há o identificador da aplicação Google. Um settings.json antigo com ela continua a abrir; o valor é ignorado e a
+    // sessão Google e o resto ficam como estavam.)
 
     public UserSettings? With(string key, string value) => key switch
     {
@@ -109,6 +129,14 @@ public sealed record UserSettings
         "readerTheme" when value is "dark" or "sepia" or "light" => this with { ReaderTheme = value },
         "readerSize" when int.TryParse(value, out var px) && px >= 15 && px <= 28 => this with { ReaderSize = px },
         "readerSerif" when bool.TryParse(value, out var on) => this with { ReaderSerif = on },
+        "pwOffer" when bool.TryParse(value, out var on) => this with { PasswordOffer = on },
+        "pwSuggest" when bool.TryParse(value, out var on) => this with { PasswordSuggestions = on },
+        "pwAskHello" when bool.TryParse(value, out var on) => this with { PasswordAskHello = on },
+        "payAskHello" when bool.TryParse(value, out var on) => this with { PaymentsAskHello = on },
+        "afPayments" when bool.TryParse(value, out var on) => this with { AutofillPayments = on },
+        "afContacts" when bool.TryParse(value, out var on) => this with { AutofillContacts = on },
+        "afDocuments" when bool.TryParse(value, out var on) => this with { AutofillDocuments = on },
+        "afTravel" when bool.TryParse(value, out var on) => this with { AutofillTravel = on },
         _ => null,
     };
 }

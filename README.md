@@ -2,7 +2,7 @@
 
 # Éteris
 
-Navegador web privado para Windows, com bloqueio de rastreadores e anúncios ativo por defeito, páginas internas cuidadas e uma interface que se adapta a cada site. Tudo fica no computador: sem contas, sem telemetria.
+Navegador web privado para Windows, com bloqueio de rastreadores e anúncios ativo por defeito, páginas internas cuidadas e uma interface que se adapta a cada site. Sem telemetria: por omissão tudo fica no computador; a sincronização entre computadores é opcional, cifrada de ponta a ponta e desligada por omissão.
 
 ## Instalar
 
@@ -20,6 +20,13 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - Observatório do site (Ctrl+Shift+U): quem está a observar a página, ao vivo, agrupado por empresa, com «Porque é que isto passou?» e bloquear um domínio só nesse site; no cadeado, «O que este site sabe de ti».
 - `eteris://privacy/`: relatório dos últimos 7 e 30 dias (só números, neste computador, apagáveis), promessas verificadas no estado real e um auto-teste local do que um site vê.
 - DNS cifrado, links sem rastreio, modo rigoroso por site, notificações recusadas sem perguntar, apagar dados ao fechar.
+
+**Palavras-passe e preenchimento automático**
+- Gestor de palavras-passe e preenchimento automático próprios (`eteris://passwords/`, `eteris://autofill/`): nada vai para a Google, o cofre fica cifrado neste computador, mostrar, copiar e exportar pedem o Windows Hello; importa o CSV do Chrome, do Brave e do Firefox; cartões (nunca o código de segurança), IBAN, moradas de Portugal e do Brasil, documentos (passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF) e viagens. O preenchimento nas páginas e a sincronização cifrada ponta a ponta vêm a seguir (`docs/palavras-passe.md`).
+
+**Sincronização (opcional)**
+- «Entrar com o Google» (no navegador do sistema): favoritos, Espaços, definições, decisões do Escudo por site e notas passam de um computador para o outro, **cifrados de ponta a ponta** — a chave nunca sai dos seus aparelhos e a Google só vê ficheiros cifrados, os tamanhos e as horas, na pasta oculta da aplicação no seu Google Drive. Histórico e abas abertas não sincronizam.
+- Um computador novo entra por aprovação noutro (o mesmo código nos dois ecrãs) ou pelo código de recuperação; remover um aparelho troca as chaves. Desligada, nada sai para a Google (`docs/sincronizacao.md`).
 
 **Barra de endereço**
 - Contas e conversões instantâneas (`(12+8)*1,5`, `10 km em milhas`, `30 °C em F`).

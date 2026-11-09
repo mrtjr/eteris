@@ -63,6 +63,7 @@ public partial class MainWindow : Window
         Activated += (_, _) => RestoreFocusAfterBrowserMenuOnActivate();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
+        Closed += (_, _) => ForgetVaultWindow();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
         StartTabs(initialUrl);
         StartupTrace.Mark("janela.abas");
@@ -139,7 +140,7 @@ public partial class MainWindow : Window
         // escuro (se pedido). Base, em todas as páginas web: deteção de vídeo só em H.264 e registo do último clique
         // (para distinguir um link aberto pelo utilizador de um anúncio pop-under); também nas internas, o Alt+clique.
         // Registados pelo DevTools antes da navegação (ver ScriptletInjector): não dependem do processo filho do CefSharp.
-        var injector = new ScriptletInjector(AppData.IsShieldOn, SiteEarlyScript, TabBaseScript, hostKey: SiteEarlyKey);
+        var injector = new ScriptletInjector(ShieldOn, SiteEarlyScript, TabBaseScript, hostKey: SiteEarlyKey);
         UserActivation? lastActivation = null;
         var mainHistory = new MainFrameHistory();
         var mainRequests = 0;
@@ -155,7 +156,7 @@ public partial class MainWindow : Window
             BirthSize = PageAreaPixels,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
-            KeyboardHandler = new ShortcutKeyboardHandler(ShortcutFromPage, KeyUpFromPage),
+            KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromPage(key, ctrl, shift, alt, tab), KeyUpFromPage),
             FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
@@ -167,7 +168,7 @@ public partial class MainWindow : Window
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(
                 () => ShieldEngine.Current,
-                AppData.IsShieldOn,
+                ShieldOn,
                 onBlocked: host =>
                 {
                     ShieldStats.CountBlocked(persist: !IsPrivate);
@@ -311,6 +312,8 @@ public partial class MainWindow : Window
             var arriving = e.Url;
             Volatile.Write(ref committedUrl, arriving);
             tab.Observatory.Commit(arriving);
+            // Documento novo: o canal do cofre prepara-o (mundo isolado; MainWindow.Vault.cs).
+            VaultPageCommitted(tab, browser);
             if (requests == mainRequestsAtCommit)
             {
                 var restored = e.TransitionType.HasFlag(TransitionType.ForwardBack);
@@ -334,6 +337,8 @@ public partial class MainWindow : Window
             if (!firstLoad.Task.IsCompleted) StartupTrace.Mark("aba.carregada");
             firstLoad.TrySetResult();
             var url = e.Url;
+            // O 1.º documento de uma aba nasce antes de a sessão do canal do cofre poder ouvir o commit dele.
+            VaultPageCommitted(tab, browser);
             // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
             if (!e.Browser.IsLoading) injector.Tidy(url);
             Dispatcher.InvokeAsync(() =>
@@ -408,7 +413,7 @@ public partial class MainWindow : Window
     private static string SiteEarlyKey(string url) => WebHost(url) is { } host && AppData.IsDark(host) ? "escuro" : "";
 
     // Por site: regras cosméticas (escudo ligado) e modo escuro (se pedido). null quando o site não precisa de nada.
-    private static string? SiteEarlyScript(string url)
+    private string? SiteEarlyScript(string url)
     {
         var dark = DarkPages.IsCandidate(url) && WebHost(url) is { } host && AppData.IsDark(host);
         var script = SiteCosmeticScript(url) + (dark ? DarkPages.EarlyScript : "");
@@ -431,6 +436,8 @@ public partial class MainWindow : Window
         OnActiveTabChanging();
         OnSplitActiveChanged();
         MoveFocusOffHiddenPage();
+        // A reautenticação pedida por uma página do cofre desiste quando a aba sai da frente.
+        CancelVaultRequests();
         CloseGlanceOnTabChange();
         // O cartão do cadeado mostrava o site da aba anterior por cima da nova.
         SiteInfoPopup.IsOpen = false;
@@ -680,7 +687,9 @@ public partial class MainWindow : Window
         if (ctrl && key == Key.Tab) return shift ? Tabs.SelectPrevious : Tabs.SelectNext;
         if (ctrl && key == Key.PageDown) return Tabs.SelectNext;
         if (ctrl && key == Key.PageUp) return Tabs.SelectPrevious;
-        if ((ctrl && key == Key.L) || (alt && key == Key.D) || key == Key.F6) return FocusOmnibox;
+        // F6 com a bolha «Guardar a palavra-passe?» à vista: primeiro a bolha, depois a barra de endereço.
+        if (key == Key.F6 && !ctrl && !alt) return () => { if (!FocusSaveBubble()) FocusOmnibox(); };
+        if ((ctrl && key == Key.L) || (alt && key == Key.D)) return FocusOmnibox;
         if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) return () => ReloadActive(ignoreCache: true);
         if ((ctrl && key == Key.R) || key == Key.F5) return () => ReloadActive();
         if (alt && key == Key.Left) return GoBack;
@@ -701,7 +710,8 @@ public partial class MainWindow : Window
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
     // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página:
     // decide BrowserMenuKeys.FromPage (puro) e o trabalho vai para a thread da janela. Não se lê nada do WPF aqui.
-    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt)
+    // from: a aba de onde veio a tecla (null: um site fixado na barra lateral).
+    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt, BrowserTab? from = null)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
@@ -713,6 +723,9 @@ public partial class MainWindow : Window
             Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;
         }
+        // A lista de sugestões de palavras-passe aberta (ou ↓ num campo com sugestões): ↑ ↓ Enter Esc são dela e a
+        // página nunca os vê (MainWindow.Vault.cs).
+        if (SuggestionKeyFromPage(key, ctrl, shift, alt, from) is { } listKey) return listKey;
         if (shortcut is { } action)
         {
             Dispatcher.InvokeAsync(action);
@@ -734,6 +747,8 @@ public partial class MainWindow : Window
     private void OnPageFocused(BrowserTab tab)
     {
         CloseSuggestions();
+        // O foco passou para outra aba (a outra metade do ecrã dividido): o campo do cofre da anterior deixa de contar.
+        if (_vaultFocus is { } vault && !ReferenceEquals(vault.Tab, tab)) ForgetVaultFocus();
         if (IsSplit && !ReferenceEquals(Tabs.Active, tab) && _split!.PaneOf(tab) is not null) Tabs.Active = tab;
     }
 

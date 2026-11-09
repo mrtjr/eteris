@@ -25,6 +25,8 @@ public class ThemedPagesTests
     [InlineData("settings")]
     [InlineData("bookmarks")]
     [InlineData("error")]
+    [InlineData("passwords")]
+    [InlineData("autofill")]
     public void EveryInternalPage_HasLightStyles(string page)
     {
         using var stream = typeof(InternalPages).Assembly.GetManifestResourceStream($"Eteris.Browser.Browser.{page}.html")!;

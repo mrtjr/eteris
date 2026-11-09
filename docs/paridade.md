@@ -274,6 +274,30 @@ nas páginas de erro de certificado passa a vir só da data da compilação do m
 Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
 pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
 
+**Formulários (ramo `sync`, por publicar; `docs/palavras-passe.md`, A0).** Com o mesmo método, numa página local
+com um início de sessão, uma morada e um cartão enviados (dados inventados): o motor mandava o par utilizador/palavra-
+passe (prefixo de um hash) a `passwordsleakcheck-pa.googleapis.com/v1/leaks:lookupSingle` logo depois do envio do
+início de sessão, apesar de `credentials_enable_service=false` — a verificação de fugas do Chromium corre sem o gestor.
+Corte: `profile.password_manager_leak_detection=false` nas preferências do perfil, lida de volta; e, preventivo (0
+pedidos medidos), `--disable-features=AutofillServerCommunication` contra o servidor de previsões de formulários
+(`content-autofill.googleapis.com`). Depois: **0 pedidos** no proxy e 0 linhas `googleapis` no NetLog. A promessa
+«Nada sai do computador sem um pedido seu» em `eteris://privacy/` diz também os formulários.
+
+**Sincronização (ramo `sync`, por publicar).** Por omissão está desligada e a promessa fica exatamente como medida
+acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o estado só leem o disco; testes
+`SyncAgentTests.Startup_BuildingTheAgentAndReadingTheState_SendsNothing` e
+`SyncIntegrationTests.Startup_OnlySchedulesTheFirstRound_ThirtySecondsAfterTheWindow`). Com ela ligada — escolha do
+utilizador —, a exceção é dita em `eteris://privacy/` (`PrivacyPage.SyncException`): só os pedidos da sincronização,
+cifrados, para a pasta oculta da aplicação no Drive dele, **30 s depois de a janela estar pronta** (ou 10 s depois de
+uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e ao abrir o menu do Éteris (⋯) ou com
+a secção Sincronização à vista (pedidos de outros computadores; ao responder a um, acompanha-o de 2 em 2 s até ao fim,
+no máximo 10 min — numa ronda agendada só se contam), mais a renovação da sessão, o nome e o e-mail da conta (uma vez)
+e as ações do utilizador, por um cliente próprio que só fala com `oauth2.googleapis.com` (`/token`, `/revoke`) e
+`www.googleapis.com` (`/drive/v3/files`, `/upload/drive/v3/files`, `/drive/v3/about`) — nada pelo motor
+(`GoogleSyncTests.HttpClient_OnlyReachesGoogleOAuthAndDrive`, varrimento `SyncLibrary_HttpOnlyInTheGoogleFolder…` e
+`BrowserSyncFolder_HttpOnlyThroughTheGoogleClient`). Prova ao vivo com a pasta de teste: a 1.ª escrita chega 31,6 s
+depois de abrir; a medição com o Drive real e o proxy fica para a fase «Prova».
+
 ## 8. Pedidos sem aba: a fuga do Escudo — medido (2026-11-08)
 
 O estudo das extensões (`C:\cef\notas\viabilidade\viab-extensoes.md`, secção 3) viu um `fetch` a
@@ -333,6 +357,21 @@ aba.
 Testes: `BrowserlessRequestsTests` (página de topo deduzida, bloqueio e contagem com o site do worker, GPC, escudo
 desligado no site, navegação reencaminhada, extensão, rede local, cookies de terceiros, o tratador nunca lê o browser
 nem o frame, cache com teto, e todo o `new RequestContext(` do Éteris com o tratador).
+
+## 9. Chaves de acesso (WebAuthn) — provado (2026-11-09, ramo `sync`)
+
+O Éteris não tem gestor de chaves de acesso próprio (desenho do gestor de palavras-passe, v1): o WebAuthn das páginas
+tem de seguir para o Windows, como no Chrome, no Firefox e no Brave. **Prova ao vivo** (`docs/palavras-passe.md`, E2):
+numa página local em `http://localhost` com um utilizador inventado, `navigator.credentials.create()` no Éteris (CEF
+156, estilo Alloy) abre a janela **«Segurança do Windows › Salvar sua chave de acesso»** do próprio Windows
+(`webauthn.dll`), presa à janela do Éteris, com o utilizador e «Chave de acesso do localhost». Neste PC, sem Windows
+Hello configurado (`isUserVerifyingPlatformAuthenticatorAvailable()` = `false`, igual ao `DeviceNotPresent` da A3),
+o Windows pede uma chave de segurança USB. Nada foi criado (a janela não foi tocada; fecha com a janela do Éteris).
+**Diferenças observadas:** o prazo do pedido (30 s) não fecha a janela do Windows (ficou aberta 45 s, até o Éteris a
+fechar) — no Chrome o prazo cancela a operação; e, enquanto essa janela está aberta, um segundo pedido da página não
+começa. A sugestão de chaves de acesso no campo do utilizador («UI condicional») e as chaves guardadas no próprio
+navegador ficam para depois (como no desenho). **Por provar à mão (dono):** num PC com Windows Hello, a mesma página
+pede o PIN/rosto/impressão digital, e o «Outro dispositivo» (telemóvel por QR) aparece na mesma janela.
 
 ## Restantes
 

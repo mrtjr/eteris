@@ -4,6 +4,66 @@ namespace Eteris.Browser.Data;
 
 public static class AppData
 {
+    // Um dado que sincroniza mudou (favoritos, Escudo por site): a sincronização compara daqui a 10 s (Sync/SyncService).
+    public static event Action? SyncableChanged;
+
+    public static void NotifySyncableChanged() => SyncableChanged?.Invoke();
+
+    // ---- Escudo numa janela privada ----------------------------------------------------------------------------------
+    // O que se decide numa janela privada (desligar o Escudo num site, modo estrito, esconder um elemento) fica só em
+    // memória até acabar a sessão privada (ForgetPrivateShield), como os bloqueios por site (SiteRules), a exceção ao
+    // HTTPS primeiro e a rede local: não vai para o perfil nem para a sincronização, e as janelas normais não o veem —
+    // como no Chrome, no Firefox e no Brave, onde o que se muda num site em modo anónimo fica nessa sessão.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> PrivateShield = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> PrivateStrict = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (bool Cleared, string[] Added)> PrivateHidden = new(StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsShieldOn(string host, bool isPrivate) => isPrivate && PrivateShield.TryGetValue(host, out var on) ? on : IsShieldOn(host);
+
+    public static void SetShield(string host, bool on, bool isPrivate)
+    {
+        if (isPrivate) PrivateShield[host] = on;
+        else SetShield(host, on);
+    }
+
+    public static bool IsStrict(string host, bool isPrivate) => isPrivate && PrivateStrict.TryGetValue(host, out var on) ? on : IsStrict(host);
+
+    public static void SetStrict(string host, bool on, bool isPrivate)
+    {
+        if (isPrivate) PrivateStrict[host] = on;
+        else SetStrict(host, on);
+    }
+
+    public static IReadOnlyList<string> HiddenElements(string host, bool isPrivate)
+    {
+        if (!isPrivate || !PrivateHidden.TryGetValue(host, out var overlay)) return HiddenElements(host);
+        return (overlay.Cleared ? overlay.Added : HiddenElements(host).Concat(overlay.Added)).Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    public static void HideElement(string host, string selector, bool isPrivate)
+    {
+        if (!isPrivate)
+        {
+            HideElement(host, selector);
+            return;
+        }
+        PrivateHidden.AddOrUpdate(host, _ => (false, [selector]), (_, old) => (old.Cleared, [.. old.Added, selector]));
+    }
+
+    public static void ClearHiddenElements(string host, bool isPrivate)
+    {
+        if (isPrivate) PrivateHidden[host] = (true, []);
+        else ClearHiddenElements(host);
+    }
+
+    // A última janela privada fechou (ou «Terminar sessão privada»): as decisões dela esquecem-se.
+    public static void ForgetPrivateShield()
+    {
+        PrivateShield.Clear();
+        PrivateStrict.Clear();
+        PrivateHidden.Clear();
+    }
+
     private static readonly Lazy<HistoryStore> LazyHistory = StartupTrace.Lazy<HistoryStore>("LazyHistory", () => new HistoryStore(AppPaths.Database));
     private static readonly Lazy<ShieldExceptionStore?> LazyShieldExceptions = StartupTrace.Lazy<ShieldExceptionStore?>("LazyShieldExceptions", () =>
     {
@@ -54,12 +114,21 @@ public static class AppData
     {
         try { LazyHidden.Value?.Add(host, selector); }
         catch (Exception) { }
+        NotifySyncableChanged();
+    }
+
+    public static void UnhideElement(string host, string selector)
+    {
+        try { LazyHidden.Value?.Remove(host, selector); }
+        catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     public static void ClearHiddenElements(string host)
     {
         try { LazyHidden.Value?.Clear(host); }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     private static readonly Lazy<DailyStatsStore?> LazyDaily = StartupTrace.Lazy<DailyStatsStore?>("LazyDaily", () =>
@@ -172,6 +241,7 @@ public static class AppData
             else store.Add(host);
         }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     // O histórico é conveniência: uma falha da base de dados nunca pode interromper a navegação.
@@ -203,6 +273,10 @@ public static class AppData
         try { return read(LazyBookmarks.Value); }
         catch (Exception) { return []; }
     }
+
+    // Como Bookmarks, mas uma falha de leitura chega a quem chama (a sincronização não pode confundir «não li» com
+    // «não há favoritos»).
+    public static IReadOnlyList<Bookmark> ReadBookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read) => read(LazyBookmarks.Value);
 
     private static readonly Lazy<ReadingListStore?> LazyReading = StartupTrace.Lazy<ReadingListStore?>("LazyReading", () =>
     {
@@ -405,6 +479,7 @@ public static class AppData
     {
         try { return BookmarkImport.Import(LazyBookmarks.Value, marks, DateTime.UtcNow); }
         catch (Exception) { return 0; }
+        finally { NotifySyncableChanged(); }
     }
 
     private static readonly Lazy<Permissions.SitePermissionStore?> LazyPermissions = StartupTrace.Lazy<Permissions.SitePermissionStore?>("LazyPermissions", () =>
@@ -470,6 +545,7 @@ public static class AppData
             else LazyStrict.Value?.Remove(host);
         }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     private static readonly Lazy<StrictSiteStore?> LazyDark = StartupTrace.Lazy<StrictSiteStore?>("LazyDark", () =>
@@ -501,6 +577,10 @@ public static class AppData
 
     public static IReadOnlyList<string> HttpExceptions() => LazyHttp.Value?.All() ?? [];
 
+    // Como HttpExceptions, mas sem a lista (base de dados que não abriu) é uma falha, não uma lista vazia.
+    public static IReadOnlyList<string> ReadHttpExceptions()
+        => (LazyHttp.Value ?? throw new System.IO.IOException("A lista de exceções ao HTTPS primeiro não abriu.")).All();
+
     public static void SetHttpException(string host, bool on)
     {
         try
@@ -509,6 +589,7 @@ public static class AppData
             else LazyHttp.Value?.Remove(host);
         }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     // «Esquecer este site ao fechar»: sites (domínio registável) cujos dados se apagam ao fechar a última aba.
@@ -590,12 +671,14 @@ public static class AppData
             return saved;
         }
         catch (Exception) { return null; }
+        finally { NotifySyncableChanged(); }
     }
 
     public static bool RestoreBookmark(SavedBookmark saved)
     {
         try { return LazyBookmarks.Value.Restore(saved); }
         catch (Exception) { return false; }
+        finally { NotifySyncableChanged(); }
     }
 
     // Sites que o utilizador mandou voltar ao motor principal (botão «Motor de vídeo»): nunca trocam sozinhos, nem os da
@@ -622,12 +705,14 @@ public static class AppData
     {
         try { LazyBookmarks.Value.Remove(url); }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     public static void RenameBookmark(string url, string title)
     {
         try { LazyBookmarks.Value.Rename(url, title); }
         catch (Exception) { }
+        NotifySyncableChanged();
     }
 
     public static bool IsBookmarked(string url)
@@ -640,5 +725,6 @@ public static class AppData
     {
         try { return LazyBookmarks.Value.Toggle(url, title, DateTime.UtcNow); }
         catch (Exception) { return false; }
+        finally { NotifySyncableChanged(); }
     }
 }

@@ -6,10 +6,19 @@ public enum PageCommand
     OpenLinkNewTab, PreviewLink, OpenLinkSideBySide, OpenLinkPrivate, CopyLink,
     OpenImageNewTab, SaveImage, CopyImageUrl,
     Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink, PlayInVideoEngine,
+    GeneratePassword, FillWith,
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
-    bool CanGoBack, bool CanGoForward, bool IsPrivate, bool IsWebPage = true);
+    bool CanGoBack, bool CanGoForward, bool IsPrivate, bool IsWebPage = true)
+{
+    // O campo onde se clicou, como o script do cofre o viu (null: fora de um campo de uma página http(s)).
+    public VaultFieldInfo? Vault { get; init; }
+}
+
+// IsPassword: um campo de palavra-passe; CanGenerate: «Oferecer para guardar palavras-passe» ligado e fora da janela
+// privada (D-3).
+public sealed record VaultFieldInfo(bool IsPassword, bool CanGenerate);
 
 public sealed record PageMenuItem(PageCommand Command, string Glyph, string Label, string? Gesture = null, bool Enabled = true);
 
@@ -48,6 +57,14 @@ public static class PageMenu
             items.Add(new(PageCommand.Paste, "", "Colar", "Ctrl+V"));
             items.Add(new(PageCommand.SelectAll, "", "Selecionar tudo", "Ctrl+A"));
             items.Add(null);
+            // O cofre (C5, C6): «Preencher com… ›» (palavra-passe, contacto, cartão, documento, viagem) em qualquer campo de
+            // uma página onde o script do cofre está; «Gerar palavra-passe forte» num campo de palavra-passe.
+            if (ctx.Vault is { } vault)
+            {
+                items.Add(new(PageCommand.FillWith, "\uE8D7", "Preencher com…"));
+                if (vault is { IsPassword: true, CanGenerate: true }) items.Add(new(PageCommand.GeneratePassword, "\uE8D7", "Gerar palavra-passe forte"));
+                items.Add(null);
+            }
         }
         else if (hasSelection)
         {

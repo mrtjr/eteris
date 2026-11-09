@@ -42,6 +42,8 @@ public partial class App : Application
         FirstPaint.App.SignalAfter(FirstPaint.Fallback);
         FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
         FirstPaint.App.Then(CompositionWarmup.Stop);
+        // Sincronização: nada aqui sai para a rede. Só com ela ligada, a primeira ronda fica para 30 s depois.
+        FirstPaint.App.Then(Sync.SyncService.AfterFirstPaint);
         // O perfil do JIT só grava o arranque (Infrastructure/StartupJit.cs): para pouco depois da 1.ª página.
         FirstPaint.App.Then(() => _ = Task.Delay(StartupJit.RecordAfterFirstPaint).ContinueWith(_ => StartupJit.Stop(), TaskScheduler.Default));
         FirstPaint.App.Then(() =>
@@ -82,6 +84,11 @@ public partial class App : Application
             catch (Exception) { }
         }
         UpdateService.ApplyPendingOnExit();
+        // Palavras-passe apagadas há menos de 10 s (ainda com «Anular»): apagam-se de vez.
+        Vault.VaultRoutes.CommitPendingOnExit();
+        // Uma palavra-passe copiada há menos de 60 s sai da área de transferência (se ainda lá estiver).
+        try { Vault.SecureClipboard.ClearPendingOnExit(); }
+        catch (Exception) { }
         try
         {
             // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se

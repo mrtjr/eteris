@@ -39,6 +39,9 @@
     <EmbeddedResource Include="Browser\welcome.html" />
     <EmbeddedResource Include="Browser\whatsnew.html" />
     <EmbeddedResource Include="Browser\privacy.html" />
+    <EmbeddedResource Include="Browser\passwords.html" />
+    <EmbeddedResource Include="Browser\autofill.html" />
+    <EmbeddedResource Include="Vault\Scripts\cofre.js" LogicalName="Eteris.Browser.Vault.cofre.js" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="Eteris.Browser.THIRD-PARTY-NOTICES.md" />
     <EmbeddedResource Include="Shields\trackers.txt" />
     <!-- Mapa domínio → empresa do Observatório do site: escrito pelo projeto, sem dados de terceiros. -->
@@ -56,6 +59,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Eteris.Browser.Tests" />
+  </ItemGroup>
+
+  <!-- Sincronização (docs/sincronizacao.md): biblioteca .NET sem WPF, partilhável com a versão Android. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Eteris.Sync\Eteris.Sync.csproj" />
   </ItemGroup>
 
   <!-- Motor com codecs da plataforma (docs/motor.md, «Motor com codecs»): quando existe a compilação própria da CEF

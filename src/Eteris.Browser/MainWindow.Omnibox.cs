@@ -254,6 +254,8 @@ public partial class MainWindow
 
     private void Omnibox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
+        // A barra de endereço com o foco: o campo do cofre da página deixa de contar.
+        ForgetVaultFocus();
         // O cartão do cadeado é da página atual: escrever outro endereço (Ctrl+L, F6, clique) fecha-o.
         SiteInfoPopup.IsOpen = false;
         Omnibox.SelectAll();
