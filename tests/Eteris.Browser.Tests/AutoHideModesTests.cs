@@ -71,6 +71,37 @@ public class AutoHideModesTests
         Assert.True(tap.KeyUp(isAlt: true));
     }
 
+    // Menu do navegador aberto a partir da página: o Chromium descarta o keyup das teclas que o Éteris consumiu (o F do
+    // Alt+F, o Alt com o menu aberto), por isso o Alt fica «em baixo» e o «Alt sozinho» seguinte perde-se uma vez. O
+    // fecho do menu repõe o gesto (MainWindow.BrowserMenu.cs, popup.Closed).
+    [Fact]
+    public void AltLostKeyUp_ResetRestoresNextTap()
+    {
+        var lost = new AltTap();
+        lost.KeyDown(isAlt: true, otherModifiers: false);
+        lost.KeyDown(isAlt: false, otherModifiers: false); // F do Alt+F; o keyup do Alt nunca chega
+        lost.KeyDown(isAlt: true, otherModifiers: false);
+        Assert.False(lost.KeyUp(isAlt: true));
+
+        var reset = new AltTap();
+        reset.KeyDown(isAlt: true, otherModifiers: false);
+        reset.KeyDown(isAlt: false, otherModifiers: false);
+        reset.Reset();
+        reset.KeyDown(isAlt: true, otherModifiers: false);
+        Assert.True(reset.KeyUp(isAlt: true));
+    }
+
+    [Fact]
+    public void Reset_ClearsGesture()
+    {
+        var t0 = new DateTime(2026, 11, 9, 6, 0, 0, DateTimeKind.Utc);
+        var tap = new AltTap();
+        tap.KeyDown(isAlt: true, otherModifiers: false, t0);
+        tap.Reset();
+        Assert.False(tap.TakeGesture(t0.AddMilliseconds(200), TimeSpan.FromSeconds(3)));
+        Assert.False(tap.KeyUp(isAlt: true));
+    }
+
     // Espreitar: o Alt do 1.º Alt+clique é largado com o cartão aberto (a camada tem o teclado). Se esse largar não
     // chegar ao AltTap, o Alt fica «em baixo» e o Alt+clique seguinte não dá gesto — era o cartão que não abria depois
     // de fechado com Esc. A camada passa a entregar o KeyUp (MainWindow.Overlay.cs).

@@ -699,8 +699,9 @@ public partial class MainWindow : Window
 
     // Tecla premida com o foco na página (thread do CEF): os atalhos do Éteris são consumidos e corridos na janela;
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
-    // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página:
-    // decide BrowserMenuKeys.FromPage (puro) e o trabalho vai para a thread da janela. Não se lê nada do WPF aqui.
+    // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página
+    // (nenhuma chega à página, nem os modificadores sozinhos): decide BrowserMenuKeys.FromPage (puro) e o trabalho vai
+    // para a thread da janela. Não se lê nada do WPF aqui.
     private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
@@ -709,7 +710,6 @@ public partial class MainWindow : Window
         if (_browserMenuOpenForPage)
         {
             var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null);
-            if (decision == BrowserMenuKey.PassToPage) return false;
             Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;
         }
