@@ -169,11 +169,14 @@ public class SandboxPublishTests
             Assert.Contains(dir, ignore);
     }
 
-    // Dentro do repositório o clone do CefSharp apanharia o Directory.Build.props do Éteris (avisos como erros).
+    // Dentro do repositório o clone do CefSharp apanharia o Directory.Build.props do Éteris (avisos como erros). Os dois
+    // do clone só trazem as opções dos caminhos de quem compila (BuilderPathsTests).
     [Fact]
     public void PrepareSource_IsolatesTheCloneFromTheEterisBuildRules()
     {
         var prepare = Read("build", "cefsharp", "prepare-source.ps1");
-        Assert.Contains("'Directory.Build.props', 'Directory.Build.targets'", prepare);
+        Assert.Contains("'Directory.Build.props'   = '<Project>'", prepare);
+        Assert.Contains("'Directory.Build.targets' = '<Project>'", prepare);
+        Assert.Contains("foreach ($stub in $stubs.Keys) {", prepare);
     }
 }

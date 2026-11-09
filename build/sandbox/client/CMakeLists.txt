@@ -19,6 +19,19 @@ if(ETERIS_TEST_HOOKS)
   set(ETERIS_CLIENT_FLAVOR "; test_hooks")
 endif()
 
+# Sem o caminho de quem compila na DLL (docs/sandbox.md, «Caminhos de quem compila»). A DLL não leva PDB (a CEF só liga
+# com /DEBUG em Debug), mas o __FILE__ dos LOG/CHECK do libcef_dll_wrapper e dos cabeçalhos da CEF fica como texto com o
+# caminho completo da distribuição: 34 cadeias medidas na 0.2.14 (libcef_dll\ctocpp, cpptoc, wrapper), todas debaixo do
+# CEF_ROOT. O /d1trimfile:<prefixo> do front-end do MSVC (c1xx, nas Build Tools 2022 e no VS 2026) corta esse prefixo do
+# __FILE__. Um só prefixo, o mesmo em todas as unidades de compilação, e só no C++ (o rc.exe não o conhece). Sem a barra
+# final: uma barra antes das aspas que o gerador põe à volta de um caminho com espaços escapá-las-ia. Depois de compilar,
+# o build-all.ps1 confere a DLL (build/profile-paths.ps1) e pára se o caminho do perfil lá ficar.
+# Não se usa o /pathmap do MSVC: só vale com /experimental:deterministic, que também não está documentado e acrescenta
+# avisos de determinismo (C5048 com __DATE__/__TIME__, por exemplo) que o /WX da CEF tornaria erros.
+string(REGEX REPLACE "/+$" "" _eteris_trim_prefix "${CEF_ROOT}")
+file(TO_NATIVE_PATH "${_eteris_trim_prefix}" _eteris_trim_prefix)
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/d1trimfile:${_eteris_trim_prefix}>")
+
 list(APPEND CMAKE_MODULE_PATH "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)

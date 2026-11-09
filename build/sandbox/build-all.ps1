@@ -10,7 +10,9 @@
        build/cef-codecs: build/cef-codecs/out/distrib/<cef.distrib do manifest.json>), conferida contra o runtime (commit
        da CEF e SHA256 do libcef.dll), para build/sandbox/client/out/Release/Eteris.Browser.dll.
     3. Verificação: pacotes do feed (versão, dependência, assinatura do repositório removida, WindowsSandboxInfo nos
-       binários trocados, nada na cache do NuGet com a mesma versão e outros binários), DLL cliente (verify-client.ps1).
+       binários trocados, nada na cache do NuGet com a mesma versão e outros binários), DLL cliente (verify-client.ps1),
+       e o caminho do perfil de quem compila: nem a DLL cliente nem o CefSharp.Core.dll/CefSharp.Core.Runtime.dll do
+       feed o podem levar (build/profile-paths.ps1, a mesma procura do publish.ps1, que os recusaria no fim).
     4. Testes com o CefSharp do feed: o modo COM sandbox (a constante ETERIS_CEFSHARP_SANDBOX vem do csproj, por causa do
        -p:EterisCefSharpFeed que este script passa; a CI corre o modo sem, com o CefSharp oficial), confirmando que o
        CefSharp restaurado e carregado é o do feed. Só com todos aprovados, numa árvore sem alterações por gravar, grava
@@ -24,6 +26,11 @@
   Caminho com acentos (por exemplo %USERPROFILE%\... com «ú» no nome do utilizador): o cmd.exe, o C++/CLI, o CMake e o
   SourceLink só foram provados com caminhos ASCII, por isso o script trabalha pelo nome curto 8.3 da pasta do
   repositório (por exemplo ABCDEF~1); sem nomes curtos no disco, pára e pede uma cópia num caminho ASCII.
+  O nome curto continua a ser o do utilizador, e um repositório dentro do perfil deixaria o caminho nos binários. Não
+  o deixa por causa de três opções, sem mudar a raiz de compilação (docs/sandbox.md, «Caminhos de quem compila»):
+  /d1trimfile:<CEF_ROOT> no compilador da DLL cliente (build/sandbox/client/CMakeLists.txt: o __FILE__ do
+  libcef_dll_wrapper), /PDBALTPATH:%_PDB% no linker do CefSharp.Core.Runtime e DeterministicSourcePaths no
+  CefSharp.Core (os dois no Directory.Build.props/.targets que o prepare-source.ps1 escreve no clone).
 
   Requisitos: git, CMake, Build Tools do Visual Studio 2022 com C++/CLI (VC.CLI.Support) e o SDK do .NET 9 (além do 10);
   o motor próprio já compilado (build/cef-codecs/out/runtime e a distribuição em build/cef-codecs/out/distrib, ou
@@ -127,6 +134,9 @@ function Git-Out([string[]]$Arguments) {
   try { $out = @(& git -C $repo @Arguments 2>$null); if ($LASTEXITCODE -ne 0) { $out = @() } } finally { $ErrorActionPreference = $old }
   $out
 }
+
+# New-ProfileScan e Test-ProfilePath: a procura do caminho do perfil que o publish.ps1 também faz.
+. (Join-Path $PSScriptRoot '..\profile-paths.ps1')
 
 function Highest-N {
   $max = 0
@@ -271,6 +281,36 @@ if ($SkipClient) {
 if (-not (Test-Path -LiteralPath $clientDll)) { Fail "falta $clientDll (corra sem -SkipClient)" }
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'verify-client.ps1') -Dll $clientDll -Runtime $runtime
 if ($LASTEXITCODE -ne 0) { Fail 'a DLL cliente não passou a verificação (verify-client.ps1)' }
+
+# --- Sem o caminho de quem compila ------------------------------------------------------------------------------
+# O publish.ps1 recusa binários publicados com o caminho do perfil (build/profile-paths.ps1). As peças nativas são
+# conferidas aqui, antes dos testes e da marca (que fica presa ao SHA256 delas), também com -SkipCefSharp/-SkipClient:
+# um feed ou uma DLL de antes das opções da arrumação 0.2.14 pára já, e não só no fim da publicação.
+Step 'Sem o caminho de quem compila nas peças nativas'
+$profileScan = New-ProfileScan
+if (-not $profileScan) {
+  Write-Warning 'sem USERPROFILE: não confiro o caminho do perfil nas peças nativas (o publish.ps1 também não)'
+} else {
+  $withProfile = @()
+  if (Test-ProfilePath $profileScan ([IO.File]::ReadAllBytes($clientDll))) { $withProfile += 'DLL cliente (Eteris.Browser.dll)' }
+  Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+  $commonNupkg = Join-Path $feed "cefsharp.common.netcore.$Official-eteris.$N.nupkg"
+  if (-not (Test-Path -LiteralPath $commonNupkg)) { Fail "falta $commonNupkg (corra sem -SkipCefSharp)" }
+  $zip = [IO.Compression.ZipFile]::OpenRead($commonNupkg)
+  try {
+    foreach ($entry in 'runtimes/win-x64/lib/net6.0/CefSharp.Core.dll', 'runtimes/win-x64/lib/net6.0/CefSharp.Core.Runtime.dll') {
+      $bytes = Read-ZipEntry $zip $entry
+      if (-not $bytes) { Fail "o feed não tem $entry" }
+      if (Test-ProfilePath $profileScan $bytes) { $withProfile += $entry.Substring($entry.LastIndexOf('/') + 1) }
+    }
+  } finally { $zip.Dispose() }
+  if ($withProfile.Count -gt 0) {
+    Fail ("caminho do perfil de quem compila em: $($withProfile -join ', '); o publish.ps1 recusá-los-ia. Volte a compilar " +
+          'sem -SkipCefSharp/-SkipClient (as opções estão no prepare-source.ps1 e no client\CMakeLists.txt); se continuar, ' +
+          'docs/sandbox.md, «Caminhos de quem compila», tem o plano B (raiz neutra)')
+  }
+  'sem o caminho do perfil na DLL cliente nem no CefSharp.Core.dll/CefSharp.Core.Runtime.dll do feed'
+}
 
 # --- 3. Testes no modo com sandbox ------------------------------------------------------------------------------
 if ($SkipTests) {

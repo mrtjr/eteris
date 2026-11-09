@@ -3,7 +3,9 @@
     1. aplica windows-sandbox-info.patch (CefSettings.WindowsSandboxInfo, patch v2);
     2. global.json -> SDK 9.0.x (o .NET 10 com o MSBuild 17.14 das Build Tools 2022 da NETSDK1145);
     3. net6.0 -> net8.0 nos 4 projetos compilados (o C++/CLI precisa do pacote Apphost da versao-alvo);
-       Directory.Build.props/.targets vazios na raiz (isola o clone das regras do Eteris quando esta dentro do repositorio);
+       Directory.Build.props/.targets proprios na raiz (isolam o clone das regras do Eteris quando esta dentro do
+       repositorio, e tiram dos binarios o caminho de quem compila: DeterministicSourcePaths nos .csproj e
+       /PDBALTPATH:%_PDB% no linker do .vcxproj);
     4. pasta packages\ (formato packages.config do CefSharp.Core.Runtime: cef.sdk e SourceLink) copiada da cache
        global do NuGet (%USERPROFILE%\.nuget\packages), onde o restauro do Eteris ja as pos; o /restore do msbuild
        nao restaura packages.config.
@@ -26,11 +28,32 @@ try {
   [IO.File]::WriteAllText((Join-Path $Source 'global.json'), $gj)
   # O MSBuild procura Directory.Build.props/.targets nas pastas acima do projeto: dentro do repositorio do Eteris
   # (build/cefsharp/src, de build/sandbox/build-all.ps1) apanharia o TreatWarningsAsErrors do Eteris e o CefSharp
-  # nao compilava (CA1033, CA2213...). Os dois vazios na raiz do clone param a procura (o CefSharp nao os tem).
-  foreach ($stub in 'Directory.Build.props', 'Directory.Build.targets') {
+  # nao compilava (CA1033, CA2213...). Os dois na raiz do clone param a procura (o CefSharp nao os tem), e so trazem o
+  # que tira o caminho de quem compila dos binarios publicados (docs/sandbox.md, "Caminhos de quem compila"):
+  #   - Directory.Build.props, so nos .csproj: DeterministicSourcePaths. O CefSharp.Core.dll leva o PDB portatil
+  #     embutido (DebugType embedded), com os caminhos das fontes e o sourcelink.json comprimidos la dentro; assim o
+  #     Roslyn troca a raiz do SourceRoot (o clone, dado pelo SourceLink) por /_/ nos dois.
+  #   - Directory.Build.targets, so no .vcxproj: /PDBALTPATH:%_PDB% no linker. O CefSharp.Core.Runtime.dll (C++/CLI)
+  #     guardava o caminho completo do .pdb na entrada CodeView; assim guarda so o nome do ficheiro. Fica no .targets
+  #     para ser acrescentado depois das definicoes do proprio vcxproj (que tambem mexem no AdditionalOptions do Link).
+  $stubs = [ordered]@{
+    'Directory.Build.props'   = '<Project>' + "`n" +
+                                '  <PropertyGroup Condition="''$(MSBuildProjectExtension)'' == ''.csproj''">' + "`n" +
+                                '    <DeterministicSourcePaths>true</DeterministicSourcePaths>' + "`n" +
+                                '  </PropertyGroup>' + "`n" +
+                                '</Project>' + "`n"
+    'Directory.Build.targets' = '<Project>' + "`n" +
+                                '  <ItemDefinitionGroup Condition="''$(MSBuildProjectExtension)'' == ''.vcxproj''">' + "`n" +
+                                '    <Link>' + "`n" +
+                                '      <AdditionalOptions>%(AdditionalOptions) /PDBALTPATH:%_PDB%</AdditionalOptions>' + "`n" +
+                                '    </Link>' + "`n" +
+                                '  </ItemDefinitionGroup>' + "`n" +
+                                '</Project>' + "`n"
+  }
+  foreach ($stub in $stubs.Keys) {
     $f = Join-Path $Source $stub
     if (Test-Path -LiteralPath $f) { throw "o CefSharp ja tem $stub" }
-    [IO.File]::WriteAllText($f, "<Project />`n")
+    [IO.File]::WriteAllText($f, $stubs[$stub])
   }
   foreach ($p in 'CefSharp\CefSharp.netcore.csproj', 'CefSharp.Core\CefSharp.Core.netcore.csproj',
                  'CefSharp.Core.Runtime\CefSharp.Core.Runtime.netcore.vcxproj',

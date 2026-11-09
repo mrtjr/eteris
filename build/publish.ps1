@@ -118,37 +118,22 @@ if ($NoSandbox) {
 
 # Nenhum binário nosso publicado leva o caminho do perfil de quem compila (o nome do utilizador do Windows), nos dois
 # modos: Eteris.Browser.dll (o .NET sem sandbox, a DLL cliente nativa com ele), Eteris.App.dll, eteris_shields.dll, o
-# bootstrap Eteris.Browser.exe, os do CefSharp e os .pdb. Procura «\Users\<nome>\» nas formas longa e curta 8.3, em
-# UTF-8 e UTF-16LE; nos .pdb também o nome como segmento solto (o PDB portátil guarda os caminhos aos bocados, cada um
-# com o comprimento antes). O libcef.dll (~250 MB, compilado em C:\cef) fica de fora. A mensagem nunca diz o nome.
-# Remédios: PathMap no Directory.Build.props, --remap-path-prefix do Escudo no csproj, peças nativas do build-all.ps1.
-if (-not $env:USERPROFILE) {
+# bootstrap Eteris.Browser.exe, os do CefSharp e os .pdb. A procura está em build/profile-paths.ps1, a mesma que o
+# build-all.ps1 faz às peças nativas logo depois de as compilar: «\Users\<nome>\» nas formas longa e curta 8.3, em UTF-8
+# e UTF-16LE, nos .pdb também o nome como segmento solto (o PDB portátil guarda os caminhos aos bocados, cada um com o
+# comprimento antes) e o PDB portátil embutido nas montagens .NET, que vai comprimido. O libcef.dll (~250 MB, compilado
+# em C:\cef) fica de fora. A mensagem nunca diz o nome. Remédios: PathMap no Directory.Build.props, --remap-path-prefix
+# do Escudo no csproj, e as opções das peças nativas do build-all.ps1 (docs/sandbox.md, «Caminhos de quem compila»).
+. (Join-Path $PSScriptRoot "profile-paths.ps1")
+$profileScan = New-ProfileScan
+if (-not $profileScan) {
   Write-Warning "Sem USERPROFILE: não é possível procurar o caminho do perfil nos binários publicados."
 } else {
-  $profileDir = [IO.Path]::GetFullPath($env:USERPROFILE).TrimEnd('\')
-  $profileParent = Split-Path -Leaf (Split-Path -Parent $profileDir)
-  $profileNames = @(Split-Path -Leaf $profileDir)
-  try { $profileNames += Split-Path -Leaf ((New-Object -ComObject Scripting.FileSystemObject).GetFolder($profileDir).ShortPath) } catch { Write-Verbose "Perfil sem nome curto 8.3" }
-  $profileNames = @($profileNames | Where-Object { $_ } | Sort-Object -Unique)
-  $latin1 = [Text.Encoding]::GetEncoding(28591)
-  $needles = @(foreach ($name in $profileNames) {
-    foreach ($form in "\$profileParent\$name\", "/$profileParent/$name/") {
-      $latin1.GetString([Text.Encoding]::UTF8.GetBytes($form))
-      $latin1.GetString([Text.Encoding]::Unicode.GetBytes($form))
-    }
-  })
-  $segments = @(foreach ($name in $profileNames) {
-    $bytes = [Text.Encoding]::UTF8.GetBytes($name)
-    if ($bytes.Length -ge 4 -and $bytes.Length -lt 128) { $latin1.GetString([byte[]](@([byte]$bytes.Length) + $bytes)) }
-  })
   $ours = @(Get-ChildItem -LiteralPath $publishDir -File -Recurse | Where-Object { $_.Name -match '^(Eteris|eteris_|CefSharp)' -or $_.Extension -eq '.pdb' })
   $withProfile = @(foreach ($file in $ours) {
-    $text = $latin1.GetString([IO.File]::ReadAllBytes($file.FullName))
-    $found = @($needles | Where-Object { $text.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count -gt 0
-    if (-not $found -and $file.Extension -eq '.pdb') { $found = @($segments | Where-Object { $text.IndexOf($_, [StringComparison]::Ordinal) -ge 0 }).Count -gt 0 }
-    if ($found) { $file.Name }
+    if (Test-ProfilePath $profileScan ([IO.File]::ReadAllBytes($file.FullName)) -Pdb:($file.Extension -eq '.pdb')) { $file.Name }
   })
-  if ($withProfile.Count -gt 0) { throw "Caminho do perfil de quem compila em: $($withProfile -join ', ') (PathMap, --remap-path-prefix do Escudo ou peças nativas do build-all.ps1)" }
+  if ($withProfile.Count -gt 0) { throw "Caminho do perfil de quem compila em: $($withProfile -join ', ') (PathMap, --remap-path-prefix do Escudo ou as opções das peças nativas do build-all.ps1: docs/sandbox.md, «Caminhos de quem compila»)" }
   "Sem o caminho do perfil em $($ours.Count) binários nossos"
 }
 
