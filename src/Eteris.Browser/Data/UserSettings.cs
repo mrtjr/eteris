@@ -5,83 +5,87 @@ using Eteris.Browser.Infrastructure;
 namespace Eteris.Browser.Data;
 
 // Preferências do utilizador (eteris://settings). Valores validados: a página só consegue escolher opções conhecidas.
+// As propriedades têm set e não init por causa do código gerado (ajuste e12, Data/StartupJson.cs): com init, o gerador
+// do System.Text.Json cria o record com todas no inicializador e as que faltam no ficheiro ficavam a default(T) (um
+// settings.json antigo perdia o SleepOnLowMemory = true, o SearchEngine e o resto). Com set, só as que estão no ficheiro
+// são escritas, como na leitura por reflexão. Ninguém as muda depois: as alterações passam pelo With (cópias com with).
 public sealed record UserSettings
 {
     public static readonly string[] Engines = ["duckduckgo", "brave", "startpage"];
     public static readonly int[] SleepChoices = [0, 5, 20, 60];
     public static readonly string[] NewTabThemes = ["aurora", "ocean", "sunset", "forest", "minimal"];
 
-    public string SearchEngine { get; init; } = "duckduckgo";
-    public string Startup { get; init; } = "restore";
-    public int SleepMinutes { get; init; } = 20;
+    public string SearchEngine { get; set; } = "duckduckgo";
+    public string Startup { get; set; } = "restore";
+    public int SleepMinutes { get; set; } = 20;
     // Adormecer também com pouca memória (ajuste e13, Tabs/MemoryPressure.cs); desligado = só o tempo conta.
-    public bool SleepOnLowMemory { get; init; } = true;
+    public bool SleepOnLowMemory { get; set; } = true;
     // Arquivo automático: abas sem visita há N dias vão para o Arquivo (0 = nunca).
-    public int ArchiveDays { get; init; } = Tabs.ArchivePolicy.DefaultDays;
+    public int ArchiveDays { get; set; } = Tabs.ArchivePolicy.DefaultDays;
     // O utilizador escolheu o prazo em Definições › Abas. Até lá as abas esquecidas só desvanecem: o Éteris não
     // fecha abas sozinho sem o utilizador o ter pedido.
-    public bool ArchiveConfirmed { get; init; }
-    public bool HttpsFirst { get; init; } = true;
-    public bool BlockThirdPartyCookies { get; init; } = true;
-    public bool Mica { get; init; } = true;
-    public bool VerticalTabs { get; init; }
+    public bool ArchiveConfirmed { get; set; }
+    public bool HttpsFirst { get; set; } = true;
+    public bool BlockThirdPartyCookies { get; set; } = true;
+    public bool Mica { get; set; } = true;
+    public bool VerticalTabs { get; set; }
     // «normal» (abas numa barra, endereço noutra) ou «compact» (abas e endereço numa só linha).
-    public string Density { get; init; } = "normal";
+    public string Density { get; set; } = "normal";
     // Cor do Éteris: uma chave da paleta (Theme/Accent.cs), «wallpaper» (da paisagem) ou «windows» (do sistema).
-    public string Accent { get; init; } = global::Eteris.Browser.Theme.Accent.Default;
-    public bool BlockAutoplay { get; init; } = true;
-    public bool SearchSuggestions { get; init; }
-    public string SecureDns { get; init; } = "off";
-    public bool ClearOnExit { get; init; }
-    public string Theme { get; init; } = "dark";
-    public bool CleanUrls { get; init; } = true;
+    public string Accent { get; set; } = global::Eteris.Browser.Theme.Accent.Default;
+    public bool BlockAutoplay { get; set; } = true;
+    public bool SearchSuggestions { get; set; }
+    public string SecureDns { get; set; } = "off";
+    public bool ClearOnExit { get; set; }
+    public string Theme { get; set; } = "dark";
+    public bool CleanUrls { get; set; } = true;
     // Links que passam por um rastreador com o destino no endereço vão direto ao destino (Shields/Debounce.cs).
-    public bool SkipTrackingRedirects { get; init; } = true;
+    public bool SkipTrackingRedirects { get; set; } = true;
     // Sites que só serviram de salto (sem visita a sério há 45 dias) perdem cookies e armazenamento ao fim de 1 hora.
-    public bool ForgetBounceTrackers { get; init; } = true;
+    public bool ForgetBounceTrackers { get; set; } = true;
     // Rastreadores escondidos atrás de um subdomínio do próprio site (CNAME) são bloqueados (Shields/CnameUncloak.cs).
-    public bool UncloakCname { get; init; } = true;
-    public bool BlockNotificationPrompts { get; init; } = true;
+    public bool UncloakCname { get; set; } = true;
+    public bool BlockNotificationPrompts { get; set; } = true;
     // Esconder as janelas das capturas de ecrã e do Recall (Infrastructure/CaptureShield.cs). Desligado por omissão,
     // também na janela privada: ligado, as capturas, gravações e partilhas de ecrã mostram um vazio.
-    public bool HideFromCapture { get; init; }
+    public bool HideFromCapture { get; set; }
     // Língua enviada aos sites (Accept-Language e navigator.languages): «pt-PT», «system» ou «en-US», sempre uma só.
     // Por omissão a do Windows (medido, docs/paridade.md #6): pt-PT fixo num Windows pt-BR com fuso de São Paulo era
     // uma combinação rara (13,49 bits no Cover Your Tracks, contra 7,92 do Chrome).
-    public string SiteLanguage { get; init; } = "system";
+    public string SiteLanguage { get; set; } = "system";
     // A língua foi escolhida nas Definições. Até à 0.2.9 o pt-PT era o valor por omissão e ficava gravado como se fosse
     // escolhido: sem esta marca, um pt-PT gravado passa à predefinida (SettingsStore.Load).
-    public bool SiteLanguageChosen { get; init; }
-    public string LastSeenVersion { get; init; } = string.Empty;
-    public string NewTabTheme { get; init; } = "aurora";
-    public string NewTabWallpaper { get; init; } = "coast";
-    public string NewTabWallpaperMotion { get; init; } = "photo";
-    public bool NewTabClock { get; init; } = true;
-    public bool NewTabTiles { get; init; } = true;
-    public bool NewTabWeek { get; init; } = true;
-    public bool NewTabTips { get; init; } = true;
-    public bool SidebarCollapsed { get; init; }
+    public bool SiteLanguageChosen { get; set; }
+    public string LastSeenVersion { get; set; } = string.Empty;
+    public string NewTabTheme { get; set; } = "aurora";
+    public string NewTabWallpaper { get; set; } = "coast";
+    public string NewTabWallpaperMotion { get; set; } = "photo";
+    public bool NewTabClock { get; set; } = true;
+    public bool NewTabTiles { get; set; } = true;
+    public bool NewTabWeek { get; set; } = true;
+    public bool NewTabTips { get; set; } = true;
+    public bool SidebarCollapsed { get; set; }
     // Barra lateral unificada (Ctrl+Shift+B): aberta ao arrancar, último painel, largura e lado (Sidebar/SidebarPanels.cs).
-    public bool Sidebar { get; init; }
-    public string SidebarPanel { get; init; } = global::Eteris.Browser.Sidebar.SidebarPanels.Notes;
-    public int SidebarWidth { get; init; } = (int)global::Eteris.Browser.Sidebar.SidebarPanels.DefaultWidth;
-    public string SidebarSide { get; init; } = "right";
-    public string ReaderTheme { get; init; } = "dark";
-    public int ReaderSize { get; init; } = 20;
-    public bool ReaderSerif { get; init; } = true;
+    public bool Sidebar { get; set; }
+    public string SidebarPanel { get; set; } = global::Eteris.Browser.Sidebar.SidebarPanels.Notes;
+    public int SidebarWidth { get; set; } = (int)global::Eteris.Browser.Sidebar.SidebarPanels.DefaultWidth;
+    public string SidebarSide { get; set; } = "right";
+    public string ReaderTheme { get; set; } = "dark";
+    public int ReaderSize { get; set; } = 20;
+    public bool ReaderSerif { get; set; } = true;
     // Palavras-passe e preenchimento automático (docs/palavras-passe.md, B1). Oferecer para guardar e as sugestões ao
     // clicar num campo viajam entre computadores; «Pedir o Windows Hello…» é deste computador (D-5: desligado para as
     // palavras-passe, como o Chrome e o Firefox; ligado para pagamentos e documentos).
-    public bool PasswordOffer { get; init; } = true;
-    public bool PasswordSuggestions { get; init; } = true;
-    public bool PasswordAskHello { get; init; } = Vault.ReauthPolicy.DefaultAskWhenFillingPasswords;
-    public bool PaymentsAskHello { get; init; } = Vault.ReauthPolicy.DefaultAskWhenFillingPayments;
+    public bool PasswordOffer { get; set; } = true;
+    public bool PasswordSuggestions { get; set; } = true;
+    public bool PasswordAskHello { get; set; } = Vault.ReauthPolicy.DefaultAskWhenFillingPasswords;
+    public bool PaymentsAskHello { get; set; } = Vault.ReauthPolicy.DefaultAskWhenFillingPayments;
     // «Preencher automaticamente…» de cada secção de eteris://autofill: só controla as sugestões (nada se preenche sem
     // o utilizador escolher).
-    public bool AutofillPayments { get; init; } = true;
-    public bool AutofillContacts { get; init; } = true;
-    public bool AutofillDocuments { get; init; } = true;
-    public bool AutofillTravel { get; init; } = true;
+    public bool AutofillPayments { get; set; } = true;
+    public bool AutofillContacts { get; set; } = true;
+    public bool AutofillDocuments { get; set; } = true;
+    public bool AutofillTravel { get; set; } = true;
 
     // Desligar «Pedir o Windows Hello ao preencher pagamentos» ou «… palavras-passe» também pede o Windows Hello
     // (ReauthPurpose.ChangePaymentSetting / ChangePasswordSetting): só se mudam nas páginas do cofre.
