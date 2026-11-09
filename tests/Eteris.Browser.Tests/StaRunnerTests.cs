@@ -11,7 +11,9 @@ public class StaRunnerTests
     [Fact]
     public void StaThreads_HaveTimeouts()
     {
-        var sta = "ApartmentState" + ".STA";
+        // Uma thread STA nasce de Set/TrySetApartmentState; citar o valor do enum (por exemplo numa asserção sobre a
+        // thread do StaRunner, como Run_ReturnsTheResultFromAnStaThread) não abre thread nenhuma e não conta.
+        var setSta = new Regex(@"SetApartmentState\s*\(");
         var joinWithoutTimeout = new Regex(@"\.Join\(\s*\)");
         var offenders = new List<string>();
         foreach (var file in TestSources())
@@ -20,12 +22,14 @@ public class StaRunnerTests
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
-                if (lines[i].Contains(sta) && name != "StaRunner.cs") offenders.Add($"{name}:{i + 1}: thread STA fora do StaRunner");
+                if (setSta.IsMatch(lines[i]) && name != "StaRunner.cs") offenders.Add($"{name}:{i + 1}: thread STA fora do StaRunner");
                 if (joinWithoutTimeout.IsMatch(lines[i])) offenders.Add($"{name}:{i + 1}: Join sem prazo");
             }
         }
         Assert.True(offenders.Count == 0, string.Join("\n", offenders));
-        Assert.Contains("IsBackground = true", File.ReadAllText(Path.Combine(TestsDir(), "StaRunner.cs")));
+        var runner = File.ReadAllText(Path.Combine(TestsDir(), "StaRunner.cs"));
+        Assert.Matches(setSta, runner); // a procura apanha a única thread STA permitida
+        Assert.Contains("IsBackground = true", runner);
     }
 
     [Fact]
