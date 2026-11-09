@@ -87,11 +87,12 @@ public class SandboxFallbackTests
     public void CrashBeforePaint_IsInertInAnInstall(string? value, bool installed, bool expected)
         => Assert.Equal(expected, TestSwitches.CrashBeforePaintFor(value, installed));
 
+    // TestSwitches.IsInstalled aqui; ao fundir a 0.2.13 pode passar a ser o Sync.SyncService.IsInstalled.
     [Fact]
     public void CrashBeforePaint_ReadsTheInstallFromTheSwitches()
     {
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Infrastructure", "TestSwitches.cs"));
-        Assert.Matches(@"CrashBeforePaint\s*=>\s*CrashBeforePaintFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_CRASH_BEFORE_PAINT""\),\s*\w*\.?IsInstalled\)", source);
+        Assert.Matches(@"CrashBeforePaint\s*=>\s*CrashBeforePaintFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_CRASH_BEFORE_PAINT""\),\s*[\w.]*IsInstalled\)", source);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
