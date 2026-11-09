@@ -17,6 +17,12 @@
   Firefox, do Bitwarden ou do 1Password (o ficheiro é lido pelo Éteris, não pela página, com a escolha nos conflitos e a
   oferta de o enviar para a Reciclagem) e exportar no formato do Chrome (pede sempre o Windows Hello e avisa numa pasta
   do OneDrive, do Dropbox ou do Google Drive). Nenhuma palavra-passe vai no HTML da página; nada sai do computador.
+- **`eteris://autofill/` — Pagamentos, Informações de contacto, Documentos de identificação e Viagens:** cartões
+  (nunca o código de segurança) e IBAN, moradas com os campos de Portugal (código postal, distrito) e do Brasil (CEP,
+  bairro, estado), passaporte, carta de condução/CNH, Cartão de Cidadão/RG e NIF/CPF, veículos (matrícula/placa, VIN)
+  e programas de fidelidade. Números sempre mascarados; vê-los ou editá-los pede o Windows Hello. Validações com o
+  dígito de controlo (cartão, IBAN, NIF, CPF) e os formatos de cada país. «Pedir o Windows Hello ao preencher
+  pagamentos» ligado por omissão (desligá-lo também pede).
 - **Nada dos formulários vai para a Google:** medido ao vivo, o motor mandava o utilizador e a palavra-passe (prefixo
   de um hash) de cada início de sessão enviado a `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas do
   Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de

@@ -1,6 +1,6 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5) e, do bloco B (interfaces de gestão), B1 e B2 feitos no ramo `sync`, por
+Estado: **bloco A (base local: A0–A5) e, do bloco B (interfaces de gestão), B1 a B3 feitos no ramo `sync`, por
 publicar** (os blocos C a E do desenho — preenchimento na página, sincronização e fecho — estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
@@ -322,3 +322,49 @@ guardada e reposta):
 - «Exportar…» (dois cliques, Hello falso, diálogo «Guardar como» nativo) → «6 palavras-passe exportadas…», ficheiro
   com 7 linhas e o cabeçalho do Chrome;
 - `cofre.db` sem «Inventada», «loja.exemplo» nem «ana.teste» em Latin-1, UTF-8 ou UTF-16.
+
+## B3. `eteris://autofill/`
+
+`Browser/AutofillPage.cs`, `Browser/autofill.html`, `Vault/VaultRoutes.Autofill.cs`.
+
+- **Quatro secções com contagem**, como o «Your saved info» do Chrome, e endereços diretos
+  (`#pagamentos`, `#contacto`, `#documentos`, `#viagens`) para o submenu de B1:
+  - **Pagamentos:** cartões («Visa •••• 1111 · validade 08/29 · titular · alcunha», marcados «Fora da validade»)
+    e IBAN («PT50 •••• 0154»); «Preencher automaticamente pagamentos»; «Pedir o Windows Hello ao preencher pagamentos»
+    (ligado por omissão, D-5; desligá-lo pede o Windows Hello e, recusado, fica ligado); a ligação «Sincronizar entre
+    computadores» diz que os pagamentos ficarão desligados por omissão (D-1) e que a sincronização do cofre ainda não
+    existe.
+  - **Informações de contacto:** moradas com etiqueta; o formulário muda com o país (`AutofillPage.AddressForm`):
+    Portugal (Apelido, Morada, Andar/porta, Código postal 0000-000, Localidade, Distrito), Brasil (Sobrenome,
+    Logradouro, Complemento, Bairro, CEP 00000-000, Cidade, Estado) e os outros (Código postal, Região).
+  - **Documentos de identificação:** passaporte, carta de condução/CNH, Cartão de Cidadão/RG e o número fiscal
+    NIF/CPF (D-2), com o nome do país quando há país («NIF», «CPF», «CNH», «Cartão de Cidadão») e os dois quando não
+    há; números mascarados; validade.
+  - **Viagens:** veículos (marca, modelo, ano, proprietário, matrícula/placa e país, VIN) e programas de fidelidade
+    (companhia, programa, número mascarado, nome).
+- **Nenhum número completo no HTML:** a página recebe só máscaras e metadados. «Mostrar» e «Editar» de um cartão,
+  IBAN, documento ou viagem pedem a reautenticação (com a janela de graça) e o número fica à vista no máximo 30 s, com
+  as janelas fora das capturas. As moradas não têm segredos e editam-se sem pedir.
+- **Validações** (as de A1): Luhn e marca do cartão; validade MM/AA; IBAN por mod-97; NIF e CPF pelo dígito de
+  controlo; código postal de Portugal e CEP do Brasil (o CEP guarda-se com hífen); e-mail; matrícula de Portugal e
+  placa do Brasil (antiga e Mercosul); ano do veículo; datas pelo calendário. Mensagens em português, no formulário.
+- **Nunca o código de segurança:** um formulário com um campo chamado `cvc`, `cvv`, `csc` ou «security code» é
+  recusado inteiro, sem guardar nada; a página não tem esse campo.
+- **Apagar com «Anular»** e as mesmas regras de B2 (token, POST, iframes da mesma origem, janela privada recusada).
+- O JSON das duas páginas sai com os acentos e o «•» como são (só `<`, `>`, `&` e aspas escapados).
+
+Testes: `Vault/AutofillPageTests` (só máscaras no HTML; secções, tema e nenhum campo de código de segurança; os nomes
+dos documentos nas duas formas; mostrar com e sem reautenticação nas quatro coleções com segredo; `cvc`, `cvv`, `csc`
+e `card-security-code` recusados; dezasseis validações; um de cada guardado e normalizado; editar com segredo pede e
+morada não; apagar e anular; o interruptor do Hello dos pagamentos; formulários de Portugal e do Brasil; cartão fora da
+validade; janela privada e token), `InjectedScriptsSyntaxTests` e `ThemedPagesTests`.
+
+Prova ao vivo (`pp\vivo\b3`, `pp\vivo\b3-registo.txt`; perfil de teste novo; Hello falso; tudo inventado): um
+cartão com o Luhn errado recusado («Número de cartão inválido…»); depois, pelos formulários da página, dois cartões
+(um fora da validade), um IBAN, uma morada de Portugal e uma do Brasil (o CEP `01310100` guardado `01310-100`), NIF,
+CPF, CNH, Cartão de Cidadão, passaporte, dois veículos (a placa `abc1d23` guardada `ABC1D23`) e um programa de
+fidelidade, todos «Guardado.»; nenhum número completo no HTML; «Mostrar» o cartão → o número à vista e a afinidade
+`0x11`, «Esconder» → `0x0`; editar a alcunha do IBAN (Hello falso) → «Alterações guardadas.»; apagar o programa →
+«Apagado [Anular]» → «Anular» → de volta; desligar o Hello dos pagamentos (Hello falso) → «Guardado»; `cofre.db` sem
+números, nomes nem moradas em claro. Capturas das quatro secções (`dark-pagamentos.png`, `dark-contacto.png`,
+`dark-documentos.png`, `dark-viagens.png`), sem nenhum número completo à vista.

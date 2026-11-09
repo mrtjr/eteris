@@ -59,11 +59,16 @@ public class InjectedScriptsSyntaxTests
     // As páginas do cofre (eteris://passwords/ e eteris://autofill/), como são servidas.
     [Theory]
     [InlineData("passwords")]
+    [InlineData("autofill")]
     public void VaultPageScript_IsValidJavaScript(string page)
     {
         var html = page == "passwords"
             ? PasswordsPage.Render(new { token = "t", logins = Array.Empty<object>(), never = Array.Empty<object>(), pwOffer = true, pwSuggest = true, pwAskHello = false })
-            : throw new ArgumentException(page);
+            : AutofillPage.Render(new
+            {
+                token = "t", cards = Array.Empty<object>(), ibans = Array.Empty<object>(), contacts = Array.Empty<object>(), docs = Array.Empty<object>(),
+                travel = Array.Empty<object>(), docTypes = Array.Empty<object>(), addressForms = new Dictionary<string, object>(), afPayments = true,
+            });
         var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);
         Assert.True(match.Success);
         CheckSyntax(page, match.Groups[1].Value);

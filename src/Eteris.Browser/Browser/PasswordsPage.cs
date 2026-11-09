@@ -1,5 +1,7 @@
 using System.IO;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 
 namespace Eteris.Browser.Browser;
 
@@ -19,5 +21,8 @@ public static class PasswordsPage
 
     public static string Template => s_template.Value;
 
-    public static string Render(object data) => Template.Replace("{{DATA}}", JsonSerializer.Serialize(data));
+    // Acentos e IDN como são; <, >, & e aspas continuam escapados para o <script>.
+    private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) };
+
+    public static string Render(object data) => Template.Replace("{{DATA}}", JsonSerializer.Serialize(data, Json));
 }
