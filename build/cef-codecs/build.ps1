@@ -432,7 +432,7 @@ function Invoke-Package {
 
   foreach ($d in @($DistribDir, $RuntimeDir, $SymbolsDir)) {
     # [IO.Directory]::Delete e nao Remove-Item: no PowerShell 5.1 o Remove-Item falha com caminhos
-    # curtos 8.3 (C:\Users\JNIOR~1\...), que e como o -OutDir costuma chegar.
+    # curtos 8.3 (por exemplo C:\Users\ABCDEF~1\...), que e como o -OutDir costuma chegar.
     if (Test-Path -LiteralPath $d) { [IO.Directory]::Delete($d, $true) }
     New-Item -ItemType Directory -Force -Path $d | Out-Null
   }
@@ -474,7 +474,7 @@ function Invoke-Package {
   Copy-Item -LiteralPath (Join-Path $BuildDir 'libcef.dll.pdb') -Destination $SymbolsDir -ErrorAction SilentlyContinue
 
   # Caminhos relativos sem aritmetica entre caminhos de origens diferentes: o $RuntimeDir pode vir
-  # com nomes curtos 8.3 (C:\Users\JNIOR~1) e o FullName do Get-ChildItem com os longos
+  # com nomes curtos 8.3 (C:\Users\ABCDEF~1) e o FullName do Get-ChildItem com os longos
   # (o nome longo do perfil), com comprimentos diferentes. O Directory.EnumerateFiles devolve cada ficheiro
   # com o prefixo exatamente igual a pasta que recebe, por isso o corte e sempre certo.
   $files = @()

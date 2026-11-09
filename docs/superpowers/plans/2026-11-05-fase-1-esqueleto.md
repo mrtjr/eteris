@@ -24,7 +24,7 @@
 
 ## Review Focus
 
-1. Nome de utilizador Windows com acentos (`C:\Users\Júnior`) — o cache do CEF e a DB têm de abrir normalmente em caminhos não-ASCII. → teste em Task 2 (`AppPaths` devolve caminho sob `LocalApplicationData` sem alterar caracteres) + verificação manual em Task 6.
+1. Nome de utilizador Windows com acentos (`C:\Users\<utilizador>`, por exemplo «José») — o cache do CEF e a DB têm de abrir normalmente em caminhos não-ASCII. → teste em Task 2 (`AppPaths` devolve caminho sob `LocalApplicationData` sem alterar caracteres) + verificação manual em Task 6.
 2. Abrir o Éteris duas vezes — o CEF falha se dois processos partilharem `profile\`. A segunda instância deve trazer a primeira para a frente e sair. → Task 3.
 3. Arrancar sem rede — a verificação de updates não pode bloquear a UI nem mostrar erro. → teste em Task 5 (`UpdateService.CheckAsync` devolve `null` em exceção).
 4. Fechar a janela principal — o processo tem de terminar (`Cef.Shutdown()`), sem processos `CefSharp.BrowserSubprocess` órfãos. → verificação manual em Task 6.
