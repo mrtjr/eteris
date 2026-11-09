@@ -63,10 +63,10 @@ internal static class SyncService
     }
 
     public const string WhatSyncs =
-        "Favoritos, Espaços (nome, cor e emoji; as abas ficam em cada computador), as definições que viajam (tema, motor de pesquisa, proteções, nova aba, leitura…), as decisões do Escudo por site (desligado, modo estrito, elementos escondidos, bloqueios por site, exceções ao HTTPS primeiro) e as notas.";
+        "Favoritos, Espaços (nome, cor e emoji; as abas ficam em cada computador), as definições que viajam (tema, motor de pesquisa, proteções, nova aba, leitura…), as decisões do Escudo por site (desligado, modo estrito, elementos escondidos, bloqueios por site, exceções ao HTTPS primeiro), as notas e, com uma segunda cifra própria, as palavras-passe, as informações de contacto e as viagens (pagamentos e documentos de identificação só se os ligar).";
 
     public const string WhatStays =
-        "Não sincroniza: histórico, abas abertas, cookies, transferências, palavras-passe (o Éteris não as guarda) e o que só vale neste computador (Mica, barra lateral, esconder das capturas).";
+        "Não sincroniza: histórico, abas abertas, cookies, transferências, chaves de acesso (ficam no Windows Hello ou na chave de segurança), o histórico das palavras-passe e o que só vale neste computador (Mica, barra lateral, esconder das capturas, «Pedir o Windows Hello…»).";
 
     public static SyncAgent? Agent()
     {
@@ -75,7 +75,11 @@ internal static class SyncService
         {
             if (_agent is not null) return _agent;
             var store = new DpapiSyncStore(StatePath, new Dpapi("sync-state"));
-            _agent = new SyncAgent(Transport, new BrowserProfile(), store, DeviceName, Now) { AccountKey = AccountKey };
+            // O perfil inteiro: o resto do Éteris (BrowserProfile) e o cofre (Vault/VaultSyncProfile, só as coleções ligadas
+            // neste computador; sem nenhuma ligada, ou sem cofre neste perfil, nem o abre).
+            var profile = new Vault.ProfileWithVault(new BrowserProfile(), new Vault.VaultSyncProfile(() => Vault.VaultService.Profile),
+                () => _agent?.EnabledCollections);
+            _agent = new SyncAgent(Transport, profile, store, DeviceName, Now) { AccountKey = AccountKey };
             _agent.Changed += () => Changed?.Invoke();
             return _agent;
         }
@@ -118,6 +122,7 @@ internal static class SyncService
         Data.Settings.Changed += _ => Touch();
         Data.AppData.SyncableChanged += Touch;
         Data.NotesStore.Saved += Touch;
+        Vault.VaultService.Changed += Touch;
     }
 
     // Uma alteração local (favorito, definição, Escudo, Espaço, notas): sincroniza 10 s depois da última.

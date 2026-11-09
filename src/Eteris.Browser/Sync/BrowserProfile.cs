@@ -17,7 +17,8 @@ namespace Eteris.Browser.Sync;
 //   Espaços              nome → cor, emoji e ordem (da primeira janela; as abas de cada Espaço ficam em cada computador)
 //   notas                o texto das notas
 //
-// Nunca: histórico, abas abertas, cookies, transferências, palavras-passe (o Éteris não as guarda).
+// Nunca: histórico, abas abertas, cookies, transferências. As palavras-passe e o preenchimento automático vêm do cofre
+// (Vault/VaultSyncProfile, juntos em Vault/ProfileWithVault), com uma segunda cifra por registo.
 // Ler é só disco (e a lista de Espaços da janela, na thread da interface); aplicar escreve pelos mesmos caminhos que a
 // interface usa (AppData, Settings), por isso o resto do Éteris vê as alterações como se fossem feitas aqui.
 // Uma coleção que não se consegue ler (base de dados ocupada, notas bloqueadas pelo antivírus, sem janela nem sessão

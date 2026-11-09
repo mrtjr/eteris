@@ -14,7 +14,7 @@ public sealed record LoginEntry(string Id, string Origin, string Username, Origi
 
 // A fachada do cofre (docs/palavras-passe.md, A2: só armazenamento). Abre-se na primeira vez que é precisa — nunca no
 // arranque do Éteris (o arranque não muda). Os nomes dos campos são os da sincronização (desenho, secção 4.1).
-public sealed class VaultService : IDisposable
+public sealed partial class VaultService : IDisposable
 {
     private readonly string _root;
     private readonly ISecretProtector _protector;
@@ -35,6 +35,12 @@ public sealed class VaultService : IDisposable
     public static VaultService Profile => s_profile.Value;
 
     public bool IsOpen => _store is not null;
+
+    // O cofre mudou por uma ação neste computador (não pelo que a sincronização aplicou): a sincronização marca uma
+    // ronda para daqui a 10 s (Sync/SyncService.Touch), como depois de mudar um favorito.
+    public static event Action? Changed;
+
+    private static void Raise() => Changed?.Invoke();
 
     private VaultStore Store
     {
@@ -92,7 +98,9 @@ public sealed class VaultService : IDisposable
             ["realm"] = item.Realm,
         };
         var secret = new JsonObject { ["password"] = item.Password ?? string.Empty, ["note"] = item.Note };
-        Store.Put(VaultCollection.Logins, id, Origins.IsAndroid(origin) ? null : origin, meta, secret, now, keepPrevious: passwordChanged);
+        Store.Put(VaultCollection.Logins, id, Origins.IsAndroid(origin) ? null : origin, meta, secret, now, keepPrevious: passwordChanged,
+            sync: SyncOf(VaultCollection.Logins, id, meta, secret));
+        Raise();
         return id;
     }
 
@@ -139,7 +147,9 @@ public sealed class VaultService : IDisposable
             ["origin"] = origin, ["username"] = user, ["created"] = Time(old?.Created ?? now), ["changed"] = Time(now),
             ["used"] = null, ["formAction"] = null, ["generated"] = true, ["realm"] = null,
         };
-        Store.Put(VaultCollection.Logins, id, origin, meta, new JsonObject { ["password"] = password, ["note"] = null }, now, keepPrevious: old is not null);
+        var secret = new JsonObject { ["password"] = password, ["note"] = null };
+        Store.Put(VaultCollection.Logins, id, origin, meta, secret, now, keepPrevious: old is not null, sync: SyncOf(VaultCollection.Logins, id, meta, secret));
+        Raise();
         return id;
     }
 
@@ -154,6 +164,7 @@ public sealed class VaultService : IDisposable
         {
             SaveLogin(account with { Password = generated.Password });
             Store.Delete(VaultCollection.Logins, id, Now);
+            Raise();
             return existing;
         }
         SaveLogin(generated with { Username = username, Generated = false });
@@ -188,7 +199,10 @@ public sealed class VaultService : IDisposable
     {
         var origin = Origins.Normalize(url) ?? throw new ArgumentException("Origem inválida.", nameof(url));
         if (IsNeverSave(origin)) return;
-        Store.Put(VaultCollection.LoginsNever, VaultIds.New(), origin, new JsonObject { ["origin"] = origin, ["created"] = Time(Now) }, null, Now);
+        var id = VaultIds.New();
+        var meta = new JsonObject { ["origin"] = origin, ["created"] = Time(Now) };
+        Store.Put(VaultCollection.LoginsNever, id, origin, meta, null, Now, sync: SyncOf(VaultCollection.LoginsNever, id, meta, null));
+        Raise();
     }
 
     public bool IsNeverSave(string url)
@@ -201,6 +215,7 @@ public sealed class VaultService : IDisposable
     {
         if (Origins.Normalize(url) is not { } origin) return;
         foreach (var id in Store.FindByOrigin(VaultCollection.LoginsNever, origin)) Store.Delete(VaultCollection.LoginsNever, id, Now);
+        Raise();
     }
 
     // ---- Pagamentos, contactos, documentos, viagens ----
@@ -298,18 +313,29 @@ public sealed class VaultService : IDisposable
         if (Store.Get(collection, id) is not { } entry) return;
         var meta = (JsonObject)entry.Meta.DeepClone();
         meta["used"] = Time(Now);
-        Store.UpdateMeta(collection, id, meta, Now);
+        // A impressão da sincronização muda com a «última utilização» (o segredo só se lê para a refazer).
+        Store.UpdateMeta(collection, id, meta, Now, SyncOf(collection, id, meta, entry.HasSecret ? Store.ReadSecret(collection, id) : null));
+        Raise();
     }
 
     public IReadOnlyList<VaultEntry> List(VaultCollection collection) => Store.List(collection);
 
-    public bool Delete(VaultCollection collection, string id) => Store.Delete(collection, id, Now);
+    public bool Delete(VaultCollection collection, string id)
+    {
+        var deleted = Store.Delete(collection, id, Now);
+        if (deleted) Raise();
+        return deleted;
+    }
 
     public IReadOnlyList<(string Id, DateTimeOffset Deleted)> Tombstones(VaultCollection collection) => Store.Tombstones(collection);
 
     public void Purge(VaultCollection collection, string id) => Store.Purge(collection, id);
 
-    public void EraseAll() => Store.EraseAll();
+    public void EraseAll()
+    {
+        Store.EraseAll();
+        Raise();
+    }
 
     private (string Id, DateTimeOffset Created) Identity(VaultCollection collection, string? id, DateTimeOffset created)
     {
@@ -322,7 +348,8 @@ public sealed class VaultService : IDisposable
     {
         VaultFields.RejectForbidden(meta.Select(p => new KeyValuePair<string, string?>(p.Key, null)));
         if (secret is not null) VaultFields.RejectForbidden(secret.Select(p => new KeyValuePair<string, string?>(p.Key, null)));
-        Store.Put(collection, id, null, meta, secret, Now);
+        Store.Put(collection, id, null, meta, secret, Now, sync: SyncOf(collection, id, meta, secret));
+        Raise();
         return id;
     }
 

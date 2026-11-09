@@ -32,12 +32,14 @@ public sealed class VaultStore : IDisposable
     private readonly string _connectionString;
     private readonly byte[] _encKey;
     private readonly byte[] _idxKey;
+    private readonly byte[] _syncKey;
 
     public VaultStore(string path, ReadOnlySpan<byte> vaultKey)
     {
         if (vaultKey.Length != VaultKey.Length) throw new ArgumentException("A chave do cofre tem 256 bits.", nameof(vaultKey));
         _encKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey.ToArray(), 32, salt: null, info: "Eteris.Cofre:enc"u8.ToArray());
         _idxKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey.ToArray(), 32, salt: null, info: "Eteris.Cofre:idx"u8.ToArray());
+        _syncKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey.ToArray(), 32, salt: null, info: "Eteris.Cofre:sync"u8.ToArray());
         _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString();
         using var connection = Open();
         Execute(connection, """
@@ -55,10 +57,21 @@ public sealed class VaultStore : IDisposable
                 created INTEGER NOT NULL,
                 changed INTEGER NOT NULL,
                 deleted INTEGER,
+                sync_key BLOB,
+                sync_print BLOB,
                 PRIMARY KEY (collection, id));
             CREATE INDEX IF NOT EXISTS items_origin ON items(collection, origin_key);
             CREATE INDEX IF NOT EXISTS items_site ON items(collection, site_key);
             """);
+        // Um cofre de antes da sincronização (D3) ganha as duas colunas; os itens dele ganham a chave e a impressão na
+        // primeira vez que a sincronização os lê (VaultService.SyncEntries).
+        using (var columns = connection.CreateCommand())
+        {
+            columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('items') WHERE name = 'sync_key'";
+            if (Convert.ToInt64(columns.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 0)
+                Execute(connection, "ALTER TABLE items ADD COLUMN sync_key BLOB; ALTER TABLE items ADD COLUMN sync_print BLOB;");
+        }
+        Execute(connection, "CREATE INDEX IF NOT EXISTS items_sync ON items(collection, sync_key);");
         // A versão do esquema só se escreve num cofre novo: abrir para ler não muda o ficheiro (escrever a mesma versão
         // mudava o contador do cabeçalho; C7: a janela privada lê o cofre sem deixar rasto).
         using var version = connection.CreateCommand();
@@ -70,11 +83,62 @@ public sealed class VaultStore : IDisposable
     {
         CryptographicOperations.ZeroMemory(_encKey);
         CryptographicOperations.ZeroMemory(_idxKey);
+        CryptographicOperations.ZeroMemory(_syncKey);
+    }
+
+    // ---- sincronização (D3): chave local e impressão de cada item ----
+    // sync_key = HMAC(K_sync, "k|coleção\nchave natural") e sync_print = HMAC(K_sync, "p|coleção\nforma canónica"), com
+    // K_sync = HKDF(chave do cofre, "Eteris.Cofre:sync"): a sincronização compara itens sem decifrar nada, e nenhum
+    // dos dois diz o site, o utilizador ou o conteúdo (a chave é deste computador).
+
+    public string SyncKey(string collection, string naturalKey)
+        => Convert.ToHexStringLower(HMACSHA256.HashData(_syncKey, Encoding.UTF8.GetBytes("k|" + collection + "\n" + naturalKey)));
+
+    public string SyncPrint(string collection, string canonical)
+        => Convert.ToHexStringLower(HMACSHA256.HashData(_syncKey, Encoding.UTF8.GetBytes("p|" + collection + "\n" + canonical)));
+
+    // Os itens vivos de uma coleção com a chave local e a impressão (null num item de antes da sincronização).
+    public IReadOnlyList<(string Id, string? Key, string? Print)> SyncEntries(VaultCollection collection)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, sync_key, sync_print FROM items WHERE collection = $c AND deleted IS NULL ORDER BY rowid";
+        command.Parameters.AddWithValue("$c", VaultCollections.Name(collection));
+        using var r = command.ExecuteReader();
+        var result = new List<(string, string?, string?)>();
+        while (r.Read())
+            result.Add((r.GetString(0), r.IsDBNull(1) ? null : Convert.ToHexStringLower((byte[])r[1]), r.IsDBNull(2) ? null : Convert.ToHexStringLower((byte[])r[2])));
+        return result;
+    }
+
+    public string? FindBySyncKey(VaultCollection collection, string syncKey)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id FROM items WHERE collection = $c AND sync_key = $k AND deleted IS NULL ORDER BY rowid LIMIT 1";
+        command.Parameters.AddWithValue("$c", VaultCollections.Name(collection));
+        command.Parameters.AddWithValue("$k", Convert.FromHexString(syncKey));
+        return command.ExecuteScalar() as string;
+    }
+
+    // Grava a chave e a impressão de um item (os de antes da sincronização).
+    public void SetSync(VaultCollection collection, string id, (string Key, string Print) sync)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE items SET sync_key = $k, sync_print = $p WHERE collection = $c AND id = $id AND deleted IS NULL";
+        command.Parameters.AddWithValue("$c", VaultCollections.Name(collection));
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$k", Convert.FromHexString(sync.Key));
+        command.Parameters.AddWithValue("$p", Convert.FromHexString(sync.Print));
+        command.ExecuteNonQuery();
     }
 
     // Grava (ou substitui) um item. indexOrigin: a origem normalizada para as procuras (só palavras-passe e «nunca»).
     // keepPrevious: o segredo atual passa a «anterior» (histórico de 1 versão) antes de ser substituído.
-    public void Put(VaultCollection collection, string id, string? indexOrigin, JsonObject meta, JsonObject? secret, DateTimeOffset now, bool keepPrevious = false)
+    // sync: a chave local e a impressão do item para a sincronização (VaultService calcula-as do conteúdo).
+    public void Put(VaultCollection collection, string id, string? indexOrigin, JsonObject meta, JsonObject? secret, DateTimeOffset now, bool keepPrevious = false,
+        (string Key, string Print)? sync = null)
     {
         var name = VaultCollections.Name(collection);
         using var connection = Open();
@@ -111,11 +175,13 @@ public sealed class VaultStore : IDisposable
         using var write = connection.CreateCommand();
         write.Transaction = tx;
         write.CommandText = """
-            INSERT INTO items(collection, id, origin_key, site_key, meta_ct, meta_version, secret_ct, secret_version, prev_ct, prev_version, created, changed, deleted)
-            VALUES ($c, $id, $o, $s, $m, $mv, $x, $xv, $p, $pv, $created, $changed, NULL)
+            INSERT INTO items(collection, id, origin_key, site_key, meta_ct, meta_version, secret_ct, secret_version, prev_ct, prev_version, created, changed, deleted, sync_key, sync_print)
+            VALUES ($c, $id, $o, $s, $m, $mv, $x, $xv, $p, $pv, $created, $changed, NULL, $sk, $sp)
             ON CONFLICT(collection, id) DO UPDATE SET origin_key = $o, site_key = $s, meta_ct = $m, meta_version = $mv, secret_ct = $x,
-                secret_version = $xv, prev_ct = $p, prev_version = $pv, created = $created, changed = $changed, deleted = NULL
+                secret_version = $xv, prev_ct = $p, prev_version = $pv, created = $created, changed = $changed, deleted = NULL, sync_key = $sk, sync_print = $sp
             """;
+        write.Parameters.AddWithValue("$sk", sync is { } k ? Convert.FromHexString(k.Key) : DBNull.Value);
+        write.Parameters.AddWithValue("$sp", sync is { } p ? Convert.FromHexString(p.Print) : DBNull.Value);
         write.Parameters.AddWithValue("$c", name);
         write.Parameters.AddWithValue("$id", id);
         write.Parameters.AddWithValue("$o", indexOrigin is null ? DBNull.Value : OriginKey(indexOrigin));
@@ -133,7 +199,7 @@ public sealed class VaultStore : IDisposable
     }
 
     // Só os metadados (por exemplo, a «última utilização»): o segredo nem se decifra.
-    public bool UpdateMeta(VaultCollection collection, string id, JsonObject meta, DateTimeOffset now)
+    public bool UpdateMeta(VaultCollection collection, string id, JsonObject meta, DateTimeOffset now, (string Key, string Print)? sync = null)
     {
         var name = VaultCollections.Name(collection);
         using var connection = Open();
@@ -150,7 +216,14 @@ public sealed class VaultStore : IDisposable
         }
         using var write = connection.CreateCommand();
         write.Transaction = tx;
-        write.CommandText = "UPDATE items SET meta_ct = $m, meta_version = $mv, changed = $changed WHERE collection = $c AND id = $id";
+        write.CommandText = sync is null
+            ? "UPDATE items SET meta_ct = $m, meta_version = $mv, changed = $changed WHERE collection = $c AND id = $id"
+            : "UPDATE items SET meta_ct = $m, meta_version = $mv, changed = $changed, sync_key = $sk, sync_print = $sp WHERE collection = $c AND id = $id";
+        if (sync is { } s)
+        {
+            write.Parameters.AddWithValue("$sk", Convert.FromHexString(s.Key));
+            write.Parameters.AddWithValue("$sp", Convert.FromHexString(s.Print));
+        }
         write.Parameters.AddWithValue("$c", name);
         write.Parameters.AddWithValue("$id", id);
         write.Parameters.AddWithValue("$m", EncryptJson(meta, name, id, "meta", version));
@@ -179,7 +252,8 @@ public sealed class VaultStore : IDisposable
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            UPDATE items SET meta_ct = NULL, secret_ct = NULL, prev_ct = NULL, origin_key = NULL, site_key = NULL, deleted = $now, changed = $now
+            UPDATE items SET meta_ct = NULL, secret_ct = NULL, prev_ct = NULL, origin_key = NULL, site_key = NULL, sync_key = NULL, sync_print = NULL,
+                deleted = $now, changed = $now
             WHERE collection = $c AND id = $id AND deleted IS NULL
             """;
         command.Parameters.AddWithValue("$c", VaultCollections.Name(collection));

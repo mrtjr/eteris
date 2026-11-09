@@ -876,3 +876,39 @@ nunca abre selos nem envia, e ligá-la junta só essa (e desligar outra vez não
 e lápides que não ressuscitam; selo estragado fica de fora sem apagar nada aqui; cofre ilegível não envia remoções.
 
 Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, pela pasta local).
+
+## D3. O cofre na sincronização do navegador
+
+- **Chave local e impressão gravadas com cada item** (`VaultStore`: colunas `sync_key` e `sync_print`, com
+  `K_sync = HKDF(chave do cofre, "Eteris.Cofre:sync")`): `sync_key = HMAC(K_sync, coleção ‖ chave natural)` e
+  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar, «última
+  utilização»), por isso a sincronização compara o cofre **sem decifrar nada**. Um cofre de antes (sem as colunas)
+  ganha-as ao abrir; os itens dele ganham a chave e a impressão na primeira leitura. Nenhuma das duas diz o site, o
+  utilizador ou o conteúdo, e são de cada computador (outra chave do cofre, outras chaves locais).
+- **Formato da sincronização** (`Vault/VaultSyncMap.cs`): cada item vai com os nomes de `SecretSchemas`; a chave
+  natural é `origem\nutilizador` nas palavras-passe (`gerada\n<ID>` numa gerada por confirmar, que pode ter o mesmo
+  site e utilizador que uma confirmada), a origem em «nunca neste site» e o ID do item nas outras coleções. Os
+  derivados (marca e últimos 4 algarismos do cartão, máscaras) não viajam: refazem-se ao gravar.
+- **Aplicar** (`VaultService.ApplySynced`): grava os campos **tal como vieram**, cifrados com a chave deste cofre (a
+  impressão sai igual à do conteúdo recebido: nada volta em eco). Recusa o que não é aceitável — tipos errados, código
+  de segurança, origem que não está normalizada (ou que não é `http(s)`/`android://`), chave natural que não bate com os
+  campos, cartão com Luhn errado, IBAN inválido, tipo de documento ou de viagem desconhecido, ID estranho. Uma
+  palavra-passe substituída fica no **histórico local** (1 versão) e o estado da sincronização avisa «A palavra-passe de
+  *site* mudou noutro computador; a anterior ficou no histórico…». **A página `eteris://passwords/` mostra agora a
+  anterior**: «Mostrar» (com a confirmação do Windows) mostra também «Palavra-passe anterior», que nunca vai na lista.
+- **Perfil do navegador** (`Vault/VaultSyncProfile.cs`, `ProfileWithVault`; `Sync/SyncService.cs`): o resto do perfil
+  (`BrowserProfile`) mais o cofre. As coleções do cofre só se leem quando estão ligadas neste aparelho; **sem nenhuma
+  ligada, ou sem cofre neste perfil, a leitura não o abre nem o cria**. Um cofre que não abre (chave em falta, DPAPI de
+  outra conta, base ocupada) conta como «não se leu», nunca como vazio. Mudar o cofre neste computador marca uma ronda
+  para 10 s depois (`VaultService.Changed` → `SyncService.Touch`), como os favoritos.
+- **Nunca sobe:** o histórico local, os candidatos por guardar, a chave do cofre, a janela de graça, os «Pedir o Windows
+  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre não muda a impressão).
+
+Testes: `Vault/VaultSyncProfileTests` — só chaves e impressões opacas, estáveis ao reabrir; as sete coleções de ida e
+volta para outro computador **sem eco**, com chaves locais diferentes, servindo depois as sugestões, o cartão e «nunca
+neste site», e nenhum dos onze textos inventados em claro no `cofre.db` do outro; a anterior no histórico, com aviso e
+à vista no «Mostrar» (nunca na lista); dez itens inaceitáveis recusados; ler não muda a impressão e a «última
+utilização» sim (um só sítio da janela a grava); sem coleções ligadas ou sem cofre não abre nem cria nada; cofre sem
+chave = ilegível; cofre de antes ganha as colunas; e **dois computadores pela pasta local com o cofre real** (guardar
+num aparece no outro, apagar some, mudar nos dois deixa a anterior no histórico com aviso, Pagamentos só depois de
+ligado).

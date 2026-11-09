@@ -139,7 +139,8 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
                 if (!await AskAsync(r, ReauthPurpose.Reveal).ConfigureAwait(false)) return NotConfirmed();
                 if (vault.GetLogin(id) is not { } login) return Gone();
                 HoldSecretOnScreen();
-                return VaultReply.Json(new { ok = true, password = login.Password, note = login.Note ?? string.Empty });
+                // A anterior (histórico local de 1 versão: mudada aqui, ou substituída por outro computador) vem junto.
+                return VaultReply.Json(new { ok = true, password = login.Password, note = login.Note ?? string.Empty, previous = vault.PreviousPassword(id) ?? string.Empty });
             }
             case "/hide":
                 ReleaseSecretOnScreen();
