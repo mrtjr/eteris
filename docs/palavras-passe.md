@@ -967,3 +967,46 @@ sincronizar, o removido para e com o código e as chaves antigas não abre nada,
 cadeia nova; um código novo também volta a selar, sem o aviso do aparelho removido; `RestageOwn` sela de novo o que o
 aparelho escreveu (lápide incluída) e um estado antigo sem as chaves não passa segredos; a documentação lista as sete
 coleções, todos os campos, as derivações, os dados associados, o tópico, a ameaça e o que a Google vê.
+
+### Prova ao vivo do bloco D (D2–D5)
+
+`pp\vivo\d\*.ps1`, `pp\vivo\d\registo.txt` e capturas, fora do repositório. Compilação do ramo `sync`; até cinco
+perfis de teste (`profile-pp-da`…`de`) na mesma pasta local como «conta» (`ETERIS_TEST_SYNC_FOLDER`: nenhum pedido de
+rede); Windows Hello falso (`ETERIS_TEST_REAUTH=aceitar|recusar`); as Definições lidas e carregadas por DevTools em
+`127.0.0.1` (`ETERIS_TEST_DEVTOOLS_PORT`); cofres semeados e lidos por um comando de teste que usa o `VaultService`
+real; só dados inventados.
+
+1. **A** com um item de cada coleção liga a sincronização; o tópico «O que passa entre PCs» mostra as doze linhas
+   com as omissões D-1 (`1-a-topico.png`). **B**, sem cofre, entra com o código: recebe as duas palavras-passe
+   (iguais às de A), «nunca neste site», o contacto e o veículo; **nenhum cartão, IBAN nem documento** (linhas
+   desligadas).
+2. Em B com o Windows a **recusar**, ligar Pagamentos deixa a linha desligada com «Não foi confirmado com o Windows:
+   «Pagamentos» continua desligado.» (`2-b-pagamentos-recusado.png`). Com o Windows a aceitar liga; o cartão e o IBAN
+   só chegam depois de A também ligar Pagamentos (`3-b-pagamentos-chegaram.png`).
+3. A mesma palavra-passe mudada em A e em B antes das rondas: fica a de B nos dois; em A a de A vai para o histórico
+   e o estado diz «A palavra-passe de contas.exemplo.test mudou noutro computador; a anterior ficou no histórico…»
+   (`4-a-aviso-historico.png`); «Mostrar» no gestor de A (Windows a aceitar) mostra a atual e a «Palavra-passe
+   anterior» — e a captura feita nesse momento mostra a janela de **B**, não a de A: com um segredo à vista a janela
+   sai das capturas (A5). Apagar uma palavra-passe em B some em A.
+4. Um terceiro perfil (C) pede para entrar: o pedido diz que ele vai receber as palavras-passe e que aprovar pede o
+   Windows Hello (`6-b-pedido-com-segredos.png`); aprovado (Windows a aceitar), C recebe o cofre das linhas ligadas
+   por omissão. Com o Windows a **recusar**, «Aprovar» deixa o pedido de um quarto perfil à espera, com «Não foi
+   confirmado com o Windows: o pedido continua à espera.» (`7-a-aprovar-recusado.png`).
+5. `.eteris`: com o Windows a recusar, «Incluir palavras-passe…» não exporta nada (nenhum ficheiro novo); sem a caixa,
+   34 registos e importá-lo num perfil novo (E) **não cria cofre**; com a caixa e o Windows a aceitar, 41 registos
+   (7 do cofre) e importá-lo dá a E um item de cada coleção. Os dois ficheiros sem nenhum texto inventado em claro.
+   (Os ficheiros vão para Transferências do Windows; foram logo movidos para `pp\vivo\d\eteris`.)
+6. **Nova cadeia:** A remove C; o aviso acaba em «O aparelho removido já tinha as suas palavras-passe: mude as dos
+   sites importantes.» (`10-a-removido-aviso.png`); o estado de A (lido pelo comando de teste, dentro da DPAPI) passa
+   para a cadeia nova com os selos da cadeia nova e todas as `Key` opacas, lápide incluída. B, fechado durante a troca,
+   recebe a conta nova ao abrir e continua; uma palavra-passe mudada depois em B chega a A (a anterior no histórico).
+   C para («removido noutro aparelho») e fica com o que tinha (`11-c-removido-parado.png`).
+7. **Nada em claro:** em todos os ficheiros da pasta da «conta» (o que a Google veria; antes e depois da troca de chave)
+   e no `cofre.db` de cada perfil, 0 dos textos inventados em Latin-1, UTF-8 e UTF-16; no estado da sincronização de
+   A, B e C (o JSON inteiro decifrado da DPAPI: motor, base, caixa de saída), 0.
+
+**Correções encontradas na prova:** a página `eteris://autofill/` ainda dizia «a sincronização das palavras-passe e do
+preenchimento automático ainda não existe»; agora cada secção (Pagamentos, Informações de contacto, Documentos,
+Viagens) e as Definições das Palavras-passe têm «Sincronizar entre computadores» com o que passa e a ligação para o
+tópico (`12-b-preenchimento-textos.png`). O texto da conta em Definições › Sincronização passou a incluir as
+palavras-passe e o preenchimento automático (`13-b-definicoes-conta.png`).
