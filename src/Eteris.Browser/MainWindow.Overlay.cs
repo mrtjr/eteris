@@ -42,8 +42,13 @@ public partial class MainWindow
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var host = (Grid)RootBorder.Child;
+        // Ajuste e5 (MainWindow.LinkBubble.cs): a bolha do link numa janela própria e o contorno do ecrã dividido na
+        // janela principal; a camada já não fica ligada por causa deles.
+        SetUpLinkBubble(host);
+        var ownBubble = Infrastructure.PerfTuning.IsOn(Infrastructure.PerfTuning.OwnLinkBubble);
         foreach (var name in OverlayElementNames)
         {
+            if (StaysOutOfOverlay(name, ownBubble)) continue;
             if (FindName(name) is not FrameworkElement element) continue;
             host.Children.Remove(element);
             root.Children.Add(element);

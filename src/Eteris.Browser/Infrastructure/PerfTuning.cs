@@ -26,6 +26,7 @@ public static class PerfTuning
     public const string WaitingDot = "e1";
     public const string ShaderCache = "e3";
     public const string MediaPolling = "e4";
+    public const string OwnLinkBubble = "e5";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -33,6 +34,8 @@ public static class PerfTuning
         new(ShaderCache, "cache dos shaders da GPU no disco (apagada com os dados dos sites e depois de uma janela privada)",
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D-4"),
         new(MediaPolling, "a central de multimédia sonda de 2 em 2 s só as abas à vista, quentes ou com som, e as outras de 30 em 30 s; o modo foco deixa de ler o rato com a janela inativa",
+            OnByDefault: true),
+        new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
     ];
 
