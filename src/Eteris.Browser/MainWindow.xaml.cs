@@ -80,6 +80,7 @@ public partial class MainWindow : Window
         WatchForgetOnClose();
         StartBounceWatch();
         StartAudioWatch();
+        SetUpLiveDot();
         WatchMiniBar();
         WatchOmniboxMenu();
         SetUpSideFilter();

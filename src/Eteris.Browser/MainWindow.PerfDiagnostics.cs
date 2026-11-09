@@ -10,7 +10,6 @@ public partial class MainWindow
     {
         // Contador de lotes do WPF (≈ fotogramas por segundo do processo principal), a prova do E1.
         PerfCounters.WatchWpf(Dispatcher);
-        // Braço «puro»: sem a animação eterna do ponto «a tocar». Tirada antes do Loaded, que a começaria.
-        if (PerfDiagnostics.Without(PerfLayers.Animations)) MediaLiveDot.Triggers.Clear();
+        // Braço «puro» (sem a animação do ponto «a tocar»): MainWindow.Media.cs, SetUpLiveDot.
     }
 }
