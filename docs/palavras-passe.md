@@ -107,3 +107,43 @@ repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-pas
 `127.0.0.1`, `exemplo.test`, números, nomes, «Visa») em Latin-1, UTF-8 nem UTF-16; as colunas são blobs. Arranque
 (marca `aba.apresentada`, ms desde o início do processo): 802 e 802 antes de haver cofre, 753, 798 e 742 depois; o
 `cofre.db` ficou igual (mesmo hash) depois de três arranques: o Éteris não o abre.
+
+## A3. Reautenticação do Windows
+
+`Vault/WindowsReauth.cs`. Só APIs do sistema por P/Invoke e COM, sem WinRT projetado nem pacotes (teste de guarda).
+
+- **Windows Hello** (PIN, rosto, impressão digital): `UserConsentVerifier` por **COM puro** — `RoGetActivationFactory`
+  (combase.dll), `IUserConsentVerifierInterop::RequestVerificationForWindowAsync` com a janela do Éteris como dona e
+  `IUserConsentVerifierStatics::CheckAvailabilityAsync`; a operação assíncrona é esperada consultando
+  `IAsyncInfo::get_Status` numa thread MTA própria (cancelada com `IAsyncInfo::Cancel`). Os IIDs parametrizados
+  (`IAsyncOperation<UserConsentVerificationResult>` = `fd596ffd-2318-558f-9dbe-d21df43764a5`,
+  `IAsyncOperation<UserConsentVerifierAvailability>` = `ddd384f3-d818-5d83-ab4b-32119c28587c`) estão fixos e o
+  algoritmo `pinterface` que os calcula confere com IIDs conhecidos do Windows (`IAsyncOperation<Boolean>`,
+  `IReference<Int32>`). É o caminho do Chrome (`authenticator_win.cc`).
+- **Sem Hello:** a palavra-passe da conta do Windows — `CredUIPromptForWindowsCredentialsW` com
+  `CREDUIWIN_ENUMERATE_CURRENT_USER`, `CredUnPackAuthenticationBufferW` e `LogonUserW(LOGON32_LOGON_NETWORK)`, até 3
+  tentativas, com o buffer da palavra-passe apagado logo a seguir (o caminho do Chrome, `password_manager_util_win.cc`).
+  Uma palavra-passe em branco que o Windows recusa por política (`ERROR_ACCOUNT_RESTRICTION`) quer dizer **conta sem
+  palavra-passe**: não se pede nada (como o Firefox) e a página explica «Proteja a sua conta do Windows com um PIN…».
+  Nunca se experimenta uma palavra-passe sem o utilizador a escrever (contaria como tentativa falhada).
+- **Janela de graça** (`ReauthGate`): 5 minutos **por janela do Éteris**, contados desde a verificação (não se renova
+  a cada uso); recomeça quando o Windows bloqueia (`SystemEvents.SessionSwitch`), quando o computador suspende e quando
+  a janela fecha. Dois pedidos ao mesmo tempo dão uma só janela do Windows. Um pedido cancelado (a aba saiu da frente)
+  não conta, mesmo que o Windows responda «verificado» depois.
+- **Quando pede** (`ReauthPolicy`, decisão D-5): mostrar, copiar ou editar um segredo e ver números completos — sim;
+  preencher palavras-passe — não por omissão (interruptor deste PC); preencher cartões, IBAN e documentos — sim por
+  omissão (desligar o interruptor também pede); **exportar, pôr segredos no perfil exportado, ligar Pagamentos ou
+  Documentos na sincronização e aprovar um aparelho — sempre, sem janela de graça**.
+- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; a versão
+  instalada ignora-a, como as outras `ETERIS_TEST_*` (`TestSwitches.ReauthFor`).
+
+Testes: `Vault/WindowsReauthTests` (graça de 5 min por janela sem renovação; bloqueio, suspensão e fecho; «sempre»
+sem graça; recusa; cancelamento quando a aba sai da frente; conta sem proteção; pedidos simultâneos; política D-5;
+IIDs fixos; mapeamento dos resultados do Windows e dos erros do `LogonUser`; a disponibilidade real, que não pede nada;
+a via de teste só fora da versão instalada).
+
+Ao vivo (sem pedir nada a ninguém): `CheckAvailabilityAsync` neste PC de testes deu `DeviceNotPresent` (1) em 67 ms
+— o mesmo valor que a projeção WinRT do Windows PowerShell dá —, por isso aqui o Éteris pediria a palavra-passe do
+Windows (CredUI). **Provas manuais que ficam para o dono** (precisam do PIN ou da palavra-passe dele): a janela do
+Windows Hello real (`RequestVerificationForWindowAsync`) num PC com Hello, a janela da palavra-passe do Windows
+(CredUI + `LogonUser`), e o recomeço da graça depois de bloquear o Windows.

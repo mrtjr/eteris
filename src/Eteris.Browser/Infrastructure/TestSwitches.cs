@@ -10,6 +10,18 @@ public static class TestSwitches
     // e o estado das páginas por CDP (nunca ligado sem esta variável).
     public static int? DevToolsPort => Port(Environment.GetEnvironmentVariable("ETERIS_TEST_DEVTOOLS_PORT"));
 
+    // ETERIS_TEST_REAUTH=aceitar|recusar: a confirmação com o Windows (Windows Hello / palavra-passe do Windows) do cofre
+    // responde sozinha, sem janela (Vault/WindowsReauth.cs), para as provas ao vivo não precisarem do PIN de ninguém.
+    // Como a pasta de teste da sincronização, a versão instalada ignora-a (há um Update.exe do Velopack na pasta de cima).
+    public static Vault.TestReauthMode? Reauth => ReauthFor(Environment.GetEnvironmentVariable("ETERIS_TEST_REAUTH"), Sync.SyncService.IsInstalled);
+
+    public static Vault.TestReauthMode? ReauthFor(string? value, bool installed) => installed ? null : value?.Trim().ToLowerInvariant() switch
+    {
+        "aceitar" => Vault.TestReauthMode.Accept,
+        "recusar" => Vault.TestReauthMode.Refuse,
+        _ => null,
+    };
+
     public static bool IsOn(string? value) => value?.Trim() == "1";
 
     public static int? Port(string? value)

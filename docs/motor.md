@@ -26,6 +26,9 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
   (`mute-audio` no Chromium, `CoreWebView2.IsMuted` no motor de vídeo). Ver `Infrastructure/TestSwitches.cs`.
 - `ETERIS_TEST_SYNC_FOLDER=<pasta>`: a sincronização usa esta pasta em vez do Google Drive (nenhum pedido de rede;
   dois perfis de teste na mesma pasta). Ignorada pela versão instalada. Ver `docs/sincronizacao.md`.
+- `ETERIS_TEST_REAUTH=aceitar|recusar`: a confirmação com o Windows do cofre de palavras-passe (Windows Hello ou
+  palavra-passe do Windows) responde sozinha, sem janela, para as provas ao vivo não precisarem do PIN de ninguém.
+  Ignorada pela versão instalada. Ver `docs/palavras-passe.md`.
 
 ## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
 
