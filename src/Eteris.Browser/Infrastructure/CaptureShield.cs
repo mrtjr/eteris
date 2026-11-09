@@ -20,7 +20,25 @@ public static class CaptureShield
     // WDA_EXCLUDEFROMCAPTURE existe desde o Windows 10 2004 (19041); antes só WDA_MONITOR (a janela aparece preta).
     public static uint AffinityFor(bool hide, int build) => !hide ? WdaNone : build >= 19041 ? WdaExcludeFromCapture : WdaMonitor;
 
-    public static uint Wanted => AffinityFor(Data.Settings.Current.HideFromCapture, Environment.OSVersion.Version.Build);
+    // Um segredo à vista (uma palavra-passe mostrada no cofre, docs/palavras-passe.md, A5) tira as janelas das capturas
+    // enquanto durar, mesmo com a definição desligada.
+    public static uint AffinityFor(bool hide, int build, bool secret) => AffinityFor(hide || secret, build);
+
+    public static uint Wanted => AffinityFor(Data.Settings.Current.HideFromCapture, Environment.OSVersion.Version.Build, Secrets.Visible);
+
+    private static readonly SecretHolds Secrets = new(_ => ApplyAllOnUiThread());
+
+    public static bool SecretVisible => Secrets.Visible;
+
+    // Enquanto o objeto devolvido não for libertado, todas as janelas do Éteris ficam fora das capturas.
+    public static IDisposable HoldSecret() => Secrets.Hold();
+
+    private static void ApplyAllOnUiThread()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess()) ApplyAll();
+        else dispatcher.InvokeAsync(ApplyAll);
+    }
 
     private static bool _installed;
 
@@ -162,6 +180,35 @@ public static class CaptureShield
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
+}
+
+// Quantos segredos estão à vista; avisa quando passa de nenhum para algum e de volta (cada libertação conta uma vez).
+public sealed class SecretHolds(Action<bool> changed)
+{
+    private int _count;
+
+    public bool Visible => Volatile.Read(ref _count) > 0;
+
+    public IDisposable Hold()
+    {
+        if (Interlocked.Increment(ref _count) == 1) changed(true);
+        return new Release(this);
+    }
+
+    private void Drop()
+    {
+        if (Interlocked.Decrement(ref _count) == 0) changed(false);
+    }
+
+    private sealed class Release(SecretHolds owner) : IDisposable
+    {
+        private int _done;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _done, 1) == 0) owner.Drop();
+        }
+    }
 }
 
 // Textos do selo «Privada» e do aviso (testados: dizem sempre o preço de ligar — as capturas ficam vazias).

@@ -87,12 +87,24 @@ public class SandboxFallbackTests
     public void CrashBeforePaint_IsInertInAnInstall(string? value, bool installed, bool expected)
         => Assert.Equal(expected, TestSwitches.CrashBeforePaintFor(value, installed));
 
-    // TestSwitches.IsInstalled aqui; ao fundir a 0.2.13 pode passar a ser o Sync.SyncService.IsInstalled.
+    // Uma só regra de instalação, a do TestSwitches.IsInstalled (desde a fusão da 0.2.13).
     [Fact]
     public void CrashBeforePaint_ReadsTheInstallFromTheSwitches()
     {
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Infrastructure", "TestSwitches.cs"));
-        Assert.Matches(@"CrashBeforePaint\s*=>\s*CrashBeforePaintFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_CRASH_BEFORE_PAINT""\),\s*[\w.]*IsInstalled\)", source);
+        Assert.Matches(@"CrashBeforePaint\s*=>\s*CrashBeforePaintFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_CRASH_BEFORE_PAINT""\),\s*IsInstalled\)", source);
+        Assert.Matches(@"Reauth\s*=>\s*ReauthFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_REAUTH""\),\s*IsInstalled\)", source);
+    }
+
+    // A pasta de teste da sincronização, o ETERIS_TEST_REAUTH e o ETERIS_TEST_CRASH_BEFORE_PAINT decidem «instalado» pela
+    // mesma regra: o SyncService já não tem a sua cópia (eram duas iguais até à fusão da 0.2.13).
+    [Fact]
+    public void InstallRule_LivesOnlyInTheSwitches()
+    {
+        var sync = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs"));
+        Assert.DoesNotContain("Update.exe\")", sync);
+        Assert.DoesNotContain("bool IsInstalled", sync);
+        Assert.Matches(@"TestFolderFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_SYNC_FOLDER""\),\s*TestSwitches\.IsInstalled\)", sync);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

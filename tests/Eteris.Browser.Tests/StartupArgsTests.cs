@@ -39,6 +39,8 @@ public class StartupArgsTests
     [InlineData("eteris://newtab/")]
     [InlineData("eteris://history/clear?range=all")]
     [InlineData("eteris://history/delete")]
+    [InlineData("eteris://passwords/reveal?id=x")]
+    [InlineData("eteris://passwords/export")]
     public void InitialUrl_IgnoresAnythingElse(string args)
         => Assert.Null(StartupArgs.InitialUrl(Args(args)));
 
@@ -46,6 +48,8 @@ public class StartupArgsTests
     [InlineData("eteris://history/")]
     [InlineData("eteris://settings/")]
     [InlineData("eteris://about/")]
+    [InlineData("eteris://passwords/")]
+    [InlineData("eteris://autofill/")]
     public void InitialUrl_AllowsSafeInternalPages(string url)
         => Assert.Equal(url, StartupArgs.InitialUrl([url]));
 }

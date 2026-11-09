@@ -17,9 +17,12 @@ public partial class MainWindow
 
     // Regras cosméticas específicas do site (##… das listas), registadas para correr antes dos scripts da página,
     // quando os anúncios ainda não apareceram. Vazio sem escudo ou sem regras para o site.
-    private static string SiteCosmeticScript(string url)
+    // O Escudo neste site, para esta janela (numa janela privada conta também o que se decidiu nela: AppData).
+    private bool ShieldOn(string host) => AppData.IsShieldOn(host, IsPrivate);
+
+    private string SiteCosmeticScript(string url)
     {
-        if (WebHost(url) is not { } host || !AppData.IsShieldOn(host) || ShieldEngine.Cosmetic is not { } engine) return string.Empty;
+        if (WebHost(url) is not { } host || !ShieldOn(host) || ShieldEngine.Cosmetic is not { } engine) return string.Empty;
         var script = CosmeticScripts.InjectEarly(engine.UrlCss(url));
         return script.Length == 0 ? string.Empty : script + "\n;\n";
     }
@@ -47,7 +50,7 @@ public partial class MainWindow
     {
         var tab = Tabs.Active;
         var host = WebHost(tab?.Address);
-        var on = host is null || AppData.IsShieldOn(host);
+        var on = host is null || ShieldOn(host);
         var count = tab?.BlockedCount ?? 0;
 
         ShieldBadge.Visibility = count > 0 && on ? Visibility.Visible : Visibility.Collapsed;
@@ -66,7 +69,7 @@ public partial class MainWindow
     {
         var tab = Tabs.Active;
         var host = WebHost(tab?.Address);
-        var on = host is null || AppData.IsShieldOn(host);
+        var on = host is null || ShieldOn(host);
         var count = tab?.BlockedCount ?? 0;
 
         ShieldTitle.Text = host is null ? "Página interna" : on ? "Escudo ativo" : "Escudo desligado";
@@ -74,7 +77,7 @@ public partial class MainWindow
         ShieldToggle.IsEnabled = host is not null;
         ShieldToggle.IsChecked = on;
         StrictToggle.IsEnabled = host is not null && on;
-        StrictToggle.IsChecked = host is not null && AppData.IsStrict(host);
+        StrictToggle.IsChecked = host is not null && AppData.IsStrict(host, IsPrivate);
         ShieldHalo.Opacity = on ? 0.9 : 0.25;
 
         ShieldBigCount.Text = count.ToString();
@@ -104,10 +107,10 @@ public partial class MainWindow
 
     // Regras genéricas das listas (##.classe, ###id): aplicadas às classes e ids que existem na página,
     // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde.
-    private static async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
     {
         if (ShieldEngine.Cosmetic is not { } engine) return;
-        if (WebHost(url) is not { } host || !AppData.IsShieldOn(host)) return;
+        if (WebHost(url) is not { } host || !ShieldOn(host)) return;
 
         foreach (var delay in new[] { 0, 2500 })
         {
@@ -132,7 +135,7 @@ public partial class MainWindow
     private void StrictToggle_Click(object sender, RoutedEventArgs e)
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.SetStrict(host, StrictToggle.IsChecked == true);
+        AppData.SetStrict(host, StrictToggle.IsChecked == true, IsPrivate);
         ReloadActive();
         FillShieldPopup();
     }
@@ -140,7 +143,7 @@ public partial class MainWindow
     private void ShieldToggle_Click(object sender, RoutedEventArgs e)
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.SetShield(host, ShieldToggle.IsChecked == true);
+        AppData.SetShield(host, ShieldToggle.IsChecked == true, IsPrivate);
         ReloadActive();
         UpdateShieldButton();
         FillShieldPopup();

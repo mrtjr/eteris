@@ -59,8 +59,8 @@ public static class ReducedClientHints
     // Na sessão de uma aba: o User-Agent fica o do motor (o reduzido do Chromium), só os metadados mudam.
     public static async Task Apply(DevToolsClient client)
     {
-        var version = await client.Browser.GetVersionAsync();
+        var version = await Browser.DevToolsCalls.Run(() => client.Browser.GetVersionAsync());
         if (MajorOf(version.UserAgent) is not { } major) return;
-        await client.Emulation.SetUserAgentOverrideAsync(version.UserAgent, null, null, Metadata(major));
+        await Browser.DevToolsCalls.Run(() => client.Emulation.SetUserAgentOverrideAsync(version.UserAgent, null, null, Metadata(major)));
     }
 }

@@ -18,6 +18,7 @@ public partial class MainWindow
     private void ReleaseChromium(BrowserTab tab)
     {
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
+        ReleaseVaultChannel(tab);
         if (!_browsers.Remove(tab, out var browser)) return;
         ForgetCnameQuota(browser);
         PageScript.Release(browser);

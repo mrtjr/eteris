@@ -1,6 +1,7 @@
 using CefSharp;
 using CefSharp.DevTools.Page;
 using CefSharp.Wpf.HwndHost;
+using Eteris.Browser.Browser;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
@@ -27,7 +28,7 @@ public partial class MainWindow
             using var client = browser.GetDevToolsClient();
             // SEM clip: com clip (e escala) o Chromium aplica emulação de dispositivo à página à vista enquanto fotografa
             // (docs/motor.md, P1). Sem clip só lê a superfície já desenhada; reduz-se no .NET.
-            var shot = await client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Jpeg, 70, null, true, false, true);
+            var shot = await DevToolsCalls.Run(() => client.Page.CaptureScreenshotAsync(CaptureScreenshotFormat.Jpeg, 70, null, true, false, true));
             if (!StillCurrent()) return;
             var image = await Task.Run(() => Thumbnails.Decode(shot.Data));
             if (!StillCurrent()) return;

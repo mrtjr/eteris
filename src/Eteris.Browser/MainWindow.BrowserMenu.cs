@@ -10,8 +10,12 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using CefSharp;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Palette;
+using Eteris.Browser.Sync;
+using Eteris.Browser.Vault;
+using Eteris.Sync.Google;
 
 namespace Eteris.Browser;
 
@@ -30,6 +34,21 @@ public partial class MainWindow
     private static readonly object BrowserMenuZoomGroup = new();
     // Lido na thread do CEF (ShortcutFromPage): o menu está aberto. Atualizado só na thread da janela, ao abrir e ao fechar.
     private volatile bool _browserMenuOpenForPage;
+    // As partes do menu aberto que o submenu troca (a lista, a linha da conta, os botões do menu principal).
+    private BrowserMenuParts? _browserMenuParts;
+
+    private sealed class BrowserMenuParts
+    {
+        public required Popup Popup;
+        public required Border Frame;
+        public required ScrollViewer Body;
+        public required StackPanel Main;
+        public required List<Button> MainButtons;
+        public required Style RowStyle;
+        public FrameworkElement? Account;
+        public BrowserMenuSubmenuButton? SubmenuRow;
+        public bool InSubmenu;
+    }
 
     private sealed record BrowserMenuReturn(IInputElement? Element, nint ChildWindow);
 
@@ -75,10 +94,12 @@ public partial class MainWindow
         };
         var buttons = new List<Button>();
         var frame = BuildBrowserMenu(popup, buttons);
+        // A linha da conta (se houver) já está em buttons: conta como o primeiro item do menu.
         NumberBrowserMenuItems(buttons);
         popup.Child = frame;
         // As teclas premidas no menu ficam na árvore do Popup (sem pai, não sobem até à janela — nem pelo MenuButton):
         // a raiz do menu entrega-as às mesmas funções da janela, e é Window_PreviewKeyDown que chama HandleBrowserMenuKey.
+        // A linha da conta está em buttons (a primeira): as setas, Home e End também passam por ela.
         frame.PreviewKeyDown += Window_PreviewKeyDown;
         frame.PreviewKeyUp += (_, e) => AltKeyUp(e.Key == Key.System ? e.SystemKey : e.Key);
         // Uma só seleção, como no Chrome, no Firefox e no Brave: passar o rato por uma linha leva-lhe o foco do teclado
@@ -90,7 +111,8 @@ public partial class MainWindow
             var at = e.GetPosition(frame);
             if (mouseAt == at) return;
             mouseAt = at;
-            if (buttons.FirstOrDefault(button => button.IsMouseOver && button.IsEnabled) is { IsKeyboardFocused: false } hovered) hovered.Focus();
+            // (_browserMenuButtons: os do submenu, quando está aberto.)
+            if (_browserMenuButtons.FirstOrDefault(button => button.IsMouseOver && button.IsEnabled) is { IsKeyboardFocused: false } hovered) hovered.Focus();
         };
         popup.Opened += (_, _) => Dispatcher.InvokeAsync(() =>
         {
@@ -99,18 +121,22 @@ public partial class MainWindow
             // Com o foco na página, o foco do Win32 está na janela do Chromium (filha, noutra thread) e o Focus() do WPF
             // não o tira de lá: as teclas iam para a página. Pede-se o foco do Win32 para a janela do WPF.
             if (_browserMenuReturn is { ChildWindow: not 0 }) SetFocus(new WindowInteropHelper(this).Handle);
-            // Pelo teclado (Alt+F, Enter no «⋯») a primeira linha fica realçada; pelo rato nenhuma, como no Chrome, no
-            // Firefox e no Brave: o teclado fica na raiz do menu e a primeira ↓ (ou Tab) vai para a primeira linha.
-            if (byKeyboard) FocusBrowserMenuButton(buttons.FirstOrDefault(button => button.IsEnabled) ?? buttons[0]);
+            // Pelo teclado (Alt+F, Enter no «⋯») a primeira linha fica realçada (a da conta, se houver: está primeiro no
+            // ecrã); pelo rato nenhuma, como no Chrome, no Firefox e no Brave: o teclado fica na raiz do menu e a primeira
+            // ↓ (ou Tab) vai para a primeira linha. O convite «Entrar com o Google» não fica realçado a cada clique.
+            if (BrowserMenuFirstFocus(byKeyboard) is var first and >= 0)
+                FocusBrowserMenuButton(buttons[first].IsEnabled ? buttons[first] : buttons.FirstOrDefault(button => button.IsEnabled) ?? buttons[first]);
             else frame.Focus();
             if (AutomationPeer.ListenerExists(AutomationEvents.MenuOpened))
                 UIElementAutomationPeer.CreatePeerForElement(frame)?.RaiseAutomationEvent(AutomationEvents.MenuOpened);
         }, DispatcherPriority.Input);
         popup.Closed += (_, _) =>
         {
+            if (popup.Tag is Action detach) detach();
             if (!ReferenceEquals(_browserMenu, popup)) return;
             _browserMenu = null;
             _browserMenuButtons = [];
+            _browserMenuParts = null;
             _browserMenuOpenForPage = false;
             _altTap.Reset();
             // Fechado sem Esc nem Alt+F (clique fora, mudança de aba, perda de ativação): se o teclado ficou preso no menu
@@ -221,6 +247,16 @@ public partial class MainWindow
         new(new Point(target.Width - popup.Width, -popup.Height - 6), PopupPrimaryAxis.Vertical),
     ];
 
+    // Que linha recebe o foco ao abrir. Pelo teclado, a primeira (a da conta, se houver: está primeiro no ecrã). Pelo
+    // rato, a primeira ação (Nova aba), como antes da linha da conta: o convite «Entrar com o Google» não fica realçado
+    // em cada abertura (no Chrome e no Firefox a conta só se realça ao passar o rato ou com o teclado).
+    internal static int BrowserMenuFirstFocus(bool byKeyboard) => byKeyboard ? 0 : -1;
+
+    // Altura máxima do menu: a da janela, menos a barra de cima (como no Chrome e no Firefox, o menu cresce o que
+    // precisar). Antes havia também um teto fixo de 665 px, a altura do menu sem a linha da conta: com ela,
+    // «Atalhos de teclado» e «Fechar janela» ficavam escondidos atrás de uma barra de deslocamento.
+    internal static double BrowserMenuMaxHeight(double windowHeight) => Math.Max(254, windowHeight - 74);
+
     private Border BuildBrowserMenu(Popup popup, List<Button> buttons)
     {
         var theme = new ResourceDictionary { Source = new Uri($"pack://application:,,,/{typeof(MainWindow).Assembly.GetName().Name};component/Theme/BrowserMenu.xaml", UriKind.Absolute) };
@@ -255,6 +291,9 @@ public partial class MainWindow
         Divider();
         if (!IsPrivate) Row("\uE81C", "Histórico", OpenHistory, "Ctrl+H");
         Row("\uE734", "Favoritos", OpenBookmarks, "Ctrl+Shift+O");
+        // Palavras-passe e preenchimento automático › (submenu com as cinco páginas, como no Chrome). Também na janela
+        // privada: as entradas abrem numa janela normal.
+        var submenuRow = SubmenuRow("\uE8D7", VaultPages.MenuTitle);
         Row("\uE896", "Transferências", ToggleDownloads, "Ctrl+J");
         Row("\uE71D", "Radar de abas", ToggleRadar, "Ctrl+Shift+A");
         Row("\uE8A0", SidebarOpen ? "Fechar a barra lateral" : "Barra lateral", () => ToggleSidebar(), "Ctrl+Shift+B");
@@ -285,16 +324,108 @@ public partial class MainWindow
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Focusable = false,
         };
+        body.Resources.Add(typeof(ScrollBar), theme["BrowserMenuScrollBar"]);
         var content = new DockPanel();
+        var parts = new BrowserMenuParts { Popup = popup, Frame = null!, Body = body, Main = items, MainButtons = buttons, RowStyle = rowStyle, SubmenuRow = submenuRow };
         var heading = BrowserMenuHeading(IsPrivate);
         DockPanel.SetDock(heading, Dock.Top);
         content.Children.Add(heading);
+        if (BuildBrowserMenuAccount(popup, rowStyle) is { } account)
+        {
+            // Primeira na ordem do teclado, como está primeiro no ecrã.
+            buttons.Insert(0, account);
+            var holder = new StackPanel { Margin = new Thickness(6, 0, 6, 0) };
+            holder.Children.Add(account);
+            holder.Children.Add(BrowserMenuDivider());
+            DockPanel.SetDock(holder, Dock.Top);
+            content.Children.Add(holder);
+            parts.Account = holder;
+        }
         content.Children.Add(body);
         KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
 
-        var frame = BrowserMenuFrame(content, Math.Clamp(ActualHeight - 74, 254, 665));
+        var frame = BrowserMenuFrame(content, BrowserMenuMaxHeight(ActualHeight));
         frame.Resources.MergedDictionaries.Add(theme);
+        parts.Frame = frame;
+        _browserMenuParts = parts;
         return frame;
+
+        BrowserMenuSubmenuButton SubmenuRow(string glyph, string label)
+        {
+            var button = new BrowserMenuSubmenuButton { Style = rowStyle, Content = BrowserMenuLabel(glyph, label, submenu: true) };
+            AutomationProperties.SetName(button, label);
+            button.Click += (_, _) => OpenBrowserSubmenu(byKeyboard: InputManager.Current.MostRecentInputDevice is KeyboardDevice);
+            buttons.Add(button);
+            items.Children.Add(button);
+            return button;
+        }
+    }
+
+    // O submenu abre no lugar do menu, com «‹ Palavras-passe e preenchimento automático» no topo para voltar (como as
+    // subvistas do menu do Firefox): as setas, as letras, o Enter e o leitor de ecrã continuam a ser os do menu.
+    private void OpenBrowserSubmenu(bool byKeyboard)
+    {
+        if (_browserMenuParts is not { InSubmenu: false } parts || !parts.Popup.IsOpen) return;
+        var panel = new StackPanel { Margin = new Thickness(6, 0, 6, 6) };
+        var back = new Button { Style = parts.RowStyle, Content = BrowserMenuLabel("\uE72B", VaultPages.MenuTitle) };
+        AutomationProperties.SetName(back, "Voltar ao menu do Éteris");
+        back.Click += (_, _) => CloseBrowserSubmenu();
+        panel.Children.Add(back);
+        panel.Children.Add(BrowserMenuDivider());
+        var buttons = new List<Button> { back };
+        foreach (var entry in VaultPages.Entries)
+        {
+            var url = entry.Url;
+            var button = new BrowserMenuItemButton { Style = parts.RowStyle, Content = BrowserMenuLabel(entry.Glyph, entry.Title) };
+            AutomationProperties.SetName(button, entry.Title);
+            button.Click += (_, _) => RunBrowserMenuAction(parts.Popup, () => OpenVaultPage(url));
+            buttons.Add(button);
+            panel.Children.Add(button);
+        }
+        NumberBrowserMenuItems(buttons);
+        parts.InSubmenu = true;
+        if (parts.SubmenuRow is { } row) row.IsExpanded = true;
+        if (parts.Account is { } account) account.Visibility = Visibility.Collapsed;
+        parts.Body.Content = panel;
+        _browserMenuButtons = buttons;
+        // Pelo teclado a primeira entrada fica realçada; pelo rato o teclado fica na raiz (a ↓ vai para a primeira).
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (!parts.Popup.IsOpen || !parts.InSubmenu) return;
+            if (byKeyboard) FocusBrowserMenuButton(buttons[1]);
+            else parts.Frame.Focus();
+        }, DispatcherPriority.Input);
+    }
+
+    private void CloseBrowserSubmenu()
+    {
+        if (_browserMenuParts is not { InSubmenu: true } parts) return;
+        parts.InSubmenu = false;
+        parts.Body.Content = parts.Main;
+        if (parts.Account is { } account) account.Visibility = Visibility.Visible;
+        _browserMenuButtons = parts.MainButtons;
+        if (parts.SubmenuRow is { } row)
+        {
+            row.IsExpanded = false;
+            Dispatcher.InvokeAsync(() => { if (parts.Popup.IsOpen) FocusBrowserMenuButton(row); }, DispatcherPriority.Input);
+        }
+    }
+
+    // O passo do submenu para uma tecla já decidida (Resolve na janela, FromPage na thread do CEF): true se o fez.
+    private bool BrowserMenuSubmenuStep(BrowserMenuKey decision, Key key)
+    {
+        if (_browserMenuParts is not { } parts) return false;
+        switch (BrowserMenuKeys.Submenu(decision, key, parts.InSubmenu, parts.SubmenuRow is { IsKeyboardFocused: true }))
+        {
+            case BrowserSubmenuStep.Open:
+                OpenBrowserSubmenu(byKeyboard: true);
+                return true;
+            case BrowserSubmenuStep.Back:
+                CloseBrowserSubmenu();
+                return true;
+            default:
+                return false;
+        }
     }
 
     // Moldura do menu. O Popup não tem pai e herda a fonte do MenuButton (IconButton: fonte de ícones), por isso a
@@ -319,6 +450,121 @@ public partial class MainWindow
         frame.SetResourceReference(Border.BorderBrushProperty, "FieldBorderBrush");
         AutomationProperties.SetName(frame, "Menu do Éteris");
         return frame;
+    }
+
+    // A linha da conta no topo do menu (como no Chrome, no Firefox e no Brave), numa janela normal e com o
+    // identificador da aplicação (google-oauth.json): nas janelas privadas não aparece nada da conta, e sem
+    // identificador «Entrar com o Google» não se pode cumprir (as Definições dizem «indisponível nesta compilação»),
+    // por isso o menu não o oferece.
+    internal enum MenuAccountRow { None, SignIn, Account }
+
+    internal static MenuAccountRow BrowserMenuAccountRow(bool isPrivate, bool available, bool connected)
+        => isPrivate || !available ? MenuAccountRow.None : connected ? MenuAccountRow.Account : MenuAccountRow.SignIn;
+
+    private Button? BuildBrowserMenuAccount(Popup popup, Style rowStyle)
+    {
+        // Só lê o disco (tokens e estado cifrados); nada sai daqui para a Google.
+        var available = !IsPrivate && SyncService.Available;
+        var kind = BrowserMenuAccountRow(IsPrivate, available, available && SyncService.Connected);
+        if (kind == MenuAccountRow.None) return null;
+        var button = BrowserMenuAccountButton(kind, kind == MenuAccountRow.Account ? GoogleSync.Account : null, rowStyle);
+        button.Click += (_, _) => RunBrowserMenuAction(popup, () => OpenInternal(SettingsPage.Url + "#sincronizacao"));
+        if (kind != MenuAccountRow.Account) return button;
+        // A linha atualiza-se se o menu ainda estiver aberto: a conta chegou, a sincronização acabou uma ronda, ou um
+        // aparelho novo pediu para entrar.
+        Action changed = () => Dispatcher.BeginInvoke(() =>
+        {
+            if (popup.IsOpen) FillBrowserMenuAccount(button, MenuAccountRow.Account, GoogleSync.Account);
+        });
+        GoogleSync.AccountChanged += changed;
+        SyncService.Changed += changed;
+        popup.Tag = (Action)(() =>
+        {
+            GoogleSync.AccountChanged -= changed;
+            SyncService.Changed -= changed;
+        });
+        // Abrir o menu (ação do utilizador), com a sincronização ligada: pedidos de aparelhos novos e — se já havia
+        // sessão sem conta guardada — o nome e o e-mail, em segundo plano. Com ela desligada, nada sai para a Google.
+        SyncService.Look();
+        if (SyncService.Enabled && GoogleSync.Account is null) GoogleSync.RequestAccount();
+        return button;
+    }
+
+    internal static Button BrowserMenuAccountButton(MenuAccountRow kind, GoogleAccount? account, Style rowStyle)
+    {
+        // Item de menu como as outras linhas (para o leitor de ecrã e para a numeração «1 de N»).
+        var button = new BrowserMenuItemButton { Style = rowStyle, Padding = new Thickness(8, 6, 8, 6) };
+        FillBrowserMenuAccount(button, kind, account);
+        return button;
+    }
+
+    // O que a linha diz. Com sessão: avatar com a inicial (círculo com o gradiente da íris; sem foto, que seria outro
+    // pedido a outro servidor), nome em negrito, e-mail e o estado. Sem sessão: «Entrar com o Google».
+    internal static void FillBrowserMenuAccount(Button button, MenuAccountRow kind, GoogleAccount? account)
+    {
+        var signedIn = kind == MenuAccountRow.Account;
+        var known = signedIn && account is { IsEmpty: false };
+        // Sem sessão, a linha abre a secção Sincronização das Definições (onde o início de sessão mostra o estado e, sem
+        // outro navegador, o endereço para copiar): as reticências dizem que há mais um passo.
+        var folder = SyncService.FolderMode;
+        var title = !signedIn ? (folder ? "Ligar à pasta de teste…" : "Entrar com o Google…")
+            : folder ? "Pasta de teste"
+            : known ? (string.IsNullOrWhiteSpace(account!.Name) ? account.Email! : account.Name!) : "Conta Google ligada";
+        var detail = !folder && known && !string.IsNullOrWhiteSpace(account!.Name) && !string.IsNullOrWhiteSpace(account.Email) ? account.Email : null;
+        // Com sessão, o estado da sincronização («Sincronizado há 2 min», «A sincronizar…», um pedido de um aparelho
+        // novo com o código); sem ela, o convite.
+        var state = signedIn ? SyncService.Summary(SyncService.Status, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : "Sincronização cifrada de ponta a ponta";
+
+        var avatar = new Border
+        {
+            Width = 32, Height = 32, CornerRadius = new CornerRadius(16),
+            Margin = new Thickness(0, 0, 11, 0), VerticalAlignment = VerticalAlignment.Center,
+        };
+        var mark = new TextBlock
+        {
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        if (known)
+        {
+            avatar.SetResourceReference(Border.BackgroundProperty, "IrisBrush");
+            mark.Text = account!.Initial;
+            mark.FontSize = 15;
+            mark.FontWeight = FontWeights.SemiBold;
+            // A tinta sobre a cor de destaque (grafite ou branco, conforme a cor e o tema), como o resto da interface.
+            mark.SetResourceReference(TextBlock.ForegroundProperty, "AccentInkBrush");
+        }
+        else
+        {
+            avatar.BorderThickness = new Thickness(2);
+            avatar.SetResourceReference(Border.BorderBrushProperty, "IrisBrush");
+            mark.Text = "\uE77B";
+            mark.FontSize = 14;
+            mark.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
+            mark.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+        }
+        avatar.Child = mark;
+
+        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        TextBlock Line(string text, double size, bool strong, bool muted)
+        {
+            var line = new TextBlock { Text = text, FontSize = size, TextTrimming = TextTrimming.CharacterEllipsis };
+            if (strong) line.FontWeight = FontWeights.SemiBold;
+            line.SetResourceReference(TextBlock.ForegroundProperty, muted ? "TextMutedBrush" : "TextBrush");
+            lines.Children.Add(line);
+            return line;
+        }
+        Line(title, 13, strong: true, muted: false);
+        if (detail is not null) Line(detail, 12, strong: false, muted: true);
+        Line(state, 11, strong: false, muted: true).Margin = new Thickness(0, 1, 0, 0);
+
+        var row = new DockPanel();
+        DockPanel.SetDock(avatar, Dock.Left);
+        row.Children.Add(avatar);
+        row.Children.Add(lines);
+        button.Content = row;
+        AutomationProperties.SetName(button, signedIn
+            ? $"{(folder ? "Pasta de teste" : $"Conta Google: {(known ? account!.Label : "ligada")}")}. {state}. Abre a sincronização nas Definições"
+            : $"{(folder ? "Ligar à pasta de teste" : "Entrar com o Google")}. Abre a sincronização nas Definições");
     }
 
     internal static Border BrowserMenuHeading(bool isPrivate)
@@ -400,7 +646,7 @@ public partial class MainWindow
         return row;
     }
 
-    internal static Grid BrowserMenuLabel(string glyph, string title, string? shortcut = null)
+    internal static Grid BrowserMenuLabel(string glyph, string title, string? shortcut = null, bool submenu = false)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
@@ -427,6 +673,14 @@ public partial class MainWindow
             key.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
             Grid.SetColumn(key, 2);
             grid.Children.Add(key);
+        }
+        if (submenu)
+        {
+            var chevron = new TextBlock { Text = "\uE76C", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            chevron.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
+            chevron.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+            Grid.SetColumn(chevron, 2);
+            grid.Children.Add(chevron);
         }
         return grid;
     }
@@ -466,7 +720,9 @@ public partial class MainWindow
     private bool HandleBrowserMenuKey(Key key, bool ctrl, bool shift, bool alt)
     {
         if (_browserMenu is not { IsOpen: true } popup) return false;
-        switch (BrowserMenuKeys.Resolve(key, ctrl, shift, alt))
+        var decision = BrowserMenuKeys.Resolve(key, ctrl, shift, alt);
+        if (BrowserMenuSubmenuStep(decision, key)) return true;
+        switch (decision)
         {
             case BrowserMenuKey.Close:
                 CloseBrowserMenu(restoreFocus: true);
@@ -499,6 +755,7 @@ public partial class MainWindow
             if (decision == BrowserMenuKey.Shortcut) shortcut?.Invoke();
             return;
         }
+        if (BrowserMenuSubmenuStep(decision, key)) return;
         switch (decision)
         {
             case BrowserMenuKey.Close:
@@ -562,7 +819,7 @@ public partial class MainWindow
 }
 
 // Linha do menu para o leitor de ecrã: um item de menu (não «botão»), com a posição na lista (NumberBrowserMenuItems).
-internal sealed class BrowserMenuItemButton : Button
+internal class BrowserMenuItemButton : Button
 {
     protected override AutomationPeer OnCreateAutomationPeer() => new ItemPeer(this);
 
@@ -570,6 +827,46 @@ internal sealed class BrowserMenuItemButton : Button
     {
         protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.MenuItem;
         protected override string GetClassNameCore() => "BrowserMenuItem";
+    }
+}
+
+// A linha com submenu («Palavras-passe e preenchimento automático ›»): um item de menu que o leitor de ecrã anuncia
+// como fechado ou aberto (ExpandCollapse), como no Chrome.
+internal sealed class BrowserMenuSubmenuButton : BrowserMenuItemButton
+{
+    private bool _expanded;
+
+    public bool IsExpanded
+    {
+        get => _expanded;
+        set
+        {
+            if (_expanded == value) return;
+            _expanded = value;
+            if (UIElementAutomationPeer.FromElement(this) is SubmenuPeer peer)
+                peer.RaisePropertyChangedEvent(ExpandCollapsePatternIdentifiers.ExpandCollapseStateProperty,
+                    value ? ExpandCollapseState.Collapsed : ExpandCollapseState.Expanded, value ? ExpandCollapseState.Expanded : ExpandCollapseState.Collapsed);
+        }
+    }
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new SubmenuPeer(this);
+
+    private sealed class SubmenuPeer(BrowserMenuSubmenuButton owner) : ButtonAutomationPeer(owner), System.Windows.Automation.Provider.IExpandCollapseProvider
+    {
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.MenuItem;
+        protected override string GetClassNameCore() => "BrowserMenuItem";
+
+        public override object GetPattern(PatternInterface patternInterface)
+            => patternInterface == PatternInterface.ExpandCollapse ? this : base.GetPattern(patternInterface);
+
+        public ExpandCollapseState ExpandCollapseState => owner.IsExpanded ? ExpandCollapseState.Expanded : ExpandCollapseState.Collapsed;
+
+        public void Expand()
+        {
+            if (!owner.IsExpanded) owner.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, owner));
+        }
+
+        public void Collapse() { }
     }
 }
 

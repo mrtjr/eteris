@@ -28,6 +28,22 @@ public static partial class PublicSuffix
         return site;
     }
 
+    // A lista nativa está a responder (não a aproximação do TrackerBlocker). O cofre só junta subdomínios com ela.
+    public static bool Precise
+    {
+        get
+        {
+            if (s_native && !s_probed)
+            {
+                Lookup("eteris-psl-probe.github.io");
+                s_probed = true;
+            }
+            return s_native;
+        }
+    }
+
+    private static volatile bool s_probed;
+
     private static string? Lookup(string host)
     {
         if (s_native)

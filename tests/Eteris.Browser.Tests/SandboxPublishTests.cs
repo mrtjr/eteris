@@ -112,6 +112,33 @@ public class SandboxPublishTests
         Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, "build/pack.ps1 tem acentos: UTF-8 com BOM (PowerShell 5.1)");
     }
 
+    // O login Google da 0.2.13 no fluxo da 0.2.14 (docs/sincronizacao.md): o JSON valida-se antes de compilar, a cópia
+    // fica dentro do trap (um Copy-Item que falhe apaga publish\), depois da verificação da forma e do caminho do perfil
+    // e antes da marca, e a marca diz se o levou sem guardar o client_id.
+    [Fact]
+    public void Publish_CopiesGoogleOAuthUnderTheTrapAndBeforeTheBuildMark()
+    {
+        var publish = Read("build", "publish.ps1").Replace("\r\n", "\n");
+        Assert.Contains("[string]$GoogleOAuthJson = \"\"", PublishParam(publish));
+        Assert.DoesNotContain("exit ", publish);
+        var trap = publish.IndexOf("trap {", StringComparison.Ordinal);
+        var validate = publish.IndexOf("ConvertFrom-Json } catch { throw \"-GoogleOAuthJson", StringComparison.Ordinal);
+        var dotnet = publish.IndexOf("dotnet publish ", StringComparison.Ordinal);
+        var shape = publish.IndexOf("Publicado COM sandbox", StringComparison.Ordinal);
+        var copy = publish.IndexOf("Copy-Item -LiteralPath $GoogleOAuthJson -Destination (Join-Path $publishDir \"google-oauth.json\")", StringComparison.Ordinal);
+        var mark = publish.LastIndexOf("\"eteris-build.json\"", StringComparison.Ordinal);
+        Assert.True(trap >= 0 && validate > trap && dotnet > validate, "a validação do JSON vem antes de compilar, dentro do trap");
+        Assert.True(copy > shape && copy > publish.LastIndexOf("throw ", StringComparison.Ordinal), "a cópia vem depois das verificações");
+        Assert.True(mark > copy, "a marca vem depois da cópia");
+        // O $oauth só se usa depois de validado: a primeira atribuição com valor é a do ConvertFrom-Json.
+        Assert.Equal(publish.IndexOf("$oauth = $null", StringComparison.Ordinal), publish.IndexOf("$oauth", StringComparison.Ordinal));
+        Assert.Single(Regex.Matches(publish, @"google-oauth\.json""\)"));
+        Assert.Matches(@"google_oauth\s*=\s*\[bool\]\$oauth\r?\n", publish);
+        Assert.DoesNotMatch(@"client_id\s*=", publish);
+        // A limpeza antiga «nunca um google-oauth.json esquecido» já não faz falta: publish\ é apagada no início.
+        Assert.DoesNotContain("$oauthTarget", publish);
+    }
+
     [Fact]
     public void BuildAll_IsReadableByWindowsPowerShell_AndProducesWhatPublishReads()
     {

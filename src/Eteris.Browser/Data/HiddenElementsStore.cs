@@ -39,6 +39,9 @@ public sealed class HiddenElementsStore
         return hosts;
     }
 
+    public void Remove(string host, string selector)
+        => Execute("DELETE FROM hidden_elements WHERE host = $h AND selector = $s", ("$h", host.ToLowerInvariant()), ("$s", selector));
+
     public void Clear(string host) => Execute("DELETE FROM hidden_elements WHERE host = $h", ("$h", host.ToLowerInvariant()));
 
     private void Execute(string sql, params (string Name, object Value)[] parameters)

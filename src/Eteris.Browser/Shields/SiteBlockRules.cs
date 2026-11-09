@@ -166,6 +166,12 @@ public sealed class SiteRuleSet(SiteBlockRules saved, Action<string, string>? pe
         return new SiteUnblock(undone, savedKept);
     }
 
+    // A sincronização tira exatamente esta regra (Unblock tira todas as que apanham o anfitrião, também a do pai).
+    public void RemoveExact(string site, string domain)
+    {
+        if (saved.Remove(site, domain)) persistRemove?.Invoke(site, domain);
+    }
+
     // «Repor» o site: as regras dele saem.
     public void Forget(string site)
     {
@@ -225,11 +231,30 @@ public static class SiteRules
         return rules.Blocks(site, host, isPrivate);
     }
 
-    public static void Block(string site, string domain, bool isPrivate) => Rules.Value.Block(site, domain, isPrivate);
+    public static void Block(string site, string domain, bool isPrivate)
+    {
+        Rules.Value.Block(site, domain, isPrivate);
+        if (!isPrivate) Data.AppData.NotifySyncableChanged();
+    }
 
-    public static SiteUnblock Unblock(string site, string host, bool isPrivate) => Rules.Value.Unblock(site, host, isPrivate);
+    public static SiteUnblock Unblock(string site, string host, bool isPrivate)
+    {
+        var undone = Rules.Value.Unblock(site, host, isPrivate);
+        if (!isPrivate) Data.AppData.NotifySyncableChanged();
+        return undone;
+    }
 
-    public static void Forget(string site) => Rules.Value.Forget(site);
+    public static void RemoveExact(string site, string domain)
+    {
+        Rules.Value.RemoveExact(site, domain);
+        Data.AppData.NotifySyncableChanged();
+    }
+
+    public static void Forget(string site)
+    {
+        Rules.Value.Forget(site);
+        Data.AppData.NotifySyncableChanged();
+    }
 
     public static void ForgetPrivate() => Rules.Value.ForgetPrivate();
 

@@ -378,7 +378,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             }
 
             // Modo rigoroso neste site: scripts e frames de outros domínios não carregam (além das listas).
-            if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var top) && Data.AppData.IsStrict(top.Host)
+            if (pageUrl is not null && Uri.TryCreate(pageUrl, UriKind.Absolute, out var top) && Data.AppData.IsStrict(top.Host, isPrivate)
                 && StrictPolicy.ShouldBlock(pageUrl, request.Url, request.ResourceType))
             {
                 blocking = true;

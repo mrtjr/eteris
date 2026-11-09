@@ -9,7 +9,12 @@
 # No fim grava publish\eteris-build.json (versão, modo, commit, CefSharp com o SHA256 das montagens): o pack.ps1 só
 # empacota uma pasta com essa marca, e ela fica na instalação como registo do que a release leva. Se alguma verificação
 # falhar, a pasta publish\ é apagada.
-param([string]$Version = "0.2.12", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0, [string]$SandboxClientDll = "")
+# -GoogleOAuthJson <caminho> (docs/sincronizacao.md): o identificador da aplicação Google («App para computador»,
+# descarregado da Google Cloud) vai para a pasta publish e o «Entrar com o Google» fica disponível. Nunca no repositório
+# (.gitignore). Sem ele publica sem login: a secção Sincronização diz «indisponível nesta compilação». A marca
+# eteris-build.json diz se o levou (google_oauth), nunca o client_id.
+param([string]$Version = "0.2.13", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0,
+  [string]$SandboxClientDll = "", [string]$GoogleOAuthJson = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $publishDir = Join-Path $root "publish"
@@ -51,6 +56,18 @@ if (Test-Path -LiteralPath (Join-Path $cefRuntime "libcef.dll")) {
     if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) { throw "Motor com codecs: $($file.path) não bate com o manifesto" }
   }
   "Motor com codecs da plataforma: $fileVersion ($(@($manifest.files).Count) ficheiros verificados)"
+}
+
+# O identificador da aplicação Google é verificado ANTES de compilar (um ficheiro errado não deixa publicar a meio).
+$oauth = $null
+if ($GoogleOAuthJson) {
+  if (-not (Test-Path -LiteralPath $GoogleOAuthJson -PathType Leaf)) { throw "-GoogleOAuthJson: ficheiro não encontrado: $GoogleOAuthJson" }
+  try { $oauth = Get-Content -LiteralPath $GoogleOAuthJson -Raw -Encoding UTF8 | ConvertFrom-Json } catch { throw "-GoogleOAuthJson: não é JSON válido" }
+  $installed = $oauth.installed
+  if (-not $installed) { throw "-GoogleOAuthJson: não é um cliente «App para computador» da Google (falta o objeto «installed»; um cliente «web» não serve)" }
+  if ([string]$installed.client_id -notmatch '^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$') { throw "-GoogleOAuthJson: client_id inválido" }
+  if ($installed.token_uri -and $installed.token_uri -ne "https://oauth2.googleapis.com/token") { throw "-GoogleOAuthJson: token_uri inesperado ($($installed.token_uri))" }
+  if ($installed.auth_uri -and $installed.auth_uri -notlike "https://accounts.google.com/o/oauth2/*") { throw "-GoogleOAuthJson: auth_uri inesperado ($($installed.auth_uri))" }
 }
 
 $sandboxArgs = @()
@@ -137,6 +154,15 @@ if (-not $profileScan) {
   "Sem o caminho do perfil em $($ours.Count) binários nossos"
 }
 
+# Login Google (docs/sincronizacao.md): só o que este comando pediu (publish\ foi limpa no início). Dentro do trap: um
+# Copy-Item que falhe apaga a publicação a meio, e a marca só se escreve depois.
+if ($oauth) {
+  Copy-Item -LiteralPath $GoogleOAuthJson -Destination (Join-Path $publishDir "google-oauth.json")
+  "Login Google: google-oauth.json copiado (cliente «App para computador», client_id $(([string]$oauth.installed.client_id).Split('-')[0])-…)"
+} else {
+  Write-Warning "Publicado SEM login Google (falta -GoogleOAuthJson): a secção Sincronização e o menu dizem «indisponível nesta compilação»."
+}
+
 # Marca do fim (só aqui, com tudo verificado): o pack.ps1 exige-a e ela vai na instalação como registo da release.
 $build = [ordered]@{
   version               = $Version
@@ -147,5 +173,6 @@ $build = [ordered]@{
   cefsharp              = $(if ($NoSandbox) { [ordered]@{ version = "156.0.150"; official = $true } } else { $feedInfo })
   sandbox_client_sha256 = $(if ($NoSandbox) { $null } else { $testsInfo.client_sha256 })
   sandbox_tests_utc     = $(if ($NoSandbox) { $null } else { $testsInfo.tested_utc })
+  google_oauth          = [bool]$oauth
 }
 [IO.File]::WriteAllText((Join-Path $publishDir "eteris-build.json"), ($build | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))

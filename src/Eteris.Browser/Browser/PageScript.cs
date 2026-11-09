@@ -32,8 +32,8 @@ public static class PageScript
         try
         {
             var client = Sessions.GetValue(browser, b => b.GetDevToolsClient());
-            var call = client.Runtime.EvaluateAsync(Expression(script, asyncBody), returnByValue: true, awaitPromise: asyncBody,
-                userGesture: userGesture);
+            var call = DevToolsCalls.Run(() => client.Runtime.EvaluateAsync(Expression(script, asyncBody), returnByValue: true,
+                awaitPromise: asyncBody, userGesture: userGesture));
             var limit = timeout ?? TimeSpan.FromSeconds(10);
             if (await Task.WhenAny(call, Task.Delay(limit)) != call) return new ScriptResult(false, null, "tempo esgotado");
             var response = await call;

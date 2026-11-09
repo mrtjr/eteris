@@ -24,6 +24,11 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
 
 - `ETERIS_TEST_MUTE=1` (no ambiente do processo que lança o Éteris): nenhum som sai dos dois motores
   (`mute-audio` no Chromium, `CoreWebView2.IsMuted` no motor de vídeo). Ver `Infrastructure/TestSwitches.cs`.
+- `ETERIS_TEST_SYNC_FOLDER=<pasta>`: a sincronização usa esta pasta em vez do Google Drive (nenhum pedido de rede;
+  dois perfis de teste na mesma pasta). Ignorada pela versão instalada. Ver `docs/sincronizacao.md`.
+- `ETERIS_TEST_REAUTH=aceitar|recusar`: a confirmação com o Windows do cofre de palavras-passe (Windows Hello ou
+  palavra-passe do Windows) responde sozinha, sem janela, para as provas ao vivo não precisarem do PIN de ninguém.
+  Ignorada pela versão instalada. Ver `docs/palavras-passe.md`.
 
 ## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
 
@@ -111,6 +116,8 @@ site a ver a pergunta), pergunta `MediaSource.isTypeSupported` para `avc1.640028
   H.264 de um MP4 progressivo e só se ouve o som — um `<video>` de MP4/MOV/M3U8 com metadados, `videoWidth` 0 e o motor
   a dizer «não» ao `avc1` dá `format`, e a aba troca.
 
+### Como publicar
+
 **Publicação (decidido na 0.2.9: localmente, nesta máquina).** O `.github/workflows/release.yml` **não** consegue
 compilar este motor: são 110–150 GB de fonte e objetos, 5–10 h de compilação oficial (ThinLTO + PGO) e o código
 descarregado à parte; os runners alojados do GitHub têm ~14 GB de disco e 6 h por trabalho. Uma publicação pelo CI sai
@@ -126,13 +133,18 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    `build/cef-codecs/build.ps1 -Steps Package`, sem recompilar) ou de `-CefDistrib <pasta>`. **Em cada release**, depois
    do commit da versão: `build\sandbox\build-all.ps1 -SkipCefSharp -SkipClient` — só os testes no modo com sandbox (o CI
    só testa o modo sem), que gravam a marca `build/sandbox/out/tests-ok.json` para esse commit; sem ela o passo 2 recusa.
-2. `.\build\publish.ps1 -Version X.Y.Z` — recusa um runtime que não seja o validado (modo, commit, versão do
+2. `.\build\publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho do google-oauth.json>` — o `-GoogleOAuthJson` copia
+   o identificador da aplicação Google («App para computador», descarregado da Google Cloud; nunca no repositório, está
+   no `.gitignore`) para `publish\google-oauth.json`, depois de verificar (antes de compilar) que é um cliente
+   `installed` com `client_id` e endereços da Google; sem ele publica **sem login** (a secção Sincronização diz
+   «indisponível nesta compilação») e avisa. Recusa um runtime que não seja o validado (modo, commit, versão do
    `libcef.dll`, SHA256 de cada ficheiro do manifesto); com o sandbox (a omissão) recusa também a falta do feed ou da
    DLL cliente, verifica a DLL contra o motor (`verify-client.ps1`) e confirma a forma publicada (`Eteris.Browser.exe` =
    bootstrap com a marca e a versão, `Eteris.Browser.dll` = DLL cliente, `Eteris.App.dll`, CefSharp com
    `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
    para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
-   falhar, e no fim leva `eteris-build.json` (versão, modo, commit e o CefSharp com o SHA256 das montagens).
+   falhar, e no fim leva `eteris-build.json` (versão, modo, commit, o CefSharp com o SHA256 das montagens e
+   `google_oauth`, se levou o login Google, nunca o `client_id`).
    Nos dois modos recusa também binários publicados com o caminho do perfil de quem compila (`docs/sandbox.md`,
    «Como publicar com o sandbox», passo 3).
    `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.13). Confirmar que `publish\libcef.dll` tem o SHA256
@@ -149,7 +161,8 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    H.264 toca no motor principal, sem processos `msedgewebview2` filhos; `chrome://sandbox` com os renderers
    Lockdown/Untrusted e a GPU Low, e `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`;
    fora de uma instalação a pasta não tem a ACL do serviço de rede, por isso aí ele aparece «Not Sandboxed» — normal,
-   os ganchos do Velopack dão-na ao instalar e ao atualizar). Nunca instalar o `Setup` na máquina do dono.
+   os ganchos do Velopack dão-na ao instalar e ao atualizar; com `-GoogleOAuthJson`, Definições › Sincronização mostra
+   «Entrar com o Google» e não «indisponível»). Nunca instalar o `Setup` na máquina do dono.
 6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
    (compilar e testes, sem pack nem upload).
 7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --publish --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z

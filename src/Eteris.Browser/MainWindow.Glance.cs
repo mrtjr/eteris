@@ -147,7 +147,7 @@ public partial class MainWindow
             PermissionHandler = PermissionHandler,
             // A rede local que o utilizador deixou ao site também chega na pré-visualização (sem cartão: a pré-visualização
             // não pergunta nada).
-            RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, AppData.IsShieldOn, onBlocked: _ => { }, isPrivate: IsPrivate,
+            RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, ShieldOn, onBlocked: _ => { }, isPrivate: IsPrivate,
                 localNetworkAllowed: IsLocalNetworkAllowed),
         };
         // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
@@ -236,7 +236,7 @@ public partial class MainWindow
     private void LoadGlanceImage(ChromiumWebBrowser browser, string imageUrl, string pageUrl, int serial)
     {
         // Um pixel de rastreio em og:image não é pedido.
-        if (AppData.IsShieldOn(LinkPreview.HostOf(pageUrl)) && ShieldEngine.Current.ShouldBlock(imageUrl, pageUrl, "image")) return;
+        if (ShieldOn(LinkPreview.HostOf(pageUrl)) && ShieldEngine.Current.ShouldBlock(imageUrl, pageUrl, "image")) return;
         if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http")) return;
         if (browser.IsDisposed || !browser.IsBrowserInitialized) return;
         var client = new EngineFetchClient(bytes => Dispatcher.InvokeAsync(() => ShowGlanceImage(bytes, serial)),

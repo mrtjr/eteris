@@ -198,7 +198,7 @@ public partial class MainWindow
                 e.Response = environment.CreateWebResourceResponse(new MemoryStream(page), 200, "OK", "Content-Type: text/html; charset=utf-8");
                 return;
             }
-            if (!VideoEngine.IsFiltered(context) || pageHost is null || !AppData.IsShieldOn(pageHost)) return;
+            if (!VideoEngine.IsFiltered(context) || pageHost is null || !ShieldOn(pageHost)) return;
             var requestUrl = e.Request.Uri;
             if (string.Equals(requestUrl, mainNavigation, StringComparison.Ordinal)) return;
             var type = context == CoreWebView2WebResourceContext.Document ? "sub_frame" : VideoEngine.ToAdblock(context);
@@ -296,7 +296,7 @@ public partial class MainWindow
         {
             e.Handled = true;
             var target = e.Uri;
-            if (PopupPolicy.Allow(e.IsUserInitiated, target, core.Source, ShieldEngine.Current, AppData.IsShieldOn))
+            if (PopupPolicy.Allow(e.IsUserInitiated, target, core.Source, ShieldEngine.Current, ShieldOn))
                 Tabs.NewTab(target);
             else if (WebHost(target) is { } blocked)
             {
@@ -315,7 +315,7 @@ public partial class MainWindow
 
     // Regras cosméticas do Escudo no motor de vídeo (banners, pop-ups): as mesmas do motor principal, registadas pelo
     // DevTools (Browser/VideoPageScript.cs) para correr antes dos scripts da página, uma vez por site e protegidas pelo hostname da página de topo.
-    private static async Task EnsureVideoCosmeticsAsync(CoreWebView2 core, string url, HashSet<string> done)
+    private async Task EnsureVideoCosmeticsAsync(CoreWebView2 core, string url, HashSet<string> done)
     {
         if (HostScriptRegistry.HostOf(url) is not { } page || !done.Add(page.IdnHost)) return;
         var css = SiteCosmeticScript(url);

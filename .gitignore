@@ -16,3 +16,7 @@ build/sandbox/client/out/
 build/cefsharp/src/
 build/cefsharp/feed/
 build/sandbox/out/
+# Identificador da aplicação Google (OAuth «App para computador»): nunca no repositório. Vai para a pasta publish pelo
+# build/publish.ps1 -GoogleOAuthJson (docs/motor.md, «Como publicar»; docs/sincronizacao.md).
+google-oauth.json
+**/google-oauth.json

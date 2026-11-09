@@ -36,7 +36,7 @@ public partial class MainWindow
 
     private void ApplyPopupDecision(BrowserTab tab, PopupRequest request, UserActivation? activation)
     {
-        if (PopupPolicy.Allow(request, ShieldEngine.Current, AppData.IsShieldOn, activation))
+        if (PopupPolicy.Allow(request, ShieldEngine.Current, ShieldOn, activation))
         {
             Tabs.NewTab(request.TargetUrl, request.Foreground);
             return;

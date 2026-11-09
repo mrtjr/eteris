@@ -37,6 +37,8 @@ public class PrivateSessionTests
     [Fact]
     public void WhatsNew_AnnouncesHttpsFirst()
     {
-        Assert.Contains(WhatsNewPage.Highlights.Skip(10).Take(8), h => h.Detail.Contains("HTTPS", StringComparison.Ordinal));
+        // Entre os destaques da 0.2.9 (os 8 a seguir ao da 0.2.14, aos 3 da 0.2.13, aos 2 da 0.2.12, aos 2 da 0.2.11 e aos 5
+        // da 0.2.10).
+        Assert.Contains(WhatsNewPage.Highlights.Skip(13).Take(8), h => h.Detail.Contains("HTTPS", StringComparison.Ordinal));
     }
 }

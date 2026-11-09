@@ -10,6 +10,18 @@ public static class TestSwitches
     // e o estado das páginas por CDP (nunca ligado sem esta variável).
     public static int? DevToolsPort => Port(Environment.GetEnvironmentVariable("ETERIS_TEST_DEVTOOLS_PORT"));
 
+    // ETERIS_TEST_REAUTH=aceitar|recusar: a confirmação com o Windows (Windows Hello / palavra-passe do Windows) do cofre
+    // responde sozinha, sem janela (Vault/WindowsReauth.cs), para as provas ao vivo não precisarem do PIN de ninguém.
+    // Como a pasta de teste da sincronização, a versão instalada ignora-a (há um Update.exe do Velopack na pasta de cima).
+    public static Vault.TestReauthMode? Reauth => ReauthFor(Environment.GetEnvironmentVariable("ETERIS_TEST_REAUTH"), IsInstalled);
+
+    public static Vault.TestReauthMode? ReauthFor(string? value, bool installed) => installed ? null : value?.Trim().ToLowerInvariant() switch
+    {
+        "aceitar" => Vault.TestReauthMode.Accept,
+        "recusar" => Vault.TestReauthMode.Refuse,
+        _ => null,
+    };
+
     // ETERIS_TEST_CRASH_BEFORE_PAINT=1: o processo termina de repente logo a seguir ao Cef.Initialize, antes da 1.ª página
     // (como uma queda), para provar a rede de segurança do sandbox (Infrastructure/SandboxFallback.cs). Só numa cópia
     // portátil: a versão instalada ignora-a, porque uma variável esquecida no PC de alguém fazia cair o Éteris instalado
@@ -20,7 +32,8 @@ public static class TestSwitches
 
     // Instalação do Velopack: o Update.exe está na pasta de cima (%LOCALAPPDATA%\<pacote>\current\Eteris.Browser.exe).
     // Com o sandbox, o AppContext.BaseDirectory é a pasta do Eteris.App.dll, a mesma do bootstrap (current\).
-    // É a regra do Sync.SyncService.IsInstalled da 0.2.13; ao fundir a 0.2.13 fica uma só.
+    // É a única regra de instalação: a pasta de teste da sincronização (Sync.SyncService.TestFolder), o ETERIS_TEST_REAUTH
+    // e o ETERIS_TEST_CRASH_BEFORE_PAINT leem-na daqui.
     public static bool IsInstalled => System.IO.File.Exists(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "Update.exe"));
 
     // Como uma queda: sem fecho, sem relatório do Windows (TerminateProcess), com um código de saída próprio.
