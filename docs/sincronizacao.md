@@ -27,7 +27,8 @@ recuperação mostrado uma vez. Base: `C:\cef\notas\viabilidade\viab-sync.md`, `
 | O serviço no navegador (agente, agendador, estado para a interface) | `Sync/SyncService.cs` | pronto |
 | Definições › **Sincronização** (sempre que há `google-oauth.json`) | `settings.html`, `SettingsPage.cs` | pronta |
 | A conta no menu do navegador (nome, e-mail, avatar, estado da sincronização, pedidos) | `MainWindow.BrowserMenu.cs` | pronta |
-| Exportar / importar o perfil cifrado num ficheiro `.eteris` | `Sync/ProfileTransfer.cs` | pronto |
+| Exportar / importar o perfil cifrado num ficheiro `.eteris` (o cofre só com a caixa e o Windows Hello) | `Sync/ProfileTransfer.cs` | pronto |
+| Coleções secretas do cofre de palavras-passe (selo próprio, perfil com segredos, escolha por aparelho, tópico «O que passa entre PCs») | `Secrets/`, `Engine/ProfileSync.cs`, `Model/SyncGroups.cs`; `Vault/VaultSyncProfile.cs`, `Sync/SyncChoices.cs` | pronto (ver «Coleções secretas») |
 | `google-oauth.json` na publicação (`build/publish.ps1 -GoogleOAuthJson`) | `build/publish.ps1` | pronto |
 | Prova com o Google Drive real | — | fase «Prova» |
 | QR para o telemóvel, abas noutros aparelhos, histórico | — | versões seguintes |
