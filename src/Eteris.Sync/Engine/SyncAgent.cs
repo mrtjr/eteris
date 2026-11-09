@@ -32,6 +32,12 @@ public sealed class SavedSync
     [JsonPropertyName("account")] public string? Account { get; set; }
     // Quando este aparelho criou a conta (0 = não a criou, ou já passou o tempo de ver se outro a criou ao mesmo tempo).
     [JsonPropertyName("created")] public long CreatedMs { get; set; }
+    // As coleções ligadas NESTE aparelho (tópico «O que passa entre PCs»; null = as de omissão, SyncGroups). Desligar uma
+    // linha para de enviar e de aplicar essas coleções e não apaga nada, nem aqui nem na conta.
+    [JsonPropertyName("collections")] public List<string>? Collections { get; set; }
+    // As coleções que já fizeram a «primeira junção» com a conta (null = estado de antes destas linhas: com base, as
+    // coleções que já existiam). Uma coleção ligada outra vez sai daqui e junta-se de novo sem perder nada.
+    [JsonPropertyName("joined")] public List<string>? Joined { get; set; }
 }
 
 public interface ISyncStore
@@ -147,6 +153,64 @@ public sealed class SyncAgent
         get { lock (_gate) return _saved?.Secret is not null; }
     }
 
+    // As coleções ligadas neste aparelho (as de omissão até o utilizador escolher). Só disco.
+    public IReadOnlySet<string> EnabledCollections
+    {
+        get
+        {
+            lock (_gate) return EnabledOf(_saved);
+        }
+    }
+
+    private static IReadOnlySet<string> EnabledOf(SavedSync? saved)
+        => saved?.Collections is { } chosen ? chosen.ToHashSet(StringComparer.Ordinal) : Model.SyncGroups.DefaultCollections;
+
+    // Liga ou desliga coleções neste aparelho. Desligar não apaga nada; ligar outra vez faz a «primeira junção» só delas
+    // (o que só existe aqui sobe; o que a conta tem vale). A confirmação do Windows para Pagamentos e Documentos é do
+    // anfitrião, antes de chamar isto.
+    public void SetCollections(IEnumerable<string> collections, bool on)
+    {
+        lock (_gate)
+        {
+            _saved ??= new SavedSync();
+            var enabled = EnabledOf(_saved).ToHashSet(StringComparer.Ordinal);
+            var joined = JoinedOf(_saved).ToHashSet(StringComparer.Ordinal);
+            foreach (var collection in collections)
+            {
+                if (on) enabled.Add(collection);
+                else enabled.Remove(collection);
+                joined.Remove(collection);
+            }
+            _saved.Collections = enabled.Order(StringComparer.Ordinal).ToList();
+            _saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
+            _store.Save(_saved);
+        }
+        Notify();
+    }
+
+    // Há segredos em jogo neste aparelho (coleções secretas ligadas ou registos secretos na conta): aprovar um aparelho
+    // novo entrega-lhe também as palavras-passe, os pagamentos e os documentos.
+    public bool HasSecrets
+    {
+        get
+        {
+            lock (_gate)
+                return EnabledOf(_saved).Any(Model.Collections.IsSecret)
+                       || _engine?.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)) == true;
+        }
+    }
+
+    // As já juntadas (um estado de antes das linhas: com base, as coleções que existiam antes das secretas).
+    private static IReadOnlyCollection<string> JoinedOf(SavedSync saved)
+        => saved.Joined ?? (saved.Baseline is null ? [] : [.. Model.SyncGroups.LegacyCollections]);
+
+    private static ProfileSyncOptions OptionsOf(SavedSync saved)
+    {
+        var enabled = EnabledOf(saved);
+        var joined = JoinedOf(saved);
+        return new ProfileSyncOptions { Enabled = enabled, Fresh = enabled.Where(c => !joined.Contains(c)).ToHashSet(StringComparer.Ordinal) };
+    }
+
     public SyncStatus Status
     {
         get
@@ -192,6 +256,7 @@ public sealed class SyncAgent
                 _engine = null;
                 _saved.Engine = null;
                 _saved.Baseline = null;
+                _saved.Joined = null;
                 _saved.Rotation = null;
                 _saved.CreatedMs = 0;
                 _saved.Account = AccountKey?.Invoke();
@@ -266,7 +331,9 @@ public sealed class SyncAgent
         SavedSync? saved;
         lock (_gate) saved = _saved;
         if (saved is not { Enabled: true, Secret: not null }) return false;
-        return ProfileSync.CountLocalChanges(_profile, saved.Baseline) > 0;
+        ProfileSyncOptions options;
+        lock (_gate) options = OptionsOf(saved);
+        return ProfileSync.CountLocalChanges(_profile, saved.Baseline, options) > 0;
     }
 
     private async Task<bool> ResumeAsync(SavedSync saved, string secret, SyncState state, CancellationToken cancellationToken)
@@ -323,6 +390,7 @@ public sealed class SyncAgent
                 saved.Secret = Kdf.Base64Url(account.ToBytes());
                 saved.Engine = engine.State;
                 saved.Baseline = null;
+                saved.Joined = null;
                 saved.CodePending = true;
                 saved.CreatedMs = _now();
                 saved.Account = AccountKey?.Invoke();
@@ -349,9 +417,11 @@ public sealed class SyncAgent
         var engine = _engine!;
         SyncReport report;
         Dictionary<string, string> baseline;
+        ProfileSyncOptions options;
+        lock (_gate) options = OptionsOf(saved);
         try
         {
-            (report, baseline) = await ProfileSync.RunAsync(engine, _profile, saved.Baseline, DeviceName, cancellationToken).ConfigureAwait(false);
+            (report, baseline) = await ProfileSync.RunAsync(engine, _profile, saved.Baseline, DeviceName, options, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -366,8 +436,14 @@ public sealed class SyncAgent
         lock (_gate)
         {
             if (!IsCurrent(saved) || !ReferenceEquals(_engine, engine)) return;
+            // As coleções que fizeram a ronda inteira já estão juntas (as ligadas entretanto ficam por juntar).
+            var joined = JoinedOf(saved).ToHashSet(StringComparer.Ordinal);
+            var enabledNow = EnabledOf(saved);
+            joined.UnionWith(report.Joined.Where(c => options.IsEnabled(c) && enabledNow.Contains(c)));
             saved.Baseline = baseline;
+            saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
             _store.Save(saved);
+            if (_profile is ILocalNotices notices && notices.TakeNotice() is { } notice) _notice = notice;
         }
         if (await LeaveDuplicateAsync(saved, engine, cancellationToken).ConfigureAwait(false)) return;
         await engine.PushAsync(cancellationToken).ConfigureAwait(false);
@@ -443,6 +519,7 @@ public sealed class SyncAgent
             saved.Secret = null;
             saved.Engine = null;
             saved.Baseline = null;
+            saved.Joined = null;
             saved.CodePending = false;
             saved.CreatedMs = 0;
             saved.Rotation = null;
@@ -549,6 +626,7 @@ public sealed class SyncAgent
             {
                 saved.Engine = null;
                 saved.Baseline = null;
+                saved.Joined = null;
                 saved.Rotation = null;
                 saved.CreatedMs = 0;
             }
@@ -626,6 +704,7 @@ public sealed class SyncAgent
             _saved.Secret = Kdf.Base64Url(account.ToBytes());
             _saved.Engine = engine.State;
             _saved.Baseline = null; // primeira vez: junta sem perder nada (ProfileSync)
+            _saved.Joined = null;
             _saved.CodePending = false;
             _saved.LastCompactMs = 0;
             _saved.LastCompactSeq = 0;

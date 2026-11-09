@@ -843,3 +843,36 @@ número do cartão, nota) aparece no transporte nem no estado do motor; selo mov
 abre; campos desconhecidos preservados; lápide com a chave natural.
 
 Prova ao vivo: nenhuma (biblioteca pura).
+
+## D2. `ProfileSync` com segredos e escolha por aparelho
+
+- **Perfil com cofre** (`Engine/ISecretSource.cs`): o perfil local dá, de cada item secreto, só a **chave local** (opaca,
+  HMAC com uma chave deste computador) e a **impressão** `{"h": HMAC(conteúdo canónico)}`. A base do `ProfileSync`
+  guarda essa impressão, nunca o conteúdo nem o site. Quando a impressão muda, o `ProfileSync` pede o conteúdo
+  (`ReadSecret`: **só esse item se decifra**), sela-o e faz `PutSecret`. Contar as alterações (o agendador, depois de cada
+  alteração local) não decifra nada.
+- **No sentido contrário**, os selos das coleções **ligadas** abrem-se e o conteúdo vai ao perfil em
+  `LocalChange.Secret` (com a impressão em `Data`), para o cofre o voltar a cifrar com a chave local. Um selo que não
+  abre ou com campos de tipo errado fica de fora, conta em `SyncReport.SecretErrors`, e nessa ronda **nada se apaga**
+  dessa coleção aqui (o que falta pode ser só um registo que este Éteris não abre). Um item que não se consegue selar
+  (campo proibido, grande demais) fica de fora e volta a ser tentado (a base dele não muda).
+- **Conflitos:** LWW por registo (HLC). Quem perde aplica a versão nova e o cofre guarda a palavra-passe anterior no
+  **histórico local** (1 versão), com um aviso no estado (`ILocalNotices`): «… mudaram noutro computador; as anteriores
+  ficaram no histórico». Na **primeira junção**, o que só existe aqui sobe e, com a mesma chave natural, vale a versão
+  da conta (a deste computador vai para o histórico).
+- **Escolha por aparelho** (`SavedSync.Collections`, `SyncAgent.EnabledCollections`/`SetCollections`, linhas e
+  omissões em `Model/SyncGroups.cs`): as coleções desligadas **não se leem, não se enviam, não se aplicam e os selos delas
+  nunca se abrem**; a base delas fica como estava. Desligar não apaga nada (nem aqui nem na conta). Ligar outra vez faz
+  a **primeira junção só dessa coleção** (`SavedSync.Joined`, `ProfileSyncOptions.Fresh`). Omissões (D-1): tudo ligado
+  menos Pagamentos (`cards`, `ibans`) e Documentos de identificação (`idDocs`). Um estado de antes destas linhas conta
+  como já juntado nas coleções que existiam (favoritos, Espaços, definições, Escudo, notas); as secretas juntam-se na
+  primeira ronda. `SyncAgent.HasSecrets` diz se aprovar um aparelho novo lhe entrega segredos (D4).
+
+Testes: `Sync/SyncSecretProfileTests` (um perfil em memória com cofre e chave local própria por aparelho) — omissões da
+decisão D-1 e escolha guardada; **nenhum segredo nem site em claro** no transporte, no estado do motor, na base nem nos
+instantâneos (oito textos inventados, também em Base64); só o item alterado é lido do cofre (40 palavras-passe, 1
+leitura); conflito → a mais recente ganha e a outra fica no histórico com aviso; primeira junção; coleção desligada
+nunca abre selos nem envia, e ligá-la junta só essa (e desligar outra vez não apaga nada); convergência em 3 aparelhos
+e lápides que não ressuscitam; selo estragado fica de fora sem apagar nada aqui; cofre ilegível não envia remoções.
+
+Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, pela pasta local).
