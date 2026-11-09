@@ -54,6 +54,67 @@ public sealed class PasswordsPageTests : IDisposable
     }
 
     // As ações exigem o token desta sessão.
+    // Revisão: adicionar um site e utilizador que já existem era substituir a palavra-passe em silêncio; mudar o
+    // utilizador para o de outro item fazia dois iguais. As duas coisas são recusadas.
+    [Fact]
+    public async Task Save_NeverMakesTwoItemsWithTheSameSiteAndUser()
+    {
+        var first = VaultFixture.Json(await _f.Post("passwords", "/save", new() { ["origin"] = "https://exemplo.pt", ["username"] = "carla", ["password"] = "Primeira-1!" }))["id"]!.GetValue<string>();
+        var dup = VaultFixture.Json(await _f.Post("passwords", "/save", new() { ["origin"] = "https://exemplo.pt/outra", ["username"] = "carla", ["password"] = "Segunda-2!" }));
+        Assert.False(dup["ok"]!.GetValue<bool>());
+        Assert.Contains("Já existe uma palavra-passe para «carla» em exemplo.pt", dup["message"]!.GetValue<string>());
+        Assert.Equal("Primeira-1!", _f.Vault.GetLogin(first)!.Password);
+        var second = VaultFixture.Json(await _f.Post("passwords", "/save", new() { ["origin"] = "https://exemplo.pt", ["username"] = "diana", ["password"] = "Terceira-3!" }))["id"]!.GetValue<string>();
+        var rename = VaultFixture.Json(await _f.Post("passwords", "/save", new() { ["id"] = second, ["origin"] = "https://exemplo.pt", ["username"] = "carla", ["password"] = "Terceira-3!" }));
+        Assert.False(rename["ok"]!.GetValue<bool>());
+        Assert.Equal(2, _f.Vault.Logins().Count);
+        // Editar o próprio item (o mesmo utilizador) continua a funcionar.
+        Assert.True(VaultFixture.Json(await _f.Post("passwords", "/save", new() { ["id"] = second, ["origin"] = "https://exemplo.pt", ["username"] = "diana", ["password"] = "Mudada-4!" }))["ok"]!.GetValue<bool>());
+    }
+
+    // Revisão: um cofre que não abre tem a sua página (o que aconteceu, que nada foi apagado e o que fazer), não a da
+    // janela privada; o título segue a rota.
+    [Fact]
+    public void UnavailablePage_IsNotThePrivateWindowPage()
+    {
+        var page = VaultRoutes.UnavailablePage("A chave do cofre desapareceu: o cofre ficou como estava, sem ser aberto.", "autofill");
+        Assert.Contains("<title>Preenchimento automático</title>", page);
+        Assert.Contains("Nada foi apagado", page);
+        Assert.Contains("cofre.key", page);
+        Assert.DoesNotContain("janela privada", page);
+        Assert.Contains("<title>Palavras-passe</title>", VaultRoutes.UnavailablePage("x"));
+        Assert.Contains("janela privada", VaultRoutes.PrivatePage(VaultRoutes.PrivateMessage, "autofill"));
+        Assert.Contains("<title>Preenchimento automático</title>", VaultRoutes.PrivatePage(VaultRoutes.PrivateMessage, "autofill"));
+    }
+
+    // Revisão (acessibilidade e textos): os interruptores entram na ordem do Tab e têm nome; as notas dos resultados
+    // são anunciadas; os nomes das secções são os do menu; o singular de «verificada»; o estilo das ligações.
+    [Fact]
+    public async Task Page_Accessibility_AndNames()
+    {
+        var html = (await _f.Get("passwords", "/")).Body;
+        Assert.DoesNotContain(".switch input { display: none; }", html);
+        Assert.Contains("input.setAttribute('aria-label', name.textContent)", html);
+        foreach (var note in new[] { "importNote", "exportNote", "eraseNote" }) Assert.Contains($"<span id=\"{note}\" role=\"status\">", html);
+        Assert.Contains("aria-describedby", html);
+        Assert.Contains(">Informações de contacto</a>", html);
+        Assert.Contains(">Documentos de identificação</a>", html);
+        Assert.Contains("'1 palavra-passe verificada neste computador", html);
+        Assert.Contains("a.link {", html);
+        Assert.Contains("input.checked = !input.checked", html);
+        var autofill = (await _f.Get("autofill", "/")).Body;
+        Assert.DoesNotContain(".switch input { display: none; }", autofill);
+        Assert.Contains("input.setAttribute('aria-label', name.textContent)", autofill);
+        Assert.Contains("a.link {", autofill);
+        Assert.Contains("rerender: 1 }], ['country'", autofill);
+        var settings = SettingsPage.Render(new Eteris.Browser.Data.UserSettings());
+        Assert.Contains("<label class=\"switch kb\"><input type=\"checkbox\" data-key=\"pwAskHello\" aria-label=\"Pedir o Windows Hello ao preencher palavras-passe\">", settings);
+        // O menu de contexto: um cofre que não abre não deita o Éteris abaixo; «Viagem» segue o interruptor.
+        var window = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Vault.cs"));
+        Assert.Equal(5, window.Split("Guarded(sub =>").Length - 1);
+        Assert.Contains("if (Data.Settings.Current.AutofillTravel)", window);
+    }
+
     [Theory]
     [InlineData("/reveal", "id=x")]
     [InlineData("/copy", "id=x&what=password")]

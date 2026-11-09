@@ -687,7 +687,9 @@ public partial class MainWindow : Window
         if (ctrl && key == Key.Tab) return shift ? Tabs.SelectPrevious : Tabs.SelectNext;
         if (ctrl && key == Key.PageDown) return Tabs.SelectNext;
         if (ctrl && key == Key.PageUp) return Tabs.SelectPrevious;
-        if ((ctrl && key == Key.L) || (alt && key == Key.D) || key == Key.F6) return FocusOmnibox;
+        // F6 com a bolha «Guardar a palavra-passe?» à vista: primeiro a bolha, depois a barra de endereço.
+        if (key == Key.F6 && !ctrl && !alt) return () => { if (!FocusSaveBubble()) FocusOmnibox(); };
+        if ((ctrl && key == Key.L) || (alt && key == Key.D)) return FocusOmnibox;
         if ((ctrl && shift && key == Key.R) || (ctrl && key == Key.F5)) return () => ReloadActive(ignoreCache: true);
         if ((ctrl && key == Key.R) || key == Key.F5) return () => ReloadActive();
         if (alt && key == Key.Left) return GoBack;

@@ -115,24 +115,39 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
                 _ => VaultReply.NotFound,
             };
         }
-        catch (VaultUnavailableException e)
+        catch (Exception e) when (VaultSyncProfile.IsVaultFailure(e) && e is not InvalidOperationException)
         {
-            return r.Path == "/" ? VaultReply.Html(PrivatePage(e.Message)) : VaultReply.Json(new { ok = false, message = e.Message });
+            var message = e is VaultUnavailableException ? e.Message : "O cofre deste computador não abre agora.";
+            return r.Path == "/" ? VaultReply.Html(UnavailablePage(message, r.Host)) : VaultReply.Json(new { ok = false, message });
         }
     }
 
-    public static string PrivatePage(string message)
-        => "<!doctype html><html lang=\"pt\"><head><meta charset=\"utf-8\"><meta name=\"color-scheme\" content=\"dark\"><title>Palavras-passe</title>"
+    private static string TitleOf(string host) => host == "autofill" ? "Preenchimento automático" : "Palavras-passe";
+
+    private static string SimplePage(string title, string heading, string paragraphs)
+        => "<!doctype html><html lang=\"pt\"><head><meta charset=\"utf-8\"><meta name=\"color-scheme\" content=\"dark\"><title>" + title + "</title>"
            + "<style>body{font-family:\"Segoe UI\",system-ui,sans-serif;background:#0b0d13;color:#e9ebf2;display:grid;place-items:center;min-height:90vh;margin:0}"
-           + "html.light body{background:#f3f4f9;color:#1b1f2a}p{color:#a3a9b8;max-width:440px;text-align:center;line-height:1.5}</style></head>"
-           + "<body><main><h1 style=\"font-weight:400\">" + System.Net.WebUtility.HtmlEncode(message) + "</h1>"
-           + "<p>As palavras-passe e o preenchimento automático abrem-se numa janela normal: a janela privada não lê nem mexe no cofre fora do preenchimento que pedir.</p></main></body></html>";
+           + "html.light body{background:#f3f4f9;color:#1b1f2a}p{color:#a3a9b8;max-width:480px;text-align:center;line-height:1.5}</style></head>"
+           + "<body><main><h1 style=\"font-weight:400\">" + System.Net.WebUtility.HtmlEncode(heading) + "</h1>" + paragraphs + "</main></body></html>";
+
+    // A janela privada não abre estas páginas.
+    public static string PrivatePage(string message, string host = "passwords")
+        => SimplePage(TitleOf(host), message,
+            "<p>As palavras-passe e o preenchimento automático abrem-se numa janela normal: a janela privada não lê nem mexe no cofre fora do preenchimento que pedir.</p>");
+
+    // O cofre deste computador não abre (a chave não abre nesta conta do Windows, desapareceu, ou a base de dados está
+    // ocupada ou estragada): o que aconteceu, que nada foi apagado e o que se pode fazer.
+    public static string UnavailablePage(string message, string host = "passwords")
+        => SimplePage(TitleOf(host), message,
+            "<p>Nada foi apagado: o cofre continua neste computador, tal como estava, e o Éteris não o substitui por um vazio.</p>"
+            + "<p>Isto acontece quando a pasta do Éteris veio de outra conta do Windows ou de outro computador, quando o ficheiro cofre.key se perdeu, ou quando outro programa tem o cofre aberto.</p>"
+            + "<p>Feche o Éteris e abra-o outra vez. Se continuar, reponha a pasta do Éteris (com o cofre.key) de uma cópia de segurança feita nesta conta do Windows. Com a sincronização ligada, as palavras-passe continuam nos outros computadores.</p>");
 
     // ---- Palavras-passe ----
 
     private async Task<VaultReply> PasswordsAsync(VaultRequest r)
     {
-        if (r.IsPrivate) return r.Path == "/" ? VaultReply.Html(PrivatePage(PrivateMessage)) : VaultReply.Refused;
+        if (r.IsPrivate) return r.Path == "/" ? VaultReply.Html(PrivatePage(PrivateMessage, r.Host)) : VaultReply.Refused;
         if (r.Path == "/") return VaultReply.Html(Browser.PasswordsPage.Render(PasswordsData()));
         if (!r.Authorized) return VaultReply.Refused;
         switch (r.Path)
@@ -292,6 +307,10 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
         if (password.Length == 0) return Invalid("Escreva a palavra-passe.");
         if (password.Length > PasswordCsv.MaxPassword || username.Length > PasswordCsv.MaxUsername || (note?.Length ?? 0) > PasswordCsv.MaxNote)
             return Invalid("Texto demasiado comprido (até 1000 carateres).");
+        // Nunca dois itens com o mesmo site e utilizador: adicionar um que já existe (que o substituía em silêncio) ou
+        // mudar o utilizador para o de outro item é recusado, como no Chrome.
+        if (vault.FindLogin(origin, username) is { } existing && existing != id)
+            return Invalid($"Já existe uma palavra-passe para «{(username.Length > 0 ? username : VaultFillPolicy.NoUsername)}» em {Origins.DisplayHost(origin) ?? origin}: edite essa.");
         LoginItem? old = null;
         if (!string.IsNullOrEmpty(id))
         {

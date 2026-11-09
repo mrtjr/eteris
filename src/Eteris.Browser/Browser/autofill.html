@@ -81,7 +81,11 @@
   .note.bad { color: var(--bad); }
   .empty { padding: 34px 22px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
   .switch { position: relative; width: 46px; height: 26px; flex: none; cursor: pointer; }
-  .switch input { display: none; }
+  /* O checkbox fica por cima do interruptor, transparente: entra na ordem do Tab e no leitor de ecrã (aria-label). */
+  .switch input { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a.link { color: #67e8f9; text-decoration: none; font-size: 13.5px; white-space: nowrap; }
+  a.link:hover { text-decoration: underline; }
   .switch i { position: absolute; inset: 0; border-radius: 13px; background: #2c3042; transition: background .2s; }
   .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #e9ebf2; transition: transform .2s cubic-bezier(.3, 1.4, .6, 1); }
   .switch input:checked + i { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
@@ -102,7 +106,7 @@
   html.light button.action { background: #fff; }
   html.light button.action:hover:not(:disabled) { background: #eef0f6; }
   html.light button.action.danger { border-color: rgba(180, 35, 60, .35); }
-  html.light button.link { color: #0e7490; }
+  html.light button.link, html.light a.link { color: #0e7490; }
   html.light .row:hover, html.light .row.open { background: rgba(20, 24, 40, .03); }
   html.light .form { background: rgba(20, 24, 40, .03); }
   html.light .toast { background: #fff; box-shadow: 0 12px 40px rgba(20, 24, 40, .18); }
@@ -214,7 +218,7 @@
         </div>
         <div id="list-loyalty"></div>
         <div class="item">
-          <div class="label"><b>Preencher automaticamente viagens</b><span>Os veículos e os programas preenchem-se com o botão direito › «Preencher com…».</span></div>
+          <div class="label"><b>Preencher automaticamente viagens</b><span>Os veículos e os programas preenchem-se com o botão direito › «Preencher com…» › «Viagem». Desligado, essa entrada sai do menu.</span></div>
           <label class="switch"><input type="checkbox" data-key="afTravel"><i></i></label>
         </div>
         <div class="item">
@@ -275,7 +279,7 @@
     ibans: () => [['iban', 'IBAN', { mono: 1, wide: 1, placeholder: 'PT50 0000 0000 0000 0000 0000 0' }], ['nickname', 'Alcunha']],
     contacts: v => [['label', 'Etiqueta', { placeholder: 'Casa, Trabalho…' }], ['country', 'País', { select: COUNTRIES, rerender: 1 }]]
       .concat((data.addressForms[(v.country || '').toUpperCase() === 'PT' ? 'PT' : (v.country || '').toUpperCase() === 'BR' ? 'BR' : ''] || []).map(f => [f.key, f.label, { placeholder: f.placeholder, wide: f.wide }])),
-    idDocs: v => [['type', 'Tipo', { select: data.docTypes.map(t => [t.code, docName(t.code, (v.country || '').toUpperCase())]) }], ['country', 'País', { select: COUNTRIES, rerender: 1 }],
+    idDocs: v => [['type', 'Tipo', { select: data.docTypes.map(t => [t.code, docName(t.code, (v.country || '').toUpperCase())]), rerender: 1 }], ['country', 'País', { select: COUNTRIES, rerender: 1 }],
       ['number', (v.type === 'taxId' ? docName('taxId', (v.country || '').toUpperCase()) : 'Número'), { mono: 1 }], ['name', 'Nome'], ['issuer', 'Emissor'],
       ['issued', 'Emissão', { type: 'date' }], ['expires', 'Validade', { type: 'date' }], ['note', 'Nota', { textarea: 1, wide: 1 }]],
     vehicle: () => [['make', 'Marca'], ['model', 'Modelo'], ['year', 'Ano', { placeholder: '2019' }], ['owner', 'Proprietário'],
@@ -397,6 +401,11 @@
   };
   const refresh = () => ask('list', {}, reply => { if (reply.cards) { data = Object.assign(data, reply); render(); } });
 
+  // Cada interruptor tem o nome da linha (o <b> ao lado) para o leitor de ecrã.
+  document.querySelectorAll('.switch input').forEach(input => {
+    const name = input.closest('.item') && input.closest('.item').querySelector('.label b');
+    if (name) input.setAttribute('aria-label', name.textContent);
+  });
   document.querySelectorAll('input[data-key]').forEach(input => {
     input.checked = !!data[input.dataset.key];
     input.addEventListener('change', () => ask('set', { k: input.dataset.key, v: input.checked }, r => {

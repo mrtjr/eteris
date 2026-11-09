@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -11,10 +13,10 @@ namespace Eteris.Browser.Vault;
 // uma linha ao largar o botão; o teclado (↑ ↓ Enter) chega pela janela. Nada aqui recebe o foco.
 public partial class SuggestionList : UserControl
 {
-    private readonly List<(SuggestionRow Row, Border Element)> _rows = [];
+    private readonly List<(SuggestionRow Row, SuggestionRowElement Element)> _rows = [];
     private Point? _lastMouse;
     // A linha onde o botão do rato desceu e quando (UTC): só um clique que começa e acaba na mesma linha escolhe.
-    private (Border Element, DateTime At)? _pressed;
+    private (SuggestionRowElement Element, DateTime At)? _pressed;
 
     public SuggestionList()
     {
@@ -72,7 +74,26 @@ public partial class SuggestionList : UserControl
             _rows.Add((rows[i], element));
             Rows.Children.Add(element);
         }
-        Select(selected);
+        Select(selected, announce: false);
+        // O foco do teclado fica no campo da página: o leitor de ecrã sabe da lista por um anúncio.
+        Announce(selected >= 0 && selected < rows.Count ? Announcement(rows[selected], selected, rows.Count) : Opening(Heading, rows.Count));
+    }
+
+    // O que o leitor de ecrã diz ao abrir a lista e ao mudar de linha (puro).
+    public static string Opening(string heading, int count)
+        => $"{heading}: {(count == 1 ? "1 sugestão" : $"{count} sugestões")}. Seta para baixo para escolher, Enter para preencher.";
+
+    public static string Announcement(SuggestionRow row, int index, int count)
+        => (row.Detail.Length > 0 ? $"{row.Title}, {row.Detail}" : row.Title) + $", {index + 1} de {count}";
+
+    private void Announce(string text)
+    {
+        try
+        {
+            UIElementAutomationPeer.CreatePeerForElement(this)?.RaiseNotificationEvent(AutomationNotificationKind.ItemAdded,
+                AutomationNotificationProcessing.ImportantMostRecent, text, "eteris-sugestoes");
+        }
+        catch (InvalidOperationException) { }
     }
 
     // ↑ e ↓, com volta.
@@ -82,17 +103,34 @@ public partial class SuggestionList : UserControl
         Select(Selected < 0 ? (delta > 0 ? 0 : _rows.Count - 1) : ((Selected + delta) % _rows.Count + _rows.Count) % _rows.Count);
     }
 
-    public void Select(int index)
+    public void Select(int index) => Select(index, announce: true);
+
+    private void Select(int index, bool announce)
     {
+        var before = Selected;
         Selected = index >= 0 && index < _rows.Count ? index : -1;
         for (var i = 0; i < _rows.Count; i++)
         {
             _rows[i].Element.Background = i == Selected ? (Brush)FindResource("SelectedBrush") : Brushes.Transparent;
+            _rows[i].Element.IsChosen = i == Selected;
             AutomationProperties.SetItemStatus(_rows[i].Element, i == Selected ? "escolhida" : string.Empty);
         }
+        if (!announce || Selected < 0 || Selected == before) return;
+        if (UIElementAutomationPeer.FromElement(_rows[Selected].Element) is { } peer)
+            peer.RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
+        Announce(Announcement(_rows[Selected].Row, Selected, _rows.Count));
     }
 
-    private Border Build(SuggestionRow row, int index, int count)
+    protected override AutomationPeer OnCreateAutomationPeer() => new ListPeer(this);
+
+    // A lista é uma «lista» para o leitor de ecrã (como a do Chrome), com o nome do cabeçalho.
+    private sealed class ListPeer(SuggestionList owner) : UserControlAutomationPeer(owner)
+    {
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.List;
+        protected override string GetClassNameCore() => "SugestoesDoCofre";
+    }
+
+    private SuggestionRowElement Build(SuggestionRow row, int index, int count)
     {
         var initial = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         initial.Children.Add(new Ellipse { Fill = (Brush)FindResource(row.Insecure ? "DangerBrush" : "IrisBrush"), Opacity = 0.18 });
@@ -121,7 +159,7 @@ public partial class SuggestionList : UserControl
         Grid.SetColumn(text, 1);
         grid.Children.Add(initial);
         grid.Children.Add(text);
-        var element = new Border { Padding = new Thickness(8, 6, 10, 6), CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Cursor = Cursors.Hand, Child = grid };
+        var element = new SuggestionRowElement { Padding = new Thickness(8, 6, 10, 6), CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Cursor = Cursors.Hand, Child = grid };
         AutomationProperties.SetName(element, $"{row.Title}, {row.Detail}");
         AutomationProperties.SetPositionInSet(element, index + 1);
         AutomationProperties.SetSizeOfSet(element, count);
@@ -158,9 +196,53 @@ public partial class SuggestionList : UserControl
         catch (InvalidOperationException) { return null; }
     }
 
+    internal static string InitialOf(SuggestionRow row) => Initial(row);
+
     private static string Initial(SuggestionRow row)
     {
         var source = row.Title == VaultFillPolicy.NoUsername ? row.Detail : row.Title;
         return source.Length > 0 ? source[..1].ToUpperInvariant() : "?";
+    }
+}
+
+// Uma linha da lista para o leitor de ecrã: um «item de lista» com o nome, a posição «n de N» e se está escolhida
+// (SelectionItem). Um Border simples não tem AutomationPeer e nada disto chegava à UIA.
+public sealed class SuggestionRowElement : Border
+{
+    public bool IsChosen
+    {
+        get => _chosen;
+        set
+        {
+            if (_chosen == value) return;
+            _chosen = value;
+            if (UIElementAutomationPeer.FromElement(this) is { } peer)
+                peer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, !value, value);
+        }
+    }
+
+    private bool _chosen;
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new RowPeer(this);
+
+    private sealed class RowPeer(SuggestionRowElement owner) : FrameworkElementAutomationPeer(owner), ISelectionItemProvider
+    {
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.ListItem;
+        protected override string GetClassNameCore() => "SugestaoDoCofre";
+        protected override bool IsControlElementCore() => true;
+        protected override bool IsContentElementCore() => true;
+
+        public override object GetPattern(PatternInterface patternInterface)
+            => patternInterface == PatternInterface.SelectionItem ? this : base.GetPattern(patternInterface);
+
+        public bool IsSelected => owner.IsChosen;
+
+        public IRawElementProviderSimple? SelectionContainer
+            => owner.Parent is UIElement parent && CreatePeerForElement(parent) is { } container ? ProviderFromPeer(container) : null;
+
+        // A escolha faz-se com as setas (no campo da página) ou com o rato: o leitor de ecrã só a lê.
+        public void Select() { }
+        public void AddToSelection() { }
+        public void RemoveFromSelection() { }
     }
 }

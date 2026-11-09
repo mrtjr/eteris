@@ -13,7 +13,7 @@ public sealed partial class VaultRoutes
 
     private async Task<VaultReply> AutofillAsync(VaultRequest r)
     {
-        if (r.IsPrivate) return r.Path == "/" ? VaultReply.Html(PrivatePage(PrivateMessage)) : VaultReply.Refused;
+        if (r.IsPrivate) return r.Path == "/" ? VaultReply.Html(PrivatePage(PrivateMessage, r.Host)) : VaultReply.Refused;
         if (r.Path == "/") return VaultReply.Html(Browser.AutofillPage.Render(AutofillData()));
         if (!r.Authorized) return VaultReply.Refused;
         var collection = r.Q("c") switch

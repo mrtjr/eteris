@@ -118,5 +118,11 @@ public static class SavePolicy
             : offer.Kind == SaveOfferKind.Update ? $"Atualizar a palavra-passe de {host}?" : $"Guardar a palavra-passe de {host}?";
     }
 
+    // A dica do ícone de chave: segue a oferta (guardar ou atualizar).
+    public static string KeyTip(SaveOffer offer) => offer.Kind == SaveOfferKind.Update ? "Atualizar a palavra-passe…" : "Guardar a palavra-passe…";
+
+    // O que o leitor de ecrã diz quando a bolha aparece sem levar o foco (a página continua com o teclado).
+    public static string Announcement(SaveOffer offer) => Question(offer) + " F6 para responder.";
+
     public static bool KeepsOfferAcrossNavigation(TimeSpan sinceOffer) => sinceOffer <= RedirectGrace;
 }

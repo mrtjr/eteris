@@ -566,16 +566,30 @@ public partial class MainWindow
             if (AutofillPolicy.AllowedOn(FillCategory.Card, origin)) fill(sub);
             else sub.Item("\uE72E", "Só em ligações seguras (https)", () => { }, enabled: false);
         }
-        menu.Submenu("\uE8D7", "Palavra-passe", sub => FillWithLogins(sub, f));
-        menu.Submenu("\uE77B", "Contacto", sub => Rows(sub, VaultCollection.Contacts, FillCategory.Contact));
-        menu.Submenu("\uE8C7", "Cartão", sub => Secure(sub, s =>
+        menu.Submenu("\uE8D7", "Palavra-passe", Guarded(sub => FillWithLogins(sub, f)));
+        menu.Submenu("\uE77B", "Contacto", Guarded(sub => Rows(sub, VaultCollection.Contacts, FillCategory.Contact)));
+        menu.Submenu("\uE8C7", "Cartão", Guarded(sub => Secure(sub, s =>
         {
             Rows(s, VaultCollection.Cards, FillCategory.Card);
             Rows(s, VaultCollection.Ibans, FillCategory.Iban);
-        }));
-        menu.Submenu("\uE779", "Documento", sub => Secure(sub, s => Rows(s, VaultCollection.IdDocs, FillCategory.Document)));
-        menu.Submenu("\uE804", "Viagem", sub => Rows(sub, VaultCollection.Travel, FillCategory.Travel));
+        })));
+        menu.Submenu("\uE779", "Documento", Guarded(sub => Secure(sub, s => Rows(s, VaultCollection.IdDocs, FillCategory.Document))));
+        // «Preencher automaticamente viagens» (eteris://autofill): desligado, a entrada sai do menu.
+        if (Data.Settings.Current.AutofillTravel)
+            menu.Submenu("\uE804", "Viagem", Guarded(sub => Rows(sub, VaultCollection.Travel, FillCategory.Travel)));
     }
+
+    // O submenu lê o cofre quando abre: um cofre que não abre neste computador (chave em falta, DPAPI, base de dados
+    // ocupada) dá uma linha desativada e um aviso, em vez de uma exceção num tratador do WPF (que fechava o Éteris).
+    private Action<DarkMenu> Guarded(Action<DarkMenu> fill) => sub =>
+    {
+        try { fill(sub); }
+        catch (Exception e) when (VaultSyncProfile.IsVaultFailure(e))
+        {
+            sub.Item("\uE783", "O cofre não abre neste computador", () => { }, enabled: false);
+            ShowToast(e is VaultUnavailableException ? e.Message : "O cofre não abre neste computador.");
+        }
+    };
 
     // As palavras-passe deste site primeiro; as de outros sites (até 15) pedem confirmação com os dois nomes.
     private void FillWithLogins(DarkMenu sub, VaultContextField f)
@@ -809,8 +823,24 @@ public partial class MainWindow
         }
         _vaultOffers[tab] = (offer, DateTime.UtcNow);
         HookSaveBubble();
-        if (ReferenceEquals(tab, Tabs.Active)) ShowSaveBubble(tab);
+        // Aparece sem levar o teclado (a página nova continua com ele, como no Chrome): o leitor de ecrã anuncia-a e o
+        // F6 ou o ícone de chave levam o teclado para ela.
+        if (ReferenceEquals(tab, Tabs.Active))
+        {
+            ShowSaveBubble(tab);
+            _saveBubble?.Announce(SavePolicy.Announcement(offer));
+        }
         UpdatePasswordKey();
+    }
+
+    // F6 com a bolha à vista e o teclado fora dela: o teclado vai para a bolha (o F6 seguinte vai para a barra de
+    // endereço). true = foi para a bolha.
+    private bool FocusSaveBubble()
+    {
+        if (_saveBubble is not { Visibility: Visibility.Visible } bubble || bubble.IsKeyboardFocusWithin) return false;
+        if (_overlay is { IsVisible: true } overlay && !overlay.IsActive) overlay.Activate();
+        bubble.FocusFirst();
+        return true;
     }
 
     private void ShowSaveBubble(BrowserTab tab)
@@ -875,7 +905,10 @@ public partial class MainWindow
         try
         {
             var vault = VaultService.Profile;
-            var old = offer.ExistingId is { } id ? vault.GetLogin(id) : null;
+            // O utilizador corrigido na bolha para um que já existe neste site: atualiza esse (como o Chrome), em vez de
+            // dar a outro item o mesmo site e utilizador.
+            var old = vault.FindLogin(offer.Origin, username) is { } same ? vault.GetLogin(same)
+                : offer.ExistingId is { } id ? vault.GetLogin(id) : null;
             vault.SaveLogin(old is not null
                 ? old with { Username = username, Password = offer.Password }
                 : new LoginItem(string.Empty, offer.Origin, username, offer.Password, null, default, default, null, null, false, null));
@@ -921,10 +954,10 @@ public partial class MainWindow
             UpdatePasswordKey();
         };
         SizeChanged += (_, _) => PlaceSaveBubble();
-        // Esc com a bolha aberta (o foco na janela ou na bolha) é «Agora não».
+        // Esc com o teclado na bolha é «Agora não»; noutro sítio (a barra de endereço, um painel) o Esc é de quem o tem.
         void OnKey(object sender, KeyEventArgs e)
         {
-            if (e.Key != Key.Escape || _saveBubble is not { Visibility: Visibility.Visible }) return;
+            if (e.Key != Key.Escape || _saveBubble is not { Visibility: Visibility.Visible, IsKeyboardFocusWithin: true }) return;
             e.Handled = true;
             CloseSaveBubble();
         }
@@ -934,13 +967,25 @@ public partial class MainWindow
 
     // O ícone de chave na barra de endereço: a aba à vista tem uma oferta por responder.
     private void UpdatePasswordKey()
-        => PasswordKeyButton.Visibility = Tabs.Active is { } tab && _vaultOffers.ContainsKey(tab) ? Visibility.Visible : Visibility.Collapsed;
+    {
+        var offer = Tabs.Active is { } tab && _vaultOffers.TryGetValue(tab, out var entry) ? entry.Offer : null;
+        PasswordKeyButton.Visibility = offer is not null ? Visibility.Visible : Visibility.Collapsed;
+        if (offer is null) return;
+        // A dica e o nome seguem a oferta («Guardar…» ou «Atualizar…»).
+        PasswordKeyButton.ToolTip = SavePolicy.KeyTip(offer);
+        System.Windows.Automation.AutomationProperties.SetName(PasswordKeyButton, SavePolicy.KeyTip(offer).TrimEnd('…'));
+    }
 
+    // O ícone de chave abre a bolha e leva o teclado para ela (não a fecha: fecha-se com «Agora não», × ou Esc).
     private void PasswordKey_Click(object sender, RoutedEventArgs e)
     {
         if (Tabs.Active is not { } tab) return;
-        if (_saveBubble is { Visibility: Visibility.Visible }) CloseSaveBubble();
-        else ShowSaveBubble(tab);
+        ShowSaveBubble(tab);
+        if (_saveBubble is not null)
+        {
+            if (_overlay is { IsVisible: true } overlay && !overlay.IsActive) overlay.Activate();
+            _saveBubble.FocusFirst();
+        }
     }
 }
 

@@ -213,6 +213,39 @@ public class VaultMenuTests
         return count;
     }
 
+    // Revisão (leitor de ecrã): cada linha da lista de sugestões é um «item de lista» com nome, posição e SelectionItem;
+    // a lista anuncia-se ao abrir e a linha escolhida a cada ↑/↓; a bolha de guardar é um painel com a pergunta.
+    [Fact]
+    public void Automation_SuggestionRows_AndTheSaveBubble()
+    {
+        var (type, selectedBefore, selectedAfter, name) = OnSta(() =>
+        {
+            var row = new SuggestionRowElement();
+            AutomationProperties.SetName(row, "ana@exemplo.test, conta.exemplo.test");
+            var peer = UIElementAutomationPeer.CreatePeerForElement(row);
+            var pattern = (ISelectionItemProvider)peer.GetPattern(PatternInterface.SelectionItem);
+            var before = pattern.IsSelected;
+            row.IsChosen = true;
+            return (peer.GetAutomationControlType(), before, pattern.IsSelected, peer.GetName());
+        });
+        Assert.Equal(AutomationControlType.ListItem, type);
+        Assert.False(selectedBefore);
+        Assert.True(selectedAfter);
+        Assert.Equal("ana@exemplo.test, conta.exemplo.test", name);
+        var r = new SuggestionRow("1", "ana@exemplo.test", "conta.exemplo.test", false, OriginMatch.Exact);
+        Assert.Equal("ana@exemplo.test, conta.exemplo.test, 2 de 3", SuggestionList.Announcement(r, 1, 3));
+        Assert.StartsWith("Palavras-passe guardadas: 3 sugestões.", SuggestionList.Opening("Palavras-passe guardadas", 3));
+        Assert.StartsWith("Cartões guardados: 1 sugestão.", SuggestionList.Opening("Cartões guardados", 1));
+
+        var update = new SaveOffer(SaveOfferKind.Update, "https://conta.exemplo.test", "ana", "x", "id1");
+        var save = new SaveOffer(SaveOfferKind.Save, "https://conta.exemplo.test", "ana", "x", null);
+        Assert.Equal("Atualizar a palavra-passe…", SavePolicy.KeyTip(update));
+        Assert.Equal("Guardar a palavra-passe…", SavePolicy.KeyTip(save));
+        Assert.Equal("Guardar a palavra-passe de conta.exemplo.test? F6 para responder.", SavePolicy.Announcement(save));
+        var window = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.xaml.cs"));
+        Assert.Contains("if (!FocusSaveBubble()) FocusOmnibox();", window);
+    }
+
     private static T OnSta<T>(Func<T> work)
     {
         T result = default!;
