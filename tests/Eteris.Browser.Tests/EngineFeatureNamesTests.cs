@@ -12,20 +12,69 @@ namespace Eteris.Browser.Tests;
 // estado por omissão (0 ou 1).
 public class EngineFeatureNamesTests
 {
-    private static readonly Lazy<HashSet<string>> Present = new(Scan);
+    // Cada nome encontrado como base::Feature, com o(s) estado(s) por omissão lido(s) a seguir ao ponteiro.
+    private static readonly Lazy<Dictionary<string, HashSet<int>>> Scanned = new(Scan);
+    private static readonly Lazy<HashSet<string>> Present = new(() => Scanned.Value.Keys.ToHashSet(StringComparer.Ordinal));
 
     public static IEnumerable<object[]> Names()
         => EngineHardening.AdApis.Concat(EngineHardening.Partitioning).Concat(EngineHardening.LocalNetworkChecks)
             .Concat(EngineHardening.Identity).Concat(EngineHardening.NoListeningSockets).Concat(EngineHardening.NoGoogleAtStartup)
             .Select(f => f.Feature).Append("HttpsUpgrades").Append(NetworkSandbox.Feature)
-            // As de desempenho levam parâmetros («Nome:param/valor»): procura-se só o nome.
-            .Concat(EnginePerformance.Enabled.Select(f => EnginePerformance.FeatureName(f.Feature)))
+            // As de desempenho levam parâmetros («Nome:param/valor»): procura-se só o nome. As «V8Flag_x» não são
+            // base::Feature (o gin passa-as ao V8 como --x): têm o seu teste, mais abaixo.
+            .Concat(EnginePerformance.Enabled.Select(f => EnginePerformance.FeatureName(f.Feature))
+                .Where(n => !n.StartsWith(EnginePerformance.V8FlagPrefix, StringComparison.Ordinal)))
             .Distinct().Select(n => new object[] { n });
 
     [Theory]
     [MemberData(nameof(Names))]
     public void EverySwitchedFeature_IsABaseFeatureOfTheEngine(string name)
         => Assert.True(Present.Value.Contains(name), $"«{name}» não é uma base::Feature do libcef.dll: o Chromium ignorava-o");
+
+    // Fase 2 do plano de desempenho: as funcionalidades confirmadas na árvore do Chromium 156 (cc/base/features.cc,
+    // components/viz/common/features.cc, external_begin_frame_source_win.cc, gpu/config/gpu_finch_features.cc,
+    // third_party/blink/common/features.cc, spare_render_process_host_manager_impl.cc, partition_alloc_features.cc) têm de
+    // estar também no binário em uso, e com o estado por omissão que o plano conta (todas desligadas, salvo a cache do
+    // Graphite, ligada no Windows: é por isso que o Éteris a desliga sem o e3).
+    [Theory]
+    [InlineData("ThrottleRepeatedNoDamageFrames", 0)]
+    [InlineData("ExternalBeginFrameSourceWinUsesRunOrPostTask", 0)]
+    [InlineData("SingleVideoFrameRateThrottling", 0)]
+    [InlineData("GpuPersistentCache", 0)]
+    [InlineData("GpuPersistentCacheMetadata", 0)]
+    [InlineData("DelegatedCompositing", 0)]
+    [InlineData("SkiaGraphite", 0)]
+    [InlineData("SkiaGraphiteUsePersistentCache", 1)]
+    [InlineData("WebGLDiscardBackBuffer", 0)]
+    [InlineData("OffscreenCanvasPropagateVisibility", 0)]
+    [InlineData("KillSpareRenderOnMemoryPressure", 0)]
+    [InlineData("SpareRPHUseCriticalMemoryPressure", 0)]
+    [InlineData("PartitionAllocSortActiveSlotSpans", 0)]
+    public void PhaseTwoFeatures_HaveTheDefaultThePlanCountsOn(string name, int state)
+    {
+        Assert.Contains(EnginePerformance.Enabled, f => EnginePerformance.FeatureName(f.Feature) == name);
+        Assert.True(Scanned.Value.TryGetValue(name, out var found), $"«{name}» não é uma base::Feature do libcef.dll");
+        Assert.Contains(state, found);
+    }
+
+    // «V8Flag_x»: a flag «x» do V8 tem de existir no binário (o V8 guarda o nome de cada flag numa tabela de cadeias);
+    // uma flag que não existe era ignorada (o V8 avisa, mas na consola de um processo sem consola).
+    public static IEnumerable<object[]> V8Flags()
+        => EnginePerformance.Enabled.Select(f => EnginePerformance.FeatureName(f.Feature))
+            .Where(n => n.StartsWith(EnginePerformance.V8FlagPrefix, StringComparison.Ordinal))
+            .Select(n => new object[] { n[EnginePerformance.V8FlagPrefix.Length..] });
+
+    [Theory]
+    [MemberData(nameof(V8Flags))]
+    public void EveryV8Flag_IsAFlagOfTheEngine(string flag)
+    {
+        var image = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "libcef.dll")).AsSpan();
+        var bytes = Encoding.ASCII.GetBytes(flag + "\0");
+        var found = false;
+        for (int from = 0, at; !found && (at = image[from..].IndexOf(bytes)) >= 0; from += at + 1)
+            found = from + at == 0 || image[from + at - 1] == 0;
+        Assert.True(found, $"«{flag}» não é uma flag do V8 no libcef.dll: o V8 ignorava-a");
+    }
 
     // O próprio teste distingue: estes nomes só existem como funcionalidades do Blink (ou numa tabela de nomes).
     [Theory]
@@ -34,7 +83,7 @@ public class EngineFeatureNamesTests
     [InlineData("SharedStorageAPI")]
     public void DeadNames_AreNotFound(string name) => Assert.DoesNotContain(name, Present.Value);
 
-    private static HashSet<string> Scan()
+    private static Dictionary<string, HashSet<int>> Scan()
     {
         var names = Names().Select(n => (string)n[0]).Concat(["PartitionedCookies", "AttributionReporting", "SharedStorageAPI"]).ToList();
         var path = Path.Combine(AppContext.BaseDirectory, "libcef.dll");
@@ -79,13 +128,15 @@ public class EngineFeatureNamesTests
             }
         }
         // Uma só passagem pelos ponteiros alinhados: o nome seguido do estado por omissão (0 ou 1).
-        var found = new HashSet<string>(StringComparer.Ordinal);
+        var found = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
         for (var i = 0; i + 12 <= image.Length; i += 8)
         {
             var value = BitConverter.ToUInt64(image, i);
             if (value < imageBase || !wanted.TryGetValue(value, out var name)) continue;
             var state = BitConverter.ToInt32(image, i + 8);
-            if (state is 0 or 1) found.Add(name);
+            if (state is not (0 or 1)) continue;
+            if (!found.TryGetValue(name, out var states)) found[name] = states = [];
+            states.Add(state);
         }
         return found;
     }

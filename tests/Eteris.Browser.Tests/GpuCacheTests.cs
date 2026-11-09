@@ -29,11 +29,12 @@ public class GpuCacheTests
     }
 
     // As pastas verificadas no Chromium 156: globais (chrome_content_browser_client.cc) e por partição
-    // (gpu_disk_cache_type.cc). Uma que falte ficava no disco depois de «Apagar ao fechar».
+    // (gpu_disk_cache_type.cc), mais a cache persistente da GPU (E14.4 e Graphite). Uma que falte ficava no disco depois
+    // de «Apagar ao fechar».
     [Fact]
     public void Folders_AreEveryGpuCacheOfTheEngine()
     {
-        Assert.Equal(["ShaderCache", "GrShaderCache", "GraphiteDawnCache"], ProfileCleanup.GlobalGpuCaches);
+        Assert.Equal(["ShaderCache", "GrShaderCache", "GraphiteDawnCache", "GPUPersistentCache"], ProfileCleanup.GlobalGpuCaches);
         Assert.Equal(["GPUCache", "DawnWebGPUCache", "DawnGraphiteCache"], ProfileCleanup.PartitionGpuCaches);
     }
 
@@ -49,7 +50,7 @@ public class GpuCacheTests
             Directory.CreateDirectory(Path.Combine(root, "Default", "Local Storage"));
             File.WriteAllText(Path.Combine(root, "Local State"), "{}");
 
-            Assert.Equal(6, ProfileCleanup.RemoveGpuCaches(root));
+            Assert.Equal(7, ProfileCleanup.RemoveGpuCaches(root));
             Assert.All(ProfileCleanup.GlobalGpuCaches, f => Assert.False(Directory.Exists(Path.Combine(root, f))));
             Assert.All(ProfileCleanup.PartitionGpuCaches, f => Assert.False(Directory.Exists(Path.Combine(root, "Default", f))));
             Assert.True(Directory.Exists(Path.Combine(root, "Default", "Cache")));

@@ -45,7 +45,7 @@ precisa também de `numpy` e `Pillow`). Os navegadores de referência nos sítio
 | `servidor.py` | servidor local das páginas (127.0.0.1) e registo dos sinais `/p/…` e `/b?…` | `python -m http.server`, `abas2\srv.py` |
 | `paginas\` | páginas de teste (ver abaixo) | `perf-pages\`, `abas\pages\` |
 | `medir.ps1` | uma passagem da bateria num braço (B-ARR, B-MEM, B-CPU, B-ENTRADA, B-CARGA) | `perf-tools\measure.ps1`, `breakdown.ps1`, `arranque-tools\final-mem.ps1`, `memab.ps1` |
-| `ronda.ps1` + `bracos.exemplo.psd1`, `bracos.aa.exemplo.psd1` | várias rondas em vários braços, ordem rodada (quadrado latino) | — (era à mão) |
+| `ronda.ps1` + `bracos.exemplo.psd1`, `bracos.aa.exemplo.psd1`, `bracos.fase2.exemplo.psd1` | várias rondas em vários braços, ordem rodada (quadrado latino); o da fase 2 tem um braço por funcionalidade do motor | — (era à mão) |
 | `estatistica.py` | pares por ronda: medianas, razão, mediana das diferenças com IC 95% por bootstrap, σd e pares precisos | — |
 | `arranque-ab.ps1` + `fases.py` | A/B do arranque intercalado lançamento a lançamento, com as fases do rastro | `arranque-tools\ab.ps1`, `final-startup.ps1`, `phases.py` |
 | `filhos.ps1` | hora de criação de cada processo filho, vista de fora (para as referências) | `arranque-tools\children.ps1` |
@@ -96,10 +96,10 @@ Os nomes `*.eteris-teste.example` vão para 127.0.0.1: no Éteris por `ETERIS_TE
 | `ETERIS_TRACE_STARTUP=1` ou `=<caminho>` | rastro das fases do arranque e da memória; com as linhas `filho` (hora de criação de cada processo filho; o 1.º renderer = `renderer.processo`, D8) | `Infrastructure/StartupTrace.cs`, `StartupTrace.Children.cs` |
 | `ETERIS_TRACE_GC_AT=20,60` | GC completo antes das fotografias da memória desses segundos | idem |
 | `ETERIS_TEST_PRESSAO=1` | pouca memória simulada para o sono por pressão (E13, com `ETERIS_TEST_AJUSTES=e13`): uma aba adormece a cada 15 s, a usada há mais tempo; a pressão real (~25 GB reservados) só com a decisão D-16 | `Infrastructure/PerfDiagnostics.cs`, `Tabs/MemoryPressure.cs` |
-| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`) | liga e desliga os ajustes de desempenho da fase 1 (braços A/B com o mesmo binário); o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, e `--eteris-sem-ajustes` desliga todos (também numa instalação: é o recuo) | `Infrastructure/PerfTuning.cs` |
+| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`, `motor`, `e14`) | liga e desliga os ajustes de desempenho das fases 1 e 2 (braços A/B com o mesmo binário); `motor` são os do motor (E7, E14, E15) e `e14` as entradas e14.1…e14.6; o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, `--eteris-sem-ajustes-motor` desliga só os do motor e `--eteris-sem-ajustes` desliga todos (os dois valem também numa instalação: são o recuo) | `Infrastructure/PerfTuning.cs` |
 
-`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`, `ETERIS_TEST_HOST_RULES`, `ETERIS_TEST_PRESSAO` e `ETERIS_TEST_AJUSTES` são inertes numa
-instalação. O contador
+`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`, `ETERIS_TEST_HOST_RULES`, `ETERIS_TEST_PRESSAO` e `ETERIS_TEST_AJUSTES`
+são inertes numa instalação. O contador
 `wpf.lotes` ouve o `MediaContext.CommittingBatch` interno do WPF, nunca o `CompositionTarget.Rendering` (um ouvinte
 nesse evento obriga o WPF a desenhar todos os fotogramas e estragaria a prova). Se uma versão do WPF não tiver o evento,
 o ficheiro diz `wpf.lotes=indisponivel`.
@@ -240,6 +240,41 @@ no popup do Escudo (a decisão é pelo site de topo). Brave com os Escudos ligad
 
 Resultados em `resultados\abas\<etiqueta>.total.txt` (linha `TOTAL`: capturas, fotogramas errados por tipo, latência da
 tecla à página à vista). Capturas em que a janela perdeu o primeiro plano são descartadas.
+
+## Fase 2 — funcionalidades do motor (E14, E15)
+
+A nossa CEF compila com `is_official_build`, que força `disable_fieldtrial_testing_config`: tudo o que o Chrome estável
+liga por variações (Finch) fica desligado no Éteris. A fase 2 liga-as **uma de cada vez**, sem recompilar, pela lista
+`Shields/EnginePerformance.cs` (o mesmo `Merge` das promessas de `EngineHardening.cs`; o código tem, para cada uma, o
+ficheiro e a linha do Chromium 156 e o estudo da `fieldtrial_testing_config.json` de onde vêm os parâmetros). **Todas
+estão desligadas por omissão** até ao seu A/B: mudam a configuração do motor antes da 1.ª página (R-2), e as de GPU podem
+fazer cair o processo da GPU antes dela, o que hoje conta como falha do sandbox (D-18; o gancho `PerfTuning.Suspend` é o
+1.º degrau, por ligar ao `StartupGuard` quando o sandbox for fundido). Nada que mude a impressão digital liga por
+omissão: o Graphite (e14.6) espera pela D-3 e, ligado, fica ✘ em `eteris://privacy/` («As afinações de desempenho não
+mudam o que os sites medem»).
+
+Os nomes verificam-se no `libcef.dll` em uso (`EngineFeatureNamesTests`: cada nome é uma `base::Feature`, com o estado por
+omissão que o plano conta; as `V8Flag_x` são flags do V8 e procura-se a flag). Cada uma mede-se com um braço próprio
+contra L1, por exemplo `@{ Nome = 'L1-e14.1'; Navegador = 'eteris'; Exe = '...'; Ambiente = @('ETERIS_TEST_AJUSTES=e14.1') }`,
+e confirma-se em `chrome://gpu` / `chrome://version` (com `ETERIS_TEST_DEVTOOLS_PORT`) que o motor a recebeu.
+
+| Ajuste | Funcionalidade | O que faz | Risco | Como medir (prova principal primeiro) |
+|---|---|---|---|---|
+| `e14.1` | `ThrottleRepeatedNoDamageFrames` | depois de 360 fotogramas seguidos sem dano, o cc espaça os BeginMainFrame (×2, e ×2 outra vez 60 depois) | a cadência do rAF dessa página desce (como no Chrome com o estudo) | `dano-zero` (deve cair muito no renderer); `fps`, `scroll` sem mudança |
+| `e14.2` | `ExternalBeginFrameSourceWinUsesRunOrPostTask` | o vsync corre o BeginFrame logo, sem `PostTask` | baixo: ordem das tarefas do Viz | **latência** (`entrada`, «quadro»), não a CPU (~0, revisão R1) |
+| `e14.3` | `SingleVideoFrameRateThrottling` | um vídeo de 30 fps sozinho → composição a 30 Hz | vídeos de cadência irregular; volta a 60 Hz com outro dano | B-VID 30 fps: CPU da GPU e do renderer; `fps` sem mudança |
+| `e14.4` | `GpuPersistentCache` + `GpuPersistentCacheMetadata` | cache persistente dos shaders (pasta `GPUPersistentCache`) | dado local, como o E3; **só liga com o e3** (a fábrica dos ficheiros não olha para o `disable-gpu-shader-disk-cache`) | arranque e 1.º segundo de `webgl`/`fps` com a cache quente; `e3-cache-gpu.ps1` para as pastas |
+| `e14.5` | `DelegatedCompositing` (`limit_to_ui`, o modo por omissão no Windows) | as superfícies vão como camadas DirectComposition | espera-se 0 ou pior (a raiz de cada aba só tem a página); miniaturas e T1/T6 | B-CPU, `gpu3d` do processo da GPU, `cpu.dwm`; opcional, depois das outras |
+| `e14.6` | `SkiaGraphite` (`dawn_skip_validation=true`, `dawn_backend_validation=false`) | o Graphite (Dawn/D3D11) desenha em vez do Ganesh; nas placas Intel decide o `SkiaGraphiteWinIntel`, que não se liga | **muda o canvas** (D-3, workflow do farbling); quedas da GPU por controlador. Sem o e3 o Éteris desliga o `SkiaGraphiteUsePersistentCache` (nada de pipelines no disco). O `dawn_use_persistent_cache` do estudo já não é lido na 156 | por último: B-CPU completo, MotionMark, `chrome://gpu` («Graphite»), WebGL, impressão |
+| `e15.1` | `WebGLDiscardBackBuffer` + `OffscreenCanvasPropagateVisibility` | o WebGL escondido larga o back buffer | 1 fotograma em branco ao voltar à aba (T1) | `webgl.html` escondida: `\GPU Process Memory(*)` (Dedicated, Shared) e PMF da GPU; −≥ 4 MB |
+| `e15.2` | `KillSpareRenderOnMemoryPressure` | com pressão de memória o renderer de reserva fecha | a navegação seguinte arranca um renderer | só com pressão real (D-16); sem ela, ausência de regressão (D9, 2.ª aba) |
+| `e15.3` | `SpareRPHUseCriticalMemoryPressure` | o renderer de reserva só cede à pressão crítica | o mesmo, ao contrário | idem |
+| `e15.4` | `PartitionAllocSortActiveSlotSpans` | o PartitionAlloc ordena os blocos ativos ao purgar (o `PartitionAllocMemoryReclaimer` do plano já está ligado na 156; os braços do estudo só diferem nisto) | CPU a mais em cada purga | D9 (PartitionAlloc por renderer) em C3/C5; só se o D9 mostrar peso |
+| `e15.5` | `V8Flag_sqrt_allocation_limits` | os limites do heap do V8 crescem pela raiz quadrada (os fatores do estudo são os do código) | mais recolhas de lixo nas páginas grandes | D9 (V8 por renderer), Speedometer; só se o D9 mostrar peso |
+
+Critérios (plano): E14 entra se baixar a soma ≥ 0,5 p.p. sem regressão de fps, 0 fotogramas errados (T1/T6, miniaturas,
+ecrã dividido) e 0 falhas da GPU num dia de uso; E15 com −≥ 1 MB por renderer ou −≥ 4 MB de GPU por aba WebGL escondida.
+Cada uma recua tirando o ajuste (`--eteris-ajustes=-e14.1`), e todas com `--eteris-sem-ajustes-motor`.
 
 ## Resultados
 

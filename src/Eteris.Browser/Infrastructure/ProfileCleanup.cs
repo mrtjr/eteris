@@ -20,8 +20,9 @@ public static class ProfileCleanup
     // Caches da GPU no disco (ajuste e3, Infrastructure/PerfTuning.cs; lista verificada no Chromium 156). As globais, na
     // raiz dos dados (chrome_content_browser_client.cc): shaders do Skia, do compositor e do Graphite, de todas as
     // janelas, também da privada. As da partição, no perfil (gpu_disk_cache_type.cc): programas do WebGL e do WebGPU,
-    // não separados por site.
-    public static readonly string[] GlobalGpuCaches = ["ShaderCache", "GrShaderCache", "GraphiteDawnCache"];
+    // não separados por site. A GPUPersistentCache (chrome_content_browser_client.cc:5201-5206) só aparece com o e14.4 (a
+    // cache persistente dos shaders, que só liga com o e3) ou com o Graphite e o e3 (Shields/EnginePerformance.cs).
+    public static readonly string[] GlobalGpuCaches = ["ShaderCache", "GrShaderCache", "GraphiteDawnCache", "GPUPersistentCache"];
     public static readonly string[] PartitionGpuCaches = ["GPUCache", "DawnWebGPUCache", "DawnGraphiteCache"];
 
     private static volatile bool _gpuCachesAtExit;

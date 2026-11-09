@@ -90,6 +90,9 @@ public static class PrivacyPage
         var referrerKept = capped is { Kind: ReferrerCap.Kind.Origin, Value: "https://www.exemplo.pt/" } && sameSite.Kind == ReferrerCap.Kind.Keep;
         // Cache dos shaders da GPU no disco (ajuste e3 do plano de desempenho): ligada quando o motor arrancou sem o interruptor.
         var gpuCache = !s.EngineArgs.ContainsKey("disable-gpu-shader-disk-cache");
+        // Afinações de desempenho do motor (fase 2 do plano de desempenho): as que estão na linha de comandos em vigor.
+        var tuning = EnginePerformance.ActiveIn(s.EngineArgs).Where(f => !f.Disable).ToList();
+        var fingerprint = tuning.Where(f => f.ChangesFingerprint).ToList();
 
         return
         [
@@ -185,6 +188,15 @@ public static class PrivacyPage
                     ? "Os shaders da GPU ficam no disco para as páginas abrirem mais depressa, como no Chrome. Não são separados por site: apagam-se ao sair com «Apagar ao fechar», depois de apagar a cache em «Apagar dados» e depois de usar uma janela privada."
                     : "Os shaders da GPU não ficam no disco: o motor volta a prepará-los em cada sessão.",
                 true),
+            new("engine-tuning", "As afinações de desempenho não mudam o que os sites medem",
+                tuning.Count == 0
+                    ? "Opcional · nenhuma ligada: o motor corre com os valores do Chromium. O Chrome recebe afinações destas por variações da Google; o Éteris não fala com esse serviço."
+                    : fingerprint.Count == 0
+                        ? "Ligadas: " + string.Join("; ", tuning.Select(f => f.What)) + ". Nenhuma muda o resultado do canvas nem outro valor que identifique este computador."
+                        : "Ligadas: " + string.Join("; ", tuning.Select(f => f.What)) + ". Atenção: "
+                          + string.Join(", ", fingerprint.Select(f => EnginePerformance.FeatureName(f.Feature)))
+                          + " muda o desenho do canvas, e a impressão digital passa a ser a de um Chrome com o mesmo motor de desenho. Desliga-se com --eteris-sem-ajustes-motor.",
+                tuning.Count == 0 ? null : fingerprint.Count == 0),
         ];
     }
 

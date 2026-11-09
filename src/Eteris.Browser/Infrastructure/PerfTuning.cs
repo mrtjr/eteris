@@ -1,25 +1,34 @@
 namespace Eteris.Browser.Infrastructure;
 
-// Um ajuste de desempenho do plano da 0.2.14 (fase 1): o que muda, se está ligado por omissão e porquê não.
-//   Id               a referência da experiência no plano (e1, e3…), também o nome do interruptor;
+// Um ajuste de desempenho do plano da 0.2.14 (fases 1 e 2): o que muda, se está ligado por omissão e porquê não.
+//   Id               a referência da experiência no plano (e1, e3…, e14.1 para a 1.ª entrada do E14), também o nome do
+//                    interruptor;
 //   BeforeFirstPaint mexe no caminho antes da 1.ª página (regra R-2 do sandbox): fica desligado por omissão até a rede de
 //                    segurança saber desligar os ajustes antes do sandbox (D-18, gancho Suspend);
-//   Waits            a decisão do dono ou o diagnóstico de que depende (D-4, D4…); com ela, desligado por omissão.
-public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool BeforeFirstPaint = false, string? Waits = null);
+//   Waits            a decisão do dono ou o diagnóstico de que depende (D-4, D4…); com ela, desligado por omissão;
+//   Engine           muda a configuração do motor (Shields/EnginePerformance.cs): o grupo
+//                    «motor» e o --eteris-sem-ajustes-motor ligam-nos e desligam-nos todos de uma vez.
+public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool BeforeFirstPaint = false, string? Waits = null,
+                               bool Engine = false);
 
 // Interruptores dos ajustes de desempenho, para os desligar (ou ligar, nas medições) sem compilar de novo:
 //
 //   --eteris-sem-ajustes                  todos desligados (recuo; vale também numa instalação, por um atalho);
-//   --eteris-ajustes=e3,-e5               liga o e3 e desliga o e5 (também «tudo» e «nada»);
+//   --eteris-sem-ajustes-motor            só os do motor desligados (o grupo «motor»: E7, E14, E15), os outros como
+//                                         estiverem: o recuo de uma funcionalidade do motor que falhe, sem perder o resto;
+//   --eteris-ajustes=e3,-e5               liga o e3 e desliga o e5; também «tudo», «nada», «motor» (os do motor) e o
+//                                         número de uma experiência para as suas entradas («e14» = e14.1…e14.6);
 //   ETERIS_TEST_AJUSTES=e3,-e5            o mesmo, para os braços A/B das medições (build/perf); inerte numa instalação,
 //                                         como os outros ETERIS_TEST_* (Infrastructure/PerfDiagnostics.cs).
 //
-// O argumento ganha à variável, e o --eteris-sem-ajustes a tudo. O E2 (manifesto do Windows 10/11) não está aqui: é um
-// recurso do exe, fixo na compilação. Lê-se uma vez (a linha de comandos e uma variável do ambiente; nada no disco sem a
-// variável) e daí em diante é um campo.
+// O argumento ganha à variável, o --eteris-sem-ajustes-motor aos dois (nos do motor) e o --eteris-sem-ajustes a tudo. O
+// E2 (manifesto do Windows 10/11) não está aqui: é um recurso do exe, fixo na compilação. Lê-se uma vez (a linha de
+// comandos e uma variável do ambiente; nada no disco sem a variável) e daí em diante é um campo.
 public static class PerfTuning
 {
     public const string AllOffArgument = "--eteris-sem-ajustes";
+    public const string EngineOffArgument = "--eteris-sem-ajustes-motor";
+    public const string EngineGroup = "motor";
     public const string ArgumentPrefix = "--eteris-ajustes=";
     public const string TestVariable = "ETERIS_TEST_AJUSTES";
 
@@ -34,6 +43,19 @@ public static class PerfTuning
     public const string EngineThreadStartup = "e11";
     public const string ReadyNewTab = "e12";
     public const string SleepUnderPressure = "e13";
+    // Fase 2 (sem recompilar o motor): funcionalidades que o Chrome estável recebe por variações e a nossa CEF nunca liga
+    // (Shields/EnginePerformance.cs, com o que faz cada uma, o risco, a medição e a prova no Chromium 156).
+    public const string NoDamageThrottle = "e14.1";
+    public const string BeginFrameRunOrPost = "e14.2";
+    public const string SingleVideoThrottle = "e14.3";
+    public const string GpuPersistentCache = "e14.4";
+    public const string DelegatedCompositing = "e14.5";
+    public const string SkiaGraphite = "e14.6";
+    public const string HiddenWebGlBuffers = "e15.1";
+    public const string KillSpareOnPressure = "e15.2";
+    public const string SpareCriticalPressure = "e15.3";
+    public const string SortActiveSlotSpans = "e15.4";
+    public const string V8SqrtLimits = "e15.5";
 
     public static readonly IReadOnlyList<PerfTweak> Tweaks =
     [
@@ -45,7 +67,7 @@ public static class PerfTuning
         new(ReleaseGlance, "o Espreitar liberta o motor 60 s depois de fechar; os sites fixados escondidos na barra lateral adormecem como as abas (salvo «Manter acordado»)",
             OnByDefault: true),
         new(SmallBackForwardCache, "Voltar/Avançar instantâneo para as 3 últimas páginas de cada aba (o Chromium guarda 6): menos renderers vivos",
-            OnByDefault: false, BeforeFirstPaint: true, Waits: "D-5"),
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D-5", Engine: true),
         new(HideWhenUnseen, "a página à vista deixa de desenhar com a janela minimizada, noutra área de trabalho ou com a sessão bloqueada (nunca com som, multimédia, captura ou Picture-in-Picture)",
             OnByDefault: false, Waits: "D4"),
         new(UpdatesOnExitOnly, "as atualizações aplicam-se só ao sair do Éteris, nunca no arranque", OnByDefault: false,
@@ -58,6 +80,30 @@ public static class PerfTuning
             OnByDefault: false, Waits: "D-6"),
         new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
+        // Fase 2. Todas desligadas por omissão até ao seu A/B, uma de cada vez pela ordem do plano: mudam a configuração do
+        // motor, que entra antes da 1.ª página (R-2), e as de GPU podem fazer cair o processo da GPU antes dela (D-18).
+        new(NoDamageThrottle, "o motor abranda os fotogramas de uma página que pede animação sem mudar nada (depois de 360 seguidos)",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D3/D5", Engine: true),
+        new(BeginFrameRunOrPost, "o vsync do Windows começa o fotograma sem um salto de tarefa (mexe na latência; CPU ~0)",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D3/D5", Engine: true),
+        new(SingleVideoThrottle, "uma página só com um vídeo de 30 fps compõe a 30 Hz em vez de 60",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D3/D5", Engine: true),
+        new(GpuPersistentCache, "cache persistente dos shaders da GPU (só com o e3, a cache dos shaders no disco)",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D3/D5", Engine: true),
+        new(DelegatedCompositing, "composição delegada parcial (limit_to_ui); no Éteris espera-se 0 ou pior: opcional, depois das outras",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D3/D5", Engine: true),
+        new(SkiaGraphite, "o Skia Graphite (Dawn sobre D3D11) desenha as páginas em vez do Ganesh; muda o resultado do canvas, isto é, a impressão digital",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D-3", Engine: true),
+        new(HiddenWebGlBuffers, "o WebGL e o OffscreenCanvas das abas escondidas largam o back buffer na GPU",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
+        new(KillSpareOnPressure, "com pouca memória, o motor fecha o renderer de reserva",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
+        new(SpareCriticalPressure, "o renderer de reserva só se deixa de criar (ou se fecha) com pressão de memória crítica, não já com a moderada",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
+        new(SortActiveSlotSpans, "o PartitionAlloc também ordena os blocos ativos quando purga a memória",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
+        new(V8SqrtLimits, "os limites do heap do V8 crescem pela raiz quadrada do tamanho (menos memória nas páginas grandes)",
+            OnByDefault: false, BeforeFirstPaint: true, Waits: "D9", Engine: true),
     ];
 
     private static readonly Lazy<IReadOnlySet<string>> Resolved = new(()
@@ -79,6 +125,9 @@ public static class PerfTuning
 
     public static IReadOnlySet<string> Defaults { get; } = Tweaks.Where(t => t.OnByDefault).Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
 
+    // Os ajustes que mudam a configuração do motor (o grupo «motor»).
+    public static IReadOnlyList<string> EngineIds { get; } = Tweaks.Where(t => t.Engine).Select(t => t.Id).ToList();
+
     // Os ligados para esta linha de comandos e este valor da variável de teste (já nulo numa instalação).
     public static IReadOnlySet<string> Resolve(IEnumerable<string> args, string? testValue)
     {
@@ -88,6 +137,7 @@ public static class PerfTuning
         Apply(on, testValue);
         foreach (var arg in list.Where(a => a.Trim().StartsWith(ArgumentPrefix, StringComparison.OrdinalIgnoreCase)))
             Apply(on, arg.Trim()[ArgumentPrefix.Length..]);
+        if (list.Any(a => a.Trim().Equals(EngineOffArgument, StringComparison.OrdinalIgnoreCase))) on.ExceptWith(EngineIds);
         return on;
     }
 
@@ -99,13 +149,20 @@ public static class PerfTuning
             var item = raw.ToLowerInvariant();
             if (item == "tudo") on.UnionWith(Tweaks.Select(t => t.Id));
             else if (item == "nada") on.Clear();
-            else if (item.StartsWith('-') && Known(item[1..])) on.Remove(item[1..]);
-            else if (item.StartsWith('+') && Known(item[1..])) on.Add(item[1..]);
-            else if (Known(item)) on.Add(item);
+            else if (item.StartsWith('-')) on.ExceptWith(Expand(item[1..]));
+            else if (item.StartsWith('+')) on.UnionWith(Expand(item[1..]));
+            else on.UnionWith(Expand(item));
         }
     }
 
-    private static bool Known(string id) => Tweaks.Any(t => t.Id == id);
+    // Um ajuste («e14.1»), as entradas de uma experiência («e14» = e14.1…e14.6) ou «motor» (todos os do motor). Um nome
+    // desconhecido não faz nada.
+    public static IEnumerable<string> Expand(string item)
+    {
+        if (item == EngineGroup) return EngineIds;
+        if (Tweaks.Any(t => t.Id == item)) return [item];
+        return Tweaks.Select(t => t.Id).Where(id => id.StartsWith(item + ".", StringComparison.Ordinal)).ToList();
+    }
 
     private static string? Read(string variable)
         => Environment.GetEnvironmentVariable(variable) is { } value && !string.IsNullOrWhiteSpace(value) ? value : null;
