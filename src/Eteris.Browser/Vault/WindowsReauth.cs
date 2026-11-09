@@ -99,7 +99,11 @@ public sealed class ReauthGate
     private readonly Func<DateTimeOffset> _clock;
     private readonly Dictionary<nint, DateTimeOffset> _verified = [];
     private readonly SemaphoreSlim _one = new(1, 1);
-    private bool _unprotected;
+    // Quando se viu que a conta do Windows não tem proteção (null: não se viu). Vale a janela de graça: depois (ou ao
+    // bloquear), volta-se a verificar, para quem seguiu o conselho e pôs um PIN não ficar sem confirmação até reiniciar.
+    private DateTimeOffset? _unprotectedAt;
+
+    private bool Unprotected => _unprotectedAt is { } at && _clock() - at < Grace;
 
     public ReauthGate(IReauth reauth, Func<DateTimeOffset>? clock = null)
     {
@@ -125,7 +129,7 @@ public sealed class ReauthGate
     }
 
     // Texto para a página quando a conta do Windows não tem proteção (null se tem).
-    public string? Advice => _unprotected ? ProtectAccountAdvice : null;
+    public string? Advice => _unprotectedAt is not null ? ProtectAccountAdvice : null;
 
     public static bool ResetsOn(SessionSwitchReason reason)
         => reason is SessionSwitchReason.SessionLock or SessionSwitchReason.ConsoleDisconnect or SessionSwitchReason.RemoteDisconnect or SessionSwitchReason.SessionLogoff;
@@ -145,6 +149,7 @@ public sealed class ReauthGate
     public void Reset()
     {
         lock (_verified) _verified.Clear();
+        _unprotectedAt = null;
     }
 
     public async Task<bool> RequestAsync(nint window, ReauthPurpose purpose, CancellationToken cancel = default)
@@ -157,12 +162,13 @@ public sealed class ReauthGate
         {
             if (cancel.IsCancellationRequested) return false;
             if (!always && InGrace(window)) return true;
-            if (_unprotected) return true;
+            if (Unprotected) return true;
             if (_reauth.CheckAvailability() == ReauthAvailability.Unavailable)
             {
-                _unprotected = true;
+                _unprotectedAt = _clock();
                 return true;
             }
+            _unprotectedAt = null;
             ReauthOutcome outcome;
             try { outcome = await _reauth.VerifyAsync(window, ReauthPolicy.Message(purpose), cancel).ConfigureAwait(false); }
             catch (OperationCanceledException) { return false; }
@@ -173,7 +179,7 @@ public sealed class ReauthGate
                     if (!always) lock (_verified) _verified[window] = _clock();
                     return true;
                 case ReauthOutcome.NoProtection:
-                    _unprotected = true;
+                    _unprotectedAt = _clock();
                     return true;
                 default:
                     return false;

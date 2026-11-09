@@ -58,6 +58,9 @@
   .footer p { color: var(--faint); font-size: 12.5px; margin-top: 14px; }
   iframe { display: none; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .go-link { color: #67e8f9; text-decoration: none; font-size: 13.5px; }
+  .go-link:hover { text-decoration: underline; }
+  html.light .go-link { color: #0e7490; }
 </style>
 </head>
 <body>
@@ -94,6 +97,11 @@
       <p>O escudo já bloqueia rastreadores e anúncios. Se quiser ir mais longe:</p>
       <label class="toggle"><span>DNS cifrado (Quad9)<small>O seu fornecedor deixa de ver que sites visita</small></span><input type="checkbox" id="dns"></label>
       <label class="toggle"><span>Esquecer os sites ao fechar<small>Apaga cookies e dados de sites em cada saída</small></span><input type="checkbox" data-key="clearOnExit"></label>
+    </section>
+    <section class="step" style="grid-column: 1 / -1">
+      <h2><span class="num">5</span>Trazer palavras-passe do Chrome, Brave ou Firefox</h2>
+      <p>Exporte-as para um ficheiro CSV no navegador que usava — no Chrome e no Brave: Gestor de palavras-passe › Definições › Exportar palavras-passe; no Firefox: Palavras-passe › ⋯ › Exportar palavras-passe — e importe-o no Éteris. O ficheiro é lido pelo Éteris, nada sai do computador, e no fim pode enviá-lo para a Reciclagem.</p>
+      <p><a class="go-link" href="eteris://passwords/#definicoes">Importar palavras-passe…</a></p>
     </section>
   </div>
   <div class="footer">

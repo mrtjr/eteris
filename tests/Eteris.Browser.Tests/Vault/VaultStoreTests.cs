@@ -204,9 +204,10 @@ public sealed class VaultStoreTests : IDisposable
         Assert.Single(vault.Logins());
     }
 
-    // Apagar deixa uma lápide (para a sincronização) sem dados; o item sai das listas e dos índices.
+    // Revisão: apagar tira a linha de vez (a sincronização vê o apagamento pela falta do item): nem lápide, nem quantos
+    // itens se apagaram, nem quando. As lápides de versões anteriores saem ao abrir.
     [Fact]
-    public void Delete_LeavesATombstoneWithoutData()
+    public void Delete_RemovesTheRow_AndOldTombstonesGoAway()
     {
         string id;
         using (var vault = Service())
@@ -217,21 +218,33 @@ public sealed class VaultStoreTests : IDisposable
             Assert.Empty(vault.Logins());
             Assert.Null(vault.GetLogin(id));
             Assert.Empty(vault.LoginsFor("https://" + Host));
-            var tomb = Assert.Single(vault.Tombstones(VaultCollection.Logins));
-            Assert.Equal((id, _now), tomb);
+            Assert.Empty(vault.Tombstones(VaultCollection.Logins));
             Assert.False(vault.Delete(VaultCollection.Logins, id));
         }
         using (var connection = Open())
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = $"SELECT meta_ct IS NULL AND secret_ct IS NULL AND prev_ct IS NULL AND origin_key IS NULL AND site_key IS NULL FROM items WHERE id = '{id}'";
-            Assert.Equal(1L, command.ExecuteScalar());
+            command.CommandText = "SELECT COUNT(*) FROM items";
+            Assert.Equal(0L, command.ExecuteScalar());
+            // Uma lápide como as da versão anterior.
+            command.CommandText = "INSERT INTO items(collection, id, created, changed, deleted) VALUES ('logins', 'antiga', 1, 1, 1)";
+            command.ExecuteNonQuery();
         }
+        SqliteConnection.ClearAllPools();
         using (var vault = Service())
-        {
-            vault.Purge(VaultCollection.Logins, id);
             Assert.Empty(vault.Tombstones(VaultCollection.Logins));
-        }
+    }
+
+    // Revisão: a chave do cofre não fica em cópias que ninguém apaga (HKDF direto do span; DPAPI apaga os buffers nativos).
+    [Fact]
+    public void TheVaultKey_IsNotCopiedIntoUnclearedArrays()
+    {
+        var root = Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot();
+        var store = File.ReadAllText(Path.Combine(root, "src", "Eteris.Browser", "Vault", "VaultStore.cs"));
+        Assert.DoesNotContain("vaultKey.ToArray()", store);
+        var dpapi = File.ReadAllText(Path.Combine(root, "src", "Eteris.Browser", "Sync", "Dpapi.cs"));
+        Assert.Contains("Zero(output.Data, output.Size);", dpapi);
+        Assert.Contains("Zero(Data, Size);", dpapi);
     }
 
     [Fact]

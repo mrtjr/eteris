@@ -144,8 +144,11 @@ public static class ProfileSync
         public Dictionary<string, LocalItem> Items { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, SecretItem> Secrets { get; } = new(StringComparer.Ordinal);
         // Coleções com algum selo que não abriu: nesta ronda não se apaga nada delas aqui (o registo que falta pode ser
-        // só um que este Éteris não consegue abrir — de um Éteris mais recente, por exemplo).
+        // só um que este Éteris não consegue abrir — de um Éteris mais recente, por exemplo)…
         public HashSet<string> Broken { get; } = new(StringComparer.Ordinal);
+        // …a não ser o que uma lápide que abre diz que foi apagado (a chave natural vai selada na lápide): sem isto, um
+        // selo de um Éteris mais recente travava para sempre todas as remoções da coleção.
+        public HashSet<string> Removed { get; } = new(StringComparer.Ordinal);
         // Coleções que o cofre deste computador não deixou ver (não abre agora): ilegíveis nesta ronda.
         public HashSet<string> Unavailable { get; } = new(StringComparer.Ordinal);
         public int Errors { get; set; }
@@ -156,6 +159,17 @@ public static class ProfileSync
         var view = new AccountView();
         foreach (var record in engine.State.Records.Values)
         {
+            if (record.Deleted && record.Data is not null && secrets is not null && Collections.IsSecret(record.Collection)
+                && options.IsEnabled(record.Collection) && !view.Unavailable.Contains(record.Collection) && engine.OpenSecret(record) is { } gone)
+            {
+                try { view.Removed.Add(Id(record.Collection, secrets.LocalKey(record.Collection, gone.NaturalKey))); }
+                catch (SecretSourceUnavailableException)
+                {
+                    view.Unavailable.Add(record.Collection);
+                    view.Broken.Add(record.Collection);
+                }
+                continue;
+            }
             if (record.Deleted || record.Data is null || record.Collection == Collections.Notes || !Fields.TryGetValue(record.Collection, out var fields)
                 || !options.IsEnabled(record.Collection)) continue;
             if (Collections.IsSecret(record.Collection))
@@ -317,8 +331,9 @@ public static class ProfileSync
             var have = before.GetValueOrDefault(id);
             if (Canonical(want) == Canonical(have)) continue;
             if (Canonical(during.GetValueOrDefault(id)) != Canonical(have)) continue;
-            // Um selo desta coleção não abriu: o que falta pode ser ele, por isso nada se apaga dela aqui nesta ronda.
-            if (want is null && desired.Broken.Contains(collection)) continue;
+            // Um selo desta coleção não abriu: o que falta pode ser ele, por isso nada se apaga dela aqui nesta ronda — salvo
+            // o que uma lápide que abre diz que foi apagado.
+            if (want is null && desired.Broken.Contains(collection) && !desired.Removed.Contains(id)) continue;
             var (_, key) = Split(id);
             changes.Add(new LocalChange(collection, key, want?.Data.DeepClone().AsObject()) { Secret = desired.Secrets.GetValueOrDefault(id) });
         }

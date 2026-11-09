@@ -52,6 +52,24 @@ public class SecureClipboardTests
         private sealed class Nothing : IDisposable { public void Dispose() { } }
     }
 
+    // Revisão: o Éteris fecha antes dos 60 s — a palavra-passe copiada sai já da área de transferência; o que o
+    // utilizador copiou depois fica.
+    [Fact]
+    public void ClosingTheBrowser_ClearsAPendingCopy_ButNotWhatTheUserCopiedAfter()
+    {
+        var clip = new FakeClipboard();
+        var copier = new SecureClipboard(clip, new FakeScheduler().Schedule);
+        Assert.True(copier.Copy("Inventada-Fecho-1!"));
+        copier.ClearPending();
+        Assert.Equal(1, clip.Clears);
+        Assert.Null(clip.Text);
+
+        Assert.True(copier.Copy("Inventada-Fecho-2!"));
+        clip.Sequence++; // o utilizador copiou outra coisa
+        copier.ClearPending();
+        Assert.Equal(1, clip.Clears);
+    }
+
     // Os três formatos que o Windows respeita: fora do histórico (Win+V), fora da nuvem e fora de quem vigia a área de
     // transferência.
     [Fact]

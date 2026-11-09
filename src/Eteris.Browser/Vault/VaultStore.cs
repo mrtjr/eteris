@@ -19,8 +19,8 @@ public sealed record VaultEntry(VaultCollection Collection, string Id, JsonObjec
 // Chromium. Cada item tem os metadados (meta_ct) e o segredo (secret_ct) cifrados em separado com AES-256-GCM e uma
 // chave derivada da chave do cofre; dados associados «eteris-cofre|v1|coleção|id|campo|versão» (um blob trocado de
 // item, de campo ou de versão não abre). A origem nunca fica em claro: a procura é por HMAC da origem (origin_key) e do
-// domínio registável (site_key). Uma versão anterior do segredo (prev_ct, histórico local de 1 versão). Apagar deixa
-// uma lápide sem dados (para a sincronização). secure_delete: o SQLite escreve zeros por cima do que apaga.
+// domínio registável (site_key). Uma versão anterior do segredo (prev_ct, histórico local de 1 versão). Apagar tira a
+// linha de vez (a sincronização vê o apagamento pela falta do item). secure_delete: o SQLite escreve zeros por cima do que apaga.
 public sealed class VaultStore : IDisposable
 {
     public const string FileName = "cofre.db";
@@ -37,9 +37,10 @@ public sealed class VaultStore : IDisposable
     public VaultStore(string path, ReadOnlySpan<byte> vaultKey)
     {
         if (vaultKey.Length != VaultKey.Length) throw new ArgumentException("A chave do cofre tem 256 bits.", nameof(vaultKey));
-        _encKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey.ToArray(), 32, salt: null, info: "Eteris.Cofre:enc"u8.ToArray());
-        _idxKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey.ToArray(), 32, salt: null, info: "Eteris.Cofre:idx"u8.ToArray());
-        _syncKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey.ToArray(), 32, salt: null, info: "Eteris.Cofre:sync"u8.ToArray());
+        // Direto do span (sem cópias da chave do cofre em arrays que ninguém apagava).
+        _encKey = Derive(vaultKey, "Eteris.Cofre:enc"u8);
+        _idxKey = Derive(vaultKey, "Eteris.Cofre:idx"u8);
+        _syncKey = Derive(vaultKey, "Eteris.Cofre:sync"u8);
         _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString();
         using var connection = Open();
         Execute(connection, """
@@ -77,6 +78,11 @@ public sealed class VaultStore : IDisposable
         using var version = connection.CreateCommand();
         version.CommandText = "PRAGMA user_version;";
         if (Convert.ToInt64(version.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 0) Execute(connection, "PRAGMA user_version = 1;");
+        // As lápides deixadas por versões anteriores (o «Apagar» de antes) saem: a sincronização não precisa delas.
+        // (Só se houver: abrir para ler não pode escrever no ficheiro.)
+        using var tombs = connection.CreateCommand();
+        tombs.CommandText = "SELECT EXISTS(SELECT 1 FROM items WHERE deleted IS NOT NULL);";
+        if (Convert.ToInt64(tombs.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 1) Execute(connection, "DELETE FROM items WHERE deleted IS NOT NULL;");
     }
 
     public void Dispose()
@@ -246,19 +252,23 @@ public sealed class VaultStore : IDisposable
 
     public IReadOnlyList<string> FindBySite(VaultCollection collection, string site) => Ids(collection, "site_key", SiteKey(site));
 
-    // Lápide: fica o ID e a hora (para a sincronização mandar o apagamento); os dados e os índices saem.
+    private static byte[] Derive(ReadOnlySpan<byte> vaultKey, ReadOnlySpan<byte> info)
+    {
+        var key = new byte[32];
+        HKDF.DeriveKey(HashAlgorithmName.SHA256, vaultKey, key, salt: ReadOnlySpan<byte>.Empty, info);
+        return key;
+    }
+
+    // Apagar tira a linha de vez (secure_delete: o SQLite escreve zeros por cima). A sincronização vê o apagamento pela
+    // falta do item na leitura (a base dela), por isso não fica lápide nenhuma: nem quantos itens se apagaram nem quando.
+    // now: só para a assinatura de sempre.
     public bool Delete(VaultCollection collection, string id, DateTimeOffset now)
     {
         using var connection = Open();
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE items SET meta_ct = NULL, secret_ct = NULL, prev_ct = NULL, origin_key = NULL, site_key = NULL, sync_key = NULL, sync_print = NULL,
-                deleted = $now, changed = $now
-            WHERE collection = $c AND id = $id AND deleted IS NULL
-            """;
+        command.CommandText = "DELETE FROM items WHERE collection = $c AND id = $id AND deleted IS NULL";
         command.Parameters.AddWithValue("$c", VaultCollections.Name(collection));
         command.Parameters.AddWithValue("$id", id);
-        command.Parameters.AddWithValue("$now", now.ToUnixTimeMilliseconds());
         return command.ExecuteNonQuery() > 0;
     }
 

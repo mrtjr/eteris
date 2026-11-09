@@ -86,6 +86,9 @@ public partial class App : Application
         UpdateService.ApplyPendingOnExit();
         // Palavras-passe apagadas há menos de 10 s (ainda com «Anular»): apagam-se de vez.
         Vault.VaultRoutes.CommitPendingOnExit();
+        // Uma palavra-passe copiada há menos de 60 s sai da área de transferência (se ainda lá estiver).
+        try { Vault.SecureClipboard.ClearPendingOnExit(); }
+        catch (Exception) { }
         try
         {
             // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se

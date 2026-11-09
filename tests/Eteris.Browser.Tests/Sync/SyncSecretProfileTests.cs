@@ -422,6 +422,30 @@ public sealed class SyncSecretProfileTests : IDisposable
         Assert.Equal(broken, engine.Get(Collections.Logins, engine.SecretKey(Collections.Logins, SecretMemoryProfile.LoginKey(Site, "u1"))));
     }
 
+    // Revisão: um selo que não abre (de um Éteris mais recente) já não trava para sempre as remoções da coleção: uma
+    // lápide que abre (o item apagado noutro computador) aplica-se aqui; só o que poderia ser o selo que não abre fica.
+    [Fact]
+    public async Task ASealThatDoesNotOpen_StillLetsOpenTombstonesThrough()
+    {
+        using var secret = AccountSecret.Create();
+        var engine = await SyncEngine.CreateAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("A"), Now);
+        var profile = new SecretMemoryProfile();
+        profile.Login(Site, "u1", "1");
+        profile.Login(Site, "u2", "2");
+        var (_, baseline) = await ProfileSync.RunAsync(engine, profile, null, "A");
+        await engine.PushAsync();
+
+        var record = engine.Get(Collections.Logins, engine.SecretKey(Collections.Logins, SecretMemoryProfile.LoginKey(Site, "u1")))!;
+        engine.State.Records[SyncState.RecordKey(record.Collection, record.Id)] = record with { Data = new JsonObject { ["v"] = 9, ["n"] = "x", ["c"] = "y" } };
+        (_, baseline) = await ProfileSync.RunAsync(engine, profile, baseline, "A");
+        // Outro computador apagou o u2: a lápide abre.
+        engine.DeleteSecret(Collections.Logins, SecretMemoryProfile.LoginKey(Site, "u2"));
+        var (report, _) = await ProfileSync.RunAsync(engine, profile, baseline, "A");
+        Assert.True(report.SecretErrors > 0);
+        Assert.Null(profile.Password(Site, "u2"));
+        Assert.Equal("1", profile.Password(Site, "u1"));
+    }
+
     // Aprovar um aparelho novo com segredos na conta pede o Windows Hello mesmo com as linhas do cofre desligadas aqui
     // (o aparelho novo recebe a conta inteira).
     [Fact]

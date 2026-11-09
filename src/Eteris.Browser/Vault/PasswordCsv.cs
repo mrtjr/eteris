@@ -33,9 +33,11 @@ public sealed record ImportPlan(IReadOnlyList<CsvLogin> Add, int Duplicates, IRe
 // «a do ficheiro» (a atual fica no histórico do item: nenhuma se perde) ou «a atual».
 public enum ConflictChoice { UseFile, KeepCurrent }
 
-public sealed record ImportSummary(int Imported, int Replaced, int Conflicts, int Invalid, int Duplicates)
+// Kept: as diferentes do ficheiro em que o utilizador escolheu «Manter as atuais» (a pergunta já resolveu o conflito:
+// o resumo não diz «em conflito», que parecia deixar algo por resolver).
+public sealed record ImportSummary(int Imported, int Replaced, int Kept, int Invalid, int Duplicates)
 {
-    // «312 importadas, 4 em conflito, 2 inválidas».
+    // «312 importadas, 4 mantidas (as atuais), 2 inválidas».
     public string Text
     {
         get
@@ -43,7 +45,7 @@ public sealed record ImportSummary(int Imported, int Replaced, int Conflicts, in
             var parts = new List<string>();
             if (Imported > 0) parts.Add(Count(Imported, "importada", "importadas"));
             if (Replaced > 0) parts.Add(Count(Replaced, "substituída", "substituídas"));
-            if (Conflicts > 0) parts.Add($"{Conflicts} em conflito");
+            if (Kept > 0) parts.Add(Kept == 1 ? "1 mantida (a atual)" : $"{Kept} mantidas (as atuais)");
             if (Invalid > 0) parts.Add(Count(Invalid, "inválida", "inválidas"));
             if (Duplicates > 0) parts.Add(Duplicates == 1 ? "1 já existia" : $"{Duplicates} já existiam");
             return parts.Count == 0 ? "Nada para importar" : string.Join(", ", parts);

@@ -150,6 +150,29 @@ public class WindowsReauthTests
         Assert.Equal(ReauthGate.ProtectAccountAdvice, gate2.Advice);
     }
 
+    // Revisão: depois do conselho «Proteja a sua conta do Windows com um PIN», o «não pede» não dura até reiniciar o
+    // Éteris: acaba com a janela de graça (5 min) ou ao bloquear o Windows, e volta-se a pedir.
+    [Fact]
+    public async Task AccountWithoutProtection_IsCheckedAgain_AfterTheGraceOrALock()
+    {
+        var blank = new FakeReauth { Outcome = ReauthOutcome.NoProtection };
+        var gate = Gate(blank);
+        Assert.True(await gate.RequestAsync(WindowA, ReauthPurpose.Export));
+        Assert.True(await gate.RequestAsync(WindowA, ReauthPurpose.Export));
+        Assert.Equal(1, blank.Prompts);
+        _now = _now.Add(ReauthGate.Grace).AddSeconds(1);
+        blank.Outcome = ReauthOutcome.Canceled; // pôs um PIN e não confirmou
+        Assert.False(await gate.RequestAsync(WindowA, ReauthPurpose.Export));
+        Assert.Equal(2, blank.Prompts);
+        Assert.Null(gate.Advice);
+        blank.Outcome = ReauthOutcome.NoProtection;
+        Assert.True(await gate.RequestAsync(WindowA, ReauthPurpose.Export));
+        gate.Reset();
+        blank.Outcome = ReauthOutcome.Canceled;
+        Assert.False(await gate.RequestAsync(WindowA, ReauthPurpose.Export));
+        Assert.Equal(4, blank.Prompts);
+    }
+
     // Dois pedidos ao mesmo tempo na mesma janela: um só pedido ao Windows.
     [Fact]
     public async Task ConcurrentRequests_AskOnce()

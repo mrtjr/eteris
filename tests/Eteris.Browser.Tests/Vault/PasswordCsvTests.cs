@@ -186,7 +186,7 @@ public sealed class PasswordCsvTests : IDisposable
         Assert.Single(plan.Invalid);
 
         var summary = PasswordCsv.Apply(plan, vault, _ => ConflictChoice.KeepCurrent);
-        Assert.Equal("1 importada, 1 em conflito, 1 inválida, 2 já existiam", summary.Text);
+        Assert.Equal("1 importada, 1 mantida (a atual), 1 inválida, 2 já existiam", summary.Text);
         Assert.Equal("A-atual-1!", vault.GetLogin(keep)!.Password);
         Assert.Equal(3, vault.Logins().Count);
 
@@ -201,7 +201,7 @@ public sealed class PasswordCsvTests : IDisposable
     [Fact]
     public void Summary_Text_PluralsInPortuguese()
     {
-        Assert.Equal("312 importadas, 4 em conflito, 2 inválidas", new ImportSummary(312, 0, 4, 2, 0).Text);
+        Assert.Equal("312 importadas, 4 mantidas (as atuais), 2 inválidas", new ImportSummary(312, 0, 4, 2, 0).Text);
         Assert.Equal("Nada para importar", new ImportSummary(0, 0, 0, 0, 0).Text);
         Assert.Equal("1 importada, 3 já existiam", new ImportSummary(1, 0, 0, 0, 3).Text);
     }

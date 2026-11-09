@@ -33,15 +33,38 @@ public sealed class SecureClipboard(IClipboardBackend backend, Func<TimeSpan, Ac
 
     public static SecureClipboard Shared => s_shared.Value;
 
+    // As cópias por limpar (número de sequência de cada uma): ao fechar o Éteris limpam-se já, se ainda lá estiverem.
+    private readonly HashSet<uint> _pending = [];
+
     public bool Copy(string secret)
     {
         if (!backend.SetText(secret, ExclusionFormats)) return false;
         var ours = backend.SequenceNumber;
+        lock (_pending) _pending.Add(ours);
         schedule(ClearAfter, () =>
         {
+            lock (_pending) _pending.Remove(ours);
             if (backend.SequenceNumber == ours) backend.Clear();
         });
         return true;
+    }
+
+    // O Éteris vai fechar antes dos 60 s: a palavra-passe copiada não fica na área de transferência (o que o utilizador
+    // copiou depois fica).
+    public void ClearPending()
+    {
+        bool ours;
+        lock (_pending)
+        {
+            ours = _pending.Contains(backend.SequenceNumber);
+            _pending.Clear();
+        }
+        if (ours) backend.Clear();
+    }
+
+    public static void ClearPendingOnExit()
+    {
+        if (s_shared.IsValueCreated) s_shared.Value.ClearPending();
     }
 }
 

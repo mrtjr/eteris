@@ -104,7 +104,7 @@ exemplo do registo SWIFT, NIF e CPF de exemplo).
 
 Testes: `Vault/VaultStoreTests` (nenhum texto em claro em `cofre.db` em Latin-1, UTF-8 e UTF-16; blob trocado de item
 ou de campo e versão alterada falham; outra entropia não abre e não substitui a chave; procura por HMAC; histórico;
-lápides; apagar tudo; abertura preguiçosa; sem registos).
+apagar tira a linha de vez, sem lápide; apagar tudo; abertura preguiçosa; sem registos).
 
 Prova ao vivo (perfil de teste novo, compilação de depuração): itens inventados criados por um comando de teste fora do
 repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-passe, 1 «nunca», 1 cartão, 1 IBAN,
@@ -292,7 +292,7 @@ pelo teclado e pelo rato, nos dois temas, e a secção das Definições (`defini
   diálogo «Guardar como» nativo, aviso nativo se a pasta for do OneDrive, do Dropbox ou do Google Drive (e nada se grava
   se o utilizador disser que não), formato do Chrome em UTF-8.
 - **«Apagar todas as palavras-passe…»:** dois cliques e reautenticação; apaga as palavras-passe e os «nunca» (com
-  lápides para a sincronização); os pagamentos, contactos, documentos e viagens ficam.
+  a sincronização ligada, também nos outros computadores, e a página di-lo); os pagamentos, contactos, documentos e viagens ficam.
 - **Regras das rotas:** todas as ações exigem o token desta sessão; a janela privada recebe «Abra numa janela normal»
   e as rotas recusam; os dados vão no corpo de um POST (nunca no endereço); as respostas chegam por iframes da mesma
   origem (a CSP da página não deixa `fetch` nem pedidos de rede); a reautenticação desiste quando a aba sai da frente

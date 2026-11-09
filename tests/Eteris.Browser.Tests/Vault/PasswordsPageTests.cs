@@ -87,6 +87,17 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.Contains("<title>Preenchimento automático</title>", VaultRoutes.PrivatePage(VaultRoutes.PrivateMessage, "autofill"));
     }
 
+    // Revisão: as boas-vindas têm o passo «Trazer palavras-passe do Chrome, Brave ou Firefox» (desenho, secção 3.12), com
+    // os passos para exportar o CSV e a ligação para importar.
+    [Fact]
+    public void Welcome_HasTheStepToBringPasswords()
+    {
+        var html = WelcomePage.Render(new Eteris.Browser.Data.UserSettings(), []);
+        Assert.Contains("Trazer palavras-passe do Chrome, Brave ou Firefox", html);
+        Assert.Contains("href=\"eteris://passwords/#definicoes\"", html);
+        Assert.Contains("Exportar palavras-passe", html);
+    }
+
     // Revisão (acessibilidade e textos): os interruptores entram na ordem do Tab e têm nome; as notas dos resultados
     // são anunciadas; os nomes das secções são os do menu; o singular de «verificada»; o estilo das ligações.
     [Fact]
@@ -326,7 +337,7 @@ public sealed class PasswordsPageTests : IDisposable
         await _f.Get("passwords", "/delete", "id=" + id);
         _f.Host.RunScheduled();
         Assert.Null(_f.Vault.GetLogin(id));
-        Assert.Contains(_f.Vault.Tombstones(VaultCollection.Logins), t => t.Id == id);
+        Assert.Empty(_f.Vault.Tombstones(VaultCollection.Logins)); // apagado de vez (revisão: sem lápide)
         Assert.False(VaultFixture.Json(await _f.Get("passwords", "/undo", "u=" + undo))["ok"]!.GetValue<bool>());
     }
 
@@ -422,7 +433,8 @@ public sealed class PasswordsPageTests : IDisposable
         _f.Host.ImportPath = csv;
         await _f.Get("passwords", "/import");
         var done = VaultFixture.Json(await _f.Get("passwords", "/import-resolve", "choice=current"));
-        Assert.Contains("1 em conflito", done["message"]!.GetValue<string>());
+        Assert.Contains("1 mantida (a atual)", done["message"]!.GetValue<string>());
+        Assert.DoesNotContain("em conflito", done["message"]!.GetValue<string>());
         Assert.Equal("Antiga-1!", _f.Vault.GetLogin(existing)!.Password);
     }
 

@@ -33,9 +33,14 @@ internal sealed class Dpapi(string purpose) : ISecretProtector
         }
         finally
         {
+            // A chave do cofre (e os tokens) passam por estas cópias nativas: apagadas antes de libertar.
             input.Free();
             entropy.Free();
-            if (output.Data != IntPtr.Zero) LocalFree(output.Data);
+            if (output.Data != IntPtr.Zero)
+            {
+                Zero(output.Data, output.Size);
+                LocalFree(output.Data);
+            }
         }
     }
 
@@ -55,9 +60,16 @@ internal sealed class Dpapi(string purpose) : ISecretProtector
         public void Free()
         {
             if (Data == IntPtr.Zero) return;
+            Zero(Data, Size);
             Marshal.FreeHGlobal(Data);
             Data = IntPtr.Zero;
         }
+    }
+
+    private static void Zero(IntPtr data, int size)
+    {
+        if (data == IntPtr.Zero || size <= 0) return;
+        Marshal.Copy(new byte[size], 0, data, size);
     }
 
     [DllImport("crypt32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
