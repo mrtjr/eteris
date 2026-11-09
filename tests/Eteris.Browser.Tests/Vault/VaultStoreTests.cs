@@ -70,13 +70,47 @@ public sealed class VaultStoreTests : IDisposable
             "Conta-alcunha", "Nome-Inventado", "Rua-Inventada", "Bairro-Inventado", "Cidade-Inventada", "contacto@exemplo.test", "ABC1D23",
             "VIN-INVENTADO", "nunca.exemplo", "Visa",
         };
+        // Os ids dos itens estão em claro (128 bits aleatórios em hexadecimal, VaultIds) e, em cerca de 1 corrida em 40,
+        // um deles tinha «1111» (os 4 últimos dígitos do cartão): falso positivo, não fuga. Só esses ids exatos saem do
+        // texto antes de procurar — e confirma-se que são mesmo 32 algarismos hexadecimais (nada do site nem do utilizador).
+        var ids = ItemIds(Path.Combine(_root, VaultStore.FileName));
+        Assert.Equal(7, ids.Count);
+        Assert.All(ids, id => Assert.Matches("^[0-9a-f]{32}$", id));
+        // Tudo o que está na pasta do cofre (cofre.db, cofre.key e, se lá ficassem, o -wal, o -journal ou temporários).
         foreach (var file in Directory.GetFiles(_root))
         {
             var bytes = File.ReadAllBytes(file);
-            var texts = new[] { Encoding.Latin1.GetString(bytes), Encoding.UTF8.GetString(bytes), Encoding.Unicode.GetString(bytes) };
+            var texts = new[] { Encoding.Latin1.GetString(bytes), Encoding.UTF8.GetString(bytes), Encoding.Unicode.GetString(bytes) }
+                .Select(t => WithoutIds(t, ids)).ToArray();
             foreach (var secret in secrets)
                 Assert.DoesNotContain(texts, t => t.Contains(secret, StringComparison.OrdinalIgnoreCase));
         }
+    }
+
+    // A máscara tira só os ids: um id com «1111» no meio (como o que fez o teste falhar) deixa de contar, e um «1111»
+    // fora dele continua a ser apanhado.
+    [Fact]
+    public void Disk_HasNoPlainText_MasksOnlyTheRandomIds()
+    {
+        const string id = "33d47f813a424df271111a0ab59d5364";
+        Assert.DoesNotContain("1111", WithoutIds("..LLcontacts" + id + "..", [id]), StringComparison.Ordinal);
+        Assert.Contains("1111", WithoutIds("..LLcards" + id + "..1111..", [id]), StringComparison.Ordinal);
+        Assert.Contains("1111", WithoutIds("..LLcards4111111111111111..", [id]), StringComparison.Ordinal);
+    }
+
+    private static string WithoutIds(string text, IEnumerable<string> ids)
+        => ids.Aggregate(text, (t, id) => t.Replace(id, new string('·', id.Length), StringComparison.Ordinal));
+
+    private static List<string> ItemIds(string db)
+    {
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = db, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id FROM items";
+        using var r = command.ExecuteReader();
+        var ids = new List<string>();
+        while (r.Read()) ids.Add(r.GetString(0));
+        return ids;
     }
 
     [Fact]
