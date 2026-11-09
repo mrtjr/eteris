@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de privacidade — Éteris</title>
+<meta name="description" content="Política de privacidade do Éteris: que dados trata, a permissão drive.appdata da Google e para quê, cifra ponta a ponta, o que a Google vê, como apagar, e a conformidade com a Google API Services User Data Policy.">
+<meta name="referrer" content="no-referrer">
+<meta property="og:site_name" content="Éteris">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="irisbar"></div>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="eteris.png" alt="" width="34" height="34">Éteris</a>
+    <nav class="top" aria-label="Secções">
+      <a href="./">Página inicial</a>
+      <a href="#google">Dados da Google</a>
+      <a href="#limited-use">Limited Use</a>
+      <a href="#en" hreflang="en" lang="en">English</a>
+    </nav>
+  </header>
+
+  <main class="policy">
+    <h1>Política de privacidade do <span class="grad">Éteris</span></h1>
+    <p class="small">Em vigor desde 8 de novembro de 2026. Versão em inglês <a href="#en">mais abaixo</a>; as duas dizem o mesmo.</p>
+
+    <div class="note ok">
+      <strong>Em resumo.</strong> O Éteris é um navegador que corre no seu computador. Não tem telemetria, não tem
+      servidores e o projeto não recebe dados seus. A sincronização com o Google Drive é opcional, está desligada por
+      omissão, usa só a pasta oculta da própria aplicação e vai cifrada ponta a ponta: a chave fica nos seus aparelhos e
+      nem a Google nem o projeto Éteris conseguem ler o que lá está.
+    </div>
+
+    <section>
+      <h2>1. A quem se aplica</h2>
+      <p>Esta política cobre a aplicação Éteris para Windows (o navegador) e esta página. O Éteris é software livre
+        (GPL-3.0-or-later), mantido como projeto de código aberto em
+        <a href="https://github.com/mrtjr/eteris">github.com/mrtjr/eteris</a>. Os sites que visita com o Éteris têm as
+        suas próprias políticas; esta não as substitui.</p>
+    </section>
+
+    <section>
+      <h2>2. Dados que ficam no seu computador</h2>
+      <p>Histórico, favoritos, abas e sessões, notas, definições, decisões do Escudo, cookies, cache, permissões dos sites
+        e o relatório de <code>eteris://privacy/</code> (só números) ficam na pasta do perfil do Éteris, no seu computador.
+        Não são enviados ao projeto Éteris nem a ninguém. Pode apagá-los no próprio Éteris (Definições › Privacidade,
+        «Esquecer», apagar ao fechar) ou desinstalando a aplicação e apagando a pasta do perfil.</p>
+    </section>
+
+    <section>
+      <h2>3. Sem telemetria e sem servidores do Éteris</h2>
+      <ul>
+        <li>O Éteris não envia estatísticas de uso, relatórios de erros, identificadores do aparelho nem dados de navegação.</li>
+        <li>Não há servidores do Éteris: o projeto não recebe, não guarda e não consegue ver dados dos utilizadores.</li>
+        <li>Não há publicidade, perfis de utilizador, venda ou partilha de dados.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. Ligações que o Éteris faz por si</h2>
+      <p>Além das páginas que abre, o Éteris faz apenas estes pedidos, e nenhum leva dados pessoais:</p>
+      <ul>
+        <li><strong>Atualizações:</strong> pergunta ao GitHub (<code>github.com/mrtjr/eteris</code>, releases) se há uma
+          versão nova e descarrega-a de lá. O GitHub vê o endereço IP do pedido.</li>
+        <li><strong>Listas do Escudo:</strong> descarrega as listas de filtros do uBlock Origin de
+          <code>ublockorigin.github.io</code>.</li>
+        <li><strong>Sugestões de pesquisa:</strong> só se as ligar nas Definições (vêm desligadas), o que escreve na barra
+          de endereço é enviado ao motor de pesquisa escolhido.</li>
+        <li><strong>DNS cifrado:</strong> só se o escolher nas Definições, os nomes dos sites são resolvidos pelo
+          fornecedor escolhido.</li>
+        <li><strong>Google:</strong> só com a sincronização ligada e depois de «Entrar com o Google» (secção 5).</li>
+      </ul>
+    </section>
+
+    <section id="google">
+      <h2>5. «Entrar com o Google» e a sincronização</h2>
+      <p>A sincronização é <strong>opcional e está desligada por omissão</strong>. Nada é pedido à Google enquanto não a
+        ligar e carregar em «Entrar com o Google». O ecrã de início de sessão da Google abre no navegador do sistema;
+        o Éteris nunca vê a sua senha da Google.</p>
+
+      <h3>5.1 A permissão pedida e para quê</h3>
+      <p>O Éteris pede <strong>apenas</strong> o âmbito <code>https://www.googleapis.com/auth/drive.appdata</code>
+        (classificado pela Google como não sensível). Serve para uma única coisa: guardar, ler, substituir e apagar os
+        ficheiros cifrados da sincronização na <strong>pasta oculta da aplicação</strong> («appDataFolder») do seu Google
+        Drive, para que os seus dados cheguem aos seus outros aparelhos.</p>
+      <ul>
+        <li>Com este âmbito o Éteris <strong>não tem acesso a nenhum ficheiro fora da pasta da aplicação</strong>: não
+          vê, não lista, não lê e não altera os seus documentos, fotografias ou outras pastas do Drive. O código só pede
+          a pasta da aplicação (<code>spaces=appDataFolder</code>).</li>
+        <li>Não pede acesso ao Gmail, aos contactos, ao calendário nem a qualquer outro serviço da Google.</li>
+      </ul>
+
+      <h3>5.2 Dados de utilizador da Google a que o Éteris acede</h3>
+      <div class="table"><table>
+        <thead><tr><th>Dado</th><th>Para quê</th><th>Onde fica</th></tr></thead>
+        <tbody>
+          <tr><td>Ficheiros que o próprio Éteris criou na pasta oculta da aplicação</td>
+              <td>Sincronizar os seus dados entre os seus aparelhos</td>
+              <td>No seu Google Drive, cifrados; decifrados só nos seus aparelhos</td></tr>
+          <tr><td>Nome e endereço de e-mail da conta Google (pedido uma vez ao Drive depois de entrar:
+                <code>about?fields=user(displayName,emailAddress)</code>)</td>
+              <td>Mostrar com que conta está ligado, no menu e nas Definições</td>
+              <td>Só no seu computador, cifrado com a proteção de dados do Windows (DPAPI); apagado ao «Sair»</td></tr>
+          <tr><td>Tokens de acesso e de renovação (OAuth)</td>
+              <td>Falar com a API do Drive sem pedir a sessão a cada vez</td>
+              <td>Só no seu computador, cifrados com DPAPI; apagados e revogados ao «Sair»</td></tr>
+        </tbody>
+      </table></div>
+      <p>Nenhum destes dados é enviado ao projeto Éteris nem a terceiros: o Éteris não tem servidores. Os pedidos vão
+        diretamente do seu computador para os servidores da Google (<code>oauth2.googleapis.com</code> e
+        <code>www.googleapis.com</code>), por HTTPS; o Éteris recusa qualquer outro endereço nesse canal.</p>
+
+      <h3>5.3 O que vai para o Drive, cifrado ponta a ponta</h3>
+      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site, as notas e as
+        abas abertas em cada aparelho. O histórico, cookies, cache e permissões dos sites não vão.</p>
+      <ul>
+        <li>Tudo é cifrado <strong>no seu computador, antes de sair</strong>, com AES-256-GCM e uma chave por ficheiro,
+          derivada de um segredo de 256 bits gerado no seu computador.</li>
+        <li>A chave <strong>nunca vai para a Google nem para o projeto Éteris</strong>. Fica nos seus aparelhos e no
+          código de recuperação mostrado uma única vez, só a si.</li>
+        <li>Os nomes dos ficheiros são opacos; os conteúdos são preenchidos para não revelar tamanhos exatos.</li>
+        <li>Sem o código de recuperação e sem nenhum aparelho ligado, a cópia na nuvem não pode ser recuperada — por ninguém.</li>
+      </ul>
+
+      <h3>5.4 O que a Google vê</h3>
+      <ul>
+        <li>que a sua conta autorizou a aplicação «Éteris», e quando houve início de sessão e renovação de tokens;</li>
+        <li>os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos e tamanhos aproximados
+          (o espaço conta na quota do seu Drive — poucos MB);</li>
+        <li><strong>nunca</strong> o conteúdo: favoritos, endereços, títulos, notas, abas, definições, Espaços, decisões
+          do Escudo ou nomes dos aparelhos.</li>
+      </ul>
+      <p>O tratamento destes dados pela Google rege-se pela
+        <a href="https://policies.google.com/privacy">Política de Privacidade da Google</a>.</p>
+
+      <h3>5.5 Conservação e eliminação</h3>
+      <ul>
+        <li><strong>No Éteris:</strong> Definições › Sincronização › «Sair» apaga deste computador os tokens e a conta
+          guardada e revoga o acesso do Éteris na Google.</li>
+        <li><strong>Retirar o acesso na Google:</strong>
+          <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> › Éteris › Remover acesso.</li>
+        <li><strong>Apagar os ficheiros no Drive:</strong> <a href="https://drive.google.com/">drive.google.com</a> ›
+          Definições › Gerir aplicações › Éteris › Opções › «Eliminar dados ocultos da aplicação».</li>
+        <li>Os ficheiros ficam no seu Drive até os apagar assim; o Éteris apaga sozinho os lotes antigos que todos os
+          seus aparelhos já leram. O projeto Éteris não tem cópia nenhuma.</li>
+      </ul>
+    </section>
+
+    <section id="limited-use">
+      <h2>6. Conformidade com a política de dados de utilizador das APIs da Google</h2>
+      <p>A utilização e a transferência, para qualquer outra aplicação, de informação recebida das APIs da Google pelo
+        Éteris respeitam a <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services
+        User Data Policy</a>, incluindo os requisitos de <strong>Limited Use</strong> (utilização limitada). Em concreto:</p>
+      <ul>
+        <li>os dados de utilizador da Google são usados <strong>só</strong> para a funcionalidade que vê na interface —
+          sincronizar os seus dados e mostrar com que conta está ligado — e para nada mais;</li>
+        <li>não são transferidos para ninguém, exceto quando a lei o exigir (e o projeto, sem servidores, nem os tem);</li>
+        <li>não são usados nem transferidos para publicidade, incluindo publicidade personalizada ou de reorientação
+          (retargeting), nem vendidos, nem usados para avaliar crédito ou para empréstimos;</li>
+        <li>nenhuma pessoa os lê: ficam no seu computador e, no Drive, cifrados com uma chave que só os seus aparelhos têm;</li>
+        <li>não são usados para criar, treinar ou melhorar modelos de inteligência artificial ou de aprendizagem automática.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. Segurança</h2>
+      <p>Cifra ponta a ponta na sincronização, tokens e conta protegidos com DPAPI, OAuth com PKCE e redirecionamento só para
+        <code>127.0.0.1</code>, e código aberto que qualquer pessoa pode auditar. Se encontrar um problema de segurança,
+        avise em <a href="https://github.com/mrtjr/eteris/issues">GitHub Issues</a> (sem publicar dados pessoais).</p>
+    </section>
+
+    <section>
+      <h2>8. Alterações e contacto</h2>
+      <p>Se esta política mudar, a versão nova é publicada nesta página com a data, e as alterações ficam registadas no
+        histórico do repositório. Se o Éteris passar a usar dados da Google de outra maneira, pede-lhe consentimento
+        antes. Contacto: <a href="https://github.com/mrtjr/eteris/issues">github.com/mrtjr/eteris/issues</a>.</p>
+      <p class="small">Última atualização: 8 de novembro de 2026.</p>
+    </section>
+
+    <!-- English version -->
+    <div class="lang" id="en" lang="en">
+      <span class="badge">English</span>
+      <h1>Éteris privacy policy</h1>
+      <p class="small">Effective 8 November 2026. The Portuguese and English versions say the same thing.</p>
+
+      <div class="note ok">
+        <strong>In short.</strong> Éteris is a browser that runs on your computer. It has no telemetry and no servers,
+        and the project receives no data from you. Google Drive sync is optional, off by default, uses only the app's own
+        hidden folder and is end-to-end encrypted: the key stays on your devices, and neither Google nor the Éteris
+        project can read what is stored there.
+      </div>
+
+      <section>
+        <h2>1. Scope</h2>
+        <p>This policy covers the Éteris application for Windows (the browser) and this website. Éteris is free software
+          (GPL-3.0-or-later), maintained as an open-source project at
+          <a href="https://github.com/mrtjr/eteris">github.com/mrtjr/eteris</a>. Websites you visit with Éteris have their
+          own policies.</p>
+      </section>
+
+      <section>
+        <h2>2. Data that stays on your computer</h2>
+        <p>History, bookmarks, tabs and sessions, notes, settings, Shield decisions, cookies, cache, site permissions and
+          the <code>eteris://privacy/</code> report (numbers only) are stored in the Éteris profile folder on your computer.
+          They are not sent to the Éteris project or to anyone else. You can delete them inside Éteris or by uninstalling
+          the app and deleting the profile folder.</p>
+      </section>
+
+      <section>
+        <h2>3. No telemetry, no Éteris servers</h2>
+        <ul>
+          <li>Éteris sends no usage statistics, crash reports, device identifiers or browsing data.</li>
+          <li>There are no Éteris servers: the project does not receive, store or have access to user data.</li>
+          <li>No advertising, no user profiling, no sale or sharing of data.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4. Connections Éteris makes on its own</h2>
+        <ul>
+          <li><strong>Updates:</strong> checks GitHub (<code>github.com/mrtjr/eteris</code> releases) for a new version and downloads it from there. GitHub sees the request's IP address.</li>
+          <li><strong>Shield lists:</strong> downloads uBlock Origin filter lists from <code>ublockorigin.github.io</code>.</li>
+          <li><strong>Search suggestions:</strong> only if you turn them on (off by default), what you type in the address bar is sent to your chosen search engine.</li>
+          <li><strong>Encrypted DNS:</strong> only if you choose it, site names are resolved by the chosen provider.</li>
+          <li><strong>Google:</strong> only with sync turned on and after “Sign in with Google” (section 5).</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>5. “Sign in with Google” and sync</h2>
+        <p>Sync is <strong>optional and off by default</strong>. Nothing is requested from Google until you turn it on
+          and click “Sign in with Google”. Google's sign-in screen opens in your system browser; Éteris never sees your
+          Google password.</p>
+
+        <h3>5.1 The permission requested and why</h3>
+        <p>Éteris requests <strong>only</strong> the <code>https://www.googleapis.com/auth/drive.appdata</code> scope
+          (classified by Google as non-sensitive). It is used for one thing: to store, read, replace and delete the
+          encrypted sync files in the <strong>hidden application data folder</strong> (“appDataFolder”) of your Google
+          Drive, so your data reaches your other devices.</p>
+        <ul>
+          <li>With this scope Éteris <strong>has no access to any file outside its own app folder</strong>: it cannot see,
+            list, read or change your documents, photos or other Drive folders. The code only requests the app folder
+            (<code>spaces=appDataFolder</code>).</li>
+          <li>It does not request access to Gmail, contacts, calendar or any other Google service.</li>
+        </ul>
+
+        <h3>5.2 Google user data Éteris accesses</h3>
+        <div class="table"><table>
+          <thead><tr><th>Data</th><th>Purpose</th><th>Where it is kept</th></tr></thead>
+          <tbody>
+            <tr><td>Files Éteris itself created in the hidden app folder</td>
+                <td>Syncing your data between your devices</td>
+                <td>In your Google Drive, encrypted; decrypted only on your devices</td></tr>
+            <tr><td>Google account name and email address (requested once from Drive after sign-in:
+                  <code>about?fields=user(displayName,emailAddress)</code>)</td>
+                <td>Showing which account is connected, in the menu and in Settings</td>
+                <td>Only on your computer, encrypted with Windows data protection (DPAPI); deleted on “Sign out”</td></tr>
+            <tr><td>OAuth access and refresh tokens</td>
+                <td>Calling the Drive API without signing in every time</td>
+                <td>Only on your computer, encrypted with DPAPI; deleted and revoked on “Sign out”</td></tr>
+          </tbody>
+        </table></div>
+        <p>None of this data is sent to the Éteris project or to third parties: Éteris has no servers. Requests go
+          directly from your computer to Google's servers (<code>oauth2.googleapis.com</code> and
+          <code>www.googleapis.com</code>) over HTTPS; Éteris refuses any other address on that channel.</p>
+
+        <h3>5.3 What goes to Drive, end-to-end encrypted</h3>
+        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions, notes and the tabs
+          open on each device. History, cookies, cache and site permissions are not synced.</p>
+        <ul>
+          <li>Everything is encrypted <strong>on your computer, before it leaves</strong>, with AES-256-GCM and one key
+            per file, derived from a 256-bit secret generated on your computer.</li>
+          <li>The key <strong>never goes to Google or to the Éteris project</strong>. It stays on your devices and in the
+            recovery code shown once, only to you.</li>
+          <li>File names are opaque; contents are padded so exact sizes are not revealed.</li>
+          <li>Without the recovery code and without a connected device, the cloud copy cannot be recovered — by anyone.</li>
+        </ul>
+
+        <h3>5.4 What Google sees</h3>
+        <ul>
+          <li>that your account authorized the “Éteris” app, and when sign-in and token refreshes happened;</li>
+          <li>Drive API requests: times, IP address, number of files, opaque names and approximate sizes (the space counts against your Drive quota — a few MB);</li>
+          <li><strong>never</strong> the content: bookmarks, addresses, titles, notes, tabs, settings, Spaces, Shield decisions or device names.</li>
+        </ul>
+        <p>Google's processing of this data is governed by the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</p>
+
+        <h3>5.5 Retention and deletion</h3>
+        <ul>
+          <li><strong>In Éteris:</strong> Settings › Sync › “Sign out” deletes the tokens and the stored account from this computer and revokes Éteris's access at Google.</li>
+          <li><strong>Revoke access at Google:</strong> <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> › Éteris › Remove access.</li>
+          <li><strong>Delete the files in Drive:</strong> <a href="https://drive.google.com/">drive.google.com</a> › Settings › Manage apps › Éteris › Options › “Delete hidden app data”.</li>
+          <li>The files stay in your Drive until you delete them this way; Éteris itself deletes old batches that all your devices have already read. The Éteris project keeps no copy.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>6. Compliance with the Google API Services User Data Policy</h2>
+        <p><strong>Éteris's use and transfer to any other app of information received from Google APIs will adhere to the
+          <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+          including the Limited Use requirements.</strong> Specifically:</p>
+        <ul>
+          <li>Google user data is used <strong>only</strong> to provide the user-facing feature you see in the interface — syncing your data and showing which account is connected — and nothing else;</li>
+          <li>it is not transferred to anyone, except as required by law (and the project, having no servers, does not hold it);</li>
+          <li>it is not used or transferred for advertising, including personalized or retargeted advertising, not sold, and not used to determine creditworthiness or for lending purposes;</li>
+          <li>no human reads it: it stays on your computer and, in Drive, is encrypted with a key only your devices have;</li>
+          <li>it is not used to develop, train or improve artificial intelligence or machine learning models.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>7. Security</h2>
+        <p>End-to-end encryption for sync, tokens and account protected with DPAPI, OAuth with PKCE and a redirect to
+          <code>127.0.0.1</code> only, and open-source code anyone can audit. To report a security problem, open an issue
+          at <a href="https://github.com/mrtjr/eteris/issues">GitHub Issues</a> (without posting personal data).</p>
+      </section>
+
+      <section>
+        <h2>8. Changes and contact</h2>
+        <p>If this policy changes, the new version is published on this page with its date, and changes are recorded in
+          the repository history. If Éteris ever uses Google data in a new way, it will ask for your consent first.
+          Contact: <a href="https://github.com/mrtjr/eteris/issues">github.com/mrtjr/eteris/issues</a>.</p>
+        <p class="small">Last updated: 8 November 2026.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <nav aria-label="Ligações">
+      <a href="./">Éteris</a>
+      <a href="termos.html">Termos de utilização · Terms of use</a>
+      <a href="https://github.com/mrtjr/eteris">GitHub</a>
+      <a href="https://github.com/mrtjr/eteris/issues">Contacto · Contact</a>
+    </nav>
+    <p>Esta página não usa cookies, scripts nem rastreadores. · <span lang="en">This page uses no cookies, scripts or trackers.</span></p>
+  </footer>
+</div>
+</body>
+</html>
