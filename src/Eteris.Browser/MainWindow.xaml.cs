@@ -81,6 +81,7 @@ public partial class MainWindow : Window
         StartBounceWatch();
         StartAudioWatch();
         SetUpLiveDot();
+        WatchUnseen();
         WatchMiniBar();
         WatchOmniboxMenu();
         SetUpSideFilter();
@@ -305,6 +306,8 @@ public partial class MainWindow : Window
         browser.FrameLoadStart += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
+            CaptureSessions.Ended(e.Browser.Identifier);
             StartupTrace.MarkOnce("aba.1.commit");
             // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a
             // contagem do Escudo recomeça aqui, no commit.
@@ -568,6 +571,8 @@ public partial class MainWindow : Window
 
     private void OnWindowStateChanged()
     {
+        // Ajuste e8 (MainWindow.Unseen.cs): a página à vista esconde-se ao minimizar antes de o CefSharp a encolher a 0×0.
+        ReviewUnseen();
         var maximized = WindowState == WindowState.Maximized;
         var frame = SystemParameters.WindowResizeBorderThickness;
         // Maximizada com moldura, o Windows estende a janela para lá do ecrã; sem moldura (ecrã inteiro) não.
