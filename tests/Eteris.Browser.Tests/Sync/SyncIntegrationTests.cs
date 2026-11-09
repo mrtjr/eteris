@@ -79,6 +79,20 @@ public class SyncIntegrationTests
         Assert.Equal(@"C:\pasta", SyncService.TestFolderFor(@" C:\pasta ", installed: false));
     }
 
+    // Com a secção Sincronização à vista, a página volta a procurar pedidos de aparelhos novos de 5 em 5 s — só depois
+    // de um gesto, com a sincronização ligada, a página à vista, e até 10 minutos depois do último gesto (só os pedidos,
+    // sem reler a lista de aparelhos).
+    [Fact]
+    public void SettingsPage_LooksForRequestsWhileTheSectionIsVisible_OnlyAfterAGesture()
+    {
+        var page = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.Contains("askGoogle('sync-look', ++looks % 6 === 0 ? '' : '&devices=0', true)", page, StringComparison.Ordinal);
+        Assert.Contains("if (!looked || !seen || document.visibilityState !== 'visible' || !lastState || !lastState.enabled) return;", page, StringComparison.Ordinal);
+        Assert.Contains("if (Date.now() - lastGesture > 10 * 60 * 1000) return;", page, StringComparison.Ordinal);
+        Assert.Contains("Sync.SyncService.Look(devices: InternalPages.Query(uri, \"devices\") != \"0\")",
+            File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs")), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void MenuSummary_SaysWhereTheSyncIs()
     {

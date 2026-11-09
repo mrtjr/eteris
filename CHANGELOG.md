@@ -29,6 +29,31 @@
   ligada, diz a exceção escolhida (só os pedidos da sincronização, cifrados, para o seu Drive, e quando).
 - Publicação: `build/publish.ps1 -GoogleOAuthJson <ficheiro>` põe o identificador da aplicação Google na instalação
   (verificado; nunca no repositório); sem ele publica sem login e avisa.
+- **Mais seguro ao remover um aparelho:** antes de trocar a chave faz uma ronda completa e os outros computadores
+  voltam a pôr na conta nova o que tinham mudado, por isso nada do que já tinham enviado se perde; a troca resiste a
+  uma falha de rede a meio (acaba na ronda seguinte); o aparelho removido não consegue desviar os outros para uma conta
+  dele, e só recebem a chave nova os aparelhos que estavam na lista. «Gerar um código de recuperação novo» nas
+  Definições.
+- **Parar nunca apaga a chave:** dados apagados noutro aparelho, um registo de chaves danificado ou entrar com outra
+  conta Google param (ou põem em pausa) a sincronização sem apagar a chave deste computador; de volta à conta certa,
+  continua sem código.
+- **Uma leitura que falha não apaga nada** nos outros computadores (favoritos, Escudo, notas ou Espaços que não se
+  conseguiram ler ficam de fora dessa ronda).
+- **Janela privada:** desligar o Escudo num site, o modo estrito e esconder um elemento ficam só nessa sessão privada
+  (não vão para o perfil nem sincronizam), como no Chrome, no Firefox e no Brave.
+- **Autorização da Google retirada ou expirada:** «Sincronização em pausa: entre outra vez» no menu e «Entrar outra
+  vez» nas Definições, em vez de tentar para sempre.
+- **Pedidos de computadores novos:** respondidos só quando abre o menu (⋯) ou com a secção Sincronização à vista (que
+  agora os mostra sem recarregar); dois computadores ligados a responder ao mesmo pedido já não o fazem falhar.
+- **Definições › Sincronização mais fáceis de usar pelo teclado e com leitor de ecrã:** os pedidos e a lista de
+  aparelhos já não perdem o foco a cada atualização; «Remover» anuncia a confirmação; as mensagens são anunciadas;
+  depois de cada ação o foco vai para o que apareceu; «Escolher ficheiro…» é um botão. Um código de recuperação com uma
+  gralha deixa tentar outra vez sem o escrever de novo. «Apagar…» e «Remover» não se confirmam com um duplo clique, e
+  «Apagar…» tem «Cancelar». «Sair» com «apagar a chave» pede confirmação se o código ainda não foi guardado. Quem perdeu
+  o código e não tem outro computador vê a saída («apagar os dados do Éteris no Drive e começar de novo»).
+- `eteris://privacy/`: a exceção da sincronização diz tudo o que sai para a Google (o menu ⋯, a renovação da sessão, o
+  nome e o e-mail da conta e as ações que pede) e aparece também com sessão Google e a sincronização desligada; com ela
+  desligada, abrir o menu já não pede nada à Google.
 
 ## 0.2.12 — 2026-11-08
 

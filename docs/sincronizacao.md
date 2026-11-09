@@ -83,11 +83,45 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   primeira vez que a veem; a conta nova vai em `eteris/<cadeia antiga>/r/<aparelho>/<de>`, cifrada com ECDH entre as
   chaves estáticas de quem remove e de quem fica. O removido não tem mensagem para si e não consegue forjar uma (não tem
   as chaves privadas dos outros): para — «a sincronização parou… este computador foi removido noutro aparelho».
+  Pormenores que a revisão do login completo acrescentou:
+  - **Antes de trocar a chave, uma ronda completa** (o que os outros enviaram e este ainda não leu entra no estado que
+    passa para a conta nova); e quem recebe a conta nova volta a pôr nela o que escreveu na antiga, com a hora original
+    e as lápides (`RestageOwn`): o LWW decide contra o instantâneo de quem trocou a chave, e nada se perde nem ressuscita.
+  - **Em dois passos**: a conta nova é criada sem tocar na antiga e **guardada** (segredo, estado e `RotationPending`)
+    antes de se escreverem as mensagens `r/` e de se apagar a cadeia antiga — o registo de chaves em último lugar, porque
+    é a falta dele que manda os outros procurar a mensagem. Uma falha a meio acaba na ronda seguinte.
+  - **Só os aparelhos que o utilizador viu na lista e com a chave fixada antes** recebem a conta nova (a troca não fixa
+    chaves novas: um estado `a/` inventado à pressa pelo removido não entra); se aparecer outro, o aviso diz o nome.
+    Depois da troca, os que ficaram continuam na lista (pela chave fixada) até escreverem o seu estado na conta nova.
+  - A mensagem diz **quem foi removido e quem fica**: um remetente que outra mensagem válida dá como removido é recusado
+    (o removido também tinha as chaves fixadas e podia deixar uma «conta nova» dele); remetentes que se contradizem, ou
+    contas novas diferentes, **param sem escolher** (junta-se outra vez com o código ou por aprovação); as chaves do
+    removido não passam para a conta nova. As mensagens só saem do Drive **depois** de a conta nova ficar guardada, e um
+    aparelho desligado durante **duas remoções seguidas** segue as duas (até 8 saltos).
+  - **«Gerar um código de recuperação novo»** (Definições, com confirmação): a mesma troca de chave, sem tirar ninguém.
+- **Parar não apaga a chave.** Conta desaparecida (dados apagados, este aparelho removido, outra conta Google), registo
+  de chaves que não abre (alterado ou danificado) ou outra conta Google: a sincronização para ou fica em pausa, a chave
+  fica (e, nos dois últimos casos, o estado todo). O estado guarda uma impressão digital da conta Google (não o e-mail):
+  com outra sessão, «A sincronização está em pausa: a sessão é de outra conta Google…» e nada se mexe até o utilizador
+  voltar à conta certa (retoma sem código) ou carregar em «Ligar outra vez» para usar esta.
+- **Uma leitura que falha não apaga nada.** Favoritos, Escudo, notas ou Espaços que não se conseguem ler numa ronda
+  (base de dados ocupada, ficheiro bloqueado pelo antivírus, sem janela nem sessão gravada) ficam de fora dessa ronda —
+  sem remoções e com a base como estava — em vez de contarem como «vazios» (o que apagava em todos os aparelhos).
+- **Escudo numa janela privada**: desligar o Escudo num site, o modo estrito e «esconder um elemento» numa janela
+  privada ficam só em memória até a sessão privada acabar (como os bloqueios por site e a exceção ao HTTPS primeiro):
+  nem vão para o perfil, nem sincronizam.
+- **Dois computadores a criar a conta ao mesmo tempo** (Drive vazio para os dois): na primeira meia hora, enquanto
+  estiver sozinho na conta que criou, cada um confere se há outra; a de identificador menor fica e o outro sai da sua
+  (apaga-a do Drive) e volta a «escolher como entrar», sem perder nada deste computador.
 - **«Sair»** (Definições, botão da conta): a sincronização para neste aparelho e os tokens são apagados e revogados na
   Google (como antes). Com «Ao sair, apagar também a chave da sincronização deste computador», o estado local sai todo
-  e voltar exige o código ou outro aparelho; sem ela, entrar outra vez retoma sem código.
+  e voltar exige o código ou outro aparelho (com o código de recuperação ainda por guardar, pede confirmação); sem ela,
+  entrar outra vez retoma sem código e o código por guardar continua à vista até «Já guardei». Uma ronda a meio não
+  volta a gravar a chave depois de «Sair».
 - **«Apagar os meus dados do Éteris no Google Drive»** (com confirmação): apaga todos os ficheiros do Éteris da pasta
-  da aplicação (todas as contas e pedidos), **sem revogar** nem sair da conta Google. Os dados deste computador ficam;
+  da aplicação (todas as contas e pedidos, e os duplicados com o mesmo nome; lista outra vez até a pasta ficar vazia, no
+  máximo 4 passagens), **sem revogar** nem sair da conta Google. A confirmação aparece por baixo, com «Cancelar» no
+  lugar onde se carregou, não aceita o 2.º clique de um duplo clique e desarma-se ao fim de 10 s. Os dados deste computador ficam;
   a sincronização fica desligada aqui e, nos outros aparelhos, para na ronda seguinte (não recriam a conta sozinhos,
   o que desfaria o «apagar»). «Ligar outra vez» cria uma conta nova.
 
@@ -485,4 +519,12 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   agendador (30 s depois da janela, 10 s depois de uma alteração, 10 min, espera crescente).
 - `SyncEngineTests.RemovedDevice_IsLeftOut_TheOthersGetTheNewChain` — a conta nova entregue aos que ficam; o removido
   não tem mensagem e uma forjada por ele não abre.
+- Revisão do login completo: `SyncEngineTests` (`Rotation_DoesNotLoseWhatAStayingDeviceSentButTheRotatorNeverRead`,
+  `RemovedDevice_CannotHijackTheOthers_WithAnAccountOfItsOwn`, `Rotation_GivesTheNewAccountOnlyToDevicesPinnedBefore`,
+  `Rotation_InTwoSteps_OldAccountIntactUntilTheSecond_WhichCanBeRepeated`), `SyncAgentTests` (o que outro aparelho
+  enviou e quem remove não leu fica; troca interrompida acaba na ronda seguinte; duas remoções seguidas; aparelho que
+  aparece à pressa não recebe a chave; «Sair» a meio de uma ronda; outra conta Google; registo de chaves que não abre;
+  pedidos só contados nas rondas; coleção ilegível não apaga; dois computadores a criar a conta; autorização retirada;
+  código novo), `SyncPairingTests.TwoHostsAnswerTheSameRequest_TheOneNotChosenStepsAsideQuietly`,
+  `GoogleSyncTests.Drive_CreateThatFailsAfterCreating_LeavesOneFile_AndDeleteRemovesDuplicates` e `PrivateShieldTests`.
 - `PrivacyPageTests.NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`.

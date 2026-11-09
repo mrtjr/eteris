@@ -196,7 +196,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 break;
             case "/sync-look":
                 // Também só depois de um gesto, com a secção à vista: aparelhos da conta e pedidos de aparelhos novos.
-                Sync.SyncService.Look(devices: true);
+                // A página repete-o de 5 em 5 s enquanto a secção estiver à vista («devices=0»: só os pedidos).
+                Sync.SyncService.Look(devices: InternalPages.Query(uri, "devices") != "0");
                 break;
             case "/sync-start":
                 // «Ligar a sincronização» / «Ligar outra vez» (depois de ler o porquê): também com outra conta Google.

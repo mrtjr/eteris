@@ -123,14 +123,12 @@
   .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
   .syncnote.bad { color: #ffb3c1; }
   .syncheld { margin: 6px 0 0; padding-left: 18px; color: #ffd8a8; font-size: 12.8px; line-height: 1.45; }
-  .syncheld[hidden], #importWeaker[hidden] { display: none; }
+  .syncheld[hidden], #importWeaker[hidden], #syncDeleteCancel[hidden], #syncReauth[hidden] { display: none; }
   #importWeaker { margin-top: 8px; }
   .syncform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
   .syncform input[type=text] { font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line);
     border-radius: 12px; padding: 9px 12px; width: min(100%, 420px); }
-  .syncform label.action { font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; padding: 9px 16px; border-radius: 12px;
-    border: 1px solid var(--line); background: rgba(255, 255, 255, .05); }
-  .syncform label.action:hover { background: rgba(255, 255, 255, .1); }
+>>>
   .syncform .filename { color: var(--muted); font-size: 12.5px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .syncform.left { justify-content: flex-start; margin-top: 10px; }
   .stack { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
@@ -165,6 +163,7 @@
   html.light .code, html.light .syncform input[type=text] { background: rgba(20, 24, 40, .05); }
   html.light .syncalert { background: color-mix(in srgb, var(--accent) 8%, transparent); }
   html.light .syncnote.bad, html.light #syncState.bad { color: #b4233c; }
+  html.light .syncheld { color: #9a4a00; }
   html.light button.action.danger { color: #b4233c; border-color: rgba(180, 35, 60, .35); }
   html.light .saved { background: #fff; box-shadow: 0 12px 40px rgba(20, 24, 40, .18); }
   html.light .logo::after { background: #f3f4f9; box-shadow: inset 0 0 0 5px #1b1f2a; }
@@ -406,20 +405,21 @@
             <span class="syncnote" id="syncPrivateNote" hidden>Numa janela privada a sincronização não está disponível e a conta não aparece: abra as Definições numa janela normal.</span>
             <span class="syncnote" id="googleNote"></span>
             <div class="code" id="googleUrl" hidden></div>
-            <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o código de recuperação ou outro computador)</small></label></div>
+            <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o código de recuperação ou outro computador)</small></label>
+            <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span></div>
           <button class="action" id="googleButton" aria-describedby="googleNote">Entrar com o Google</button>
         </div>
         <div class="syncbody" id="syncBody" hidden>
           <div class="item syncalert" id="syncCodeItem" hidden>
             <div class="label"><b>Código de recuperação — guarde-o agora</b><span>É a chave da sua conta de sincronização. <strong>Sem este código e sem outro computador ligado, os dados na nuvem não se recuperam</strong>: nem a Google nem o Éteris os conseguem abrir. Guarde-o num gestor de palavras-passe ou em papel. Só aparece até carregar em «Já guardei».</span>
               <div class="code" id="syncCode" aria-label="Código de recuperação"></div>
-              <span class="syncnote" id="syncCodeNote" hidden></span></div>
+              <span class="syncnote" id="syncCodeNote" role="status" hidden></span></div>
             <div class="stack"><button class="action" id="syncCodeCopy">Copiar</button><button class="action" id="syncCodeSaved">Já guardei</button></div>
           </div>
           <div class="item" id="syncStateItem" hidden>
             <div class="label"><b>Estado</b><span id="syncState" role="status">—</span>
-              <span class="syncnote" id="syncNotice" hidden></span></div>
-            <button class="action" id="syncNow">Sincronizar agora</button>
+              <span class="syncnote" id="syncNotice" role="status" hidden></span></div>
+            <div class="stack"><button class="action" id="syncReauth" hidden>Entrar outra vez</button><button class="action" id="syncNow">Sincronizar agora</button></div>
           </div>
           <div class="item" id="syncOffItem" hidden>
             <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
@@ -427,15 +427,16 @@
           </div>
           <div class="item" id="syncChooseItem" hidden>
             <div class="label"><b>Este Google Drive já tem dados do Éteris</b><span>Junte este computador à sua conta de sincronização: aprove-o noutro computador onde o Éteris já sincroniza, ou use o código de recuperação. Os dados deste computador juntam-se aos da conta — nada se perde.</span>
+              <span class="syncnote">Perdeu o código e não tem outro computador ligado? Pode <a href="#syncDeleteItem" id="syncLostLink">apagar os dados do Éteris no Drive</a> e começar de novo com uma conta nova (perde-se o que só estava na nuvem; os dados deste computador ficam).</span>
               <form class="syncform left" id="syncJoinForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
                 <input type="text" name="code" id="syncJoinCode" placeholder="Código de recuperação (14 grupos de 4)" spellcheck="false" aria-label="Código de recuperação">
                 <button class="action" type="submit" id="syncJoinButton">Usar o código de recuperação</button>
               </form>
-              <span class="syncnote" id="syncJoinNote" hidden></span></div>
+              <span class="syncnote" id="syncJoinNote" role="status" hidden></span></div>
             <button class="action" id="syncPair">Aprovar noutro computador</button>
           </div>
           <div class="item" id="syncPairItem" hidden>
-            <div class="label"><b>Aprovar noutro computador</b><span id="syncPairText">A preparar o pedido…</span>
+            <div class="label"><b>Aprovar noutro computador</b><span id="syncPairText" tabindex="-1" role="status">A preparar o pedido…</span>
               <div class="code big" id="syncPairCode" hidden aria-label="Código de verificação"></div></div>
             <div class="stack"><button class="action" id="syncPairConfirm" hidden>O outro computador mostra este código</button><button class="action" id="syncPairCancel">Cancelar</button></div>
           </div>
@@ -443,15 +444,20 @@
           <div class="item" id="syncDevicesItem" hidden>
             <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e aparece aqui um código de recuperação novo.</span>
               <ul class="devices" id="syncDevices"></ul>
-              <span class="syncnote" id="syncDevicesNote" hidden></span></div>
+              <span class="syncnote" id="syncDevicesNote" role="status" hidden></span></div>
+          </div>
+          <div class="item" id="syncNewCodeItem" hidden>
+            <div class="label"><b>Código de recuperação</b><span>Perdeu o código, ou alguém o pode ter visto? Gere um novo: a conta muda de chave, o código antigo deixa de servir e os outros computadores continuam ligados sozinhos. O código novo aparece aqui uma vez.</span>
+              <span class="syncnote" id="syncNewCodeNote" role="status" hidden></span></div>
+            <button class="action" id="syncNewCode">Gerar um código novo…</button>
           </div>
           <div class="item">
-            <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris, 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora». Sem rede, volta a tentar sozinho.</span></div>
+            <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris (ou 10 s depois de uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora»; com esta secção à vista ou ao abrir o menu (⋯), procura pedidos de outros computadores. Sem rede, volta a tentar sozinho.</span></div>
           </div>
           <div class="item" id="syncDeleteItem">
             <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
-              <span class="syncnote" id="syncDeleteNote" hidden></span></div>
-            <div class="stack"><button class="action danger" id="syncDelete">Apagar…</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
+              <span class="syncnote" id="syncDeleteNote" role="status" hidden></span></div>
+            <div class="stack"><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
           </div>
         </div>
         <div class="item">
@@ -462,12 +468,12 @@
         </div>
         <div class="item">
           <div class="label"><b>Importar perfil cifrado</b><span>Junta um perfil exportado a este: o que falta entra, as definições do ficheiro passam a valer e as notas ficam por baixo das atuais. O que baixaria a proteção deste computador só entra se confirmar.</span>
-            <span class="syncnote" id="importNote" hidden></span>
+            <span class="syncnote" id="importNote" role="status" hidden></span>
             <ul class="syncheld" id="importHeld" hidden></ul>
             <button class="action" type="button" id="importWeaker" hidden>Aplicar também estas alterações</button></div>
           <form class="syncform" id="syncImportForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
             <span class="filename" id="syncFileName">Nenhum ficheiro escolhido</span>
-            <label class="action" for="syncFile">Escolher ficheiro…</label>
+            <button class="action" type="button" id="syncFileButton" aria-describedby="syncFileName">Escolher ficheiro…</button>
             <input type="file" id="syncFile" accept=".eteris" hidden>
             <input type="text" name="code" id="syncCode2" placeholder="Código (14 grupos de 4)" spellcheck="false" aria-label="Código do perfil exportado">
             <input type="hidden" name="data" id="syncData">
@@ -678,8 +684,17 @@
       return frame;
     };
     const ask = (path, handler, extra) => { sinkFor(handler).src = `eteris://${location.host}/${path}?t=${data.token}&n=${Date.now()}${extra || ''}`; };
-    const note = (el, text, bad) => { el.hidden = !text; el.textContent = text || ''; el.classList.toggle('bad', !!bad); };
+    // As notas são regiões vivas: um erro é anunciado já (alert), o resto quando o leitor de ecrã puder (status). Só se
+    // mexe no texto quando muda (as sondagens repetidas não voltam a anunciar o mesmo).
+    const note = (el, text, bad) => {
+      const value = text || '';
+      if (el.textContent !== value) el.textContent = value;
+      el.hidden = !value; el.classList.toggle('bad', !!bad);
+      if (value) el.setAttribute('role', bad ? 'alert' : 'status');
+    };
     const $ = id => document.getElementById(id);
+    // Confirmação em dois passos: o 2.º clique só conta meio segundo depois do 1.º (um duplo clique não confirma).
+    const ARM_GUARD = 500;
 
     const exportButton = $('exportButton');
     exportButton.addEventListener('click', () => {
@@ -695,6 +710,8 @@
 
     const form = $('syncImportForm');
     const file = $('syncFile');
+    // O <input type=file> fica escondido; o botão abre o mesmo seletor e entra na ordem do Tab.
+    $('syncFileButton').addEventListener('click', () => file.click());
     file.addEventListener('change', () => {
       $('syncFileName').textContent = file.files && file.files[0] ? file.files[0].name : 'Nenhum ficheiro escolhido';
     });
@@ -739,14 +756,14 @@
     const googleTitle = $('googleTitle');
     const googleNote = $('googleNote');
     const googleUrl = $('googleUrl');
-    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, lastState = null, quickUntil = 0;
+    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null;
     // Pedidos do estado (estado, conta, entrar, sair, ações): só a resposta mais recente desenha. Uma resposta
     // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
-    const askGoogle = (path, extra) => {
+    const askGoogle = (path, extra, quiet) => {
       const seq = ++googleAsked;
       // Depois de uma ação (entrar, ligar, aprovar, procurar pedidos…), o resultado chega em segundo plano: pergunta
-      // amiúde durante uns segundos.
-      if (path !== 'sync-status') quickUntil = Date.now() + 15000;
+      // amiúde durante uns segundos. A procura periódica de pedidos (quiet) não conta como ação.
+      if (path !== 'sync-status' && !quiet) quickUntil = Date.now() + 15000;
       ask(path, d => { if (seq < googlePainted) return; googlePainted = seq; paint(d); }, extra);
     };
     // Nome e e-mail da conta: se há sessão sem conta guardada, pedem-se uma vez quando a secção fica à vista DEPOIS de
@@ -763,6 +780,17 @@
       looked = true;
       askGoogle('sync-look');
     };
+    // Enquanto a secção está à vista (e a página também), com a sincronização ligada, volta a procurar pedidos de 5 em
+    // 5 s — o pedido de um computador novo aparece aqui sem recarregar — até 10 minutos depois do último gesto.
+    // A lista de aparelhos relê-se de 30 em 30 s (cada vez lê o estado de todos os aparelhos).
+    let lastGesture = 0, looks = 0;
+    const lookAgain = () => {
+      setTimeout(lookAgain, 5000);
+      if (!looked || !seen || document.visibilityState !== 'visible' || !lastState || !lastState.enabled) return;
+      if (Date.now() - lastGesture > 10 * 60 * 1000) return;
+      askGoogle('sync-look', ++looks % 6 === 0 ? '' : '&devices=0', true);
+    };
+    setTimeout(lookAgain, 5000);
     const paintGoogle = g => {
       googleNote.textContent = g.text;
       googleUrl.hidden = !g.url; googleUrl.textContent = g.url || '';
@@ -778,6 +806,18 @@
       if (g.state !== 'signedIn') accountAsked = false;
     };
     const show = (id, on) => { $(id).hidden = !on; };
+    // Pedidos e aparelhos: só se reconstroem quando a lista muda (as sondagens de 1,5 s não tiram o foco do teclado, não
+    // desarmam um «Remover» à espera da confirmação nem voltam a ativar um «Aprovar» já carregado).
+    let requestsKey = null, devicesKey = null;
+    const approving = new Set();            // pedidos com «Aprovar» ou «Recusar» já carregado
+    const armed = new Map();                // aparelho → hora em que «Remover» ficou à espera da confirmação
+    const keyOfFocus = box => box.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+    const refocus = (box, key) => { if (key) box.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus(); };
+    const paintRemove = (button, dev) => {
+      const on = armed.has(dev.id);
+      button.textContent = on ? 'Confirmar: remover e trocar a chave' : 'Remover';
+      button.setAttribute('aria-label', on ? `Confirmar: remover ${dev.name} e trocar a chave da conta` : `Remover ${dev.name} da sincronização`);
+    };
     const paintSync = d => {
       const s = d.sync || { phase: 'off' };
       const phase = s.phase;
@@ -801,14 +841,25 @@
       $('syncState').classList.toggle('bad', !!s.error && !s.running);
       note($('syncNotice'), phase === 'on' ? s.notice : '');
       $('syncNow').disabled = !!s.running;
+      // A autorização da Google expirou ou foi retirada: não passa sozinho — entrar outra vez (sem sair nem mexer na chave).
+      show('syncReauth', !!s.needsSignIn && !d.google.folder);
+      // Gerar um código novo (com a conta ligada e sem um código ainda por guardar).
+      show('syncNewCodeItem', d.enabled && phase === 'on' && !s.code);
+      note($('syncNewCodeNote'), msg0(d, 'code'), true);
       // Código de recuperação (só no aparelho que criou a conta, ou depois de remover um aparelho).
       show('syncCodeItem', d.enabled && !!s.code);
       if (s.code && $('syncCode').textContent !== s.code) $('syncCode').textContent = s.code;
-      // Entrar num aparelho novo.
-      $('syncJoinButton').disabled = joining || !!s.running;
+      // Entrar num aparelho novo. O botão volta quando a junção acabou: deu certo (a fase muda), deu erro (a mensagem
+      // «join»), ou a ronda acabou sem nada (por exemplo sem rede). O código só sai do campo quando deu certo.
       const msg = d.message || null;
-      note($('syncJoinNote'), msg && msg.area === 'join' ? msg.text : (s.pairing && s.pairing.error) || '', true);
-      if (phase !== 'choose') joining = false;
+      if (joining) {
+        if (phase !== 'choose') { joining = false; $('syncJoinCode').value = ''; }
+        else if (msg && msg.area === 'join') joining = false;
+        else if (!s.running && Date.now() - joinSent > 4000) joining = false;
+      }
+      $('syncJoinButton').disabled = joining || !!s.running;
+      const joinError = msg && msg.area === 'join' ? msg.text : (s.pairing && s.pairing.error) || '';
+      note($('syncJoinNote'), joinError || (phase === 'choose' && !joining ? s.notice : '') || (joining ? 'A abrir a conta e a juntar os dados…' : ''), !!joinError);
       if (phase === 'pairing') {
         const p = s.pairing || {};
         const code = p.code;
@@ -822,51 +873,81 @@
       }
       // Pedidos de aparelhos novos (este computador aprova).
       const box = $('syncRequests');
-      box.replaceChildren(...(d.enabled ? s.requests || [] : []).map(r => {
-        const item = document.createElement('div');
-        item.className = 'item syncalert';
-        const label = document.createElement('div'); label.className = 'label';
-        const title = document.createElement('b'); title.textContent = `«${r.name}» quer juntar-se à sincronização`;
-        const text = document.createElement('span');
-        text.textContent = 'Só aprove se estiver a ligar esse computador agora e ele mostrar este mesmo código. Aprovado, recebe a chave da conta (cifrada só para ele).';
-        const code = document.createElement('div'); code.className = 'code big'; code.textContent = r.code;
-        label.append(title, text, code);
-        const buttons = document.createElement('div'); buttons.className = 'stack';
-        const yes = document.createElement('button'); yes.className = 'action'; yes.textContent = 'Aprovar';
-        yes.addEventListener('click', () => { yes.disabled = true; askGoogle('sync-approve', `&id=${encodeURIComponent(r.id)}`); });
-        const no = document.createElement('button'); no.className = 'action'; no.textContent = 'Recusar';
-        no.addEventListener('click', () => { no.disabled = true; askGoogle('sync-refuse', `&id=${encodeURIComponent(r.id)}`); });
-        buttons.append(yes, no);
-        item.append(label, buttons);
-        return item;
-      }));
-      if (msg && msg.area === 'approve') note($('syncNotice'), msg.text, true);
+      const requests = d.enabled ? s.requests || [] : [];
+      for (const id of [...approving]) if (!requests.some(r => r.id === id)) approving.delete(id);
+      const rKey = JSON.stringify(requests.map(r => [r.id, r.name, r.code]));
+      if (rKey !== requestsKey) {
+        requestsKey = rKey;
+        const focused = keyOfFocus(box);
+        box.replaceChildren(...requests.map(r => {
+          const item = document.createElement('div');
+          item.className = 'item syncalert';
+          const label = document.createElement('div'); label.className = 'label';
+          const title = document.createElement('b'); title.textContent = `«${r.name}» quer juntar-se à sincronização`;
+          const text = document.createElement('span');
+          text.textContent = 'Só aprove se estiver a ligar esse computador agora e ele mostrar este mesmo código. Aprovado, recebe a chave da conta (cifrada só para ele).';
+          const code = document.createElement('div'); code.className = 'code big'; code.textContent = r.code;
+          label.append(title, text, code);
+          const buttons = document.createElement('div'); buttons.className = 'stack';
+          const yes = document.createElement('button'); yes.className = 'action'; yes.textContent = 'Aprovar'; yes.dataset.key = r.id + ':yes';
+          yes.setAttribute('aria-label', `Aprovar «${r.name}», código ${r.code}`);
+          const no = document.createElement('button'); no.className = 'action'; no.textContent = 'Recusar'; no.dataset.key = r.id + ':no';
+          no.setAttribute('aria-label', `Recusar «${r.name}»`);
+          yes.disabled = no.disabled = approving.has(r.id);
+          const act = path => { if (approving.has(r.id)) return; approving.add(r.id); yes.disabled = no.disabled = true; askGoogle(path, `&id=${encodeURIComponent(r.id)}`); };
+          yes.addEventListener('click', () => act('sync-approve'));
+          no.addEventListener('click', () => act('sync-refuse'));
+          buttons.append(yes, no);
+          item.append(label, buttons);
+          return item;
+        }));
+        refocus(box, focused);
+      }
+      if (msg && msg.area === 'approve') {
+        note($('syncNotice'), msg.text, true);
+        approving.clear(); requestsKey = null; // a aprovação falhou: os botões voltam
+      }
       // Aparelhos.
-      $('syncDevices').replaceChildren(...(s.devices || []).map(dev => {
-        const li = document.createElement('li');
-        const name = document.createElement('span'); name.className = 'devname'; name.textContent = dev.name;
-        const info = document.createElement('small'); info.textContent = (dev.me ? 'este computador · ' : '') + dev.last;
-        li.append(name, info);
-        if (!dev.me) {
-          const remove = document.createElement('button'); remove.className = 'action danger'; remove.textContent = 'Remover';
-          remove.setAttribute('aria-label', `Remover ${dev.name} da sincronização`);
-          remove.addEventListener('click', () => {
-            if (remove.dataset.armed !== '1') {
-              remove.dataset.armed = '1'; remove.textContent = 'Confirmar: remover e trocar a chave';
-              setTimeout(() => { remove.dataset.armed = ''; remove.textContent = 'Remover'; }, 6000);
-              return;
-            }
-            remove.disabled = true;
-            askGoogle('sync-remove', `&id=${encodeURIComponent(dev.id)}`);
-          });
-          li.append(remove);
-        }
-        return li;
-      }));
+      const list = $('syncDevices');
+      const devices = s.devices || [];
+      for (const id of [...armed.keys()]) if (!devices.some(dev => dev.id === id)) armed.delete(id);
+      const dKey = JSON.stringify(devices.map(dev => [dev.id, dev.name, dev.me, dev.last]));
+      if (dKey !== devicesKey) {
+        devicesKey = dKey;
+        const focused = keyOfFocus(list);
+        list.replaceChildren(...devices.map(dev => {
+          const li = document.createElement('li');
+          const name = document.createElement('span'); name.className = 'devname'; name.textContent = dev.name;
+          const info = document.createElement('small'); info.textContent = (dev.me ? 'este computador · ' : '') + dev.last;
+          li.append(name, info);
+          if (!dev.me) {
+            const remove = document.createElement('button'); remove.className = 'action danger'; remove.dataset.key = dev.id;
+            paintRemove(remove, dev);
+            remove.addEventListener('click', () => {
+              const since = armed.get(dev.id);
+              if (since === undefined) {
+                armed.set(dev.id, Date.now());
+                paintRemove(remove, dev);
+                setTimeout(() => { if (armed.get(dev.id) !== undefined && Date.now() - armed.get(dev.id) >= 5900) { armed.delete(dev.id); paintRemove(remove, dev); } }, 6000);
+                return;
+              }
+              if (Date.now() - since < ARM_GUARD) return; // 2.º clique de um duplo clique: não confirma
+              armed.delete(dev.id);
+              remove.disabled = true;
+              // Os aparelhos que esta lista mostra: só esses (com a chave já fixada) recebem a chave nova.
+              askGoogle('sync-remove', `&id=${encodeURIComponent(dev.id)}&shown=${encodeURIComponent(devices.map(x => x.id).join(','))}`);
+            });
+            li.append(remove);
+          }
+          return li;
+        }));
+        refocus(list, focused);
+      }
       note($('syncDevicesNote'), msg && msg.area === 'devices' ? msg.text : '', true);
       note($('syncDeleteNote'), msg && msg.area === 'delete' ? msg.text : '', true);
       return s;
     };
+    const msg0 = (d, area) => d.message && d.message.area === area ? d.message.text : '';
     const paint = d => {
       if (!d || !d.google) return;
       lastState = d;
@@ -879,22 +960,67 @@
         || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil;
       poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
       askLook();
+      // Depois de uma ação que muda o que está à vista, o foco vai para o que apareceu (o leitor de ecrã diz o quê).
+      if (focusAfterPaint && !$(focusAfterPaint).hidden && $(focusAfterPaint).closest('[hidden]') === null) {
+        $(focusAfterPaint).focus();
+        focusAfterPaint = null;
+      }
     };
     paint(initial);
     // O gesto que é o próprio «Sair» não pede a conta: o pedido sairia para a Google no instante em que se sai.
     const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && googleButton.contains(e.target);
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
-      addEventListener(type, e => { touched = true; if (!isSignOut(e)) { askAccount(); askLook(); } }, { passive: true, capture: true });
+      addEventListener(type, e => { touched = true; lastGesture = Date.now(); if (!isSignOut(e)) { askAccount(); askLook(); } }, { passive: true, capture: true });
     new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); askLook(); }).observe(googleButton);
+    // «Sair» com «apagar a chave» e o código de recuperação ainda por guardar: a conta ficava irrecuperável se este for o
+    // único computador. Pede confirmação (2.º clique, meio segundo depois, nos 8 s seguintes).
+    let signOutArmed = 0;
+    const disarmSignOut = () => {
+      signOutArmed = 0;
+      note($('syncForgetNote'), '');
+      if (googleButton.dataset.state === 'signedIn') googleButton.textContent = 'Sair';
+    };
+    $('syncForget').addEventListener('change', disarmSignOut);
     googleButton.addEventListener('click', () => {
       const state = googleButton.dataset.state;
-      if (state === 'signedIn') askGoogle('sync-google-out', $('syncForget').checked ? '&forget=1' : '');
+      if (state === 'signedIn') {
+        const forget = $('syncForget').checked;
+        const codePending = !!(lastState && lastState.sync && lastState.sync.code);
+        if (forget && codePending) {
+          if (!signOutArmed) {
+            signOutArmed = Date.now();
+            googleButton.textContent = 'Confirmar: sair e apagar a chave';
+            note($('syncForgetNote'), 'O código de recuperação ainda não foi guardado. Se este for o único computador ligado, sair e apagar a chave torna os dados na nuvem irrecuperáveis. Guarde o código primeiro, ou carregue outra vez para confirmar.', true);
+            setTimeout(() => { if (signOutArmed && Date.now() - signOutArmed >= 7900) disarmSignOut(); }, 8000);
+            return;
+          }
+          if (Date.now() - signOutArmed < ARM_GUARD) return;
+        }
+        signOutArmed = 0;
+        note($('syncForgetNote'), '');
+        askGoogle('sync-google-out', forget ? '&forget=1' : '');
+      }
       else askGoogle(state === 'waiting' ? 'sync-google-cancel' : 'sync-google');
     });
     $('syncStart').addEventListener('click', () => askGoogle('sync-start'));
     $('syncNow').addEventListener('click', () => askGoogle('sync-now'));
-    $('syncPair').addEventListener('click', () => askGoogle('sync-pair'));
-    $('syncPairConfirm').addEventListener('click', () => askGoogle('sync-pair-confirm'));
+    $('syncReauth').addEventListener('click', () => askGoogle('sync-google'));
+    let newCodeArmed = 0;
+    $('syncNewCode').addEventListener('click', () => {
+      const button = $('syncNewCode');
+      if (!newCodeArmed) {
+        newCodeArmed = Date.now();
+        button.textContent = 'Confirmar: gerar um código novo';
+        setTimeout(() => { if (newCodeArmed && Date.now() - newCodeArmed >= 7900) { newCodeArmed = 0; button.textContent = 'Gerar um código novo…'; } }, 8000);
+        return;
+      }
+      if (Date.now() - newCodeArmed < ARM_GUARD) return;
+      newCodeArmed = 0; button.textContent = 'Gerar um código novo…';
+      focusAfterPaint = 'syncCodeSaved';
+      askGoogle('sync-new-code');
+    });
+    $('syncPair').addEventListener('click', () => { focusAfterPaint = 'syncPairCancel'; askGoogle('sync-pair'); });
+    $('syncPairConfirm').addEventListener('click', () => { $('syncPairCancel').focus(); askGoogle('sync-pair-confirm'); });
     $('syncPairCancel').addEventListener('click', () => askGoogle('sync-pair-cancel'));
     $('syncCodeSaved').addEventListener('click', () => askGoogle('sync-code-saved'));
     $('syncCodeCopy').addEventListener('click', () => {
@@ -911,21 +1037,43 @@
     joinForm.addEventListener('submit', e => {
       e.preventDefault();
       if (!$('syncJoinCode').value.trim()) { note($('syncJoinNote'), 'Escreva o código de recuperação.', true); return; }
-      joining = true;
+      if (joining) return;
+      joining = true; joinSent = Date.now();
+      quickUntil = Date.now() + 15000;
+      $('syncJoinButton').disabled = true;
       note($('syncJoinNote'), 'A abrir a conta e a juntar os dados…');
       const seq = ++googleAsked;
       joinForm.target = sinkFor(d => {
         if (d && d.google) { if (seq >= googlePainted) { googlePainted = seq; paint(d); } }
-        else { joining = false; note($('syncJoinNote'), d.message || 'Pedido recusado.', true); }
+        else { joining = false; $('syncJoinButton').disabled = false; note($('syncJoinNote'), d.message || 'Pedido recusado.', true); }
       }).name;
       joinForm.submit();
-      $('syncJoinCode').value = '';
+      // O código fica no campo até a junção dar certo (uma gralha corrige-se sem escrever os 56 carateres outra vez).
     });
-    $('syncDelete').addEventListener('click', () => { $('syncDeleteConfirm').hidden = false; $('syncDelete').hidden = true; });
+    // «Apagar…»: a confirmação aparece por baixo, com «Cancelar» no lugar onde se carregou (um duplo clique cai no
+    // «Cancelar», não no «Sim»), não aceita um clique no primeiro meio segundo e desarma-se sozinha ao fim de 10 s.
+    let deleteArmed = 0;
+    const disarmDelete = focus => {
+      deleteArmed = 0;
+      $('syncDeleteConfirm').hidden = true; $('syncDeleteCancel').hidden = true; $('syncDelete').hidden = false;
+      if (focus) $('syncDelete').focus();
+    };
+    $('syncDelete').addEventListener('click', () => {
+      deleteArmed = Date.now();
+      $('syncDelete').hidden = true; $('syncDeleteCancel').hidden = false; $('syncDeleteConfirm').hidden = false;
+      $('syncDeleteCancel').focus();
+      setTimeout(() => { if (deleteArmed && Date.now() - deleteArmed >= 9900) disarmDelete(false); }, 10000);
+    });
+    $('syncDeleteCancel').addEventListener('click', () => disarmDelete(true));
     $('syncDeleteConfirm').addEventListener('click', () => {
-      $('syncDeleteConfirm').hidden = true; $('syncDelete').hidden = false;
+      if (!deleteArmed || Date.now() - deleteArmed < ARM_GUARD) return;
+      disarmDelete(false);
+      $('syncDeleteNote').hidden = false; note($('syncDeleteNote'), 'A apagar…');
+      $('syncDelete').focus();
       askGoogle('sync-delete-cloud');
     });
+    // «Perdeu o código?»: leva a «Apagar os meus dados…» e põe lá o foco.
+    $('syncLostLink').addEventListener('click', e => { e.preventDefault(); $('syncDeleteItem').scrollIntoView({ block: 'center' }); $('syncDelete').focus(); });
   })();
 
   // Realce da navegação. As últimas secções são curtas e a página não as consegue pôr no topo: pela posição, um clique
