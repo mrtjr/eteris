@@ -111,7 +111,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         {
             var ok = InternalPages.IsAuthorized(url)
                      && InternalPages.Query(uri, "k") is { } key && InternalPages.Query(uri, "v") is { } value
-                     && Settings.Set(key, value);
+                     && SettingsPage.CanSetFromPage(key, value) && Settings.Set(key, value);
             return ResourceHandler.FromString(ok ? "ok" : "recusado", Encoding.UTF8, false, "text/plain");
         }
         if (uri.AbsolutePath == "/update" && InternalPages.IsAuthorized(url))

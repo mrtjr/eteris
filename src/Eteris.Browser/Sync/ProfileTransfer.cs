@@ -78,6 +78,8 @@ internal static class ProfileTransfer
             ["accent"] = s.Accent, ["ntTheme"] = s.NewTabTheme, ["ntWallpaper"] = s.NewTabWallpaper, ["ntWallpaperMotion"] = s.NewTabWallpaperMotion,
             ["ntClock"] = B(s.NewTabClock), ["ntTiles"] = B(s.NewTabTiles), ["ntWeek"] = B(s.NewTabWeek), ["ntTips"] = B(s.NewTabTips),
             ["readerTheme"] = s.ReaderTheme, ["readerSize"] = I(s.ReaderSize), ["readerSerif"] = B(s.ReaderSerif),
+            ["pwOffer"] = B(s.PasswordOffer), ["pwSuggest"] = B(s.PasswordSuggestions), ["afPayments"] = B(s.AutofillPayments),
+            ["afContacts"] = B(s.AutofillContacts), ["afDocuments"] = B(s.AutofillDocuments), ["afTravel"] = B(s.AutofillTravel),
         };
         // Só o que o utilizador escolheu: o prazo do arquivo e a língua dos sites por omissão dependem deste computador.
         if (s.ArchiveConfirmed) values["archive"] = I(s.ArchiveDays);

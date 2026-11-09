@@ -30,6 +30,9 @@ public static class Collections
         "theme", "cleanUrls", "debounce", "bounceForget", "cname", "notifications", "siteLanguage", "verticalTabs",
         "density", "accent", "ntTheme", "ntWallpaper", "ntWallpaperMotion", "ntClock", "ntTiles", "ntWeek", "ntTips",
         "readerTheme", "readerSize", "readerSerif",
+        // Palavras-passe e preenchimento automático: oferecer para guardar e sugestões (os «Pedir o Windows Hello…» são
+        // de cada computador e não viajam).
+        "pwOffer", "pwSuggest", "afPayments", "afContacts", "afDocuments", "afTravel",
     };
 
     // Tipos de decisão do Escudo que se sincronizam (as listas de filtros, cada aparelho descarrega as suas).

@@ -72,6 +72,10 @@ public static class SettingsPage
         };
     }
 
+    // A página das Definições muda as definições sem reautenticação: desligar «Pedir o Windows Hello ao preencher
+    // pagamentos» só se faz em eteris://autofill, que pede o Windows Hello (UserSettings.NeedsReauth).
+    public static bool CanSetFromPage(string key, string value) => !UserSettings.NeedsReauth(key, value);
+
     // isPrivate: as Definições abertas numa janela privada não mostram nada da conta Google (nem nome nem e-mail) e a
     // secção Sincronização fica indisponível (as rotas sync-* também recusam nesse contexto).
     public static string Render(UserSettings settings, About? about = null, bool focusAbout = false,
@@ -108,6 +112,9 @@ public static class SettingsPage
             bounceForget = settings.ForgetBounceTrackers,
             cname = settings.UncloakCname,
             notifications = settings.BlockNotificationPrompts,
+            pwOffer = settings.PasswordOffer,
+            pwSuggest = settings.PasswordSuggestions,
+            pwAskHello = settings.PasswordAskHello,
             imports = (imports ?? []).Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
             sites = (sites ?? []).Select(s => new
             {

@@ -2,7 +2,13 @@
 
 ## Por publicar
 
-### Palavras-passe e preenchimento automático (base, ainda sem interface)
+### Palavras-passe e preenchimento automático
+- **Menu do Éteris › «Palavras-passe e preenchimento automático ›»**, a seguir a «Favoritos», com o submenu do Chrome:
+  Gestor de palavras-passe, Pagamentos, Informações de contacto, Documentos de identificação e Viagens. Pelo teclado
+  como no Chrome (→ ou Enter abre, ← ou Esc volta, a inicial salta) e anunciado pelo leitor de ecrã (aberto/fechado,
+  «n de N»). Na janela privada as entradas abrem numa janela normal. Também nas Definições (secção nova, com «Oferecer
+  para guardar palavras-passe», «Mostrar sugestões ao clicar num campo» e «Pedir o Windows Hello ao preencher
+  palavras-passe») e na paleta (Ctrl+K).
 - **Nada dos formulários vai para a Google:** medido ao vivo, o motor mandava o utilizador e a palavra-passe (prefixo
   de um hash) de cada início de sessão enviado a `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas do
   Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de

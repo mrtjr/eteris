@@ -31,8 +31,23 @@ public enum BrowserMenuKey
     PassToPage,
 }
 
+// O submenu «Palavras-passe e preenchimento automático ›» (o único do menu): abrir a partir da linha, voltar ao menu.
+public enum BrowserSubmenuStep { None, Open, Back }
+
 public static class BrowserMenuKeys
 {
+    // Como no Chrome: → na linha do submenu abre-o (Enter e Espaço ativam a linha, que também o abre); dentro dele, ← e
+    // Esc voltam ao menu. Alt+F e Alt+E continuam a fechar o menu inteiro. decision: o que Resolve ou FromPage decidiram.
+    public static BrowserSubmenuStep Submenu(BrowserMenuKey decision, Key key, bool inSubmenu, bool onSubmenuRow)
+    {
+        if (inSubmenu)
+            return decision == BrowserMenuKey.PreviousInGroup || (decision == BrowserMenuKey.Close && key == Key.Escape)
+                ? BrowserSubmenuStep.Back : BrowserSubmenuStep.None;
+        // Enter e Espaço também passam por aqui (e não pelo clique do botão): vindos da página, o WPF não sabe que foram
+        // do teclado, e o submenu abria sem a primeira entrada realçada.
+        return onSubmenuRow && decision is BrowserMenuKey.NextInGroup or BrowserMenuKey.Activate ? BrowserSubmenuStep.Open : BrowserSubmenuStep.None;
+    }
+
     // Navegação no menu, como nos menus do Chrome, do Firefox e do Brave: Esc, Alt+F e Alt+E fecham; ↑ e ↓ movem de
     // linha em linha, Home e End vão ao início e ao fim (com volta); ← e → só andam dentro da linha do zoom; uma letra
     // salta para a linha com essa inicial; Enter e Espaço ativam; Tab e Shift+Tab percorrem.

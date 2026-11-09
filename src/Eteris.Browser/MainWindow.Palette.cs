@@ -209,6 +209,12 @@ public partial class MainWindow
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("\uE789", "Novidades desta versão", "O que mudou no Éteris", null, () => OpenInternal(WhatsNewPage.Url));
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
+        // Palavras-passe e preenchimento automático: as cinco páginas do submenu do menu do Éteris.
+        foreach (var entry in Vault.VaultPages.Entries)
+        {
+            var url = entry.Url;
+            yield return new(entry.Glyph, entry.PaletteTitle, entry.Subtitle, null, () => OpenVaultPage(url));
+        }
         yield return new("\uE72E", "Relatório de privacidade", IsPrivate
                 ? "As promessas do Éteris verificadas agora (a janela privada não alimenta o relatório)"
                 : "O que o Escudo travou nos últimos 7 e 30 dias e as promessas verificadas agora", null,

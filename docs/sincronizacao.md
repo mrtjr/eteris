@@ -183,8 +183,10 @@ campos desconhecidos (escritos por um Éteris mais recente) são guardados e ree
 | `shield` (Escudo) | `tipo\|site\|valor` (`off`, `strict`, `hide`, `rule`, `http`) | conjunto com lápides (LWW por elemento) |
 | `notes` (notas) | `notes` | fusão a três por linhas (diff3); conflito = as duas versões marcadas |
 
-Definições que **não** viajam: Mica, esconder das capturas, barra lateral (aberta, painel, largura, lado), e o que só
-vale neste computador. O prazo do arquivo e a língua dos sites só viajam se o utilizador os escolheu.
+Definições que **não** viajam: Mica, esconder das capturas, barra lateral (aberta, painel, largura, lado), «Pedir o
+Windows Hello ao preencher…» (palavras-passe e pagamentos) e o que só vale neste computador. «Oferecer para guardar
+palavras-passe», «Mostrar sugestões ao clicar num campo» e o «Preencher automaticamente…» de cada secção do
+preenchimento automático viajam. O prazo do arquivo e a língua dos sites só viajam se o utilizador os escolheu.
 
 - **IDs opacos e estáveis:** `HMAC-SHA256(K_ids, coleção ‖ chave natural)`, 128 bits. O mesmo URL dá o mesmo ID em
   todos os aparelhos da conta; sem a chave não se liga um ID a um URL.

@@ -1,7 +1,7 @@
 # Gestor de palavras-passe e preenchimento automático do Éteris
 
-Estado: **bloco A (base local: A0–A5) feito no ramo `sync`, por publicar; ainda sem interface** (os blocos B a E do
-desenho — páginas de gestão, preenchimento na página, sincronização e fecho — estão por fazer). O gestor é próprio, em
+Estado: **bloco A (base local: A0–A5) e, do bloco B (interfaces de gestão), B1 feitos no ramo `sync`, por
+publicar** (os blocos C a E do desenho — preenchimento na página, sincronização e fecho — estão por fazer). O gestor é próprio, em
 C#, com a interface do Éteris; o do Chromium continua desligado. Desenho completo (arquitetura, ameaças, plano de 25
 tarefas e decisões do dono): fora do repositório, no documento de desenho de 08/11/2026. Este ficheiro diz o que já
 existe no código e como foi provado.
@@ -207,3 +207,46 @@ imagem — guardada e reposta):
   compara só o item mais recente do histórico com o marcador, sem o mostrar, e retira o item de controlo que pôs.
 - `SecretOnScreen` numa janela WPF fora do ecrã: afinidade `0x0` → `0x11` com o segredo à vista → `0x0` ao esconder;
   outra vez `0x11` e, sem esconder, o aviso e `0x0` aos 30 s.
+
+## B1. Menu, Definições e paleta
+
+`MainWindow.BrowserMenu.cs`, `BrowserMenuKeys.cs`, `MainWindow.Vault.cs`, `Vault/VaultPages.cs`, `Data/UserSettings.cs`,
+`Browser/settings.html`, `Browser/SettingsPage.cs`, `MainWindow.Palette.cs`.
+
+- **Menu do Éteris (⋯ / Alt+F):** a linha **«Palavras-passe e preenchimento automático ›»** fica logo a seguir a
+  «Favoritos» e abre o submenu com as cinco entradas do Chrome: «Gestor de palavras-passe» (`eteris://passwords/`),
+  «Pagamentos», «Informações de contacto», «Documentos de identificação» e «Viagens» (`eteris://autofill/#…`). O
+  submenu abre no lugar do menu, com «‹ Palavras-passe e preenchimento automático» no topo para voltar (como as
+  subvistas do menu do Firefox), por isso as setas, as letras, o Enter, o realce pelo rato e o leitor de ecrã são os
+  do menu. Teclado como no Chrome: → (ou Enter, ou Espaço) na linha abre; ← ou Esc voltam à linha; ↑ ↓ andam; a
+  primeira letra salta (as cinco têm iniciais diferentes); Alt+F e Alt+E fecham o menu inteiro. Vindas da página
+  (foco do Win32 no Chromium) as teclas passam pelo mesmo passo (`BrowserMenuKeys.Submenu`).
+- **Leitor de ecrã:** a linha é um item de menu com o padrão ExpandCollapse (fechado/aberto) e conta na posição
+  («6 de 18»); as entradas do submenu são «1 de 5» … «5 de 5» (o «Voltar» não conta).
+- **Janela privada:** a linha aparece, mas as páginas recusam-se lá; as entradas abrem numa janela normal (a primeira
+  que houver, ou uma nova). A aba de `eteris://autofill/` já aberta é reaproveitada e muda só de secção.
+- **Definições › Palavras-passe e preenchimento automático:** as cinco ligações e os interruptores gerais —
+  «Oferecer para guardar palavras-passe» (ligado), «Mostrar sugestões ao clicar num campo» (ligado) e «Pedir o
+  Windows Hello ao preencher palavras-passe» (desligado, D-5). «Pedir o Windows Hello ao preencher pagamentos» (ligado)
+  muda-se em `eteris://autofill/`, porque desligá-lo também pede o Windows Hello: a rota genérica das Definições
+  (`eteris://settings/set`) recusa-o (`SettingsPage.CanSetFromPage`, `UserSettings.NeedsReauth`).
+- **Definições novas** (`UserSettings`): `pwOffer`, `pwSuggest`, `afPayments`, `afContacts`, `afDocuments`,
+  `afTravel` viajam entre computadores (`Collections.SyncableSettings`); `pwAskHello` e `payAskHello` são de cada
+  computador e nunca viajam.
+- **Paleta (Ctrl+K):** «Palavras-passe», «Pagamentos», «Informações de contacto», «Documentos de identificação» e
+  «Viagens». «Gerar palavra-passe» entra com o gerador (tarefa C5).
+- De passagem: a folha de estilo das Definições tinha uma marca solta (`>>>`) que anulava a regra seguinte
+  (`.syncform .filename`); saiu.
+
+Testes: `Vault/VaultMenuTests` (as cinco entradas e as páginas; janela privada; →/Enter/Espaço abrem, ←/Esc voltam,
+Alt+F fecha, as mesmas decisões vindas da página; ExpandCollapse e «n de N»; a linha a seguir a «Favoritos»; valores
+por omissão e só booleanos; o que viaja e o que não; desligar o Hello dos pagamentos recusado na rota das Definições;
+a secção das Definições com as ligações e os interruptores) e `Sync/SyncIntegrationTests` (todas as definições que
+viajam voltam iguais).
+
+Prova ao vivo (`pp\vivo\b1`, perfis de teste novos, tema escuro e claro, teclas reais por `SendInput` e estado por UI
+Automation): Alt+F → a linha «Palavras-passe e preenchimento automático» é «6 de 18», `expand=Collapsed`; P salta para
+ela; → abre o submenu com «Gestor de palavras-passe» realçado («1 de 5»); ↓ e V levam a «Viagens»; ← volta à linha;
+Enter abre outra vez com a primeira entrada realçada; Esc volta à linha; outro Esc fecha o menu. Pelo rato: um clique
+na linha abre o submenu e um clique em «Gestor de palavras-passe» abre `eteris://passwords`. Capturas: menu, submenu
+pelo teclado e pelo rato, nos dois temas, e a secção das Definições (`definicoes-dark.png`, `definicoes-light.png`).
