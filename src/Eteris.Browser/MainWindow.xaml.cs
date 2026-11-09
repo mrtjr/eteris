@@ -57,6 +57,8 @@ public partial class MainWindow : Window
             ApplyBackdrop();
         };
         Deactivated += (_, _) => CloseSuggestions();
+        // Como os menus do Chrome, do Firefox e do Brave: a janela perde a ativação (outra janela, Alt+Tab), o menu fecha.
+        Deactivated += (_, _) => CloseBrowserMenu();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
@@ -423,6 +425,7 @@ public partial class MainWindow : Window
     private void OnTabsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(TabsViewModel.Active)) return;
+        CloseBrowserMenu();
         OnActiveTabChanging();
         OnSplitActiveChanged();
         MoveFocusOffHiddenPage();
@@ -609,7 +612,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // O menu do Éteris é um Popup sem pai: as suas teclas chegam aqui primeiro, pelo MenuButton.
+        // O menu do Éteris é um Popup sem pai: as suas teclas chegam aqui pela raiz do menu (ver ToggleBrowserMenu).
         if (BrowserMenuOpen)
         {
             e.Handled = HandleBrowserMenuKey(key, ctrl, shift, alt);
@@ -693,11 +696,21 @@ public partial class MainWindow : Window
 
     // Tecla premida com o foco na página (thread do CEF): os atalhos do Éteris são consumidos e corridos na janela;
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
+    // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página:
+    // decide BrowserMenuKeys.FromPage (puro) e o trabalho vai para a thread da janela. Não se lê nada do WPF aqui.
     private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
-        if (Shortcut(key, ctrl, shift, alt) is { } action)
+        var shortcut = Shortcut(key, ctrl, shift, alt);
+        if (_browserMenuOpenForPage)
+        {
+            var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null);
+            if (decision == BrowserMenuKey.PassToPage) return false;
+            Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut));
+            return true;
+        }
+        if (shortcut is { } action)
         {
             Dispatcher.InvokeAsync(action);
             return true;
