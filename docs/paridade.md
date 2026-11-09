@@ -274,6 +274,15 @@ nas páginas de erro de certificado passa a vir só da data da compilação do m
 Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
 pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
 
+**Formulários (ramo `sync`, por publicar; `docs/palavras-passe.md`, A0).** Com o mesmo método, numa página local
+com um início de sessão, uma morada e um cartão enviados (dados inventados): o motor mandava o par utilizador/palavra-
+passe (prefixo de um hash) a `passwordsleakcheck-pa.googleapis.com/v1/leaks:lookupSingle` logo depois do envio do
+início de sessão, apesar de `credentials_enable_service=false` — a verificação de fugas do Chromium corre sem o gestor.
+Corte: `profile.password_manager_leak_detection=false` nas preferências do perfil, lida de volta; e, preventivo (0
+pedidos medidos), `--disable-features=AutofillServerCommunication` contra o servidor de previsões de formulários
+(`content-autofill.googleapis.com`). Depois: **0 pedidos** no proxy e 0 linhas `googleapis` no NetLog. A promessa
+«Nada sai do computador sem um pedido seu» em `eteris://privacy/` diz também os formulários.
+
 **Sincronização (ramo `sync`, por publicar).** Por omissão está desligada e a promessa fica exatamente como medida
 acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o estado só leem o disco; testes
 `SyncAgentTests.Startup_BuildingTheAgentAndReadingTheState_SendsNothing` e

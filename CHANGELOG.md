@@ -2,6 +2,13 @@
 
 ## Por publicar
 
+### Palavras-passe e preenchimento automático (base, ainda sem interface)
+- **Nada dos formulários vai para a Google:** medido ao vivo, o motor mandava o utilizador e a palavra-passe (prefixo
+  de um hash) de cada início de sessão enviado a `passwordsleakcheck-pa.googleapis.com` — a verificação de fugas do
+  Chromium corria mesmo com o gestor dele desligado. Desligada nas preferências do perfil; o servidor de previsões de
+  formulários da Google (`content-autofill.googleapis.com`) fica também cortado no motor. `eteris://privacy/` › «Nada
+  sai do computador sem um pedido seu» diz os dois e verifica-os no estado real (`docs/palavras-passe.md`).
+
 ### Sincronização entre computadores («Entrar com o Google»)
 - **Login completo:** entra-se com a conta Google no navegador do sistema e os **favoritos, Espaços (nome, cor, emoji
   e ordem), definições que viajam, decisões do Escudo por site (desligado, modo estrito, elementos escondidos,

@@ -44,7 +44,8 @@ public static class PrivacyPage
         long CnameDecisions = 0,
         double CnameMicros = 0,
         CnameSource CnameSource = CnameSource.WindowsDns,
-        bool SyncOn = false);
+        bool SyncOn = false,
+        bool LeakCheckOff = true);
 
     // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
     public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
@@ -65,6 +66,10 @@ public static class PrivacyPage
             .Concat(EngineHardening.AdBlinkFeatures.Where(f => !hiddenFromJs.Contains(f))).Distinct().ToList();
         var quiet = s.EngineArgs.ContainsKey("disable-background-networking") && s.EngineArgs.ContainsKey("disable-component-update")
                     && s.EngineArgs.TryGetValue("component-updater", out var updater) && updater.Contains(Infrastructure.CefConfigurator.NoUpdateServer, StringComparison.Ordinal);
+        // Os formulários enviados aos sites: sem a verificação de fugas do Chromium (preferência lida do perfil) e sem o
+        // servidor de previsões de formulários da Google (interruptor do motor).
+        var formsToGoogle = EngineHardening.NoGoogleOnPages.Where(f => !disabled.Contains(f.Feature)).Select(f => f.Feature).ToList();
+        var formsQuiet = s.LeakCheckOff && formsToGoogle.Count == 0;
         // Só o GPC: o «DNT: 1» saiu porque distinguia quem o envia (docs/paridade.md #6).
         var gpcHeader = s.Headers.Contains(("Sec-GPC", "1")) && !s.Headers.Any(h => h.Name == "DNT");
         var enabled = EngineHardening.Switch(s.EngineArgs, "enable-features");
@@ -105,9 +110,11 @@ public static class PrivacyPage
                     : "Ainda ligadas no motor: " + string.Join(", ", missingAds) + ".",
                 missingAds.Count == 0, Live: "ads"),
             new("quiet", "Nada sai do computador sem um pedido seu",
-                quiet ? "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium."
-                    : "O motor arrancou sem os interruptores que cortam o tráfego de fundo.",
-                quiet),
+                !quiet ? "O motor arrancou sem os interruptores que cortam o tráfego de fundo."
+                    : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para passwordsleakcheck-pa.googleapis.com."
+                    : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
+                    : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com).",
+                quiet && formsQuiet),
             new("no-google", "No arranque, nada sai para a Google",
                 googleStillOn.Count == 0
                     ? "Nem o relógio de rede do Chromium (clients2.google.com) nem a verificação do «Modo IA» da pesquisa Google (www.google.com, com os cookies da Google): a Google só recebe um pedido quando pesquisa nela ou abre um site dela."
@@ -206,7 +213,7 @@ public static class PrivacyPage
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
             settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false),
-            Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn));
+            Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn), PrivacyPreferences.LeakCheckOff);
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.

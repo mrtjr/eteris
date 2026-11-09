@@ -14,6 +14,10 @@ public static class PrivacyPreferences
         ["credentials_enable_autosignin"] = false,
         ["autofill.profile_enabled"] = false,
         ["autofill.credit_card_enabled"] = false,
+        // A verificação de fugas do Chromium corre mesmo com o gestor desligado: medido ao vivo (docs/palavras-passe.md,
+        // A0), um formulário de início de sessão enviado num perfil novo levava o utilizador e a palavra-passe (com hash)
+        // a passwordsleakcheck-pa.googleapis.com/v1/leaks:lookupSingle. Desligada, nada dos formulários vai para a Google.
+        [LeakCheckPreference] = false,
         ["net.network_prediction_options"] = 2,
         ["search.suggest_enabled"] = false,
         // As APIs de anúncios do Chromium também desligadas nas definições do perfil (além dos interruptores do motor,
@@ -26,6 +30,14 @@ public static class PrivacyPreferences
     };
 
     public static bool ThirdPartyCookiesBlocked { get; private set; }
+
+    // password_manager::prefs::kPasswordLeakDetectionEnabled.
+    public const string LeakCheckPreference = "profile.password_manager_leak_detection";
+
+    // Desligada é o valor em vigor no perfil, lido de volta depois de o aplicar (eteris://privacy/ verifica-o).
+    public static bool IsLeakCheckOff(object? value) => value is false;
+
+    public static bool LeakCheckOff { get; private set; }
 
     public static bool WebRtcIpProtected { get; private set; }
 
@@ -58,8 +70,10 @@ public static class PrivacyPreferences
         cookies &= block;
         target.SetPreference(WebRtcPreference, EngineHardening.WebRtcPolicy, out _);
         var webRtc = IsWebRtcProtected(target.GetPreference(WebRtcPreference));
+        var leakOff = IsLeakCheckOff(target.GetPreference(LeakCheckPreference));
         if (context is not null) return;
         ThirdPartyCookiesBlocked = cookies;
         WebRtcIpProtected = webRtc;
+        LeakCheckOff = leakOff;
     });
 }

@@ -53,6 +53,7 @@ public class EngineHardeningTests
                 "PrivacySandboxAdsAPIsOverride", "PrivacySandboxAdsAPIsM1Override",
                 "WebRtcHideLocalIpsWithMdns",
                 "NetworkTimeServiceQuerying", "AimEnabled",
+                "AutofillServerCommunication",
             }.Order(StringComparer.Ordinal),
             Switch("disable-features").Order(StringComparer.Ordinal));
         Assert.Equal("1", args["disable-background-networking"]);

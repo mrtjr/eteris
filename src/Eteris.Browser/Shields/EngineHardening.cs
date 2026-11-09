@@ -80,6 +80,18 @@ public static class EngineHardening
         ("AimEnabled", "o «Modo IA» da pesquisa Google não pergunta a www.google.com, com os cookies da Google, se o pode usar"),
     ];
 
+    // Formulários das páginas (docs/palavras-passe.md, A0): o servidor de previsões de formulários da Google
+    // (components/autofill/core/browser/crowdsourcing/autofill_crowdsourcing_manager.cc, content-autofill.googleapis.com)
+    // recebia as assinaturas dos formulários de cada página visitada e os «votos» dos enviados. Medido ao vivo num perfil
+    // novo com login, morada e cartão: 0 pedidos (o preenchimento do Chromium está desligado nas preferências), mas fica
+    // cortado no motor desde o primeiro processo para não depender disso. O gestor de palavras-passe do Éteris é dele e
+    // não fala com ninguém. A verificação de fugas do Chromium, essa sim medida, é uma preferência do perfil
+    // (PrivacyPreferences.LeakCheckPreference).
+    public static readonly IReadOnlyList<(string Feature, string What)> NoGoogleOnPages =
+    [
+        ("AutofillServerCommunication", "os formulários das páginas não vão para o servidor de previsões de formulários da Google (content-autofill.googleapis.com)"),
+    ];
+
     // Tudo o que o Éteris acrescenta à configuração do motor: interruptores e uma só língua para os sites (a lista de
     // línguas fixa-se ao arrancar; o cabeçalho Accept-Language e o navigator.languages seguem-na).
     // A língua do motor (Locale) é a mesma: é ela que dá o locale por omissão do Intl nas páginas e nos workers
@@ -102,7 +114,7 @@ public static class EngineHardening
     public static void Apply(IDictionary<string, string> args)
     {
         Merge(args, "enable-features", Partitioning.Concat(Identity).Concat(LocalNetworkChecks).Select(f => f.Feature));
-        Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Concat(NoGoogleAtStartup).Select(a => a.Feature));
+        Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Concat(NoGoogleAtStartup).Concat(NoGoogleOnPages).Select(a => a.Feature));
         args[WebRtcPolicySwitch] = WebRtcPolicy;
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         Applied = new Dictionary<string, string>(args);
