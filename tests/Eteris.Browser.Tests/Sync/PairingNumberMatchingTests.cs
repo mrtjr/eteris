@@ -36,9 +36,24 @@ public sealed class PairingNumberMatchingTests : IDisposable
 
     private FolderTransport Folder => new(_folder);
 
+    // Com a bateria inteira a correr em paralelo, os passos do emparelhamento (sondagens de 5 ms em tarefas de fundo)
+    // podem demorar: espera-se até 30 s.
     private static async Task Until(Func<bool> condition, string what)
     {
-        for (var i = 0; i < 1000 && !condition(); i++) await Task.Delay(10);
+        for (var i = 0; i < 3000 && !condition(); i++) await Task.Delay(10);
+        Assert.True(condition(), "À espera de: " + what);
+    }
+
+    // Responde aos pedidos e, enquanto a condição não se cumpre, volta a procurar (um pedido que a primeira procura não
+    // apanhou, por exemplo por uma leitura da pasta que falhou a meio, fica para a seguinte; os já respondidos não se
+    // repetem).
+    private static async Task AnswerUntil(Device casa, Func<bool> condition, string what)
+    {
+        for (var i = 0; i < 3000 && !condition(); i++)
+        {
+            if (i % 50 == 0) await casa.Agent.CheckRequestsAsync();
+            await Task.Delay(10);
+        }
         Assert.True(condition(), "À espera de: " + what);
     }
 
@@ -66,7 +81,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         await guest.Agent.StartAsync();
         Assert.Equal(SyncPhase.Choose, guest.Agent.Status.Phase);
         guest.Agent.RequestPairing();
-        for (var i = 0; i < 1000 && await RequestFiles() == before; i++) await Task.Delay(10);
+        for (var i = 0; i < 3000 && await RequestFiles() == before; i++) await Task.Delay(10);
         Assert.True(await RequestFiles() > before, "o pedido na pasta");
         return guest;
     }
@@ -76,8 +91,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
     {
         var casa = await HostAsync();
         var guest = await GuestAsync(guestName);
-        await casa.Agent.CheckRequestsAsync();
-        await Until(() => casa.Agent.Status.Requests.Count == 1 && guest.Agent.Status.Pairing?.Code is not null, "o pedido pronto");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && guest.Agent.Status.Pairing?.Code is not null, "o pedido pronto");
         return (casa, guest, casa.Agent.Status.Requests[0].Session, guest.Agent.Status.Pairing!.Code!);
     }
 
@@ -228,8 +242,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         var casa = await HostAsync();
         var portatil = await GuestAsync("Portátil");
         var tablet = await GuestAsync("Tablet");
-        await casa.Agent.CheckRequestsAsync();
-        await Until(() => casa.Agent.Status.Requests.Count == 2 && portatil.Agent.Status.Pairing?.Code is not null
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 2 && portatil.Agent.Status.Pairing?.Code is not null
             && tablet.Agent.Status.Pairing?.Code is not null, "os dois pedidos prontos");
         var first = casa.Agent.Status.Requests.Single(r => r.Name == "Portátil").Session;
         var second = tablet.Agent.Status.Pairing!.Code!;
@@ -254,12 +267,10 @@ public sealed class PairingNumberMatchingTests : IDisposable
     {
         var casa = await HostAsync();
         var portatil = await GuestAsync("Portátil");
-        await casa.Agent.CheckRequestsAsync();
-        await Until(() => casa.Agent.Status.Requests.Count == 1, "o primeiro pedido pronto");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1, "o primeiro pedido pronto");
         _now += 1_000;
         var tablet = await GuestAsync("Tablet");
-        await casa.Agent.CheckRequestsAsync();
-        await Until(() => casa.Agent.Status.Requests.Count == 2, "os dois pedidos prontos");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 2, "os dois pedidos prontos");
         Assert.Equal(["Portátil", "Tablet"], casa.Agent.Status.Requests.Select(r => r.Name));
         Assert.True(casa.Agent.Status.Requests[0].SeenMs < casa.Agent.Status.Requests[1].SeenMs);
         GC.KeepAlive(portatil);
@@ -311,8 +322,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.Equal(SyncPhase.On, escritorio.Agent.Status.Phase);
 
         var guest = await GuestAsync("Portátil");
-        await casa.Agent.CheckRequestsAsync();
-        await Until(() => casa.Agent.Status.Requests.Count == 1 && guest.Agent.Status.Pairing?.Code is not null, "o pedido pronto na Casa");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && guest.Agent.Status.Pairing?.Code is not null, "o pedido pronto na Casa");
         var session = casa.Agent.Status.Requests[0].Session;
         var code = guest.Agent.Status.Pairing!.Code!;
 
@@ -365,8 +375,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.StartsWith("Portátil", name, StringComparison.Ordinal);
 
         var blank = await GuestAsync("   ");
-        await casa.Agent.CheckRequestsAsync();
-        await Until(() => casa.Agent.Status.Requests.Count == 2, "o segundo pedido pronto");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 2, "o segundo pedido pronto");
         Assert.Equal("Aparelho sem nome", casa.Agent.Status.Requests.Single(r => r.Session != session).Name);
         GC.KeepAlive(blank);
     }

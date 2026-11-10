@@ -25,6 +25,8 @@ public partial class MainWindow
     // Chamado no construtor (MainWindow.xaml.cs). Só regista: nada se cria nem se lê aqui.
     private void InitPairingBar()
     {
+        // Voltar à janela pode procurar pedidos (o serviço decide quando: nunca antes da 1.ª ronda nem em privadas).
+        Activated += (_, _) => Sync.SyncService.WindowActivated(IsPrivate);
         if (IsPrivate) return;
         RegisterBar(Sync.WindowBar.PairingRequest, PairingBarWants, ShowPairingBar);
     }

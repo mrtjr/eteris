@@ -462,6 +462,64 @@ public class SyncIntegrationTests
         Assert.Single(Regex.Matches(service, @"PairingBarModel\.From\("));
     }
 
+    // Voltar à janela procura pedidos, mas pelo limitador (5 minutos, ou logo com um pedido contado).
+    [Fact]
+    public void Activation_GoesThroughTheLimiter()
+    {
+        Assert.DoesNotContain("SyncService", File.ReadAllText(BrowserSrc("MainWindow.xaml.cs"), Encoding.UTF8));
+        Assert.Contains("WindowActivated(IsPrivate)", File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8));
+        var body = Body(File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8), "public static void WindowActivated(bool privateWindow)");
+        var pass = body.IndexOf("TryPass(", StringComparison.Ordinal);
+        Assert.True(pass >= 0, "WindowActivated não passa pelo limitador");
+        Assert.True(body.IndexOf("Look(", StringComparison.Ordinal) > pass, "Look( antes do limitador");
+        Assert.DoesNotContain("r.code", File.ReadAllText(BrowserSrc("Browser", "settings.html"), Encoding.UTF8));
+    }
+
+    // O «teste de varrimento» dos momentos de rede da sincronização: quem procura pedidos de computadores novos é uma
+    // lista fechada. Quem acrescentar um momento de rede acrescenta aqui o ficheiro (e na página de privacidade).
+    [Fact]
+    public void NetworkMoments_ClosedListOfCallers()
+    {
+        Assert.Equal(["Browser/EterisSchemeHandlerFactory.cs", "MainWindow.BrowserMenu.cs", "MainWindow.PairingBar.cs"],
+            BrowserFilesWith("SyncService.Look("));
+        Assert.Equal(["MainWindow.PairingBar.cs", "Sync/SyncService.cs"], BrowserFilesWith("WindowActivated("));
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        // Dentro do serviço: a definição e a chamada da ativação da janela, mais nada.
+        Assert.Equal(2, Regex.Matches(service, @"\bLook\(").Count);
+        Assert.Contains("Look();", Body(service, "public static void WindowActivated(bool privateWindow)"));
+        // A janela liga a ativação uma vez, no gancho do construtor.
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8);
+        Assert.Single(Regex.Matches(glue, @"WindowActivated\("));
+    }
+
+    // Antes da 1.ª ronda desta abertura (a janela ativa-se no arranque, antes da 1.ª página) e em janelas privadas, a
+    // ativação não faz nada: nem rede, nem criar o agente, nem ler o disco.
+    [Fact]
+    public void Activation_IsFreeBeforeTheFirstRound_AndInPrivateWindows()
+    {
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        var body = Body(service, "public static void WindowActivated(bool privateWindow)");
+        var firstUse = new[] { "Enabled", "_agent" }.Min(t => body.IndexOf(t, StringComparison.Ordinal));
+        Assert.True(firstUse > 0);
+        foreach (var guard in new[] { "privateWindow", "_firstRoundDone" })
+        {
+            var at = body.IndexOf(guard, body.IndexOf('{'), StringComparison.Ordinal);
+            Assert.True(at >= 0 && at < firstUse, $"{guard} tem de vir antes de Enabled e de _agent");
+        }
+        Assert.DoesNotContain("Agent()", body);
+        // A marca da 1.ª ronda: depois da ronda do agendador e da ronda do gesto («Ligar», entrar); nunca no arranque.
+        Assert.Contains("_firstRoundDone = true;", Body(service, "private static void Tick()"));
+        Assert.Contains("_firstRoundDone = true;", Body(service, "internal static async Task StartAsync("));
+        Assert.DoesNotContain("_firstRoundDone", Body(service, "public static void AfterFirstPaint()"));
+
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8);
+        var init = Body(glue, "private void InitPairingBar()");
+        Assert.True(init.IndexOf("if (IsPrivate) return;", StringComparison.Ordinal) is var guardAt && guardAt >= 0
+            && guardAt < init.IndexOf("RegisterBar(", StringComparison.Ordinal));
+        foreach (var never in new[] { "SyncService.Enabled", "Agent()", "Look(" })
+            Assert.DoesNotContain(never, init);
+    }
+
     // Plano §10.1 S1: nenhum caminho entrega a chave sem o código escrito E sem a porta do Windows.
     [Fact]
     public void ApproveWithCode_HasOneProductCaller_BehindTheWindowsGate()

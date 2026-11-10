@@ -16,9 +16,11 @@ namespace Eteris.Browser.Sync;
 //
 // Quando há rede (só com a sincronização ligada): 30 s depois de a janela estar pronta (ou 10 s depois de uma
 // alteração, se for antes), 10 s depois de uma alteração local (e só se houver alguma coisa por enviar), de 10 em 10
-// minutos, ao entrar e em «Sincronizar agora»; ao abrir o menu do Éteris (⋯) ou com a secção Sincronização à vista
-// (ação do utilizador), procura pedidos de aparelhos novos e responde-lhes. Construir o serviço e ler o estado nunca
-// faz pedidos: o arranque sem sincronização ligada não fala com a Google. Se a autorização da Google tiver sido
+// minutos, ao entrar e em «Sincronizar agora»; ao abrir o menu do Éteris (⋯), com a secção Sincronização à vista, ao
+// carregar em «Ver» na barra de aprovação (ações do utilizador) e ao voltar à janela do Éteris (depois da 1.ª ronda
+// desta abertura, no máximo uma vez a cada 5 minutos, ou logo se uma ronda já tiver encontrado um pedido:
+// WindowActivated, ActivationLook), procura pedidos de aparelhos novos e responde-lhes. Construir o serviço e ler o
+// estado nunca faz pedidos: o arranque sem sincronização ligada não fala com a Google. Se a autorização da Google tiver sido
 // retirada ou tiver expirado, o agendador para até o utilizador entrar outra vez (não «tenta outra vez sozinho»).
 internal static class SyncService
 {
@@ -29,6 +31,10 @@ internal static class SyncService
     private static bool _busy;
     private static bool _hooked;
     private static long _lastLook;
+    // Já se fez (ou tentou) uma ronda nesta abertura do Éteris: até lá, voltar à janela não é um momento de rede. Só
+    // memória.
+    private static volatile bool _firstRoundDone;
+    private static readonly ActivationLook Activation = new();
 
     // O estado mudou (para a linha da conta no menu e as Definições). Chamado de qualquer thread.
     public static event Action? Changed;
@@ -229,6 +235,7 @@ internal static class SyncService
                     return;
                 }
                 var ok = await agent.RunAsync().ConfigureAwait(false);
+                _firstRoundDone = true;
                 lock (Gate)
                 {
                     Schedule.Done(Now(), ok);
@@ -238,6 +245,8 @@ internal static class SyncService
             }
             catch (Exception)
             {
+                // Uma ronda que falhou também conta como a 1.ª (corra bem ou mal).
+                _firstRoundDone = true;
                 lock (Gate) Schedule.Done(Now(), ok: false);
             }
             finally
@@ -283,6 +292,8 @@ internal static class SyncService
             ok = false;
             if (agent.DeletePending) Say("delete", "Não foi possível acabar de apagar (" + e.Message + ").");
         }
+        // A ronda do gesto («Ligar», entrar) acabou: a partir daqui voltar à janela pode procurar pedidos.
+        _firstRoundDone = true;
         lock (Gate)
         {
             Schedule.Now(Now());
@@ -365,6 +376,20 @@ internal static class SyncService
 
     // «Não fui eu»: recusa o pedido (o computador novo fica a saber).
     public static void RefusePairing(string session) => Act("approve", a => a.RefuseAsync(session));
+
+    // A janela do Éteris veio para a frente. Não é um gesto de rede antes da 1.ª ronda; depois, no máximo uma vez a
+    // cada 5 minutos, ou logo se a última ronda contou um pedido.
+    public static void WindowActivated(bool privateWindow)
+    {
+        // Antes da 1.ª ronda (inclui o arranque, antes da 1.ª página) e em janelas privadas: nada. Só memória — não
+        // cria o agente nem lê o disco.
+        if (privateWindow || !_firstRoundDone) return;
+        // O campo, nunca a função que cria o agente.
+        if (_agent is not { } agent || !Enabled) return;
+        var status = agent.Status;
+        var counted = status.WaitingRequests;
+        if (Activation.TryPass(Now(), counted, firstRoundDone: true)) Look();
+    }
 
     private static (string Area, string Text)? _message;
 
