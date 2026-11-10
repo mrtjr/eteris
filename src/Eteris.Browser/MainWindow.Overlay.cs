@@ -87,7 +87,14 @@ public partial class MainWindow
         RootBorder.SizeChanged += (_, _) => SyncOverlayBounds();
         PageFrame.SizeChanged += (_, _) => SyncOverlayBounds();
         StateChanged += (_, _) => { SyncOverlayBounds(); UpdateOverlayVisibility(); };
-        Closed += (_, _) => _overlay?.Close();
+        // Esquecida antes de fechar: uma vigilância de Visibility que ainda corra (um RefreshBars na fila) encontra null
+        // em UpdateOverlayVisibility e não chama Show() numa janela fechada.
+        Closed += (_, _) =>
+        {
+            var closing = _overlay;
+            _overlay = null;
+            closing?.Close();
+        };
         UpdateOverlayVisibility();
     }
 

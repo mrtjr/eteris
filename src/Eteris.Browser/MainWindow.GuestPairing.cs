@@ -144,6 +144,7 @@ public partial class MainWindow
     {
         _guestBar?.ShowNote(null);
         bool ok;
+        string? failed = null;
         try
         {
             ok = await SyncService.JoinAfterReplacedAsync(purpose => ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken()));
@@ -151,11 +152,17 @@ public partial class MainWindow
         catch (OperationCanceledException) { ok = false; }
         catch (Exception e)
         {
-            AfterGuestAction();
-            _guestBar?.ShowNote("Não foi possível concluir (" + e.Message + ").");
+            ok = false;
+            failed = "Não foi possível concluir (" + e.Message + ").";
+        }
+        // A janela pode ter fechado durante a espera: nada se mostra numa janela fechada.
+        if (_barsClosed) return;
+        AfterGuestAction();
+        if (failed is not null)
+        {
+            _guestBar?.ShowNote(failed);
             return;
         }
-        AfterGuestAction();
         if (!ok && SyncService.GuestPairingState().Kind == GuestPairingKind.Replaced)
             _guestBar?.ShowNote(SyncChoices.NotConfirmed("este computador não foi juntado à conta"));
     }

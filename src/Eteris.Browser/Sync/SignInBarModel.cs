@@ -175,7 +175,7 @@ internal sealed class WindowBarSet
         _refreshing = true;
         try
         {
-            var wanting = _bars.Where(b => b.Value.Wants()).Select(b => b.Key).ToList();
+            var wanting = _bars.Where(b => Asks(b.Value.Wants)).Select(b => b.Key).ToList();
             var winner = WindowBars.Pick(wanting);
             foreach (var (kind, bar) in _bars)
                 if (kind != winner) bar.Show(false);
@@ -183,5 +183,13 @@ internal sealed class WindowBarSet
             return winner;
         }
         finally { _refreshing = false; }
+    }
+
+    // O contrato diz «sem lançar»; se um lançar mesmo assim, conta como «não quer» e as outras decidem (uma exceção aqui
+    // saía pelo Dispatcher e fechava o Éteris).
+    private static bool Asks(Func<bool> wants)
+    {
+        try { return wants(); }
+        catch (Exception) { return false; }
     }
 }

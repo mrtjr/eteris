@@ -27,8 +27,16 @@ public partial class MainWindow
     // candidata, uma vez por janela, a partir dos seus parciais.
     private void RegisterBar(WindowBar kind, Func<bool> wants, Action<bool> show) => _bars.Register(kind, wants, show);
 
+    // Posto no Closed (MainWindow.PairingBar.cs, InitPairingBar): um RefreshBars já na fila, ou o fim de uma espera
+    // assíncrona de uma barra, não volta a mostrar nada numa janela fechada (a camada recusava o Show e o Éteris caía).
+    private bool _barsClosed;
+
     // ÚNICO sítio que mostra ou esconde barras da janela. Só na thread da IU.
-    private void RefreshBars() => _bars.Refresh();
+    private void RefreshBars()
+    {
+        if (_barsClosed) return;
+        _bars.Refresh();
+    }
 
     // Chamado no ContentRendered (MainWindow.xaml.cs), depois de a camada existir.
     private void WireSignInBar()
@@ -264,6 +272,8 @@ public partial class MainWindow
         }
         catch (OperationCanceledException) { error = SyncChoices.NotConfirmed($"«{SyncChoices.AccountLine}» continua desligado"); }
         catch (Exception) { error = SyncChoices.CouldNotFinish; }
+        // A janela pode ter fechado durante o Windows Hello: o aviso não vai para uma janela fechada.
+        if (_barsClosed) return;
         if (error is not null) ShowToast(error);
     }
 }

@@ -65,7 +65,8 @@ public static class SettingsPage
             ok = true,
             google,
             available = Sync.SyncService.Available,
-            sync = isPrivate ? new { phase = "off" } : Sync.SyncService.StatusData(Sync.SyncService.Status, now),
+            // Protegido: chamado na thread de E/S do CEF, de onde nenhuma exceção pode sair (sem estado: «desligado»).
+            sync = isPrivate ? new { phase = "off" } : Sync.SyncService.StatusData(Sync.SyncService.Guarded(() => Sync.SyncService.Status, null), now),
             connected = !isPrivate && Sync.SyncService.Available && Sync.SyncService.Connected,
             enabled = !isPrivate && Sync.SyncService.Enabled,
             hasKey = !isPrivate && Sync.SyncService.Agent()?.HasKey == true,

@@ -25,6 +25,8 @@ public partial class MainWindow
     // Chamado no construtor (MainWindow.xaml.cs). Só regista: nada se cria nem se lê aqui.
     private void InitPairingBar()
     {
+        // O primeiro Closed das barras: daqui em diante nenhuma barra se mostra nesta janela (RefreshBars).
+        Closed += (_, _) => _barsClosed = true;
         // Voltar à janela pode procurar pedidos (o serviço decide quando: nunca antes da 1.ª ronda nem em privadas).
         Activated += (_, _) => Sync.SyncService.WindowActivated(IsPrivate);
         if (IsPrivate) return;
@@ -111,7 +113,8 @@ public partial class MainWindow
     // A pessoa escreveu o código e carregou em Enter na caixa.
     private async void OnPairingCode(string session, string typed)
     {
-        PairingAnswer answer;
+        PairingAnswer answer = PairingAnswer.NotConfirmed;
+        string? failed = null;
         try
         {
             answer = await Sync.SyncService.ApprovePairingAsync(session, typed,
@@ -120,9 +123,7 @@ public partial class MainWindow
         catch (SyncUserException e)
         {
             // Não se entregou (sem rede, o pedido expirou entretanto…): o pedido continua e diz-se porquê.
-            AfterPairingAction(returnFocus: false);
-            _pairingBar?.ShowNote(e.Message);
-            return;
+            failed = e.Message;
         }
         catch (OperationCanceledException)
         {
@@ -130,8 +131,14 @@ public partial class MainWindow
         }
         catch (Exception e)
         {
+            failed = "Não foi possível concluir (" + e.Message + ").";
+        }
+        // A janela pode ter fechado durante a espera (o Windows Hello, a entrega): nada se mostra numa janela fechada.
+        if (_barsClosed) return;
+        if (failed is not null)
+        {
             AfterPairingAction(returnFocus: false);
-            _pairingBar?.ShowNote("Não foi possível concluir (" + e.Message + ").");
+            _pairingBar?.ShowNote(failed);
             return;
         }
         if (answer == PairingAnswer.Refused) _pairingAdvice = PairingBarModel.ThreeWrong;
