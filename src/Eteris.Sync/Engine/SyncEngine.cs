@@ -590,7 +590,10 @@ public sealed class SyncEngine
         return true;
     }
 
-    private string Label(string node) => State.DeviceNames.TryGetValue(node, out var name) && name.Length > 0 ? name : "aparelho " + node[..Math.Min(6, node.Length)];
+    // O nome é recebido (escolhido pelo outro aparelho): entra no texto das notas limpo, como em todo o lado onde se
+    // mostra um nome que chegou de fora.
+    private string Label(string node)
+        => (State.DeviceNames.TryGetValue(node, out var name) ? DeviceNameText.Clean(name) : null) ?? "aparelho " + node[..Math.Min(6, node.Length)];
 
     private SyncRecord NotesRecord(string text, IReadOnlyList<string> parents, Hlc version)
         => new()

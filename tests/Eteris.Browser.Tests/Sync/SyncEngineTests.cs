@@ -684,6 +684,33 @@ public class SyncEngineTests
         Assert.Equal(expected, c.Notes);
     }
 
+    // O nome de um aparelho chega de fora (quem o escolheu foi o outro computador): no texto das notas fundidas entra
+    // limpo, como em todo o lado onde um nome recebido se mostra — sem caracteres de controlo nem de inversão de
+    // sentido, numa só linha (revisão final da 0.2.15, A-10).
+    [Fact]
+    public async Task Notes_Conflict_LabelsWithReceivedNames_AreCleaned()
+    {
+        var hostile = "Trabalho" + (char)0x202E + "gpj.exe" + (char)13 + (char)10 + "Segunda linha" + (char)7;
+        using var lab = new SyncLab();
+        var devices = await lab.DevicesAsync("Casa", hostile);
+        var (a, b) = (devices[0], devices[1]);
+        a.SetNotes("Reunião às 10h\nLevar o portátil");
+        await SyncLab.SettleAsync(a, b);
+        a.SetNotes("Reunião às 11h\nLevar o portátil");
+        lab.Advance(TimeSpan.FromSeconds(1));
+        b.SetNotes("Reunião às 9h30\nLevar o portátil");
+        await SyncLab.SettleAsync(b, a);
+        Assert.Equal(a.Notes, b.Notes);
+        Assert.Contains("Conflito de sincronização", a.Notes);
+        var clean = Eteris.Sync.Engine.DeviceNameText.Clean(hostile)!;
+        Assert.Equal("Trabalhogpj.exeSegunda linha", clean);
+        Assert.Contains("——— " + clean + " ———", a.Notes);
+        Assert.DoesNotContain((char)0x202E, a.Notes);
+        Assert.DoesNotContain('\r', a.Notes);
+        Assert.DoesNotContain('\u0007', a.Notes);
+        Assert.All(a.Notes.Split((char)10).Where(line => line.Contains("Segunda linha")), line => Assert.Contains(clean, line));
+    }
+
     [Fact]
     public async Task Notes_SameLineEditedTwice_KeepsBothVersions_SameEverywhere()
     {
