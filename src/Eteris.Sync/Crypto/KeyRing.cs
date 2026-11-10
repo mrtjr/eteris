@@ -9,7 +9,8 @@ namespace Eteris.Sync.Crypto;
 // O segredo de conta R (256 bits do gerador do sistema; nunca derivado de uma senha). Dele saem, por HKDF:
 //   KEK    = HKDF(R, "kek")       — embrulha a chave de dados (DEK);
 //   cadeia = HKDF(R, "chain-id")  — nome opaco da pasta da conta no transporte (16 bytes em hex).
-// R só sai do aparelho escrito como código de recuperação ou cifrado para outro aparelho (emparelhamento).
+// R só sai do aparelho escrito no kit de recuperação (24 palavras ou o código antigo) ou cifrado para outro aparelho
+// (emparelhamento).
 public sealed class AccountSecret : IDisposable
 {
     private readonly byte[] _bytes;
@@ -25,6 +26,8 @@ public sealed class AccountSecret : IDisposable
 
     public string ToCode() => RecoveryCode.Encode(_bytes);
 
+    public string ToWords() => RecoveryCode.EncodeWords(_bytes);
+
     public byte[] ToBytes() => (byte[])_bytes.Clone();
 
     public string ChainId => Kdf.Hex(Kdf.Derive(_bytes, "chain-id", 16));
@@ -35,7 +38,7 @@ public sealed class AccountSecret : IDisposable
     internal byte[] ArchiveKey(ReadOnlySpan<byte> salt) => Kdf.Derive(_bytes, "profile-archive", salt);
 
     // Os selos dos registos secretos dentro de um ficheiro exportado (com segredos): derivados da chave do ficheiro,
-    // como os da conta derivam da DEK (o código mostrado uma vez abre o ficheiro e os selos).
+    // como os da conta derivam da DEK (o kit de recuperação — 24 palavras ou o código antigo — abre o ficheiro e os selos).
     internal SealKeys ArchiveSeals(ReadOnlySpan<byte> salt)
     {
         var key = ArchiveKey(salt);

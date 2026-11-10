@@ -1164,6 +1164,29 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(SyncPhase.On, outro.Agent.Status.Phase);
     }
 
+    // O kit de recuperação em 24 palavras abre a conta pelo mesmo caminho do código antigo; as palavras de outra conta
+    // e um kit incompleto dão a mensagem certa.
+    [Fact]
+    public async Task Join_AcceptsTheWords()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        var palavras = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.Status.RecoveryCode!).ToWords();
+        var trabalho = NewDevice("Trabalho");
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(palavras);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+
+        var outro = NewDevice("Outro");
+        await outro.Agent.StartAsync();
+        using var alheia = Eteris.Sync.Crypto.AccountSecret.Create();
+        var wrong = await Assert.ThrowsAsync<SyncUserException>(() => outro.Agent.JoinWithCodeAsync(alheia.ToWords()));
+        Assert.StartsWith("Este kit não abre", wrong.Message);
+        var curto = string.Join(' ', palavras.Split(' ')[..23]);
+        var count = await Assert.ThrowsAsync<SyncUserException>(() => outro.Agent.JoinWithCodeAsync(curto));
+        Assert.Contains("24 palavras", count.Message);
+    }
+
     // A página de fim da entrada lê a fase logo que StartAsync devolve a tarefa: tem de ler já «Starting», nunca a fase
     // da ronda anterior (um «On» antigo dava «Pronto.» antes de se saber como ficou).
     [Fact]

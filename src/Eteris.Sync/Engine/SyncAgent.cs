@@ -835,7 +835,7 @@ public sealed class SyncAgent
             }
             catch (Exception e) when (e is WrongCodeException or ChainGoneException)
             {
-                throw new SyncUserException("Este código não abre a conta do Éteris neste Google Drive. Confirme o código (14 grupos de 4).");
+                throw new SyncUserException("Este kit não abre a conta do Éteris neste Google Drive. Confirme as 24 palavras (ou o código de 14 grupos de 4).");
             }
             catch (Exception e) when (IsTransient(e))
             {

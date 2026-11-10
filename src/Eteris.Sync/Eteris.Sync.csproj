@@ -15,4 +15,9 @@
     <InternalsVisibleTo Include="Eteris.Browser.Tests" />
   </ItemGroup>
 
+  <!-- A lista BIP39 em português do kit de recuperação (Crypto/Bip39Words.cs), sem alterações: o SHA-256 está num teste. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Crypto\bip39-pt.txt" LogicalName="Eteris.Sync.bip39-pt.txt" />
+  </ItemGroup>
+
 </Project>
