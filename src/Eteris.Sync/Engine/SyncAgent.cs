@@ -126,6 +126,10 @@ public sealed class SyncAgent
     private readonly SemaphoreSlim _run = new(1, 1);
     private readonly Lock _gate = new();
     private readonly Dictionary<string, HostFlow> _hosts = new(StringComparer.Ordinal);
+    // Sessões a que este aparelho respondeu e que já acabaram (recusadas, 3 códigos errados, expiradas, acabadas mal do
+    // outro lado, aprovadas). Quem tem o Drive pode apagar o x-host e o 1-host e deixar o 0-request: a mesma sessão não
+    // volta a ser respondida (seriam três tentativas novas sem pedido novo). Só memória, como as tentativas.
+    private readonly HashSet<string> _ended = new(StringComparer.Ordinal);
     private ISyncTransport? _transport;
     private SavedSync? _saved;
     private SyncEngine? _engine;
@@ -954,7 +958,7 @@ public sealed class SyncAgent
         foreach (var session in await PairingRequests.PendingAsync(transport, _now, cancellationToken).ConfigureAwait(false))
         {
             lock (_gate)
-                if (_hosts.ContainsKey(session) || _guest?.Session == session) continue;
+                if (_hosts.ContainsKey(session) || _ended.Contains(session) || _guest?.Session == session) continue;
             if (!answer)
             {
                 waiting++;
@@ -999,7 +1003,11 @@ public sealed class SyncAgent
         {
             _waiting = waiting;
             stale = _hosts.Values.Where(h => _now() - h.Created > (long)PairingProtocol.Lifetime.TotalMilliseconds).ToList();
-            foreach (var flow in stale) _hosts.Remove(flow.Session);
+            foreach (var flow in stale)
+            {
+                _hosts.Remove(flow.Session);
+                _ended.Add(flow.Session);
+            }
         }
         foreach (var flow in stale)
         {
@@ -1014,6 +1022,7 @@ public sealed class SyncAgent
     {
         lock (_gate)
         {
+            _ended.Add(flow.Session);
             if (flow.CountedBad || _saved is not { } saved) return;
             flow.CountedBad = true;
             saved.BadPairings = PairingFatigue.Add(saved.BadPairings, _now());
@@ -1115,6 +1124,7 @@ public sealed class SyncAgent
         lock (_gate)
         {
             _hosts.Remove(session);
+            _ended.Add(session);
             _notice = $"«{DeviceNameText.Shown(flow.Name)}» foi aprovado: os dados juntam-se nesse computador.";
             // Uma aprovação repõe a contagem dos pedidos em série.
             if (_saved is { BadPairings: not null } saved)

@@ -449,6 +449,28 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.Equal(0, BadCount(casa));
     }
 
+    // Quem tem o Drive apaga o x-host e o 1-host de uma sessão recusada aqui, deixando só o 0-request: a Casa não
+    // responde outra vez à mesma sessão (seriam três tentativas novas sem pedido novo).
+    [Fact]
+    public async Task RefusedSession_RewrittenOnTheDrive_IsNotAnsweredAgain()
+    {
+        var casa = await HostAsync();
+        var session = await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        await casa.Agent.RefuseAsync(session);
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido");
+        foreach (var path in await Folder.ListAsync(SyncPaths.Pairing(session)))
+            if (!path.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal)) await Folder.DeleteAsync(path);
+        Assert.Equal([session], await PairingRequests.PendingAsync(Folder, Now));
+
+        await casa.Agent.CheckRequestsAsync();
+        await Task.Delay(100);
+        Assert.Equal(0, casa.Agent.Status.AnsweringSinceMs);
+        Assert.Equal(0, casa.Agent.Status.WaitingRequests);
+        Assert.False(await HasStep(session, PairingProtocol.HostKey));
+        Assert.Equal(1, BadCount(casa));
+    }
+
     // Um pedido escrito à mão a que a Casa responde e cujo passo 2 (também escrito à mão) não confere.
     private async Task AnsweredThenForgedAsync(Device casa, byte[] guestKeyFile)
     {
