@@ -120,6 +120,30 @@ ele (8,96% contra 9,39%), enquanto o Chrome, o Firefox e o Brave param. Fica em 
 histerese do plano). O e13 mediu-se só com o sinal simulado: prova que o mecanismo adormece e liberta memória, não
 quando o Windows dá o sinal a sério (D-16). Todos os outros ajustes continuam desligados por omissão.
 
+**O restauro do e8 não foi medido.** O plano só o aceita com «0 fotogramas errados ao restaurar» (B-ABAS ao restaurar)
+e pede o diagnóstico D11 (restaurar com 1 e com 20 abas); o B-OCL inclui ainda a outra área de trabalho e a sessão
+bloqueada. A medição que o ligou tem só a CPU com a janela à vista, minimizada e tapada: não há nenhuma medição do
+restauro, da área de trabalho nem do bloqueio, e o D11 não correu. A revisão do fecho da 0.2.14 corrigiu, por leitura
+do código e com testes da regra e do texto (`UnseenWindowTests`), quatro caminhos que **nunca correram na aplicação**:
+a janela ativada a partir de outra área de trabalho, a página segurada ou quente ao restaurar, uma disposição com a
+janela minimizada e a página que ainda não apresentou. Antes do pacote, com o PC livre e num perfil de teste (cerca de
+10 min):
+
+1. minimizar e restaurar com o cursor numa caixa de texto da página e continuar a escrever sem clicar — o foco do
+   teclado: quando o WPF devolve o foco, a janela da página ainda está minimizada (o restauro dela vem a seguir, em
+   fila, e não repõe o foco);
+2. gravar o restauro e contar os fotogramas errados, com 1 e com 20 abas (`ocl.ps1 -Estados minimizada,restauro` e
+   `abas\sessao.ps1`);
+3. outra área de trabalho, pelo dono (`ocl.ps1 -Estados manual`): voltar com Ctrl+Win+seta (a janela volta sem ser
+   ativada) e voltar pelo ícone do Éteris ou por Alt+Tab (a janela é ativada ainda tapada) — a página tem de aparecer
+   em menos de meio segundo, sem trocar de aba;
+4. bloquear e desbloquear a sessão (Win+L), também pelo dono;
+5. um link aberto por outra aplicação com o Éteris minimizado: vê-se a página antiga até a nova aparecer, nunca uma
+   área vazia.
+
+Se algum falhar e não houver tempo para o corrigir, o recuo é desligar o e8: `--eteris-ajustes=-e8` na linha de
+comandos (vale numa instalação), ou tirá-lo dos ligados por omissão (`OnByDefault` em `Infrastructure/PerfTuning.cs`).
+
 ## Linhas de base
 
 - **L0** = a 0.2.13 publicada (sem sandbox): `build/publish.ps1` na tag `v0.2.13`. Serve para a comparação com as
