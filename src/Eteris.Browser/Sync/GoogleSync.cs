@@ -119,6 +119,8 @@ internal static class GoogleSync
                     Finish = (tokens, ct) => ct.IsCancellationRequested
                         ? Task.FromCanceled<SignInPageKind>(ct)
                         : (after = AfterTokensAsync(tokens)).WaitAsync(ct),
+                    // Uma vez, quando a sessão fica iniciada (nunca numa recusa): pisca a janela do Éteris.
+                    SignedIn = MainWindow.SignInArrived,
                 };
                 try { await oauth.SignInAsync(options, cancel.Token); }
                 finally

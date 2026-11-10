@@ -96,30 +96,8 @@ public partial class MainWindow
 
     private bool _hadActiveDownloads;
 
-    private void FlashTaskbar()
-    {
-        var info = new FLASHWINFO
-        {
-            cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<FLASHWINFO>(),
-            hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle,
-            dwFlags = 0x2 | 0xC, // FLASHW_TRAY | FLASHW_TIMERNOFG: pisca até a janela voltar ao primeiro plano
-            uCount = 3,
-        };
-        FlashWindowEx(ref info);
-    }
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct FLASHWINFO
-    {
-        public uint cbSize;
-        public nint hwnd;
-        public uint dwFlags;
-        public uint uCount;
-        public uint dwTimeout;
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool FlashWindowEx(ref FLASHWINFO info);
+    // Pisca até a janela voltar ao primeiro plano (Infrastructure/WindowAttention).
+    private void FlashTaskbar() => Infrastructure.WindowAttention.Flash(new System.Windows.Interop.WindowInteropHelper(this).Handle);
 
     // Arco do anel de progresso à volta do botão (raio 15, começa no topo, sentido horário).
     private static Geometry? RingArc(int percent)

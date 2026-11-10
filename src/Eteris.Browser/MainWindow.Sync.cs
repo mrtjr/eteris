@@ -21,6 +21,19 @@ public partial class MainWindow
         window.ShowToast(summary);
     }
 
+    // A sessão ficou iniciada no navegador do sistema: chama a atenção para o Éteris (qualquer thread). Pisca a janela
+    // normal mais à mão e tenta trazê-la para a frente (o Windows costuma recusar: fica o piscar). Não a restaura nem
+    // maximiza; sem janela normal, nada.
+    internal static void SignInArrived()
+        => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (NormalWindows().Where(w => !w._forgetOnCloseDone).OrderByDescending(w => w.IsActive).FirstOrDefault() is not { } window) return;
+            if (!Infrastructure.WindowAttention.ShouldAsk(window.IsActive)) return;
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            Infrastructure.WindowAttention.Flash(hwnd);
+            Infrastructure.WindowAttention.TryForeground(hwnd);
+        });
+
     // Os Espaços da primeira janela normal, pela ordem (null sem janela: a sincronização lê a sessão gravada).
     internal static IReadOnlyList<(string Name, int Color, string? Icon)>? SyncSpaces()
         => NormalWindows().FirstOrDefault(w => !w._forgetOnCloseDone) is { } window
