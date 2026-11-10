@@ -126,10 +126,22 @@ public class SignInBarTests
     {
         var glue = Source("MainWindow.SignInBar.cs");
         var actions = Body(glue, "private void OnSignInBarAction(");
-        Assert.Contains("GoogleSync.BeginSignIn(GoogleSync.ReentryHint())", actions);
-        Assert.Contains("SyncService.DismissSignInPrompt()", actions);
-        Assert.Contains("SignInBarAction.SignInAgain", actions);
-        Assert.Contains("SignInBarAction.NotNow", actions);
+        var enter = Case(actions, "SignInBarAction.SignInAgain");
+        Assert.Contains("GoogleSync.BeginSignIn(GoogleSync.ReentryHint())", enter);
+        Assert.Contains("SyncService.DismissSignInPrompt()", enter);
+        var notNow = Case(actions, "SignInBarAction.NotNow");
+        Assert.Contains("SyncService.DismissSignInPrompt()", notNow);
+        Assert.DoesNotContain("BeginSignIn", notNow);
+    }
+
+    // O texto de um «case» do switch: de «case <rótulo>:» até ao «break;» seguinte.
+    private static string Case(string code, string label)
+    {
+        var start = code.IndexOf("case " + label + ":", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"não encontrei case {label}");
+        var end = code.IndexOf("break;", start, StringComparison.Ordinal);
+        Assert.True(end > start, $"case {label} sem break");
+        return code[start..end];
     }
 
     [Fact]
