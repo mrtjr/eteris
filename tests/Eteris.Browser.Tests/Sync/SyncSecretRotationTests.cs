@@ -53,7 +53,7 @@ public sealed class SyncSecretRotationTests : IDisposable
         casa.Profile.Login(Site, "maria.teste", "Inventada-1");
         casa.Profile.SetSecret(Collections.Contacts, "a1", new JsonObject { ["city"] = "Lisboa" });
         await casa.Agent.StartAsync();
-        var code = casa.Agent.Status.RecoveryCode!;
+        var code = casa.Agent.RevealKit()!.Words;
         var trabalho = NewDevice("Trabalho");
         await trabalho.Agent.StartAsync();
         await trabalho.Agent.JoinWithCodeAsync(code);
@@ -117,7 +117,7 @@ public sealed class SyncSecretRotationTests : IDisposable
         var casa = NewDevice("Casa");
         casa.Profile.Login(Site, "u", "1");
         await casa.Agent.StartAsync();
-        casa.Agent.AcknowledgeCode();
+        casa.Agent.MarkKitSaved();
         var before = Secrets(casa.Store).Single();
         await casa.Agent.NewRecoveryCodeAsync();
         Assert.DoesNotContain("removido", casa.Agent.Status.Notice);

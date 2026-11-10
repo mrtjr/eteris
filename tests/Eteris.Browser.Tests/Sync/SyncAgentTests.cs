@@ -167,7 +167,7 @@ public sealed class SyncAgentTests : IDisposable
     // ---- criar e entrar ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public async Task FirstDevice_CreatesTheAccount_ShowsTheCodeOnce_AndUploadsEverything()
+    public async Task FirstDevice_CreatesTheAccount_AsksForNothing_KitIsPending()
     {
         var casa = NewDevice("Casa");
         casa.Profile.Bookmark("https://pt.wikipedia.org/", "Wikipédia");
@@ -179,16 +179,23 @@ public sealed class SyncAgentTests : IDisposable
         var status = casa.Agent.Status;
         Assert.Equal(SyncPhase.On, status.Phase);
         Assert.Null(status.Error);
-        Assert.NotNull(status.RecoveryCode);
-        Assert.Equal(14, status.RecoveryCode!.Split(' ', '-').Length);
         Assert.True(status.LastSuccessMs > 0);
+        // Nada é pedido ao criar a conta: o kit fica por guardar, neste PC, e vê-se quando se quiser.
+        Assert.Equal(KitState.Pending, status.Kit!.State);
+        Assert.Equal(_now, status.Kit.SinceMs);
+        var kit = casa.Agent.RevealKit()!;
+        Assert.Equal(24, kit.Words.Split(' ').Length);
 
-        // O código continua à vista até «Já guardei» — também depois de reabrir o Éteris — e depois nunca mais.
+        // Reabrir o Éteris: o mesmo kit (a mesma impressão digital e as mesmas palavras).
         var reopened = NewDevice("Casa", store: casa.Store, profile: casa.Profile);
-        Assert.Equal(status.RecoveryCode, reopened.Agent.Status.RecoveryCode);
-        reopened.Agent.AcknowledgeCode();
-        Assert.Null(reopened.Agent.Status.RecoveryCode);
-        Assert.Null(NewDevice("Casa", store: casa.Store, profile: casa.Profile).Agent.Status.RecoveryCode);
+        Assert.Equal(status.Kit.Id, reopened.Agent.Status.Kit!.Id);
+        Assert.Equal(kit.Words, reopened.Agent.RevealKit()!.Words);
+        reopened.Agent.MarkKitSaved();
+        Assert.Equal(KitState.Saved, reopened.Agent.Status.Kit!.State);
+        var again = NewDevice("Casa", store: casa.Store, profile: casa.Profile);
+        Assert.Equal(KitState.Saved, again.Agent.Status.Kit!.State);
+        // «Ver de novo»: guardado não quer dizer escondido para sempre.
+        Assert.Equal(kit.Words, again.Agent.RevealKit()!.Words);
 
         // Nenhum texto do perfil em claro na pasta (só ficheiros cifrados).
         foreach (var file in Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories))
@@ -209,7 +216,7 @@ public sealed class SyncAgentTests : IDisposable
         casa.Profile.Setting("theme", "light");
         casa.Profile.SetNotes("da casa");
         await casa.Agent.StartAsync();
-        var code = casa.Agent.Status.RecoveryCode!;
+        var code = casa.Agent.RevealKit()!.Words;
 
         var trabalho = NewDevice("Trabalho");
         trabalho.Profile.Bookmark("https://so-no-trabalho.example/", "Só aqui");
@@ -218,7 +225,7 @@ public sealed class SyncAgentTests : IDisposable
         trabalho.Profile.SetNotes("do trabalho");
         await trabalho.Agent.StartAsync();
         Assert.Equal(SyncPhase.Choose, trabalho.Agent.Status.Phase);
-        Assert.Null(trabalho.Agent.Status.RecoveryCode);
+        Assert.Null(trabalho.Agent.Status.Kit);
 
         await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.JoinWithCodeAsync("0000-0000"));
         await trabalho.Agent.JoinWithCodeAsync(code.ToLowerInvariant());
@@ -313,7 +320,7 @@ public sealed class SyncAgentTests : IDisposable
     {
         var (casa, trabalho) = await TwoAsync();
         // Um Éteris mais recente, na mesma conta, escreve um campo que estes não conhecem («folder»).
-        using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.Status.RecoveryCode!))
+        using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.RevealKit()!.Words))
         {
             var newer = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Mais recente"), Now);
             newer.Put(Collections.Bookmarks, "https://c.example/", new JsonObject { ["title"] = "C", ["folder"] = "Receitas" });
@@ -340,7 +347,7 @@ public sealed class SyncAgentTests : IDisposable
         var (casa, _) = (NewDevice("Casa", DriveFor(google)), 0);
         casa.Profile.Bookmark("https://pt.wikipedia.org/", "Wikipédia");
         await casa.Agent.StartAsync();
-        casa.Agent.AcknowledgeCode();
+        casa.Agent.MarkKitSaved();
 
         var portatil = NewDevice("Portátil", DriveFor(google));
         portatil.Profile.Bookmark("https://portatil.example/", "Do portátil");
@@ -367,7 +374,8 @@ public sealed class SyncAgentTests : IDisposable
             await casa.Agent.ApproveWithCodeAsync(request.Session, portatil.Agent.Status.Pairing!.Code!));
         await Until(() => portatil.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o portátil ligado");
         Assert.Contains("Casa", portatil.Agent.Status.Notice);
-        Assert.Null(portatil.Agent.Status.RecoveryCode); // o código só aparece no aparelho que cria a conta
+        // Entrou por aprovação: não se sabe se tem o kit guardado noutro lado — fica por guardar (só no menu).
+        Assert.Equal(KitState.Pending, portatil.Agent.Status.Kit!.State);
         await Settle(casa, portatil);
         Assert.Equal("Do portátil", casa.Profile.Title("https://portatil.example/"));
         Assert.Equal("Wikipédia", portatil.Profile.Title("https://pt.wikipedia.org/"));
@@ -400,7 +408,7 @@ public sealed class SyncAgentTests : IDisposable
         var (casa, trabalho) = await TwoAsync();
         var portatil = NewDevice("Portátil");
         await portatil.Agent.StartAsync();
-        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho, portatil);
         var devices = await casa.Agent.RefreshDevicesAsync();
         Assert.Equal(3, devices.Count);
@@ -410,7 +418,7 @@ public sealed class SyncAgentTests : IDisposable
         trabalho.Profile.Bookmark("https://antes.example/", "Mudado antes de saber"); // ainda por enviar
         var removed = devices.Single(d => d.Name == "Portátil");
         await casa.Agent.RemoveDeviceAsync(removed.Id);
-        Assert.NotNull(casa.Agent.Status.RecoveryCode);                // código novo, mostrado uma vez
+        Assert.NotEqual(KitState.Saved, casa.Agent.Status.Kit!.State); // kit novo, por guardar
         Assert.NotEqual(oldCode, casa.Store.Load()!.Secret);
         Assert.Contains("Portátil", casa.Agent.Status.Notice);
 
@@ -456,7 +464,7 @@ public sealed class SyncAgentTests : IDisposable
         // «Ligar outra vez» cria uma conta nova.
         await casa.Agent.StartAsync();
         Assert.Equal(SyncPhase.On, casa.Agent.Status.Phase);
-        Assert.NotNull(casa.Agent.Status.RecoveryCode);
+        Assert.NotEqual(KitState.Saved, casa.Agent.Status.Kit!.State);
     }
 
     // «Apagar os meus dados…» e a janela fecha a meio (ainda «A sincronizar…»): o «desligada» ficou gravado antes do
@@ -503,7 +511,7 @@ public sealed class SyncAgentTests : IDisposable
         var velhas = FilesInFolder().Select(f => f.Split('/')[1]).Distinct().ToList();
         await reaberta.Agent.StartAsync();
         Assert.Equal(SyncPhase.On, reaberta.Agent.Status.Phase);
-        Assert.NotNull(reaberta.Agent.Status.RecoveryCode);
+        Assert.NotEqual(KitState.Saved, reaberta.Agent.Status.Kit!.State);
         Assert.False(reaberta.Agent.Status.Deleting);
         var cadeias = FilesInFolder().Select(f => f.Split('/')[1]).Where(c => c != "pair").Distinct().ToList();
         Assert.Single(cadeias);
@@ -722,7 +730,7 @@ public sealed class SyncAgentTests : IDisposable
 
         var outro = NewDevice("Outro", DriveFor(google));
         await outro.Agent.StartAsync();
-        await outro.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await outro.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         Assert.Equal("Offline", outro.Profile.Title("https://offline.example/"));
     }
 
@@ -776,7 +784,7 @@ public sealed class SyncAgentTests : IDisposable
         var (casa, trabalho) = await TwoAsync();
         var portatil = NewDevice("Portátil");
         await portatil.Agent.StartAsync();
-        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         casa.Profile.Bookmark("https://y.example/", "Y");
         await Settle(casa, trabalho, portatil);
         var devices = await casa.Agent.RefreshDevicesAsync();
@@ -807,10 +815,10 @@ public sealed class SyncAgentTests : IDisposable
         await casa.Agent.StartAsync();
         var trabalho = NewDevice("Trabalho");
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         var portatil = NewDevice("Portátil");
         await portatil.Agent.StartAsync();
-        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho, portatil);
         var devices = await casa.Agent.RefreshDevicesAsync();
         var oldSecret = casa.Store.Load()!.Secret;
@@ -841,10 +849,10 @@ public sealed class SyncAgentTests : IDisposable
         var (casa, trabalho) = await TwoAsync();
         var portatil = NewDevice("Portátil");
         await portatil.Agent.StartAsync();
-        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         var quarto = NewDevice("Quarto");
         await quarto.Agent.StartAsync();
-        await quarto.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await quarto.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho, portatil, quarto);
         var devices = await casa.Agent.RefreshDevicesAsync();
         Assert.Equal(4, devices.Count);
@@ -872,13 +880,13 @@ public sealed class SyncAgentTests : IDisposable
         var (casa, trabalho) = await TwoAsync();
         var portatil = NewDevice("Portátil");
         await portatil.Agent.StartAsync();
-        await portatil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho, portatil);
         var devices = await casa.Agent.RefreshDevicesAsync();
         var oldChain = casa.Store.Load()!.Engine!.ChainId;
 
         // O portátil (prestes a ser removido) inventa um aparelho na conta, com uma chave dele.
-        using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.Status.RecoveryCode!))
+        using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.RevealKit()!.Words))
         {
             var fake = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Falso"), Now);
             fake.Put(Collections.Bookmarks, "https://isco.example/", new JsonObject { ["title"] = "isco" });
@@ -1060,7 +1068,7 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Single(Directory.EnumerateFiles(Path.Combine(_folder, "eteris"), "keys", SearchOption.AllDirectories));
         var (left, stayed) = casa.Agent.Status.Phase == SyncPhase.Choose ? (casa, trabalho) : (trabalho, casa);
         Assert.Contains("ao mesmo tempo", left.Agent.Status.Notice);
-        await left.Agent.JoinWithCodeAsync(stayed.Agent.Status.RecoveryCode!);
+        await left.Agent.JoinWithCodeAsync(stayed.Agent.RevealKit()!.Words);
         await Settle(stayed, left);
         Assert.Equal("Casa", trabalho.Profile.Title("https://casa.example/"));
         Assert.Equal("Trabalho", casa.Profile.Title("https://trabalho.example/"));
@@ -1130,17 +1138,27 @@ public sealed class SyncAgentTests : IDisposable
         Assert.False(prompt.Pending);
     }
 
-    // «Sair» sem apagar a chave, com o código de recuperação ainda por guardar: continua à vista ao voltar.
+    // «Sair» com «apagar a chave» esquece o kit; sem apagar a chave, o estado do kit fica como estava.
     [Fact]
-    public async Task SignOut_KeepingTheKey_TheRecoveryCodeStaysUntilSaved()
+    public async Task SignOut_ForgettingTheKey_ForgetsTheKit_AndKeepingIt_KeepsTheKitState()
     {
         var casa = NewDevice("Casa");
         await casa.Agent.StartAsync();
-        var code = casa.Agent.Status.RecoveryCode;
-        Assert.NotNull(code);
+        Assert.Equal(KitState.Pending, casa.Agent.Status.Kit!.State);
         casa.Agent.SignOut(forgetKey: false);
         await casa.Agent.StartAsync();
-        Assert.Equal(code, casa.Agent.Status.RecoveryCode);
+        Assert.Equal(KitState.Pending, casa.Agent.Status.Kit!.State); // por guardar antes → por guardar depois
+
+        casa.Agent.MarkKitSaved();
+        var id = casa.Agent.Status.Kit!.Id;
+        casa.Agent.SignOut(forgetKey: false);
+        await casa.Agent.StartAsync();
+        Assert.Equal(KitState.Saved, casa.Agent.Status.Kit!.State);
+        Assert.Equal(id, casa.Agent.Status.Kit.Id);
+
+        casa.Agent.SignOut(forgetKey: true);
+        Assert.Null(casa.Agent.Status.Kit);
+        Assert.Null(casa.Agent.RevealKit());
     }
 
     // «Gerar um código de recuperação novo»: o antigo deixa de servir, ninguém sai da conta.
@@ -1148,11 +1166,12 @@ public sealed class SyncAgentTests : IDisposable
     public async Task NewRecoveryCode_TheOldOneStopsWorking_EveryoneStays()
     {
         var (casa, trabalho) = await TwoAsync();
-        var old = casa.Agent.Status.RecoveryCode!;
-        casa.Agent.AcknowledgeCode();
+        var old = casa.Agent.RevealKit()!.Words;
+        casa.Agent.MarkKitSaved();
         await casa.Agent.RefreshDevicesAsync();
         await casa.Agent.NewRecoveryCodeAsync();
-        var fresh = casa.Agent.Status.RecoveryCode;
+        Assert.NotEqual(KitState.Saved, casa.Agent.Status.Kit!.State);
+        var fresh = casa.Agent.RevealKit()?.Words;
         Assert.NotNull(fresh);
         Assert.NotEqual(old, fresh);
         Assert.True(await trabalho.Agent.RunAsync());
@@ -1171,7 +1190,7 @@ public sealed class SyncAgentTests : IDisposable
     {
         var casa = NewDevice("Casa");
         await casa.Agent.StartAsync();
-        var palavras = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.Status.RecoveryCode!).ToWords();
+        var palavras = casa.Agent.RevealKit()!.Words;
         var trabalho = NewDevice("Trabalho");
         await trabalho.Agent.StartAsync();
         await trabalho.Agent.JoinWithCodeAsync(palavras);
@@ -1185,6 +1204,214 @@ public sealed class SyncAgentTests : IDisposable
         var curto = string.Join(' ', palavras.Split(' ')[..23]);
         var count = await Assert.ThrowsAsync<SyncUserException>(() => outro.Agent.JoinWithCodeAsync(curto));
         Assert.Contains("24 palavras", count.Message);
+    }
+
+    // ---- kit de recuperação (0.2.15, T5) ----------------------------------------------------------------------------
+
+    // O estado (que vai para a página em cada atualização) nunca leva o segredo: só a impressão digital do kit.
+    [Fact]
+    public async Task Status_NeverCarriesTheSecret()
+    {
+        var (casa, _) = await TwoAsync();
+        var kit = casa.Agent.RevealKit()!;
+        var words = kit.Words.Split(' ');
+        string code;
+        using (var account = Eteris.Sync.Crypto.AccountSecret.FromCode(kit.Words)) code = account.ToCode();
+        var status = System.Text.Json.JsonSerializer.Serialize(casa.Agent.Status);
+        var page = System.Text.Json.JsonSerializer.Serialize(Eteris.Browser.Sync.SyncService.StatusData(casa.Agent.Status, _now));
+        foreach (var json in new[] { status, page })
+        {
+            Assert.DoesNotContain(kit.Words, json, StringComparison.Ordinal);
+            Assert.DoesNotContain(words[0] + " " + words[1], json, StringComparison.Ordinal);
+            Assert.DoesNotContain(code, json, StringComparison.Ordinal);
+        }
+        Assert.Contains("\"kit\":{\"id\":\"" + kit.KitId + "\"", page, StringComparison.Ordinal);
+    }
+
+    // A impressão digital: 4 caracteres Crockford, a mesma para os dois formatos do kit e para o estado.
+    [Fact]
+    public async Task KitId_Is4Chars_Stable_AndFollowsTheSecret()
+    {
+        using (var s = Eteris.Sync.Crypto.AccountSecret.Create())
+        {
+            Assert.Matches("^[0-9A-HJKMNP-TV-Z]{4}$", s.KitId);
+            using var fromCode = Eteris.Sync.Crypto.AccountSecret.FromCode(s.ToCode());
+            using var fromWords = Eteris.Sync.Crypto.AccountSecret.FromCode(s.ToWords());
+            Assert.Equal(s.KitId, fromCode.KitId);
+            Assert.Equal(s.KitId, fromWords.KitId);
+        }
+
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        for (var round = 0; round < 2; round++)
+        {
+            var kit = casa.Agent.RevealKit()!;
+            using var account = Eteris.Sync.Crypto.AccountSecret.FromCode(kit.Words);
+            Assert.Equal(kit.KitId, casa.Agent.Status.Kit!.Id);
+            Assert.Equal(account.KitId, kit.KitId);
+            // Não se afirma que muda: 20 bits; o que muda sempre são as palavras.
+            if (round == 0) await casa.Agent.NewRecoveryCodeAsync();
+        }
+    }
+
+    // Cadeia nova: o kit guardado deixou de valer, aqui e no computador que recebe a conta nova.
+    [Fact]
+    public async Task Rotation_MakesTheSavedKitStale_HereAndOnTheOtherDevice()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Agent.MarkKitSaved();
+        Assert.Equal(KitState.Saved, trabalho.Agent.Status.Kit!.State); // entrou com o kit: tem-no
+        var old = casa.Agent.RevealKit()!.Words;
+        await casa.Agent.RefreshDevicesAsync();
+        _now += 60_000;
+        await casa.Agent.NewRecoveryCodeAsync();
+        Assert.True(await trabalho.Agent.RunAsync());
+
+        var fresh = casa.Agent.RevealKit()!.Words;
+        Assert.NotEqual(old, fresh);
+        Assert.Equal(fresh, trabalho.Agent.RevealKit()!.Words);
+        using var account = Eteris.Sync.Crypto.AccountSecret.FromCode(fresh);
+        foreach (var device in new[] { casa, trabalho })
+        {
+            var kit = device.Agent.Status.Kit!;
+            Assert.Equal(account.KitId, kit.Id);
+            Assert.Equal(KitState.Stale, kit.State);
+            Assert.Equal(_now, kit.SinceMs);
+        }
+
+        var outro = NewDevice("Outro");
+        await outro.Agent.StartAsync();
+        await Assert.ThrowsAsync<SyncUserException>(() => outro.Agent.JoinWithCodeAsync(old));
+        await outro.Agent.JoinWithCodeAsync(fresh);
+        Assert.Equal(SyncPhase.On, outro.Agent.Status.Phase);
+    }
+
+    // Uma cadeia nova repõe o «Mais tarde»; um «Não quero» fica só se o kit nunca foi guardado.
+    [Fact]
+    public async Task Rotation_ResetsTheSnooze_AndKeepsADeclineOnlyIfNeverSaved()
+    {
+        var a = NewDevice("A");
+        await a.Agent.StartAsync();
+        a.Agent.SnoozeKit(_now + 1000);
+        Assert.Equal(_now + 1000, a.Agent.Status.Kit!.SnoozedUntilMs);
+        await a.Agent.NewRecoveryCodeAsync();
+        Assert.Equal(0, a.Agent.Status.Kit!.SnoozedUntilMs);
+
+        a.Agent.DeclineKit();
+        await a.Agent.NewRecoveryCodeAsync();
+        Assert.True(a.Agent.Status.Kit!.Declined);
+        Assert.Equal(KitState.Pending, a.Agent.Status.Kit.State);
+
+        a.Agent.MarkKitSaved();
+        a.Agent.DeclineKit();
+        await a.Agent.NewRecoveryCodeAsync();
+        Assert.False(a.Agent.Status.Kit!.Declined);
+        Assert.Equal(KitState.Stale, a.Agent.Status.Kit.State);
+    }
+
+    // «Não quero» e «Mais tarde» ficam gravados neste computador; sem chave não fazem nada.
+    [Fact]
+    public async Task Decline_AndSnooze_StickAcrossRestarts()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        casa.Agent.DeclineKit();
+        Assert.True(NewDevice("Casa", store: casa.Store, profile: casa.Profile).Agent.Status.Kit!.Declined);
+        casa.Agent.SnoozeKit(_now + 12_345);
+        Assert.Equal(_now + 12_345, NewDevice("Casa", store: casa.Store, profile: casa.Profile).Agent.Status.Kit!.SnoozedUntilMs);
+
+        var semChave = NewDevice("Novo");
+        semChave.Agent.MarkKitSaved();
+        semChave.Agent.SnoozeKit(_now + 1);
+        semChave.Agent.DeclineKit();
+        Assert.Null(semChave.Agent.Status.Kit);
+        Assert.Null(semChave.Agent.RevealKit());
+    }
+
+    // Quem entra com o kit (palavras ou o código antigo) tem-no; quem entra por aprovação fica «por guardar».
+    [Fact]
+    public async Task JoinWithTheKit_CountsAsSaved_AndJoinByApproval_IsPending()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        var words = casa.Agent.RevealKit()!.Words;
+        var trabalho = NewDevice("Trabalho");
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(words);
+        Assert.Equal(KitState.Saved, trabalho.Agent.Status.Kit!.State);
+        Assert.Equal(KitState.Pending, casa.Agent.Status.Kit!.State); // guardar é local a cada computador
+
+        string code;
+        using (var account = Eteris.Sync.Crypto.AccountSecret.FromCode(words)) code = account.ToCode();
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(code);
+        Assert.Equal(KitState.Saved, portatil.Agent.Status.Kit!.State);
+
+        var novo = NewDevice("Novo");
+        await novo.Agent.StartAsync();
+        novo.Agent.RequestPairing();
+        await Until(() => Directory.Exists(Path.Combine(_folder, "eteris", "pair")), "o pedido");
+        await Until(() => { casa.Agent.CheckRequestsAsync().Wait(); return casa.Agent.Status.Requests.Count == 1 && novo.Agent.Status.Pairing?.Code is not null; }, "o código");
+        novo.Agent.ConfirmPairing();
+        Assert.Equal(Eteris.Sync.Pairing.PairingAnswer.Approved,
+            await casa.Agent.ApproveWithCodeAsync(casa.Agent.Status.Requests[0].Session, novo.Agent.Status.Pairing!.Code!));
+        await Until(() => novo.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o novo ligado");
+        Assert.Equal(KitState.Pending, novo.Agent.Status.Kit!.State);
+    }
+
+    // Um estado da 0.2.14 (sem registo do kit): «código por guardar» passa a kit por guardar; senão, guardado.
+    [Fact]
+    public async Task Migration_From0214()
+    {
+        foreach (var pending in new[] { true, false })
+        {
+            var folder = Path.Combine(_folder, pending ? "por-guardar" : "guardado");
+            var casa = NewDevice("Casa", () => new FolderTransport(folder));
+            await casa.Agent.StartAsync();
+            var old = casa.Store.Load()!;
+            old.Kit = null;
+            old.CodePending = pending;
+            casa.Store.Save(old);
+            _now += 1000;
+
+            var reopened = NewDevice("Casa", () => new FolderTransport(folder), casa.Store, casa.Profile);
+            var kit = reopened.Agent.Status.Kit!;
+            Assert.Equal(pending ? KitState.Pending : KitState.Saved, kit.State);
+            Assert.Equal(_now, kit.SinceMs);
+            Assert.True(await reopened.Agent.RunAsync());
+            var saved = casa.Store.Load()!;
+            Assert.False(saved.CodePending);
+            Assert.NotNull(saved.Kit);
+            Assert.Equal(kit.Id, saved.Kit!.ForId);
+        }
+    }
+
+    // Quantos computadores há na conta, sem rede: a lista da última ronda, ou as chaves fixadas (mais este).
+    [Fact]
+    public async Task KnownDevices_Is1Alone_And2AfterASecondJoins()
+    {
+        var sozinho = NewDevice("Sozinho", () => new FolderTransport(Path.Combine(_folder, "sozinho")));
+        await sozinho.Agent.StartAsync();
+        Assert.Equal(1, sozinho.Agent.Status.Kit!.KnownDevices);
+
+        // Dois computadores com dados (como um perfil real: a Casa conhece o Trabalho pelos lotes que ele envia).
+        var casa = NewDevice("Casa");
+        casa.Profile.Bookmark("https://casa.example/", "Casa");
+        await casa.Agent.StartAsync();
+        var trabalho = NewDevice("Trabalho");
+        trabalho.Profile.Bookmark("https://trabalho.example/", "Trabalho");
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
+        await Settle(casa, trabalho);
+        Assert.Equal(2, casa.Agent.Status.Kit!.KnownDevices);
+        Assert.Equal(2, trabalho.Agent.Status.Kit!.KnownDevices);
+        // Reabrir a Casa, antes de qualquer ronda: contado pelas chaves fixadas.
+        Assert.Equal(2, NewDevice("Casa", store: casa.Store, profile: casa.Profile).Agent.Status.Kit!.KnownDevices);
+
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => !d.IsThis).Id);
+        Assert.Equal(1, casa.Agent.Status.Kit!.KnownDevices);
     }
 
     // A página de fim da entrada lê a fase logo que StartAsync devolve a tarefa: tem de ler já «Starting», nunca a fase
@@ -1268,7 +1495,7 @@ public sealed class SyncAgentTests : IDisposable
         await casa.Agent.StartAsync();
         var trabalho = NewDevice("Trabalho");
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho);
         return (casa, trabalho);
     }

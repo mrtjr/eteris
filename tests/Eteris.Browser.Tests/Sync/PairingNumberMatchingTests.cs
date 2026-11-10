@@ -72,7 +72,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         var casa = NewDevice(name);
         casa.Profile.Bookmark("https://pt.wikipedia.org/", "Wikipédia");
         await casa.Agent.StartAsync();
-        casa.Agent.AcknowledgeCode();
+        casa.Agent.MarkKitSaved();
         return casa;
     }
 
@@ -340,7 +340,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         await Until(() => guest.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o portátil ligado");
     }
 
-    // O código de recuperação da conta da Casa: AcknowledgeCode só o tira do ecrã; o segredo guardado dá-o outra vez.
+    // O código de recuperação (formato antigo) da conta da Casa, a partir do segredo guardado.
     private static Task<string> RecoveryCodeOf(Device casa)
     {
         var secret = casa.Store.Load()!.Secret!;
@@ -615,7 +615,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         var flaky = new FlakyTransport(new FolderTransport(_folder));
         var casa = NewDevice("Casa", transport: () => flaky);
         await casa.Agent.StartAsync();
-        casa.Agent.AcknowledgeCode();
+        casa.Agent.MarkKitSaved();
 
         // Erro de transporte enquanto espera pelo computador novo.
         await PairingRequests.OpenAsync(Folder, Now);

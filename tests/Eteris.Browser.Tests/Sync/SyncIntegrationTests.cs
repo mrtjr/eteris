@@ -98,9 +98,11 @@ public class SyncIntegrationTests
     public void MenuSummary_SaysWhereTheSyncIs()
     {
         var now = 1_762_560_000_000L;
-        Eteris.Sync.Engine.SyncStatus Status(Eteris.Sync.Engine.SyncPhase phase, bool running = false, long last = 0, string? error = null, string? code = null,
+        Eteris.Sync.Engine.SyncStatus Status(Eteris.Sync.Engine.SyncPhase phase, bool running = false, long last = 0, string? error = null,
             IReadOnlyList<Eteris.Sync.Engine.HostRequest>? requests = null, Eteris.Sync.Engine.GuestPairing? pairing = null)
-            => new(phase, running, last, error, null, code, pairing, requests ?? [], [], false, 0);
+            => TestStatus.Of(phase, running, last, error, requests, pairing);
+        Eteris.Sync.Engine.KitInfo Kit(Eteris.Sync.Engine.KitState state, bool declined = false, int devices = 1)
+            => new("K7QF", state, 0, 0, declined, devices);
         Assert.Equal("Sincronização desligada", SyncService.Summary(null, now));
         Assert.Equal("Sincronizado há 2 min", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now - 125_000), now));
         Assert.Equal("Sincronizado agora mesmo", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now - 5_000), now));
@@ -110,7 +112,12 @@ public class SyncIntegrationTests
             SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, error: "A autorização da Google expirou") with { NeedsSignIn = true }, now));
         Assert.Equal("Um computador novo pede para entrar",
             SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now) with { WaitingRequests = 1 }, now));
-        Assert.Equal("Guarde o código de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, code: "X"), now));
+        Assert.Equal("Guarde o kit de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On) with { Kit = new Eteris.Sync.Engine.KitInfo("K7QF", Eteris.Sync.Engine.KitState.Pending, 0, 0, false, 1) }, now));
+        Assert.Equal("Guarde o kit de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On) with { Kit = Kit(Eteris.Sync.Engine.KitState.Stale) }, now));
+        Assert.Equal("Sincronização ligada", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On) with { Kit = Kit(Eteris.Sync.Engine.KitState.Saved) }, now));
+        Assert.Equal("Sincronização ligada", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On) with { Kit = Kit(Eteris.Sync.Engine.KitState.Pending, declined: true) }, now));
+        // Com 2 ou mais computadores não há barra, mas a linha do menu fica.
+        Assert.Equal("Guarde o kit de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On) with { Kit = Kit(Eteris.Sync.Engine.KitState.Pending, devices: 2) }, now));
         Assert.Equal("Falta juntar este computador à conta", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Choose), now));
         // O computador novo mostra o código e o outro escreve-o (T7, PROPOSTA P1).
         Assert.Equal("Escreva o código 123 456 no outro computador", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Pairing, pairing: new("123 456", false, null)), now));
@@ -175,7 +182,7 @@ public class SyncIntegrationTests
         Assert.Contains("|| (s.deleting && !s.deleteError && !(d.message && d.message.area === 'delete'))", page, StringComparison.Ordinal);
 
         var now = 1_762_560_000_000L;
-        var deleting = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, true, 0, null, "A apagar", null, null, [], [], false, 0) { Deleting = true };
+        var deleting = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, true, 0, null, "A apagar", null, [], [], false, 0) { Deleting = true };
         Assert.Equal("A apagar os dados do Drive…", SyncService.Summary(deleting, now));
         Assert.Contains("deleting = True", SyncService.StatusData(deleting, now).ToString(), StringComparison.Ordinal);
     }
@@ -210,7 +217,7 @@ public class SyncIntegrationTests
         Assert.Contains("askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : '')", page, StringComparison.Ordinal);
 
         var now = 1_762_560_000_000L;
-        var failed = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, false, 0, null, "A apagar", null, null, [], [], false, 0)
+        var failed = new Eteris.Sync.Engine.SyncStatus(Eteris.Sync.Engine.SyncPhase.Stopped, false, 0, null, "A apagar", null, [], [], false, 0)
         {
             Deleting = true,
             DeleteError = "Ainda não se conseguiu apagar tudo do Google Drive (sem ligação ao Google Drive).",

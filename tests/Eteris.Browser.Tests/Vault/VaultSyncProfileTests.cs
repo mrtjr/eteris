@@ -330,7 +330,7 @@ public sealed class VaultSyncProfileTests : IDisposable
         agentB = new SyncAgent(() => new FolderTransport(folder), new ProfileWithVault(plainB, vaultB, () => agentB?.EnabledCollections),
             new MemoryStore(), "B", () => now, (_, ct) => Task.Delay(5, ct));
         await agentB.StartAsync();
-        await agentB.JoinWithCodeAsync(agentA.Status.RecoveryCode!);
+        await agentB.JoinWithCodeAsync(agentA.RevealKit()!.Words);
 
         plainB.Set(Collections.Bookmarks, "https://favorito.exemplo.test/", new JsonObject { ["title"] = "Favorito de teste", ["folder"] = "" });
         for (var i = 0; i < 3; i++)
@@ -370,7 +370,7 @@ public sealed class VaultSyncProfileTests : IDisposable
         await a.Agent.StartAsync();
         var b = Device("B");
         await b.Agent.StartAsync();
-        await b.Agent.JoinWithCodeAsync(a.Agent.Status.RecoveryCode!);
+        await b.Agent.JoinWithCodeAsync(a.Agent.RevealKit()!.Words);
         await Settle(a, b);
 
         Assert.Equal("Inventada-A", b.Vault.GetLogin(b.Vault.LoginsFor(Site + "/").Single().Id)!.Password);

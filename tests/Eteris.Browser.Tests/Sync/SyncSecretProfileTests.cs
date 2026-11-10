@@ -181,7 +181,7 @@ public sealed class SyncSecretProfileTests : IDisposable
     {
         var device = NewDevice(name);
         await device.Agent.StartAsync();
-        await device.Agent.JoinWithCodeAsync(first.Agent.Status.RecoveryCode ?? throw new InvalidOperationException("sem código"));
+        await device.Agent.JoinWithCodeAsync(first.Agent.RevealKit()?.Words ?? throw new InvalidOperationException("sem código"));
         return device;
     }
 
@@ -304,7 +304,7 @@ public sealed class SyncSecretProfileTests : IDisposable
         trabalho.Profile.Login(Site, "maria.teste", "deste-pc");
         trabalho.Profile.Login("https://so-no-trabalho.exemplo.pt", "y", "2");
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho);
 
         foreach (var device in new[] { casa, trabalho })
@@ -332,7 +332,7 @@ public sealed class SyncSecretProfileTests : IDisposable
         trabalho.Profile.SetSecret(Collections.Cards, "c-comum", new JsonObject { ["number"] = "5555555555554444", ["nickname"] = "do trabalho", ["expMonth"] = 2, ["expYear"] = 2030 });
         trabalho.Profile.Login(Site, "maria.teste", "1");
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho);
 
         Assert.Equal(0, trabalho.Profile.Touched.GetValueOrDefault(Collections.Cards)); // nenhum selo de cartão aberto
@@ -458,7 +458,7 @@ public sealed class SyncSecretProfileTests : IDisposable
         trabalho.Agent.SetCollections(Collections.Secret, on: false);
         Assert.False(trabalho.Agent.HasSecrets);
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         Assert.True(await trabalho.Agent.RunAsync());
         Assert.Null(trabalho.Profile.Password(Site, "u1"));
         Assert.True(trabalho.Agent.HasSecrets);

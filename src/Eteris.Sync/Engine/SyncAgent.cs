@@ -18,8 +18,12 @@ public sealed class SavedSync
     [JsonPropertyName("base")] public Dictionary<string, string>? Baseline { get; set; }
     // A sincronização está ligada neste aparelho (desliga-se com «Sair», ao apagar os dados ou se a conta desaparecer).
     [JsonPropertyName("on")] public bool Enabled { get; set; }
-    // O código de recuperação ainda não foi confirmado como guardado («Já guardei»): é o único momento em que aparece.
+    // Estado de antes da 0.2.15 («código por guardar»): só se lê, para migrar para Kit (nunca mais se escreve true; um
+    // Éteris antigo que abra o mesmo perfil não volta a mostrar o código sozinho).
     [JsonPropertyName("codePending")] public bool CodePending { get; set; }
+    // O kit de recuperação deste segredo neste computador (guardado, adiado, recusado). Local: nunca vai para o
+    // transporte nem passa para os outros computadores.
+    [JsonPropertyName("kit")] public KitRecord? Kit { get; set; }
     [JsonPropertyName("last")] public long LastSuccessMs { get; set; }
     [JsonPropertyName("compactMs")] public long LastCompactMs { get; set; }
     [JsonPropertyName("compactSeq")] public long LastCompactSeq { get; set; }
@@ -50,6 +54,31 @@ public sealed class SavedSync
     // Marca local: nunca sai deste computador. Um aparelho com ela nunca pede a aprovação sozinho (SyncAgent.AutoPair).
     [JsonPropertyName("had")] public bool HadAccount { get; set; }
 }
+
+// O kit de recuperação do segredo guardado, neste computador. Os estados derivam-se (nunca se gravam como tais):
+// guardado ⇔ SavedId == ForId; deixou de valer ⇔ SavedId de outro kit; por guardar ⇔ SavedId nulo.
+public sealed class KitRecord
+{
+    // A impressão digital (AccountSecret.KitId) do segredo guardado: evita derivar a cada leitura do estado.
+    [JsonPropertyName("for")] public string? ForId { get; set; }
+    // A impressão digital do último kit que o utilizador guardou neste computador.
+    [JsonPropertyName("saved")] public string? SavedId { get; set; }
+    // Quando o segredo atual chegou a este computador.
+    [JsonPropertyName("since")] public long SinceMs { get; set; }
+    // «Mais tarde»: o lembrete não aparece na barra antes desta hora.
+    [JsonPropertyName("snoozed")] public long SnoozedUntilMs { get; set; }
+    // «Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera».
+    [JsonPropertyName("declined")] public bool Declined { get; set; }
+}
+
+public enum KitState { Saved, Pending, Stale }
+
+// O kit no estado (sem segredo): a impressão digital, o estado e quantos computadores se conhecem na conta (sem rede;
+// inclui este).
+public sealed record KitInfo(string Id, KitState State, long SinceMs, long SnoozedUntilMs, bool Declined, int KnownDevices);
+
+// O kit em si (o segredo em palavras): só SyncAgent.RevealKit o dá, e só a porta do anfitrião o pede.
+public sealed record RecoveryKitSecret(string Words, string KitId, long SinceMs);
 
 public interface ISyncStore
 {
@@ -86,9 +115,12 @@ public sealed record GuestPairing(string? Code, bool Confirmed, string? Error)
 
 public sealed record DeviceInfo(string Id, string Name, string Kind, long LastSyncMs, bool IsThis);
 
-public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessMs, string? Error, string? Notice, string? RecoveryCode,
+public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessMs, string? Error, string? Notice,
     GuestPairing? Pairing, IReadOnlyList<HostRequest> Requests, IReadOnlyList<DeviceInfo> Devices, bool NeedsUpdate, int PendingDevices)
 {
+    // O kit de recuperação deste computador, sem o segredo (null = sem chave aqui). As palavras só por RevealKit.
+    public KitInfo? Kit { get; init; }
+
     // A autorização da Google expirou ou foi retirada: nada se resolve sozinho, é preciso entrar outra vez.
     public bool NeedsSignIn { get; init; }
 
@@ -126,7 +158,7 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     public bool JoinedNow { get; init; }
 }
 
-// O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
+// O aparelho na conta de sincronização: decide se cria a conta, entra (kit de recuperação ou aprovação), sincroniza, emparelha,
 // remove aparelhos e apaga os dados. Uma operação de cada vez. Construir e ler o estado nunca faz pedidos: a rede só
 // é usada quando o anfitrião chama RunAsync (o agendador), StartAsync (o utilizador entrou ou ligou) ou outra ação.
 //
@@ -187,6 +219,19 @@ public sealed class SyncAgent
         _now = now;
         _delay = delay;
         _saved = store.Load();
+        // O registo do kit: migra um estado da 0.2.14 (sem registo) e corrige um que não corresponda ao segredo. Só em
+        // memória: vai para o disco na gravação seguinte.
+        if (_saved?.Secret is { } kept)
+        {
+            using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(kept));
+            if (_saved.Kit is null)
+            {
+                var id = account.KitId;
+                _saved.Kit = new KitRecord { ForId = id, SavedId = _saved.CodePending ? null : id, SinceMs = _now() };
+                _saved.CodePending = false;
+            }
+            else KitFor(_saved, account);
+        }
         // O nome escolhido aqui; senão o que o estado do motor já tem (ligado antes desta versão); senão o de omissão.
         DeviceName = DeviceNameText.Clean(_saved?.DeviceName) ?? DeviceNameText.Clean(_saved?.Engine?.Device.Name) ?? deviceName;
         _phase = _saved is { Enabled: true } ? SyncPhase.On : _saved?.Stopped is not null ? SyncPhase.Stopped : SyncPhase.Off;
@@ -325,12 +370,6 @@ public sealed class SyncAgent
         {
             lock (_gate)
             {
-                string? code = null;
-                if (_saved is { CodePending: true, Secret: { } secret })
-                {
-                    using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
-                    code = account.ToCode();
-                }
                 var now = _now();
                 var live = _hosts.Values.Where(h => now - h.Created < (long)PairingProtocol.Lifetime.TotalMilliseconds).ToList();
                 // O mais antigo primeiro (e, com a mesma hora, pela sessão): a barra mostra um de cada vez, sempre o mesmo.
@@ -342,8 +381,9 @@ public sealed class SyncAgent
                     HostAnswered = _guest.HostAnswered,
                     End = _guest.End,
                 };
-                return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, code, pairing, requests, _devices, _needsUpdate, _pendingDevices)
+                return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, pairing, requests, _devices, _needsUpdate, _pendingDevices)
                 {
+                    Kit = KitInfoOf(_saved),
                     NeedsSignIn = _needsSignIn,
                     WaitingRequests = _waiting,
                     Deleting = _saved?.DeletePending == true,
@@ -526,11 +566,14 @@ public sealed class SyncAgent
                 if (!IsCurrent(saved)) return;
                 _engine = engine;
                 saved.Secret = Kdf.Base64Url(account.ToBytes());
+                // Conta nova: kit novo, por guardar (mesmo que este computador tivesse o registo de outra conta). Nada
+                // é pedido agora; o lembrete vem depois.
+                saved.Kit = null;
+                KitFor(saved, account);
                 saved.HadAccount = true;
                 saved.Engine = engine.State;
                 saved.Baseline = null;
                 saved.Joined = null;
-                saved.CodePending = true;
                 saved.CreatedMs = _now();
                 saved.Account = AccountKey?.Invoke();
                 _phase = SyncPhase.On;
@@ -671,6 +714,7 @@ public sealed class SyncAgent
             _devices = [];
             saved.HadAccount = true;
             saved.Secret = null;
+            saved.Kit = null;
             saved.Engine = null;
             saved.Baseline = null;
             saved.Joined = null;
@@ -731,6 +775,8 @@ public sealed class SyncAgent
                         if (!IsCurrent(saved)) return;
                         _engine = engine;
                         saved.Secret = Kdf.Base64Url(rekey.Secret!.ToBytes());
+                        // Este computador recebeu a cadeia nova: o kit que tinha guardado deixou de valer.
+                        KitFor(saved, rekey.Secret!);
                         saved.HadAccount = true;
                         saved.Engine = engine.State;
                         saved.Rotation = null;
@@ -742,8 +788,8 @@ public sealed class SyncAgent
                         saved.LastCompactSeq = 0;
                         _store.Save(saved);
                         _notice = DeviceNameText.Clean(rekey.FromName) is { } deNome
-                            ? $"A conta mudou de chave em «{deNome}» (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado."
-                            : "A conta mudou de chave (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado.";
+                            ? $"A conta mudou de chave em «{deNome}» (um aparelho foi removido, ou há um kit de recuperação novo). Este computador continua ligado."
+                            : "A conta mudou de chave (um aparelho foi removido, ou há um kit de recuperação novo). Este computador continua ligado.";
                     }
                     // Só agora, com a conta nova guardada, as mensagens saem do transporte (melhor esforço).
                     try { await SyncEngine.ForgetRekeysAsync(transport, consumed, cancellationToken).ConfigureAwait(false); }
@@ -790,6 +836,7 @@ public sealed class SyncAgent
             {
                 saved.HadAccount = true;
                 saved.Secret = null;
+                saved.Kit = null;
                 saved.CodePending = false;
             }
             saved.Stopped = reason;
@@ -830,7 +877,16 @@ public sealed class SyncAgent
                 // «Apagar…» ou «Sair» enquanto se entrava: nada foi gravado e não há ronda.
                 if (!await JoinCoreAsync(account, null, fresh: true, cancellationToken).ConfigureAwait(false)) return;
                 SavedSync saved;
-                lock (_gate) saved = _saved!;
+                lock (_gate)
+                {
+                    saved = _saved!;
+                    // Entrou com o kit: quem o escreveu tem-no.
+                    if (IsCurrent(saved) && saved.Kit is { } kit)
+                    {
+                        kit.SavedId = kit.ForId;
+                        _store.Save(saved);
+                    }
+                }
                 await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception e) when (e is WrongCodeException or ChainGoneException)
@@ -873,6 +929,8 @@ public sealed class SyncAgent
             _saved.Enabled = true;
             _saved.Stopped = null;
             _saved.Secret = Kdf.Base64Url(account.ToBytes());
+            // A mesma chave (reentrada): nada muda; outra conta: o kit é outro (deixou de valer, ou por guardar).
+            KitFor(_saved, account);
             _saved.HadAccount = true;
             _saved.Engine = engine.State;
             _saved.Baseline = null; // primeira vez: junta sem perder nada (ProfileSync)
@@ -1310,14 +1368,14 @@ public sealed class SyncAgent
         }
     }
 
-    // Remove um aparelho da conta: nova cadeia (código de recuperação novo, mostrado uma vez); os aparelhos que ficam
+    // Remove um aparelho da conta: nova cadeia (kit de recuperação novo, por guardar; o antigo deixa de valer); os que ficam
     // recebem a conta nova sozinhos, o removido deixa de conseguir ler e escrever.
     // «shown»: os aparelhos que o utilizador viu na lista quando decidiu (por omissão, a última lista). Só esses, e só
     // com a chave fixada antes desta ação, recebem a conta nova.
     public Task RemoveDeviceAsync(string device, IReadOnlyCollection<string>? shown = null, CancellationToken cancellationToken = default)
         => RotateAsync(device, shown, cancellationToken);
 
-    // «Gerar um código de recuperação novo»: nova cadeia sem tirar ninguém; o código antigo deixa de servir.
+    // «Gerar um kit novo»: nova cadeia sem tirar ninguém; o kit antigo deixa de valer.
     public Task NewRecoveryCodeAsync(CancellationToken cancellationToken = default) => RotateAsync(null, null, cancellationToken);
 
     private async Task RotateAsync(string? device, IReadOnlyCollection<string>? shown, CancellationToken cancellationToken)
@@ -1363,20 +1421,21 @@ public sealed class SyncAgent
                     saved.Secret = Kdf.Base64Url(secret.ToBytes());
                     saved.HadAccount = true;
                     saved.Engine = rotated.State;
+                    // Cadeia nova: kit novo; o guardado (se havia) deixou de valer.
+                    KitFor(saved, secret);
                     saved.Rotation = pending;
-                    saved.CodePending = true;
                     saved.CreatedMs = 0;
                     saved.LastCompactMs = _now();
                     saved.LastCompactSeq = rotated.State.NextSeq - 1;
                     _store.Save(saved);
                     var done = device is null
-                        ? "A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos."
-                        : $"«{name}» foi removido. A conta tem um código de recuperação novo (o antigo deixou de servir); os outros aparelhos continuam ligados sozinhos.";
+                        ? "A conta tem um kit de recuperação novo (o antigo deixou de valer); os outros aparelhos continuam ligados sozinhos."
+                        : $"«{name}» foi removido. A conta tem um kit de recuperação novo (o antigo deixou de valer); os outros aparelhos continuam ligados sozinhos.";
                     // Os selos novos não servem de nada contra o que o aparelho removido já leu (desenho, secção 4.5).
                     if (device is not null && engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)))
                         done += " O aparelho removido já tinha as suas palavras-passe: mude as dos sites importantes.";
                     _notice = newcomers.Count == 0 ? done
-                        : done + $" Apareceu na conta {string.Join(", ", newcomers)}, que não estava na lista: não recebeu a chave nova. Se for seu, junte-o outra vez com o código novo ou por aprovação.";
+                        : done + $" Apareceu na conta {string.Join(", ", newcomers)}, que não estava na lista: não recebeu a chave nova. Se for seu, junte-o outra vez com o kit novo ou por aprovação.";
                 }
                 await FinishRotationCoreAsync(saved, secret, pending, rotated.State, cancellationToken).ConfigureAwait(false);
             }
@@ -1448,6 +1507,7 @@ public sealed class SyncAgent
             saved.DeletePending = true;
             saved.HadAccount = true;
             saved.Secret = null;
+            saved.Kit = null;
             saved.CodePending = false;
             saved.Engine = null;
             saved.Baseline = null;
@@ -1597,8 +1657,8 @@ public sealed class SyncAgent
     }
 
     // «Sair»: a sincronização para neste aparelho. Com forgetKey, a cópia local da conta sai também (para voltar a
-    // entrar é preciso o código ou outro aparelho); sem ela, entrar outra vez retoma sem código — e um código de
-    // recuperação ainda por guardar continua à vista até «Já guardei».
+    // entrar é preciso o kit de recuperação ou outro aparelho; o registo do kit sai com ela); sem ela, entrar outra vez
+    // retoma sem kit — e o estado do kit (guardado, por guardar) fica como estava.
     // Não espera pela ronda em curso: ela confere IsCurrent antes de gravar (e o «apagar a chave» não volta atrás).
     public void SignOut(bool forgetKey)
     {
@@ -1636,15 +1696,75 @@ public sealed class SyncAgent
         Notify();
     }
 
-    public void AcknowledgeCode()
+    // ---- kit de recuperação -----------------------------------------------------------------------------------------
+
+    // O kit (as 24 palavras do segredo guardado), ou null sem chave. NÃO pede confirmação nenhuma: o anfitrião só o
+    // chama atrás da sua porta (a confirmação do Windows).
+    public RecoveryKitSecret? RevealKit()
     {
         lock (_gate)
         {
-            if (_saved is null) return;
-            _saved.CodePending = false;
+            if (_saved is not { Secret: { } secret, Kit: { } kit }) return null;
+            using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
+            return new RecoveryKitSecret(account.ToWords(), account.KitId, kit.SinceMs);
+        }
+    }
+
+    // O utilizador guardou o kit atual (ficheiro, ou «Já guardei o kit»).
+    public void MarkKitSaved() => ChangeKit(kit => kit.SavedId = kit.ForId);
+
+    // «Mais tarde»: o lembrete não aparece na barra antes de «untilMs».
+    public void SnoozeKit(long untilMs) => ChangeKit(kit => kit.SnoozedUntilMs = untilMs);
+
+    // «Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera».
+    public void DeclineKit() => ChangeKit(kit => kit.Declined = true);
+
+    // Sem chave neste computador, nada.
+    private void ChangeKit(Action<KitRecord> change)
+    {
+        lock (_gate)
+        {
+            if (_saved is not { Secret: not null, Kit: { } kit }) return;
+            change(kit);
             _store.Save(_saved);
         }
         Notify();
+    }
+
+    // Acerta o registo do kit ao segredo guardado. Chamar dentro do _gate, logo depois de gravar o segredo: o mesmo
+    // segredo não muda nada; outro começa por guardar — e, se havia um kit guardado, esse deixou de valer (Stale). Um
+    // «Não quero» fica só se nunca se guardou nenhum kit (aceitou o risco); quem contava com um kit volta a ser lembrado.
+    private void KitFor(SavedSync saved, AccountSecret account)
+    {
+        var id = account.KitId;
+        if (saved.Kit is { } kit && kit.ForId == id) return;
+        var hadSaved = saved.Kit?.SavedId is not null;
+        saved.Kit = new KitRecord
+        {
+            ForId = id,
+            SavedId = saved.Kit?.SavedId,
+            SinceMs = _now(),
+            SnoozedUntilMs = 0,
+            Declined = !hadSaved && saved.Kit?.Declined == true,
+        };
+    }
+
+    // O kit no estado, sem derivar nada (lê ForId). Chamar dentro do _gate.
+    private KitInfo? KitInfoOf(SavedSync? saved)
+    {
+        if (saved is not { Secret: not null, Kit: { ForId: { } id } kit }) return null;
+        var state = kit.SavedId is null ? KitState.Pending : kit.SavedId == id ? KitState.Saved : KitState.Stale;
+        return new KitInfo(id, state, kit.SinceMs, kit.SnoozedUntilMs, kit.Declined, KnownDevices(saved));
+    }
+
+    // Quantos computadores há na conta, sem rede (inclui este): a lista da última leitura dos aparelhos; antes dela,
+    // este mais as chaves fixadas dos outros (DeviceNames não serve: guarda os removidos). Na dúvida conta a menos —
+    // o lembrete a mais é o lado seguro. Chamar dentro do _gate.
+    private int KnownDevices(SavedSync saved)
+    {
+        if (_devices.Count > 0) return _devices.Count;
+        if ((_engine?.State ?? saved.Engine) is not { } state) return 1;
+        return 1 + state.PeerKeys.Keys.Count(k => k != state.Device.Id);
     }
 
     // ---- auxiliares -------------------------------------------------------------------------------------------------

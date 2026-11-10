@@ -64,7 +64,7 @@ public sealed class DeviceNameTests : IDisposable
         await casa.Agent.StartAsync();
         var trabalho = NewDevice(second, DriveFor(google));
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho);
         return (casa, trabalho);
     }
@@ -227,7 +227,7 @@ public sealed class DeviceNameTests : IDisposable
         var google = new FakeGoogle();
         var casa = NewDevice("Casa", DriveFor(google));
         await casa.Agent.StartAsync();
-        casa.Agent.AcknowledgeCode();
+        casa.Agent.MarkKitSaved();
         var portatil = NewDevice("Portátil", DriveFor(google));
         await portatil.Agent.StartAsync();
         Assert.Equal(SyncPhase.Choose, portatil.Agent.Status.Phase);
@@ -274,7 +274,7 @@ public sealed class DeviceNameTests : IDisposable
         await trabalho.Agent.StartAsync();
         Assert.Equal(SyncPhase.Choose, trabalho.Agent.Status.Phase);
         await trabalho.Agent.RenameDeviceAsync("Escritório");
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         Assert.Equal("Escritório", trabalho.Store.Load()!.Engine!.Device.Name);
     }
 
@@ -286,13 +286,13 @@ public sealed class DeviceNameTests : IDisposable
         await casa.Agent.StartAsync();
         var hostil = NewDevice(Hostile, DriveFor(google));
         await hostil.Agent.StartAsync();
-        await hostil.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode!);
+        await hostil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, hostil);
         await casa.Agent.RefreshDevicesAsync();
         Assert.All(casa.Agent.Status.Devices, d => Assert.False(HasControlOrFormat(d.Name), d.Name));
         Assert.Contains(casa.Agent.Status.Devices, d => d.Name == DeviceNameText.Shown(Hostile));
 
-        casa.Agent.AcknowledgeCode();
+        casa.Agent.MarkKitSaved();
         var terceiro = NewDevice(Hostile, DriveFor(google));
         await terceiro.Agent.StartAsync();
         terceiro.Agent.RequestPairing();

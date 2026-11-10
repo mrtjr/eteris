@@ -59,7 +59,7 @@ public sealed class SyncDeleteRaceTests : IDisposable
 
         await casa.StartAsync();
         Assert.Equal(SyncPhase.On, casa.Status.Phase);
-        Assert.NotNull(casa.Status.RecoveryCode);
+        Assert.NotEqual(KitState.Saved, casa.Status.Kit!.State);
         Assert.True(store.Load()!.Enabled);
     }
 
@@ -219,7 +219,7 @@ public sealed class SyncDeleteRaceTests : IDisposable
         faulty.Down = false;
         await casa.StartAsync();
         Assert.Equal(SyncPhase.On, casa.Status.Phase);
-        Assert.NotNull(casa.Status.RecoveryCode);
+        Assert.NotEqual(KitState.Saved, casa.Status.Kit!.State);
         Assert.False(store.Load()!.DeletePending);
         Assert.Null(casa.Status.DeleteError);
         var chains = Files().Select(f => f.Split('/')[1]).Where(c => c != "pair").Distinct().ToList();
@@ -238,7 +238,7 @@ public sealed class SyncDeleteRaceTests : IDisposable
         casaProfile.Bookmark("https://casa.example/", "Casa");
         var casa = Agent(casaProfile, new MemoryStore());
         await casa.StartAsync();
-        var code = casa.Status.RecoveryCode!;
+        var code = casa.RevealKit()!.Words;
 
         var hook = new HookTransport(new FolderTransport(_folder));
         var profile = new MemoryProfile();
@@ -278,7 +278,7 @@ public sealed class SyncDeleteRaceTests : IDisposable
         var store = new MemoryStore();
         var casa = Agent(profile, store);
         await casa.StartAsync();
-        casa.AcknowledgeCode();
+        casa.MarkKitSaved();
         // A chave ficou, o motor não (por exemplo, a conta parou com «a chave ficou neste computador»).
         var kept = store.Load()!;
         kept.Engine = null;
@@ -316,7 +316,7 @@ public sealed class SyncDeleteRaceTests : IDisposable
         trabP.Bookmark("https://trab.example/", "Trab");
         var trab = Agent(trabP, new MemoryStore(), "Trabalho");
         await trab.StartAsync();
-        await trab.JoinWithCodeAsync(casa.Status.RecoveryCode!);
+        await trab.JoinWithCodeAsync(casa.RevealKit()!.Words);
         await casa.RunAsync();
         await trab.RunAsync();
         await casa.RunAsync();

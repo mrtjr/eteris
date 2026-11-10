@@ -290,7 +290,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.SyncNow();
                 break;
             case "/sync-code-saved":
-                Sync.SyncService.Agent()?.AcknowledgeCode();
+                Sync.SyncService.Agent()?.MarkKitSaved();
                 break;
             case "/sync-pair":
                 // «Aprovar noutro computador» e «Pedir outra vez». Com a conta substituída não pede (só «Foi eu», com a

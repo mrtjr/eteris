@@ -554,7 +554,7 @@ internal static class SyncService
             // Este computador mostra o código; o outro escreve-o (PROPOSTA P1).
             SyncPhase.Pairing => status.Pairing?.Code is { } code ? $"Escreva o código {code} no outro computador" : "À espera da aprovação noutro computador",
             SyncPhase.Starting => "A ligar…",
-            _ when status.RecoveryCode is not null => "Guarde o código de recuperação",
+            _ when status.Kit is { State: not KitState.Saved, Declined: false } => "Guarde o kit de recuperação",
             _ when status.Running => "A sincronizar…",
             _ when status.Error is not null => "Por sincronizar: o Éteris tenta outra vez sozinho",
             _ when status.NeedsUpdate => "Atualize o Éteris para sincronizar tudo",
@@ -584,7 +584,11 @@ internal static class SyncService
             error = status.Error,
             needsSignIn = status.NeedsSignIn,
             notice = status.Notice,
-            code = status.RecoveryCode,
+            // O kit de recuperação sem o segredo (as palavras só pela rota do kit, depois da confirmação do Windows):
+            // a impressão digital, «saved», «pending» ou «stale», a recusa e quantos computadores se conhecem.
+            kit = status.Kit is { } k
+                ? new { id = k.Id, state = k.State.ToString().ToLowerInvariant(), declined = k.Declined, devices = k.KnownDevices }
+                : null,
             pairing = status.Pairing is { } p
                 ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error, hostAnswered = p.HostAnswered, end = Camel(p.End) }
                 : null,

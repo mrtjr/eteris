@@ -151,7 +151,7 @@ public sealed class AutoPairingTests : IDisposable
         var casa = await HomeAsync(google);
         var trabalho = Pc("Trabalho", DriveFor(google));
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode ?? throw new InvalidOperationException("sem código"));
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()?.Words ?? throw new InvalidOperationException("sem código"));
         Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
         // Entrou: este computador já teve chave desta conta.
         Assert.False(SyncAgent.MayAutoRequest(trabalho.Store.Load()));
@@ -209,7 +209,7 @@ public sealed class AutoPairingTests : IDisposable
         var casa = await HomeAsync(google);
         var trabalho = Pc("Trabalho", DriveFor(google));
         await trabalho.Agent.StartAsync();
-        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.Status.RecoveryCode ?? throw new InvalidOperationException("sem código"));
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()?.Words ?? throw new InvalidOperationException("sem código"));
         Assert.True(await casa.Agent.RunAsync());
         Assert.True(await trabalho.Agent.RunAsync());
         await casa.Agent.DeleteCloudDataAsync();
@@ -448,7 +448,7 @@ public sealed class AutoPairingTests : IDisposable
         await kit.Agent.StartAsync();
         var kitSeen = new List<bool>();
         kit.Agent.Changed += () => { lock (kitSeen) kitSeen.Add(kit.Agent.Status.JoinedNow); };
-        await kit.Agent.JoinWithCodeAsync(home.Agent.Status.RecoveryCode!);
+        await kit.Agent.JoinWithCodeAsync(home.Agent.RevealKit()!.Words);
         lock (kitSeen) Assert.Contains(true, kitSeen);
         Assert.False(kit.Agent.Status.JoinedNow);
 

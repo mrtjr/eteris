@@ -9,5 +9,5 @@ internal static class TestStatus
     // Os restantes campos de SyncStatus acertam-se com «with { … }» no teste que precisar deles.
     public static SyncStatus Of(SyncPhase phase, bool running = false, long last = 0, string? error = null,
         IReadOnlyList<HostRequest>? requests = null, GuestPairing? pairing = null)
-        => new(phase, running, last, error, null, null, pairing, requests ?? [], [], false, 0);
+        => new(phase, running, last, error, null, pairing, requests ?? [], [], false, 0);
 }

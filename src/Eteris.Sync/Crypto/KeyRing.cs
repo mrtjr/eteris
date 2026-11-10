@@ -32,6 +32,10 @@ public sealed class AccountSecret : IDisposable
 
     public string ChainId => Kdf.Hex(Kdf.Derive(_bytes, "chain-id", 16));
 
+    // Impressão digital do kit de recuperação: 4 caracteres Crockford (20 bits) de HKDF(R, "kit-id"). Não é segredo;
+    // muda quando a cadeia muda (diz qual é o kit atual).
+    public string KitId => RecoveryCode.ToBase32(Kdf.Derive(_bytes, "kit-id", 3))[..4];
+
     internal byte[] Kek => Kdf.Derive(_bytes, "kek");
 
     // Chave de um ficheiro de perfil exportado (cada ficheiro tem o seu sal aleatório).
