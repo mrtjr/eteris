@@ -47,6 +47,9 @@ public class RecoveryKitTests
         foreach (var bad in new[] { "@", "<script", "http:", "https:", "<img", "<link", "<iframe", "src=", "href=", "url(" })
             Assert.DoesNotContain(bad, html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotMatch("([0-9A-Z]{4}-){13}[0-9A-Z]{4}", html);
+        // Revisão final (I-07): aberto num navegador com tradução automática, as palavras não vão para o tradutor.
+        Assert.Contains("<html lang=\"pt-PT\" translate=\"no\">", html);
+        Assert.Contains("<meta name=\"google\" content=\"notranslate\">", html);
     }
 
     [Fact]
@@ -331,7 +334,9 @@ public class RecoveryKitTests
         Assert.Contains("VaultFrontToken().Register(", factory);
         Assert.Contains("\"Cache-Control\", \"no-store\"", factory);
         Assert.Contains("SyncChoices.NotConfirmed(\"o kit não foi mostrado\")", factory);
-        Assert.True(Count(factory, "MarkKitSaved()") >= 2);
+        // Revisão final (I-07): as duas rotas do ficheiro marcam o kit que gravaram, nunca «o que houver».
+        Assert.True(Count(factory, "MarkKitSaved(kit.KitId)") >= 2);
+        Assert.Equal(0, Count(factory, "MarkKitSaved()"));
         // «Já guardei o kit» só marca o kit que a página mostrou (o id vai no corpo; sem id não marca nada).
         Assert.Contains("MarkKitSaved(kitId)", factory);
         Assert.Contains("SyncForm.Parse(request).GetValueOrDefault(\"id\") is { Length: > 0 } kitId", factory);
@@ -376,6 +381,10 @@ public class RecoveryKitTests
         Assert.True(start >= 0);
         var body = vault[start..vault.IndexOf("}).Task;", start, StringComparison.Ordinal)];
         Assert.Contains("InitialDirectory = Downloads.DownloadPaths.DownloadsFolder()", body);
+        // Revisão final (I-07): o kit não fica nos «Recentes» do Windows (nem ao guardar nem ao abrir).
+        Assert.Contains("AddToRecent = false,", body);
+        var open = vault[vault.IndexOf("Task<string?> PickKitOpenAsync(", StringComparison.Ordinal)..];
+        Assert.Contains("AddToRecent = false,", open[..open.IndexOf("}).Task;", StringComparison.Ordinal)]);
         Assert.DoesNotContain("MyDocuments", body);
         Assert.DoesNotContain("PickKit", Source("Vault", "VaultRoutes.cs"));
     }

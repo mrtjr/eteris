@@ -152,13 +152,19 @@ internal sealed unsafe class Win32Clipboard : IClipboardBackend
         {
             return WithClipboard(() =>
             {
-                if (!EmptyClipboard() || !Put(UnicodeText, bytes)) return false;
+                if (!EmptyClipboard()) return false;
+                var complete = Put(UnicodeText, bytes);
                 foreach (var (format, data) in extra)
                 {
+                    if (!complete) break;
                     var id = RegisterClipboardFormatW(format);
-                    if (id == 0 || !Put(id, data)) return false;
+                    complete = id != 0 && Put(id, data);
                 }
-                return true;
+                if (complete) return true;
+                // Sem todos os formatos de exclusão o segredo não fica (iria para o histórico e para a nuvem do Windows):
+                // esvazia-se outra vez, ainda na mesma abertura, antes de devolver false.
+                EmptyClipboard();
+                return false;
             });
         }
         finally

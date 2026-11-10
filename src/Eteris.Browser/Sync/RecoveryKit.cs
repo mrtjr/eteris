@@ -49,7 +49,8 @@ internal static class RecoveryKit
     {
         var tokens = words.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var html = new StringBuilder();
-        html.Append("<!doctype html>\n<html lang=\"pt-PT\">\n<head>\n<meta charset=\"utf-8\">\n<title>").Append(Title).Append("</title>\n");
+        // translate="no" e notranslate: aberto num navegador com tradução automática, as palavras não vão para o tradutor.
+        html.Append("<!doctype html>\n<html lang=\"pt-PT\" translate=\"no\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"google\" content=\"notranslate\">\n<title>").Append(Title).Append("</title>\n");
         // Sem nenhuma regra «@» (nem media, nem page, nem import) e sem cores que dependam de impressora a cores.
         html.Append("<style>\n")
             .Append("body { font-family: Segoe UI, Arial, sans-serif; color: #000; background: #fff; margin: 32px; max-width: 760px; font-size: 14px; line-height: 1.5; }\n")
@@ -192,6 +193,13 @@ internal static class RecoveryKit
         }
     }
 
-    // A gravação real: UTF-8 sem BOM, no caminho escolhido.
-    public static void WriteFile(string path, string html) => File.WriteAllText(path, html, new UTF8Encoding(false));
+    // A gravação real: UTF-8 sem BOM, no caminho escolhido, descarregada para o disco antes de o kit contar como
+    // guardado (uma falha de energia logo a seguir não deixa um ficheiro vazio com o lembrete já calado).
+    public static void WriteFile(string path, string html)
+    {
+        var bytes = new UTF8Encoding(false).GetBytes(html);
+        using var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        file.Write(bytes);
+        file.Flush(flushToDisk: true);
+    }
 }

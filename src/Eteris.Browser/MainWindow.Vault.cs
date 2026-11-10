@@ -1051,6 +1051,8 @@ internal sealed class WindowsVaultHost : IVaultHost
             DefaultExt = ".html",
             AddExtension = true,
             OverwritePrompt = true,
+            // O kit não fica nos «Recentes» do Windows (Explorador, Acesso rápido, listas de atalhos).
+            AddToRecent = false,
             InitialDirectory = Downloads.DownloadPaths.DownloadsFolder(),
         };
         return (Owner(browserId) is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;
@@ -1064,6 +1066,7 @@ internal sealed class WindowsVaultHost : IVaultHost
             Title = "Abrir o ficheiro do kit",
             Filter = "Kit de recuperação (*.html)|*.html|Todos os ficheiros (*.*)|*.*",
             CheckFileExists = true,
+            AddToRecent = false,
             InitialDirectory = Downloads.DownloadPaths.DownloadsFolder(),
         };
         return (Owner(browserId) is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;

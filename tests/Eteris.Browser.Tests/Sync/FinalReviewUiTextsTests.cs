@@ -134,6 +134,47 @@ public class FinalReviewUiTextsTests
         Assert.Contains("else $('sincronizacao').scrollIntoView();", go);
     }
 
+    // ---- I-07: o ficheiro do kit e a área de transferência segura -------------------------------------------------
+
+    [Fact]
+    public void I07_SavingTheFile_MarksTheKitThatWasSaved()
+    {
+        var routes = Source("Browser", "EterisSchemeHandlerFactory.cs");
+        Assert.DoesNotContain("MarkKitSaved())", routes);
+        Assert.Equal(2, Regex.Matches(routes, Regex.Escape("Sync.SyncService.Agent()?.MarkKitSaved(kit.KitId)")).Count);
+    }
+
+    [Fact]
+    public void I07_TheKitFile_IsFlushedToDiskBeforeCountingAsSaved()
+    {
+        var write = Body(Source("Sync", "RecoveryKit.cs"), "public static void WriteFile(string path, string html)", "\n    }");
+        Assert.Contains("new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None)", write);
+        Assert.Contains("Flush(flushToDisk: true)", write);
+        var folder = Path.Combine(Path.GetTempPath(), "eteris-i07-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var path = Path.Combine(folder, "kit.html");
+            File.WriteAllText(path, "antigo e mais comprido do que o novo");
+            Eteris.Browser.Sync.RecoveryKit.WriteFile(path, "Kit é");
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(System.Text.Encoding.UTF8.GetBytes("Kit é"), bytes); // sem BOM, e o resto do antigo não fica
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public void I07_Clipboard_IsEmptiedWhenAnExclusionFormatFails()
+    {
+        var set = Body(Source("Vault", "SecureClipboard.cs"), "public bool SetText(string text, IReadOnlyList<(string Format, byte[] Data)> extra)", "\n    public bool Clear()");
+        // Depois de o texto entrar, uma falha num formato de exclusão esvazia outra vez antes de devolver false.
+        var afterText = set[set.IndexOf("Put(UnicodeText, bytes)", StringComparison.Ordinal)..];
+        var failed = afterText.IndexOf("return false;", StringComparison.Ordinal);
+        Assert.True(failed >= 0);
+        Assert.Contains("EmptyClipboard();", afterText[..failed]);
+        Assert.DoesNotMatch(@"if \(id == 0 \|\| !Put\(id, data\)\) return false;", set);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {

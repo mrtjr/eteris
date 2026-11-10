@@ -368,7 +368,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     if (path is null) return Vault.VaultReply.Json(new { ok = true, saved = false });
                     // O kit pode ter fechado enquanto o diálogo estava aberto (prazo, «Sair», cadeia nova).
                     if (OpenedKit(browserId) is not { } kit) return KitClosed;
-                    return SaveKit(kit, path, accepted: false, saved: () => Sync.SyncService.Agent()?.MarkKitSaved());
+                    return SaveKit(kit, path, accepted: false, saved: () => Sync.SyncService.Agent()?.MarkKitSaved(kit.KitId));
                 });
             case "/sync-kit-save-anyway":
                 if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
@@ -376,7 +376,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 {
                     if (OpenedKit(browserId) is not { } kit || Sync.SyncService.OpenKit.TakePendingPath() is not { } path)
                         return Task.FromResult(KitClosed);
-                    return Task.FromResult(SaveKit(kit, path, accepted: true, saved: () => Sync.SyncService.Agent()?.MarkKitSaved()));
+                    return Task.FromResult(SaveKit(kit, path, accepted: true, saved: () => Sync.SyncService.Agent()?.MarkKitSaved(kit.KitId)));
                 });
             case "/sync-kit-print":
             {
