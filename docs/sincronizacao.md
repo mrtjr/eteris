@@ -761,7 +761,9 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 - que o Éteris pediu o nome e o e-mail da conta (`about.get`, uma vez depois de cada entrada — a Google já os conhece;
   nada do Éteris vai nesse pedido além do token); na reentrada, o e-mail vai no endereço do ecrã de consentimento
   (`login_hint`);
-- quando um computador novo pede para entrar e se foi recusado. Os pedidos para juntar um computador novo são a exceção: têm nomes legíveis e levam só a hora, chaves públicas de uso único e números aleatórios — nenhum dado seu. A Google fica a saber quando um computador novo pede para entrar e se foi recusado.
+- Os pedidos para juntar um computador novo são a exceção: têm nomes legíveis e levam só a hora, chaves públicas de
+  uso único e números aleatórios — nenhum dado seu. A Google fica a saber quando um computador novo pede para entrar e
+  se foi recusado.
   (`eteris/pair/<sessão>/0-request` só com a hora, `1-host` com a chave pública do anfitrião, `x-host` numa recusa; o
   nome do computador novo vai cifrado com a chave da sessão.)
 - nos ficheiros de dados, os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)

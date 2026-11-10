@@ -312,6 +312,10 @@ public class PublicTextsTests
         Assert.Contains("0-request", doc);
         Assert.Contains(Eteris.Browser.Sync.SyncExit.SignOutKeeps, doc);
         Assert.Contains("Os pedidos para juntar um computador novo são a exceção", doc);
+        // Dito uma vez só no item de «O que a Google vê» (a ressalva; a abertura não o repete).
+        var sees = Regex.Match(Read("docs", "sincronizacao.md"), @"### O que a Google vê\r?\n(.*?)\r?\n#", RegexOptions.Singleline);
+        Assert.True(sees.Success);
+        Assert.Single(Regex.Matches(Flat(sees.Groups[1].Value), "pede para entrar e se foi recusado"));
         Assert.Contains("o ficheiro fica onde o guardar", doc);
         if (GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs").Contains("\"/sync-lost\"", StringComparison.Ordinal))
             Assert.Contains("O que já estava nesse computador continua lá", doc);
