@@ -276,6 +276,35 @@ public class FinalReviewUiTextsTests
         Assert.DoesNotContain("UIElementAutomationPeer.FromElement(", code);
     }
 
+    // ---- I-11: os botões que abrem as Definições numa âncora, a entrada pelas páginas do cofre e o «Sincronizado.» ----
+
+    [Fact]
+    public void I11_OpenInternal_WithAnAnchor_ReusesThePageAndGoesThere()
+    {
+        var open = Body(Source("MainWindow.PageMenu.cs"), "private void OpenInternal(string url)", "\n    }\n");
+        Assert.Contains("var hash = url.IndexOf('#');", open);
+        Assert.Contains("var page = url[..hash];", open);
+        Assert.Contains("t.Address.StartsWith(page, StringComparison.OrdinalIgnoreCase)", open);
+        // O mesmo endereço: carrega outra vez (o mesmo hash não volta a levar a vista ao item); outro: vai lá.
+        Assert.Matches(@"string\.Equals\(open\.Address, url, StringComparison\.OrdinalIgnoreCase\)\)\s*ReloadActive\(\);\s*else LoadUrl\(url\);", open);
+    }
+
+    [Fact]
+    public void I11_SignedInBar_StopsTheHideTimer_WhenTheNextViewHasNone()
+    {
+        var show = Body(Source("MainWindow.SignInBar.cs"), "private void ShowSignInBar(bool on)", "\n    }\n");
+        Assert.Matches(@"if \(view\.HideAfter is not \{ \} hold\)\s*\{\s*(//[^\n]*\n\s*)*_signInBarHide\?\.Stop\(\);\s*_signInTimed = null;", show);
+    }
+
+    [Theory]
+    [InlineData("VaultRoutes.cs")]
+    [InlineData("VaultRoutes.Autofill.cs")]
+    public void I11_SignInRoute_ChecksTheOfferAgain(string file)
+    {
+        var route = Body(Source("Vault", file), "case \"/sign-in\":", "return VaultReply.Json(new { ok = true });");
+        Assert.Contains("if (!host.OffersSignIn) return VaultReply.Json(new { ok = false });", route);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {

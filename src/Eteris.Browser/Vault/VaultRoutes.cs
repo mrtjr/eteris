@@ -161,6 +161,8 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
             case "/list":
                 return VaultReply.Json(PasswordsData());
             case "/sign-in":
+                // A página pode ter aberto antes de a sessão começar noutra aba ou janela: o anfitrião decide outra vez.
+                if (!host.OffersSignIn) return VaultReply.Json(new { ok = false });
                 host.BeginSignIn();
                 return VaultReply.Json(new { ok = true });
             case "/reveal" when r.Q("id") is { } id:

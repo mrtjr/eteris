@@ -134,6 +134,8 @@ public partial class MainWindow
         ShowInSignInBar(view);
         if (view.HideAfter is not { } hold)
         {
+            // A vista seguinte não some sozinha: o temporizador da anterior não fica armado.
+            _signInBarHide?.Stop();
             _signInTimed = null;
             return;
         }

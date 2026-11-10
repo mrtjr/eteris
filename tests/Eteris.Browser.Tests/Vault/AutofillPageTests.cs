@@ -284,6 +284,7 @@ public sealed class AutofillPageTests : IDisposable
     [Fact]
     public async Task SignIn_NeedsTheToken()
     {
+        _f.Host.SignInOffer = true;
         Assert.Equal(VaultReply.Refused, await _f.Get("autofill", "/sign-in", authorized: false));
         Assert.Equal(0, _f.Host.SignIns);
         Assert.True(VaultFixture.Json(await _f.Get("autofill", "/sign-in"))["ok"]!.GetValue<bool>());

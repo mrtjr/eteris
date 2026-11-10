@@ -559,10 +559,40 @@ public sealed class PasswordsPageTests : IDisposable
     [Fact]
     public async Task SignIn_NeedsTheToken()
     {
+        _f.Host.SignInOffer = true;
         Assert.Equal(VaultReply.Refused, await _f.Get("passwords", "/sign-in", authorized: false));
         Assert.Equal(0, _f.Host.SignIns);
         Assert.True(VaultFixture.Json(await _f.Get("passwords", "/sign-in"))["ok"]!.GetValue<bool>());
         Assert.Equal(1, _f.Host.SignIns);
+    }
+
+    // Revisão final (I-11): uma página aberta antes de entrar não começa outra entrada quando o anfitrião já não a oferece
+    // (sessão iniciada entretanto noutra aba ou janela).
+    [Theory]
+    [InlineData("passwords")]
+    [InlineData("autofill")]
+    public async Task SignIn_RefusedWhenNoLongerOffered(string host)
+    {
+        _f.Host.SignInOffer = false;
+        Assert.False(VaultFixture.Json(await _f.Get(host, "/sign-in"))["ok"]!.GetValue<bool>());
+        Assert.Equal(0, _f.Host.SignIns);
+    }
+
+    // Revisão final (I-11): voltar à página pergunta outra vez (/list traz signIn) e os botões seguem a resposta.
+    [Fact]
+    public void Templates_FollowTheSignInOffer_WhenThePageComesBack()
+    {
+        foreach (var template in new[] { PasswordsPage.Template, AutofillPage.Template })
+        {
+            Assert.Contains("addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });", template);
+            var apply = template[template.IndexOf("const applySignIn = () => {", StringComparison.Ordinal)..];
+            apply = apply[..apply.IndexOf("};", StringComparison.Ordinal)];
+            Assert.Contains("a.hidden = !!data.signIn;", apply);
+            Assert.Contains("b.hidden = !data.signIn;", apply);
+            var refresh = template[template.IndexOf("const refresh = ", StringComparison.Ordinal)..];
+            Assert.Contains("applySignIn();", refresh[..refresh.IndexOf("});", StringComparison.Ordinal)]);
+            Assert.DoesNotContain("if (data.signIn) {", template);
+        }
     }
 
     // A janela privada não chega ao anfitrião: nem a rota nem os dados da página (S31).

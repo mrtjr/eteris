@@ -95,11 +95,28 @@ public partial class MainWindow
         ShowToast("Guardado em «Para ler» — veja em Favoritos › Para ler");
     }
 
-    // Páginas internas: reaproveita uma aba já aberta em vez de duplicar.
+    // Páginas internas: reaproveita uma aba já aberta em vez de duplicar. Com uma âncora (os botões das barras que
+    // levam a um item das Definições), a aba da mesma página serve e vai até ao item: outro endereço carrega-se (o hash
+    // novo leva a vista e abre «Mais opções»); o mesmo endereço carrega outra vez (o mesmo hash não voltava a levar a
+    // vista ao item, que podia estar em «Mais opções» já fechado).
     private void OpenInternal(string url)
     {
-        if (Tabs.Tabs.FirstOrDefault(t => t.Address.StartsWith(url, StringComparison.OrdinalIgnoreCase)) is { } open) Tabs.Active = open;
-        else Tabs.NewTab(url);
+        var hash = url.IndexOf('#');
+        if (hash < 0)
+        {
+            if (Tabs.Tabs.FirstOrDefault(t => t.Address.StartsWith(url, StringComparison.OrdinalIgnoreCase)) is { } same) Tabs.Active = same;
+            else Tabs.NewTab(url);
+            return;
+        }
+        var page = url[..hash];
+        if (Tabs.Tabs.FirstOrDefault(t => t.Address.StartsWith(page, StringComparison.OrdinalIgnoreCase)) is not { } open)
+        {
+            Tabs.NewTab(url);
+            return;
+        }
+        Tabs.Active = open;
+        if (string.Equals(open.Address, url, StringComparison.OrdinalIgnoreCase)) ReloadActive();
+        else LoadUrl(url);
     }
 
     private void OpenHistory() => OpenInternal(HistoryPage.Url);

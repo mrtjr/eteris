@@ -403,7 +403,7 @@
     $('countDocumentos').textContent = data.docs.length || '';
     $('countViagens').textContent = data.travel.length || '';
   };
-  const refresh = () => ask('list', {}, reply => { if (reply.cards) { data = Object.assign(data, reply); render(); } });
+  const refresh = () => ask('list', {}, reply => { if (reply.cards) { data = Object.assign(data, reply); render(); applySignIn(); } });
 
   // Cada interruptor tem o nome da linha (o <b> ao lado) para o leitor de ecrã.
   document.querySelectorAll('.switch input').forEach(input => {
@@ -431,18 +431,21 @@
   // A página saiu: todas as retenções dela saem.
   addEventListener('pagehide', () => ask('hide'));
   // Sem sessão (data.signIn), «Entrar com o Google» no lugar de «Sincronização →»: começa o início de sessão no
-  // navegador do sistema e a página fica onde está (o progresso é da barra da janela).
-  if (data.signIn) {
-    document.querySelectorAll('a.link[href="eteris://settings/#syncTopicItem"]').forEach(a => { a.hidden = true; });
-    document.querySelectorAll('button[data-sign-in]').forEach(b => {
-      b.hidden = false;
-      // Desativados já no clique: um duplo clique não envia dois pedidos.
-      b.addEventListener('click', () => {
-        document.querySelectorAll('button[data-sign-in]').forEach(x => { x.disabled = true; });
-        ask('sign-in');
-      });
+  // navegador do sistema e a página fica onde está (o progresso é da barra da janela). Voltar à página pergunta outra
+  // vez (/list traz signIn): a sessão pode ter começado ou acabado noutra aba ou janela.
+  const applySignIn = () => {
+    document.querySelectorAll('a.link[href="eteris://settings/#syncTopicItem"]').forEach(a => { a.hidden = !!data.signIn; });
+    document.querySelectorAll('button[data-sign-in]').forEach(b => { b.hidden = !data.signIn; b.disabled = false; });
+  };
+  document.querySelectorAll('button[data-sign-in]').forEach(b => {
+    // Desativados já no clique: um duplo clique não envia dois pedidos.
+    b.addEventListener('click', () => {
+      document.querySelectorAll('button[data-sign-in]').forEach(x => { x.disabled = true; });
+      ask('sign-in');
     });
-  }
+  });
+  applySignIn();
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
   render();
   if (location.hash) { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); }
   mark();
