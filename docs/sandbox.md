@@ -709,6 +709,37 @@ abre também nunca recebe a correção. Três camadas:
   e conta como a 1.ª das 2 falhas: só a 2.ª, já sem eles, desliga o sandbox. Sem esses ajustes (a configuração de
   omissão, em que estão todos desligados) não há 1.º degrau e tudo fica como em cima; nesse caso o `Program.Main` nem
   lê o ficheiro. Uma versão nova volta a tentar os ajustes.
+- **De onde veio cada falha contada (0.2.14; risco R-2 do plano do sandbox).** Sem isto, um sandbox desligado «até à
+  versão seguinte» não dizia a ninguém o que tinha caído (o plano contava com um `eteris.log`, que não existe). Não há
+  ficheiro de registo novo: a origem fica no próprio `sandbox-fallback.json`, no campo `Origins` — um texto com uma
+  linha por falha contada, a mais recente no fim, separadas por `\n`:
+  - `<hora UTC> <versão> queda-antes-da-1a-pagina` (camada (b); com ` com-ajustes` no fim se esse arranque corria com
+    ajustes de desempenho antes da 1.ª página). Quem dá pela queda é o arranque seguinte, por isso a hora e a versão
+    são as dele; o código de saída do processo principal não se sabe (ninguém o vigia).
+  - `<hora UTC> <versão> filhos <tipo>=<código>@<segundos>s <tipo>=<código>@<segundos>s <tipo>=<código>@<segundos>s`
+    (camada (c)): os 3 filhos que fizeram desse arranque um arranque falhado, cada um com o tipo do processo, o código
+    de saída (em hexadecimal os do Windows, `0xC0000005`; em decimal os do sandbox, `7006`) e os segundos desde o
+    arranque. `renderer=nao-lancado-4` (ou `-5`) é uma página que o motor não conseguiu lançar (o estado de terminação
+    da CEF, sem código de saída).
+
+  Exemplo, depois de dois arranques falhados:
+  `{"Starting":true,"WithSandbox":false,"Failures":2,"DisabledFor":"0.2.14","WithTweaks":false,"TweaksDisabledFor":null,"Origins":"2026-11-09T20:31:07Z 0.2.14 filhos ?=0xC0000005@1s gpu-process=0xC0000005@2s gpu-process=0xC0000005@3s\n2026-11-09T20:35:10Z 0.2.14 queda-antes-da-1a-pagina"}`.
+  - **O tipo do filho** é o `--type=` do Chromium (`renderer`, `gpu-process`, `utility`, `crashpad-handler`) e, nos
+    utilitários, o serviço (`utility:NetworkService`, `StorageService`, `AudioService`, `VideoCaptureService`,
+    `DataDecoderService`), os dois de listas fechadas; `?` quando não se sabe. O Windows só dá a linha de comandos de um
+    processo vivo (depois de sair, `STATUS_PROCESS_IS_TERMINATING`), e lê-la em todos os filhos de todos os arranques
+    seria trabalho novo antes da 1.ª página. Por isso a vigia só começa a ler os tipos **depois de a 1.ª falha ter
+    contado**: o 1.º filho a falhar fica com `?`, os seguintes (os que já estavam vivos e os que o motor volta a
+    lançar, como a placa gráfica) levam o tipo.
+  - **Privacidade:** só texto fixo, tipos dessas listas e números. Nunca endereços, títulos, nomes de utilizador,
+    caminhos nem nada das páginas; da linha de comandos de um filho só se aproveita o tipo, e só do que vem depois do
+    programa (o caminho do executável fica de fora), e ela nunca é guardada. O ficheiro fica no perfil
+    (`%LOCALAPPDATA%\Eteris`, ou a pasta do `--user-data-dir`) e não sai do computador.
+  - **Tamanho:** as últimas 8 linhas (`SandboxFallback.OriginsToKeep`), cada uma com 200 carateres no máximo.
+  - **Apagado** quando a contagem é reposta: num arranque bom com sandbox (`Failures` volta a 0) e na versão seguinte
+    à que o desligou. Com o sandbox desligado por precaução, o porquê fica lá enquanto durar.
+  - **Regra R-2 (nada de novo antes da 1.ª página):** num arranque normal o estado leva só mais um campo nulo, na
+    escrita que já existia; a hora só se lê e a linha só se escreve quando uma falha conta, que já é um caminho de erro.
 - Sem sandbox possível (publicação normal, CefSharp oficial) nada disto corre: nem ficheiro, nem vigia.
 - Uma queda **sem** sandbox (por exemplo com `--eteris-no-sandbox` manual) não conta: não é culpa dele.
 - `--eteris-no-sandbox` manual continua igual (sem aviso).
@@ -719,7 +750,9 @@ abre também nunca recebe a correção. Três camadas:
   passageiras (ficheiro preso pelo antivírus a meio de uma atualização, por exemplo); numa pasta sem .NET o aviso aparece
   na mesma, mas só uma vez e depois de tentar.
 - Testes: `SandboxFallbackTests` (estados, contagem, versão nova, manual, DLL cliente, códigos de saída, ficheiro
-  partido, guarda inerte sem sandbox, aviso na nova aba normal e privada, interruptores iguais nos dois lados);
+  partido, guarda inerte sem sandbox, aviso na nova aba normal e privada, interruptores iguais nos dois lados; e o
+  registo de onde veio cada falha: a queda e os filhos com tipo e código, apagado com a contagem, só as últimas
+  linhas, o tipo de uma lista fechada e nunca o caminho, nada de novo num arranque normal);
   `SandboxBootstrapSourceTests` (recurso de versão com a marca das DLLs de teste).
 - Ganchos só de teste: `ETERIS_TEST_CRASH_BEFORE_PAINT=1` (`TestSwitches`: `TerminateProcess` logo a seguir ao
   `Cef.Initialize`, código `0xE7E50001`, sem relatório do Windows; desde a 0.2.14 ignorado numa instalação do Velopack,

@@ -400,6 +400,165 @@ public class SandboxFallbackTests
         Assert.Contains("test_hooks", verify);
     }
 
+    // Risco R-2 do plano do sandbox da 0.2.14: quando a rede de segurança conta uma falha, fica escrito de onde veio, no
+    // próprio sandbox-fallback.json (campo Origins: uma linha por falha contada, a mais recente no fim).
+    private static readonly DateTime T0 = new(2026, 11, 9, 20, 31, 7, DateTimeKind.Utc);
+    private const string Crashed = "2026-11-09T20:31:07Z 0.2.14 queda-antes-da-1a-pagina";
+    // Uma linha: hora UTC, versão e o quê, só com letras sem acentos, algarismos e «? = @ : -».
+    private const string OriginLine = @"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ [0-9A-Za-z.?-]+ [0-9A-Za-z?=@: -]+$";
+
+    private static SandboxStart StartAt(SandboxFallbackState previous, DateTime when, string version = V, bool manualOff = false,
+        bool tweaks = false)
+        => SandboxFallback.Begin(previous, version, available: true, manualOff, retried: false, tweaks, () => when);
+
+    [Fact]
+    public void Origins_ACrashBeforeTheFirstPage_IsWrittenByTheStartThatCountsIt()
+    {
+        var s1 = StartAt(new(), T0);
+        Assert.Null(s1.State.Origins);
+        // A queda só se vê no arranque seguinte: a hora e a versão são as desse arranque.
+        var s2 = StartAt(Crash(s1), T0);
+        Assert.Equal(1, s2.State.Failures);
+        Assert.Equal(Crashed, s2.State.Origins);
+        var s3 = StartAt(Crash(s2), T0.AddMinutes(2));
+        Assert.Equal(V, s3.State.DisabledFor);
+        Assert.Equal(Crashed + "\n2026-11-09T20:33:07Z 0.2.14 queda-antes-da-1a-pagina", s3.State.Origins);
+        // Com ajustes de desempenho antes da 1.ª página (o 1.º degrau), a linha di-lo.
+        var tweaked = StartAt(Crash(StartAt(new(), T0, tweaks: true)), T0, tweaks: true);
+        Assert.Equal(Crashed + " com-ajustes", tweaked.State.Origins);
+        Assert.Matches(OriginLine, tweaked.State.Origins);
+        // Uma queda sem sandbox não conta, por isso também não fica escrita.
+        Assert.Null(StartAt(Crash(StartAt(new(), T0, manualOff: true)), T0).State.Origins);
+    }
+
+    // Apagado nas mesmas condições em que a contagem é reposta: um arranque bom com sandbox e a versão seguinte. Com o
+    // sandbox desligado por precaução, o porquê fica lá enquanto durar.
+    [Fact]
+    public void Origins_AreClearedWhenTheCountIs()
+    {
+        var one = StartAt(Crash(StartAt(new(), T0)), T0);
+        Assert.NotNull(one.State.Origins);
+        var good = SandboxFallback.Healthy(one.State);
+        Assert.Equal(0, good.Failures);
+        Assert.Null(good.Origins);
+
+        var disabled = StartAt(Crash(one), T0);
+        Assert.False(disabled.UseSandbox);
+        var stillOff = StartAt(SandboxFallback.Healthy(disabled.State), T0.AddDays(1));
+        Assert.False(stillOff.UseSandbox);
+        Assert.Equal(2, stillOff.State.Origins!.Split('\n').Length);
+        var next = StartAt(SandboxFallback.Healthy(stillOff.State), T0.AddDays(2), version: "0.2.15");
+        Assert.True(next.UseSandbox);
+        Assert.Equal(0, next.State.Failures);
+        Assert.Null(next.State.Origins);
+    }
+
+    // Filhos a morrer no arranque: o tipo de cada um (quando se sabe), o código de saída e os segundos desde o arranque.
+    [Fact]
+    public void Origins_ChildFailures_SayTheTypeAndTheExitCodeOfEachChild()
+    {
+        var dir = TempDir();
+        try
+        {
+            var file = Path.Combine(dir, SandboxFallback.FileName);
+            var guard = new StartupGuard(file, () => TimeSpan.FromSeconds(5.9), () => T0);
+            guard.Begin(V, true, false, false);
+            // Um arranque normal não escreve nada de novo.
+            Assert.Null(StartupGuard.Read(file).Origins);
+            guard.ChildFailed(0);                                     // saída normal: não conta
+            guard.ChildFailed(0xC0000005);                            // o 1.º a falhar: o tipo ainda não se leu
+            guard.ChildFailed(0xC0000005, at: SandboxFallback.ChildWindow + TimeSpan.FromSeconds(1), type: "renderer"); // tarde demais
+            guard.ChildFailed(7006, type: "gpu-process");
+            guard.Flush();
+            Assert.Null(StartupGuard.Read(file).Origins);             // ainda não é um arranque falhado
+            guard.RenderProcessTerminated(4);
+            guard.ChildFailed(0x80000003, type: "renderer");          // depois de contado, já não entra
+            guard.Flush();
+            var state = StartupGuard.Read(file);
+            Assert.Equal(1, state.Failures);
+            Assert.Equal("2026-11-09T20:31:07Z 0.2.14 filhos ?=0xC0000005@5s gpu-process=7006@5s renderer=nao-lancado-4@5s", state.Origins);
+            // No ficheiro lê-se tal e qual (sem carateres que o JSON escreva em \uXXXX).
+            Assert.Contains("filhos ?=0xC0000005@5s gpu-process=7006@5s renderer=nao-lancado-4@5s\"", File.ReadAllText(file));
+            Assert.Matches(OriginLine, state.Origins);
+
+            // O arranque seguinte que cai junta a sua linha; o que corre bem (aqui sem sandbox: desligado) mantém-nas.
+            new StartupGuard(file, () => TimeSpan.Zero, () => T0.AddHours(1)).Begin(V, true, false, false);
+            var third = new StartupGuard(file, () => TimeSpan.Zero, () => T0.AddHours(2));
+            Assert.False(third.Begin(V, true, false, false).UseSandbox);
+            third.Healthy();
+            third.Flush();
+            Assert.Equal(["2026-11-09T20:31:07Z 0.2.14 filhos ?=0xC0000005@5s gpu-process=7006@5s renderer=nao-lancado-4@5s",
+                          "2026-11-09T22:31:07Z 0.2.14 queda-antes-da-1a-pagina"], StartupGuard.Read(file).Origins!.Split('\n'));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // Tamanho limitado: só as últimas linhas, cada uma com um comprimento máximo (também para um ficheiro mexido à mão).
+    [Fact]
+    public void Origins_KeepOnlyTheLastEntries()
+    {
+        var state = new SandboxFallbackState { Origins = new string('x', 5000) + "\nantiga" };
+        for (var i = 0; i < 20; i++)
+            state = SandboxFallback.Failed(state with { Starting = true, WithSandbox = true }, V, $"filhos renderer=7006@{i}s", () => T0);
+        var lines = state.Origins!.Split('\n');
+        Assert.Equal(SandboxFallback.OriginsToKeep, lines.Length);
+        Assert.Equal("2026-11-09T20:31:07Z 0.2.14 filhos renderer=7006@19s", lines[^1]);
+        Assert.All(lines, line => Assert.StartsWith("2026-11-09T20:31:07Z 0.2.14 filhos renderer=7006@", line));
+
+        var long1 = SandboxFallback.Failed(new() { Starting = true, WithSandbox = true }, new string('9', 500), new string('y', 5000), () => T0);
+        Assert.True(long1.Origins!.Length <= SandboxFallback.MaxOriginLength);
+        Assert.InRange(SandboxFallback.OriginsToKeep, 1, 16);
+    }
+
+    // Privacidade: de um processo filho só fica o tipo do Chromium (--type= e o serviço), de uma lista fechada — nunca a
+    // linha de comandos, que traz o caminho do perfil (com o nome do utilizador) e outros argumentos.
+    [Theory]
+    [InlineData("\"C:\\Users\\ana\\AppData\\Local\\EterisBrowser\\current\\Eteris.Browser.exe\" --type=renderer --user-data-dir=\"C:\\Users\\ana\\AppData\\Local\\Eteris\\profile\" --lang=pt-PT", "renderer")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=gpu-process --field-trial-handle=1", "gpu-process")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=utility --utility-sub-type=network.mojom.NetworkService --lang=pt", "utility:NetworkService")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=crashpad-handler", "crashpad-handler")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=coisa-nova", "?")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=utility --utility-sub-type=x.Ana_Teste", "utility")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=utility --utility-sub-type=x.Joana", "utility")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --type=renderer --user-data-dir=\"D:\\a --utility-sub-type=x.NetworkService\\p\"", "renderer")]
+    [InlineData("C:\\app\\Eteris.Browser.exe --sem-tipo", "?")]
+    [InlineData(null, "?")]
+    [InlineData("", "?")]
+    // Só conta o que vem depois do programa (o 1.º elemento da linha): uma pasta com «--type=» no nome não passa.
+    [InlineData("\"D:\\a --type=utility --utility-sub-type=x.Ana\\Eteris.Browser.exe\" --type=gpu-process", "gpu-process")]
+    [InlineData("\"D:\\a --type=utility --utility-sub-type=x.Ana\\Eteris.Browser.exe\"", "?")]
+    public void ChildKind_KeepsOnlyTheChromiumProcessType(string? commandLine, string expected)
+        => Assert.Equal(expected, SandboxFallback.ChildKind(commandLine));
+
+    [Theory]
+    [InlineData("renderer", 0xC0000005u, 1.2, "renderer=0xC0000005@1s")]
+    [InlineData("utility:NetworkService", 7013u, 29.9, "utility:NetworkService=7013@29s")]
+    [InlineData(null, 0x80000003u, 0.0, "?=0x80000003@0s")]
+    [InlineData("C:\\Users\\ana\\x", 7006u, 3.0, "?=7006@3s")]   // o que não for um tipo conhecido não se escreve
+    public void ChildOrigin_IsTypeExitCodeAndSeconds(string? type, uint code, double seconds, string expected)
+        => Assert.Equal(expected, SandboxFallback.ChildOrigin(type, code, TimeSpan.FromSeconds(seconds)));
+
+    // Regra R-2: nada de novo num arranque normal. A hora só se lê quando uma falha conta (o relógio vai por entregar) e a
+    // vigia só lê o tipo dos filhos depois de a 1.ª falha ter contado, enquanto estão vivos.
+    [Fact]
+    public void Origins_CostNothingOnAHealthyStart()
+    {
+        var calls = 0;
+        DateTime Clock() { calls++; return T0; }
+        var start = SandboxFallback.Begin(new(), V, true, false, false, false, Clock);
+        SandboxFallback.Healthy(start.State);
+        SandboxFallback.Begin(SandboxFallback.Healthy(start.State), V, true, false, false, false, Clock);
+        Assert.Equal(0, calls);
+        SandboxFallback.Begin(start.State, V, true, false, false, false, Clock);
+        Assert.Equal(1, calls);
+
+        var guard = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Infrastructure", "StartupGuard.cs"));
+        var types = guard.IndexOf("if (types is null && ChildFailures > 0) types = [];", StringComparison.Ordinal);
+        Assert.True(types > 0, "a vigia só começa a ler os tipos depois da 1.ª falha");
+        Assert.Single(Regex.Matches(guard, @"CommandLineOf\("));
+        Assert.True(guard.IndexOf("CommandLineOf(", StringComparison.Ordinal) > types);
+    }
+
     private static string TempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "eteris-fallback-" + Guid.NewGuid().ToString("N"));

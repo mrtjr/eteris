@@ -11,10 +11,13 @@ namespace Eteris.Browser.Infrastructure;
 //   - Healthy: a 1.ª página apareceu (MainWindow.PageVisibility) ou o Éteris fechou normalmente (App.OnExit).
 //   - ChildFailed / RenderProcessTerminated: um filho morreu com um código de falha no início do arranque (vigia dos
 //     filhos, em baixo) ou o motor não conseguiu lançar uma página; ChildFailuresToCount fazem do arranque um falhado.
+//   - De onde veio cada falha contada fica no próprio estado (SandboxFallbackState.Origins): a queda vista pelo Begin do
+//     arranque seguinte, ou o tipo e o código de saída de cada filho. Só se escreve quando uma falha conta (regra R-2
+//     do plano do sandbox: nada de novo num arranque normal).
 //   - SuspendTweaksAfterAFailedStart (início do Program.Main): o 1.º degrau, os ajustes de desempenho desligados depois de
 //     um arranque falhado com eles (D-18; SandboxFallback.TweaksSuspended).
 // Sem sandbox possível (publicação normal, CefSharp oficial) não faz nada: nem ficheiro, nem vigia.
-public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
+public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<DateTime>? utcNow = null)
 {
     private enum Outcome { Pending, Healthy, Failed }
 
@@ -24,6 +27,10 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
     private Outcome _outcome;
     private int _childFailures;
     private string? _version;
+    // De onde veio cada falha de filho deste arranque (SandboxFallback.ChildOrigin); vai para o estado se contarem.
+    private readonly List<string> _childOrigins = [];
+    // A hora das linhas de Origins: só se lê quando uma falha conta.
+    private readonly Func<DateTime> _utcNow = utcNow ?? (() => DateTime.UtcNow);
 
     public static StartupGuard Current { get; private set; } = new(string.Empty, () => TimeSpan.Zero);
 
@@ -41,7 +48,7 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
     public SandboxStart Begin(string version, bool available, bool manualOff, bool retried, bool tweaks = false)
     {
         if (!available) return new SandboxStart(new SandboxFallbackState(), false, SandboxNotice.None);
-        var start = SandboxFallback.Begin(Read(path), version, available, manualOff, retried, tweaks);
+        var start = SandboxFallback.Begin(Read(path), version, available, manualOff, retried, tweaks, _utcNow);
         lock (_gate)
         {
             _begun = start.State;
@@ -65,29 +72,35 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
     }
 
     // Um processo filho saiu com este código. Só conta com o sandbox ligado, no início do arranque e com um código de falha.
-    public void ChildFailed(uint exitCode, TimeSpan? at = null)
+    // «type»: o tipo do filho (SandboxFallback.ChildKind), quando a vigia o chegou a ler.
+    public void ChildFailed(uint exitCode, TimeSpan? at = null, string? type = null)
     {
-        if (!SandboxFallback.IsChildFailure(exitCode) || !SandboxFallback.InWindow(at ?? sinceStart())) return;
-        CountChildFailure();
+        if (!SandboxFallback.IsChildFailure(exitCode)) return;
+        var when = at ?? sinceStart();
+        if (!SandboxFallback.InWindow(when)) return;
+        CountChildFailure(SandboxFallback.ChildOrigin(type, exitCode, when));
     }
 
     // Uma página terminou (CefSharp OnRenderProcessTerminated): só as que o motor nem conseguiu lançar contam aqui (as que
     // caíram deixam um código de saída que a vigia dos filhos vê).
     public void RenderProcessTerminated(int terminationStatus)
     {
-        if (!SandboxFallback.IsLaunchFailure(terminationStatus) || !SandboxFallback.InWindow(sinceStart())) return;
-        CountChildFailure();
+        if (!SandboxFallback.IsLaunchFailure(terminationStatus)) return;
+        var when = sinceStart();
+        if (!SandboxFallback.InWindow(when)) return;
+        CountChildFailure(SandboxFallback.LaunchOrigin(terminationStatus, when));
     }
 
-    private void CountChildFailure()
+    private void CountChildFailure(string origin)
     {
         lock (_gate)
         {
             if (_begun is not { WithSandbox: true } begun || _outcome == Outcome.Failed) return;
+            _childOrigins.Add(origin);
             if (++_childFailures < SandboxFallback.ChildFailuresToCount) return;
             // Falhado, mesmo que a 1.ª página já tenha aparecido (a contagem de antes deste arranque é a de _begun).
             _outcome = Outcome.Failed;
-            _toWrite = SandboxFallback.Failed(begun, _version);
+            _toWrite = SandboxFallback.Failed(begun, _version, SandboxFallback.ChildrenOrigin + " " + string.Join(' ', _childOrigins), _utcNow);
         }
         _ = Task.Run(Flush);
     }
@@ -150,6 +163,10 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
     // filhos deste com o mesmo executável (o bootstrap: páginas, placa gráfica, utilitários — não os do WebView2 nem
     // outros programas) e, quando um sai, entrega o código de saída a ChildFailed. Uma fotografia de processos custa ~1 ms
     // numa thread de fundo; no fim fecha tudo.
+    // O tipo de cada filho (o --type= da linha de comandos, para o registo de onde veio a falha) só se lê depois de a 1.ª
+    // falha ter contado (num arranque normal a vigia não faz nada de novo: regra R-2) e enquanto o filho está vivo
+    // (depois de sair, o Windows já não dá a linha de comandos): o 1.º filho a falhar fica com «?», os seguintes (os que
+    // já estavam vivos e os que o motor volta a lançar) com o tipo. A linha de comandos nunca é guardada.
     public void WatchChildren()
     {
         lock (_gate)
@@ -163,6 +180,7 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
         var self = (uint)Environment.ProcessId;
         var exeName = Path.GetFileName(Environment.ProcessPath ?? string.Empty);
         var watched = new Dictionary<uint, nint>();
+        Dictionary<uint, string>? types = null;
         try
         {
             while (true)
@@ -172,10 +190,15 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart)
                     foreach (var pid in ChildProcesses(self, exeName))
                         if (!watched.ContainsKey(pid))
                             watched[pid] = OpenProcess(Synchronize | QueryLimitedInformation, false, pid);
+                if (types is null && ChildFailures > 0) types = [];
+                if (types is not null)
+                    foreach (var (pid, handle) in watched)
+                        if (handle != 0 && !types.ContainsKey(pid))
+                            types[pid] = SandboxFallback.ChildKind(StartupTrace.CommandLineOf(handle));
                 foreach (var (pid, handle) in watched.ToList())
                 {
                     if (handle == 0 || WaitForSingleObject(handle, 0) != 0) continue;
-                    if (GetExitCodeProcess(handle, out var code)) ChildFailed(code);
+                    if (GetExitCodeProcess(handle, out var code)) ChildFailed(code, type: types?.GetValueOrDefault(pid));
                     CloseHandle(handle);
                     watched[pid] = 0;
                 }

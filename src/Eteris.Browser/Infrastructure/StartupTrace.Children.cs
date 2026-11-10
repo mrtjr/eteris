@@ -78,7 +78,8 @@ public static partial class StartupTrace
         return found;
     }
 
-    private static string? CommandLineOf(IntPtr process)
+    // Também usada pela vigia dos filhos da rede de segurança (StartupGuard), só depois de uma falha contar.
+    internal static string? CommandLineOf(IntPtr process)
     {
         var size = 4096;
         for (var attempt = 0; attempt < 3; attempt++)
