@@ -394,9 +394,11 @@ public class SyncIntegrationTests
         Assert.Contains("Nome deste computador", page);
         Assert.Contains("Mudar", page);
         Assert.DoesNotContain("innerHTML", page);
-        var item = page.IndexOf("syncNameItem", StringComparison.Ordinal);
-        Assert.True(item >= 0);
-        Assert.Contains("textContent", page[item..]);
+        Assert.DoesNotContain("insertAdjacentHTML", page);
+        Assert.DoesNotContain("outerHTML", page);
+        Assert.Contains("id=\"syncNameItem\"", page);
+        // O nome (escolhido aqui, mas também o que se recebeu antes desta versão) entra na página só como texto.
+        Assert.Contains("$('syncNameText').textContent = s.deviceName", page);
 
         foreach (var file in new[] { Path.Combine(root, "Sync", "BrowserProfile.cs"), Path.Combine(root, "Data", "UserSettings.cs") })
             Assert.DoesNotContain("DeviceName", File.ReadAllText(file, Encoding.UTF8));
