@@ -109,6 +109,10 @@ public class SandboxPublishTests
         Assert.Contains("$build.version -ne $Version", pack);
         Assert.Contains("[bool]$build.sandbox -eq [bool]$NoSandbox", pack);
         Assert.True(pack.IndexOf("eteris-build.json", StringComparison.Ordinal) < pack.IndexOf("vpk pack", StringComparison.Ordinal));
+        // E só a do commit que se empacota: a marca diz de que commit é a publicação, e o pack.ps1 compara-o com o HEAD.
+        var commit = pack.IndexOf("if ($head -ne $build.commit) { throw", StringComparison.Ordinal);
+        Assert.True(commit > 0 && commit < pack.IndexOf("vpk pack", StringComparison.Ordinal), "o commit confere-se antes de empacotar");
+        Assert.Contains("rev-parse", pack);
         var bytes = File.ReadAllBytes(Path.Combine(Root(), "build", "pack.ps1"));
         Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, "build/pack.ps1 tem acentos: UTF-8 com BOM (PowerShell 5.1)");
     }
@@ -187,6 +191,42 @@ public class SandboxPublishTests
     [InlineData(false, false, "-NoSandbox -SemLogin", "COM sandbox e foi pedido -NoSandbox")]
     public async Task Pack_RunOnAFakePublish_RefusesBeforePacking(bool login, bool file, string switches, string expected)
     {
+        var said = await RunPackAsync("{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": " + (login ? "true" : "false") + " }",
+                                      file, switches, head: null);
+        Assert.True(said(expected), $"o pack.ps1 não recusou com «{expected}»");
+        // Uma só recusa: a do login não aparece quando a publicação o leva ou o -SemLogin a aceita, e só ela diz como
+        // publicar; o aviso do -SemLogin só aparece quando ele foi preciso e a publicação é mesmo sem login.
+        Assert.True(said("-GoogleOAuthJson") == (expected == "SEM login Google"), "a recusa do login (e só ela) diz como publicar com ele");
+        Assert.True(said("Pacote SEM login Google (-SemLogin)") == (switches.Contains("-SemLogin") && !login && !file), "o aviso do -SemLogin");
+        Assert.True(said("publish\\ incoerente") == (login != file), "a recusa da pasta incoerente");
+    }
+
+    // A publicação tem de ser do commit que se empacota (o HEAD, o que a etiqueta da release vai marcar): uma publish\ que
+    // ficou de um commit anterior — a de uma medição, a de antes da última correção — não sai como release, nem com
+    // -SemLogin (que a deixava passar pelas outras verificações). A marca das outras recusas não tem commit, como a de uma
+    // publicação feita sem git, e não tem com que comparar. «head»: o que um git.cmd falso responde ao rev-parse HEAD
+    // (nulo: não há git no PATH, e sem saber o HEAD também não empacota).
+    [Theory]
+    [InlineData(true, "", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "é do commit aaaaaaaaaaaa e o HEAD é bbbbbbbbbbbb")]
+    [InlineData(false, "-SemLogin", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "é do commit aaaaaaaaaaaa e o HEAD é bbbbbbbbbbbb")]
+    [InlineData(true, "", null, "não consigo ler o HEAD")]
+    public async Task Pack_RunOnAPublishOfAnotherCommit_RefusesBeforePacking(bool login, string switches, string? head, string expected)
+    {
+        var mark = "{ \"version\": \"9.9.9\", \"sandbox\": true, \"commit\": \"" + new string('a', 40) + "\", \"google_oauth\": "
+                   + (login ? "true" : "false") + " }";
+        var said = await RunPackAsync(mark, file: login, switches, head);
+        Assert.True(said(expected), $"o pack.ps1 não recusou com «{expected}»");
+        Assert.True(said("publique de novo"), "a recusa manda publicar de novo");
+        Assert.False(said("-GoogleOAuthJson") || said("publish\\ incoerente") || said("foi pedido"), "as outras verificações passaram");
+        Assert.True(said("Pacote SEM login Google (-SemLogin)") == switches.Contains("-SemLogin"), "o aviso do -SemLogin");
+    }
+
+    // Corre o pack.ps1 verdadeiro numa cópia com uma pasta publish\ falsa: só a marca «mark» e, com «file», um
+    // publish\google-oauth.json (vazio, feito aqui). O PATH do processo fica só com o sistema (e, com «head», uma pasta
+    // onde só há um git.cmd falso que responde «head»): o vpk nunca corre daqui. Confirma que recusou sem empacotar e
+    // devolve uma função que diz se o pack.ps1 escreveu um texto.
+    private static async Task<Func<string, bool>> RunPackAsync(string mark, bool file, string switches, string? head)
+    {
         var dir = Directory.CreateTempSubdirectory("eteris-pack-");
         try
         {
@@ -194,14 +234,19 @@ public class SandboxPublishTests
             Directory.CreateDirectory(Path.Combine(dir.FullName, "publish"));
             var script = Path.Combine(dir.FullName, "build", "pack.ps1");
             File.Copy(Path.Combine(Root(), "build", "pack.ps1"), script);
-            File.WriteAllText(Path.Combine(dir.FullName, "publish", "eteris-build.json"),
-                              "{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": " + (login ? "true" : "false") + " }");
+            File.WriteAllText(Path.Combine(dir.FullName, "publish", "eteris-build.json"), mark);
             if (file) File.WriteAllText(Path.Combine(dir.FullName, "publish", "google-oauth.json"), "{}");
             var start = new ProcessStartInfo("powershell.exe")
             {
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             };
             start.Environment["PATH"] = Environment.SystemDirectory;
+            if (head is not null)
+            {
+                var tools = Directory.CreateDirectory(Path.Combine(dir.FullName, "tools")).FullName;
+                File.WriteAllText(Path.Combine(tools, "git.cmd"), "@echo off\r\necho " + head + "\r\n");
+                start.Environment["PATH"] += ";" + tools;
+            }
             foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Version", "9.9.9" })
                 start.ArgumentList.Add(argument);
             foreach (var argument in switches.Split(' ', StringSplitOptions.RemoveEmptyEntries)) start.ArgumentList.Add(argument);
@@ -212,15 +257,9 @@ public class SandboxPublishTests
             // Sem a saída nas mensagens: traz o caminho da pasta temporária, com o perfil (o registo do CI é público).
             // E sem espaços nem quebras: o PowerShell parte as linhas do erro pela largura da consola.
             var all = Regex.Replace(output + await error, @"\s+", "");
-            bool Said(string text) => all.Contains(Regex.Replace(text, @"\s+", ""), StringComparison.Ordinal);
             Assert.True(shell.ExitCode != 0, "o pack.ps1 não recusou");
-            Assert.True(Said(expected), $"o pack.ps1 não recusou com «{expected}»");
-            // Uma só recusa: a do login não aparece quando a publicação o leva ou o -SemLogin a aceita, e só ela diz como
-            // publicar; o aviso do -SemLogin só aparece quando ele foi preciso e a publicação é mesmo sem login.
-            Assert.True(Said("-GoogleOAuthJson") == (expected == "SEM login Google"), "a recusa do login (e só ela) diz como publicar com ele");
-            Assert.True(Said("Pacote SEM login Google (-SemLogin)") == (switches.Contains("-SemLogin") && !login && !file), "o aviso do -SemLogin");
-            Assert.True(Said("publish\\ incoerente") == (login != file), "a recusa da pasta incoerente");
             Assert.False(Directory.Exists(Path.Combine(dir.FullName, "Releases")), "o pack.ps1 empacotou");
+            return text => all.Contains(Regex.Replace(text, @"\s+", ""), StringComparison.Ordinal);
         }
         finally { dir.Delete(recursive: true); }
     }

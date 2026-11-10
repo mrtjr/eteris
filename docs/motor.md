@@ -166,7 +166,11 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    nunca o lê. **A marca e o ficheiro têm de bater**: se a marca disser que a publicação leva o login e o
    `publish\google-oauth.json` não estiver lá, ou se ele lá estiver sem a marca o dizer (a pasta foi mexida depois de
    publicar), recusa sempre, com ou sem `-SemLogin`, e manda publicar de novo — um ficheiro posto à mão, que o
-   `publish.ps1` não verificou, sairia num pacote anunciado como «sem login».
+   `publish.ps1` não verificou, sairia num pacote anunciado como «sem login». **E a publicação tem de ser a do commit
+   que se empacota**: a marca guarda o commit de onde a `publish\` saiu e o `pack.ps1` compara-o com o HEAD
+   (`git rev-parse HEAD`); se forem diferentes — uma pasta que ficou de uma medição, ou um commit feito depois de
+   publicar —, ou se não conseguir ler o HEAD, recusa e manda publicar de novo. Por isso o passo 2 faz-se depois do
+   último commit (o da versão), e nada se grava entre publicar e empacotar.
 5. Testar o executável de `publish\` num perfil de teste (abre, navega, `eteris://whatsnew/` com a versão nova, um MP4
    H.264 toca no motor principal, sem processos `msedgewebview2` filhos; `chrome://sandbox` com os renderers
    Lockdown/Untrusted e a GPU Low, e `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`;
