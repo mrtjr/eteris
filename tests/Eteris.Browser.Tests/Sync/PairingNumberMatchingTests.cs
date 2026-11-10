@@ -549,6 +549,47 @@ public sealed class PairingNumberMatchingTests : IDisposable
         public Task DeleteAsync(string path, CancellationToken cancellationToken = default) => inner.DeleteAsync(path, cancellationToken);
     }
 
+    // ---- o teto dos pedidos respondidos (revisão final, A-04) -------------------------------------------------------
+
+    // Quem escreve no Drive pode abrir muitos pedidos e deixar ficar «pronto» só o que der o código que o computador
+    // novo verdadeiro mostra: cada pedido respondido é uma tentativa em 1 000 000. A Casa só acompanha
+    // PairingRequests.MaxAnswered de cada vez; os outros ficam só contados e são respondidos quando houver vaga (e uma
+    // vaga só se liberta com um pedido que acaba — mal, e conta para os pedidos em série).
+    [Fact]
+    public async Task ManyRequests_OnlyKAreAnswered()
+    {
+        Assert.Equal(3, PairingRequests.MaxAnswered);
+        var casa = await HostAsync();
+        var sessions = new List<string>();
+        for (var i = 0; i < 10; i++) sessions.Add(await PairingRequests.OpenAsync(Cloud, Now));
+        int Answered() => sessions.Count(s => HasStepNow(s, PairingProtocol.HostKey));
+
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Equal(3, Answered());
+        Assert.Equal(7, casa.Agent.Status.WaitingRequests);
+        // Procurar outra vez não responde a mais nenhum, e uma ronda só conta.
+        await casa.Agent.CheckRequestsAsync();
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.Equal(3, Answered());
+        Assert.Equal(7, casa.Agent.Status.WaitingRequests);
+
+        // Um dos respondidos acaba (cancelado do outro lado: conta): há uma vaga, e o seguinte é respondido.
+        var first = sessions.First(s => HasStepNow(s, PairingProtocol.HostKey));
+        await PairingRequests.RefuseAsync(Cloud, first, Now);
+        await Until(() => BadCount(casa) == 1, "o fim do pedido contado");
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Equal(4, Answered());
+        Assert.Equal(6, casa.Agent.Status.WaitingRequests);
+
+        // Um pedido pronto (com código, à espera de ser escrito) também ocupa a sua vaga.
+        var open = sessions.First(s => HasStepNow(s, PairingProtocol.HostKey) && !HasStepNow(s, PairingProtocol.Refused));
+        using var guest = await PairingRequests.WaitForHostAsync(Cloud, open, "Portátil", Now, Quick, TimeSpan.FromMilliseconds(5));
+        await guest.WaitForCodeAsync();
+        await Until(() => casa.Agent.Status.Requests.Count == 1, "o pedido pronto");
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Equal(4, Answered());
+    }
+
     // ---- pedidos em série (R18) ------------------------------------------------------------------------------------
 
     // Um pedido escrito à mão a que a Casa responde e que o outro lado cancela (x-host) antes de haver código.

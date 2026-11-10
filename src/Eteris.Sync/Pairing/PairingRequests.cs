@@ -20,6 +20,14 @@ namespace Eteris.Sync.Pairing;
 // saem no fim.
 public static class PairingRequests
 {
+    // Quantos pedidos um aparelho ligado acompanha ao mesmo tempo (respondidos e ainda por acabar). O código de
+    // verificação deriva de valores que estão em claro no transporte, e quem pede só revela o seu nonce depois de ver o
+    // do anfitrião: quem escreve no transporte podia abrir N pedidos e deixar seguir só o que desse o código que o
+    // computador novo verdadeiro mostra (N em 1 000 000). Com o teto, cada pedido a mais só é respondido quando outro
+    // acaba — e um pedido falso só acaba mal, o que conta para os pedidos em série (PairingFatigue). O teto também
+    // limita as sondagens de 10 minutos em curso.
+    public const int MaxAnswered = 3;
+
     // Aparelho novo: abre o pedido e devolve a sessão. A escrita repete-se como as dos outros passos
     // (PairingProtocol.WriteAsync).
     public static async Task<string> OpenAsync(ISyncTransport transport, Func<long> now, CancellationToken cancellationToken = default,

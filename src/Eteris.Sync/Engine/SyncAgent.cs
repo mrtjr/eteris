@@ -1451,6 +1451,15 @@ public sealed class SyncAgent
                 waiting++;
                 continue;
             }
+            // O teto (PairingRequests.MaxAnswered): sem vaga, o pedido fica só contado e é respondido numa procura
+            // seguinte, quando um dos que este aparelho acompanha acabar.
+            int following;
+            lock (_gate) following = _hosts.Values.Count(h => _now() - h.Created < (long)PairingProtocol.Lifetime.TotalMilliseconds);
+            if (following >= PairingRequests.MaxAnswered)
+            {
+                waiting++;
+                continue;
+            }
             var host = await PairingHost.AnswerAsync(transport, session, _now, _delay, cancellationToken).ConfigureAwait(false);
             var flow = new HostFlow(session, host, _now());
             lock (_gate) _hosts[session] = flow;
