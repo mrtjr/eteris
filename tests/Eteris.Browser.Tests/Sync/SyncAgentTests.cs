@@ -1449,6 +1449,31 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(1, casa.Agent.Status.Kit!.KnownDevices);
     }
 
+    // A lista dos aparelhos foi lida com um só computador; um segundo entra na mesma sessão: a contagem passa a 2.
+    [Fact]
+    public async Task KnownDevices_CountsASecondThatJoinsAfterTheListWasRead()
+    {
+        var casa = NewDevice("Casa");
+        casa.Profile.Bookmark("https://casa.example/", "Casa");
+        await casa.Agent.StartAsync();
+        Assert.Single(await casa.Agent.RefreshDevicesAsync());
+        Assert.Equal(1, casa.Agent.Status.Kit!.KnownDevices);
+
+        // Entra por aprovação, já com a lista da Casa lida: a ronda seguinte da Casa vê-o e fixa-lhe a chave.
+        var trabalho = NewDevice("Trabalho");
+        trabalho.Profile.Bookmark("https://trabalho.example/", "Trabalho");
+        await trabalho.Agent.StartAsync();
+        trabalho.Agent.RequestPairing();
+        await Until(() => Directory.Exists(Path.Combine(_folder, "eteris", "pair")), "o pedido");
+        await Until(() => { casa.Agent.CheckRequestsAsync().Wait(); return casa.Agent.Status.Requests.Count == 1 && trabalho.Agent.Status.Pairing?.Code is not null; }, "o código");
+        trabalho.Agent.ConfirmPairing();
+        Assert.Equal(Eteris.Sync.Pairing.PairingAnswer.Approved,
+            await casa.Agent.ApproveWithCodeAsync(casa.Agent.Status.Requests[0].Session, trabalho.Agent.Status.Pairing!.Code!));
+        await Until(() => trabalho.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o Trabalho ligado");
+        await Settle(casa, trabalho);
+        Assert.Equal(2, casa.Agent.Status.Kit!.KnownDevices);
+    }
+
     // A página de fim da entrada lê a fase logo que StartAsync devolve a tarefa: tem de ler já «Starting», nunca a fase
     // da ronda anterior (um «On» antigo dava «Pronto.» antes de se saber como ficou).
     [Fact]
