@@ -1086,6 +1086,45 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(SyncPhase.On, outro.Agent.Status.Phase);
     }
 
+    // A página de fim da entrada lê a fase logo que StartAsync devolve a tarefa: tem de ler já «Starting», nunca a fase
+    // da ronda anterior (um «On» antigo dava «Pronto.» antes de se saber como ficou).
+    [Fact]
+    public async Task StartAsync_IsAlreadyStarting_BeforeItsFirstAwait()
+    {
+        var gated = new GatedTransport(new FolderTransport(_folder));
+        var casa = NewDevice("Casa", () => gated);
+        await casa.Agent.StartAsync();
+        Assert.Equal(SyncPhase.On, casa.Agent.Status.Phase);
+
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gated.Gate = held.Task;
+        var start = casa.Agent.StartAsync(false);
+        Assert.Equal(SyncPhase.Starting, casa.Agent.Status.Phase);
+        held.SetResult();
+        await start;
+        Assert.Equal(SyncPhase.On, casa.Agent.Status.Phase);
+    }
+
+    // Transporte que só lista depois de «Gate» acabar: segura a ronda a meio.
+    private sealed class GatedTransport(ISyncTransport inner) : ISyncTransport
+    {
+        public Task Gate { get; set; } = Task.CompletedTask;
+
+        public string Name => inner.Name;
+
+        public async Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+        {
+            await Gate.WaitAsync(cancellationToken);
+            return await inner.ListAsync(prefix, cancellationToken);
+        }
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default) => inner.ReadAsync(path, cancellationToken);
+
+        public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default) => inner.WriteAsync(path, data, cancellationToken);
+
+        public Task DeleteAsync(string path, CancellationToken cancellationToken = default) => inner.DeleteAsync(path, cancellationToken);
+    }
+
     // Transporte que falha de propósito: não apaga o registo de chaves (troca de chave interrompida) ou esconde a pasta
     // na primeira listagem (dois computadores a criar a conta ao mesmo tempo).
     private sealed class FlakyTransport(ISyncTransport inner) : ISyncTransport

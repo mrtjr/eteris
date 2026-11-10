@@ -219,41 +219,43 @@ internal static class SyncService
     // Entrou na Google (GoogleSync) ou carregou em «Ligar a sincronização» / «Ligar outra vez»: liga e faz a primeira
     // ronda já. «switchAccount» só no botão (o utilizador leu o aviso de que a sessão é de outra conta Google).
     // «abandonDeletion»: «Ligar sem acabar de apagar», depois de um apagar do Drive que não acabou (o que ficou fica lá).
-    public static void Start(bool switchAccount = false, bool abandonDeletion = false)
+    public static void Start(bool switchAccount = false, bool abandonDeletion = false) => _ = Task.Run(() => StartAsync(switchAccount, abandonDeletion));
+
+    // O mesmo, para quem espera pela primeira ronda (a página de fim da entrada pela Google). Não lança. Não há nenhum
+    // «await» antes do StartAsync do agente: quando esta tarefa é devolvida, o agente já está em «Starting» (ou mais à
+    // frente) e quem lê a fase não vê a da ronda anterior.
+    internal static async Task StartAsync(bool switchAccount = false, bool abandonDeletion = false)
     {
         if (Agent() is not { } agent) return;
         Hook();
         // Uma ação nova: a mensagem da anterior (por exemplo, um apagar que falhou) sai da página.
         lock (Gate) _message = null;
         if (abandonDeletion) agent.AbandonCloudDeletion();
-        _ = Task.Run(async () =>
+        bool ok;
+        try
         {
-            bool ok;
-            try
-            {
-                await agent.StartAsync(switchAccount).ConfigureAwait(false);
-                ok = agent.Status.Error is null;
-            }
-            catch (SyncUserException e)
-            {
-                // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê (e que pode
-                // tentar de novo ou ligar sem acabar de apagar).
-                ok = false;
-                Say("delete", e.Message);
-            }
-            catch (Exception e)
-            {
-                ok = false;
-                if (agent.DeletePending) Say("delete", "Não foi possível acabar de apagar (" + e.Message + ").");
-            }
-            lock (Gate)
-            {
-                Schedule.Now(Now());
-                Schedule.Done(Now(), ok);
-                if (agent.Status.NeedsSignIn || !agent.Enabled) Schedule.Stop();
-            }
-            Arm();
-        });
+            await agent.StartAsync(switchAccount).ConfigureAwait(false);
+            ok = agent.Status.Error is null;
+        }
+        catch (SyncUserException e)
+        {
+            // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê (e que pode
+            // tentar de novo ou ligar sem acabar de apagar).
+            ok = false;
+            Say("delete", e.Message);
+        }
+        catch (Exception e)
+        {
+            ok = false;
+            if (agent.DeletePending) Say("delete", "Não foi possível acabar de apagar (" + e.Message + ").");
+        }
+        lock (Gate)
+        {
+            Schedule.Now(Now());
+            Schedule.Done(Now(), ok);
+            if (agent.Status.NeedsSignIn || !agent.Enabled) Schedule.Stop();
+        }
+        Arm();
     }
 
     // «Apagar os meus dados do Éteris no Google Drive»: grava já (antes de responder à página e de qualquer pedido) que a

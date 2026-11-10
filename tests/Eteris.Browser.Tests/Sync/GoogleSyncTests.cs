@@ -294,6 +294,27 @@ public class GoogleSyncTests
         Assert.Contains("BeginSignIn(string? loginHint = null)", File.ReadAllText(Path.Combine(root, "src", "Eteris.Browser", "Sync", "GoogleSync.cs")));
     }
 
+    // «Cancelar» que chega quando os tokens já estavam a ser usados: este computador fica sem sessão, e só localmente
+    // (revogar na Google desligava os outros computadores da pessoa). A entrada a sério fica para a prova do dono.
+    [Fact]
+    public void Cancel_AfterTheCodeArrived_LeavesNoSession()
+    {
+        var sync = File.ReadAllText(Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync", "GoogleSync.cs")).Replace("\r\n", "\n");
+        var begin = Regex.Match(sync, @"public static void BeginSignIn\(string\? loginHint = null\)\n    \{(?<b>.*?)\n    \}\n", RegexOptions.Singleline).Groups["b"].Value;
+        Assert.Matches(new Regex(@"if \([^)\n]*cancel\.IsCancellationRequested[^)\n]*\) UndoSignIn\(\);"), begin);
+        var undo = Regex.Match(sync, @"private static void UndoSignIn\(\)\n    \{(?<b>.*?)\n    \}\n", RegexOptions.Singleline).Groups["b"].Value;
+        Assert.Contains("SyncService.SignOut(forgetKey: false);", undo);
+        Assert.Contains("Accounts()?.Forget();", undo);
+        Assert.Contains("Session()?.SignOut();", undo);
+        Assert.DoesNotContain("SignOutAsync", undo);
+        Assert.DoesNotContain("Revoke", undo);
+        // O trabalho depois dos tokens: com os tokens guardados antes da conta, e a página escolhida pela sincronização.
+        var after = Regex.Match(sync, @"private static async Task<SignInPageKind> AfterTokensAsync\(OAuthTokens tokens\)\n    \{(?<b>.*?)\n    \}\n", RegexOptions.Singleline).Groups["b"].Value;
+        Assert.Contains("SyncService.StartAsync()", after);
+        Assert.Contains("SignInFinish.WaitAsync(", after);
+        Assert.Contains("Finish = ", begin);
+    }
+
     [Fact]
     public async Task SignIn_EndToEnd_ThroughTheLoopback()
     {

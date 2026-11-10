@@ -107,15 +107,32 @@ internal static class GoogleSync
         }
         _ = Task.Run(async () =>
         {
+            // O trabalho depois dos tokens (guardá-los, a conta, ligar a sincronização) não se cancela a meio: corre até
+            // ao fim mesmo que a página já tenha saído com o texto neutro.
+            Task<SignInPageKind>? after = null;
             try
             {
                 var oauth = new GoogleOAuth(Http(), config, Now);
-                var tokens = await oauth.SignInAsync(new SignInOptions(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, loginHint), cancel.Token);
-                Session()?.Use(tokens);
-                // Logo a seguir a entrar (ação do utilizador): com que conta (antes de ligar a sincronização, para ela
-                // saber se a sessão é da mesma conta Google de antes — com outra, fica em pausa sem apagar nada).
-                if (Accounts()?.AfterSignIn() is { } account) await account;
-                SyncService.Start();
+                var options = new SignInOptions(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, loginHint)
+                {
+                    // «Cancelar» antes de os tokens chegarem a ser usados: não se guarda nada.
+                    Finish = (tokens, ct) => ct.IsCancellationRequested
+                        ? Task.FromCanceled<SignInPageKind>(ct)
+                        : (after = AfterTokensAsync(tokens)).WaitAsync(ct),
+                };
+                try { await oauth.SignInAsync(options, cancel.Token); }
+                finally
+                {
+                    try
+                    {
+                        if (after is not null) await after;
+                    }
+                    finally
+                    {
+                        // «Cancelar» quando os tokens já estavam a ser usados: este computador fica sem sessão.
+                        if (after is not null && cancel.IsCancellationRequested) UndoSignIn();
+                    }
+                }
             }
             catch (OAuthException e) { lock (Gate) _error = e.Message; }
             catch (OperationCanceledException) { lock (Gate) _error = null; }
@@ -133,6 +150,27 @@ internal static class GoogleSync
                 cancel.Dispose();
             }
         });
+    }
+
+    // Com os tokens na mão (a página do navegador à espera): guarda-os, pede a conta — antes de ligar a sincronização,
+    // para ela saber se a sessão é da mesma conta Google de antes (com outra, fica em pausa sem apagar nada) — e liga a
+    // sincronização. Devolve a página de fim que o estado da sincronização justifica.
+    private static async Task<SignInPageKind> AfterTokensAsync(OAuthTokens tokens)
+    {
+        var hadKey = SyncService.Agent()?.HasKey == true; // antes de ligar
+        Session()?.Use(tokens);
+        if (Accounts()?.AfterSignIn() is { } account) await account;
+        var round = SyncService.StartAsync();
+        return await SignInFinish.WaitAsync(() => SyncService.Agent()?.Status, round, hadKey, SignInFinish.Poll, CancellationToken.None);
+    }
+
+    // O utilizador cancelou quando os tokens já tinham chegado: este computador fica sem sessão. Só local — revogar na
+    // Google desligava os outros computadores da pessoa. Uma conta de sincronização já criada no Drive fica lá.
+    private static void UndoSignIn()
+    {
+        SyncService.SignOut(forgetKey: false);
+        Accounts()?.Forget();
+        Session()?.SignOut();
     }
 
     public static void CancelSignIn()

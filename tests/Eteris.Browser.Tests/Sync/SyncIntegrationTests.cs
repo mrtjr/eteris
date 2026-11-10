@@ -192,7 +192,10 @@ public class SyncIntegrationTests
         Assert.Contains("if (abandonDeletion) agent.AbandonCloudDeletion();", service, StringComparison.Ordinal);
         // «Ligar…» é uma ação nova: a mensagem de um apagar que falhou antes não fica na nota (visto na prova ao vivo:
         // depois de «Ligar sem acabar de apagar», a nota ainda dizia «Ainda não se conseguiu apagar…»).
-        var start = Regex.Match(service, @"public static void Start\(bool switchAccount = false, bool abandonDeletion = false\)\s*\{(?<b>.*?)_ = Task\.Run", RegexOptions.Singleline).Groups["b"].Value;
+        // (Desde a 0.2.15 o corpo vive em StartAsync, que a entrada pela Google também espera; Start só o lança.)
+        Assert.Contains("public static void Start(bool switchAccount = false, bool abandonDeletion = false) => _ = Task.Run(() => StartAsync(switchAccount, abandonDeletion));",
+            service, StringComparison.Ordinal);
+        var start = Regex.Match(service, @"internal static async Task StartAsync\(bool switchAccount = false, bool abandonDeletion = false\)\s*\{(?<b>.*?)await agent\.StartAsync", RegexOptions.Singleline).Groups["b"].Value;
         Assert.Contains("lock (Gate) _message = null;", start, StringComparison.Ordinal);
         Assert.Contains("catch (Exception e) { return \"Não foi possível concluir (\" + e.Message + \").\"; }", service, StringComparison.Ordinal);
 
