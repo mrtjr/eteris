@@ -216,7 +216,11 @@ public class GoogleAccountTests
         var page = File.ReadAllText(Path.Combine(src, "Browser", "settings.html"));
         Assert.Single(Regex.Matches(page, "'sync-account'"));
         Assert.Matches(new Regex(@"const askAccount = \(\) => \{\s*if \(!touched \|\| !seen \|\| accountKnown \|\| accountAsked"), page);
-        Assert.DoesNotMatch(new Regex(@"setInterval|setTimeout\(\(\) => ask\('sync-account'"), page);
+        Assert.DoesNotMatch(new Regex(@"(setInterval|setTimeout)\(\(\) => ask\('sync-account'"), page);
+        // O único temporizador repetido da página é a conferência do kit de recuperação à vista (T5: pedido interno,
+        // sem rede, só enquanto as palavras estão no ecrã).
+        foreach (Match m in Regex.Matches(page, @"setInterval\("))
+            Assert.StartsWith("setInterval(() => post('sync-kit-open'", page[m.Index..], StringComparison.Ordinal);
     }
 
     [Fact]

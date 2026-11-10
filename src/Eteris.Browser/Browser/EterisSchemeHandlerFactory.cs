@@ -378,6 +378,40 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
                 Sync.SyncService.DeclineKit();
                 break;
+            case "/sync-kit-from-file":
+                // «Abrir o ficheiro do kit…» (ecrã de entrada): o Éteris lê as palavras do ficheiro (a página nunca as vê)
+                // e entra com elas.
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                return new VaultResourceHandler(async () =>
+                {
+                    var path = await WindowsVaultHost.PickKitOpenAsync(browserId).ConfigureAwait(false);
+                    if (path is null) return Vault.VaultReply.Json(new { ok = true, picked = false });
+                    if (!Sync.RecoveryKit.TryReadFile(path, p => new System.IO.FileInfo(p).Length, System.IO.File.ReadAllText, out var secret))
+                        return Vault.VaultReply.Json(new { ok = false, message = "Este ficheiro não é um kit de recuperação do Éteris." });
+                    string words;
+                    try
+                    {
+                        using var account = Eteris.Sync.Crypto.AccountSecret.FromBytes(secret);
+                        words = account.ToWords();
+                    }
+                    finally
+                    {
+                        System.Security.Cryptography.CryptographicOperations.ZeroMemory(secret);
+                    }
+                    Sync.SyncService.Act("join", a => a.JoinWithCodeAsync(words));
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            case "/sync-kit-complete":
+            {
+                // A palavra do kit que começa pelas letras escritas (a partir de 4).
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                var p = SyncForm.Parse(request).GetValueOrDefault("p");
+                return Json(new { ok = true, p, words = Sync.RecoveryKit.Completion(p) });
+            }
+            case "/sync-kit-open":
+                // A página confere de 2 em 2 s se o kit à vista continua aberto: só pergunta (nunca abre, fecha nem lê o kit).
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                return Json(new { ok = true, open = Sync.SyncService.OpenKit.IsOpen(browserId) });
             case "/sync-pair":
                 // «Aprovar noutro computador» e «Pedir outra vez». Com a conta substituída não pede (só «Foi eu», com a
                 // confirmação do Windows).
@@ -398,9 +432,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 break;
             case "/sync-join":
             {
-                // O código de recuperação vai no corpo de um POST (nunca no endereço).
+                // O kit de recuperação vai no corpo de um POST (nunca no endereço).
                 var form = SyncForm.Parse(request);
-                if (form.GetValueOrDefault("code") is not { Length: > 0 } code) return Json(new { ok = false, message = "Escreva o código de recuperação." });
+                if (form.GetValueOrDefault("code") is not { Length: > 0 } code) return Json(new { ok = false, message = "Escreva ou cole o kit de recuperação." });
                 Sync.SyncService.Act("join", agent => agent.JoinWithCodeAsync(code));
                 break;
             }

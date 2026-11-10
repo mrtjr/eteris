@@ -142,6 +142,11 @@
   .syncform .filename { color: var(--muted); font-size: 12.5px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .syncform.left { justify-content: flex-start; margin-top: 10px; }
   .stack { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  /* O kit de recuperação à vista: 24 palavras numeradas em quatro colunas. */
+  .kitwords { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 16px; margin: 10px 0 4px; padding-left: 28px;
+    font: 600 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  .kitactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  .kitwords[hidden] { display: none; }
   .stack[hidden], .item[hidden] { display: none; }
   .code.big { font-size: 22px; letter-spacing: .12em; text-align: center; max-width: 220px; }
   .syncalert { background: rgba(124, 92, 255, .1); }
@@ -459,17 +464,11 @@
             <span class="syncnote" id="syncPrivateNote" hidden>Numa janela privada a sincronização não está disponível e a conta não aparece: abra as Definições numa janela normal.</span>
             <span class="syncnote" id="googleNote"></span>
             <div class="code" id="googleUrl" hidden></div>
-            <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o código de recuperação ou outro computador)</small></label>
+            <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o kit de recuperação ou outro computador)</small></label>
             <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span></div>
           <button class="action" id="googleButton" aria-describedby="googleNote">Entrar com o Google</button>
         </div>
         <div class="syncbody" id="syncBody" hidden>
-          <div class="item syncalert" id="syncCodeItem" hidden>
-            <div class="label"><b>Código de recuperação — guarde-o agora</b><span>É a chave da sua conta de sincronização. Com este código abre-se também o cofre de palavras-passe (e os pagamentos e documentos, se os sincronizar). <strong>Sem este código e sem outro computador ligado, os dados na nuvem não se recuperam</strong>: nem a Google nem o Éteris os conseguem abrir. Guarde-o num lugar seguro ou em papel (não só no próprio cofre do Éteris). Só aparece até carregar em «Já guardei».</span>
-              <div class="code" id="syncCode" aria-label="Código de recuperação"></div>
-              <span class="syncnote" id="syncCodeNote" role="status" hidden></span></div>
-            <div class="stack"><button class="action" id="syncCodeCopy">Copiar</button><button class="action" id="syncCodeSaved">Já guardei</button></div>
-          </div>
           <div class="item" id="syncStateItem" hidden>
             <div class="label"><b>Estado</b><span id="syncState" role="status">—</span>
               <span class="syncnote" id="syncNotice" role="status" hidden></span></div>
@@ -495,14 +494,16 @@
             <div class="stack"><button class="action" id="syncPairConfirm" hidden>Sim</button><button class="action" id="syncPairDeny" hidden>Não</button><button class="action" id="syncPairAgain" hidden>Pedir outra vez</button><button class="action" id="syncPairCancel">Cancelar</button></div>
           </div>
           <div class="item" id="syncChooseItem" hidden>
-            <div class="label"><b>Este Google Drive já tem dados do Éteris</b><span>Junte este computador à sua conta de sincronização: aprove-o noutro computador onde o Éteris já sincroniza, ou use o código de recuperação. Os dados deste computador juntam-se aos da conta — nada se perde.</span>
+            <div class="label"><b>Este Google Drive já tem dados do Éteris</b><span>Junte este computador à sua conta de sincronização: aprove-o noutro computador onde o Éteris já sincroniza, ou use o kit de recuperação. Os dados deste computador juntam-se aos da conta — nada se perde.</span>
               <span class="syncnote">Perdeu o código e não tem outro computador ligado? Pode <a href="#syncDeleteItem" id="syncLostLink">apagar os dados do Éteris no Drive</a> e começar de novo com uma conta nova (perde-se o que só estava na nuvem; os dados deste computador ficam).</span>
-              <span class="syncnote" id="syncKitHelp">Para entrar sem o outro computador, use o seu <b>kit de recuperação</b>.</span>
+              <span class="syncnote" id="syncKitHelp">Para entrar sem o outro computador, use o seu <b>kit de recuperação</b> (24 palavras ou o código de 56 caracteres).</span>
               <button class="action" type="button" id="syncKitPaste">Colar o kit</button>
+              <button class="action" type="button" id="syncKitOpenFile">Abrir o ficheiro do kit…</button>
               <form class="syncform left" id="syncJoinForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
-                <input type="text" name="code" id="syncJoinCode" placeholder="Código de recuperação (14 grupos de 4)" spellcheck="false" aria-label="Código de recuperação">
-                <button class="action" type="submit" id="syncJoinButton">Usar o código de recuperação</button>
+                <input type="text" name="code" id="syncJoinCode" placeholder="Kit de recuperação (24 palavras ou o código antigo)" spellcheck="false" aria-label="Kit de recuperação">
+                <button class="action" type="submit" id="syncJoinButton">Usar o kit de recuperação</button>
               </form>
+              <span class="syncnote" id="syncJoinHint" role="status" hidden></span>
               <span class="syncnote" id="syncJoinNote" role="status" hidden></span></div>
             <button class="action" id="syncPair">Aprovar noutro computador</button>
           </div>
@@ -519,14 +520,35 @@
             <button class="action" id="syncNameChange">Mudar</button>
           </div>
           <div class="item" id="syncDevicesItem" hidden>
-            <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e aparece aqui um código de recuperação novo.</span>
+            <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e o kit de recuperação passa a ser outro: o antigo deixa de valer.</span>
               <ul class="devices" id="syncDevices"></ul>
               <span class="syncnote" id="syncDevicesNote" role="status" hidden></span></div>
           </div>
-          <div class="item" id="syncNewCodeItem" hidden>
-            <div class="label"><b>Código de recuperação</b><span>Perdeu o código, ou alguém o pode ter visto? Gere um novo: a conta muda de chave, o código antigo deixa de servir e os outros computadores continuam ligados sozinhos. O código novo aparece aqui uma vez.</span>
-              <span class="syncnote" id="syncNewCodeNote" role="status" hidden></span></div>
-            <button class="action" id="syncNewCode">Gerar um código novo…</button>
+          <!-- O kit de recuperação: vê-se (com a confirmação do Windows), guarda-se, imprime-se ou copia-se quando se
+               quiser. As palavras só existem aqui enquanto estão à vista. -->
+          <div class="item" id="syncKitItem" hidden>
+            <div class="label"><b>Kit de recuperação</b><span id="syncKitState" role="status"></span>
+              <span>O kit sozinho não abre nada: também é preciso entrar na sua conta Google. E a Google sozinha também não.</span>
+              <span>Quem tiver este kit e a sua conta Google abre também o cofre de palavras-passe (e os pagamentos e documentos, se os sincronizar).</span>
+              <span class="syncnote bad" id="syncKitAdvice" role="alert" hidden><span id="syncKitAdviceText"></span> Qualquer pessoa com acesso a este computador pode ver o kit.</span>
+              <ol class="kitwords" id="syncKitWords" hidden></ol>
+              <div id="syncKitOpen" hidden>
+                <span class="syncnote">Não fotografe com o telemóvel se as fotos forem para a nuvem, e não guarde no Google Drive: se ficar na mesma conta, a Google passa a ter a chave.</span>
+                <span class="syncnote">Não deixe este ficheiro neste computador: passe-o para uma pen ou imprima-o e apague-o daqui.</span>
+                <div class="kitactions">
+                  <button class="action" id="syncKitSave">Guardar como ficheiro…</button>
+                  <button class="action" id="syncKitPrint">Imprimir</button>
+                  <span class="syncnote">«Imprimir para PDF» cria um ficheiro com o kit: trate-o como o ficheiro do kit. Numa impressora partilhada, vá buscar a folha logo.</span>
+                  <button class="action" id="syncKitCopy">Copiar</button>
+                </div>
+              </div>
+              <div class="syncnote bad" id="syncKitWarn" role="alert" hidden><span id="syncKitWarnText"></span>
+                <div class="kitactions"><button class="action" id="syncKitElsewhere">Guardar noutro sítio</button><button class="action" id="syncKitAnyway">Guardar mesmo assim</button></div></div>
+              <button class="action" id="syncKitSaved" hidden>Já guardei o kit</button>
+              <span class="syncnote" id="syncKitNote" role="status" hidden></span>
+              <span class="syncnote">Perdeu o kit, ou alguém o pode ter visto? Gere um novo: a conta muda de chave, o kit antigo deixa de valer e os outros computadores continuam ligados sozinhos.</span>
+              <a href="#syncKitItem" class="syncnote" id="syncKitDecline" hidden>Não quero guardar o kit</a></div>
+            <div class="stack"><button class="action" id="syncKitShow">Ver o kit</button><button class="action" id="syncKitNew">Gerar um kit novo…</button></div>
           </div>
           <div class="item" id="syncTopicItem">
             <div class="label"><b id="syncTopicTitle">O que passa entre PCs</b><span id="syncTopicIntro"></span>
@@ -1012,6 +1034,92 @@
       $('syncPairAgain').hidden = !['timeUp', 'stillWaiting', 'refused', 'failed'].includes(guest);
       $('syncPairCancel').hidden = !(guest === 'waiting' || confirmed);
     };
+    // ---- o kit de recuperação -------------------------------------------------------------------------------------
+    // Um pedido POST num iframe próprio (sinkFor): os campos vão no corpo; no endereço só vai o testemunho.
+    const postTo = (path, fields, target) => {
+      const form = document.createElement('form');
+      form.method = 'post'; form.enctype = 'application/x-www-form-urlencoded'; form.hidden = true; form.target = target;
+      form.action = `eteris://${location.host}/${path}?t=${data.token}`;
+      for (const [name, value] of Object.entries(fields || {})) {
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = name; input.value = value;
+        form.append(input);
+      }
+      document.body.append(form);
+      form.submit();
+      setTimeout(() => form.remove(), 1000);
+    };
+    const post = (path, fields, handler) => postTo(path, fields, sinkFor(handler).name);
+    // Enquanto as palavras estão à vista, confere de 2 em 2 s se o kit continua aberto do lado do Éteris (a aba saiu da
+    // frente, a janela fechou, 5 min, «Sair», cadeia nova): se não, as palavras saem do ecrã.
+    const KIT_CHECK = 2000;
+    const KIT_STALE = 'O seu kit de recuperação antigo deixou de valer (um computador foi removido). Guarde o novo.';
+    const KIT_DECLINE = 'Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera';
+    let kitTimer = 0, kitCheck = 0, kitShownId = null, kitAck = false, kitKept = false, kitDeclineArmed = 0, kitNewArmed = 0;
+    const kitWordsShown = () => !$('syncKitWords').hidden;
+    // As palavras só existem no ecrã enquanto estão à vista: um só sítio que as tira (e, com askHide, fecha o kit no
+    // processo).
+    const hideKitWords = askHide => {
+      const shown = kitWordsShown();
+      $('syncKitWords').replaceChildren();
+      $('syncKitWords').hidden = true;
+      $('syncKitOpen').hidden = true;
+      $('syncKitWarn').hidden = true;
+      $('syncKitShow').textContent = 'Ver o kit';
+      clearTimeout(kitTimer); clearInterval(kitCheck);
+      kitTimer = 0; kitCheck = 0; kitShownId = null;
+      if (askHide && shown) post('sync-kit-hide', {}, () => {});
+    };
+    const showKitWords = r => {
+      const list = $('syncKitWords');
+      list.replaceChildren(...r.words.split(' ').map(word => { const li = document.createElement('li'); li.textContent = word; return li; }));
+      list.hidden = false;
+      $('syncKitOpen').hidden = false;
+      $('syncKitShow').textContent = 'Esconder';
+      kitShownId = r.id;
+      clearTimeout(kitTimer); clearInterval(kitCheck);
+      kitTimer = setTimeout(() => hideKitWords(true), (r.seconds || 300) * 1000);
+      kitCheck = setInterval(() => post('sync-kit-open', {}, r => { if (!r || !r.open) hideKitWords(false); }), KIT_CHECK);
+    };
+    const kitText = kit => kit.state === 'stale' ? KIT_STALE : kit.state === 'saved' ? 'Já guardou este kit.'
+      : kit.declined ? 'Escolheu não guardar o kit: sem este computador, a cópia na nuvem não se recupera.' : 'Ainda não guardou este kit.';
+    const paintKit = (kit, d) => {
+      show('syncKitItem', !!kit);
+      // Sem kit, ou outro kit (cadeia nova): as palavras que estavam à vista saem.
+      if (kitWordsShown() && (!kit || kit.id !== kitShownId)) hideKitWords(true);
+      if (!kit) return;
+      const state = $('syncKitState');
+      const key = kit.id + '|' + kitText(kit);
+      if (state.dataset.key !== key) {
+        state.dataset.key = key;
+        const id = document.createElement('b'); id.textContent = kit.id;
+        state.replaceChildren('O seu kit atual termina em ', id, '. ' + kitText(kit));
+      }
+      // «Já guardei o kit» só depois de imprimir ou copiar, enquanto não estiver guardado.
+      $('syncKitSaved').hidden = !(kitKept && kit.state !== 'saved');
+      // «Não quero guardar o kit»: só com um computador, por guardar e ainda não recusado.
+      $('syncKitDecline').hidden = !(kit.state !== 'saved' && !kit.declined && kit.devices <= 1);
+      if (msg0(d, 'code')) note($('syncKitNote'), msg0(d, 'code'), true);
+    };
+    // Depois de imprimir ou copiar: o botão discreto «Já guardei o kit» (não marca nada sozinho).
+    const kept = () => {
+      kitKept = true;
+      const kit = lastState && lastState.sync && lastState.sync.kit;
+      $('syncKitSaved').hidden = !(kit && kit.state !== 'saved');
+    };
+    const kitReply = r => {
+      if (!r) return;
+      if (r.closed) { hideKitWords(false); note($('syncKitNote'), r.message, true); return; }
+      if (!r.ok) { note($('syncKitNote'), r.message || 'Pedido recusado.', true); return; }
+      if (r.warn) {
+        $('syncKitWarnText').textContent = r.warn;
+        $('syncKitWarn').hidden = false;
+        $('syncKitElsewhere').focus();
+        return;
+      }
+      $('syncKitWarn').hidden = true;
+      if (r.state) paint(r.state);
+    };
     const paintSync = d => {
       const s = d.sync || { phase: 'off' };
       const phase = s.phase;
@@ -1050,12 +1158,8 @@
       $('syncNow').disabled = !!s.running;
       // A autorização da Google expirou ou foi retirada: não passa sozinho — entrar outra vez (sem sair nem mexer na chave).
       show('syncReauth', !!s.needsSignIn && !d.google.folder);
-      // Gerar um código novo (com a conta ligada e sem um código ainda por guardar).
-      show('syncNewCodeItem', d.enabled && phase === 'on' && !s.code);
-      note($('syncNewCodeNote'), msg0(d, 'code'), true);
-      // Código de recuperação (só no aparelho que criou a conta, ou depois de remover um aparelho).
-      show('syncCodeItem', d.enabled && !!s.code);
-      if (s.code && $('syncCode').textContent !== s.code) $('syncCode').textContent = s.code;
+      // O kit de recuperação (sem as palavras: essas só chegam por «Ver o kit», com a confirmação do Windows).
+      paintKit(d.enabled && phase === 'on' ? s.kit : null, d);
       // Entrar num aparelho novo. O botão volta quando a junção acabou: deu certo (a fase muda), deu erro (a mensagem
       // «join»), ou a ronda acabou sem nada (por exemplo sem rede). O código só sai do campo quando deu certo.
       const msg = d.message || null;
@@ -1230,7 +1334,7 @@
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
       addEventListener(type, e => { touched = true; lastGesture = Date.now(); if (!isSignOut(e)) { askAccount(); askLook(); } }, { passive: true, capture: true });
     new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); askLook(); }).observe(googleButton);
-    // «Sair» com «apagar a chave» e o código de recuperação ainda por guardar: a conta ficava irrecuperável se este for o
+    // «Sair» com «apagar a chave» e o kit de recuperação ainda por guardar: a conta ficava irrecuperável se este for o
     // único computador. Pede confirmação (2.º clique, meio segundo depois, nos 8 s seguintes).
     let signOutArmed = 0;
     const disarmSignOut = () => {
@@ -1243,12 +1347,12 @@
       const state = googleButton.dataset.state;
       if (state === 'signedIn') {
         const forget = $('syncForget').checked;
-        const codePending = !!(lastState && lastState.sync && lastState.sync.code);
-        if (forget && codePending) {
+        const kitPending = !!(lastState && lastState.sync && lastState.sync.kit && lastState.sync.kit.state !== 'saved');
+        if (forget && kitPending) {
           if (!signOutArmed) {
             signOutArmed = Date.now();
             googleButton.textContent = 'Confirmar: sair e apagar a chave';
-            note($('syncForgetNote'), 'O código de recuperação ainda não foi guardado. Se este for o único computador ligado, sair e apagar a chave torna os dados na nuvem irrecuperáveis. Guarde o código primeiro, ou carregue outra vez para confirmar.', true);
+            note($('syncForgetNote'), 'O kit de recuperação ainda não foi guardado. Se este for o único computador ligado, sair e apagar a chave torna os dados na nuvem irrecuperáveis. Guarde o kit primeiro, ou carregue outra vez para confirmar.', true);
             setTimeout(() => { if (signOutArmed && Date.now() - signOutArmed >= 7900) disarmSignOut(); }, 8000);
             return;
           }
@@ -1269,20 +1373,87 @@
     });
     $('syncNow').addEventListener('click', () => askGoogle('sync-now'));
     $('syncReauth').addEventListener('click', () => askGoogle('sync-google'));
-    let newCodeArmed = 0;
-    $('syncNewCode').addEventListener('click', () => {
-      const button = $('syncNewCode');
-      if (!newCodeArmed) {
-        newCodeArmed = Date.now();
-        button.textContent = 'Confirmar: gerar um código novo';
-        setTimeout(() => { if (newCodeArmed && Date.now() - newCodeArmed >= 7900) { newCodeArmed = 0; button.textContent = 'Gerar um código novo…'; } }, 8000);
+    // «Gerar um kit novo…» (dois cliques): a conta muda de chave e o kit fica por guardar (não se mostra sozinho).
+    $('syncKitNew').addEventListener('click', () => {
+      const button = $('syncKitNew');
+      if (!kitNewArmed) {
+        kitNewArmed = Date.now();
+        button.textContent = 'Confirmar: gerar um kit novo';
+        setTimeout(() => { if (kitNewArmed && Date.now() - kitNewArmed >= 7900) { kitNewArmed = 0; button.textContent = 'Gerar um kit novo…'; } }, 8000);
         return;
       }
-      if (Date.now() - newCodeArmed < ARM_GUARD) return;
-      newCodeArmed = 0; button.textContent = 'Gerar um código novo…';
-      focusAfterPaint = 'syncCodeSaved';
+      if (Date.now() - kitNewArmed < ARM_GUARD) return;
+      kitNewArmed = 0; button.textContent = 'Gerar um kit novo…';
+      focusAfterPaint = 'syncKitShow';
       askGoogle('sync-new-code');
     });
+    // «Ver o kit» pede sempre a confirmação do Windows. Conta do Windows sem proteção: a 1.ª resposta é só o conselho;
+    // carregar outra vez mostra o kit. «Esconder» tira as palavras e fecha o kit no Éteris.
+    $('syncKitShow').addEventListener('click', () => {
+      if (kitWordsShown()) { hideKitWords(true); return; }
+      note($('syncKitNote'), '');
+      post('sync-kit-show', kitAck ? { ack: '1' } : {}, r => {
+        if (!r || !r.ok) { kitAck = false; note($('syncKitNote'), (r && r.message) || 'Pedido recusado.', true); return; }
+        $('syncKitAdviceText').textContent = r.advice || '';
+        $('syncKitAdvice').hidden = !r.advice;
+        if (!r.words) { kitAck = true; return; }
+        kitAck = false;
+        showKitWords(r);
+      });
+    });
+    // Guardar: o diálogo do Windows (começa em Transferências); numa pasta que pode ir para a nuvem, o Éteris avisa antes.
+    $('syncKitSave').addEventListener('click', () => { $('syncKitWarn').hidden = true; post('sync-kit-save', {}, kitReply); });
+    $('syncKitElsewhere').addEventListener('click', () => { $('syncKitWarn').hidden = true; post('sync-kit-save', {}, kitReply); });
+    $('syncKitAnyway').addEventListener('click', () => { $('syncKitWarn').hidden = true; post('sync-kit-save-anyway', {}, kitReply); });
+    // Copiar: pela área de transferência segura do Éteris (fora do histórico e da nuvem do Windows; sai ao fim de 1 min).
+    $('syncKitCopy').addEventListener('click', () => post('sync-kit-copy', {}, r => {
+      kitReply(r);
+      if (r && r.ok) { note($('syncKitNote'), r.message); kept(); }
+    }));
+    // Imprimir: o documento do kit num iframe próprio (não o dos pedidos, que o leria como resposta), e a impressão dele.
+    $('syncKitPrint').addEventListener('click', () => {
+      if (!kitWordsShown()) return;
+      const frame = document.createElement('iframe');
+      frame.name = 'syncKitPrint' + (++sinks);
+      frame.style.cssText = 'position: fixed; width: 0; height: 0; border: 0';
+      let printed = false;
+      frame.addEventListener('load', () => {
+        const doc = frame.contentDocument;
+        if (printed || !doc || !doc.body || !doc.body.textContent.trim()) return; // o about:blank inicial
+        printed = true;
+        if (!doc.body.hasAttribute('data-eteris-kit')) {
+          frame.remove();
+          hideKitWords(false);
+          note($('syncKitNote'), 'O kit foi escondido. Carregue em «Ver o kit» outra vez.', true);
+          return;
+        }
+        frame.contentWindow.addEventListener('afterprint', () => frame.remove());
+        setTimeout(() => frame.remove(), 60000);
+        frame.contentWindow.print();
+        kept();
+      });
+      document.body.append(frame);
+      postTo('sync-kit-print', {}, frame.name);
+    });
+    $('syncKitSaved').addEventListener('click', () => post('sync-kit-saved', {}, d => { kitKept = false; paint(d); }));
+    // «Não quero guardar o kit» (dois cliques): o 1.º mostra o que se aceita; o 2.º, meio segundo depois e nos 8 s
+    // seguintes, recusa (o lembrete acaba; o kit continua a poder ver-se e guardar-se).
+    $('syncKitDecline').addEventListener('click', e => {
+      e.preventDefault();
+      const link = $('syncKitDecline');
+      if (!kitDeclineArmed) {
+        kitDeclineArmed = Date.now();
+        link.textContent = KIT_DECLINE;
+        setTimeout(() => { if (kitDeclineArmed && Date.now() - kitDeclineArmed >= 7900) { kitDeclineArmed = 0; link.textContent = 'Não quero guardar o kit'; } }, 8000);
+        return;
+      }
+      if (Date.now() - kitDeclineArmed < ARM_GUARD) return;
+      kitDeclineArmed = 0; link.textContent = 'Não quero guardar o kit';
+      post('sync-kit-decline', {}, paint);
+    });
+    // As palavras nunca ficam no ecrã com o kit fechado: a aba escondida, ou a página a sair.
+    document.addEventListener('visibilitychange', () => { if (document.hidden && kitWordsShown()) hideKitWords(true); });
+    addEventListener('pagehide', () => hideKitWords(true));
     // «Foi eu»: o Éteris pede a confirmação do Windows quando há segredos ligados (a resposta chega depois dela). Nunca
     // recebe o foco. «Não fui eu» não pede nada: leva a «Retirar o acesso do Éteris».
     $('syncReplacedJoin').addEventListener('click', () => askGoogle('sync-replaced-join'));
@@ -1307,25 +1478,57 @@
     });
     // «Colar o kit»: a página não lê a área de transferência; o foco vai para o campo e a pessoa cola com Ctrl+V.
     $('syncKitPaste').addEventListener('click', () => $('syncJoinCode').focus());
-    $('syncCodeSaved').addEventListener('click', () => askGoogle('sync-code-saved'));
-    $('syncCodeCopy').addEventListener('click', () => {
-      // A página interna não tem a API da área de transferência: copia pela seleção.
-      const area = document.createElement('textarea');
-      area.value = $('syncCode').textContent; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0';
-      document.body.append(area); area.select();
-      const ok = document.execCommand('copy');
-      area.remove();
-      note($('syncCodeNote'), ok ? '✓ Copiado. Guarde-o já num sítio seguro.' : 'Não foi possível copiar: selecione o código e copie-o.', !ok);
+    // «Abrir o ficheiro do kit…»: o Éteris lê as palavras do ficheiro que gerou (o diálogo é do Windows; a página nunca
+    // vê as palavras) e entra com elas.
+    $('syncKitOpenFile').addEventListener('click', () => {
+      if (joining) return;
+      post('sync-kit-from-file', {}, d => {
+        if (d && d.google) {
+          joining = true; joinSent = Date.now(); quickUntil = Date.now() + 15000;
+          note($('syncJoinNote'), 'A abrir a conta e a juntar os dados…');
+          paint(d);
+        } else if (!(d && d.ok)) note($('syncJoinNote'), (d && d.message) || 'Pedido recusado.', true);
+      });
+    });
+    // Completar a palavra a partir das 4 primeiras letras: «Tab» ou espaço trocam a ficha pela palavra inteira.
+    const joinCode = $('syncJoinCode');
+    let hintTimer = 0, hintWord = null, hintToken = null;
+    const clearHint = () => { hintWord = null; hintToken = null; note($('syncJoinHint'), ''); };
+    const lastToken = () => {
+      const value = joinCode.value;
+      if (joinCode.selectionStart !== value.length || joinCode.selectionEnd !== value.length) return null;
+      const m = /(\p{L}+)$/u.exec(value);
+      return m && m[1].length >= 4 ? m[1] : null;
+    };
+    joinCode.addEventListener('input', () => {
+      clearHint(); clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => {
+        const token = lastToken();
+        if (!token) return;
+        post('sync-kit-complete', { p: token }, r => {
+          if (r && r.words && r.words.length === 1 && lastToken() === token && r.words[0].length > token.length) {
+            hintWord = r.words[0]; hintToken = token;
+            note($('syncJoinHint'), `${hintWord} — Tab ou espaço completa`);
+          }
+        });
+      }, 150);
+    });
+    joinCode.addEventListener('keydown', e => {
+      if (!hintWord || (e.key !== 'Tab' && e.key !== ' ') || lastToken() !== hintToken) return;
+      e.preventDefault();
+      joinCode.value = joinCode.value.slice(0, joinCode.value.length - hintToken.length) + hintWord + ' ';
+      clearHint();
     });
     const joinForm = $('syncJoinForm');
     joinForm.action = `eteris://${location.host}/sync-join?t=${data.token}`;
     joinForm.addEventListener('submit', e => {
       e.preventDefault();
-      if (!$('syncJoinCode').value.trim()) { note($('syncJoinNote'), 'Escreva o código de recuperação.', true); return; }
+      if (!$('syncJoinCode').value.trim()) { note($('syncJoinNote'), 'Escreva ou cole o kit de recuperação.', true); return; }
       if (joining) return;
       joining = true; joinSent = Date.now();
       quickUntil = Date.now() + 15000;
       $('syncJoinButton').disabled = true;
+      clearHint();
       note($('syncJoinNote'), 'A abrir a conta e a juntar os dados…');
       const seq = ++googleAsked;
       joinForm.target = sinkFor(d => {
@@ -1333,7 +1536,7 @@
         else { joining = false; $('syncJoinButton').disabled = false; note($('syncJoinNote'), d.message || 'Pedido recusado.', true); }
       }).name;
       joinForm.submit();
-      // O código fica no campo até a junção dar certo (uma gralha corrige-se sem escrever os 56 carateres outra vez).
+      // O kit fica no campo até a junção dar certo (uma gralha corrige-se sem escrever o kit outra vez).
     });
     // «Apagar…»: a confirmação aparece por baixo, com «Cancelar» no lugar onde se carregou (um duplo clique cai no
     // «Cancelar», não no «Sim»), não aceita um clique no primeiro meio segundo e desarma-se sozinha ao fim de 10 s.

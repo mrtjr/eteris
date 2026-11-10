@@ -258,7 +258,8 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Contains("Documentos de identificação", html);
         Assert.Contains("id=\"exportSecrets\"", html);
         Assert.Contains("Incluir palavras-passe, pagamentos e documentos", html);
-        Assert.Contains("Com este código abre-se também o cofre de palavras-passe", html);
+        Assert.Contains("abre também o cofre de palavras-passe", html);
+        Assert.Contains("esqueci-me do kit", SyncChoices.Intro);
         // Aprovar um computador novo faz-se na barra da janela, escrevendo o código (0.2.15, T8): as Definições só
         // dizem onde responder e já não têm caminho para aprovar.
         Assert.Contains("Responda na barra que aparece no cimo da janela do Éteris", html);

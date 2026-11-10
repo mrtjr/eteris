@@ -159,7 +159,7 @@ public class GuestPairingModelTests
         Assert.Equal("Pedir outra vez", GuestPairingModel.AskAgain);
         Assert.Equal("O Éteris tem de estar aberto no outro computador.", GuestPairingModel.MustBeOpen);
         Assert.Equal("Não tenho o outro computador à mão", GuestPairingModel.NoOther);
-        Assert.Equal("Para entrar sem o outro computador, use o seu kit de recuperação.", GuestPairingModel.UseKit);
+        Assert.Equal("Para entrar sem o outro computador, use o seu kit de recuperação (24 palavras ou o código de 56 caracteres).", GuestPairingModel.UseKit);
         Assert.Equal("Colar o kit", GuestPairingModel.PasteKit);
         var html = SettingsPage.Render(new UserSettings());
         // O que a página mostra a negrito vem entre marcas: compara-se o texto sem elas.
@@ -175,7 +175,7 @@ public class GuestPairingModelTests
         Assert.DoesNotContain("O outro computador mostra este código", html, StringComparison.Ordinal);
     }
 
-    // «Começar do zero…» e as 24 palavras não são desta tarefa (T12 e T5d); a saída que já existe fica.
+    // «Começar do zero…» não é desta tarefa (T12); a saída que já existe fica. (As 24 palavras entraram com a T5d.)
     [Fact]
     public void StartOver_IsNotOfferedByThisTask()
     {
@@ -185,7 +185,6 @@ public class GuestPairingModelTests
         foreach (var text in new[] { page, model })
         {
             Assert.DoesNotContain("Começar do zero", text, StringComparison.Ordinal);
-            Assert.DoesNotContain("24 palavras", text, StringComparison.Ordinal);
         }
         Assert.Contains("syncLostLink", page, StringComparison.Ordinal);
         Assert.Contains("Perdeu o código e não tem outro computador ligado?", page, StringComparison.Ordinal);

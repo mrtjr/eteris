@@ -1047,6 +1047,19 @@ internal sealed class WindowsVaultHost : IVaultHost
         return (Owner(browserId) is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;
     }).Task;
 
+    // «Abrir o ficheiro do kit…» no ecrã de entrada da sincronização.
+    internal static Task<string?> PickKitOpenAsync(int browserId) => Ui.InvokeAsync(() =>
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Abrir o ficheiro do kit",
+            Filter = "Kit de recuperação (*.html)|*.html|Todos os ficheiros (*.*)|*.*",
+            CheckFileExists = true,
+            InitialDirectory = Downloads.DownloadPaths.DownloadsFolder(),
+        };
+        return (Owner(browserId) is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;
+    }).Task;
+
     public Task<bool> ConfirmAsync(int browserId, string title, string message) => Ui.InvokeAsync(() =>
     {
         var answer = Owner(browserId) is { } owner

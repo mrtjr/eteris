@@ -16,7 +16,7 @@ internal static class SyncChoices
     public sealed record Row(string Id, string Title, string Text, bool? On, bool Ask);
 
     public const string Intro =
-        "Tudo é cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que recebe: desligar uma linha não apaga nada. Quem perder o código de recuperação e todos os computadores perde estes dados: não há «esqueci-me do código».";
+        "Tudo é cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que recebe: desligar uma linha não apaga nada. Quem perder o kit de recuperação e todos os computadores perde estes dados: não há «esqueci-me do kit».";
 
     private static readonly IReadOnlyDictionary<string, (string Title, string Text)> Texts = new Dictionary<string, (string, string)>(StringComparer.Ordinal)
     {

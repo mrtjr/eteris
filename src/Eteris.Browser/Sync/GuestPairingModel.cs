@@ -32,8 +32,8 @@ internal static class GuestPairingModel
     public const string StillWaiting = "Ainda à espera?";                                                   // G6
     public const string AskAgain = "Pedir outra vez";
     public const string NoOther = "Não tenho o outro computador à mão";                                     // G8 (ligação)
-    // G8 sem o número de palavras (a T5d repõe a frase inteira quando as palavras entrarem).
-    public const string UseKit = "Para entrar sem o outro computador, use o seu kit de recuperação.";
+    // G8, à letra do plano (as 24 palavras da T6 e o código antigo).
+    public const string UseKit = "Para entrar sem o outro computador, use o seu kit de recuperação (24 palavras ou o código de 56 caracteres).";
     public const string PasteKit = "Colar o kit";
 
     // G3: a pergunta por baixo do código.

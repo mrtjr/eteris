@@ -164,6 +164,34 @@ internal static class RecoveryKit
         }
     }
 
+    // ---- o ecrã de entrada ------------------------------------------------------------------------------------------
+
+    // A palavra que o campo do kit pode completar: só a partir das 4 primeiras letras (dobradas: sem acentos nem
+    // maiúsculas), nunca com mais de 16 caracteres; no máximo 2 (a página só sugere quando há uma).
+    public static IReadOnlyList<string> Completion(string? typed)
+    {
+        if (typed is null || typed.Length > 16) return [];
+        var letters = typed.Normalize(NormalizationForm.FormD).Count(char.IsLetter);
+        if (letters < 4) return [];
+        return RecoveryCode.Complete(typed, 2);
+    }
+
+    // «Abrir o ficheiro do kit…»: o segredo do ficheiro que o Éteris gerou (no máximo 1 MiB); um ficheiro que não é um
+    // kit, ou que não se lê, dá false.
+    public static bool TryReadFile(string path, Func<string, long> sizeOf, Func<string, string> readText, out byte[] secret)
+    {
+        secret = [];
+        try
+        {
+            if (sizeOf(path) > MaxFileBytes) return false;
+            return RecoveryCode.TryReadKit(readText(path), out secret);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     // A gravação real: UTF-8 sem BOM, no caminho escolhido.
     public static void WriteFile(string path, string html) => File.WriteAllText(path, html, new UTF8Encoding(false));
 }

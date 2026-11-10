@@ -311,8 +311,16 @@ public class RecoveryKitTests
     public void KitRoutes_ArePostOnly_AndBehindTheGate()
     {
         var factory = Source("Browser", "EterisSchemeHandlerFactory.cs");
-        foreach (var route in new[] { "show", "hide", "copy", "save", "save-anyway", "print", "saved", "later", "decline" })
+        foreach (var route in new[] { "show", "hide", "copy", "save", "save-anyway", "print", "saved", "later", "decline", "from-file", "complete", "open" })
             Assert.Contains($"case \"/sync-kit-{route}\"", factory);
+        Assert.Equal(12, Count(factory, "case \"/sync-kit-"));
+        // «Ainda está aberto?» só pergunta: não abre, não fecha, não lê o kit.
+        var open = factory[factory.IndexOf("case \"/sync-kit-open\"", StringComparison.Ordinal)..];
+        open = open[..open.IndexOf("case \"", 10, StringComparison.Ordinal)];
+        Assert.Contains("OpenKit.IsOpen(browserId)", open);
+        Assert.DoesNotContain("RevealKit", open);
+        Assert.DoesNotContain("OpenKit.Open(", open);
+        Assert.DoesNotContain("OpenKit.Close(", open);
         Assert.DoesNotContain("/sync-code-saved", factory);
         Assert.DoesNotContain("AcknowledgeCode", factory);
         Assert.Equal(Count(factory, "case \"/sync-kit-"),
@@ -364,5 +372,111 @@ public class RecoveryKitTests
         Assert.Contains("InitialDirectory = Downloads.DownloadPaths.DownloadsFolder()", body);
         Assert.DoesNotContain("MyDocuments", body);
         Assert.DoesNotContain("PickKit", Source("Vault", "VaultRoutes.cs"));
+    }
+
+    // ---- a página e o ecrã de entrada (T5d) ---------------------------------------------------------------------------
+
+    private static string Page() => Source("Browser", "settings.html");
+
+    private static int At(string text, string what)
+    {
+        var at = text.IndexOf(what, StringComparison.Ordinal);
+        Assert.True(at >= 0, "não encontrei " + what);
+        return at;
+    }
+
+    [Fact]
+    public void Settings_HasTheKitSection_AndNoLongerCopiesFromThePage()
+    {
+        var page = Page();
+        foreach (var text in new[]
+                 {
+                     "id=\"syncKitItem\"", "id=\"syncKitShow\"", "id=\"syncKitSave\"", "id=\"syncKitPrint\"", "id=\"syncKitCopy\"",
+                     "id=\"syncKitSaved\"", "id=\"syncKitNew\"", "O seu kit atual termina em",
+                     "O kit sozinho não abre nada: também é preciso entrar na sua conta Google. E a Google sozinha também não.",
+                     "Não fotografe com o telemóvel", RecoveryKit.KeepOffThisComputer, RecoveryKit.UnprotectedNote, RecoveryKit.PrintNote,
+                     "Guardar noutro sítio", "Guardar mesmo assim", "sync-kit-show", "sync-kit-save-anyway", "sync-kit-print",
+                     "visibilitychange", "document.hidden", "sync-kit-open", "KIT_CHECK = 2000", "setInterval(",
+                 })
+            Assert.Contains(text, page);
+        Assert.True(At(page, "id=\"syncKitAdvice\"") < At(page, RecoveryKit.UnprotectedNote));
+        Assert.True(At(page, RecoveryKit.UnprotectedNote) < At(page, "id=\"syncKitWords\""));
+        Assert.True(At(page, "id=\"syncKitPrint\"") < At(page, RecoveryKit.PrintNote));
+        Assert.True(At(page, RecoveryKit.PrintNote) < At(page, "id=\"syncKitCopy\""));
+        foreach (var text in new[]
+                 {
+                     "execCommand('copy')", "syncCodeItem", "syncCodeSaved", "syncCodeCopy", "syncNewCodeItem", "syncNewCode'", "sync-code-saved",
+                     "!s.code", "lastState.sync.code", ">Já guardei<", "Código de recuperação — guarde-o agora", "Gerar um código novo",
+                 })
+            Assert.DoesNotContain(text, page);
+        Assert.Equal("Qualquer pessoa com acesso a este computador pode ver o kit.", RecoveryKit.UnprotectedNote);
+        Assert.Equal("«Imprimir para PDF» cria um ficheiro com o kit: trate-o como o ficheiro do kit. Numa impressora partilhada, vá buscar a folha logo.",
+            RecoveryKit.PrintNote);
+        Assert.Equal("Não deixe este ficheiro neste computador: passe-o para uma pen ou imprima-o e apague-o daqui.", RecoveryKit.KeepOffThisComputer);
+    }
+
+    [Fact]
+    public void Settings_SignOutGuard_UsesTheKit()
+    {
+        var page = Page();
+        Assert.Contains("lastState.sync.kit.state !== 'saved'", page);
+        Assert.Contains("O kit de recuperação ainda não foi guardado.", page);
+        Assert.DoesNotContain("codePending", page);
+    }
+
+    [Fact]
+    public void Completion_OnlyFromFourLetters()
+    {
+        Assert.Equal(["abacate"], RecoveryKit.Completion("abac"));
+        Assert.Equal(["abacate"], RecoveryKit.Completion("ABÁC"));
+        foreach (var typed in new[] { "aba", null, "", "ab1c", new string('a', 17) })
+            Assert.Empty(RecoveryKit.Completion(typed));
+    }
+
+    [Fact]
+    public void EntryScreen_OpensTheKitFile_AndCompletesWords()
+    {
+        var page = Page();
+        foreach (var text in new[] { "id=\"syncKitOpenFile\"", "Abrir o ficheiro do kit…", "sync-kit-from-file", "id=\"syncJoinHint\"", "sync-kit-complete" })
+            Assert.Contains(text, page);
+        var factory = Source("Browser", "EterisSchemeHandlerFactory.cs");
+        Assert.Contains("RecoveryKit.TryReadFile(", factory);
+        Assert.Contains("RecoveryKit.Completion(", factory);
+        Assert.Contains("PickKitOpenAsync(", factory);
+    }
+
+    [Fact]
+    public void KitFile_TooBigOrNotAKit_IsRefused_AndAKitIsRead()
+    {
+        var reads = 0;
+        Assert.False(RecoveryKit.TryReadFile("k.html", _ => RecoveryKit.MaxFileBytes + 1, _ => { reads++; return Phrase; }, out _));
+        Assert.Equal(0, reads);
+        Assert.False(RecoveryKit.TryReadFile("k.html", _ => 10, _ => "uma página qualquer", out _));
+        Assert.False(RecoveryKit.TryReadFile("k.html", _ => 10, _ => throw new IOException("ocupado"), out _));
+        Assert.False(RecoveryKit.TryReadFile("k.html", _ => throw new UnauthorizedAccessException(), _ => Phrase, out _));
+        using var s = AccountSecret.Create();
+        var html = RecoveryKit.Html(s.ToWords(), s.KitId, Day);
+        Assert.True(RecoveryKit.TryReadFile("k.html", _ => html.Length, _ => html, out var secret));
+        using var back = AccountSecret.FromBytes(secret);
+        Assert.Equal(s.ChainId, back.ChainId);
+    }
+
+    // O ecrã de entrada fala do kit (a T5d é a dona destes textos) e G8 é a frase do plano.
+    [Fact]
+    public void EntryScreen_SaysKit_AndG8IsThePlanText()
+    {
+        var page = Page();
+        foreach (var text in new[] { "Kit de recuperação (24 palavras ou o código antigo)", "Usar o kit de recuperação", "ou use o kit de recuperação" })
+            Assert.Contains(text, page);
+        foreach (var text in new[] { "Código de recuperação (14 grupos de 4)", "Usar o código de recuperação", "Escreva o código de recuperação." })
+            Assert.DoesNotContain(text, page);
+        // Até à T12c, que retira a nota syncLostLink e esta afirmação.
+        foreach (var text in new[] { "id=\"syncKitHelp\"", "id=\"syncKitPaste\"", "id=\"syncJoinButton\"", "id=\"syncLostLink\"", "method=\"post\"" })
+            Assert.Contains(text, page);
+        Assert.Equal("Para entrar sem o outro computador, use o seu kit de recuperação (24 palavras ou o código de 56 caracteres).", GuestPairingModel.UseKit);
+        // Na página, «kit de recuperação» vai a negrito: as duas metades da frase, antes e depois.
+        Assert.Contains("Para entrar sem o outro computador, use o seu <b>kit de recuperação</b> (24 palavras ou o código de 56 caracteres).", page);
+        Assert.Contains("Escreva ou cole o kit de recuperação.", page);
+        Assert.Contains("Escreva ou cole o kit de recuperação.", Source("Browser", "EterisSchemeHandlerFactory.cs"));
     }
 }
