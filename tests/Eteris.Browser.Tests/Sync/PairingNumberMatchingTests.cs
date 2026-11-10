@@ -471,6 +471,48 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.Equal(1, BadCount(casa));
     }
 
+    // As sessões acabadas só ficam em memória enquanto o pedido ainda pode voltar a aparecer: cada vez que o 0-request
+    // aparece outra vez (reescrito com uma hora nova) a contagem recomeça; Lifetime + ClockSkew sem o ver, sai.
+    [Fact]
+    public async Task EndedSessions_AreForgotten_OnceTheRequestCanNoLongerBePending()
+    {
+        var casa = await HostAsync();
+        var session = await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        await casa.Agent.RefuseAsync(session);
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido");
+        foreach (var path in await Folder.ListAsync(SyncPaths.Pairing(session)))
+            if (!path.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal)) await Folder.DeleteAsync(path);
+        Assert.Equal(1, Ended(casa));
+
+        // 11 e 20 minutos depois, o pedido reescrito com a hora do momento: nunca respondido (aos 20 já passaram mais de
+        // Lifetime + ClockSkew desde que acabou, mas foi visto aos 11).
+        foreach (var minutes in new[] { 11, 9 })
+        {
+            _now += (long)TimeSpan.FromMinutes(minutes).TotalMilliseconds;
+            await Folder.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.Request, Json.Bytes(new PairingMessage { CreatedMs = _now }));
+            Assert.Equal([session], await PairingRequests.PendingAsync(Folder, Now));
+            await casa.Agent.CheckRequestsAsync();
+            await Task.Delay(100);
+            Assert.Equal(0, casa.Agent.Status.AnsweringSinceMs);
+            Assert.False(await HasStep(session, PairingProtocol.HostKey));
+            Assert.Equal(1, Ended(casa));
+        }
+
+        // Mais 13 minutos: o pedido já não pode estar pendente e a sessão sai da memória.
+        _now += (long)TimeSpan.FromMinutes(13).TotalMilliseconds;
+        Assert.Empty(await PairingRequests.PendingAsync(Folder, Now));
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Equal(0, Ended(casa));
+        Assert.Equal(1, BadCount(casa));
+    }
+
+    private static int Ended(Device device)
+    {
+        var ended = typeof(SyncAgent).GetField("_ended", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(device.Agent)!;
+        return (int)ended.GetType().GetProperty("Count")!.GetValue(ended)!;
+    }
+
     // Um pedido escrito à mão a que a Casa responde e cujo passo 2 (também escrito à mão) não confere.
     private async Task AnsweredThenForgedAsync(Device casa, byte[] guestKeyFile)
     {

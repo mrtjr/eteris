@@ -128,8 +128,10 @@ public sealed class SyncAgent
     private readonly Dictionary<string, HostFlow> _hosts = new(StringComparer.Ordinal);
     // Sessões a que este aparelho respondeu e que já acabaram (recusadas, 3 códigos errados, expiradas, acabadas mal do
     // outro lado, aprovadas). Quem tem o Drive pode apagar o x-host e o 1-host e deixar o 0-request: a mesma sessão não
-    // volta a ser respondida (seriam três tentativas novas sem pedido novo). Só memória, como as tentativas.
-    private readonly HashSet<string> _ended = new(StringComparer.Ordinal);
+    // volta a ser respondida (seriam três tentativas novas sem pedido novo). Só memória, como as tentativas. Guarda a
+    // última vez que a sessão acabou ou voltou a aparecer como pedido; sai Lifetime + ClockSkew depois disso (o pedido
+    // já não estava pendente; se for reescrito mais tarde, conta como um pedido novo, com os pedidos em série).
+    private readonly Dictionary<string, long> _ended = new(StringComparer.Ordinal);
     private ISyncTransport? _transport;
     private SavedSync? _saved;
     private SyncEngine? _engine;
@@ -958,7 +960,14 @@ public sealed class SyncAgent
         foreach (var session in await PairingRequests.PendingAsync(transport, _now, cancellationToken).ConfigureAwait(false))
         {
             lock (_gate)
-                if (_hosts.ContainsKey(session) || _ended.Contains(session) || _guest?.Session == session) continue;
+            {
+                if (_ended.ContainsKey(session))
+                {
+                    _ended[session] = _now();
+                    continue;
+                }
+                if (_hosts.ContainsKey(session) || _guest?.Session == session) continue;
+            }
             if (!answer)
             {
                 waiting++;
@@ -1006,8 +1015,11 @@ public sealed class SyncAgent
             foreach (var flow in stale)
             {
                 _hosts.Remove(flow.Session);
-                _ended.Add(flow.Session);
+                _ended[flow.Session] = _now();
             }
+            var forget = (long)(PairingProtocol.Lifetime + PairingProtocol.ClockSkew).TotalMilliseconds;
+            foreach (var (session, last) in _ended.ToList())
+                if (_now() - last > forget) _ended.Remove(session);
         }
         foreach (var flow in stale)
         {
@@ -1022,7 +1034,7 @@ public sealed class SyncAgent
     {
         lock (_gate)
         {
-            _ended.Add(flow.Session);
+            _ended[flow.Session] = _now();
             if (flow.CountedBad || _saved is not { } saved) return;
             flow.CountedBad = true;
             saved.BadPairings = PairingFatigue.Add(saved.BadPairings, _now());
@@ -1124,7 +1136,7 @@ public sealed class SyncAgent
         lock (_gate)
         {
             _hosts.Remove(session);
-            _ended.Add(session);
+            _ended[session] = _now();
             _notice = $"«{DeviceNameText.Shown(flow.Name)}» foi aprovado: os dados juntam-se nesse computador.";
             // Uma aprovação repõe a contagem dos pedidos em série.
             if (_saved is { BadPairings: not null } saved)
