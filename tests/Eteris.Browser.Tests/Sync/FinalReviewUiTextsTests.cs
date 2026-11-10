@@ -209,6 +209,49 @@ public class FinalReviewUiTextsTests
         Assert.Contains("Say(\"replaced\", SyncChoices.NotConfirmed(\"este computador não entrou na conta\"));", body);
     }
 
+    // ---- I-09: os textos do computador novo e do kit -------------------------------------------------------------
+
+    [Fact]
+    public void I09_FirstPerson_IsFuiEu_Everywhere()
+    {
+        var root = GoogleSyncTests.FindRoot();
+        var files = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".cs") || f.EndsWith(".xaml") || f.EndsWith(".html"))
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .Concat([Path.Combine(root, "docs", "sincronizacao.md"), Path.Combine(root, "docs", "palavras-passe.md")]);
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            Assert.False(text.Contains("Foi " + "eu", StringComparison.Ordinal), file);
+            Assert.False(text.Contains("não foi juntado", StringComparison.Ordinal), file);
+        }
+        Assert.Equal("Fui eu — juntar este computador", GuestPairingModel.ReplacedJoin);
+        Assert.Contains(">Fui eu — juntar este computador</button>", Source("Browser", "settings.html"));
+        Assert.Contains("Content=\"Fui eu — juntar este computador\"", Source("Sync", "GuestPairingBar.xaml"));
+    }
+
+    [Fact]
+    public void I09_StaleKit_DoesNotBlameARemovedComputer()
+    {
+        Assert.Equal("O seu kit de recuperação antigo deixou de valer (a conta mudou de chave). Guarde o novo.", RecoveryReminder.StaleText);
+        Assert.Contains("const KIT_STALE = '" + RecoveryReminder.StaleText + "';", Source("Browser", "settings.html"));
+    }
+
+    [Fact]
+    public void I09_ApproveWarning_IsGone()
+        => Assert.DoesNotContain("ApproveWarning", Source("Sync", "SyncChoices.cs"));
+
+    [Theory]
+    [InlineData("MainWindow.PairingBar.cs", "private async void OnPairingCode(")]
+    [InlineData("MainWindow.GuestPairing.cs", "private async void OnReplacedJoin()")]
+    public void I09_TheBars_NeverShowARawExceptionMessage(string file, string start)
+    {
+        var body = Body(Source(file), start, "\n    }\n");
+        var unexpected = body[body.IndexOf("catch (Exception)", StringComparison.Ordinal)..];
+        Assert.Contains("SyncChoices.CouldNotFinish", unexpected[..unexpected.IndexOf('}')]);
+        Assert.DoesNotContain("catch (Exception e)", body);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {

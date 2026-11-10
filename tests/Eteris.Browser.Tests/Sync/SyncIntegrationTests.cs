@@ -666,7 +666,7 @@ public class SyncIntegrationTests
         Assert.True(a < b, $"{first} devia vir antes de {second}");
     }
 
-    // «Foi eu — juntar este computador» passa sempre pela confirmação do Windows; com a conta substituída, nem a rota
+    // «Fui eu — juntar este computador» passa sempre pela confirmação do Windows; com a conta substituída, nem a rota
     // antiga de pedir nem «Pedir outra vez» criam um pedido.
     [Fact]
     public void ReplacedJoin_HasNoWayAroundTheGate()
@@ -825,7 +825,7 @@ public class SyncIntegrationTests
         Assert.Single(Regex.Matches(service, @"AutoPair = true"));
     }
 
-    // Na página, «Foi eu» nunca recebe o foco.
+    // Na página, «Fui eu» nunca recebe o foco.
     [Fact]
     public void Page_ReplacedJoin_IsNeverFocused()
     {

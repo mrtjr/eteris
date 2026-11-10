@@ -124,7 +124,7 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 - **Computador novo.** Depois de entrar num computador **sem nenhum estado desta conta**, se a conta já existir no
   Drive, o pedido de aprovação abre-se sozinho na ronda do gesto (`SyncAgent.AutoPair`, `SyncAgent.MayAutoRequest`; uma
   ronda agendada nunca pede). Um computador que já esteve numa conta e encontra outra cadeia no Drive **não pede
-  sozinho**: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão («Foi eu» pede o Windows com
+  sozinho**: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão («Fui eu» pede o Windows com
   segredos ligados neste computador; «Não fui eu» leva a «Retirar o acesso»). O computador novo mostra um cartão:
   «Falta um passo no outro computador.» e, quando o outro responde, «Escreva este código no outro computador:» com o
   código de 6 algarismos; depois «Escreveu … no outro computador e ele aceitou?» [Sim] [Não] («Sim» só conta 2 s depois
@@ -290,7 +290,7 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 | Nas ações que o utilizador pede: entrar, sincronizar agora, aprovar ou recusar um computador, remover um aparelho (e «Perdi um computador»), gerar um kit novo (troca a chave da conta no Drive), ligar uma linha de «O que passa entre PCs» ou aceitar pagamentos e documentos (fazem logo uma ronda), apagar os dados do Drive (e «Começar do zero…») e retirar o acesso do Éteris à conta Google | ação do utilizador. **Sair deste computador não fala com a Google.** Mudar o nome do computador só grava e segue na ronda seguinte |
 
 Na última linha, «entrar» inclui ligar («Ligar a sincronização», «Ligar outra vez», «Ligar sem acabar de apagar»), usar
-o kit de recuperação (escrito ou do ficheiro), «Aprovar noutro computador», «Pedir outra vez» e «Foi eu — juntar este
+o kit de recuperação (escrito ou do ficheiro), «Aprovar noutro computador», «Pedir outra vez» e «Fui eu — juntar este
 computador»; «apagar os dados do Drive» inclui «Tentar de novo» e «Começar do zero…». A exceção de `eteris://privacy/`
 (`PrivacyPage.SyncException`) usa as mesmas palavras.
 
@@ -750,7 +750,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 | **Quem fotografa o QR** | nada | — |
 | **Quem escreve um pedido falso de aparelho novo** (controla o transporte, ou entrou no Éteris com a conta Google da pessoa) | fazer aparecer «Um computador quer entrar na sua conta…» no computador ligado; depois de 3 pedidos maus em 24 h a barra cala-se e o aviso fica nas Definições | receber a conta: o computador ligado não mostra nenhum código para copiar, e o código só existe no ecrã do computador novo; três códigos errados recusam |
 | **Quem dita um código à pessoa** (por telefone, por mensagem) | levá-la a escrever no computador ligado o código do computador dele | — limite do *number matching*: escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito. Remédio: «Perdi um computador» (remove e troca a chave) |
-| **Quem apaga ou substitui a conta no Drive** | fazer um computador que já esteve na conta encontrar outra cadeia | que esse computador peça aprovação sozinho: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão (`SyncStatus.ChainReplaced`, `SavedSync.HadAccount`); «Foi eu» pede o Windows com segredos ligados neste computador |
+| **Quem apaga ou substitui a conta no Drive** | fazer um computador que já esteve na conta encontrar outra cadeia | que esse computador peça aprovação sozinho: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão (`SyncStatus.ChainReplaced`, `SavedSync.HadAccount`); «Fui eu» pede o Windows com segredos ligados neste computador |
 | **Um aparelho removido** (tem o kit antigo) | ler o que já tinha (o que já estava nesse computador continua lá); enquanto o acesso do Éteris à conta Google não for retirado, apagar ou estragar os ficheiros no Drive (remover troca a chave, não retira esse acesso — remédio: «Perdi um computador / foi roubado», que o retira) | abrir a conta nova ou escrever nela algo que os outros aceitem; forjar a mensagem com a conta nova para os outros (precisava das chaves privadas deles) |
 | **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador escrever no anfitrião o código que o convidado verdadeiro mostra; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador; o que já estava nesse computador) | — remédio: «Perdi um computador / foi roubado» noutro computador (remove, troca a chave e retira o acesso na Google) e mudar as palavras-passe importantes |

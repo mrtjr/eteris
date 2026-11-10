@@ -48,7 +48,7 @@ public enum ReauthPurpose
     ExportProfileSecrets,
     SyncSecrets,
     ApproveDevice,
-    // «Foi eu — juntar este computador» depois de a conta de sincronização ter sido substituída (com segredos ligados).
+    // «Fui eu — juntar este computador» depois de a conta de sincronização ter sido substituída (com segredos ligados).
     JoinReplacedAccount,
     // «Ver o kit» de recuperação da sincronização (sempre: o kit aberto nunca dispensa a confirmação de «Ver»).
     ShowRecoveryKit,

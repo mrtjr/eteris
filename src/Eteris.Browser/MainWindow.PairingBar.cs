@@ -129,9 +129,10 @@ public partial class MainWindow
         {
             answer = PairingAnswer.NotConfirmed;
         }
-        catch (Exception e)
+        catch (Exception)
         {
-            failed = "Não foi possível concluir (" + e.Message + ").";
+            // Texto fixo: a mensagem de uma exceção inesperada pode trazer caminhos locais ou detalhes internos.
+            failed = SyncChoices.CouldNotFinish;
         }
         // A janela pode ter fechado durante a espera (o Windows Hello, a entrega): nada se mostra numa janela fechada.
         if (_barsClosed) return;

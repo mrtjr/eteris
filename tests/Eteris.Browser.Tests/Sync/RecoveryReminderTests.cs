@@ -107,7 +107,7 @@ public class RecoveryReminderTests
         Assert.True(view.MenuLine);
         Assert.False(Decide(Kit(KitState.Stale, devices: 2)).Bar);
         Assert.False(Decide(Kit()).Stale);
-        Assert.Equal("O seu kit de recuperação antigo deixou de valer (um computador foi removido). Guarde o novo.", RecoveryReminder.StaleText);
+        Assert.Equal("O seu kit de recuperação antigo deixou de valer (a conta mudou de chave). Guarde o novo.", RecoveryReminder.StaleText);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class RecoveryReminderTests
         Assert.Equal("Guardar o kit", RecoveryReminder.Save);
         Assert.Equal("Mais tarde", RecoveryReminder.Later);
         Assert.Equal("Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera", RecoveryReminder.Decline);
-        Assert.Equal("O seu kit de recuperação antigo deixou de valer (um computador foi removido). Guarde o novo.", RecoveryReminder.StaleText);
+        Assert.Equal("O seu kit de recuperação antigo deixou de valer (a conta mudou de chave). Guarde o novo.", RecoveryReminder.StaleText);
         Assert.Equal("Guarde o kit de recuperação", RecoveryReminder.MenuText);
     }
 }

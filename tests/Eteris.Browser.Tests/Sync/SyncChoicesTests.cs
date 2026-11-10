@@ -39,7 +39,7 @@ public sealed class SyncChoicesTests : IDisposable
     private SyncAgent Agent(SecretMemoryProfile? profile = null)
         => new(() => new FolderTransport(Path.Combine(_root, "pasta")), profile ?? new SecretMemoryProfile(), new MemoryStore(), "Casa", () => 1_762_560_000_000);
 
-    // «Foi eu — juntar este computador» (conta substituída, T7): com segredos ligados NESTE computador (as palavras-passe
+    // «Fui eu — juntar este computador» (conta substituída, T7): com segredos ligados NESTE computador (as palavras-passe
     // estão ligadas por omissão), o Windows confirma primeiro, sempre; sem nenhum, não pergunta.
     [Fact]
     public async Task ReplacedJoin_WithLocalSecrets_AsksWindows()
@@ -446,7 +446,6 @@ public sealed class SyncChoicesTests : IDisposable
         // Revisão: um código novo e remover um aparelho (que mostra um código novo) também pedem o Windows com segredos.
         Assert.Equal(2, routes.Split("SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))").Length - 1);
         Assert.DoesNotContain("case \"/sync-new-code\":\n                Sync.SyncService.Act", routes.Replace("\r\n", "\n"));
-        Assert.StartsWith("Esse computador vai receber", SyncChoices.ApproveWarning);
         Assert.Contains("SyncChoices.SecretsForExportAsync(true, purpose => ConfirmWithWindows(browserId, purpose)", routes);
 
         // A oferta única «receber também neste?» (T10): rota com a confirmação do Windows da aba, no serviço, e um item

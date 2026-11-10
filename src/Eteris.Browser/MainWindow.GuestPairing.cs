@@ -139,7 +139,7 @@ public partial class MainWindow
         AfterGuestAction();
     }
 
-    // «Foi eu — juntar este computador»: a confirmação do Windows desta janela (sempre, com segredos ligados aqui).
+    // «Fui eu — juntar este computador»: a confirmação do Windows desta janela (sempre, com segredos ligados aqui).
     private async void OnReplacedJoin()
     {
         _guestBar?.ShowNote(null);
@@ -150,10 +150,11 @@ public partial class MainWindow
             ok = await SyncService.JoinAfterReplacedAsync(purpose => ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken()));
         }
         catch (OperationCanceledException) { ok = false; }
-        catch (Exception e)
+        catch (Exception)
         {
+            // Texto fixo: a mensagem de uma exceção inesperada pode trazer caminhos locais ou detalhes internos.
             ok = false;
-            failed = "Não foi possível concluir (" + e.Message + ").";
+            failed = SyncChoices.CouldNotFinish;
         }
         // A janela pode ter fechado durante a espera: nada se mostra numa janela fechada.
         if (_barsClosed) return;
@@ -164,7 +165,7 @@ public partial class MainWindow
             return;
         }
         if (!ok && SyncService.GuestPairingState().Kind == GuestPairingKind.Replaced)
-            _guestBar?.ShowNote(SyncChoices.NotConfirmed("este computador não foi juntado à conta"));
+            _guestBar?.ShowNote(SyncChoices.NotConfirmed("este computador não entrou na conta"));
     }
 
     // Depois de cada ação o «wants» pode ter mudado: o ponto único decide; o teclado volta à página.

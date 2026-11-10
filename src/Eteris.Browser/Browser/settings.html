@@ -505,7 +505,7 @@
             <div class="label"><b>A conta de sincronização na nuvem foi apagada ou substituída noutro computador.</b><span>Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.</span>
               <span class="syncnote">Se juntar este computador, as palavras-passe e os outros dados dele passam a ser enviados para a conta que está agora na nuvem.</span>
               <span class="syncnote" id="syncReplacedNote" role="status" hidden></span></div>
-            <div class="stack"><button class="action" id="syncReplacedJoin">Foi eu — juntar este computador</button><button class="action" id="syncReplacedNotMe">Não fui eu</button></div>
+            <div class="stack"><button class="action" id="syncReplacedJoin">Fui eu — juntar este computador</button><button class="action" id="syncReplacedNotMe">Não fui eu</button></div>
           </div>
           <!-- O pedido do computador novo: o espelho do cartão da janela (os textos vêm de guestText, mais abaixo). -->
           <div class="item" id="syncPairItem" hidden>
@@ -1250,7 +1250,7 @@
     // Enquanto as palavras estão à vista, confere de 2 em 2 s se o kit continua aberto do lado do Éteris (a aba saiu da
     // frente, a janela fechou, 5 min, «Sair», cadeia nova): se não, as palavras saem do ecrã.
     const KIT_CHECK = 2000;
-    const KIT_STALE = 'O seu kit de recuperação antigo deixou de valer (um computador foi removido). Guarde o novo.';
+    const KIT_STALE = 'O seu kit de recuperação antigo deixou de valer (a conta mudou de chave). Guarde o novo.';
     const KIT_DECLINE = 'Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera';
     // kitKeptId: o kit que foi copiado ou impresso (o único que «Já guardei o kit» pode marcar); kitPrintFrame: o
     // documento de impressão, que tem as palavras e sai com elas.
@@ -1396,7 +1396,7 @@
       // Entrar num aparelho novo. O botão volta quando a junção acabou: deu certo (a fase muda), deu erro (a mensagem
       // «join»), ou a ronda acabou sem nada (por exemplo sem rede). O código só sai do campo quando deu certo.
       const msg = d.message || null;
-      // A conta na nuvem foi apagada ou substituída: o alerta, com «Foi eu» (a confirmação do Windows) e «Não fui eu».
+      // A conta na nuvem foi apagada ou substituída: o alerta, com «Fui eu» (a confirmação do Windows) e «Não fui eu».
       show('syncReplacedItem', d.connected && guest === 'replaced');
       note($('syncReplacedNote'), msg && msg.area === 'replaced' ? msg.text : '', true);
       // «Aprovar noutro computador» só sem nada do computador novo (um computador que não pede sozinho e sem pedido):
@@ -1727,7 +1727,7 @@
     // As palavras nunca ficam no ecrã com o kit fechado: a aba escondida, ou a página a sair.
     document.addEventListener('visibilitychange', () => { if (document.hidden && kitWordsShown()) hideKitWords(true); });
     addEventListener('pagehide', () => hideKitWords(true));
-    // «Foi eu»: o Éteris pede a confirmação do Windows quando há segredos ligados (a resposta chega depois dela). Nunca
+    // «Fui eu»: o Éteris pede a confirmação do Windows quando há segredos ligados (a resposta chega depois dela). Nunca
     // recebe o foco. «Não fui eu» não pede nada: leva a «Retirar o acesso do Éteris».
     $('syncReplacedJoin').addEventListener('click', () => askGoogle('sync-replaced-join'));
     $('syncReplacedNotMe').addEventListener('click', () => toAnchor('#syncRevokeItem'));

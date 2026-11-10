@@ -42,9 +42,9 @@ internal static class GuestPairingModel
     // Alerta «conta substituída» (A1; o título vai a negrito).
     public const string ReplacedTitle = "A conta de sincronização na nuvem foi apagada ou substituída noutro computador.";
     public const string ReplacedText = "Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.";
-    public const string ReplacedJoin = "Foi eu — juntar este computador";
+    public const string ReplacedJoin = "Fui eu — juntar este computador";
     public const string ReplacedNotMe = "Não fui eu";
-    // PROPOSTA (P2): a consequência de «Foi eu», por baixo dos botões.
+    // PROPOSTA (P2): a consequência de «Fui eu», por baixo dos botões.
     public const string ReplacedConsequence = "Se juntar este computador, as palavras-passe e os outros dados dele passam a ser enviados para a conta que está agora na nuvem.";
     // PROPOSTA (P5): o botão de ícone do cartão (dica e nome acessível), como o da barra do início de sessão.
     public const string Close = "Fechar";

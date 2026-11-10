@@ -442,12 +442,12 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
                 return Json(new { ok = true, open = Sync.SyncService.OpenKit.IsOpen(browserId) });
             case "/sync-pair":
-                // «Aprovar noutro computador» e «Pedir outra vez». Com a conta substituída não pede (só «Foi eu», com a
+                // «Aprovar noutro computador» e «Pedir outra vez». Com a conta substituída não pede (só «Fui eu», com a
                 // confirmação do Windows).
                 Sync.SyncService.AskPairingAgain();
                 break;
             case "/sync-replaced-join":
-                // «Foi eu — juntar este computador»: com segredos ligados aqui, o Windows confirma primeiro (sempre).
+                // «Fui eu — juntar este computador»: com segredos ligados aqui, o Windows confirma primeiro (sempre).
                 return new VaultResourceHandler(async () =>
                 {
                     await Sync.SyncService.JoinAfterReplacedAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false);

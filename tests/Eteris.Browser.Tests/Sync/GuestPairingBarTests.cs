@@ -264,12 +264,12 @@ public class GuestPairingBarTests
             bar.Show(Replaced);
             Press(bar.ReplacedJoinButton);
             Press(bar.ReplacedNotMeButton);
-            bar.ShowNote(SyncChoices.NotConfirmed("este computador não foi juntado à conta"));
+            bar.ShowNote(SyncChoices.NotConfirmed("este computador não entrou na conta"));
             bar.Show(Replaced); // o RefreshBars seguinte não apaga a nota do mesmo estado
             return (j, n, Shown(bar.NoteText));
         }, nameof(Replaced_Buttons_RaiseTheirEvents_AndTheNoteStays));
         Assert.Equal(1, join);
         Assert.Equal(1, notMe);
-        Assert.Equal("Não foi confirmado com o Windows: este computador não foi juntado à conta.", note);
+        Assert.Equal("Não foi confirmado com o Windows: este computador não entrou na conta.", note);
     }
 }

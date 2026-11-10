@@ -660,7 +660,7 @@ public sealed class SyncAccountChoiceTests : IDisposable
         Assert.Null(await SyncChoices.ChooseAccountAsync(outro.Agent, Confirm));
         Assert.True(await outro.Agent.RunAsync());
 
-        // «Trabalho» vê a conta substituída e entra na nova («Foi eu»: aprovação; ou com o kit novo).
+        // «Trabalho» vê a conta substituída e entra na nova («Fui eu»: aprovação; ou com o kit novo).
         Assert.True(await trabalho.Agent.RunAsync());
         Assert.True(trabalho.Agent.Status.ChainReplaced);
         var reads = trabalho.Profile.SecretReads;

@@ -182,7 +182,7 @@ public class GuestPairingModelTests
         Assert.Equal("A conta de sincronização na nuvem foi apagada ou substituída noutro computador.", GuestPairingModel.ReplacedTitle);
         Assert.Equal("Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.",
             GuestPairingModel.ReplacedText);
-        Assert.Equal("Foi eu — juntar este computador", GuestPairingModel.ReplacedJoin);
+        Assert.Equal("Fui eu — juntar este computador", GuestPairingModel.ReplacedJoin);
         Assert.Equal("Não fui eu", GuestPairingModel.ReplacedNotMe);
         Assert.Equal("Se juntar este computador, as palavras-passe e os outros dados dele passam a ser enviados para a conta que está agora na nuvem.",
             GuestPairingModel.ReplacedConsequence);

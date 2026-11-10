@@ -21,7 +21,7 @@ internal static class RecoveryReminder
 
     public const string Title = "Guarde o seu kit de recuperação.";
     public const string Body = "Se perder este computador, é com ele que recupera, na nuvem, os favoritos e as palavras-passe.";
-    public const string StaleText = "O seu kit de recuperação antigo deixou de valer (um computador foi removido). Guarde o novo.";
+    public const string StaleText = "O seu kit de recuperação antigo deixou de valer (a conta mudou de chave). Guarde o novo.";
     public const string Save = "Guardar o kit";
     public const string Later = "Mais tarde";
     public const string Decline = "Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera";

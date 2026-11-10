@@ -1094,7 +1094,7 @@ O que mudou depois da revisão de segurança e de experiência (testes em `Vault
 - **Reautenticação.** Desligar «Pedir o Windows Hello ao preencher palavras-passe» pede o Windows Hello (aqui e nas
   Definições); «Gerar um kit novo…» (até à 0.2.14, «Novo código de recuperação»), «Remover aparelho» e aprovar um
   computador novo pedem-no com segredos em jogo (`SyncChoices.MayApproveAsync`); «Ver o kit», «Perdi um computador / foi
-  roubado», «Começar do zero…» e «Foi eu — juntar este computador» (com segredos ligados aqui) pedem-no sempre; «Sair
+  roubado», «Começar do zero…» e «Fui eu — juntar este computador» (com segredos ligados aqui) pedem-no sempre; «Sair
   deste computador» e «Retirar o acesso…» não o pedem (só a confirmação na página); «Apagar todas» tem propósito e
   texto próprios; a conta sem proteção volta a ser verificada passada a janela de graça ou ao bloquear. Onde se lê «com
   o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a palavra-passe do Windows. Se a conta do Windows

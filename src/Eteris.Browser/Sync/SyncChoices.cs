@@ -161,13 +161,10 @@ internal static class SyncChoices
     // inteira). true = pode mostrar.
     public static Task<bool> MayRevealKitAsync(Func<ReauthPurpose, Task<bool>> confirm) => confirm(ReauthPurpose.ShowRecoveryKit);
 
-    // «Foi eu — juntar este computador» (alerta de conta substituída): com coleções secretas ligadas NESTE computador,
+    // «Fui eu — juntar este computador» (alerta de conta substituída): com coleções secretas ligadas NESTE computador,
     // juntá-lo à conta que está agora no Drive manda para lá as palavras-passe. O Windows confirma primeiro (sempre).
     public static async Task<bool> MayJoinReplacedAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm)
         => !agent.EnabledCollections.Any(Collections.IsSecret) || await confirm(ReauthPurpose.JoinReplacedAccount).ConfigureAwait(false);
-
-    public const string ApproveWarning =
-        "Esse computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.";
 
     // Os itens do cofre para um perfil exportado: sem eles por omissão; com eles só depois do Windows Hello (sempre).
     // (Ok = false: não foi confirmado e nada se exporta.)

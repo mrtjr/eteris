@@ -1239,7 +1239,7 @@ public sealed class SyncAgent
             _saved.AccountSecrets = pendingChoice == "on";
             if (fresh)
             {
-                // Computador novo: herda na primeira ronda. Já esteve numa conta (cadeia substituída e «Foi eu», kit novo
+                // Computador novo: herda na primeira ronda. Já esteve numa conta (cadeia substituída e «Fui eu», kit novo
                 // sem ter apagado o estado, removido e aprovado de novo): não herda; recebe a oferta única.
                 _saved.InheritPending = !hadBefore;
                 _saved.OfferAnswered = false;

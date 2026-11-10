@@ -51,10 +51,10 @@ internal sealed partial class GuestPairingBar : UserControl
     public event Action? AskAgain;          // «Pedir outra vez»
     public event Action? NoOtherComputer;   // «Não tenho o outro computador à mão»
     public event Action? CloseRequested;    // × «Fechar» (recolhe o cartão; só nos estados do cartão)
-    public event Action? ReplacedJoin;      // «Foi eu — juntar este computador»
+    public event Action? ReplacedJoin;      // «Fui eu — juntar este computador»
     public event Action? ReplacedNotMe;     // «Não fui eu»
 
-    // Desenha a vista. Nunca chama Focus(). Uma nota (P4, erro de «Foi eu») fica enquanto o estado for o mesmo.
+    // Desenha a vista. Nunca chama Focus(). Uma nota (P4, erro de «Fui eu») fica enquanto o estado for o mesmo.
     public void Show(GuestPairingView view)
     {
         if (_view?.Kind != view.Kind) ShowNote(null);
@@ -118,7 +118,7 @@ internal sealed partial class GuestPairingBar : UserControl
         AutomationProperties.SetName(this, title ?? body ?? string.Empty);
     }
 
-    // P4 e os erros de «Foi eu»; null limpa.
+    // P4 e os erros de «Fui eu»; null limpa.
     public void ShowNote(string? text) => Text(NoteText, text);
 
     // Um código novo à vista: a espera de «Sim» recomeça e o botão desenha-se desativado nesses 2 s (um temporizador de

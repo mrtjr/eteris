@@ -52,7 +52,7 @@
                             Style="{DynamicResource PillButton}" />
                     <Button x:Name="AskAgainButton" Content="Pedir outra vez" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
                             Style="{DynamicResource PrimaryPillButton}" />
-                    <Button x:Name="ReplacedJoinButton" Content="Foi eu — juntar este computador" Focusable="False" Margin="0,2,8,2"
+                    <Button x:Name="ReplacedJoinButton" Content="Fui eu — juntar este computador" Focusable="False" Margin="0,2,8,2"
                             Visibility="Collapsed" Style="{DynamicResource PillButton}" />
                     <Button x:Name="ReplacedNotMeButton" Content="Não fui eu" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
                             Style="{DynamicResource PillButton}" />

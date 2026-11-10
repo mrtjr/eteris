@@ -643,7 +643,7 @@ internal static class SyncService
     }
 
     // O cartão do computador novo está aberto (por omissão) ou recolhido («Fechar»). Partilhado por todas as janelas,
-    // só memória. «Ver código», «Foi eu», «Pedir outra vez» e um pedido novo voltam a abri-lo.
+    // só memória. «Ver código», «Fui eu», «Pedir outra vez» e um pedido novo voltam a abri-lo.
     internal static bool GuestCardOpen => _guestCardOpen;
 
     internal static void SetGuestCard(bool open)
@@ -653,7 +653,7 @@ internal static class SyncService
         Changed?.Invoke();
     }
 
-    // «Foi eu — juntar este computador» (alerta de conta substituída): junta este computador à conta que está AGORA no
+    // «Fui eu — juntar este computador» (alerta de conta substituída): junta este computador à conta que está AGORA no
     // Drive. Com segredos ligados aqui, o Windows confirma primeiro (sempre). true = o pedido foi lançado; false = não
     // foi confirmado, ou já não se aplica. Não apanha as exceções da confirmação: quem chama trata.
     public static async Task<bool> JoinAfterReplacedAsync(Func<Vault.ReauthPurpose, Task<bool>> confirm)
@@ -661,7 +661,7 @@ internal static class SyncService
         if (Agent() is not { } agent || !agent.Status.ChainReplaced) return false;
         if (!await SyncChoices.MayJoinReplacedAsync(agent, confirm).ConfigureAwait(false))
         {
-            Say("replaced", SyncChoices.NotConfirmed("este computador não foi juntado à conta"));
+            Say("replaced", SyncChoices.NotConfirmed("este computador não entrou na conta"));
             return false;
         }
         lock (Gate) if (_message?.Area == "replaced") _message = null;
