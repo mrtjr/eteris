@@ -351,6 +351,29 @@ public class PublicTextsTests
         Assert.Contains("\"/sync-lost\"", GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
     }
 
+    // Revisão final (I-12): «1 em 1 000 000» é por pedido; o documento diz também o teto por série, com os números das
+    // constantes (pedidos acompanhados de cada vez; a barra cala-se ao N.º pedido que acabe mal na janela).
+    [Fact]
+    public void Pairing_OneInAMillion_ComesWithTheCeiling()
+    {
+        var doc = SyncDoc();
+        var k = Eteris.Sync.Pairing.PairingRequests.MaxAnswered;
+        var bad = Eteris.Sync.Pairing.PairingFatigue.MaxBad;
+        var hours = (int)Eteris.Sync.Pairing.PairingFatigue.Window.TotalHours;
+        var ceiling = $"no máximo {k} pedidos acompanhados de cada vez (`PairingRequests.MaxAnswered`), e a barra deixa de abrir sozinha ao {bad}.º pedido que acabe mal em {hours} h (`PairingFatigue`)";
+        var oneIn = Regex.Matches(doc, "1 em 1 000 000");
+        Assert.True(oneIn.Count >= 2);
+        // Cada «1 em 1 000 000» é «por pedido» e leva o teto logo a seguir.
+        foreach (Match m in oneIn)
+        {
+            var after = doc.Substring(m.Index, Math.Min(400, doc.Length - m.Index));
+            Assert.StartsWith("1 em 1 000 000 por pedido", after);
+            Assert.Contains(ceiling, after);
+        }
+        // A sessão em pausa não tenta mais: nem rondas, nem procurar pedidos, nem reler os aparelhos (A-08).
+        Assert.Contains("não tenta mais: o agendador para, nem procura pedidos nem relê os aparelhos", doc);
+    }
+
     // O «Quando:» das Definições não promete mais do que o ActivationLook faz: com um pedido contado, voltar à janela
     // procura logo (3.6, ponto 3).
     [Fact]

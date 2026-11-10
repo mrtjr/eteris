@@ -304,8 +304,8 @@ constantes (`SyncSchedule.StartupDelay`, `ChangeDelay`, `Period`, `PairingProtoc
 Sem rede, com a Google em baixo ou a pasta inacessível: tenta outra vez sozinho, com espera crescente (30 s, 1, 2, 4,
 8, 16 e depois de 30 em 30 min), sem avisos; as alterações locais não encurtam a espera; o que estava por enviar fica
 na caixa de saída (no estado guardado) e segue depois. Uma compactação (instantâneo) por dia. Se a **autorização da
-Google tiver expirado ou sido retirada** (`invalid_grant`, permissão desmarcada), não tenta mais: o agendador para, o
-menu diz «Sincronização em pausa: entre outra vez» e as Definições mostram «Entrar outra vez» (sem revogar nada nem
+Google tiver expirado ou sido retirada** (`invalid_grant`, permissão desmarcada), não tenta mais: o agendador para, nem
+procura pedidos nem relê os aparelhos, o menu diz «Sincronização em pausa: entre outra vez» e as Definições mostram «Entrar outra vez» (sem revogar nada nem
 mexer na chave), como o «Sincronização em pausa · Iniciar sessão novamente» do Chrome.
 
 **Estado visível:** Definições › Sincronização, à frente, «Ligada · última sincronização há 2 min» («A ligar…», «A
@@ -452,7 +452,9 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
 
 - O QR só tem dados públicos: **fotografá-lo não dá nada**. Quem também controlar o transporte e se meter no meio tem
   de se comprometer com a sua chave e o seu nonce antes de ver o nonce do anfitrião, por isso acerta no código com
-  probabilidade 1 em 1 000 000, e o utilizador vê códigos diferentes e recusa. Sem a confirmação, o passo 5 não existe.
+  probabilidade 1 em 1 000 000 por pedido — com no máximo 3 pedidos acompanhados de cada vez
+  (`PairingRequests.MaxAnswered`), e a barra deixa de abrir sozinha ao 3.º pedido que acabe mal em 24 h
+  (`PairingFatigue`) —, e o utilizador vê códigos diferentes e recusa. Sem a confirmação, o passo 5 não existe.
 - Com QR, a chave do anfitrião vem do ecrã (autêntica) e tem de conferir com a do transporte. Sem câmara (PC↔PC),
   o código curto `XXXX-XXXX-XXXX-XXXX` dá só a sessão, e quem garante as chaves é o código de verificação.
 - **Confirmação dos dois lados.** Com o código curto, quem controla o transporte pode pôr a sua chave no passo 1 e
@@ -752,7 +754,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 | **Quem dita um código à pessoa** (por telefone, por mensagem) | levá-la a escrever no computador ligado o código do computador dele | — limite do *number matching*: escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito. Remédio: «Perdi um computador» (remove e troca a chave) |
 | **Quem apaga ou substitui a conta no Drive** | fazer um computador que já esteve na conta encontrar outra cadeia | que esse computador peça aprovação sozinho: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão (`SyncStatus.ChainReplaced`, `SavedSync.HadAccount`); «Fui eu» pede o Windows com segredos ligados neste computador |
 | **Um aparelho removido** (tem o kit antigo) | ler o que já tinha (o que já estava nesse computador continua lá); enquanto o acesso do Éteris à conta Google não for retirado, apagar ou estragar os ficheiros no Drive (remover troca a chave, não retira esse acesso — remédio: «Perdi um computador / foi roubado», que o retira) | abrir a conta nova ou escrever nela algo que os outros aceitem; forjar a mensagem com a conta nova para os outros (precisava das chaves privadas deles) |
-| **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador escrever no anfitrião o código que o convidado verdadeiro mostra; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
+| **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000 por pedido, com no máximo 3 pedidos acompanhados de cada vez (`PairingRequests.MaxAnswered`), e a barra deixa de abrir sozinha ao 3.º pedido que acabe mal em 24 h (`PairingFatigue`); com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador escrever no anfitrião o código que o convidado verdadeiro mostra; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador; o que já estava nesse computador) | — remédio: «Perdi um computador / foi roubado» noutro computador (remove, troca a chave e retira o acesso na Google) e mudar as palavras-passe importantes |
 | **Quem tem um ficheiro `.eteris`** | nada sem o código | — |
 | **Quem tem o kit de recuperação ou um computador emparelhado** | tudo o que a conta tem: **Quem tem o kit de recuperação ou um computador emparelhado tem também as palavras-passe, pagamentos e documentos** (das linhas que algum aparelho sincroniza); o kit sozinho não chega, é preciso também a conta Google | — remédio: «Nova cadeia» (remover o aparelho, «Perdi um computador» ou gerar um kit novo) **e mudar as palavras-passe** dos sites importantes, porque o que já foi lido não se desfaz |
