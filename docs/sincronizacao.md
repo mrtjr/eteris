@@ -958,5 +958,5 @@ Acrescentados na 0.2.15 («Um login e pronto»):
   baixo do pedido de permissão e do procurar e anunciam-se ao leitor de ecrã; a captura do Éteris recusa com um segredo
   à vista; o ficheiro do kit marca o kit gravado e vai para o disco; a área de transferência segura esvazia-se se um
   formato de exclusão falhar; entrar com o kit na conta substituída pede o Windows; as âncoras das barras levam ao
-  item). Em `PublicTextsTests`: o aparelho removido não perde a escrita no Drive sem «Perdi um computador» e o «1 em
-  1 000 000» vem com o teto por série.
+  item). Em `PublicTextsTests`: o aparelho removido não perde a escrita no Drive sem «Perdi um computador» e a
+  probabilidade por pedido do emparelhamento vem com o teto por série.
