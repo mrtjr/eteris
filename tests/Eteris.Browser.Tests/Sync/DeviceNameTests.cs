@@ -96,6 +96,10 @@ public sealed class DeviceNameTests : IDisposable
     public void Clean_RemovesControlAndFormatCharacters()
     {
         Assert.Equal("Casa de praia", DeviceNameText.Clean("Casa\n\t\0 de‮ pra​ia"));
+        // Formato fora do plano básico (etiquetas U+E0000–E007F, invisíveis) e substitutos soltos também saem.
+        Assert.Equal("Casa", DeviceNameText.Clean("Ca\U000E0041s\U000E007Fa"));
+        Assert.Equal("Casa", DeviceNameText.Clean("Ca\uD800s\uDC00a"));
+        Assert.Equal("Casa 😀", DeviceNameText.Clean("Casa 😀"));
     }
 
     [Fact]

@@ -24,18 +24,24 @@ public static class DeviceNameText
         if (string.IsNullOrEmpty(typed)) return null;
         var text = new StringBuilder(typed.Length);
         var space = false;
-        foreach (var c in typed)
+        // Por caracteres inteiros (Rune), não por unidades UTF-16: um carácter de formato fora do plano básico (as
+        // etiquetas U+E0000–E007F, invisíveis) também sai, e um substituto solto (texto mal formado) é deitado fora.
+        var rest = typed.AsSpan();
+        while (!rest.IsEmpty)
         {
-            var category = CharUnicodeInfo.GetUnicodeCategory(c);
+            var status = Rune.DecodeFromUtf16(rest, out var rune, out var used);
+            rest = rest[used..];
+            if (status != System.Buffers.OperationStatus.Done) continue;
+            var category = Rune.GetUnicodeCategory(rune);
             if (category is UnicodeCategory.Control or UnicodeCategory.Format) continue;
-            if (char.IsWhiteSpace(c) || category is UnicodeCategory.SpaceSeparator or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+            if (Rune.IsWhiteSpace(rune) || category is UnicodeCategory.SpaceSeparator or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
             {
                 space = text.Length > 0;
                 continue;
             }
             if (space) text.Append(' ');
             space = false;
-            text.Append(c);
+            text.Append(rune.ToString());
         }
         if (text.Length > MaxLength)
         {
