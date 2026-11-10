@@ -241,6 +241,9 @@ public sealed class SyncAgent
     private IReadOnlyList<DeviceInfo> _devices = [];
     // A conta tem registos secretos vivos (visto no fim da última ronda; o motor só se lê dentro de uma ronda).
     private bool _secretsInAccount;
+    // E quais coleções secretas (só memória; nunca se muda o conjunto: troca-se por outro).
+    private IReadOnlySet<string> _secretCollections = NoCollections;
+    private static readonly IReadOnlySet<string> NoCollections = new HashSet<string>(StringComparer.Ordinal);
     // Como este aparelho entrou na conta nesta execução, e se herdou a escolha da conta: até o Éteris fechar (a barra
     // «Sincronizado.» só existe a seguir a uma entrada nesta abertura). Só memória.
     private SyncEntry _entry;
@@ -414,6 +417,19 @@ public sealed class SyncAgent
                 return EnabledOf(_saved).Any(Model.Collections.IsSecret) || _secretsInAccount
                     || (_saved is { Secret: not null } saved && saved.SecretsInAccount != false);
         }
+    }
+
+    // Uma troca de chave começou e ainda não acabou (acaba na ronda seguinte).
+    public bool RotationPending
+    {
+        get { lock (_gate) return _saved?.Rotation is not null; }
+    }
+
+    // As coleções secretas com registos vivos na conta, vistas no fim da última ronda (memória; vazio antes dela e depois
+    // de sair).
+    public IReadOnlySet<string> SecretCollectionsInAccount
+    {
+        get { lock (_gate) return _secretCollections; }
     }
 
     // ---- escolha da conta: pagamentos e documentos (0.2.15) --------------------------------------------------------
@@ -855,6 +871,7 @@ public sealed class SyncAgent
                 saved.Baseline = baseline;
                 saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
                 _secretsInAccount = engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection));
+                _secretCollections = engine.State.Records.Values.Where(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)).Select(r => r.Collection).ToHashSet(StringComparer.Ordinal);
                 if (_profile is ILocalNotices notices && notices.TakeNotice() is { } notice) _notice = notice;
                 inherited = ReadAccountChoice(saved, engine);
                 inheritedHere |= inherited;
@@ -1799,6 +1816,7 @@ public sealed class SyncAgent
             _waiting = 0;
             _devices = [];
             _secretsInAccount = false;
+            _secretCollections = NoCollections;
             _justJoined = false;
             // Emparelhamentos a meio escrevem fora das rondas: param já (nada de pedidos novos depois do apagar).
             guest = _guest;
@@ -1949,6 +1967,7 @@ public sealed class SyncAgent
             _needsSignIn = false;
             _waiting = 0;
             _justJoined = false;
+            _secretCollections = NoCollections;
             _entry = SyncEntry.None;
             _inheritedNow = false;
             _accountBy = null;

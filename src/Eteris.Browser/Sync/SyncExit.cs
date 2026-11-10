@@ -1,4 +1,7 @@
+using Eteris.Browser.Vault;
+using Eteris.Sync.Engine;
 using Eteris.Sync.Google;
+using Eteris.Sync.Model;
 
 namespace Eteris.Browser.Sync;
 
@@ -80,4 +83,56 @@ internal static class SyncExit
                 return (false, RevokeFailed);
         }
     }
+
+    // ---- «Perdi um computador / foi roubado» ---------------------------------------------------------------------------
+
+    // A porta do Windows: sempre, haja ou não segredos na conta (S27). true = pode continuar.
+    public static Task<bool> MayLoseDeviceAsync(Func<ReauthPurpose, Task<bool>> confirm) => confirm(ReauthPurpose.LostDevice);
+
+    // Revoked = a Google confirmou a revogação (só RevokeOutcome.Revoked).
+    public sealed record LostResult(bool Removed, bool Revoked, string Message);
+
+    // 1) remove o aparelho (cadeia nova: o perdido não abre nada do que vier a seguir); 2) só se a troca de chave acabou
+    // por inteiro, revoga (revogar antes deixava os outros sem forma de receber a chave nova); 3) a mensagem.
+    // revoke null = pasta de teste (sem Google): só o passo 1 e a mensagem.
+    public static async Task<LostResult> LostDeviceAsync(SyncAgent agent, string device, IReadOnlyCollection<string>? shown,
+        Func<CancellationToken, Task<RevokeOutcome>>? revoke, Action stopHere, CancellationToken cancellationToken)
+    {
+        try { await agent.RemoveDeviceAsync(device, shown, cancellationToken).ConfigureAwait(false); }
+        catch (SyncUserException e)
+        {
+            return new LostResult(false, false, agent.RotationPending ? e.Message + " " + LostHalfway : e.Message);
+        }
+        if (agent.RotationPending) return new LostResult(true, false, LostHalfway);
+        // Lido antes de parar a sincronização aqui (parar esquece-o).
+        var secrets = agent.SecretCollectionsInAccount;
+        if (revoke is null) return new LostResult(true, false, Lines(LostFolderDone, LostKeeps, LostAdvice(secrets)));
+        RevokeOutcome outcome;
+        try { outcome = await revoke(cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) { outcome = RevokeOutcome.Failed; }
+        switch (outcome)
+        {
+            case RevokeOutcome.Revoked:
+                stopHere();
+                return new LostResult(true, true, LostMessage(secrets));
+            case RevokeOutcome.AlreadyInvalid:
+                // A sessão daqui saiu, mas a autorização pode continuar viva (R6): nada de LostDone nem LostHere.
+                stopHere();
+                return new LostResult(true, false, Lines(LostUnconfirmed, LostKeeps, LostAdvice(secrets)));
+            default:
+                return new LostResult(true, false, LostNotRevoked);
+        }
+    }
+
+    // O conselho por tipo de segredo que a conta tinha (cadeia vazia sem nenhum).
+    public static string LostAdvice(IReadOnlySet<string> secretCollections)
+        => Lines(secretCollections.Contains(Collections.Logins) ? AdvicePasswords : "",
+            secretCollections.Contains(Collections.Cards) || secretCollections.Contains(Collections.Ibans) || secretCollections.Contains(Collections.IdDocs)
+                ? AdviceCards : "");
+
+    // A mensagem final com a revogação feita, uma frase por linha.
+    public static string LostMessage(IReadOnlySet<string> secretCollections)
+        => Lines(LostDone, LostHere, LostKeeps, LostAdvice(secretCollections), LostGoogle);
+
+    private static string Lines(params string[] lines) => string.Join("\n", lines.Where(l => l.Length > 0));
 }

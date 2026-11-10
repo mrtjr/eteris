@@ -52,6 +52,9 @@ public enum ReauthPurpose
     JoinReplacedAccount,
     // «Ver o kit» de recuperação da sincronização (sempre: o kit aberto nunca dispensa a confirmação de «Ver»).
     ShowRecoveryKit,
+    // «Perdi um computador / foi roubado»: remover o aparelho e retirar o acesso do Éteris à conta Google (sempre, haja
+    // ou não segredos na conta).
+    LostDevice,
 }
 
 public static class ReauthPolicy
@@ -62,7 +65,7 @@ public static class ReauthPolicy
 
     public static bool IsAlways(ReauthPurpose purpose)
         => purpose is ReauthPurpose.Export or ReauthPurpose.ExportProfileSecrets or ReauthPurpose.SyncSecrets or ReauthPurpose.ApproveDevice
-            or ReauthPurpose.JoinReplacedAccount or ReauthPurpose.ShowRecoveryKit;
+            or ReauthPurpose.JoinReplacedAccount or ReauthPurpose.ShowRecoveryKit or ReauthPurpose.LostDevice;
 
     public static bool Needs(ReauthPurpose purpose, bool askPasswords, bool askPayments) => purpose switch
     {
@@ -89,6 +92,8 @@ public static class ReauthPolicy
         // PROPOSTA (P3).
         ReauthPurpose.JoinReplacedAccount => "O Éteris quer juntar este computador a outra conta de sincronização.",
         ReauthPurpose.ShowRecoveryKit => "O Éteris quer mostrar o seu kit de recuperação.",
+        // PROPOSTA (T12).
+        ReauthPurpose.LostDevice => "O Éteris quer remover um computador da sua conta e retirar o acesso do Éteris à conta Google.",
         _ => "O Éteris quer confirmar que é você.",
     };
 }

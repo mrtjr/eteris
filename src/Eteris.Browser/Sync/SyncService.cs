@@ -396,6 +396,30 @@ internal static class SyncService
         });
     }
 
+    // «Perdi um computador / foi roubado» (o Windows já confirmou): remove o aparelho e, só com a troca de chave acabada,
+    // retira o acesso na Google. Na pasta de teste, só remove.
+    public static void LostDevice(string device, IReadOnlyCollection<string>? shown)
+    {
+        if (Agent() is not { } agent) return;
+        Hook();
+        Exit("lost", async () =>
+        {
+            var result = await SyncExit.LostDeviceAsync(agent, device, shown, FolderMode ? null : RevokeWithLimitAsync,
+                () => SignOut(forgetKey: false), CancellationToken.None).ConfigureAwait(false);
+            // Sem a revogação, a sincronização continua aqui: o agendador segue como depois de uma ação (RunAsync).
+            AfterExit(agent);
+            return result.Message;
+        });
+    }
+
+    // Acerta o agendador depois de uma saída que deixou a sincronização ligada aqui (com ela parada, não se arma).
+    private static void AfterExit(SyncAgent agent)
+    {
+        if (!agent.Enabled) return;
+        lock (Gate) Schedule.Done(Now(), agent.Status.Error is null);
+        Arm();
+    }
+
     // O utilizador abriu o menu do Éteris (⋯) ou tem a secção Sincronização à vista: procura pedidos de aparelhos novos
     // e responde-lhes (no máximo uma vez a cada 5 s) e, com «devices», relê a lista de aparelhos.
     public static void Look(bool devices = false)

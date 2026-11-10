@@ -488,6 +488,19 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                 });
             }
+            case "/sync-lost" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
+            {
+                // «Perdi um computador / foi roubado»: uma confirmação na página e SEMPRE o Windows (propósito próprio,
+                // haja ou não segredos), e depois remover o aparelho e retirar o acesso na Google, por esta ordem.
+                var shown = InternalPages.Query(uri, "shown") is { Length: > 0 } list ? list.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+                return new VaultResourceHandler(async () =>
+                {
+                    if (await Sync.SyncExit.MayLoseDeviceAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                        Sync.SyncService.LostDevice(id, shown);
+                    else Sync.SyncService.Say("lost", Sync.SyncChoices.NotConfirmed("o aparelho continua na conta"));
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
             case "/sync-delete-cloud":
                 Sync.SyncService.DeleteCloud();
                 break;

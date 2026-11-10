@@ -155,6 +155,9 @@
   ul.devices li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   ul.devices .devname { font-weight: 600; color: var(--text); }
   ul.devices small { color: var(--muted); flex: 1; }
+  #syncLost { margin-top: 10px; }
+  #syncLostPanel { margin-top: 10px; }
+  .lostwhich { font: inherit; font-size: 13px; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
   .label strong { color: var(--text); }
   #syncWhat, #syncStays, #syncWhen { display: block; margin-top: 4px; }
   iframe { display: none; }
@@ -526,7 +529,17 @@
           <div class="item" id="syncDevicesItem" hidden>
             <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e o kit de recuperação passa a ser outro: o antigo deixa de valer.</span>
               <ul class="devices" id="syncDevices"></ul>
-              <span class="syncnote" id="syncDevicesNote" role="status" hidden></span></div>
+              <span class="syncnote" id="syncDevicesNote" role="status" hidden></span>
+              <!-- «Perdi um computador / foi roubado»: uma entrada única junto da lista; o painel diz os passos e pede uma
+                   confirmação (e o Windows, sempre). -->
+              <button class="action danger" type="button" id="syncLost" hidden>Perdi um computador / foi roubado</button>
+              <div id="syncLostPanel" hidden>
+                <select class="lostwhich" id="syncLostWhich" aria-label="Perdi um computador / foi roubado"></select>
+                <span class="syncnote" id="syncLostStep1">1. O aparelho sai da conta e a conta muda de chave: daqui em diante, esse computador não recebe nem consegue abrir nada novo. O que ele já tinha continua lá.</span>
+                <span class="syncnote" id="syncLostStep2">2. O acesso do Éteris à conta Google é retirado em todos os seus computadores: sem isto, o computador perdido ainda podia apagar ou estragar os ficheiros no Drive.</span>
+                <span class="syncnote" id="syncLostStep3">3. Depois, entra outra vez neste e nos seus outros computadores e guarda o kit novo: o antigo deixa de valer.</span>
+                <div class="kitactions"><button class="action" type="button" id="syncLostCancel">Cancelar</button><button class="action danger" type="button" id="syncLostConfirm">Confirmar: remover e retirar o acesso</button></div>
+              </div></div>
           </div>
           <!-- O kit de recuperação: vê-se (com a confirmação do Windows), guarda-se, imprime-se ou copia-se quando se
                quiser. As palavras só existem aqui enquanto estão à vista. -->
@@ -1002,6 +1015,39 @@
       $('syncRevoke').focus();
       askGoogle('sync-google-revoke');
     });
+    // «Perdi um computador / foi roubado»: o painel com a escolha do aparelho (só os outros; pré-escolhido se for só um)
+    // e os passos; «Confirmar» não aceita um clique no primeiro meio segundo. O Windows confirma depois (sempre).
+    let lostOpened = 0, lostOthers = 0, lostShown = [];
+    const lostReady = () => !(lastState && lastState.busy) && !!$('syncLostWhich').value;
+    const closeLost = focus => {
+      lostOpened = 0;
+      $('syncLostPanel').hidden = true; $('syncLost').hidden = lostOthers === 0;
+      if (focus) $('syncLost').focus();
+    };
+    const paintLost = d => {
+      if (lostOthers === 0 && lostOpened) closeLost(false);
+      $('syncLost').hidden = lostOthers === 0 || !!lostOpened;
+      // Na pasta de teste não há acesso da Google para retirar: só o passo 1.
+      $('syncLostStep2').hidden = !!d.google.folder;
+      $('syncLostConfirm').textContent = d.google.folder ? 'Confirmar: remover' : 'Confirmar: remover e retirar o acesso';
+      $('syncLost').disabled = !!d.busy;
+      $('syncLostConfirm').disabled = !lostReady();
+    };
+    $('syncLost').addEventListener('click', () => {
+      lostOpened = Date.now();
+      $('syncLostPanel').hidden = false; $('syncLost').hidden = true;
+      $('syncLostConfirm').disabled = !lostReady();
+      $('syncLostCancel').focus();
+    });
+    $('syncLostWhich').addEventListener('change', () => { $('syncLostConfirm').disabled = !lostReady(); });
+    $('syncLostCancel').addEventListener('click', () => closeLost(true));
+    $('syncLostConfirm').addEventListener('click', () => {
+      if (!lostOpened || Date.now() - lostOpened < ARM_GUARD || !lostReady()) return;
+      const id = $('syncLostWhich').value;
+      closeLost(true);
+      // Os aparelhos que a lista mostrava: só esses (com a chave já fixada) recebem a chave nova.
+      askGoogle('sync-lost', `&id=${encodeURIComponent(id)}&shown=${encodeURIComponent(lostShown.join(','))}`);
+    });
     const quietNotice = requests => {
       const item = document.createElement('div'); item.className = 'item syncalert';
       const label = document.createElement('div'); label.className = 'label';
@@ -1294,7 +1340,17 @@
           return li;
         }));
         refocus(list, focused);
+        // «Perdi um computador»: os outros aparelhos (nunca este), com os nomes postos como texto.
+        const others = devices.filter(dev => !dev.me);
+        lostOthers = others.length; lostShown = devices.map(x => x.id);
+        const which = $('syncLostWhich');
+        const chosen = which.value;
+        which.replaceChildren(...(others.length > 1 ? [new Option('—', '')] : []), ...others.map(dev => {
+          const option = document.createElement('option'); option.value = dev.id; option.textContent = dev.name; return option;
+        }));
+        if (others.some(dev => dev.id === chosen)) which.value = chosen;
       }
+      paintLost(d);
       paintTopic(d);
       note($('syncDevicesNote'), msg && msg.area === 'devices' ? msg.text : '', true);
       // Nome deste computador: o nome atual (textContent) e, se a última ação falhou, porquê.
