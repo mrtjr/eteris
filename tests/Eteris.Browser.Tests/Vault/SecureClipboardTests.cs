@@ -10,7 +10,7 @@ namespace Eteris.Browser.Tests.Vault;
 // Os testes nunca tocam na área de transferência real (backend falso): a prova com a verdadeira é ao vivo.
 public class SecureClipboardTests
 {
-    private sealed class FakeClipboard : IClipboardBackend
+    internal sealed class FakeClipboard : IClipboardBackend
     {
         public uint Sequence { get; set; } = 10;
         public string? Text;
@@ -39,7 +39,7 @@ public class SecureClipboardTests
         }
     }
 
-    private sealed class FakeScheduler
+    internal sealed class FakeScheduler
     {
         public readonly List<(TimeSpan Delay, Action Run)> Scheduled = [];
 
@@ -199,5 +199,18 @@ public class SecureClipboardTests
         Assert.False(holds.Visible);
         scheduler.Scheduled[^1].Run();
         Assert.Equal(1, expired);
+    }
+
+    // O kit de recuperação fica à vista até 5 minutos (24 palavras não se copiam à mão em 30 s); o cofre não muda.
+    [Fact]
+    public void SecretOnScreen_AcceptsALongerLimit()
+    {
+        var holds = new SecretHolds(_ => { });
+        var scheduler = new FakeScheduler();
+        using (new SecretOnScreen(holds.Hold(), scheduler.Schedule, null, TimeSpan.FromMinutes(5)))
+            Assert.Equal(TimeSpan.FromMinutes(5), scheduler.Scheduled[^1].Delay);
+        using (new SecretOnScreen(holds.Hold(), scheduler.Schedule, null))
+            Assert.Equal(SecretOnScreen.Limit, scheduler.Scheduled[^1].Delay);
+        Assert.Equal(TimeSpan.FromSeconds(30), SecretOnScreen.Limit);
     }
 }

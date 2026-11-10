@@ -22,6 +22,10 @@ public static class TestSwitches
         _ => null,
     };
 
+    // A via de teste da confirmação do Windows só vale num perfil de teste (--user-data-dir): contra o perfil de
+    // omissão, a porta é sempre a real.
+    public static Vault.TestReauthMode? ReauthForProfile(Vault.TestReauthMode? mode, bool customProfile) => customProfile ? mode : null;
+
     // ETERIS_TEST_CRASH_BEFORE_PAINT=1: o processo termina de repente logo a seguir ao Cef.Initialize, antes da 1.ª página
     // (como uma queda), para provar a rede de segurança do sandbox (Infrastructure/SandboxFallback.cs). Só numa cópia
     // portátil: a versão instalada ignora-a, porque uma variável esquecida no PC de alguém fazia cair o Éteris instalado

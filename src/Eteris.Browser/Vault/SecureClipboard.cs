@@ -79,14 +79,17 @@ public sealed class SecretOnScreen : IDisposable
     private readonly Action? _expired;
     private int _done;
 
-    public SecretOnScreen(IDisposable hold, Func<TimeSpan, Action, IDisposable> schedule, Action? expired)
+    // «limit»: outro prazo para um segredo que precisa de mais tempo à vista (o kit de recuperação: 5 min); por omissão,
+    // os 30 s do cofre.
+    public SecretOnScreen(IDisposable hold, Func<TimeSpan, Action, IDisposable> schedule, Action? expired, TimeSpan? limit = null)
     {
         _hold = hold;
         _expired = expired;
-        _timer = schedule(Limit, Expire);
+        _timer = schedule(limit ?? Limit, Expire);
     }
 
-    public static SecretOnScreen Show(Action? expired = null) => new(Infrastructure.CaptureShield.HoldSecret(), Timers.Schedule, expired);
+    public static SecretOnScreen Show(Action? expired = null, TimeSpan? limit = null)
+        => new(Infrastructure.CaptureShield.HoldSecret(), Timers.Schedule, expired, limit);
 
     private void Expire()
     {

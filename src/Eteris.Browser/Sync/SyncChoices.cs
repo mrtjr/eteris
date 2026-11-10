@@ -58,9 +58,13 @@ internal static class SyncChoices
     public static async Task<bool> MayApproveAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm)
         => !agent.HasSecrets || await confirm(ReauthPurpose.ApproveDevice).ConfigureAwait(false);
 
-    // Um código de recuperação novo (pedido ou depois de remover um aparelho) também abre o cofre: com segredos em jogo,
+    // Um kit de recuperação novo (pedido ou depois de remover um aparelho) também abre o cofre: com segredos em jogo,
     // quem o vê pode juntar outro computador e receber tudo. Pede o Windows Hello como aprovar um aparelho (sempre).
     public static Task<bool> MayRenewKeyAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm) => MayApproveAsync(agent, confirm);
+
+    // «Ver o kit» de recuperação: pede SEMPRE a confirmação do Windows (com ou sem segredos ligados: o kit abre a conta
+    // inteira). true = pode mostrar.
+    public static Task<bool> MayRevealKitAsync(Func<ReauthPurpose, Task<bool>> confirm) => confirm(ReauthPurpose.ShowRecoveryKit);
 
     // «Foi eu — juntar este computador» (alerta de conta substituída): com coleções secretas ligadas NESTE computador,
     // juntá-lo à conta que está agora no Drive manda para lá as palavras-passe. O Windows confirma primeiro (sempre).

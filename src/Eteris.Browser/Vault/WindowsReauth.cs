@@ -50,6 +50,8 @@ public enum ReauthPurpose
     ApproveDevice,
     // «Foi eu — juntar este computador» depois de a conta de sincronização ter sido substituída (com segredos ligados).
     JoinReplacedAccount,
+    // «Ver o kit» de recuperação da sincronização (sempre: o kit aberto nunca dispensa a confirmação de «Ver»).
+    ShowRecoveryKit,
 }
 
 public static class ReauthPolicy
@@ -60,7 +62,7 @@ public static class ReauthPolicy
 
     public static bool IsAlways(ReauthPurpose purpose)
         => purpose is ReauthPurpose.Export or ReauthPurpose.ExportProfileSecrets or ReauthPurpose.SyncSecrets or ReauthPurpose.ApproveDevice
-            or ReauthPurpose.JoinReplacedAccount;
+            or ReauthPurpose.JoinReplacedAccount or ReauthPurpose.ShowRecoveryKit;
 
     public static bool Needs(ReauthPurpose purpose, bool askPasswords, bool askPayments) => purpose switch
     {
@@ -86,6 +88,7 @@ public static class ReauthPolicy
         ReauthPurpose.ApproveDevice => "O Éteris quer dar as suas palavras-passe a outro computador.",
         // PROPOSTA (P3).
         ReauthPurpose.JoinReplacedAccount => "O Éteris quer juntar este computador a outra conta de sincronização.",
+        ReauthPurpose.ShowRecoveryKit => "O Éteris quer mostrar o seu kit de recuperação.",
         _ => "O Éteris quer confirmar que é você.",
     };
 }
@@ -119,7 +122,9 @@ public sealed class ReauthGate
     // A do navegador: criada só quando é precisa, presa aos eventos do Windows (bloqueio, suspensão).
     private static readonly Lazy<ReauthGate> s_shared = new(() =>
     {
-        var gate = new ReauthGate(Reauth.Create(Infrastructure.TestSwitches.Reauth));
+        // A via de teste (ETERIS_TEST_REAUTH) só vale num perfil de teste (--user-data-dir): contra o perfil de omissão a
+        // porta é sempre a real.
+        var gate = new ReauthGate(Reauth.Create(Infrastructure.TestSwitches.ReauthForProfile(Infrastructure.TestSwitches.Reauth, Infrastructure.AppPaths.IsCustomProfile)));
         SystemEvents.SessionSwitch += (_, e) => { if (ResetsOn(e.Reason)) gate.Reset(); };
         SystemEvents.PowerModeChanged += (_, e) => { if (ResetsOn(e.Mode)) gate.Reset(); };
         return gate;

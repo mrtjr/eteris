@@ -1030,6 +1030,23 @@ internal sealed class WindowsVaultHost : IVaultHost
         return (Owner(browserId) is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;
     }).Task;
 
+    // O ficheiro do kit de recuperação da sincronização (0.2.15): só disco, começa em Transferências (uma pasta local
+    // conhecida; o aviso de pasta vem depois, em RecoveryKit.Folder). Fora de IVaultHost: só a rota do kit o usa.
+    internal static Task<string?> PickKitSaveAsync(int browserId, string suggestedName) => Ui.InvokeAsync(() =>
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Guardar o kit de recuperação",
+            Filter = "Página HTML (*.html)|*.html",
+            FileName = suggestedName,
+            DefaultExt = ".html",
+            AddExtension = true,
+            OverwritePrompt = true,
+            InitialDirectory = Downloads.DownloadPaths.DownloadsFolder(),
+        };
+        return (Owner(browserId) is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;
+    }).Task;
+
     public Task<bool> ConfirmAsync(int browserId, string title, string message) => Ui.InvokeAsync(() =>
     {
         var answer = Owner(browserId) is { } owner

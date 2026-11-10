@@ -274,23 +274,109 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Start(switchAccount: true, abandonDeletion: InternalPages.Query(uri, "anyway") == "1");
                 break;
             case "/sync-new-code":
-                // Um código novo abre também o cofre (palavras-passe…): com segredos em jogo, o Windows confirma primeiro
-                // (sempre), como ao aprovar um aparelho.
+                // «Gerar um kit novo…» (cadeia nova): o kit novo abre também o cofre (palavras-passe…); com segredos em
+                // jogo, o Windows confirma primeiro (sempre), como ao aprovar um aparelho. Depois o kit fica por guardar
+                // (ou «deixou de valer»): não se mostra sozinho.
                 return new VaultResourceHandler(async () =>
                 {
                     if (Sync.SyncService.Agent() is { } agent)
                     {
                         if (await Sync.SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
                             Sync.SyncService.Act("code", a => a.NewRecoveryCodeAsync());
-                        else Sync.SyncService.Say("code", Sync.SyncChoices.NotConfirmed("o código continua o mesmo"));
+                        else Sync.SyncService.Say("code", Sync.SyncChoices.NotConfirmed("o kit continua o mesmo"));
                     }
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                 });
             case "/sync-now":
                 Sync.SyncService.SyncNow();
                 break;
-            case "/sync-code-saved":
+            // ---- o kit de recuperação (0.2.15): só POST, nada no endereço além do testemunho «t» ----
+            case "/sync-kit-show":
+            {
+                // «Ver o kit»: SEMPRE a confirmação do Windows. Conta do Windows sem proteção: primeiro só o conselho;
+                // o segundo pedido («ack=1») mostra-o.
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                var acked = SyncForm.Parse(request).GetValueOrDefault("ack") == "1";
+                return new VaultResourceHandler(async () =>
+                {
+                    if (Sync.SyncService.Agent() is not { } agent)
+                        return Vault.VaultReply.Json(new { ok = false, message = "A sincronização não está disponível nesta compilação." });
+                    var shown = await Sync.KitGate.ShowAsync(agent.RevealKit, Sync.SyncService.OpenKit, browserId, acked,
+                        purpose => ConfirmWithWindows(browserId, purpose), () => Vault.ReauthGate.Shared.Advice,
+                        () => Vault.SecretOnScreen.Show(expired: Sync.SyncService.OpenKit.Close, limit: Sync.KitUnlock.Limit)).ConfigureAwait(false);
+                    switch (shown.Step)
+                    {
+                        case Sync.KitShowStep.AdviceFirst:
+                            return Vault.VaultReply.Json(new { ok = true, advice = shown.Advice });
+                        case Sync.KitShowStep.Reveal when shown.Kit is { } kit:
+                            // A aba sai da frente ou a janela fecha: o kit fecha-se do lado do processo.
+                            MainWindow.VaultFrontToken().Register(Sync.SyncService.OpenKit.Close);
+                            return Vault.VaultReply.Json(new { ok = true, words = kit.Words, id = kit.KitId, seconds = (int)Sync.KitUnlock.Limit.TotalSeconds, advice = shown.Advice });
+                        default:
+                            return Vault.VaultReply.Json(new { ok = false, message = Sync.SyncChoices.NotConfirmed("o kit não foi mostrado") });
+                    }
+                });
+            }
+            case "/sync-kit-hide":
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                Sync.SyncService.OpenKit.Close();
+                break;
+            case "/sync-kit-copy":
+                // Pela área de transferência segura do processo (fora do histórico e da nuvem do Windows; limpa aos 60 s
+                // só se ainda for a nossa cópia). Fora da thread de E/S do CEF, como as cópias do cofre.
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                return new VaultResourceHandler(() =>
+                {
+                    if (OpenedKit(browserId) is not { } kit) return Task.FromResult(KitClosed);
+                    return Task.FromResult(Vault.SecureClipboard.Shared.Copy(kit.Words)
+                        ? Vault.VaultReply.Json(new { ok = true, message = "Copiado. Sai da área de transferência dentro de 1 minuto." })
+                        : Vault.VaultReply.Json(new { ok = false, message = "Não foi possível copiar: tente outra vez." }));
+                });
+            case "/sync-kit-save":
+                // «Guardar como ficheiro…»: diálogo do Windows (começa em Transferências); fora de uma pasta local
+                // conhecida, avisa antes de gravar e espera por «Guardar mesmo assim».
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                return new VaultResourceHandler(async () =>
+                {
+                    if (OpenedKit(browserId) is null) return KitClosed;
+                    var path = await WindowsVaultHost.PickKitSaveAsync(browserId, Sync.RecoveryKit.FileName(DateTime.Now)).ConfigureAwait(false);
+                    if (path is null) return Vault.VaultReply.Json(new { ok = true, saved = false });
+                    // O kit pode ter fechado enquanto o diálogo estava aberto (prazo, «Sair», cadeia nova).
+                    if (OpenedKit(browserId) is not { } kit) return KitClosed;
+                    return SaveKit(kit, path, accepted: false, saved: () => Sync.SyncService.Agent()?.MarkKitSaved());
+                });
+            case "/sync-kit-save-anyway":
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                return new VaultResourceHandler(() =>
+                {
+                    if (OpenedKit(browserId) is not { } kit || Sync.SyncService.OpenKit.TakePendingPath() is not { } path)
+                        return Task.FromResult(KitClosed);
+                    return Task.FromResult(SaveKit(kit, path, accepted: true, saved: () => Sync.SyncService.Agent()?.MarkKitSaved()));
+                });
+            case "/sync-kit-print":
+            {
+                // O documento do kit para o iframe de impressão da página: tal e qual (não passa pelo tema das páginas
+                // internas) e sem cache.
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                if (OpenedKit(browserId) is not { } kit) return Text("recusado");
+                // Um ResourceHandler próprio (o de FromString não aceita cabeçalhos).
+                var document = new ResourceHandler("text/html", new System.IO.MemoryStream(Encoding.UTF8.GetBytes(Sync.RecoveryKit.Html(kit.Words, kit.KitId, DateTime.Now))),
+                    autoDisposeStream: true, charset: "utf-8");
+                document.Headers.Add("Cache-Control", "no-store");
+                return document;
+            }
+            case "/sync-kit-saved":
+                // «Já guardei o kit» (depois de imprimir ou copiar).
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
                 Sync.SyncService.Agent()?.MarkKitSaved();
+                break;
+            case "/sync-kit-later":
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                Sync.SyncService.SnoozeKit();
+                break;
+            case "/sync-kit-decline":
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                Sync.SyncService.DeclineKit();
                 break;
             case "/sync-pair":
                 // «Aprovar noutro computador» e «Pedir outra vez». Com a conta substituída não pede (só «Foi eu», com a
@@ -367,6 +453,32 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 
     private static IResourceHandler Json(object value)
         => ResourceHandler.FromString(System.Text.Json.JsonSerializer.Serialize(value), Encoding.UTF8, false, "text/plain");
+
+    // O kit aberto NESTE separador pela confirmação do Windows, ou null.
+    private static Eteris.Sync.Engine.RecoveryKitSecret? OpenedKit(int browserId)
+        => Sync.SyncService.Agent() is { } agent ? Sync.KitGate.Opened(agent.RevealKit, Sync.SyncService.OpenKit, browserId) : null;
+
+    private static Vault.VaultReply KitClosed
+        => Vault.VaultReply.Json(new { ok = false, closed = true, message = "O kit foi escondido. Carregue em «Ver o kit» outra vez." });
+
+    // Grava o ficheiro do kit (já escolhido) e diz à página o que aconteceu; gravado, o kit conta como guardado.
+    private static Vault.VaultReply SaveKit(Eteris.Sync.Engine.RecoveryKitSecret kit, string path, bool accepted, Action saved)
+    {
+        var folder = Sync.RecoveryKit.FolderOnThisComputer(path);
+        switch (Sync.RecoveryKit.Save(kit, path, accepted, folder, Sync.RecoveryKit.WriteFile, DateTime.Now))
+        {
+            case Sync.KitSaveResult.Saved:
+                saved();
+                return Vault.VaultReply.Json(new { ok = true, saved = true, state = SettingsPage.SyncData(isPrivate: false) });
+            case Sync.KitSaveResult.NeedsConfirm:
+                Sync.SyncService.OpenKit.SetPendingPath(path);
+                return Vault.VaultReply.Json(new { ok = true, saved = false, warn = Sync.RecoveryKit.FolderWarning(folder) });
+            case Sync.KitSaveResult.Cancelled:
+                return Vault.VaultReply.Json(new { ok = true, saved = false });
+            default:
+                return Vault.VaultReply.Json(new { ok = false, message = "Não foi possível gravar o ficheiro." });
+        }
+    }
 
     private static SettingsPage.About AboutInfo() => new(
         Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,

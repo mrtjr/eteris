@@ -22,6 +22,8 @@ internal sealed class VaultResourceHandler(Func<Task<Vault.VaultReply>> work) : 
                 Charset = "utf-8";
                 Stream = new MemoryStream(Encoding.UTF8.GetBytes(body));
                 AutoDisposeStream = true;
+                // Respostas com segredos (o kit de recuperação, palavras-passe): nunca em cache.
+                Headers["Cache-Control"] = "no-store";
                 if (!callback.IsDisposed) callback.Continue();
             }
         });

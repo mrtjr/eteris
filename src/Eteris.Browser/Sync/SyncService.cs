@@ -334,6 +334,8 @@ internal static class SyncService
     // «Sair»: a sincronização para neste computador (a revogação na Google é do GoogleSync).
     public static void SignOut(bool forgetKey)
     {
+        // O kit aberto fecha-se já (as janelas voltam às capturas; copiar, guardar e imprimir deixam de valer).
+        OpenKit.Close();
         Agent()?.SignOut(forgetKey);
         lock (Gate) Schedule.Stop();
         Arm();
@@ -478,6 +480,9 @@ internal static class SyncService
 
     // Quando este processo começou a usar a sincronização: um segredo que já cá estava antes é «a abertura seguinte».
     private static readonly long SessionStartMs = Now();
+
+    // O kit aberto pela confirmação do Windows (um só, num separador, até 5 minutos): Sync.KitGate.
+    internal static readonly KitUnlock OpenKit = new(Now);
     // A barra do lembrete já foi respondida nesta abertura (qualquer dos três botões). Sob Gate; só memória.
     private static bool _kitAnswered;
 

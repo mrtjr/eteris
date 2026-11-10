@@ -1,0 +1,368 @@
+using System.IO;
+using System.Text.RegularExpressions;
+using Eteris.Browser.Sync;
+using Eteris.Browser.Tests.Vault;
+using Eteris.Browser.Vault;
+using Eteris.Sync.Crypto;
+using Eteris.Sync.Engine;
+
+namespace Eteris.Browser.Tests.Sync;
+
+// O kit de recuperação (0.2.15, T5): o documento, para onde se grava, a porta do Windows e o kit aberto num separador.
+// Nada aqui toca na área de transferência real, no Windows Hello real, na rede nem no perfil do dono.
+public class RecoveryKitTests
+{
+    // O vetor público «e» da T6.
+    private const string Phrase = "abacate afivelar inativo afivelar donzela achatar barulho beber albergue exalar cuidado baioneta abotoar joia dever informal argola peneira aditivo celebrar ouvido amarelo gritaria toalha";
+    private static readonly DateTime Day = new(2026, 11, 9);
+
+    private static string Source(params string[] parts)
+        => File.ReadAllText(Path.Combine([GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", .. parts])).Replace("\r\n", "\n");
+
+    private static int Count(string text, string what) => Regex.Matches(text, Regex.Escape(what)).Count;
+
+    // ---- o documento ------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Html_HasTheWordsTheIdAndTheWarnings()
+    {
+        var html = RecoveryKit.Html(Phrase, "K7QF", Day);
+        foreach (var word in Phrase.Split(' ')) Assert.Contains(word, html);
+        Assert.Contains("K7QF", html);
+        Assert.Contains("9 de novembro de 2026", html);
+        Assert.Contains("Conta Google:", html);
+        Assert.Contains("Não fotografe com o telemóvel", html);
+        Assert.Contains("guarde-o como guardaria uma chave de casa", html);
+        Assert.Contains("O kit sozinho não abre nada", html);
+        Assert.Contains(RecoveryKit.KeepOffThisComputer, html);
+        Assert.Contains("lang=\"pt-PT\"", html);
+        Assert.Contains("data-eteris-kit=\"" + Phrase + "\"", html);
+        Assert.Equal("data-eteris-kit", RecoveryCode.KitAttribute);
+    }
+
+    [Fact]
+    public void Html_HasNoEmail_NoScript_NoExternalRequests()
+    {
+        var html = RecoveryKit.Html(Phrase, "K7QF", Day);
+        foreach (var bad in new[] { "@", "<script", "http:", "https:", "<img", "<link", "<iframe", "src=", "href=", "url(" })
+            Assert.DoesNotContain(bad, html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotMatch("([0-9A-Z]{4}-){13}[0-9A-Z]{4}", html);
+    }
+
+    [Fact]
+    public void Html_CanBeReadBack()
+    {
+        using var s = AccountSecret.Create();
+        var html = RecoveryKit.Html(s.ToWords(), s.KitId, DateTime.Today);
+        Assert.True(RecoveryCode.TryReadKit(html, out var read));
+        using var back = AccountSecret.FromBytes(read);
+        Assert.Equal(s.ChainId, back.ChainId);
+    }
+
+    [Fact]
+    public void FileName_HasTheDate_AndIsAValidName()
+    {
+        var name = RecoveryKit.FileName(Day);
+        Assert.Equal("Kit de recuperação do Éteris 2026-11-09.html", name);
+        Assert.True(name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0);
+    }
+
+    // ---- para onde vai o ficheiro -------------------------------------------------------------------------------------
+
+    private static readonly string[] Roots = [@"C:\Users\teste\Downloads", @"C:\Users\teste\Documents", @"C:\Users\teste\Desktop"];
+
+    private static string? Env(string name) => name == "OneDrive" ? @"C:\Users\teste\OneDrive" : null;
+
+    private static KitFolder FolderOf(string path, DriveKind drive = DriveKind.Fixed, IReadOnlyList<string>? roots = null)
+        => RecoveryKit.Folder(path, Env, roots ?? Roots, _ => drive);
+
+    [Theory]
+    [InlineData(@"C:\Users\teste\OneDrive\Documentos\kit.html", "OneDrive")]
+    [InlineData(@"c:\users\TESTE\onedrive\documentos\kit.html", "OneDrive")]
+    [InlineData(@"G:\O meu disco\kit.html", "Google Drive")]
+    [InlineData(@"G:\My Drive\a\kit.html", "Google Drive")]
+    [InlineData(@"C:\Users\teste\Dropbox\kit.html", "Dropbox")]
+    public void Folder_DetectsTheCloudProviders(string path, string provider)
+    {
+        Assert.Equal(new KitFolder(KitFolderKind.Cloud, provider), FolderOf(path));
+        // Uma pasta conhecida redirecionada para a nuvem: a nuvem ganha.
+        Assert.Equal(new KitFolder(KitFolderKind.Cloud, "OneDrive"),
+            FolderOf(@"C:\Users\teste\OneDrive\Documentos\kit.html", roots: [@"C:\Users\teste\OneDrive\Documentos"]));
+    }
+
+    [Fact]
+    public void Folder_OnlyKnownLocalFoldersAreLocal()
+    {
+        Assert.Equal(KitFolderKind.Local, FolderOf(@"C:\Users\teste\Downloads\kit.html").Kind);
+        Assert.Equal(KitFolderKind.Unknown, FolderOf(@"C:\Users\teste\Downloads2\kit.html").Kind);
+        Assert.Equal(KitFolderKind.Unknown, FolderOf(@"C:\Users\teste\OneDriveX\kit.html").Kind);
+        Assert.Equal(KitFolderKind.Unknown, FolderOf(@"D:\Coisas\kit.html", DriveKind.Fixed).Kind);
+        Assert.Equal(KitFolderKind.Local, FolderOf(@"E:\kit.html", DriveKind.Removable).Kind);
+        Assert.Equal(KitFolderKind.Unknown, FolderOf(@"Z:\kit.html", DriveKind.Network).Kind);
+        Assert.Equal(KitFolderKind.Unknown, FolderOf(@"\\servidor\partilha\kit.html", DriveKind.Removable).Kind);
+        Assert.Equal("Esta pasta vai para a nuvem de OneDrive. Quem tiver essa conta fica com o kit.",
+            RecoveryKit.FolderWarning(new KitFolder(KitFolderKind.Cloud, "OneDrive")));
+        Assert.Equal(RecoveryKit.UnknownFolderWarning, RecoveryKit.FolderWarning(new KitFolder(KitFolderKind.Unknown)));
+        Assert.Equal("O Éteris não consegue confirmar que esta pasta fica só neste computador. Se for copiada para a nuvem, quem tiver essa conta fica com o kit.",
+            RecoveryKit.UnknownFolderWarning);
+    }
+
+    private static readonly RecoveryKitSecret Kit = new(Phrase, "K7QF", 0);
+
+    [Fact]
+    public void Save_OutsideALocalFolder_AsksFirst_AndWritesNothing()
+    {
+        var writes = new List<(string Path, string Text)>();
+        void Write(string path, string text) => writes.Add((path, text));
+        foreach (var folder in new[] { new KitFolder(KitFolderKind.Cloud, "OneDrive"), new KitFolder(KitFolderKind.Unknown) })
+        {
+            Assert.Equal(KitSaveResult.NeedsConfirm, RecoveryKit.Save(Kit, @"C:\x\kit.html", false, folder, Write, Day));
+            Assert.Empty(writes);
+            Assert.Equal(KitSaveResult.Saved, RecoveryKit.Save(Kit, @"C:\x\kit.html", true, folder, Write, Day));
+            var (path, text) = Assert.Single(writes);
+            Assert.Equal(@"C:\x\kit.html", path);
+            Assert.Equal(RecoveryKit.Html(Phrase, "K7QF", Day), text);
+            writes.Clear();
+        }
+        Assert.Equal(KitSaveResult.Saved, RecoveryKit.Save(Kit, @"C:\x\kit.html", false, new KitFolder(KitFolderKind.Local), Write, Day));
+        Assert.Single(writes);
+    }
+
+    [Fact]
+    public void Save_Cancelled_WritesNothing_AndAnIoErrorIsFailed()
+    {
+        var writes = 0;
+        Assert.Equal(KitSaveResult.Cancelled, RecoveryKit.Save(Kit, null, true, new KitFolder(KitFolderKind.Local), (_, _) => writes++, Day));
+        Assert.Equal(0, writes);
+        Assert.Equal(KitSaveResult.Failed, RecoveryKit.Save(Kit, @"C:\x\kit.html", true, new KitFolder(KitFolderKind.Local), (_, _) => throw new IOException("cheio"), Day));
+        Assert.Equal(KitSaveResult.Failed, RecoveryKit.Save(Kit, @"C:\x\kit.html", true, new KitFolder(KitFolderKind.Local), (_, _) => throw new UnauthorizedAccessException(), Day));
+    }
+
+    // ---- a porta do Windows e o kit aberto --------------------------------------------------------------------------
+
+    private long _now = 1_762_560_000_000;
+
+    private sealed class Reveals(RecoveryKitSecret? kit)
+    {
+        public RecoveryKitSecret? Kit { get; set; } = kit;
+        public int Calls { get; private set; }
+
+        public RecoveryKitSecret? Reveal()
+        {
+            Calls++;
+            return Kit;
+        }
+    }
+
+    private sealed class Confirms(bool answer)
+    {
+        public List<ReauthPurpose> Asked { get; } = [];
+
+        public Task<bool> Confirm(ReauthPurpose purpose)
+        {
+            Asked.Add(purpose);
+            return Task.FromResult(answer);
+        }
+    }
+
+    private sealed class Hold : IDisposable
+    {
+        public int Disposed { get; private set; }
+
+        public void Dispose() => Disposed++;
+    }
+
+    [Fact]
+    public async Task KitGate_WithoutWindowsConfirmation_RevealsNothing()
+    {
+        var reveals = new Reveals(Kit);
+        var confirms = new Confirms(false);
+        var unlock = new KitUnlock(() => _now);
+        var shown = await KitGate.ShowAsync(reveals.Reveal, unlock, 1, false, confirms.Confirm, () => null);
+        Assert.Equal(KitShowStep.Refused, shown.Step);
+        Assert.Null(shown.Kit);
+        Assert.Equal(0, reveals.Calls);
+        Assert.Equal([ReauthPurpose.ShowRecoveryKit], confirms.Asked);
+        Assert.False(unlock.IsOpen(1));
+    }
+
+    [Fact]
+    public async Task KitGate_UnprotectedAccount_AdviceFirst_ThenAck()
+    {
+        var reveals = new Reveals(Kit);
+        var unlock = new KitUnlock(() => _now);
+        var first = await KitGate.ShowAsync(reveals.Reveal, unlock, 1, false, new Confirms(true).Confirm, () => ReauthGate.ProtectAccountAdvice);
+        Assert.Equal(KitShowStep.AdviceFirst, first.Step);
+        Assert.Equal(ReauthGate.ProtectAccountAdvice, first.Advice);
+        Assert.Null(first.Kit);
+        Assert.Equal(0, reveals.Calls);
+        Assert.False(unlock.IsOpen(1));
+
+        var acked = await KitGate.ShowAsync(reveals.Reveal, unlock, 1, true, new Confirms(true).Confirm, () => ReauthGate.ProtectAccountAdvice);
+        Assert.Equal(KitShowStep.Reveal, acked.Step);
+        Assert.Equal(Phrase, acked.Kit!.Words);
+        Assert.Equal(ReauthGate.ProtectAccountAdvice, acked.Advice);
+        Assert.True(unlock.IsOpen(1));
+
+        var protectedAccount = await KitGate.ShowAsync(reveals.Reveal, new KitUnlock(() => _now), 1, false, new Confirms(true).Confirm, () => null);
+        Assert.Equal(KitShowStep.Reveal, protectedAccount.Step);
+        Assert.Null(protectedAccount.Advice);
+    }
+
+    [Fact]
+    public async Task KitGate_Opened_OnlyInTheSameTab_AndForTheSameKit()
+    {
+        var reveals = new Reveals(Kit);
+        var unlock = new KitUnlock(() => _now);
+        Assert.Null(KitGate.Opened(reveals.Reveal, unlock, 1));
+        Assert.Equal(0, reveals.Calls);
+
+        var confirms = new Confirms(true);
+        await KitGate.ShowAsync(reveals.Reveal, unlock, 1, false, confirms.Confirm, () => null);
+        Assert.Equal(Kit, KitGate.Opened(reveals.Reveal, unlock, 1));
+        Assert.Null(KitGate.Opened(reveals.Reveal, unlock, 2));
+        // O kit aberto não dispensa a confirmação de «Ver».
+        await KitGate.ShowAsync(reveals.Reveal, unlock, 1, false, confirms.Confirm, () => null);
+        Assert.Equal(2, confirms.Asked.Count);
+
+        // Cadeia nova: o kit aberto é de outra impressão digital — fecha.
+        reveals.Kit = new RecoveryKitSecret("outras palavras", "ZZZZ", 0);
+        Assert.Null(KitGate.Opened(reveals.Reveal, unlock, 1));
+        Assert.False(unlock.IsOpen(1));
+    }
+
+    [Fact]
+    public void KitUnlock_ExpiresClosesAndReleasesTheHold()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(5), KitUnlock.Limit);
+        var unlock = new KitUnlock(() => _now);
+        var hold = new Hold();
+        unlock.Open(1, "K7QF", hold);
+        _now += (long)KitUnlock.Limit.TotalMilliseconds - 1;
+        Assert.True(unlock.IsOpen(1));
+        _now += 1;
+        Assert.False(unlock.IsOpen(1));
+        Assert.Equal(1, hold.Disposed);
+        unlock.Close();
+        unlock.Close();
+        Assert.Equal(1, hold.Disposed);
+
+        var closed = new Hold();
+        unlock.Open(1, "K7QF", closed);
+        unlock.Close();
+        Assert.Equal(1, closed.Disposed);
+
+        var previous = new Hold();
+        unlock.Open(1, "K7QF", previous);
+        unlock.Open(2, "K7QF", new Hold());
+        Assert.Equal(1, previous.Disposed);
+        Assert.False(unlock.IsOpen(1));
+        Assert.True(unlock.IsOpen(2));
+
+        unlock.SetPendingPath(@"C:\x\kit.html");
+        Assert.Equal(@"C:\x\kit.html", unlock.TakePendingPath());
+        Assert.Null(unlock.TakePendingPath());
+        unlock.SetPendingPath(@"C:\x\kit.html");
+        unlock.Close();
+        Assert.Null(unlock.TakePendingPath());
+        // Com o kit fechado, nenhum destino fica à espera.
+        unlock.SetPendingPath(@"C:\x\kit.html");
+        Assert.Null(unlock.TakePendingPath());
+    }
+
+    [Fact]
+    public void KitUnlock_ClosesWhenTheTabNavigates()
+    {
+        var unlock = new KitUnlock(() => _now);
+        var hold = new Hold();
+        unlock.Open(1, "K7QF", hold);
+        unlock.TabNavigated(2);
+        Assert.True(unlock.IsOpen(1));
+        unlock.TabNavigated(1);
+        Assert.False(unlock.IsOpen(1));
+        Assert.Equal(1, hold.Disposed);
+    }
+
+    [Fact]
+    public void Copy_UsesTheSecureClipboard()
+    {
+        var clip = new SecureClipboardTests.FakeClipboard();
+        var scheduler = new SecureClipboardTests.FakeScheduler();
+        Assert.True(new SecureClipboard(clip, scheduler.Schedule).Copy(Phrase));
+        Assert.Equal(Phrase, clip.Text);
+        Assert.Equal(SecureClipboard.ExclusionFormats.Select(f => f.Format), clip.Extra.Select(f => f.Format));
+        Assert.Equal(3, clip.Extra.Count);
+        Assert.All(clip.Extra, f => Assert.Equal(new byte[4], f.Data));
+        var (delay, run) = Assert.Single(scheduler.Scheduled);
+        Assert.Equal(TimeSpan.FromSeconds(60), delay);
+        // O utilizador copiou outra coisa entretanto: nada é limpo.
+        clip.Sequence++;
+        run();
+        Assert.Equal(0, clip.Clears);
+        // Ainda é a nossa cópia: limpa.
+        Assert.True(new SecureClipboard(clip, scheduler.Schedule).Copy(Phrase));
+        scheduler.Scheduled[^1].Run();
+        Assert.Equal(1, clip.Clears);
+    }
+
+    // ---- as ligações no navegador (fonte) ---------------------------------------------------------------------------
+
+    [Fact]
+    public void KitRoutes_ArePostOnly_AndBehindTheGate()
+    {
+        var factory = Source("Browser", "EterisSchemeHandlerFactory.cs");
+        foreach (var route in new[] { "show", "hide", "copy", "save", "save-anyway", "print", "saved", "later", "decline" })
+            Assert.Contains($"case \"/sync-kit-{route}\"", factory);
+        Assert.DoesNotContain("/sync-code-saved", factory);
+        Assert.DoesNotContain("AcknowledgeCode", factory);
+        Assert.Equal(Count(factory, "case \"/sync-kit-"),
+            Count(factory, "\"POST\", StringComparison.OrdinalIgnoreCase)) return Text(\"recusado\");"));
+        Assert.Contains("VaultFrontToken().Register(", factory);
+        Assert.Contains("\"Cache-Control\", \"no-store\"", factory);
+        Assert.Contains("SyncChoices.NotConfirmed(\"o kit não foi mostrado\")", factory);
+        Assert.True(Count(factory, "MarkKitSaved()") >= 3);
+        Assert.Equal(2, Count(factory, "SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))"));
+        Assert.Contains("Headers[\"Cache-Control\"] = \"no-store\";", Source("Browser", "VaultResourceHandler.cs"));
+    }
+
+    [Fact]
+    public void RevealKit_HasAClosedListOfCallers()
+    {
+        var root = Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser");
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
+            var code = File.ReadAllText(file);
+            if (Path.GetFileName(file) == "EterisSchemeHandlerFactory.cs")
+            {
+                Assert.Equal(2, Count(code, ".RevealKit"));
+                Assert.Contains("KitGate.ShowAsync(agent.RevealKit,", code);
+                Assert.Contains("KitGate.Opened(agent.RevealKit,", code);
+            }
+            else Assert.DoesNotContain(".RevealKit", code);
+        }
+        var gate = Source("Sync", "KitGate.cs");
+        var show = gate[gate.IndexOf("public static async Task<KitShown> ShowAsync(", StringComparison.Ordinal)..];
+        Assert.True(show.IndexOf("SyncChoices.MayRevealKitAsync(confirm)", StringComparison.Ordinal)
+            < show.IndexOf("reveal()", StringComparison.Ordinal));
+        var window = Source("MainWindow.xaml.cs");
+        Assert.Contains("KitTabNavigated(e.Browser.Identifier)", window);
+        Assert.DoesNotContain("SyncService", window);
+        Assert.Contains("OpenKit.TabNavigated(browserId)", Source("MainWindow.Sync.cs"));
+        var service = Source("Sync", "SyncService.cs");
+        var signOut = service[service.IndexOf("public static void SignOut(bool forgetKey)", StringComparison.Ordinal)..];
+        Assert.Contains("OpenKit.Close()", signOut[..signOut.IndexOf("\n    }", StringComparison.Ordinal)]);
+    }
+
+    [Fact]
+    public void KitSaveDialog_StartsInDownloads()
+    {
+        var vault = Source("MainWindow.Vault.cs");
+        var start = vault.IndexOf("Task<string?> PickKitSaveAsync(", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var body = vault[start..vault.IndexOf("}).Task;", start, StringComparison.Ordinal)];
+        Assert.Contains("InitialDirectory = Downloads.DownloadPaths.DownloadsFolder()", body);
+        Assert.DoesNotContain("MyDocuments", body);
+        Assert.DoesNotContain("PickKit", Source("Vault", "VaultRoutes.cs"));
+    }
+}

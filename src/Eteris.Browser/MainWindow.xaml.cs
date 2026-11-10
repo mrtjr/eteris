@@ -312,6 +312,7 @@ public partial class MainWindow : Window
             if (!e.Frame.IsMain) return;
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
+            KitTabNavigated(e.Browser.Identifier);
             StartupTrace.MarkOnce("aba.1.commit");
             // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a
             // contagem do Escudo recomeça aqui, no commit.

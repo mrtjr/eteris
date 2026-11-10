@@ -285,6 +285,44 @@ public class WindowsReauthTests
         Assert.Contains("ETERIS_TEST_REAUTH", motor);
     }
 
+    // «Ver o kit» de recuperação (T5): pede sempre, sem janela de graça, com o texto próprio.
+    [Fact]
+    public async Task ShowRecoveryKit_IsAlwaysAsked()
+    {
+        Assert.True(ReauthPolicy.IsAlways(ReauthPurpose.ShowRecoveryKit));
+        var fake = new FakeReauth();
+        var gate = Gate(fake);
+        Assert.True(await gate.RequestAsync(WindowA, ReauthPurpose.ShowRecoveryKit));
+        Assert.True(await gate.RequestAsync(WindowA, ReauthPurpose.ShowRecoveryKit));
+        Assert.Equal(2, fake.Prompts);
+        Assert.Equal("O Éteris quer mostrar o seu kit de recuperação.", ReauthPolicy.Message(ReauthPurpose.ShowRecoveryKit));
+        Assert.Equal(ReauthPolicy.Message(ReauthPurpose.ShowRecoveryKit), fake.LastMessage);
+    }
+
+    // Conta do Windows sem proteção: o Windows não tem o que pedir — passa, com o conselho (a página mostra-o primeiro).
+    // Confirmação recusada ou cancelada: não passa.
+    [Fact]
+    public async Task ShowRecoveryKit_UnprotectedAccount_PassesWithAdvice()
+    {
+        var unprotected = Gate(new FakeReauth(ReauthAvailability.Unavailable));
+        Assert.True(await unprotected.RequestAsync(WindowA, ReauthPurpose.ShowRecoveryKit));
+        Assert.Equal(ReauthGate.ProtectAccountAdvice, unprotected.Advice);
+        var refused = new ReauthGate(Reauth.Create(TestReauthMode.Refuse), () => _now);
+        Assert.False(await refused.RequestAsync(WindowA, ReauthPurpose.ShowRecoveryKit));
+    }
+
+    // ETERIS_TEST_REAUTH só num perfil de teste (--user-data-dir): contra o perfil de omissão, a porta é a real.
+    [Fact]
+    public void TestReauth_OnlyOnATestProfile()
+    {
+        Assert.Equal(TestReauthMode.Accept, TestSwitches.ReauthForProfile(TestReauthMode.Accept, customProfile: true));
+        Assert.Null(TestSwitches.ReauthForProfile(TestReauthMode.Accept, customProfile: false));
+        Assert.Null(TestSwitches.ReauthForProfile(TestReauthMode.Refuse, customProfile: false));
+        Assert.Null(TestSwitches.ReauthForProfile(null, customProfile: true));
+        var source = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Vault", "WindowsReauth.cs"));
+        Assert.Contains("TestSwitches.ReauthForProfile(Infrastructure.TestSwitches.Reauth, Infrastructure.AppPaths.IsCustomProfile)", source);
+    }
+
     // Só APIs do sistema por P/Invoke e COM: nada de WinRT projetado nem pacotes novos.
     [Fact]
     public void RealReauth_UsesOnlySystemApis()

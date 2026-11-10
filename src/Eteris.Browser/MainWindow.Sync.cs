@@ -8,6 +8,10 @@ namespace Eteris.Browser;
 // (sempre na thread da interface, chamado por Sync/BrowserProfile).
 public partial class MainWindow
 {
+    // O separador carregou outro documento: o kit de recuperação aberto nele fecha-se (thread do CEF: só um lock e uma
+    // comparação).
+    private static void KitTabNavigated(int browserId) => Sync.SyncService.OpenKit.TabNavigated(browserId);
+
     // Depois de importar um perfil cifrado (Definições › Sincronização): os Espaços em falta entram na primeira janela
     // (sem mudar o que está à vista), as notas abertas recarregam e aparece o resumo.
     internal static void AfterProfileImport(IReadOnlyList<(string Name, int Color, string? Icon)> spaces, string summary)
