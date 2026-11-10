@@ -11,18 +11,20 @@ passar o `Alt` para a página e um link aberto logo a seguir ao arranque já nã
 
 ### Segurança: páginas isoladas (sandbox)
 - **O sandbox sai ligado.** Estava pronto desde a 0.2.12 e desligado até à 0.2.13. Os processos das páginas e do
-  armazenamento correm sem privilégios (Untrusted), a placa gráfica e o áudio com integridade baixa (Low) e o serviço
-  de rede num AppContainer, como no Chrome; nenhum processo do motor corre com `--no-sandbox`
+  armazenamento correm sem privilégios (Untrusted) e a placa gráfica e o áudio com integridade baixa (Low), como no
+  Chrome; o serviço de rede corre num AppContainer (no Chromium 156 esta proteção vem desligada por omissão: o Chrome
+  só a tem com a experiência ligada); nenhum processo do motor corre com `--no-sandbox`
   (`docs/sandbox.md`; `docs/paridade.md`, secção 2).
 - **O Éteris abre sempre.** Se o .NET não arrancar com o sandbox, o Éteris volta a arrancar sem ele; dois arranques
   falhados seguidos (uma queda antes da 1.ª página, ou três processos do motor a cair nos primeiros 30 s) desligam o
   sandbox até à versão seguinte, com um aviso na nova aba. O `sandbox-fallback.json` do perfil guarda de onde veio cada
   falha contada (hora, versão, tipo do processo e código de saída; nunca a linha de comandos nem caminhos).
-- **Atualizar não muda nada do que é seu:** de uma versão sem sandbox para uma com ele, os atalhos, o perfil e o
-  navegador predefinido ficam iguais, e a desinstalação não deixa restos (provado com um pacote de teste pelo
-  Velopack). A pasta de instalação recebe a permissão de que o serviço de rede precisa ao instalar e ao atualizar.
-- **Custo medido:** cerca de 40 ms a mais no arranque (703 → 735 ms até à 1.ª página, 20 rondas) e nenhuma memória a
-  mais. Para o desligar à mão num computador: `--eteris-no-sandbox` no atalho.
+- **Atualizar não muda nada do que é seu:** de uma versão sem sandbox para uma com ele, os atalhos do menu Iniciar e
+  do ambiente de trabalho, o perfil e o navegador predefinido ficam iguais, e a desinstalação não deixa restos (provado
+  com um pacote de teste pelo Velopack; o ícone fixado na barra de tarefas não entrou nessa prova). A pasta de
+  instalação recebe a permissão de que o serviço de rede precisa ao instalar e ao atualizar.
+- **Custo medido:** cerca de 40 ms a mais no arranque (medianas 703 → 735 ms até à 1.ª página; +39 ms na diferença por
+  pares, 20 rondas) e nenhuma memória a mais. Para o desligar à mão num computador: `--eteris-no-sandbox` no atalho.
 - Por ver ao vivo: o proxy do sistema e a autenticação integrada com o serviço de rede no AppContainer (a máquina de
   testes não tem domínio nem proxy; com proxy por argumentos do motor já passou).
 

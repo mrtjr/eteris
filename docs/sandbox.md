@@ -7,9 +7,11 @@ de 1–2 semanas e obriga a alterar o CefSharp.** Ver o plano em baixo.
 
 Até à 0.2.13 os 6 processos do motor do Éteris (páginas, placa gráfica, utilitários) correm com `--no-sandbox`: uma
 falha explorável no código de uma página fica com os mesmos acessos que o utilizador. Nas três referências esses
-processos correm fechados (sem acesso a ficheiros nem ao sistema). **Desde a 0.2.14 (por publicar) a publicação sai
-com o sandbox ligado** (ramo `rede-seguranca`, fundido no ramo da 0.2.14): páginas Untrusted, placa gráfica Low, armazenamento Untrusted e serviço
-de rede no AppContainer, como no Chrome — ver «Como publicar com o sandbox», a seguir. As provas feitas com o nome 0.2.12 (3.ª prova do
+processos correm fechados (sem acesso a ficheiros nem ao sistema). **Desde a 0.2.14 a publicação sai
+com o sandbox ligado** (ramo `rede-seguranca`, fundido no ramo da 0.2.14): páginas Untrusted, placa gráfica Low e armazenamento Untrusted,
+como no Chrome, e o serviço de rede no AppContainer — o mesmo que o Chrome 156 com a experiência de rede ligada (no
+Chromium 156 a `NetworkServiceSandbox` vem desligada por omissão; o Éteris liga-a quando a pasta da instalação tem a
+permissão de que o serviço precisa) — ver «Como publicar com o sandbox», a seguir. As provas feitas com o nome 0.2.12 (3.ª prova do
 Velopack, «Revisão da 0.2.12») ficam como histórico: o sandbox ficou pronto para a 0.2.12, mas a 0.2.12 e a 0.2.13
 saíram sem ele.
 

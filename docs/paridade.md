@@ -16,7 +16,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** desde a 0.2.3 (era 28–36% na 0.2.2) | ✅ resolvido (0.2.3) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** desde a 0.2.3 (era ~30% por aba animada na 0.2.2) | ✅ resolvido (0.2.3) |
 | 1d | Janela que não se vê continua a ser desenhada (página animada, % de 1 núcleo) | minimizada 0,36; tapada por outra 0,28 | 0,95; 0,33 | 0,80; 0,09 | **minimizada: pára** desde a 0.2.14 (0,59; 6,77 na 0.2.13), também noutra área de trabalho e com a sessão bloqueada; **tapada por outra janela: continua a desenhar** (8,96); ver secção 1c, «Medição da 0.2.14» | minimizada ✅ (0.2.14); tapada por outra: em aberto, média |
-| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ligado por omissão na publicação da 0.2.14**: páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, rede de segurança no arranque, CefSharp e DLL cliente reprodutíveis a partir do repositório (`build/sandbox/build-all.ps1`) e atualização de uma 0.2.11 sem sandbox provada pelo Velopack (atalhos, perfil e navegador predefinido iguais; desinstalação sem restos). Até à 0.2.13 a publicação corre com `--no-sandbox` (secção 2) | ✅ resolvido na 0.2.14 (por publicar) |
+| 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ligado por omissão na publicação da 0.2.14**: páginas Untrusted, GPU Low e armazenamento Untrusted, como no Chrome, e serviço de rede no AppContainer (o mesmo que o Chrome 156 com a experiência de rede ligada: no Chromium 156 vem desligado por omissão); funcionalidades verificadas com teclado e rato, rede de segurança no arranque, CefSharp e DLL cliente reprodutíveis a partir do repositório (`build/sandbox/build-all.ps1`) e atualização de uma 0.2.11 sem sandbox provada pelo Velopack (atalhos, perfil e navegador predefinido iguais; desinstalação sem restos). Até à 0.2.13 a publicação corre com `--no-sandbox` (secção 2) | ✅ resolvido na 0.2.14 |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (0.2.3) |
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | desde a 0.2.9: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido (0.2.9) |
@@ -243,9 +243,9 @@ memória privada sem o processo da placa gráfica; processador = % de um núcleo
   ~10% nesses passos não são conclusivas. O indexador de pesquisa do Windows gastou ~32% de um núcleo durante toda a
   medição, igual em todos os braços.
 
-## 2. Sandbox — resolvido na 0.2.14 (por publicar): ligado por omissão na publicação (2026-11-08)
+## 2. Sandbox — resolvido na 0.2.14: ligado por omissão na publicação (2026-11-08)
 
-**0.2.14 (ramo `rede-seguranca`, preparado com o nome 0.2.12, por publicar):** `build/publish.ps1` passa a publicar **com** sandbox por omissão
+**0.2.14 (ramo `rede-seguranca`, preparado com o nome 0.2.12):** `build/publish.ps1` passa a publicar **com** sandbox por omissão
 (`-NoSandbox` só para emergências; a publicação pelo CI sem codecs usa-o). O CefSharp com o patch v2 e a DLL cliente
 saem do repositório com um só script, `build/sandbox/build-all.ps1` (feed local `build/cefsharp/feed` e
 `build/sandbox/client/out`, com verificação e a bateria de testes no modo com sandbox); passo a passo em
