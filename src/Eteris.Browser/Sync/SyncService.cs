@@ -103,11 +103,33 @@ internal static class SyncService
             SyncAgent agent = _agent;
             _agent.Changed += () =>
             {
-                var first = !FolderMode && Expired.Observe(agent.Status.NeedsSignIn);
+                var first = !FolderMode && Expired.Observe(Guarded(() => agent.Status.NeedsSignIn, false));
                 Changed?.Invoke();
                 if (first) NeedsSignIn?.Invoke();
             };
             return _agent;
+        }
+    }
+
+    // Rede de segurança: ler o estado para a interface (barras, menu, agendador) ou gravar uma resposta de uma barra
+    // nunca deixa sair uma exceção para a thread da IU nem para quem avisou a mudança (sem tratador global, fechava o
+    // Éteris). Falhou: o valor de «sem estado», e segue.
+    internal static T Guarded<T>(Func<T> read, T fallback)
+    {
+        try { return read(); }
+        catch (Exception e)
+        {
+            System.Diagnostics.Debug.WriteLine("[sincronização] o estado não se leu: " + e.GetType().Name);
+            return fallback;
+        }
+    }
+
+    internal static void Guarded(Action act)
+    {
+        try { act(); }
+        catch (Exception e)
+        {
+            System.Diagnostics.Debug.WriteLine("[sincronização] a ação não se cumpriu: " + e.GetType().Name);
         }
     }
 
@@ -124,7 +146,7 @@ internal static class SyncService
     // exceções: lê o campo (nunca cria o agente) e, sem aviso pendente, não lê mais nada.
     public static bool SignInPrompt
     {
-        get { return Expired.Pending && !FolderMode && _agent?.Status.NeedsSignIn == true; }
+        get { return Expired.Pending && !FolderMode && Guarded(() => _agent?.Status.NeedsSignIn == true, false); }
     }
 
     // «Entrar», «Agora não» (e, na T12, sair): o aviso não volta nesta abertura; todas as janelas o escondem.
@@ -184,7 +206,8 @@ internal static class SyncService
     // Uma alteração local (favorito, definição, Escudo, Espaço, notas): sincroniza 10 s depois da última.
     public static void Touch()
     {
-        if (!Enabled || Agent()?.Status.NeedsSignIn == true) return;
+        // Chamado na thread de quem mudou uma definição ou um favorito: nunca lança.
+        if (!Guarded(() => Enabled && Agent()?.Status.NeedsSignIn != true, false)) return;
         lock (Gate) Schedule.LocalChange(Now());
         Arm();
     }
@@ -306,7 +329,7 @@ internal static class SyncService
         {
             Schedule.Now(Now());
             Schedule.Done(Now(), ok);
-            if (agent.Status.NeedsSignIn || !agent.Enabled) Schedule.Stop();
+            if (Guarded(() => agent.Status.NeedsSignIn || !agent.Enabled, false)) Schedule.Stop();
         }
         Arm();
     }
@@ -467,7 +490,7 @@ internal static class SyncService
     {
         var agent = _agent;
         // Com a conta a sincronizar pagamentos e documentos, o computador novo recebe também cartões e documentos.
-        return PairingBarModel.From(agent?.Status, Now(), SyncChoices.Receives(_agent?.AccountSecrets == true));
+        return PairingBarModel.From(Guarded(() => agent?.Status, null), Now(), SyncChoices.Receives(_agent?.AccountSecrets == true));
     }
 
     // ---- pagamentos e documentos: a oferta única (0.2.15, T10) ------------------------------------------------------
@@ -479,7 +502,7 @@ internal static class SyncService
     // A barra da oferta deve estar à vista. Lê o campo (nunca cria o agente): barato, sem E/S nem rede.
     public static bool SecretsOfferPrompt
     {
-        get { return !_offerClosed && _agent?.SecretsOffer == true; }
+        get { return !_offerClosed && Guarded(() => _agent?.SecretsOffer == true, false); }
     }
 
     public static void CloseSecretsOffer()
@@ -558,8 +581,9 @@ internal static class SyncService
         // cria o agente nem lê o disco.
         if (privateWindow || !_firstRoundDone) return;
         // O campo, nunca a função que cria o agente.
-        if (_agent is not { } agent || !Enabled) return;
-        var status = agent.Status;
+        if (_agent is not { } agent) return;
+        // Na thread da IU, em cada ativação da janela: sem estado, nada.
+        if (Guarded(() => Enabled ? agent.Status : null, null) is not { } status) return;
         // Com a barra calada (pedidos em série), um pedido contado já não dá direito a procurar logo: 5 minutos.
         var counted = status.PairingQuiet ? 0 : status.WaitingRequests;
         if (Activation.TryPass(Now(), counted, firstRoundDone: true)) Look();
@@ -569,7 +593,7 @@ internal static class SyncService
 
     // O que as barras do computador novo mostram agora. Lê o campo (nunca cria o agente; sem agente, nada) e só memória:
     // é chamado pelos «wants» das candidatas, a cada RefreshBars.
-    internal static GuestPairingView GuestPairingState() => GuestPairingModel.From(_agent?.Status);
+    internal static GuestPairingView GuestPairingState() => GuestPairingModel.From(Guarded(() => _agent?.Status, null));
 
     private static volatile bool _replacedDismissed;
     private static volatile bool _guestCardOpen = true;
@@ -652,7 +676,7 @@ internal static class SyncService
             agent = _agent;
             if (agent is null || _kitAnswered || isPrivate) return null;
         }
-        var status = agent.Status;
+        if (Guarded(() => agent.Status, null) is not { } status) return null;
         var view = RecoveryReminder.Decide(new KitReminderInput(status.Kit, status.Phase == SyncPhase.On, isPrivate, SessionStartMs, false), Now());
         return view.Bar ? view : null;
     }
@@ -667,14 +691,15 @@ internal static class SyncService
     // «Mais tarde»: 30 dias (RecoveryReminder.SnoozeDays).
     public static void SnoozeKit()
     {
-        _agent?.SnoozeKit(RecoveryReminder.SnoozeUntil(Now()));
+        // Grava no disco, na thread da IU: se o disco falhar, a barra fecha na mesma (o lembrete volta noutra abertura).
+        Guarded(() => _agent?.SnoozeKit(RecoveryReminder.SnoozeUntil(Now())));
         KitBarAnswered();
     }
 
     // «Não quero: aceito que…»: acaba com o lembrete (barra e menu), também depois de reiniciar.
     public static void DeclineKit()
     {
-        _agent?.DeclineKit();
+        Guarded(() => _agent?.DeclineKit());
         KitBarAnswered();
     }
 

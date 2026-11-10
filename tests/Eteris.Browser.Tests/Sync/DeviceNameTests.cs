@@ -218,6 +218,10 @@ public sealed class DeviceNameTests : IDisposable
         Assert.Equal("Casa", casa.Agent.DeviceName);
         await casa.Agent.RenameDeviceAsync(new string('z', 80));
         Assert.Equal(new string('z', 60), casa.Agent.DeviceName);
+        // Guardado já neste computador; o motor (e, por ele, os outros computadores) recebe-o na ronda seguinte: fora
+        // de uma ronda ninguém mexe no motor.
+        Assert.Equal(new string('z', 60), casa.Store.Load()!.DeviceName);
+        Assert.True(await casa.Agent.RunAsync());
         Assert.Equal(new string('z', 60), casa.Store.Load()!.Engine!.Device.Name);
     }
 

@@ -306,7 +306,7 @@ public sealed class SyncAgent
             _saved ??= new SavedSync();
             _saved.DeviceName = clean;
             DeviceName = clean;
-            _engine?.Rename(clean);
+            // O motor só é de quem tem a ronda: o nome chega-lhe no passo 0 da ronda seguinte (ApplyChosenName).
             _store.Save(_saved);
         }
         Notify();
@@ -705,8 +705,7 @@ public sealed class SyncAgent
             lock (_gate)
                 if (!IsCurrent(saved))
                     _engine = null;
-            SetRunning(false);
-            _run.Release();
+            EndRun();
         }
     }
 
@@ -730,7 +729,9 @@ public sealed class SyncAgent
         using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
         try
         {
-            var engine = await SyncEngine.ResumeAsync(Transport(), account, state, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
+            // O motor fica com uma cópia: o estado guardado não muda enquanto ele trabalha (Snapshot).
+            var engine = await SyncEngine.ResumeAsync(Transport(), account, SyncState.Parse(state.ToBytes()), _now, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             lock (_gate)
             {
                 if (!IsCurrent(saved)) return false;
@@ -773,6 +774,7 @@ public sealed class SyncAgent
             using var account = AccountSecret.Create();
             var engine = await SyncEngine.CreateAsync(Transport(), account, DeviceIdentity.Create(DeviceName), _now, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
+            var snapshot = Snapshot(engine);
             lock (_gate)
             {
                 if (!IsCurrent(saved)) return;
@@ -783,7 +785,7 @@ public sealed class SyncAgent
                 saved.Kit = null;
                 KitFor(saved, account);
                 saved.HadAccount = true;
-                saved.Engine = engine.State;
+                saved.Engine = snapshot;
                 saved.Baseline = null;
                 saved.Joined = null;
                 saved.CreatedMs = _now();
@@ -853,10 +855,11 @@ public sealed class SyncAgent
             finally
             {
                 // O que ficou na caixa de saída (e o que já se leu) fica guardado mesmo que a ronda falhe a meio.
+                var staged = Snapshot(engine);
                 lock (_gate)
                     if (IsCurrent(saved) && ReferenceEquals(_engine, engine))
                     {
-                        saved.Engine = engine.State;
+                        saved.Engine = staged;
                         _store.Save(saved);
                     }
             }
@@ -892,16 +895,21 @@ public sealed class SyncAgent
         if (now - saved.LastCompactMs > (long)TimeSpan.FromDays(1).TotalMilliseconds && engine.State.NextSeq - 1 > saved.LastCompactSeq)
         {
             await engine.CompactAsync(cancellationToken).ConfigureAwait(false);
-            saved.LastCompactMs = now;
-            saved.LastCompactSeq = engine.State.NextSeq - 1;
+            var compacted = engine.State.NextSeq - 1;
+            lock (_gate)
+            {
+                saved.LastCompactMs = now;
+                saved.LastCompactSeq = compacted;
+            }
         }
         // Numa ronda, os pedidos de aparelhos novos só se contam (para o menu dizer que há um): responder-lhes faz
         // pedidos durante minutos e só acontece quando o utilizador abre o menu ou a secção Sincronização.
         await AnswerRequestsCoreAsync(answer: false, cancellationToken).ConfigureAwait(false);
+        var done = Snapshot(engine);
         lock (_gate)
         {
             if (!IsCurrent(saved) || !ReferenceEquals(_engine, engine)) return;
-            saved.Engine = engine.State;
+            saved.Engine = done;
             saved.LastSuccessMs = now;
             if (saved.Account is null && AccountKey?.Invoke() is { } account) saved.Account = account;
             _store.Save(saved);
@@ -1017,6 +1025,7 @@ public sealed class SyncAgent
                     }
                     engine.AdoptDeviceKeys(old, rekey.Devices);
                     engine.RestageOwn(old);
+                    var rekeyed = Snapshot(engine);
                     lock (_gate)
                     {
                         if (!IsCurrent(saved)) return;
@@ -1025,7 +1034,7 @@ public sealed class SyncAgent
                         // Este computador recebeu a cadeia nova: o kit que tinha guardado deixou de valer.
                         KitFor(saved, rekey.Secret!);
                         saved.HadAccount = true;
-                        saved.Engine = engine.State;
+                        saved.Engine = rekeyed;
                         saved.Rotation = null;
                         saved.CreatedMs = 0;
                         // Os dados deste computador não mudaram: a base continua a valer, e o que mudou desde a última
@@ -1153,8 +1162,7 @@ public sealed class SyncAgent
             }
             finally
             {
-                SetRunning(false);
-                _run.Release();
+                EndRun();
             }
         }
     }
@@ -1177,6 +1185,7 @@ public sealed class SyncAgent
         }
         var engine = await SyncEngine.JoinAsync(Transport(), account, DeviceIdentity.Create(DeviceName), _now, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
+        var snapshot = Snapshot(engine);
         lock (_gate)
         {
             if (!ReferenceEquals(_saved, before) || before is { DeletePending: true } || (wasOn && before is { Enabled: false })) return false;
@@ -1188,7 +1197,7 @@ public sealed class SyncAgent
             // A mesma chave (reentrada): nada muda; outra conta: o kit é outro (deixou de valer, ou por guardar).
             KitFor(_saved, account);
             _saved.HadAccount = true;
-            _saved.Engine = engine.State;
+            _saved.Engine = snapshot;
             _saved.Baseline = null; // primeira vez: junta sem perder nada (ProfileSync)
             _saved.Joined = null;
             _saved.CodePending = false;
@@ -1280,8 +1289,7 @@ public sealed class SyncAgent
                 }
                 finally
                 {
-                    SetRunning(false);
-                    _run.Release();
+                    EndRun();
                 }
             }
             catch (OperationCanceledException) { }
@@ -1638,13 +1646,14 @@ public sealed class SyncAgent
         foreach (var peer in engine.State.PeerKeys.Keys)
             if (!list.Any(d => d.Id == peer))
                 list.Add(new DeviceInfo(peer, DeviceNameText.Shown(engine.State.DeviceNames.GetValueOrDefault(peer)), "pc", 0, false));
+        var pinned = Snapshot(engine);
         lock (_gate)
         {
             if (!ReferenceEquals(_engine, engine)) return;
             _devices = list;
             if (_saved is { Enabled: true })
             {
-                _saved.Engine = engine.State; // chaves fixadas
+                _saved.Engine = pinned; // chaves fixadas
                 _store.Save(_saved);
             }
         }
@@ -1694,15 +1703,17 @@ public sealed class SyncAgent
             var (rotated, secret, pending) = await engine.StartRotationAsync(device, staying, cancellationToken).ConfigureAwait(false);
             using (secret)
             {
+                // O motor novo ainda é só desta ronda: leva o nome escolhido antes de se guardar a cópia.
+                lock (_gate) ApplyChosenName(rotated);
+                var snapshot = Snapshot(rotated);
                 lock (_gate)
                 {
                     if (!IsCurrent(saved)) throw new SyncUserException("A sincronização foi desligada entretanto.");
                     // Guardado ANTES de mexer na conta antiga: uma falha a seguir continua na ronda seguinte.
                     _engine = rotated;
-                    ApplyChosenName(rotated);
                     saved.Secret = Kdf.Base64Url(secret.ToBytes());
                     saved.HadAccount = true;
-                    saved.Engine = rotated.State;
+                    saved.Engine = snapshot;
                     // Cadeia nova: kit novo; o guardado (se havia) deixou de valer.
                     KitFor(saved, secret);
                     saved.Rotation = pending;
@@ -1737,8 +1748,7 @@ public sealed class SyncAgent
         }
         finally
         {
-            SetRunning(false);
-            _run.Release();
+            EndRun();
         }
         Notify();
     }
@@ -1894,8 +1904,7 @@ public sealed class SyncAgent
         }
         finally
         {
-            SetRunning(false);
-            _run.Release();
+            EndRun();
         }
         Notify();
     }
@@ -2064,13 +2073,20 @@ public sealed class SyncAgent
 
     // Quantos computadores há na conta, sem rede (inclui este): a lista da última leitura dos aparelhos; antes dela,
     // este mais as chaves fixadas dos outros (DeviceNames não serve: guarda os removidos). Na dúvida conta a menos —
-    // o lembrete a mais é o lado seguro. Chamar dentro do _gate.
+    // o lembrete a mais é o lado seguro. Lê só a cópia guardada, nunca o motor (Status é lido de qualquer thread, a meio
+    // de uma ronda). Chamar dentro do _gate.
     private int KnownDevices(SavedSync saved)
     {
         if (_devices.Count > 0) return _devices.Count;
-        if ((_engine?.State ?? saved.Engine) is not { } state) return 1;
+        if (saved.Engine is not { } state) return 1;
         return 1 + state.PeerKeys.Keys.Count(k => k != state.Device.Id);
     }
+
+    // Uma cópia do estado do motor, para guardar. O motor muda o seu estado no sítio durante a ronda, fora do _gate; o
+    // que fica em SavedSync.Engine é lido por Status e serializado por cada gravação, de qualquer thread — por isso
+    // nunca é esse objeto, e ninguém muda a cópia depois de guardada. Só quem tem a ronda (_run) chama isto, e FORA do
+    // _gate (serializa o estado inteiro).
+    private static SyncState Snapshot(SyncEngine engine) => SyncState.Parse(engine.State.ToBytes());
 
     // ---- auxiliares -------------------------------------------------------------------------------------------------
 
@@ -2106,7 +2122,24 @@ public sealed class SyncAgent
         }
     }
 
-    private void Notify() => Changed?.Invoke();
+    // Cada assinante por si: a exceção de um (a interface a redesenhar-se) não sai para a operação que avisou — que
+    // ficava a meio, com o trinco das rondas por libertar ou «Sair» por acabar — nem cala os assinantes seguintes.
+    private void Notify()
+    {
+        if (Changed is not { } changed) return;
+        foreach (var subscriber in changed.GetInvocationList())
+        {
+            try { ((Action)subscriber)(); }
+            catch (Exception e) { Log?.Invoke($"Um assinante de Changed falhou ({e.GetType().Name})."); }
+        }
+    }
+
+    // O fim de uma operação com o trinco das rondas: o trinco sai sempre.
+    private void EndRun()
+    {
+        try { SetRunning(false); }
+        finally { _run.Release(); }
+    }
 
     // Falhas que passam sozinhas (rede, sessão, pasta): ficam no estado e o agendador tenta outra vez mais tarde. A
     // autorização da Google retirada ou expirada (OAuthException.NeedsSignIn) também cai aqui, mas fica marcada em
