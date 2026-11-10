@@ -372,7 +372,21 @@ internal static class SyncService
     internal static PairingBarView PairingBarState()
     {
         var agent = _agent;
-        return PairingBarModel.From(agent?.Status, Now(), PairingBarModel.DefaultReceives);
+        // Com a conta a sincronizar pagamentos e documentos, o computador novo recebe também cartões e documentos.
+        return PairingBarModel.From(agent?.Status, Now(), SyncChoices.Receives(_agent?.AccountSecrets == true));
+    }
+
+    // ---- pagamentos e documentos: a oferta única (0.2.15, T10) ------------------------------------------------------
+
+    // A resposta à oferta «receber também neste?» (barra e Definições). «Sim» pede o Windows Hello (confirm). Devolve a
+    // mensagem de erro, ou null.
+    public static async Task<string?> AnswerSecretsOfferAsync(bool accept, Func<Vault.ReauthPurpose, Task<bool>> confirm)
+    {
+        if (Agent() is not { } agent) return null;
+        var error = await SyncChoices.AnswerOfferAsync(agent, accept, confirm).ConfigureAwait(false);
+        Say("offer", error);
+        if (error is null && accept) SyncNow();
+        return error;
     }
 
     // A pessoa escreveu na barra o código que o computador novo mostra. «confirm» é a porta do Windows da janela que tem
@@ -654,7 +668,12 @@ internal static class SyncService
             {
                 id = d.Id, name = d.Name, me = d.IsThis,
                 last = d.LastSyncMs > 0 ? "sincronizou " + Ago(d.LastSyncMs, nowMs) : "ainda não sincronizou",
+                // Recebe pagamentos e documentos (null: um Éteris antigo, que não o diz).
+                receivesSecrets = d.PaymentsAndDocuments,
             }),
+            // A conta sincroniza pagamentos e documentos, e a oferta única «receber também neste?».
+            accountSecrets = status.AccountSecrets,
+            offer = status.SecretsOffer,
             update = status.NeedsUpdate,
             deleting = status.Deleting,
             deleteError = status.DeleteError,

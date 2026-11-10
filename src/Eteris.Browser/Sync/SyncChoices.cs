@@ -32,10 +32,15 @@ internal static class SyncChoices
         ["travel"] = ("Viagens", "Veículos e programas de fidelidade"),
     };
 
-    public static IReadOnlyList<Row> Rows(IReadOnlySet<string> enabled)
+    // «account» (a escolha da conta) entra imediatamente antes de «Pagamentos»: ligada com a conta a sincronizar
+    // pagamentos e documentos e os dois grupos ligados neste computador. As linhas por grupo ficam (desligar é por PC).
+    public static IReadOnlyList<Row> Rows(IReadOnlySet<string> enabled, AccountChoice? account = null)
     {
         var rows = SyncGroups.All.Select(g => new Row(g.Id, Texts[g.Id].Title, Texts[g.Id].Text + (g.AskToEnable ? " · ligar pede o Windows Hello" : string.Empty),
             g.Collections.All(enabled.Contains), g.AskToEnable)).ToList();
+        rows.Insert(rows.FindIndex(r => r.Id == SyncGroups.Payments), new Row(AccountRow, AccountLine,
+            AccountText + (account is { On: true } chosen ? AccountSince(chosen.By, chosen.SinceMs) : string.Empty),
+            account?.On == true && SyncGroups.AccountCollections.All(enabled.Contains), Ask: true));
         rows.Add(new Row("tabs", "Abas abertas", "Não passam: ficam em cada computador", null, false));
         rows.Add(new Row("passkeys", "Chaves de acesso", "Não passam: ficam no Windows Hello ou na chave de segurança", null, false));
         return rows;
@@ -49,6 +54,32 @@ internal static class SyncChoices
     public const string AccountRow = "account";
 
     public const string AccountLine = "Também pagamentos e documentos de identificação";
+
+    // O botão discreto na barra «Sincronizado.» do computador que criou a conta (abre a linha nas Definições).
+    public const string AccountLink = "Também pagamentos e documentos…";
+
+    // PROPOSTA de texto (o plano não o dá): a descrição por baixo da linha.
+    public const string AccountText =
+        "Cartões (sem o código de segurança), IBAN e documentos. Ligar pede o Windows Hello uma vez; os computadores que entrarem depois recebem-nos sem pedir de novo.";
+
+    // A oferta única num computador que já estava ligado quando a escolha foi feita (barra e Definições).
+    public const string OfferText = "Os seus outros computadores sincronizam agora pagamentos e documentos. Receber também neste?";
+    public const string OfferYes = "Sim";
+    public const string OfferNo = "Não";
+
+    // O que o computador novo recebe, no pedido de aprovação (depois de «…quer entrar na sua conta e receber »).
+    public static string Receives(bool accountSecrets)
+        => accountSecrets ? "as suas palavras-passe, cartões e documentos" : PairingBarModel.DefaultReceives;
+
+    // O que a barra «Sincronizado.» diz no computador que herdou a escolha (null = «Sincronizado.», como estava).
+    public static string? ReceivedText(bool inherited) => inherited ? SyncAgent.InheritedText : null;
+
+    // A escolha da conta para a página: ligada, por quem e quando (By/SinceMs são informação, não prova).
+    public sealed record AccountChoice(bool On, string? By, long SinceMs)
+    {
+        public static AccountChoice? Of(SyncAgent? agent)
+            => agent is null ? null : new AccountChoice(agent.AccountSecrets, agent.AccountSecretsBy, agent.AccountSecretsSinceMs);
+    }
 
     private const string NotOnHere = "A sincronização não está ligada neste computador.";
 
@@ -131,9 +162,9 @@ internal static class SyncChoices
         return (true, collect());
     }
 
-    public static object Data(IReadOnlySet<string> enabled) => new
+    public static object Data(IReadOnlySet<string> enabled, AccountChoice? account = null) => new
     {
         intro = Intro,
-        rows = Rows(enabled).Select(r => new { id = r.Id, title = r.Title, text = r.Text, on = r.On, ask = r.Ask }),
+        rows = Rows(enabled, account).Select(r => new { id = r.Id, title = r.Title, text = r.Text, on = r.On, ask = r.Ask }),
     };
 }

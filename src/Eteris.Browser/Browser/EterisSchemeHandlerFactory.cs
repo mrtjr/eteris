@@ -206,6 +206,16 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                 });
             }
+            case "/sync-offer" when InternalPages.Query(uri, "a") is "1" or "0":
+            {
+                // A oferta única «receber também neste?» (pagamentos e documentos): «Sim» pede o Windows Hello.
+                var accept = InternalPages.Query(uri, "a") == "1";
+                return new VaultResourceHandler(async () =>
+                {
+                    await Sync.SyncService.AnswerSecretsOfferAsync(accept, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false);
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
             case "/sync-export":
                 try
                 {

@@ -70,7 +70,9 @@ public static class SettingsPage
             enabled = !isPrivate && Sync.SyncService.Enabled,
             hasKey = !isPrivate && Sync.SyncService.Agent()?.HasKey == true,
             // «O que passa entre PCs»: as linhas e o interruptor de cada uma neste computador.
-            choices = isPrivate ? null : Sync.SyncChoices.Data(Sync.SyncService.Agent()?.EnabledCollections ?? Eteris.Sync.Model.SyncGroups.DefaultCollections),
+            // A linha da escolha da conta diz se está ligada, onde e quando (T10).
+            choices = isPrivate ? null : Sync.SyncChoices.Data(Sync.SyncService.Agent()?.EnabledCollections ?? Eteris.Sync.Model.SyncGroups.DefaultCollections,
+                Sync.SyncChoices.AccountChoice.Of(Sync.SyncService.Agent())),
             message = isPrivate ? null : Sync.SyncService.Message,
         };
     }

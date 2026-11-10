@@ -550,6 +550,12 @@
               <a href="#syncKitItem" class="syncnote" id="syncKitDecline" hidden>Não quero guardar o kit</a></div>
             <div class="stack"><button class="action" id="syncKitShow">Ver o kit</button><button class="action" id="syncKitNew">Gerar um kit novo…</button></div>
           </div>
+          <!-- A oferta única (pagamentos e documentos): fora do tópico, para ficar à vista até ter resposta. -->
+          <div class="item syncalert" id="syncOfferItem" hidden>
+            <div class="label"><b>Os seus outros computadores sincronizam agora pagamentos e documentos. Receber também neste?</b>
+              <span class="syncnote" id="syncOfferNote" role="status" hidden></span></div>
+            <div class="stack"><button class="action" id="syncOfferYes">Sim <small>(Windows Hello)</small></button><button class="action" id="syncOfferNo">Não</button></div>
+          </div>
           <div class="item" id="syncTopicItem">
             <div class="label"><b id="syncTopicTitle">O que passa entre PCs</b><span id="syncTopicIntro"></span>
               <ul class="topic" id="syncTopic" aria-labelledby="syncTopicTitle"></ul>
@@ -1137,6 +1143,9 @@
       show('syncPairItem', d.enabled && ['waiting', 'code', 'timeUp', 'stillWaiting', 'refused', 'failed'].includes(guest));
       show('syncNameItem', d.enabled);
       show('syncDevicesItem', d.enabled && phase === 'on' && (s.devices || []).length > 0);
+      // A oferta única «receber também neste?» (pagamentos e documentos), até ter resposta.
+      show('syncOfferItem', d.enabled && !!s.offer);
+      note($('syncOfferNote'), msg0(d, 'offer'), true);
       show('syncDeleteItem', d.connected);
       // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
       $('syncOffTitle').textContent = phase === 'stopped' ? 'A sincronização parou neste computador' : 'A sincronização está desligada neste computador';
@@ -1201,14 +1210,16 @@
       const list = $('syncDevices');
       const devices = s.devices || [];
       for (const id of [...armed.keys()]) if (!devices.some(dev => dev.id === id)) armed.delete(id);
-      const dKey = JSON.stringify(devices.map(dev => [dev.id, dev.name, dev.me, dev.last]));
+      const dKey = JSON.stringify(devices.map(dev => [dev.id, dev.name, dev.me, dev.last, dev.receivesSecrets]));
       if (dKey !== devicesKey) {
         devicesKey = dKey;
         const focused = keyOfFocus(list);
         list.replaceChildren(...devices.map(dev => {
           const li = document.createElement('li');
           const name = document.createElement('span'); name.className = 'devname'; name.textContent = dev.name;
-          const info = document.createElement('small'); info.textContent = (dev.me ? 'este computador · ' : '') + dev.last;
+          // Recebe pagamentos e documentos: só se o aparelho o disser (um Éteris antigo não diz nada).
+          const info = document.createElement('small'); info.textContent = (dev.me ? 'este computador · ' : '') + dev.last
+            + (dev.receivesSecrets === true ? ' · recebe pagamentos e documentos' : '');
           li.append(name, info);
           if (!dev.me) {
             const remove = document.createElement('button'); remove.className = 'action danger'; remove.dataset.key = dev.id;
@@ -1271,6 +1282,13 @@
       nameForm.submit();
       editName(false);
     });
+    // A oferta única: «Sim» pede o Windows Hello (a resposta chega depois dele); «Não» fecha-a neste computador.
+    const answerOffer = accept => {
+      $('syncOfferYes').disabled = true; $('syncOfferNo').disabled = true;
+      ask('sync-offer', reply => { $('syncOfferYes').disabled = false; $('syncOfferNo').disabled = false; paint(reply); }, accept ? '&a=1' : '&a=0');
+    };
+    $('syncOfferYes').addEventListener('click', () => answerOffer(true));
+    $('syncOfferNo').addEventListener('click', () => answerOffer(false));
     const msg0 = (d, area) => d.message && d.message.area === area ? d.message.text : '';
     // «O que passa entre PCs»: as linhas só se reconstroem quando mudam (uma sondagem não tira o foco do teclado).
     let topicKey = null;
@@ -1279,7 +1297,8 @@
       const c = d.choices;
       if (!c) return;
       $('syncTopicIntro').textContent = c.intro;
-      const tKey = JSON.stringify(c.rows.map(r => [r.id, r.on]));
+      // Com o texto: a descrição da linha da conta muda quando a escolha é ligada («Ligado em…»).
+      const tKey = JSON.stringify(c.rows.map(r => [r.id, r.on, r.text]));
       note($('syncTopicNote'), msg0(d, 'choices'), true);
       if (tKey === topicKey) return;
       topicKey = tKey;

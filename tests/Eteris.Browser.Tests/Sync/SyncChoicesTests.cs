@@ -64,8 +64,9 @@ public sealed class SyncChoicesTests : IDisposable
     public void Rows_AreThoseOfSection46_InOrder_WithTheDefaultsOfD1()
     {
         var rows = SyncChoices.Rows(SyncGroups.DefaultCollections);
-        Assert.Equal(["Favoritos", "Espaços", "Definições", "Decisões do Escudo", "Notas", "Palavras-passe", "Pagamentos", "Informações de contacto",
-            "Documentos de identificação", "Viagens", "Abas abertas", "Chaves de acesso"], rows.Select(r => r.Title));
+        // 0.2.15 (T10): a escolha da conta entra imediatamente antes de «Pagamentos».
+        Assert.Equal(["Favoritos", "Espaços", "Definições", "Decisões do Escudo", "Notas", "Palavras-passe", "Também pagamentos e documentos de identificação",
+            "Pagamentos", "Informações de contacto", "Documentos de identificação", "Viagens", "Abas abertas", "Chaves de acesso"], rows.Select(r => r.Title));
         string Text(string id) => rows.Single(r => r.Id == id).Text;
         bool? On(string id) => rows.Single(r => r.Id == id).On;
         Assert.StartsWith("Palavras-passe, notas e sites onde nunca guardar", Text("passwords"));
@@ -81,10 +82,84 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.False(On("documents"));
         Assert.Null(On("passkeys"));
         Assert.Null(On("tabs"));
-        Assert.Equal(["payments", "documents"], rows.Where(r => r.Ask).Select(r => r.Id));
+        Assert.Equal(["account", "payments", "documents"], rows.Where(r => r.Ask).Select(r => r.Id));
+        Assert.False(On("account"));
+        Assert.Equal(SyncChoices.AccountText, Text("account"));
         Assert.Contains("ligar pede o Windows Hello", Text("payments"));
         Assert.Contains("desligar uma linha não apaga nada", SyncChoices.Intro);
         Assert.Contains("segunda cifra", SyncChoices.Intro);
+
+        // Com a escolha ligada na conta e os dois grupos aqui: ligada, e diz onde e quando (informação, não prova).
+        var ms = new DateTimeOffset(2026, 11, 9, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var day = DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime().ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        var both = SyncGroups.DefaultCollections.Concat(SyncGroups.AccountCollections).ToHashSet(StringComparer.Ordinal);
+        var account = SyncChoices.Rows(both, new SyncChoices.AccountChoice(true, "Casa", ms)).Single(r => r.Id == "account");
+        Assert.True(account.On);
+        Assert.EndsWith($" Ligado em «Casa» em {day}.", account.Text);
+        Assert.StartsWith(SyncChoices.AccountText, account.Text);
+        Assert.Equal($" Ligado em {day}.", SyncChoices.AccountSince(null, ms));
+        // Só um dos grupos aqui: a linha está desligada (neste computador falta o outro).
+        var one = SyncGroups.DefaultCollections.Concat(["cards", "ibans"]).ToHashSet(StringComparer.Ordinal);
+        Assert.False(SyncChoices.Rows(one, new SyncChoices.AccountChoice(true, "Casa", ms)).Single(r => r.Id == "account").On);
+        // A conta sem a escolha, mesmo com os dois grupos aqui: desligada, sem «Ligado em».
+        var off = SyncChoices.Rows(both, new SyncChoices.AccountChoice(false, "Casa", ms)).Single(r => r.Id == "account");
+        Assert.False(off.On);
+        Assert.Equal(SyncChoices.AccountText, off.Text);
+        Assert.Null(SyncChoices.AccountChoice.Of(null));
+    }
+
+    // Os textos da secção 3 do brief da T10, carácter a carácter (os que o plano dá à letra).
+    [Fact]
+    public void Texts_SayCardsAndDocuments_WhenTheAccountSyncsThem()
+    {
+        Assert.Equal("as suas palavras-passe, cartões e documentos", SyncChoices.Receives(true));
+        Assert.Equal("as suas palavras-passe", SyncChoices.Receives(false));
+        Assert.Equal(PairingBarModel.DefaultReceives, SyncChoices.Receives(false));
+        Assert.Equal("Recebeu favoritos, palavras-passe, cartões e documentos", SyncChoices.ReceivedText(true));
+        Assert.Null(SyncChoices.ReceivedText(false));
+        Assert.Equal("Também pagamentos e documentos de identificação", SyncChoices.AccountLine);
+        Assert.Equal("Também pagamentos e documentos…", SyncChoices.AccountLink);
+        Assert.Equal("Os seus outros computadores sincronizam agora pagamentos e documentos. Receber também neste?", SyncChoices.OfferText);
+        Assert.Equal("Sim", SyncChoices.OfferYes);
+        Assert.Equal("Não", SyncChoices.OfferNo);
+        Assert.Equal("", SyncChoices.AccountSince(null, 0));
+        Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe, cartões e documentos",
+            PairingBarModel.Title(SyncChoices.Receives(true)));
+
+        // O estado da página: a escolha da conta, a oferta e, por aparelho, se recebe (null num Éteris antigo).
+        var status = TestStatus.Of(SyncPhase.On) with
+        {
+            AccountSecrets = true,
+            SecretsOffer = true,
+            Devices =
+            [
+                new DeviceInfo("a", "Casa", "pc", 0, true) { PaymentsAndDocuments = true },
+                new DeviceInfo("b", "Trabalho", "pc", 0, false) { PaymentsAndDocuments = false },
+                new DeviceInfo("c", "Antigo", "pc", 0, false),
+            ],
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(SyncService.StatusData(status, 1_762_560_000_000));
+        Assert.Contains("\"accountSecrets\":true", json);
+        Assert.Contains("\"offer\":true", json);
+        Assert.Contains("\"receivesSecrets\":true", json);
+        Assert.Contains("\"receivesSecrets\":false", json);
+        Assert.Contains("\"receivesSecrets\":null", json);
+    }
+
+    // R11: preencher e «Mostrar» continuam a pedir o Windows Hello como antes; a escolha da conta só pede SyncSecrets.
+    [Fact]
+    public async Task FillAndReveal_StillAskWindowsHello()
+    {
+        Assert.True(ReauthPolicy.Needs(ReauthPurpose.FillPayment, false, true));
+        Assert.True(ReauthPolicy.Needs(ReauthPurpose.FillDocument, false, true));
+        Assert.True(ReauthPolicy.Needs(ReauthPurpose.Reveal, false, false));
+        Assert.True(ReauthPolicy.IsAlways(ReauthPurpose.SyncSecrets));
+
+        var agent = new SyncAgent(() => new FolderTransport(Path.Combine(_root, "pasta")), new SecretMemoryProfile(), new MemoryStore(), "Casa", () => 1_762_560_000_000);
+        await agent.StartAsync();
+        _answer = true;
+        Assert.Null(await SyncChoices.ChooseAccountAsync(agent, Confirm));
+        Assert.Equal([ReauthPurpose.SyncSecrets], _asked);
     }
 
     [Theory]
@@ -280,5 +355,25 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.DoesNotContain("case \"/sync-new-code\":\n                Sync.SyncService.Act", routes.Replace("\r\n", "\n"));
         Assert.StartsWith("Esse computador vai receber", SyncChoices.ApproveWarning);
         Assert.Contains("SyncChoices.SecretsForExportAsync(true, purpose => ConfirmWithWindows(browserId, purpose)", routes);
+
+        // A oferta única «receber também neste?» (T10): rota com a confirmação do Windows da aba, no serviço, e um item
+        // próprio nas Definições, fora do tópico (a T14 esconde o tópico em «Mais opções» e deixa a oferta à vista).
+        Assert.Contains("case \"/sync-offer\"", routes);
+        Assert.Contains("SyncService.AnswerSecretsOfferAsync(accept, purpose => ConfirmWithWindows(browserId, purpose))", routes);
+        var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs"));
+        Assert.Contains("SyncChoices.AnswerOfferAsync(agent, accept, confirm)", service);
+        var page = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.Contains("id=\"syncOfferItem\"", page);
+        Assert.Contains("sync-offer", page);
+        Assert.Contains("receivesSecrets", page);
+        Assert.True(page.IndexOf("id=\"syncOfferItem\"", StringComparison.Ordinal) < page.IndexOf("id=\"syncTopicItem\"", StringComparison.Ordinal));
+        Assert.Contains(SyncChoices.OfferText, page);
+        Assert.Contains("<small>(Windows Hello)</small>", page);
+        // O pedido de aprovação diz «cartões e documentos» quando a conta os sincroniza (R10): a barra lê a escolha do
+        // agente que já existe (o campo, nunca Agent()).
+        var bar = service[service.IndexOf("internal static PairingBarView PairingBarState()", StringComparison.Ordinal)..];
+        bar = bar[..bar.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("SyncChoices.Receives(_agent?.AccountSecrets == true)", bar);
+        Assert.DoesNotContain("PairingBarModel.DefaultReceives", bar);
     }
 }
