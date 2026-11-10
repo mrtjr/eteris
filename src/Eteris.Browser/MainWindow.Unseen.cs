@@ -127,12 +127,13 @@ public partial class MainWindow
         foreach (var (tab, browser) in _browsers.ToList())
         {
             if (!ShouldShow(tab, browser) || browser.Visibility != Visibility.Visible || _unseenKept.Contains(browser)) continue;
-            // Entrou e ainda não apresentou um fotograma (a 1.ª página do arranque, uma aba acabada de trocar): escondida,
-            // o rAF dela não resolvia e o arranque nunca era dado por bom (StartupGuard.Healthy) — uma queda dessa sessão,
-            // mesmo horas depois, contava contra o sandbox como «queda antes da 1.ª página». Esconde-se quando apresentar
-            // (KeepUnseenHidden, MainWindow.PageVisibility.cs); a que nunca chegar a apresentar continua a desenhar, como
-            // antes do e8.
-            if (!_presentation.HasPresented(browser)) continue;
+            // Entrou e ainda se espera pelo 1.º fotograma dela (a 1.ª página do arranque, uma aba acabada de trocar):
+            // escondida, o rAF dela não resolvia e o arranque nunca era dado por bom (StartupGuard.Healthy) — uma queda
+            // dessa sessão, mesmo horas depois, contava contra o sandbox como «queda antes da 1.ª página». Esconde-se
+            // quando a espera acabar (KeepUnseenHidden, MainWindow.PageVisibility.cs): ao apresentar ou, se a espera
+            // desistir (um 1.º documento que leva mais de 9 s a carregar), nessa altura — já ninguém chama o Healthy por
+            // ela, e sem isto continuava a desenhar com a janela minimizada até a aba sair e voltar.
+            if (_presentationWaits.IsWaiting(browser)) continue;
             if (!UnseenWindow.MayHide(tab.IsAudible, tab.Media, IsCapturing(browser), pictureInPicture: false)) continue;
             // Também a que já está na lista: pode ter saído e voltado fria entretanto (restaurada pelo ShowPages).
             SetPageVisible(browser, false);

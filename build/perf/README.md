@@ -126,8 +126,10 @@ bloqueada. A medição que o ligou tem só a CPU com a janela à vista, minimiza
 restauro, da área de trabalho nem do bloqueio, e o D11 não correu. A revisão do fecho da 0.2.14 corrigiu, por leitura
 do código e com testes da regra e do texto (`UnseenWindowTests`), quatro caminhos que **nunca correram na aplicação**:
 a janela ativada a partir de outra área de trabalho, a página segurada ou quente ao restaurar, uma disposição com a
-janela minimizada e a página que ainda não apresentou. Antes do pacote, com o PC livre e num perfil de teste (cerca de
-10 min):
+janela minimizada e a página que ainda não apresentou. A conferência da versão corrigiu um quinto, da mesma forma (só
+leitura e testes): a página cuja espera de apresentação desiste (um 1.º documento que leva mais de 9 s a acabar de
+carregar) ficava a desenhar com a janela minimizada até a aba sair e voltar; agora esconde-se quando a espera acaba.
+Antes do pacote, com o PC livre e num perfil de teste (cerca de 10 min):
 
 1. minimizar e restaurar com o cursor numa caixa de texto da página e continuar a escrever sem clicar — o foco do
    teclado: quando o WPF devolve o foco, a janela da página ainda está minimizada (o restauro dela vem a seguir, em

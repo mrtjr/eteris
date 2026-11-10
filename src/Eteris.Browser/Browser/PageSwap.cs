@@ -131,3 +131,24 @@ public sealed class PagePresentation<T> where T : class
 
     public void Forget(T page) => _arrivals.Remove(page);
 }
+
+// Páginas com uma espera de apresentação ainda a correr (MainWindow.PageVisibility.cs: até PageSwap.HoldLimit e, para as
+// lentas, mais WarmTabs.Grace). É só enquanto a espera corre que o ajuste e8 não esconde a página (MainWindow.Unseen.cs):
+// escondida, o rAF dela não resolvia. Quando a espera desiste, a página pode continuar «por apresentar» no
+// PagePresentation (não fica quente), mas já ninguém espera por ela. Uma página pode ter mais de uma espera a correr
+// (saiu e voltou fria antes de a primeira acabar): conta-se cada uma.
+public sealed class PresentationWaits<T> where T : class
+{
+    private readonly Dictionary<T, int> _waits = new(ReferenceEqualityComparer.Instance);
+
+    public void Begin(T page) => _waits[page] = _waits.GetValueOrDefault(page) + 1;
+
+    public void End(T page)
+    {
+        if (!_waits.TryGetValue(page, out var count)) return;
+        if (count > 1) _waits[page] = count - 1;
+        else _waits.Remove(page);
+    }
+
+    public bool IsWaiting(T page) => _waits.ContainsKey(page);
+}

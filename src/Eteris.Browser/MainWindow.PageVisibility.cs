@@ -40,6 +40,9 @@ public partial class MainWindow
     // Páginas que entraram frias e ainda não apresentaram um fotograma desde então: nunca ficam quentes.
     private readonly PagePresentation<ChromiumWebBrowser> _presentation = new();
 
+    // Páginas com a espera de apresentação a correr: só essas o ajuste e8 não esconde (MainWindow.Unseen.cs).
+    private readonly PresentationWaits<ChromiumWebBrowser> _presentationWaits = new();
+
     // Páginas quentes: deixadas há pouco, tapadas, sem minimizar (Tabs/WarmTabs.cs).
     private readonly Dictionary<ChromiumWebBrowser, WarmPage> _warmPages = new();
     private DispatcherTimer? _warmTimer;
@@ -130,7 +133,7 @@ public partial class MainWindow
         // Sem nenhuma a segurar, ninguém espera pela que entrou: só se regista quando apresenta (para poder ficar quente).
         else if (arriving.Count > 0) _ = WaitPresentedAsync(arriving);
         // A janela não se vê (ajuste e8): o que esta disposição pôs à vista (uma aba quente que voltou a ser a ativa)
-        // esconde-se como o resto; a que entrou fria esconde-se quando apresentar (WaitPresentedAsync).
+        // esconde-se como o resto; a que entrou fria esconde-se quando a espera dela acabar (WaitPresentedAsync).
         KeepUnseenHidden();
     }
 
@@ -201,6 +204,8 @@ public partial class MainWindow
     {
         // Lido já (antes de qualquer espera): o número da chegada que esta espera confirma.
         var arrivals = arriving.Select(page => _presentation.Pending(page)).ToList();
+        // Marcada já, antes de a disposição que as mostrou acabar: enquanto a espera correr, o ajuste e8 não as esconde.
+        foreach (var page in arriving) _presentationWaits.Begin(page);
         var clock = Stopwatch.StartNew();
         TimeSpan Left() => PageSwap.HoldLimit - clock.Elapsed;
         var presented = new PageSwap.Presented[arriving.Count];
@@ -208,29 +213,51 @@ public partial class MainWindow
         if (PageSwap.NeedsMargin(presented)) await Task.Delay(PageSwap.PresentMargin);
         for (var i = 0; i < arriving.Count; i++)
         {
-            if (arrivals[i] is not { } arrival) continue;
-            if (presented[i] != PageSwap.Presented.No) _presentation.Presented(arriving[i], arrival);
-            else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible) _ = ConfirmPresentedAsync(arriving[i], arrival);
-            if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupTrace.Mark("aba.apresentada", presented[i].ToString());
-            // Uma página apareceu: o arranque correu bem (rede de segurança do sandbox).
-            if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupGuard.Current.Healthy();
+            // A lenta que continua à vista passa para ConfirmPresentedAsync, que é quem dá a espera por acabada.
+            var confirming = false;
+            if (arrivals[i] is { } arrival)
+            {
+                if (presented[i] != PageSwap.Presented.No) _presentation.Presented(arriving[i], arrival);
+                else if (!arriving[i].IsDisposed && arriving[i].Visibility == Visibility.Visible)
+                {
+                    confirming = true;
+                    _ = ConfirmPresentedAsync(arriving[i], arrival);
+                }
+                if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupTrace.Mark("aba.apresentada", presented[i].ToString());
+                // Uma página apareceu: o arranque correu bem (rede de segurança do sandbox).
+                if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupGuard.Current.Healthy();
+            }
+            if (!confirming) _presentationWaits.End(arriving[i]);
         }
-        // A janela deixou de se ver enquanto a página entrava (ajuste e8, MainWindow.Unseen.cs): só agora, apresentada e
-        // com o arranque dado por bom, se esconde como as outras.
+        // A janela deixou de se ver enquanto a página entrava (ajuste e8, MainWindow.Unseen.cs): só agora, com a espera
+        // acabada e o arranque dado por bom (se apresentou), se esconde como as outras.
         KeepUnseenHidden();
         // A 1.ª troca do arranque acabou (com a página à vista, ou desistiu-se dela): o trabalho adiado pode correr.
         Infrastructure.FirstPaint.App.Signal();
     }
 
     // Uma página lenta (mais do que o teto da troca): regista-se quando acabar por apresentar, se ainda for a mesma chegada.
+    // Se não apresentar até ao fim da graça, a espera desiste: a página continua por apresentar (não fica quente), mas
+    // deixa de estar à espera — o ajuste e8 já a pode esconder (uma página cujo 1.º documento leva mais de 9 s a acabar
+    // de carregar ficava a desenhar com a janela minimizada até a aba sair e voltar).
     private async Task ConfirmPresentedAsync(ChromiumWebBrowser page, long arrival)
     {
-        var clock = Stopwatch.StartNew();
-        var presented = await FramePresentedAsync(page, () => WarmTabs.Grace - clock.Elapsed);
-        if (presented == PageSwap.Presented.No) return;
-        if (PageSwap.NeedsMargin([presented])) await Task.Delay(PageSwap.PresentMargin);
-        _presentation.Presented(page, arrival);
-        Infrastructure.StartupGuard.Current.Healthy();
+        try
+        {
+            var clock = Stopwatch.StartNew();
+            var presented = await FramePresentedAsync(page, () => WarmTabs.Grace - clock.Elapsed);
+            if (presented != PageSwap.Presented.No)
+            {
+                if (PageSwap.NeedsMargin([presented])) await Task.Delay(PageSwap.PresentMargin);
+                _presentation.Presented(page, arrival);
+                Infrastructure.StartupGuard.Current.Healthy();
+            }
+        }
+        finally
+        {
+            // Com ou sem fotograma: já ninguém espera por esta página (nem chama o Healthy por ela).
+            _presentationWaits.End(page);
+        }
         // Como em WaitPresentedAsync: a janela pode já não se ver.
         KeepUnseenHidden();
     }

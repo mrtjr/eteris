@@ -154,4 +154,49 @@ public class PageSwapTests
         Assert.True(pages.HasPresented("b"));
         Assert.False(pages.Presented("b", arrival));
     }
+
+    // A espera de apresentação de uma página (até 1 s, mais 8 s para as lentas) é o único tempo em que o ajuste e8 não a
+    // esconde. Quando a espera desiste (o 1.º documento ainda a carregar ao fim de 9 s), a página continua «por
+    // apresentar» — não fica quente —, mas já ninguém espera por ela: pode esconder-se com a janela minimizada.
+    [Fact]
+    public void Waits_APageIsOnlyWaitingWhileAWaitRuns()
+    {
+        var waits = new PresentationWaits<string>();
+        var pages = new PagePresentation<string>();
+        Assert.False(waits.IsWaiting("b"));
+        pages.Arrive("b");
+        waits.Begin("b");
+        Assert.True(waits.IsWaiting("b"));
+        // A espera desistiu sem fotograma: acabou, e a página não passa por isso a «apresentada».
+        waits.End("b");
+        Assert.False(waits.IsWaiting("b"));
+        Assert.False(pages.HasPresented("b"));
+    }
+
+    [Fact]
+    public void Waits_OverlappingWaitsOfTheSamePageCountOneByOne()
+    {
+        // B saiu e voltou fria com a espera da 1.ª chegada ainda a correr: só deixa de estar à espera quando as duas acabam.
+        var waits = new PresentationWaits<string>();
+        waits.Begin("b");
+        waits.Begin("b");
+        waits.End("b");
+        Assert.True(waits.IsWaiting("b"));
+        waits.End("b");
+        Assert.False(waits.IsWaiting("b"));
+        // Acabar uma espera que não existe não deixa nada a dever à seguinte.
+        waits.End("b");
+        waits.Begin("b");
+        Assert.True(waits.IsWaiting("b"));
+    }
+
+    [Fact]
+    public void Waits_AreByPage()
+    {
+        var waits = new PresentationWaits<string>();
+        waits.Begin("a");
+        Assert.False(waits.IsWaiting("b"));
+        waits.End("b");
+        Assert.True(waits.IsWaiting("a"));
+    }
 }

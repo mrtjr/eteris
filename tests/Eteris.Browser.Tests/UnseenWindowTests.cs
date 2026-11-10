@@ -46,8 +46,8 @@ public class UnseenWindowTests
 
     // O diagnóstico D4 mediu-se (página animada, janela minimizada: 6,47% → 0,59% de um núcleo com o e8): ligado por
     // omissão, já sem esperar por nada. A vigia nasce depois da 1.ª página (o construtor da janela só a deixa marcada),
-    // nenhuma página se esconde antes de apresentar e não mexe no motor: fica fora da rede de segurança do arranque e
-    // do grupo «motor».
+    // nenhuma página se esconde enquanto se espera pelo 1.º fotograma dela e não mexe no motor: fica fora da rede de
+    // segurança do arranque e do grupo «motor».
     [Fact]
     public void Tweak_IsOnByDefault_SinceTheDiagnostic()
     {
@@ -191,28 +191,57 @@ public class UnseenWindowTests
         Assert.Contains("_sessionLocked = e.Reason == SessionSwitchReason.SessionLock;", unseen);
     }
 
-    // Uma página que ainda não apresentou o 1.º fotograma não se esconde: escondida, o rAF não resolve, o arranque não é
+    // Uma página com a espera de apresentação a correr não se esconde: escondida, o rAF não resolve, o arranque não é
     // dado por bom (StartupGuard.Healthy) e uma queda dessa sessão, mesmo horas depois, contava contra o sandbox como
-    // «queda antes da 1.ª página». Esconde-se quando apresentar (depois do Healthy), se a janela continuar sem se ver.
+    // «queda antes da 1.ª página». Esconde-se quando a espera acabar (depois do Healthy, se apresentou), se a janela
+    // continuar sem se ver.
     [Fact]
-    public void PageThatHasNotPresented_IsNotHidden_UntilItPresents()
+    public void PageStillWaitingToPresent_IsNotHidden_UntilTheWaitEnds()
     {
         var hide = Method(Source("MainWindow.Unseen.cs"), "private void HideUnseenPages()");
-        var skip = hide.IndexOf("if (!_presentation.HasPresented(browser)) continue;", StringComparison.Ordinal);
-        Assert.True(skip > 0 && skip < hide.IndexOf("SetPageVisible(browser, false);", StringComparison.Ordinal), "a página por apresentar salta antes de ser escondida");
+        var skip = hide.IndexOf("if (_presentationWaits.IsWaiting(browser)) continue;", StringComparison.Ordinal);
+        Assert.True(skip > 0 && skip < hide.IndexOf("SetPageVisible(browser, false);", StringComparison.Ordinal), "a página à espera de apresentar salta antes de ser escondida");
         var pages = Source("MainWindow.PageVisibility.cs");
         var wait = Method(pages, "private async Task WaitPresentedAsync(");
         var healthy = wait.IndexOf("Infrastructure.StartupGuard.Current.Healthy();", StringComparison.Ordinal);
         var keep = wait.IndexOf("KeepUnseenHidden();", StringComparison.Ordinal);
         Assert.True(healthy > 0 && keep > healthy, "esconde-se depois de o arranque ser dado por bom");
-        Assert.Matches(@"_presentation\.Presented\(page, arrival\);\s*Infrastructure\.StartupGuard\.Current\.Healthy\(\);\s*(//[^\n]*\n\s*)*KeepUnseenHidden\(\);",
+        Assert.Matches(@"_presentation\.Presented\(page, arrival\);\s*Infrastructure\.StartupGuard\.Current\.Healthy\(\);",
             Method(pages, "private async Task ConfirmPresentedAsync("));
+    }
+
+    // O e8 só salta a página enquanto a espera corre, não para sempre: uma página cujo 1.º documento demora mais do que
+    // a espera inteira (1 s + 8 s) a acabar de carregar ficava «por apresentar» até a aba sair e voltar, e a janela
+    // minimizada continuava a desenhá-la a 60 fotogramas por segundo, como antes do e8. A espera começa antes de a
+    // disposição acabar (antes do primeiro await), passa para a confirmação das lentas e acaba com ou sem fotograma;
+    // aí a página esconde-se se a janela continuar sem se ver. Desistir não a dá por apresentada (não pode ficar quente).
+    [Fact]
+    public void PageWhoseWaitGaveUp_IsHiddenLikeTheOthers()
+    {
+        var hide = Method(Source("MainWindow.Unseen.cs"), "private void HideUnseenPages()");
+        Assert.DoesNotContain("_presentation.HasPresented", hide);
+        var pages = Source("MainWindow.PageVisibility.cs");
+        Assert.Contains("private readonly PresentationWaits<ChromiumWebBrowser> _presentationWaits = new();", pages);
+        var wait = Method(pages, "private async Task WaitPresentedAsync(");
+        var begin = wait.IndexOf("foreach (var page in arriving) _presentationWaits.Begin(page);", StringComparison.Ordinal);
+        Assert.True(begin > 0 && begin < wait.IndexOf("await ", StringComparison.Ordinal), "a espera fica marcada antes do primeiro await");
+        // A lenta que continua à vista passa para a confirmação, que é quem acaba a espera; as outras acabam aqui.
+        Assert.Matches(@"confirming = true;\s*_ = ConfirmPresentedAsync\(arriving\[i\], arrival\);", wait);
+        var end = wait.IndexOf("if (!confirming) _presentationWaits.End(arriving[i]);", StringComparison.Ordinal);
+        Assert.True(end > 0 && end < wait.IndexOf("KeepUnseenHidden();", StringComparison.Ordinal), "as esperas acabam antes de esconder");
+        var confirm = Method(pages, "private async Task ConfirmPresentedAsync(");
+        // Com ou sem fotograma (e mesmo com uma exceção): a espera acaba e, a seguir, a página esconde-se se for caso disso.
+        Assert.Matches(@"finally\s*\{\s*(//[^\n]*\n\s*)*_presentationWaits\.End\(page\);\s*\}\s*(//[^\n]*\n\s*)*KeepUnseenHidden\(\);\s*\}", confirm);
+        Assert.DoesNotContain("return;", confirm);
+        // Só a que apresentou é dada por apresentada (e o arranque por bom).
+        Assert.Matches(@"if \(presented != PageSwap\.Presented\.No\)\s*\{[^}]*_presentation\.Presented\(page, arrival\);[^}]*\}", confirm);
+        Assert.Single(Regex.Matches(confirm, @"_presentation\.Presented\("));
     }
 
     // O e8 não põe trabalho no arranque: o construtor da janela só deixa a vigia marcada para depois da 1.ª página
     // (FirstPaint), e é aí que nascem a subscrição do SessionSwitch e o relógio da área de trabalho. O que corre no
-    // construtor é só a ordem do minimizar (o ReviewUnseen do OnWindowStateChanged), que não esconde nada antes de a
-    // página apresentar. Uma janela fechada antes disso não subscreve nada.
+    // construtor é só a ordem do minimizar (o ReviewUnseen do OnWindowStateChanged), que não esconde nada enquanto se
+    // espera pelo 1.º fotograma da página. Uma janela fechada antes disso não subscreve nada.
     [Fact]
     public void Watch_StartsAfterTheFirstPage_NotInTheWindowConstructor()
     {
