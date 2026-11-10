@@ -318,6 +318,8 @@ public class PublicTextsTests
         // A49 (S22): o limite do código escrito.
         if (GoogleSyncTests.Src("Eteris.Sync", "Engine", "SyncAgent.cs").Contains("ApproveWithCodeAsync(", StringComparison.Ordinal))
             Assert.Contains("Escrever o código só protege se for o código que está a ver no seu outro computador", doc);
+        // O README também enumera o que a Google vê: leva a mesma ressalva (3.6, ponto 4(b)).
+        Assert.Contains("os pedidos para juntar um computador novo têm nomes legíveis e levam só a hora", Flat(Read("README.md")));
         foreach (var (name, text) in PublicTexts())
             Assert.False(text.Contains("nunca enviado", StringComparison.Ordinal), name);
     }
