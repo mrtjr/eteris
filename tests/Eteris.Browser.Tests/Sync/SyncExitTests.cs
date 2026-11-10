@@ -545,6 +545,9 @@ public sealed class SyncExitTests : IDisposable
         var route = GoogleSyncTests.CaseBlock(factory, "case \"/sync-lost\"");
         const string gate = "SyncExit.MayLoseDeviceAsync(purpose => ConfirmWithWindows(browserId, purpose))";
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(route, System.Text.RegularExpressions.Regex.Escape(gate)));
+        // M5 da revisão: com outra saída em curso, o Windows não se pede.
+        var busy = route.IndexOf("SyncService.ExitBusy", StringComparison.Ordinal);
+        Assert.True(busy >= 0 && busy < route.IndexOf(gate, StringComparison.Ordinal), route);
         Assert.DoesNotContain("MayRenewKeyAsync", route);
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(factory,
             System.Text.RegularExpressions.Regex.Escape("SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))")).Count);
@@ -618,7 +621,10 @@ public sealed class SyncExitTests : IDisposable
     public async Task StartOver_OnlyBeforeJoining()
     {
         var casa = NewPc("Casa");
+        Assert.False(SyncExit.MayStartOverNow(null));
+        Assert.False(SyncExit.MayStartOverNow(casa.Agent));
         await casa.Agent.StartAsync();
+        Assert.False(SyncExit.MayStartOverNow(casa.Agent));
         var chains = await ChainsAsync();
         Assert.Single(chains);
         var (done, message) = await SyncExit.StartOverAsync(casa.Agent, CancellationToken.None);
@@ -640,6 +646,7 @@ public sealed class SyncExitTests : IDisposable
         novo.Profile.Plain.Bookmark("https://b.example/", "B");
         await novo.Agent.StartAsync();
         Assert.Contains(novo.Agent.Status.Phase, new[] { SyncPhase.Choose, SyncPhase.Pairing });
+        Assert.True(SyncExit.MayStartOverNow(novo.Agent));
 
         var (done, message) = await SyncExit.StartOverAsync(novo.Agent, CancellationToken.None);
         Assert.True(done, message);
@@ -692,6 +699,11 @@ public sealed class SyncExitTests : IDisposable
         var windows = route.IndexOf("MayStartOverAsync(purpose => ConfirmWithWindows(browserId, purpose))", StringComparison.Ordinal);
         var act = route.IndexOf("SyncService.StartOver()", StringComparison.Ordinal);
         Assert.True(word >= 0 && windows > word && act > windows, route);
+        // M5 da revisão: o Windows só se pede quando a saída pode correr (nenhuma em curso, e a fase certa).
+        var busy = route.IndexOf("SyncService.ExitBusy", StringComparison.Ordinal);
+        var phase = route.IndexOf("SyncExit.MayStartOverNow(", StringComparison.Ordinal);
+        Assert.True(busy > word && busy < windows, route);
+        Assert.True(phase > word && phase < windows, route);
         var page = GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html");
         foreach (var text in new[] { "id=\"syncStartOver\"", "Não tem nada disto?", "Começar do zero…", SyncExit.StartOverText, "sync-start-over" })
             Assert.Contains(text, page);

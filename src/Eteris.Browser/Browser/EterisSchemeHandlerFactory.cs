@@ -495,7 +495,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 var shown = InternalPages.Query(uri, "shown") is { Length: > 0 } list ? list.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
                 return new VaultResourceHandler(async () =>
                 {
-                    if (await Sync.SyncExit.MayLoseDeviceAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                    // Com outra saída em curso (outra janela das Definições), nada: a página mostra a que está a correr.
+                    if (Sync.SyncService.ExitBusy is not null) { }
+                    else if (await Sync.SyncExit.MayLoseDeviceAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
                         Sync.SyncService.LostDevice(id, shown);
                     else Sync.SyncService.Say("lost", Sync.SyncChoices.NotConfirmed("o aparelho continua na conta"));
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
@@ -509,6 +511,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 return new VaultResourceHandler(async () =>
                 {
                     if (!Sync.SyncExit.StartOverWordMatches(word)) Sync.SyncService.Say("startover", Sync.SyncExit.StartOverWrongWord);
+                    // O Windows só se pede quando a saída pode correr: nenhuma em curso e ainda antes de entrar.
+                    else if (Sync.SyncService.ExitBusy is not null) { }
+                    else if (!Sync.SyncExit.MayStartOverNow(Sync.SyncService.Agent())) Sync.SyncService.Say("startover", Sync.SyncExit.StartOverWrongPhase);
                     else if (await Sync.SyncExit.MayStartOverAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
                         Sync.SyncService.StartOver();
                     else Sync.SyncService.Say("startover", Sync.SyncChoices.NotConfirmed("a conta na nuvem não foi apagada"));

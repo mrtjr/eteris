@@ -185,6 +185,9 @@ internal static class SyncExit
         return new string(decomposed.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
     }
 
+    // «Começar do zero…» só existe antes de entrar na conta (Choose, Pairing). A rota confere-o antes de pedir o Windows.
+    public static bool MayStartOverNow(SyncAgent? agent) => agent?.Status.Phase is SyncPhase.Choose or SyncPhase.Pairing;
+
     // A porta do Windows de «Começar do zero…»: sempre. true = pode continuar.
     public static Task<bool> MayStartOverAsync(Func<ReauthPurpose, Task<bool>> confirm) => confirm(ReauthPurpose.StartOver);
 
@@ -193,7 +196,7 @@ internal static class SyncExit
     // aqui sobe nela).
     public static async Task<(bool Done, string Message)> StartOverAsync(SyncAgent agent, CancellationToken cancellationToken)
     {
-        if (agent.Status.Phase is not (SyncPhase.Choose or SyncPhase.Pairing)) return (false, StartOverWrongPhase);
+        if (!MayStartOverNow(agent)) return (false, StartOverWrongPhase);
         try
         {
             agent.CancelPairing();
