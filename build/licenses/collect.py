@@ -245,6 +245,11 @@ def main():
     copy(os.path.join(STATIC, "MPL-2.0.txt"), "PublicSuffixList-MPL-2.0.txt",
          f"Public Suffix List (dados, no crate psl {psl} dentro do eteris_shields.dll)", "MPL-2.0")
 
+    # A lista BIP39 em português (bitcoin/bips, bip-0039/portuguese.txt, MIT) vai embutida, sem alterações, no
+    # Eteris.Sync.dll: são as 24 palavras do kit de recuperação (Crypto/Bip39Words.cs; o SHA-256 está num teste).
+    copy(os.path.join(STATIC, "bip39-LICENSE.txt"), "BIP39-wordlist-LICENSE.txt",
+         "Lista de palavras BIP39 em português (kit de recuperação, dentro do Eteris.Sync.dll)", "MIT")
+
     with open(os.path.join(OUT, "INDEX.md"), "w", encoding="utf-8") as f:
         f.write("# Licenças\n\nTextos completos das licenças de tudo o que o Éteris distribui. "
                 "Gerado por `build/licenses/collect.py`; não editar à mão.\n\n"

@@ -78,6 +78,18 @@ FFmpeg indicados em `licenses/FFmpeg-SOURCE.txt`, que tem também a oferta escri
 Quando o Windows não descodifica (sem descodificação por hardware, ou Windows N sem o Media Feature Pack), a aba usa o
 motor de vídeo acima.
 
+## Kit de recuperação
+
+| Componente | Origem | Licença |
+|---|---|---|
+| Lista de palavras BIP39 em português (as 24 palavras do kit de recuperação; sem alterações, embutida no `Eteris.Sync.dll`) | https://github.com/bitcoin/bips (ficheiro `bip-0039/portuguese.txt`) | MIT |
+
+`src/Eteris.Sync/Crypto/bip39-pt.txt` é a lista portuguesa do BIP-0039, sem alterações (2048 palavras, 15 671 bytes,
+fins de linha LF), obtida em 2026-11-09 do ramo principal do repositório `bitcoin/bips`; SHA-256
+`2685e9c194c82ae67e10ba59d9ea5345a23dc093e92276fc5361f6667d79cd3f` (o mesmo ficheiro, byte a byte, que o do
+`trezor/python-mnemonic`). O Éteris usa só a codificação do BIP-0039 entre o segredo e as palavras, nada mais. Licença:
+MIT, texto em `licenses/BIP39-wordlist-LICENSE.txt`.
+
 ## Motor de bloqueio: dependências Rust
 
 O `eteris_shields.dll` inclui 59 crates de terceiros, todos sob licenças permissivas: MIT, Apache-2.0,

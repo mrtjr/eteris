@@ -86,3 +86,4 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | zerovec-derive 0.11.7 (motor de bloqueio) | Unicode-3.0 | `rust/zerovec-derive-0.11.7/` |
 | zmij 1.0.23 (motor de bloqueio) | MIT | `rust/zmij-1.0.23/` |
 | Public Suffix List (dados, no crate psl 2.1.247 dentro do eteris_shields.dll) | MPL-2.0 | `PublicSuffixList-MPL-2.0.txt` |
+| Lista de palavras BIP39 em português (kit de recuperação, dentro do Eteris.Sync.dll) | MIT | `BIP39-wordlist-LICENSE.txt` |

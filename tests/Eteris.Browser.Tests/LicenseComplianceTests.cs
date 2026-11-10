@@ -107,6 +107,22 @@ public class LicenseComplianceTests
         Assert.Contains("psl = ", Read("src", "Eteris.Shields", "Cargo.toml"));
     }
 
+    // Kit de recuperação: a lista BIP39 em português vai embutida no Eteris.Sync.dll, sem alterações; o texto da MIT, a
+    // origem e o SHA-256 da lista têm de estar registados.
+    [Fact]
+    public void Bip39WordList_HasItsLicense()
+    {
+        Assert.Contains("| Lista de palavras BIP39 em português (kit de recuperação, dentro do Eteris.Sync.dll) | MIT | `BIP39-wordlist-LICENSE.txt` |",
+            Read("licenses", "INDEX.md"));
+        Assert.Contains("Permission is hereby granted, free of charge", Read("licenses", "BIP39-wordlist-LICENSE.txt"));
+        var notices = Read("THIRD-PARTY-NOTICES.md");
+        Assert.Contains("bip-0039/portuguese.txt", notices);
+        Assert.Contains("https://github.com/bitcoin/bips", notices);
+        Assert.Contains("2685e9c194c82ae67e10ba59d9ea5345a23dc093e92276fc5361f6667d79cd3f", notices);
+        Assert.Contains("LogicalName=\"Eteris.Sync.bip39-pt.txt\"", Read("src", "Eteris.Sync", "Eteris.Sync.csproj"));
+        Assert.Contains("src/Eteris.Sync/Crypto/bip39-pt.txt -text", Read(".gitattributes"));
+    }
+
     [Fact]
     public void IndexPointsOnlyToFilesThatExist()
     {
