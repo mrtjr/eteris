@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using Eteris.Browser.Sync;
 using Eteris.Sync.Engine;
 using Eteris.Sync.Pairing;
 using Eteris.Sync.Transport;
@@ -366,9 +367,9 @@ public sealed class PairingNumberMatchingTests : IDisposable
     [Fact]
     public async Task GuestName_IsCleanedWhenShown()
     {
-        var (casa, _, session, _) = await ReadyAsync("Portátil‮gpj.exe\r\nSegunda linha");
+        var (casa, _, session, _) = await ReadyAsync("Portátil\u202Egpj.exe\r\nSegunda linha");
         var name = casa.Agent.Status.Requests[0].Name;
-        Assert.DoesNotContain('‮', name);
+        Assert.DoesNotContain('\u202E', name);
         Assert.DoesNotContain('\r', name);
         Assert.DoesNotContain('\n', name);
         Assert.DoesNotContain(name, char.IsControl);
@@ -378,5 +379,154 @@ public sealed class PairingNumberMatchingTests : IDisposable
         await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 2, "o segundo pedido pronto");
         Assert.Equal("Aparelho sem nome", casa.Agent.Status.Requests.Single(r => r.Session != session).Name);
         GC.KeepAlive(blank);
+    }
+
+    // ---- pedidos em série (R18) ------------------------------------------------------------------------------------
+
+    // Um pedido escrito à mão a que a Casa responde e que o outro lado cancela (x-host) antes de haver código.
+    private async Task<string> AnsweredThenCancelledElsewhereAsync(Device casa)
+    {
+        var session = await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        Assert.True(await HasStep(session, PairingProtocol.HostKey));
+        await PairingRequests.RefuseAsync(Folder, session, Now);
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido na Casa");
+        Assert.Empty(casa.Agent.Status.Requests);
+        return session;
+    }
+
+    private static int BadCount(Device device) => device.Store.Load()?.BadPairings?.Length ?? 0;
+
+    [Fact]
+    public async Task Requests_InSeries_StopOpeningTheBar()
+    {
+        // 1.º: «Não fui eu».
+        var (casa, _, first, _) = await ReadyAsync();
+        await casa.Agent.RefuseAsync(first);
+        Assert.Equal(1, BadCount(casa));
+        Assert.False(casa.Agent.Status.PairingQuiet);
+
+        // 2.º: três códigos errados.
+        var second = await GuestAsync("Tablet");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && second.Agent.Status.Pairing?.Code is not null, "o 2.º pedido pronto");
+        var code = second.Agent.Status.Pairing!.Code!;
+        var session = casa.Agent.Status.Requests[0].Session;
+        for (var shift = 1; shift <= 3; shift++) await casa.Agent.ApproveWithCodeAsync(session, Wrong(code, shift));
+        Assert.Equal(2, BadCount(casa));
+        Assert.False(casa.Agent.Status.PairingQuiet);
+
+        // 3.º: fica pronto e expira sem aprovação (o relógio da Casa passa os 10 minutos).
+        var third = await GuestAsync("Telemóvel");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && third.Agent.Status.Pairing?.Code is not null, "o 3.º pedido pronto");
+        _now += (long)PairingProtocol.Lifetime.TotalMilliseconds + 1;
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Equal(3, BadCount(casa));
+        Assert.True(casa.Agent.Status.PairingQuiet);
+
+        // Um 4.º pedido fica pronto, mas a barra não abre sozinha.
+        var fourth = await GuestAsync("Portátil novo");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && fourth.Agent.Status.Pairing?.Code is not null, "o 4.º pedido pronto");
+        Assert.Equal(PairingBarKind.None, PairingBarModel.From(casa.Agent.Status, _now, PairingBarModel.DefaultReceives).Kind);
+        // «Mostrar o pedido na barra» (um gesto) repõe a contagem.
+        casa.Agent.ResumePairingBar();
+        Assert.False(casa.Agent.Status.PairingQuiet);
+        Assert.Equal(PairingBarKind.Code, PairingBarModel.From(casa.Agent.Status, _now, PairingBarModel.DefaultReceives).Kind);
+
+        // Uma aprovação também repõe a contagem.
+        await casa.Agent.RefuseAsync(casa.Agent.Status.Requests[0].Session);
+        Assert.Equal(1, BadCount(casa));
+        var fifth = await GuestAsync("Secretária");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && fifth.Agent.Status.Pairing?.Code is not null, "o 5.º pedido pronto");
+        fifth.Agent.ConfirmPairing();
+        Assert.Equal(PairingAnswer.Approved, await casa.Agent.ApproveWithCodeAsync(casa.Agent.Status.Requests[0].Session, fifth.Agent.Status.Pairing!.Code!));
+        Assert.Equal(0, BadCount(casa));
+        Assert.Null(casa.Store.Load()!.BadPairings);
+    }
+
+    // O outro lado cancela (x-host) depois de a Casa responder: quem escreve pedidos falsos no Drive escreve também o
+    // x-host, por isso conta. Três assim, e só assim, calam a barra; a mesma sessão nunca conta duas vezes.
+    [Fact]
+    public async Task Requests_CancelledOnTheOtherSide_Count_OnceEach()
+    {
+        var casa = await HostAsync();
+        await AnsweredThenCancelledElsewhereAsync(casa);
+        await AnsweredThenCancelledElsewhereAsync(casa);
+        Assert.Equal(2, BadCount(casa));
+        Assert.False(casa.Agent.Status.PairingQuiet);
+        await AnsweredThenCancelledElsewhereAsync(casa);
+        Assert.True(casa.Agent.Status.PairingQuiet);
+
+        // «Não fui eu» num pedido ainda sem código, seguido do fim do fluxo dessa sessão: soma 1.
+        casa.Agent.ResumePairingBar();
+        var session = await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        await casa.Agent.RefuseAsync(session);
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido");
+        await Task.Delay(100);
+        Assert.Equal(1, BadCount(casa));
+    }
+
+    // Parar o agente a meio de um pedido (sair, fechar) e um erro de transporte não contam.
+    [Fact]
+    public async Task Requests_StoppedHere_OrTransportErrors_DoNotCount()
+    {
+        var flaky = new FlakyTransport(new FolderTransport(_folder));
+        var casa = NewDevice("Casa", transport: () => flaky);
+        await casa.Agent.StartAsync();
+        casa.Agent.AcknowledgeCode();
+
+        // Erro de transporte enquanto espera pelo computador novo.
+        await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        flaky.Fail = true;
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido por erro de transporte");
+        flaky.Fail = false;
+        Assert.Equal(0, BadCount(casa));
+
+        // Sair a meio de um pedido.
+        await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        casa.Agent.SignOut(forgetKey: false);
+        await Task.Delay(100);
+        Assert.Equal(0, BadCount(casa));
+        Assert.False(casa.Agent.Status.PairingQuiet);
+    }
+
+    // A contagem é guardada neste computador (nunca no transporte) e sobrevive ao reinício.
+    [Fact]
+    public async Task Counter_SurvivesRestart()
+    {
+        var casa = await HostAsync();
+        for (var i = 0; i < PairingFatigue.MaxBad; i++) await AnsweredThenCancelledElsewhereAsync(casa);
+        Assert.True(casa.Agent.Status.PairingQuiet);
+
+        var reaberta = NewDevice("Casa", casa.Store, casa.Profile);
+        Assert.True(reaberta.Agent.Status.PairingQuiet);
+        Assert.Contains("\"badPairs\"", System.Text.Encoding.UTF8.GetString(Eteris.Sync.Format.Json.Bytes(casa.Store.Load()!)));
+        foreach (var file in Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories))
+        {
+            Assert.DoesNotContain("badPairs", Path.GetFileName(file), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("badPairs", System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(file)), StringComparison.Ordinal);
+        }
+    }
+
+    // Transporte que, com Fail, falha como uma pasta inacessível.
+    private sealed class FlakyTransport(ISyncTransport inner) : ISyncTransport
+    {
+        public volatile bool Fail;
+
+        public string Name => inner.Name;
+
+        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+            => Fail ? throw new IOException("pasta inacessível") : inner.ListAsync(prefix, cancellationToken);
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
+            => Fail ? throw new IOException("pasta inacessível") : inner.ReadAsync(path, cancellationToken);
+
+        public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default)
+            => Fail ? throw new IOException("pasta inacessível") : inner.WriteAsync(path, data, cancellationToken);
+
+        public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+            => Fail ? throw new IOException("pasta inacessível") : inner.DeleteAsync(path, cancellationToken);
     }
 }

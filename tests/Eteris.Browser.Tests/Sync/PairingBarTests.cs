@@ -258,6 +258,6 @@ public class PairingBarTests
         Assert.True(noteCleared);
         Assert.True(PairingBar.Accepts("4 2"));
         Assert.False(PairingBar.Accepts("a"));
-        Assert.False(PairingBar.Accepts("٤"));
+        Assert.False(PairingBar.Accepts("\u0664"));
     }
 }

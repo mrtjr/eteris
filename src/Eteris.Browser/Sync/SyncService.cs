@@ -20,8 +20,9 @@ namespace Eteris.Browser.Sync;
 // carregar em «Ver» na barra de aprovação (ações do utilizador) e ao voltar à janela do Éteris (depois da 1.ª ronda
 // desta abertura, no máximo uma vez a cada 5 minutos, ou logo se uma ronda já tiver encontrado um pedido:
 // WindowActivated, ActivationLook), procura pedidos de aparelhos novos e responde-lhes. Construir o serviço e ler o
-// estado nunca faz pedidos: o arranque sem sincronização ligada não fala com a Google. Se a autorização da Google tiver sido
-// retirada ou tiver expirado, o agendador para até o utilizador entrar outra vez (não «tenta outra vez sozinho»).
+// estado nunca faz pedidos: o arranque sem sincronização ligada não fala com a Google. Se a autorização da Google
+// tiver sido retirada ou tiver expirado, o agendador para até o utilizador entrar outra vez (não «tenta outra vez
+// sozinho»).
 internal static class SyncService
 {
     private static readonly Lock Gate = new();
@@ -377,6 +378,13 @@ internal static class SyncService
     // «Não fui eu»: recusa o pedido (o computador novo fica a saber).
     public static void RefusePairing(string session) => Act("approve", a => a.RefuseAsync(session));
 
+    // «Mostrar o pedido na barra» (Definições, com a barra calada pelos pedidos em série): um gesto que repõe a
+    // contagem. Sem rede; lê o campo do agente (não o cria).
+    public static void ResumePairingBar()
+    {
+        _agent?.ResumePairingBar();
+    }
+
     // A janela do Éteris veio para a frente. Não é um gesto de rede antes da 1.ª ronda; depois, no máximo uma vez a
     // cada 5 minutos, ou logo se a última ronda contou um pedido.
     public static void WindowActivated(bool privateWindow)
@@ -387,7 +395,8 @@ internal static class SyncService
         // O campo, nunca a função que cria o agente.
         if (_agent is not { } agent || !Enabled) return;
         var status = agent.Status;
-        var counted = status.WaitingRequests;
+        // Com a barra calada (pedidos em série), um pedido contado já não dá direito a procurar logo: 5 minutos.
+        var counted = status.PairingQuiet ? 0 : status.WaitingRequests;
         if (Activation.TryPass(Now(), counted, firstRoundDone: true)) Look();
     }
 
@@ -494,6 +503,8 @@ internal static class SyncService
             pairing = status.Pairing is { } p ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error } : null,
             // Sem o código de verificação: a página não o mostra (a aprovação é na barra da janela, escrevendo-o).
             requests = status.Requests.Select(r => new { id = r.Session, name = r.Name }),
+            // Pedidos em série: a barra não abre sozinha e as Definições mostram o aviso.
+            pairingQuiet = status.PairingQuiet,
             devices = status.Devices.Select(d => new
             {
                 id = d.Id, name = d.Name, me = d.IsThis,

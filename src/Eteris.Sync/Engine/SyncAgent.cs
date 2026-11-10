@@ -43,6 +43,9 @@ public sealed class SavedSync
     [JsonPropertyName("deleting")] public bool DeletePending { get; set; }
     // O nome deste computador escolhido no Éteris (local, protegido; nunca vai em claro para o transporte).
     [JsonPropertyName("name")] public string? DeviceName { get; set; }
+    // Quando acabaram mal os últimos pedidos de aparelhos novos a que este aparelho respondeu (PairingFatigue: com
+    // muitos seguidos, a barra de aprovação deixa de abrir sozinha). Só horas: sem sessão, nome nem código.
+    [JsonPropertyName("badPairs")] public long[]? BadPairings { get; set; }
 }
 
 public interface ISyncStore
@@ -94,6 +97,10 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // Este computador respondeu a um pedido e espera pelo computador novo (ainda sem código): a hora da resposta mais
     // recente dentro do prazo; 0 se não há nenhum.
     public long AnsweringSinceMs { get; init; }
+
+    // Pedidos em série: vários pedidos acabaram mal há pouco e a barra de aprovação não abre sozinha (o aviso fica nas
+    // Definições, com «Mostrar o pedido na barra»). Este aparelho continua a responder quando a pessoa procura.
+    public bool PairingQuiet { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -295,6 +302,7 @@ public sealed class SyncAgent
                     DeleteError = _saved?.DeletePending == true ? _deleteError : null,
                     OtherAccount = _phase == SyncPhase.Stopped && _notice == OtherAccountText,
                     AnsweringSinceMs = answering,
+                    PairingQuiet = PairingFatigue.Quiet(_saved?.BadPairings, now),
                 };
             }
         }
@@ -968,21 +976,61 @@ public sealed class SyncAgent
                 }
                 catch (Exception e) when (e is PairingException or OperationCanceledException || IsTransient(e))
                 {
-                    lock (_gate) _hosts.Remove(session);
+                    // Ainda era deste aparelho (não saiu por «Sair», apagar, «Não fui eu» ou pelo prazo, que já tratam
+                    // de si).
+                    var mine = false;
+                    lock (_gate)
+                        if (_hosts.TryGetValue(session, out var current) && ReferenceEquals(current, flow))
+                            mine = _hosts.Remove(session);
                     host.Dispose();
+                    // O pedido acabou do outro lado depois de este aparelho responder: recusa ou cancelamento escrito
+                    // por quem pede (x-host), mensagens que não conferem, ou o prazo. Tudo isto quem escreve no Drive
+                    // consegue provocar, por isso conta para os pedidos em série. Não contam: parar deste lado
+                    // (cancelado), um erro de rede ou da pasta, e outro aparelho desta conta ter respondido primeiro.
+                    if (mine && e is PairingException and not PairingAnsweredElsewhereException) NoteBadPairing(flow);
                 }
                 Notify();
             });
         }
+        List<HostFlow> stale;
         lock (_gate)
         {
             _waiting = waiting;
-            foreach (var stale in _hosts.Values.Where(h => _now() - h.Created > (long)PairingProtocol.Lifetime.TotalMilliseconds).ToList())
-            {
-                _hosts.Remove(stale.Session);
-                stale.Cancel.Cancel();
-            }
+            stale = _hosts.Values.Where(h => _now() - h.Created > (long)PairingProtocol.Lifetime.TotalMilliseconds).ToList();
+            foreach (var flow in stale) _hosts.Remove(flow.Session);
         }
+        foreach (var flow in stale)
+        {
+            flow.Cancel.Cancel();
+            // Passou o prazo sem aprovação depois de este aparelho responder: acabou mal.
+            if (!flow.Approving) NoteBadPairing(flow);
+        }
+    }
+
+    // Um pedido a que este aparelho respondeu acabou mal (PairingFatigue). Cada sessão conta uma vez. Grava (só horas).
+    private void NoteBadPairing(HostFlow flow)
+    {
+        lock (_gate)
+        {
+            if (flow.CountedBad || _saved is not { } saved) return;
+            flow.CountedBad = true;
+            saved.BadPairings = PairingFatigue.Add(saved.BadPairings, _now());
+            _store.Save(saved);
+        }
+        Notify();
+    }
+
+    // «Mostrar o pedido na barra» (um gesto nas Definições, com a barra calada pelos pedidos em série): a contagem
+    // recomeça e a barra volta a abrir sozinha.
+    public void ResumePairingBar()
+    {
+        lock (_gate)
+        {
+            if (_saved is not { BadPairings: not null } saved) return;
+            saved.BadPairings = null;
+            _store.Save(saved);
+        }
+        Notify();
     }
 
     // A pessoa escreveu NESTE aparelho o código que o aparelho novo mostra («number matching»): este aparelho nunca o
@@ -1025,6 +1073,7 @@ public sealed class SyncAgent
             try { await flow.Host.RefuseAsync(cancellationToken).ConfigureAwait(false); }
             catch (Exception e) when (IsTransient(e)) { }
             flow.Host.Dispose();
+            NoteBadPairing(flow);
             Notify();
             return PairingAnswer.Refused;
         }
@@ -1065,6 +1114,12 @@ public sealed class SyncAgent
         {
             _hosts.Remove(session);
             _notice = $"«{DeviceNameText.Shown(flow.Name)}» foi aprovado: os dados juntam-se nesse computador.";
+            // Uma aprovação repõe a contagem dos pedidos em série.
+            if (_saved is { BadPairings: not null } saved)
+            {
+                saved.BadPairings = null;
+                _store.Save(saved);
+            }
         }
         flow.Host.Dispose();
         Notify();
@@ -1079,6 +1134,8 @@ public sealed class SyncAgent
         }
         if (flow is null) return;
         flow.Cancel.Cancel();
+        // «Não fui eu» (ou «Recusar» nas Definições): conta para os pedidos em série.
+        NoteBadPairing(flow);
         try { await flow.Host.RefuseAsync(cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (IsTransient(e)) { }
         flow.Host.Dispose();
@@ -1530,6 +1587,8 @@ public sealed class SyncAgent
         public bool Approving { get; set; }
         // Códigos errados escritos neste pedido. Só memória: o Éteris reabriu, a sessão morreu (não há tentativas novas).
         public int Wrong { get; set; }
+        // Já contou para os pedidos em série (cada sessão conta uma vez).
+        public bool CountedBad { get; set; }
     }
 }
 

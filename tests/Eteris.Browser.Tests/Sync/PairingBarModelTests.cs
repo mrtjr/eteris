@@ -24,6 +24,15 @@ public class PairingBarModelTests
         Assert.Equal(PairingBarKind.None, PairingBarModel.From(On(), Now, PairingBarModel.DefaultReceives).Kind);
     }
 
+    // Pedidos em série: com a barra calada nenhum estado abre sozinho (o pedido continua nas Definições).
+    [Fact]
+    public void QuietBar_ShowsNothing()
+    {
+        var status = On([new HostRequest("s", "Portátil", 3, Now)]) with { WaitingRequests = 1, AnsweringSinceMs = Now, PairingQuiet = true };
+        Assert.Equal(PairingBarKind.None, PairingBarModel.From(status, Now, PairingBarModel.DefaultReceives).Kind);
+        Assert.Equal(PairingBarKind.Code, PairingBarModel.From(status with { PairingQuiet = false }, Now, PairingBarModel.DefaultReceives).Kind);
+    }
+
     [Fact]
     public void CountedRequest_ShowsWaiting()
     {

@@ -319,6 +319,10 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             case "/sync-refuse" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
                 Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
                 break;
+            case "/sync-requests-show":
+                // «Mostrar o pedido na barra» (pedidos em série): a barra volta a abrir sozinha. Sem rede.
+                Sync.SyncService.ResumePairingBar();
+                break;
             case "/sync-remove" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
             {
                 // «shown»: os aparelhos que a página mostrava quando o utilizador decidiu (só esses recebem a chave nova).

@@ -520,6 +520,39 @@ public class SyncIntegrationTests
             Assert.DoesNotContain(never, init);
     }
 
+    // Com a barra calada (pedidos em série), um pedido contado deixa de dar direito a procurar logo ao voltar à janela.
+    [Fact]
+    public void QuietBar_ActivationFallsBackToFiveMinutes()
+    {
+        var body = Body(File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8), "public static void WindowActivated(bool privateWindow)");
+        var quiet = body.IndexOf("PairingQuiet", StringComparison.Ordinal);
+        Assert.True(quiet >= 0 && quiet < body.IndexOf("TryPass(", StringComparison.Ordinal));
+    }
+
+    // O aviso dos pedidos em série vive nas Definições, com as três saídas; nada de aprovar por uma página.
+    [Fact]
+    public void QuietNotice_LivesInSettings()
+    {
+        var page = File.ReadAllText(BrowserSrc("Browser", "settings.html"), Encoding.UTF8);
+        Assert.Contains("Vários pedidos para entrar na sua conta foram recusados ou ficaram sem resposta, e por isso a barra deixou de abrir sozinha. "
+            + "Se não foi você, alguém tem a sua conta Google: mude a palavra-passe da Google e retire o acesso do Éteris.", page);
+        foreach (var needed in new[] { "sync-requests-show", "sync-refuse", "syncQuietRevoke", "Mostrar o pedido na barra", "Retirar o acesso do Éteris", "Não fui eu", "s.pairingQuiet" })
+            Assert.Contains(needed, page);
+        Assert.DoesNotContain("sync-approve", page);
+        Assert.DoesNotContain("innerHTML", page);
+
+        var routes = File.ReadAllText(BrowserSrc("Browser", "EterisSchemeHandlerFactory.cs"), Encoding.UTF8);
+        var syncRoute = Body(routes, "private static IResourceHandler SyncRoute(");
+        Assert.Contains("case \"/sync-requests-show\":", syncRoute);
+        Assert.Contains("Sync.SyncService.ResumePairingBar();", syncRoute);
+
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        var resume = Body(service, "public static void ResumePairingBar()");
+        Assert.DoesNotContain("Agent()", resume);
+        Assert.Contains("_agent", resume);
+        Assert.Contains("pairingQuiet = status.PairingQuiet", service);
+    }
+
     // Plano §10.1 S1: nenhum caminho entrega a chave sem o código escrito E sem a porta do Windows.
     [Fact]
     public void ApproveWithCode_HasOneProductCaller_BehindTheWindowsGate()

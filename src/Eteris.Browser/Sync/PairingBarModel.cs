@@ -31,7 +31,8 @@ internal static class PairingBarModel
     // «receives»: o fragmento do que o computador novo recebe. Vem sempre de quem chama.
     public static PairingBarView From(SyncStatus? status, long nowMs, string receives)
     {
-        if (status is not { Phase: SyncPhase.On }) return new(PairingBarKind.None, null, null, 0);
+        // Pedidos em série: a barra não abre sozinha (o aviso fica nas Definições).
+        if (status is not { Phase: SyncPhase.On } || status.PairingQuiet) return new(PairingBarKind.None, null, null, 0);
         // Um pedido de cada vez: o mais antigo (o código escrito só se compara com esse).
         if (status.Requests.OrderBy(r => r.SeenMs).ThenBy(r => r.Session, StringComparer.Ordinal).FirstOrDefault() is { } oldest)
             return new(PairingBarKind.Code, oldest.Session, oldest.Name, oldest.AttemptsLeft, Title(receives));

@@ -914,6 +914,35 @@
       item.append(label);
       return item;
     };
+    // Pedidos em série: vários pedidos acabaram mal e a barra deixou de abrir sozinha. Fica aqui o aviso, com as saídas.
+    // O destino de «Retirar o acesso do Éteris» (a T12 aponta-o para o item próprio).
+    const quietRevokeTarget = 'sincronizacao';
+    const quietNotice = requests => {
+      const item = document.createElement('div'); item.className = 'item syncalert';
+      const label = document.createElement('div'); label.className = 'label';
+      const text = document.createElement('span');
+      text.textContent = 'Vários pedidos para entrar na sua conta foram recusados ou ficaram sem resposta, e por isso a barra deixou de abrir sozinha. Se não foi você, alguém tem a sua conta Google: mude a palavra-passe da Google e retire o acesso do Éteris.';
+      label.append(text);
+      const buttons = document.createElement('div'); buttons.className = 'stack';
+      const revoke = document.createElement('button'); revoke.className = 'action'; revoke.id = 'syncQuietRevoke';
+      revoke.dataset.key = 'quiet:revoke'; revoke.textContent = 'Retirar o acesso do Éteris';
+      revoke.addEventListener('click', () => document.getElementById(quietRevokeTarget)?.scrollIntoView({ block: 'start' }));
+      buttons.append(revoke);
+      if (requests.length) {
+        // Recusa os pedidos prontos (o outro computador fica a saber).
+        const no = document.createElement('button'); no.className = 'action'; no.dataset.key = 'quiet:no'; no.textContent = 'Não fui eu';
+        no.addEventListener('click', () => {
+          no.disabled = true;
+          for (const r of requests) askGoogle('sync-refuse', `&id=${encodeURIComponent(r.id)}`);
+        });
+        buttons.append(no);
+      }
+      const show = document.createElement('button'); show.className = 'action'; show.dataset.key = 'quiet:show'; show.textContent = 'Mostrar o pedido na barra';
+      show.addEventListener('click', () => { show.disabled = true; askGoogle('sync-requests-show'); });
+      buttons.append(show);
+      item.append(label, buttons);
+      return item;
+    };
     const armed = new Map();                // aparelho → hora em que «Remover» ficou à espera da confirmação
     const keyOfFocus = box => box.contains(document.activeElement) ? document.activeElement.dataset.key : null;
     const refocus = (box, key) => { if (key) box.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus(); };
@@ -989,11 +1018,12 @@
       // código que o computador novo mostra. Aqui só se diz onde responder.
       const box = $('syncRequests');
       const requests = d.enabled ? s.requests || [] : [];
-      const rKey = JSON.stringify(requests.map(r => r.id));
+      const quiet = d.enabled && !!s.pairingQuiet;
+      const rKey = JSON.stringify([quiet, requests.map(r => r.id)]);
       if (rKey !== requestsKey) {
         requestsKey = rKey;
         const focused = keyOfFocus(box);
-        box.replaceChildren(...(requests.length ? [requestsNotice()] : []));
+        box.replaceChildren(...(quiet ? [quietNotice(requests)] : requests.length ? [requestsNotice()] : []));
         refocus(box, focused);
       }
       if (msg && msg.area === 'approve') note($('syncNotice'), msg.text, true);
