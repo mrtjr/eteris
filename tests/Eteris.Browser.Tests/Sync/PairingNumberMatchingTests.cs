@@ -431,6 +431,32 @@ public sealed class PairingNumberMatchingTests : IDisposable
 
     private static int BadCount(Device device) => device.Store.Load()?.BadPairings?.Length ?? 0;
 
+    // Um pedido escrito à mão a que a Casa responde e cujo passo 2 (também escrito à mão) não confere.
+    private async Task AnsweredThenForgedAsync(Device casa, byte[] guestKeyFile)
+    {
+        var session = await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        await Folder.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.GuestKey, guestKeyFile);
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido na Casa");
+        Assert.Empty(casa.Agent.Status.Requests);
+    }
+
+    // R18 (d): mensagens do pedido que não conferem contam, seja qual for a exceção (chave ilegível, compromisso
+    // dirigido a outro anfitrião, ficheiro que não se lê).
+    [Fact]
+    public async Task Requests_WithForgedMessages_Count()
+    {
+        var casa = await HostAsync();
+        await AnsweredThenForgedAsync(casa, Json.Bytes(new PairingMessage { Key = "!!", Commit = "AA", CreatedMs = _now }));
+        await Until(() => BadCount(casa) == 1, "o 1.º contado");
+        await AnsweredThenForgedAsync(casa, Json.Bytes(new PairingMessage { Key = "AA", Commit = "AA", CreatedMs = _now, For = "x" }));
+        await Until(() => BadCount(casa) == 2, "o 2.º contado");
+        Assert.False(casa.Agent.Status.PairingQuiet);
+        await AnsweredThenForgedAsync(casa, "{ não é json"u8.ToArray());
+        await Until(() => casa.Agent.Status.PairingQuiet, "a barra calada");
+        Assert.Equal(3, BadCount(casa));
+    }
+
     [Fact]
     public async Task Requests_InSeries_StopOpeningTheBar()
     {

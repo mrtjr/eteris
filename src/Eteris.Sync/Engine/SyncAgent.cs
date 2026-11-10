@@ -984,10 +984,12 @@ public sealed class SyncAgent
                             mine = _hosts.Remove(session);
                     host.Dispose();
                     // O pedido acabou do outro lado depois de este aparelho responder: recusa ou cancelamento escrito
-                    // por quem pede (x-host), mensagens que não conferem, ou o prazo. Tudo isto quem escreve no Drive
-                    // consegue provocar, por isso conta para os pedidos em série. Não contam: parar deste lado
-                    // (cancelado), um erro de rede ou da pasta, e outro aparelho desta conta ter respondido primeiro.
-                    if (mine && e is PairingException and not PairingAnsweredElsewhereException) NoteBadPairing(flow);
+                    // por quem pede (x-host), mensagens que não conferem (incluindo uma chave ou um ficheiro ilegível,
+                    // FormatException/CryptographicException, e um compromisso dirigido a outro anfitrião), ou o prazo.
+                    // Tudo isto quem escreve no Drive consegue provocar, por isso conta para os pedidos em série (dois
+                    // aparelhos desta conta a responder ao mesmo pedido no mesmo instante custa, raramente, um). Não
+                    // contam: parar deste lado (cancelado) e um erro de rede ou da pasta.
+                    if (mine && e is PairingException or FormatException or CryptographicException) NoteBadPairing(flow);
                 }
                 Notify();
             });
