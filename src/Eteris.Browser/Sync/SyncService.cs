@@ -501,8 +501,9 @@ internal static class SyncService
             notice = status.Notice,
             code = status.RecoveryCode,
             pairing = status.Pairing is { } p ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error } : null,
-            // Sem o código de verificação: a página não o mostra (a aprovação é na barra da janela, escrevendo-o).
-            requests = status.Requests.Select(r => new { id = r.Session, name = r.Name }),
+            // Sem o código de verificação: a página não o mostra (a aprovação é na barra da janela, escrevendo-o). Sem o
+            // nome: quem pede escolhe-o e a página não o usa.
+            requests = status.Requests.Select(r => new { id = r.Session }),
             // Pedidos em série: a barra não abre sozinha e as Definições mostram o aviso.
             pairingQuiet = status.PairingQuiet,
             devices = status.Devices.Select(d => new

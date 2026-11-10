@@ -151,10 +151,18 @@ public class PairingBarTests
             var bar = new PairingBar();
             bar.Show(Code);
             bar.ShowNote(PairingBarModel.WrongCode(2));
-            return All<TextBlock>(bar).Select(t => t.Text).ToList();
+            var all = All<TextBlock>(bar).Select(t => t.Text).ToList();
+            // Quem pede escolheu como nome o próprio código (conhece-o no passo 4): a barra não o mostra.
+            bar.Show(Code with { Name = "Código 482 913" });
+            all.AddRange(All<TextBlock>(bar).Select(t => t.Text));
+            bar.Show(Code with { Name = "４８２ ９１３" });
+            all.AddRange(All<TextBlock>(bar).Select(t => t.Text));
+            return all;
         }, nameof(TheBar_HasNoCodeToCopy));
         Assert.NotEmpty(texts);
         Assert.DoesNotContain(texts, t => Regex.IsMatch(t, @"\d{3}\s?\d{3}"));
+        Assert.DoesNotContain(texts, t => t.Contains("482", StringComparison.Ordinal) || t.Contains("913", StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, t => t.Contains('４'));
     }
 
     [Fact]

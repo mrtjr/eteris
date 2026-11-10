@@ -1,7 +1,10 @@
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using Eteris.Browser.Sync;
+using Eteris.Sync.Crypto;
 using Eteris.Sync.Engine;
+using Eteris.Sync.Format;
 using Eteris.Sync.Pairing;
 using Eteris.Sync.Transport;
 
@@ -379,6 +382,37 @@ public sealed class PairingNumberMatchingTests : IDisposable
         await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 2, "o segundo pedido pronto");
         Assert.Equal("Aparelho sem nome", casa.Agent.Status.Requests.Single(r => r.Session != session).Name);
         GC.KeepAlive(blank);
+    }
+
+    // Um computador novo com o cliente mudado escolhe como nome o próprio código: só o conhece no passo 4, mas o nome
+    // segue selado nesse mesmo passo. A barra da Casa nunca o mostra (nem as páginas internas levam o nome).
+    [Fact]
+    public async Task GuestNamedAfterTheCode_TheBarShowsNoDigits()
+    {
+        var casa = await HostAsync();
+        var session = await PairingRequests.OpenAsync(Folder, Now);
+        await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
+        using var guest = await PairingRequests.WaitForHostAsync(Folder, session, "provisório", Now, Quick, TimeSpan.FromMilliseconds(5));
+        // O cliente mudado espera pelo nonce da Casa, calcula o código e só então fixa o nome.
+        for (var i = 0; i < 3000 && !await HasStep(session, PairingProtocol.HostNonce); i++) await Task.Delay(10);
+        var nonceFile = await Folder.ReadAsync(SyncPaths.Pairing(session) + PairingProtocol.HostNonce);
+        Assert.NotNull(nonceFile);
+        var hostNonce = Kdf.FromBase64Url(Json.Parse<PairingMessage>(nonceFile).Nonce!);
+        const BindingFlags inner = BindingFlags.Instance | BindingFlags.NonPublic;
+        byte[] Field(string name) => (byte[])typeof(PairingGuest).GetField(name, inner)!.GetValue(guest)!;
+        var guestKey = (byte[])typeof(PairingSide).GetProperty("PublicKey", inner)!.GetValue(guest)!;
+        var sas = PairingProtocol.Sas(PairingProtocol.Transcript(session, Field("_hostKey"), guestKey, hostNonce, Field("_guestNonce")));
+        typeof(PairingGuest).GetField("_name", inner)!.SetValue(guest, sas);
+        Assert.Equal(sas, await guest.WaitForCodeAsync());
+
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1, "o pedido pronto");
+        Assert.Equal(sas, casa.Agent.Status.Requests[0].Name);    // chegou como quem pede quis
+        var view = PairingBarModel.From(casa.Agent.Status, _now, PairingBarModel.DefaultReceives);
+        Assert.Equal(PairingBarKind.Code, view.Kind);
+        Assert.Equal("Aparelho sem nome", view.Name);
+        Assert.DoesNotContain(PairingBarModel.NameLine(view.Name!), char.IsDigit);
+        var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs"));
+        Assert.DoesNotContain("name = r.Name", service, StringComparison.Ordinal);
     }
 
     // ---- pedidos em série (R18) ------------------------------------------------------------------------------------

@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Reflection;
+using System.Text;
 using Eteris.Browser.Sync;
 using Eteris.Sync.Engine;
 
@@ -67,6 +69,24 @@ public class PairingBarModelTests
         // Com a mesma hora, pela sessão: sempre o mesmo pedido à vista.
         var tie = PairingBarModel.From(On([new HostRequest("d", "Tablet", 3, Now), new HostRequest("c", "Portátil", 3, Now)]), Now, PairingBarModel.DefaultReceives);
         Assert.Equal("c", tie.Session);
+    }
+
+    // Quem pede escolhe o nome depois de conhecer o código (o nome segue selado no passo 4): o nome de um pedido nunca
+    // mostra caracteres numéricos, de nenhuma escrita (Unicode Nd, Nl, No; largura total; fora do plano básico).
+    [Theory]
+    [InlineData("Código 482 913", "Código")]
+    [InlineData("４８２９１３", DeviceNameText.Unnamed)]
+    [InlineData("Portátil ٤٨٢ ⅨⅢ ½ \U0001D7D2\U0001D7D6 sala", "Portátil sala")]
+    [InlineData("Portátil da sala", "Portátil da sala")]
+    [InlineData("   ", DeviceNameText.Unnamed)]
+    [InlineData(null, DeviceNameText.Unnamed)]
+    public void RequestName_NeverShowsDigits(string? name, string shown)
+    {
+        Assert.Equal(shown, PairingBarModel.ShownName(name));
+        var view = PairingBarModel.From(On([new HostRequest("s", name ?? "", 3, Now)]), Now, PairingBarModel.DefaultReceives);
+        Assert.Equal(shown, view.Name);
+        Assert.DoesNotContain(PairingBarModel.NameLine(name ?? "").EnumerateRunes(), r => Rune.GetUnicodeCategory(r)
+            is UnicodeCategory.DecimalDigitNumber or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber);
     }
 
     [Fact]
