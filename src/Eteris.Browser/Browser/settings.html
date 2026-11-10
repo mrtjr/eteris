@@ -956,7 +956,7 @@
     const googleNote = $('googleNote');
     const googleUrl = $('googleUrl');
     const syncSignOut = $('syncSignOut');
-    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null;
+    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null, anchorWaits = false;
     // Pedidos do estado (estado, conta, entrar, sair, ações): só a resposta mais recente desenha. Uma resposta
     // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
     const askGoogle = (path, extra, quiet) => {
@@ -1559,6 +1559,8 @@
         || (s.deleting && !s.deleteError && !(d.message && d.message.area === 'delete'));
       poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
       askLook();
+      // Aberta numa âncora com syncBody ainda escondido: a vista vai ao destino quando ele aparece (uma vez).
+      if (anchorWaits && !body.hidden) { anchorWaits = false; goToAnchor(); }
       // Depois de uma ação que muda o que está à vista, o foco vai para o que apareceu (o leitor de ecrã diz o quê).
       if (focusAfterPaint && !$(focusAfterPaint).hidden && $(focusAfterPaint).closest('[hidden]') === null) {
         $(focusAfterPaint).focus();
@@ -1569,6 +1571,7 @@
     // Aberta numa âncora (#syncRevokeItem, das barras «Retirar o acesso do Éteris»: o foco vai para o botão; ou um
     // destino dentro de «Mais opções»).
     goToAnchor();
+    anchorWaits = body.hidden && !!location.hash;
     // O gesto que é o próprio «Sair» não pede a conta: o pedido sairia para a Google no instante em que se sai.
     const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && syncSignOut.contains(e.target);
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])

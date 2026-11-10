@@ -363,6 +363,23 @@ public class SyncSettingsSectionTests
         Assert.Contains("if (target) pin(target.closest('section')?.id);", nav, StringComparison.Ordinal);
     }
 
+    // Aberta numa âncora com syncBody ainda escondido na primeira pintura: a vista vai ao destino uma vez, na primeira
+    // pintura em que syncBody aparece.
+    [Fact]
+    public void Anchor_IsRetriedOnce_WhenTheBodyAppearsLater()
+    {
+        var script = Script(Page());
+        var load = At(script, "paint(initial);");
+        var first = script.IndexOf("goToAnchor();", load, StringComparison.Ordinal);
+        Assert.True(first > load);
+        Assert.True(script.IndexOf("anchorWaits = body.hidden && !!location.hash;", first, StringComparison.Ordinal) > first);
+        var start = At(script, "const paint = d => {");
+        var paint = script[start..load];
+        Assert.Contains("if (anchorWaits && !body.hidden) { anchorWaits = false; goToAnchor(); }", paint, StringComparison.Ordinal);
+        Assert.True(At(paint, "const s = paintSync(d);") < At(paint, "if (anchorWaits"));
+        Assert.True(At(script, "anchorWaits = false") < start);
+    }
+
     // R11 (c): a pesquisa das Definições encontra o que está dentro de «Mais opções» (e abre-o).
     [Fact]
     public void Search_FindsWhatIsInsideMoreOptions()
