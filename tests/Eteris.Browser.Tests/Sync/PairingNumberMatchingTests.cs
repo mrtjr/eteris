@@ -12,20 +12,35 @@ namespace Eteris.Browser.Tests.Sync;
 
 // Aprovar um computador novo escrevendo o código (0.2.15, T8, «number matching»): o computador que já está na conta
 // (aqui «Casa») nunca mostra o código de verificação; pede-o. O computador novo mostra-o e a pessoa escreve-o na Casa.
-// Três códigos errados recusam o pedido; «Não fui eu» também. Dois agentes na mesma pasta de teste, como em
-// SyncAgentTests.
+// Três códigos errados recusam o pedido; «Não fui eu» também. Os agentes de cada teste partilham um transporte em
+// memória (sem disco: uma pasta real dava erros passageiros sob carga que matavam os fluxos de emparelhamento) e as
+// esperas acordam com sinais (Changed dos agentes e escritas no transporte), nunca com um orçamento de tempo.
 public sealed class PairingNumberMatchingTests : IDisposable
 {
     private static readonly Func<TimeSpan, CancellationToken, Task> Quick = (_, ct) => Task.Delay(5, ct);
+    private static readonly TimeSpan HangGuard = TimeSpan.FromMinutes(2);   // só contra bloqueio; nunca é o caminho normal
     private long _now = 1_762_560_000_000;
-    private readonly string _folder = Path.Combine(Path.GetTempPath(), "eteris-pair-code-" + Guid.NewGuid().ToString("N"));
+    private readonly MemoryTransport _memory = new();
+    private readonly SignalTransport _cloud;
+    private readonly SemaphoreSlim _pulse = new(0);
+    private readonly List<(string Name, Device Device)> _devices = [];
+
+    public PairingNumberMatchingTests() => _cloud = new SignalTransport(_memory, Pulse);
 
     private long Now() => _now;
 
+    // O Changed nunca lança: Pulse só liberta o semáforo (que nunca se descarta: escritas de fundo ainda em curso, como
+    // o x-host de um cancelamento, podem avisar depois do fim do teste).
+    private void Pulse() => _pulse.Release();
+
+    // No fim, todos os agentes param (nenhum ciclo de sondagem fica vivo). Só escreve no MemoryStore de cada um.
     public void Dispose()
     {
-        try { Directory.Delete(_folder, recursive: true); }
-        catch (IOException) { }
+        foreach (var (_, device) in _devices)
+        {
+            device.Agent.Changed -= Pulse;
+            device.Agent.SignOut(forgetKey: false);
+        }
     }
 
     private sealed record Device(SyncAgent Agent, MemoryProfile Profile, MemoryStore Store);
@@ -34,37 +49,60 @@ public sealed class PairingNumberMatchingTests : IDisposable
     {
         profile ??= new MemoryProfile();
         store ??= new MemoryStore();
-        var agent = new SyncAgent(transport ?? (() => new FolderTransport(_folder)), profile, store, name, Now, Quick) { PairingPoll = TimeSpan.FromMilliseconds(5) };
-        return new Device(agent, profile, store);
+        var agent = new SyncAgent(transport ?? (() => _cloud), profile, store, name, Now, Quick) { PairingPoll = TimeSpan.FromMilliseconds(5) };
+        var device = new Device(agent, profile, store);
+        _devices.Add((name, device));
+        agent.Changed += Pulse;
+        return device;
     }
 
-    private FolderTransport Folder => new(_folder);
+    private SignalTransport Cloud => _cloud;
 
-    // Com a bateria inteira a correr em paralelo, os passos do emparelhamento (sondagens de 5 ms em tarefas de fundo)
-    // podem demorar: espera-se até 30 s.
-    private static async Task Until(Func<bool> condition, string what)
+    // Espera até a condição se cumprir. Acorda em cada Changed de um agente deste teste e em cada escrita no transporte;
+    // a condição avalia-se sempre AQUI (nunca dentro do Changed: lá dentro um agente pode ter o seu trinco). Um aviso
+    // entre a avaliação e o WaitAsync fica contado no semáforo (não se perde).
+    private async Task WaitFor(Func<bool> condition, string what)
     {
-        for (var i = 0; i < 3000 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition(), "À espera de: " + what);
-    }
-
-    // Responde aos pedidos e, enquanto a condição não se cumpre, volta a procurar (um pedido que a primeira procura não
-    // apanhou, por exemplo por uma leitura da pasta que falhou a meio, fica para a seguinte; os já respondidos não se
-    // repetem).
-    private static async Task AnswerUntil(Device casa, Func<bool> condition, string what)
-    {
-        for (var i = 0; i < 3000 && !condition(); i++)
+        var guard = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition())
         {
-            if (i % 50 == 0) await casa.Agent.CheckRequestsAsync();
-            await Task.Delay(10);
+            var left = HangGuard - guard.Elapsed;
+            if (left <= TimeSpan.Zero) Assert.Fail("À espera de: " + what + " | " + Describe());
+            await _pulse.WaitAsync(left);
         }
-        Assert.True(condition(), "À espera de: " + what);
     }
 
-    private async Task<bool> HasStep(string session, string step) => await Folder.ReadAsync(SyncPaths.Pairing(session) + step) is not null;
+    // Diagnóstico de uma espera que não acabou: o estado de cada agente (nunca o valor do código) e os ficheiros do
+    // emparelhamento.
+    private string Describe()
+    {
+        var parts = _devices.Select(d =>
+        {
+            var s = d.Device.Agent.Status;
+            return $"{d.Name}: Phase={s.Phase} Running={s.Running} Code={(s.Pairing?.Code is null ? "não" : "sim")} "
+                + $"Error={s.Pairing?.Error ?? "-"} End={s.Pairing?.End.ToString() ?? "-"} Requests={s.Requests.Count} "
+                + $"Answering={s.AnsweringSinceMs != 0} Waiting={s.WaitingRequests} Quiet={s.PairingQuiet} Bad={BadCount(d.Device)}";
+        });
+        var files = _memory.Files.Keys.Where(k => k.StartsWith(SyncPaths.Root + "pair/", StringComparison.Ordinal)).Order(StringComparer.Ordinal);
+        return string.Join(" ; ", parts) + " | pair/: " + string.Join(", ", files);
+    }
 
-    private async Task<int> RequestFiles()
-        => (await Folder.ListAsync(SyncPaths.Root + "pair/")).Count(f => f.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal));
+    private Task Until(Func<bool> condition, string what) => WaitFor(condition, what);
+
+    // Responde aos pedidos (já escritos: os testes esperam o 0-request antes) e espera pela condição. Uma procura
+    // chega: em memória a lista não falha, e o 1-host fica escrito antes de CheckRequestsAsync voltar.
+    private async Task AnswerUntil(Device casa, Func<bool> condition, string what)
+    {
+        await casa.Agent.CheckRequestsAsync();
+        await WaitFor(condition, what);
+    }
+
+    private bool HasStepNow(string session, string step) => _memory.Files.ContainsKey(SyncPaths.Pairing(session) + step);
+
+    private Task<bool> HasStep(string session, string step) => Task.FromResult(HasStepNow(session, step));
+
+    private int RequestFiles()
+        => _memory.Files.Keys.Count(f => f.StartsWith(SyncPaths.Root + "pair/", StringComparison.Ordinal) && f.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal));
 
     // A Casa cria a conta (e guarda o código de recuperação).
     private async Task<Device> HostAsync(string name = "Casa")
@@ -79,14 +117,13 @@ public sealed class PairingNumberMatchingTests : IDisposable
     // Um computador novo na mesma conta pede para entrar.
     private async Task<Device> GuestAsync(string name)
     {
-        var before = await RequestFiles();
+        var before = RequestFiles();
         var guest = NewDevice(name);
         guest.Profile.Bookmark("https://portatil.example/", "Do portátil");
         await guest.Agent.StartAsync();
         Assert.Equal(SyncPhase.Choose, guest.Agent.Status.Phase);
         guest.Agent.RequestPairing();
-        for (var i = 0; i < 3000 && await RequestFiles() == before; i++) await Task.Delay(10);
-        Assert.True(await RequestFiles() > before, "o pedido na pasta");
+        await WaitFor(() => RequestFiles() > before, "o pedido na pasta");
         return guest;
     }
 
@@ -231,7 +268,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
     {
         var casa = await HostAsync();
         // Quem controla o transporte escreve um pedido à mão; nenhum computador novo o segue.
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await casa.Agent.CheckRequestsAsync();
         Assert.True(await HasStep(session, PairingProtocol.HostKey));
         Assert.Empty(casa.Agent.Status.Requests);
@@ -354,12 +391,12 @@ public sealed class PairingNumberMatchingTests : IDisposable
     {
         Assert.Equal(TimeSpan.FromMinutes(2), PairingProtocol.ClockSkew);
         var casa = await HostAsync();
-        var future = await PairingRequests.OpenAsync(Folder, () => _now + 180_000);
+        var future = await PairingRequests.OpenAsync(Cloud, () => _now + 180_000);
         await casa.Agent.CheckRequestsAsync();
         Assert.Equal(0, casa.Agent.Status.AnsweringSinceMs);
         Assert.False(await HasStep(future, PairingProtocol.HostKey));
 
-        var ahead = await PairingRequests.OpenAsync(Folder, () => _now + 60_000);
+        var ahead = await PairingRequests.OpenAsync(Cloud, () => _now + 60_000);
         await casa.Agent.CheckRequestsAsync();
         Assert.NotEqual(0, casa.Agent.Status.AnsweringSinceMs);
         Assert.True(await HasStep(ahead, PairingProtocol.HostKey));
@@ -390,12 +427,12 @@ public sealed class PairingNumberMatchingTests : IDisposable
     public async Task GuestNamedAfterTheCode_TheBarShowsNoDigits()
     {
         var casa = await HostAsync();
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
-        using var guest = await PairingRequests.WaitForHostAsync(Folder, session, "provisório", Now, Quick, TimeSpan.FromMilliseconds(5));
+        using var guest = await PairingRequests.WaitForHostAsync(Cloud, session, "provisório", Now, Quick, TimeSpan.FromMilliseconds(5));
         // O cliente mudado espera pelo nonce da Casa, calcula o código e só então fixa o nome.
-        for (var i = 0; i < 3000 && !await HasStep(session, PairingProtocol.HostNonce); i++) await Task.Delay(10);
-        var nonceFile = await Folder.ReadAsync(SyncPaths.Pairing(session) + PairingProtocol.HostNonce);
+        await WaitFor(() => HasStepNow(session, PairingProtocol.HostNonce), "o nonce da Casa");
+        var nonceFile = await Cloud.ReadAsync(SyncPaths.Pairing(session) + PairingProtocol.HostNonce);
         Assert.NotNull(nonceFile);
         var hostNonce = Kdf.FromBase64Url(Json.Parse<PairingMessage>(nonceFile).Nonce!);
         const BindingFlags inner = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -418,13 +455,16 @@ public sealed class PairingNumberMatchingTests : IDisposable
     // ---- pedidos em série (R18) ------------------------------------------------------------------------------------
 
     // Um pedido escrito à mão a que a Casa responde e que o outro lado cancela (x-host) antes de haver código.
+    // Espera-se pela contagem, não só pelo fim do fluxo: o agente tira o fluxo da lista (AnsweringSinceMs passa a 0) um
+    // instante antes de gravar a contagem.
     private async Task<string> AnsweredThenCancelledElsewhereAsync(Device casa)
     {
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var before = BadCount(casa);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         Assert.True(await HasStep(session, PairingProtocol.HostKey));
-        await PairingRequests.RefuseAsync(Folder, session, Now);
-        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido na Casa");
+        await PairingRequests.RefuseAsync(Cloud, session, Now);
+        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0 && BadCount(casa) == before + 1, "o fim do pedido contado");
         Assert.Empty(casa.Agent.Status.Requests);
         return session;
     }
@@ -455,13 +495,13 @@ public sealed class PairingNumberMatchingTests : IDisposable
     public async Task RefusedSession_RewrittenOnTheDrive_IsNotAnsweredAgain()
     {
         var casa = await HostAsync();
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         await casa.Agent.RefuseAsync(session);
         await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido");
-        foreach (var path in await Folder.ListAsync(SyncPaths.Pairing(session)))
-            if (!path.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal)) await Folder.DeleteAsync(path);
-        Assert.Equal([session], await PairingRequests.PendingAsync(Folder, Now));
+        foreach (var path in await Cloud.ListAsync(SyncPaths.Pairing(session)))
+            if (!path.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal)) await Cloud.DeleteAsync(path);
+        Assert.Equal([session], await PairingRequests.PendingAsync(Cloud, Now));
 
         await casa.Agent.CheckRequestsAsync();
         await Task.Delay(100);
@@ -477,12 +517,12 @@ public sealed class PairingNumberMatchingTests : IDisposable
     public async Task EndedSessions_AreForgotten_OnceTheRequestCanNoLongerBePending()
     {
         var casa = await HostAsync();
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         await casa.Agent.RefuseAsync(session);
         await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido");
-        foreach (var path in await Folder.ListAsync(SyncPaths.Pairing(session)))
-            if (!path.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal)) await Folder.DeleteAsync(path);
+        foreach (var path in await Cloud.ListAsync(SyncPaths.Pairing(session)))
+            if (!path.EndsWith("/" + PairingProtocol.Request, StringComparison.Ordinal)) await Cloud.DeleteAsync(path);
         Assert.Equal(1, Ended(casa));
 
         // 11 e 20 minutos depois, o pedido reescrito com a hora do momento: nunca respondido (aos 20 já passaram mais de
@@ -490,8 +530,8 @@ public sealed class PairingNumberMatchingTests : IDisposable
         foreach (var minutes in new[] { 11, 9 })
         {
             _now += (long)TimeSpan.FromMinutes(minutes).TotalMilliseconds;
-            await Folder.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.Request, Json.Bytes(new PairingMessage { CreatedMs = _now }));
-            Assert.Equal([session], await PairingRequests.PendingAsync(Folder, Now));
+            await Cloud.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.Request, Json.Bytes(new PairingMessage { CreatedMs = _now }));
+            Assert.Equal([session], await PairingRequests.PendingAsync(Cloud, Now));
             await casa.Agent.CheckRequestsAsync();
             await Task.Delay(100);
             Assert.Equal(0, casa.Agent.Status.AnsweringSinceMs);
@@ -501,7 +541,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
 
         // Mais 13 minutos: o pedido já não pode estar pendente e a sessão sai da memória.
         _now += (long)TimeSpan.FromMinutes(13).TotalMilliseconds;
-        Assert.Empty(await PairingRequests.PendingAsync(Folder, Now));
+        Assert.Empty(await PairingRequests.PendingAsync(Cloud, Now));
         await casa.Agent.CheckRequestsAsync();
         Assert.Equal(0, Ended(casa));
         Assert.Equal(1, BadCount(casa));
@@ -516,9 +556,9 @@ public sealed class PairingNumberMatchingTests : IDisposable
     // Um pedido escrito à mão a que a Casa responde e cujo passo 2 (também escrito à mão) não confere.
     private async Task AnsweredThenForgedAsync(Device casa, byte[] guestKeyFile)
     {
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
-        await Folder.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.GuestKey, guestKeyFile);
+        await Cloud.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.GuestKey, guestKeyFile);
         await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido na Casa");
         Assert.Empty(casa.Agent.Status.Requests);
     }
@@ -600,7 +640,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
 
         // «Não fui eu» num pedido ainda sem código, seguido do fim do fluxo dessa sessão: soma 1.
         casa.Agent.ResumePairingBar();
-        var session = await PairingRequests.OpenAsync(Folder, Now);
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         await casa.Agent.RefuseAsync(session);
         await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido");
@@ -612,13 +652,13 @@ public sealed class PairingNumberMatchingTests : IDisposable
     [Fact]
     public async Task Requests_StoppedHere_OrTransportErrors_DoNotCount()
     {
-        var flaky = new FlakyTransport(new FolderTransport(_folder));
+        var flaky = new FlakyTransport(_cloud);
         var casa = NewDevice("Casa", transport: () => flaky);
         await casa.Agent.StartAsync();
         casa.Agent.MarkKitSaved();
 
         // Erro de transporte enquanto espera pelo computador novo.
-        await PairingRequests.OpenAsync(Folder, Now);
+        await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         flaky.Fail = true;
         await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido por erro de transporte");
@@ -626,7 +666,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.Equal(0, BadCount(casa));
 
         // Sair a meio de um pedido.
-        await PairingRequests.OpenAsync(Folder, Now);
+        await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         casa.Agent.SignOut(forgetKey: false);
         await Task.Delay(100);
@@ -645,10 +685,10 @@ public sealed class PairingNumberMatchingTests : IDisposable
         var reaberta = NewDevice("Casa", casa.Store, casa.Profile);
         Assert.True(reaberta.Agent.Status.PairingQuiet);
         Assert.Contains("\"badPairs\"", System.Text.Encoding.UTF8.GetString(Eteris.Sync.Format.Json.Bytes(casa.Store.Load()!)));
-        foreach (var file in Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories))
+        foreach (var file in _memory.Files)
         {
-            Assert.DoesNotContain("badPairs", Path.GetFileName(file), StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("badPairs", System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(file)), StringComparison.Ordinal);
+            Assert.DoesNotContain("badPairs", file.Key, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("badPairs", System.Text.Encoding.UTF8.GetString(file.Value), StringComparison.Ordinal);
         }
     }
 
@@ -670,5 +710,27 @@ public sealed class PairingNumberMatchingTests : IDisposable
 
         public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
             => Fail ? throw new IOException("pasta inacessível") : inner.DeleteAsync(path, cancellationToken);
+    }
+
+    // Transporte em memória que avisa cada escrita e cada apagamento (as esperas acordam com isto, não com o relógio).
+    private sealed class SignalTransport(ISyncTransport inner, Action changed) : ISyncTransport
+    {
+        public string Name => inner.Name;
+
+        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default) => inner.ListAsync(prefix, cancellationToken);
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default) => inner.ReadAsync(path, cancellationToken);
+
+        public async Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default)
+        {
+            await inner.WriteAsync(path, data, cancellationToken);
+            changed();
+        }
+
+        public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+        {
+            await inner.DeleteAsync(path, cancellationToken);
+            changed();
+        }
     }
 }
