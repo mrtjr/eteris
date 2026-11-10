@@ -6,7 +6,7 @@ A versão das **páginas isoladas**. Como no Chrome, no Firefox e no Brave, cada
 sandbox**, sem acesso aos seus ficheiros nem ao sistema: uma falha explorável no código de uma página deixa de ficar
 com os acessos do utilizador. Se o isolamento falhar num computador, o Éteris abre sem ele e avisa. É também uma versão
 de **desempenho medido** contra a 0.2.13 e as três referências: menos memória (−11% a −16%), quase nada de processador
-com 20 abas paradas e uma janela minimizada que deixa de desenhar. E fecha arestas: o menu do Éteris já não deixa
+com 20 abas paradas e uma janela minimizada que deixa de desenhar. E lima arestas: o menu do Éteris já não deixa
 passar o `Alt` para a página e um link aberto logo a seguir ao arranque já não se perde.
 
 ### Segurança: páginas isoladas (sandbox)
@@ -71,9 +71,10 @@ janela minimizada foi revisto depois da medição e o seu valor não voltou a se
   se abre no processo do Éteris (`docs/palavras-passe.md`). Num computador em que a rede de segurança desligou o
   sandbox, ou com `--eteris-no-sandbox`, volta o limite da 0.2.13.
 - **O que não muda: no arranque continuam a sair 0 pedidos para a Google** com a sincronização desligada (a omissão).
-  O que o Éteris corta no motor para isso é o mesmo da 0.2.13 e continua fixado por testes, e a promessa «No arranque,
-  nada sai para a Google» continua em `eteris://privacy/`, com ✔ ou ✘. Com a sincronização ligada, tudo como na
-  0.2.13: só os pedidos dela, cifrados, a partir de 30 s depois de abrir.
+  O que o Éteris corta no motor para isso é o mesmo da 0.2.13 e continua fixado por testes (a última medição do
+  arranque com um proxy é da 0.2.11; nesta versão, em que mudam o executável de arranque e o isolamento do serviço de
+  rede, não foi repetida), e a promessa «No arranque, nada sai para a Google» continua em `eteris://privacy/`, com ✔
+  ou ✘. Com a sincronização ligada, tudo como na 0.2.13: só os pedidos dela, cifrados, a partir de 30 s depois de abrir.
 - **Nada de novo sai do computador.** Os ajustes de desempenho só olham para o estado do próprio Windows (a janela
   minimizada, o aviso de pouca memória), e a rede de segurança do sandbox guarda o registo das falhas só no perfil
   (`sandbox-fallback.json`), sem o enviar a ninguém.
