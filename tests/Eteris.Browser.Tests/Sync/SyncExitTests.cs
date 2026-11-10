@@ -264,6 +264,40 @@ public sealed class SyncExitTests : IDisposable
         Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
     }
 
+    // M4 da revisão: «Sair» e «Entrar» enquanto a Google responde à revogação. A sessão nova fica (a geração mudou):
+    // nada se esquece, nada para e nada se diz retirado — conta como Failed («tente outra vez»).
+    [Fact]
+    public async Task Revoke_WithANewSignInMeanwhile_KeepsTheNewSession_AndIsNotDone()
+    {
+        var google = new FakeGoogle();
+        var (_, session) = Drive(google);
+        var (arrived, release) = google.Hold("/revoke");
+        var revoke = session.RevokeAccessAsync(CancellationToken.None);
+        await arrived.WaitAsync(TimeSpan.FromSeconds(10));
+        session.SignOut();
+        session.Use(new OAuthTokens(google.ValidAccessToken, google.RefreshToken, _now + 3_600_000, GoogleEndpoints.Scope));
+        release();
+        var outcome = await revoke.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(RevokeOutcome.Revoked, outcome);
+        Assert.True(session.IsSignedIn);
+        var after = SyncExit.SessionAfterRevoke(outcome, session.IsSignedIn);
+        Assert.Equal(RevokeOutcome.Failed, after);
+        var (done, message) = await SyncExit.RevokeAsync(Answer(after), StopHere, CancellationToken.None);
+        Assert.False(done);
+        Assert.Equal(0, _stops);
+        Assert.Equal(SyncExit.RevokeFailed, message);
+
+        // Sem ninguém a entrar, fica tal e qual.
+        foreach (var o in Enum.GetValues<RevokeOutcome>())
+            Assert.Equal(o, SyncExit.SessionAfterRevoke(o, signedInNow: false));
+        Assert.Equal(RevokeOutcome.Failed, SyncExit.SessionAfterRevoke(RevokeOutcome.AlreadyInvalid, signedInNow: true));
+
+        var code = GoogleSyncTests.Src("Eteris.Browser", "Sync", "GoogleSync.cs");
+        var body = GoogleSyncTests.Body(code, "public static async Task<RevokeOutcome> RevokeAccessAsync(");
+        var guard = body.IndexOf("SyncExit.SessionAfterRevoke(", StringComparison.Ordinal);
+        Assert.True(guard >= 0 && guard < body.IndexOf("Tracker.Reset()", StringComparison.Ordinal), body);
+    }
+
     // Uma exceção que o agente não traduz, com a troca a meio: a mesma regra (nunca revogar, LostHalfway), sem lançar.
     [Fact]
     public async Task Lost_RotationLeftHalfway_ByAnUntranslatedError_NeverRevokes()

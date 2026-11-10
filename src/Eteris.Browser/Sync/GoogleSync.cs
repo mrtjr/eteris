@@ -242,11 +242,12 @@ internal static class GoogleSync
 
     // «Retirar o acesso do Éteris à conta Google»: revoga. Com Revoked e AlreadyInvalid a sessão daqui ficou apagada:
     // esquece também a conta guardada e o estado da entrada. Devolve o resultado tal e qual (o texto é do SyncExit:
-    // AlreadyInvalid não é «retirado»).
+    // AlreadyInvalid não é «retirado»). Uma entrada nova entretanto (a sessão não ficou apagada) conta como Failed e
+    // nada se esquece (SyncExit.SessionAfterRevoke).
     public static async Task<RevokeOutcome> RevokeAccessAsync(CancellationToken cancellationToken = default)
     {
         if (Session() is not { } session) return RevokeOutcome.NotSignedIn;
-        var outcome = await session.RevokeAccessAsync(cancellationToken).ConfigureAwait(false);
+        var outcome = SyncExit.SessionAfterRevoke(await session.RevokeAccessAsync(cancellationToken).ConfigureAwait(false), session.IsSignedIn);
         if (outcome is RevokeOutcome.Revoked or RevokeOutcome.AlreadyInvalid)
         {
             Tracker.Reset();

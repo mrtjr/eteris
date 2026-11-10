@@ -70,6 +70,12 @@ internal static class SyncExit
 
     // ---- «Retirar o acesso» --------------------------------------------------------------------------------------------
 
+    // O resultado da revogação visto por este computador: se, enquanto a Google respondia, alguém fez «Sair» e «Entrar»
+    // (a sessão nova não foi apagada, GoogleSession compara a geração), nada se esquece nem para e nada se diz retirado:
+    // a sessão nova pode continuar com acesso. Conta como Failed («tente outra vez»).
+    public static RevokeOutcome SessionAfterRevoke(RevokeOutcome outcome, bool signedInNow)
+        => signedInNow && outcome is RevokeOutcome.Revoked or RevokeOutcome.AlreadyInvalid ? RevokeOutcome.Failed : outcome;
+
     // Revoga. Done = a Google CONFIRMOU (só Revoked). stopHere corre sempre que a sessão daqui ficou apagada (Revoked e
     // AlreadyInvalid), no máximo uma vez; nunca com Failed nem NotSignedIn. Um cancelamento (o limite de tempo) é Failed.
     public static async Task<(bool Done, string Message)> RevokeAsync(
