@@ -1855,7 +1855,8 @@ public sealed class SyncAgent
     }
 
     // Remove um aparelho da conta: nova cadeia (kit de recuperação novo, por guardar; o antigo deixa de valer); os que ficam
-    // recebem a conta nova sozinhos, o removido deixa de conseguir ler e escrever.
+    // recebem a conta nova sozinhos, o removido deixa de conseguir abrir o que vier a seguir. Não retira a autorização
+    // Google do removido (ainda pode apagar ou estragar os ficheiros no Drive): isso só o faz «Perdi um computador».
     // «shown»: os aparelhos que o utilizador viu na lista quando decidiu (por omissão, a última lista). Só esses, e só
     // com a chave fixada antes desta ação, recebem a conta nova.
     public Task RemoveDeviceAsync(string device, IReadOnlyCollection<string>? shown = null, CancellationToken cancellationToken = default)

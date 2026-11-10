@@ -331,6 +331,26 @@ public class PublicTextsTests
             Assert.False(text.Contains("nunca enviado", StringComparison.Ordinal), name);
     }
 
+    // Revisão final (I-03): remover um aparelho troca a chave mas não retira a autorização Google dele (só «Perdi um
+    // computador» a retira). Nenhum texto promete que o removido «deixa de conseguir escrever», e os dois sítios que o
+    // descrevem dizem o que ele ainda pode fazer ao Drive e o remédio.
+    [Fact]
+    public void RemovedDevice_IsNotPromisedToLoseWriteAccess()
+    {
+        var settings = Flat(Read("src", "Eteris.Browser", "Browser", "settings.html"));
+        var agent = Flat(Read("src", "Eteris.Sync", "Engine", "SyncAgent.cs"));
+        foreach (var (name, text) in PublicTexts().Append(("settings.html", settings)).Append(("SyncAgent.cs", agent)))
+            Assert.False(text.Contains("deixa de conseguir ler e escrever", StringComparison.Ordinal), name);
+        var devices = Regex.Match(settings, "<b>Aparelhos ligados</b><span>(.*?)</span>").Groups[1].Value;
+        Assert.Contains("ainda pode apagar ou estragar os ficheiros no Drive", devices);
+        Assert.Contains("«Perdi um computador / foi roubado»", devices);
+        var removed = Regex.Match(SyncDoc(), @"\| \*\*Um aparelho removido\*\* .*? \|[^|]*\|[^|]*\|").Value;
+        Assert.Contains("apagar ou estragar os ficheiros no Drive", removed);
+        Assert.Contains("«Perdi um computador / foi roubado»", removed);
+        // O remédio retira mesmo o acesso: a rota existe.
+        Assert.Contains("\"/sync-lost\"", GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+    }
+
     // O «Quando:» das Definições não promete mais do que o ActivationLook faz: com um pedido contado, voltar à janela
     // procura logo (3.6, ponto 3).
     [Fact]
