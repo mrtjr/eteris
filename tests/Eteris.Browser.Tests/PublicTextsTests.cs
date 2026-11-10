@@ -316,6 +316,9 @@ public class PublicTextsTests
         var sees = Regex.Match(Read("docs", "sincronizacao.md"), @"### O que a Google vê\r?\n(.*?)\r?\n#", RegexOptions.Singleline);
         Assert.True(sees.Success);
         Assert.Single(Regex.Matches(Flat(sees.Groups[1].Value), "pede para entrar e se foi recusado"));
+        // O critério das ações de «Quando sincroniza»: que rotas cabem em «entrar» e em «apagar os dados do Drive».
+        Assert.Contains("«entrar» inclui ligar («Ligar a sincronização», «Ligar outra vez», «Ligar sem acabar de apagar»)", doc);
+        Assert.Contains("«apagar os dados do Drive» inclui «Tentar de novo» e «Começar do zero…»", doc);
         Assert.Contains("o ficheiro fica onde o guardar", doc);
         if (GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs").Contains("\"/sync-lost\"", StringComparison.Ordinal))
             Assert.Contains("O que já estava nesse computador continua lá", doc);

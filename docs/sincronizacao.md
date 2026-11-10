@@ -285,6 +285,11 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 | Quando o token de acesso expira (cerca de 1 h), no próximo pedido | renovação da sessão em `oauth2.googleapis.com/token` |
 | Nas ações que o utilizador pede: entrar, sincronizar agora, aprovar ou recusar um computador, remover um aparelho (e «Perdi um computador»), gerar um kit novo (troca a chave da conta no Drive), ligar uma linha de «O que passa entre PCs» ou aceitar pagamentos e documentos (fazem logo uma ronda), apagar os dados do Drive (e «Começar do zero…») e retirar o acesso do Éteris à conta Google | ação do utilizador. **Sair deste computador não fala com a Google.** Mudar o nome do computador só grava e segue na ronda seguinte |
 
+Na última linha, «entrar» inclui ligar («Ligar a sincronização», «Ligar outra vez», «Ligar sem acabar de apagar»), usar
+o kit de recuperação (escrito ou do ficheiro), «Aprovar noutro computador», «Pedir outra vez» e «Foi eu — juntar este
+computador»; «apagar os dados do Drive» inclui «Tentar de novo» e «Começar do zero…». A exceção de `eteris://privacy/`
+(`PrivacyPage.SyncException`) usa as mesmas palavras.
+
 Esta lista é a do teste de varrimento `SyncIntegrationTests.NetworkMoments_ClosedListOfCallers` (quem chama
 `SyncService.Look(` e `WindowActivated(`: a rota `sync-look` das Definições, o menu, a barra de aprovação e a ativação da
 janela) e a de `PrivacyPage.SyncException` (a exceção que `eteris://privacy/` mostra com a sincronização ligada). Quem
