@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Sync;
@@ -44,6 +45,11 @@ public partial class MainWindow
         RegisterBar(Sync.WindowBar.KitReminder,
             () => SyncService.KitBar(IsPrivate) is not null,
             on => ShowInSignInBar(on ? Sync.SignInBarModel.KitReminder(SyncService.KitBar(IsPrivate)) : null));
+        // A oferta única «receber também neste?» (T10): a prioridade mais baixa; lê o agente que já existe (nunca o
+        // cria). As rondas levantam SyncService.Changed: sem subscrição própria nem temporizador.
+        RegisterBar(Sync.WindowBar.SecretsOffer,
+            () => SyncService.SecretsOfferPrompt,
+            on => ShowInSignInBar(on ? Sync.SignInBarModel.SecretsOffer(true, IsPrivate) : null));
         // Os eventos chegam de qualquer thread; um só manipulador para os três.
         void changed() => Dispatcher.BeginInvoke(RefreshBars);
         GoogleSync.SignInChanged += changed;
@@ -76,11 +82,15 @@ public partial class MainWindow
         SyncStatus? sync = null;
         string? name = null;
         var guest = false;
+        (string? Text, SignInBarButton? Link) hooks = (null, null);
         if (progress.Stage == SignInStage.Done)
         {
             try
             {
                 sync = SyncService.Agent()?.Status;
+                // «Sincronizado.»: o aviso «Recebeu…» do computador que herdou pagamentos e documentos, ou a ligação
+                // «Também pagamentos e documentos…» no que criou a conta (T10).
+                hooks = Sync.SyncChoices.SyncedHooks(sync);
                 // O nome; o e-mail só quando não há nome.
                 var account = GoogleSync.Account;
                 name = string.IsNullOrWhiteSpace(account?.Name) ? account?.Email : account.Name;
@@ -92,7 +102,12 @@ public partial class MainWindow
                 // Sem estado: a barra fica em «A sincronizar…», que desaparece quando a ronda acabar ou falhar.
             }
         }
-        _signInView = SignInBarModel.For(new SignInBarInput(progress, sync, name, IsPrivate) { GuestPairing = guest });
+        _signInView = SignInBarModel.For(new SignInBarInput(progress, sync, name, IsPrivate)
+        {
+            GuestPairing = guest,
+            SyncedText = hooks.Text,
+            SyncedLink = hooks.Link,
+        });
         _signInAtMs = progress.AtMs;
         return _signInView is not null;
     }
@@ -215,8 +230,37 @@ public partial class MainWindow
             case SignInBarAction.KitDecline:
                 SyncService.DeclineKit();
                 break;
+            case SignInBarAction.AccountSecrets:
+                // A linha da escolha da conta nas Definições: a pessoa lê a descrição antes de o Windows aparecer.
+                OpenInternal(SettingsPage.Url + "#syncTopicItem");
+                GoogleSync.ClearSignIn(_signInAtMs);
+                break;
+            case SignInBarAction.OfferYes:
+                // Não bloqueia: o Windows Hello responde depois; as barras refrescam-se sozinhas (SyncService.Changed).
+                AnswerSecretsOfferFromBar();
+                break;
+            case SignInBarAction.OfferNo:
+                _ = SyncService.AnswerSecretsOfferAsync(false, _ => Task.FromResult(false));
+                break;
+            case SignInBarAction.OfferLater:
+                SyncService.CloseSecretsOffer();
+                break;
         }
         RefreshBars();
         ReturnFocusToPage();
+    }
+
+    // «Sim» na oferta única: o Windows Hello desta janela; recusado ou falhado, a oferta fica e o aviso diz porquê.
+    private async void AnswerSecretsOfferFromBar()
+    {
+        string? error;
+        try
+        {
+            error = await SyncService.AnswerSecretsOfferAsync(true,
+                purpose => ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken()));
+        }
+        catch (OperationCanceledException) { error = SyncChoices.NotConfirmed($"«{SyncChoices.AccountLine}» continua desligado"); }
+        catch (Exception e) { error = "Não foi possível concluir (" + e.Message + ")."; }
+        if (error is not null) ShowToast(error);
     }
 }

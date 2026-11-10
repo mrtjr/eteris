@@ -4,9 +4,14 @@ namespace Eteris.Browser.Sync;
 
 // A barra do início de sessão na janela (0.2.15): o que diz e que botões tem, a partir do estado do início de sessão
 // (SignInTracker) e do da sincronização. Decisão pura, sem WPF (testada em SignInBarModelTests).
-internal enum SignInBarKind { Waiting, NoBrowser, TimedOut, Refused, DriveDenied, NoNetwork, OtherAccount, Syncing, Synced, NeedsApproval, Expired, KitReminder }
+internal enum SignInBarKind { Waiting, NoBrowser, TimedOut, Refused, DriveDenied, NoNetwork, OtherAccount, Syncing, Synced, NeedsApproval, Expired, KitReminder, SecretsOffer }
 
-internal enum SignInBarAction { Cancel, CopyAddress, Retry, OpenSettings, ShowCode, Close, SignInAgain, NotNow, SaveKit, KitLater, KitDecline }
+internal enum SignInBarAction
+{
+    Cancel, CopyAddress, Retry, OpenSettings, ShowCode, Close, SignInAgain, NotNow, SaveKit, KitLater, KitDecline,
+    // Pagamentos e documentos (T10): a ligação «Também pagamentos e documentos…» e a oferta única.
+    AccountSecrets, OfferYes, OfferNo, OfferLater,
+}
 
 internal sealed record SignInBarButton(string Label, SignInBarAction Action, bool Primary = false);
 
@@ -92,6 +97,14 @@ internal static class SignInBarModel
     internal static SignInBarView? KitReminder(KitReminderView? view)
         => view is not { Bar: true } ? null : view.Stale ? KitStaleView : KitView;
 
+    // A oferta única «receber também neste?» (T10): num computador que já estava ligado quando a conta passou a
+    // sincronizar pagamentos e documentos. «Sim» pede o Windows Hello; «Fechar» esconde-a até à abertura seguinte (a
+    // oferta continua nas Definições). Nenhum botão primário (nenhuma resposta é a esperada); fica até ser respondida.
+    private static readonly SignInBarView OfferView = new(SignInBarKind.SecretsOffer, SyncChoices.OfferText, null,
+        [new(SyncChoices.OfferYes, SignInBarAction.OfferYes), new(SyncChoices.OfferNo, SignInBarAction.OfferNo), new("Fechar", SignInBarAction.OfferLater)], null);
+
+    internal static SignInBarView? SecretsOffer(bool offer, bool isPrivate) => isPrivate || !offer ? null : OfferView;
+
     private static SignInBarView Failure(SignInBarKind kind, string text) => new(kind, text, null, [Retry], ErrorHold);
 
     private static SignInBarView? Done(SignInBarInput input)
@@ -126,7 +139,7 @@ internal static class SignInBarModel
 }
 
 // O árbitro «uma barra de cada vez»: o número mais baixo ganha.
-internal enum WindowBar { PairingRequest = 1, AccountReplaced = 2, SignIn = 3, SessionExpired = 4, KitReminder = 5 }
+internal enum WindowBar { PairingRequest = 1, AccountReplaced = 2, SignIn = 3, SessionExpired = 4, KitReminder = 5, SecretsOffer = 6 }
 
 internal static class WindowBars
 {

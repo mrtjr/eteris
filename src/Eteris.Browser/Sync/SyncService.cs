@@ -378,6 +378,22 @@ internal static class SyncService
 
     // ---- pagamentos e documentos: a oferta única (0.2.15, T10) ------------------------------------------------------
 
+    // «Fechar» na barra da oferta: escondida até à abertura seguinte do Éteris (a oferta continua nas Definições). Só
+    // memória, partilhado por todas as janelas.
+    private static volatile bool _offerClosed;
+
+    // A barra da oferta deve estar à vista. Lê o campo (nunca cria o agente): barato, sem E/S nem rede.
+    public static bool SecretsOfferPrompt
+    {
+        get { return !_offerClosed && _agent?.SecretsOffer == true; }
+    }
+
+    public static void CloseSecretsOffer()
+    {
+        _offerClosed = true;
+        Changed?.Invoke();
+    }
+
     // A resposta à oferta «receber também neste?» (barra e Definições). «Sim» pede o Windows Hello (confirm). Devolve a
     // mensagem de erro, ou null.
     public static async Task<string?> AnswerSecretsOfferAsync(bool accept, Func<Vault.ReauthPurpose, Task<bool>> confirm)

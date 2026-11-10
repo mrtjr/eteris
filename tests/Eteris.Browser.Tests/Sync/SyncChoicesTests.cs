@@ -146,6 +146,70 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Contains("\"receivesSecrets\":null", json);
     }
 
+    // Os ganchos do estado «Sincronizado.» da barra (T4): o aviso de herança no computador novo, e a ligação discreta
+    // no computador que criou a conta.
+    [Fact]
+    public void SyncedHooks_Table()
+    {
+        Assert.Equal((null, null), SyncChoices.SyncedHooks(null));
+
+        var inherited = SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Joined, InheritedSecrets = true, SecretsHere = true, AccountSecrets = true });
+        Assert.Equal("Recebeu favoritos, palavras-passe, cartões e documentos", inherited.Text);
+        Assert.Equal(new SignInBarButton("Abrir Definições", SignInBarAction.OpenSettings), inherited.Link);
+
+        // Herdou mas a pessoa já desligou aqui: nada a dizer.
+        Assert.Equal((null, null), SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Joined, InheritedSecrets = true, AccountSecrets = true }));
+
+        var created = SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Created });
+        Assert.Null(created.Text);
+        Assert.Equal(new SignInBarButton("Também pagamentos e documentos…", SignInBarAction.AccountSecrets), created.Link);
+
+        Assert.Equal((null, null), SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Created, AccountSecrets = true }));
+        Assert.Equal((null, null), SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Created, SecretsHere = true }));
+        Assert.Equal((null, null), SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Joined }));
+        Assert.Equal((null, null), SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On)));
+
+        // Na barra: o texto substitui «Sincronizado.» e o botão fica 12 s.
+        var view = SignInBarModel.For(new SignInBarInput(new SignInProgress(SignInStage.Done, null, null, 1), TestStatus.Of(SyncPhase.On, last: 2), "Ana Teste", false)
+        {
+            SyncedText = inherited.Text,
+            SyncedLink = inherited.Link,
+        })!;
+        Assert.Equal(SignInBarKind.Synced, view.Kind);
+        Assert.Equal("Recebeu favoritos, palavras-passe, cartões e documentos", view.Text);
+        Assert.Equal(SignInBarModel.SyncedLinkHold, view.HideAfter);
+    }
+
+    // A oferta e os ganchos passam pelo árbitro da T4 (uma barra de cada vez) e pelo controlo partilhado; nada de
+    // barras novas nem de Visibility à mão, e o arranque continua sem a sincronização.
+    [Fact]
+    public void Bars_UseTheAccountChoice_ThroughTheArbiter()
+    {
+        string Src(params string[] parts) => File.ReadAllText(Path.Combine([GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", .. parts])).Replace("\r\n", "\n");
+        var service = Src("Sync", "SyncService.cs");
+        var prompt = service[service.IndexOf("public static bool SecretsOfferPrompt", StringComparison.Ordinal)..];
+        prompt = prompt[..prompt.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.DoesNotContain("Agent()", prompt);
+        Assert.Contains("_agent?.SecretsOffer", prompt);
+
+        var glue = Src("MainWindow.SignInBar.cs");
+        Assert.Contains("RegisterBar(Sync.WindowBar.SecretsOffer", glue);
+        Assert.Contains("SyncChoices.SyncedHooks(", glue);
+        Assert.Contains("SignInBarAction.OfferYes", glue);
+        Assert.Contains("VaultFrontToken()", glue);
+        // Registada depois de «if (IsPrivate) return;» e antes do RefreshBars() final.
+        var wire = glue[glue.IndexOf("private void WireSignInBar()", StringComparison.Ordinal)..];
+        wire = wire[..wire.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.True(wire.IndexOf("if (IsPrivate) return;", StringComparison.Ordinal) < wire.IndexOf("RegisterBar(Sync.WindowBar.SecretsOffer", StringComparison.Ordinal));
+        Assert.True(wire.IndexOf("RegisterBar(Sync.WindowBar.SecretsOffer", StringComparison.Ordinal) < wire.LastIndexOf("RefreshBars();", StringComparison.Ordinal));
+
+        var window = Src("MainWindow.xaml.cs");
+        Assert.DoesNotContain("SecretsOffer", window);
+        Assert.DoesNotContain("SyncService", window);
+        Assert.DoesNotContain("Visibility =", Src("Sync", "SyncChoices.cs"));
+        Assert.DoesNotContain("Visibility =", Src("Sync", "SignInBarModel.cs"));
+    }
+
     // R11: preencher e «Mostrar» continuam a pedir o Windows Hello como antes; a escolha da conta só pede SyncSecrets.
     [Fact]
     public async Task FillAndReveal_StillAskWindowsHello()

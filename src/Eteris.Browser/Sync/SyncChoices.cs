@@ -74,6 +74,19 @@ internal static class SyncChoices
     // O que a barra «Sincronizado.» diz no computador que herdou a escolha (null = «Sincronizado.», como estava).
     public static string? ReceivedText(bool inherited) => inherited ? SyncAgent.InheritedText : null;
 
+    // Os ganchos do estado «Sincronizado.» da barra do início de sessão (T4): no computador que herdou, o aviso
+    // «Recebeu…» com «Abrir Definições» (onde se desliga); no que criou a conta nesta entrada, a ligação discreta
+    // «Também pagamentos e documentos…» (nunca uma pergunta obrigatória). Senão, nada.
+    public static (string? Text, SignInBarButton? Link) SyncedHooks(SyncStatus? status)
+    {
+        if (status is null) return (null, null);
+        if (status is { InheritedSecrets: true, SecretsHere: true })
+            return (ReceivedText(true), new SignInBarButton("Abrir Definições", SignInBarAction.OpenSettings));
+        if (status is { Entry: SyncEntry.Created, AccountSecrets: false, SecretsHere: false })
+            return (null, new SignInBarButton(AccountLink, SignInBarAction.AccountSecrets));
+        return (null, null);
+    }
+
     // A escolha da conta para a página: ligada, por quem e quando (By/SinceMs são informação, não prova).
     public sealed record AccountChoice(bool On, string? By, long SinceMs)
     {

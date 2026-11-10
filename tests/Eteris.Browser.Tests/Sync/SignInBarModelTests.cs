@@ -322,7 +322,8 @@ public class SignInBarModelTests
         Assert.Equal(WindowBar.PairingRequest, WindowBars.Pick([WindowBar.PairingRequest, WindowBar.SignIn]));
         Assert.Equal(WindowBar.AccountReplaced, WindowBars.Pick([WindowBar.KitReminder, WindowBar.AccountReplaced]));
         Assert.Null(WindowBars.Pick([]));
-        Assert.Equal([1, 2, 3, 4, 5], Enum.GetValues<WindowBar>().Select(b => (int)b));
+        // A oferta de pagamentos e documentos (T10) é a 6.ª, a prioridade mais baixa.
+        Assert.Equal([1, 2, 3, 4, 5, 6], Enum.GetValues<WindowBar>().Select(b => (int)b));
     }
 
     private sealed class Candidate(List<(WindowBar, bool)> log, WindowBar kind, bool wants)
@@ -399,6 +400,41 @@ public class SignInBarModelTests
         var set = new WindowBarSet();
         set.Register(WindowBar.SignIn, () => true, _ => { });
         Assert.Throws<InvalidOperationException>(() => set.Register(WindowBar.SignIn, () => false, _ => { }));
+    }
+
+    // A oferta única «receber também neste?» (T10): a candidata de prioridade mais baixa, com três botões e nenhum
+    // primário; nunca em janelas privadas; fica até ter resposta.
+    [Fact]
+    public void SecretsOffer_View_AndPriority()
+    {
+        var view = SignInBarModel.SecretsOffer(true, false)!;
+        Assert.Equal(SignInBarKind.SecretsOffer, view.Kind);
+        Assert.Equal(SyncChoices.OfferText, view.Text);
+        Assert.Null(view.Bold);
+        Assert.Equal(["Sim", "Não", "Fechar"], Labels(view));
+        Assert.Equal([SignInBarAction.OfferYes, SignInBarAction.OfferNo, SignInBarAction.OfferLater], view.Buttons.Select(b => b.Action));
+        Assert.DoesNotContain(view.Buttons, b => b.Primary);
+        Assert.Null(view.HideAfter);
+        Assert.Same(view, SignInBarModel.SecretsOffer(true, false)); // a mesma vista: o controlo não refaz os botões
+        Assert.Null(SignInBarModel.SecretsOffer(true, isPrivate: true));
+        Assert.Null(SignInBarModel.SecretsOffer(false, false));
+        Assert.Equal(6, (int)WindowBar.SecretsOffer);
+        Assert.Equal(WindowBar.KitReminder, WindowBars.Pick([WindowBar.SecretsOffer, WindowBar.KitReminder]));
+        Assert.Equal(WindowBar.SecretsOffer, WindowBars.Pick([WindowBar.SecretsOffer]));
+    }
+
+    [Fact]
+    public void BarSet_TheOfferWaitsForEveryOtherBar()
+    {
+        var (set, log, bars) = NewSet((WindowBar.SecretsOffer, true), (WindowBar.SessionExpired, true));
+        Assert.Equal(WindowBar.SessionExpired, set.Refresh());
+        Assert.Contains((WindowBar.SecretsOffer, false), log);
+        Assert.DoesNotContain((WindowBar.SecretsOffer, true), log);
+
+        log.Clear();
+        bars[WindowBar.SessionExpired].Wants = false;
+        Assert.Equal(WindowBar.SecretsOffer, set.Refresh());
+        Assert.Equal((WindowBar.SecretsOffer, true), log[^1]);
     }
 
     [Fact]
