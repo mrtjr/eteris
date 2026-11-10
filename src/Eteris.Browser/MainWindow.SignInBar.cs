@@ -70,9 +70,13 @@ public partial class MainWindow
             GoogleSync.AccountChanged -= changed;
             _signInBarHide?.Stop();
         };
-        // O pedido de permissão de um site e o procurar na página nunca ficam tapados: a barra desce para baixo deles.
-        PermissionBar.SizeChanged += (_, _) => PlaceSignInBar(_signInBarMargins);
-        FindBar.SizeChanged += (_, _) => PlaceSignInBar(_signInBarMargins);
+        // O pedido de permissão de um site e o procurar na página nunca ficam tapados: as barras descem para baixo deles
+        // quando aparecem ou mudam de tamanho, e sobem quando saem.
+        foreach (var other in new FrameworkElement[] { PermissionBar, FindBar })
+        {
+            other.SizeChanged += (_, _) => PlaceBarsBelowPageBars();
+            other.IsVisibleChanged += (_, _) => PlaceBarsBelowPageBars();
+        }
         // O computador novo (T7): o alerta «conta substituída» e o cartão do pedido de aprovação.
         WireGuestPairing();
         // Uma janela aberta a meio de um início de sessão mostra logo a barra; com tudo parado, nada se cria nem se lê.
@@ -172,6 +176,14 @@ public partial class MainWindow
         }
         _signInBar.Show(view);
         _signInBar.Visibility = Visibility.Visible;
+    }
+
+    // As três barras por cima da página (início de sessão, aprovação, computador novo), com as margens guardadas.
+    private void PlaceBarsBelowPageBars()
+    {
+        PlaceSignInBar(_signInBarMargins);
+        PlacePairingBar(_pairingBarMargins);
+        PlaceGuestBar(_guestBarMargins);
     }
 
     // A moldura da página (barra lateral): chamado em MainWindow.Sidebar.cs com as outras barras.

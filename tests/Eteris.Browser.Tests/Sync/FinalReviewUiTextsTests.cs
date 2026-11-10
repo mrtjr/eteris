@@ -89,6 +89,23 @@ public class FinalReviewUiTextsTests
         Assert.DoesNotMatch(@"RefreshBars|ShowToast|ShowNote|AfterPairingAction|AfterGuestAction", afterAwait[..guard]);
     }
 
+    // ---- I-04: o pedido de permissão e o procurar empurram as três barras, não só a do início de sessão --------------
+
+    [Fact]
+    public void I04_PermissionAndFind_PlaceAllThreeBars()
+    {
+        var bars = Source("MainWindow.SignInBar.cs");
+        var place = Body(bars, "private void PlaceBarsBelowPageBars()", "\n    }");
+        Assert.Contains("PlaceSignInBar(_signInBarMargins);", place);
+        Assert.Contains("PlacePairingBar(_pairingBarMargins);", place);
+        Assert.Contains("PlaceGuestBar(_guestBarMargins);", place);
+        var wire = Body(bars, "private void WireSignInBar()", "\n    }");
+        Assert.Contains("other.SizeChanged += (_, _) => PlaceBarsBelowPageBars();", wire);
+        Assert.Contains("other.IsVisibleChanged += (_, _) => PlaceBarsBelowPageBars();", wire);
+        Assert.Contains("new FrameworkElement[] { PermissionBar, FindBar }", wire);
+        Assert.DoesNotContain("SizeChanged += (_, _) => PlaceSignInBar(", wire);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {
