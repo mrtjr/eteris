@@ -11,10 +11,12 @@ using Microsoft.Win32;
 
 namespace Eteris.Browser;
 
-// E8 do plano de desempenho da 0.2.14 (ajuste e8, desligado por omissão: só se o diagnóstico D4 mostrar que a página
-// continua a desenhar com a janela que não se vê). Com a janela minimizada, noutra área de trabalho virtual ou com a
-// sessão bloqueada, a página à vista (e as duas metades do ecrã dividido) esconde-se como uma aba de fundo (minimizar a
-// janela do Chromium, MainWindow.PageVisibility.cs); quando a janela volta a ver-se, volta pelo caminho da aba fria.
+// E8 do plano de desempenho da 0.2.14 (ajuste e8, ligado por omissão: o diagnóstico D4 mostrou que a página continuava
+// a desenhar a 60 fotogramas por segundo com a janela minimizada; com o ajuste deixa de desenhar, 6,47% → 0,59% de um
+// núcleo). Com a janela minimizada, noutra área de trabalho virtual ou com a sessão bloqueada, a página à vista (e as
+// duas metades do ecrã dividido) esconde-se como uma aba de fundo (minimizar a janela do Chromium,
+// MainWindow.PageVisibility.cs); quando a janela volta a ver-se, volta pelo caminho da aba fria. A janela tapada por
+// outra não entra aqui: continua a desenhar.
 //   - minimizar: o StateChanged desta janela corre antes do do CefSharp (que põe todas as páginas a 0×0, leitura 7 do
 //     plano): a página fica escondida antes de encolher, a ordem do T5 (docs/motor.md);
 //   - área de trabalho: uma janela noutra área de trabalho fica «cloaked» pelo DWM (DWMWA_CLOAKED), o mesmo sinal que o

@@ -7,20 +7,46 @@ using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser.Tests;
 
-// E13 do plano de desempenho da 0.2.14 (ajuste e13, desligado por omissão até à decisão D-6): com pouca memória, as abas
-// adormecem uma de cada vez, a usada há mais tempo primeiro, com as isenções; e a rolagem volta ao acordar.
+// E13 do plano de desempenho da 0.2.14 (ajuste e13, ligado por omissão pela decisão D-6: modo equilibrado, com a
+// rolagem restaurada): com pouca memória, as abas adormecem uma de cada vez, a usada há mais tempo primeiro, com as
+// isenções; e a rolagem volta ao acordar.
 public class MemoryPressureTests
 {
+    private static readonly string[] Exe = [@"C:\x\Eteris.Browser.exe"];
     private static readonly DateTime Now = new(2026, 11, 9, 10, 0, 0, DateTimeKind.Utc);
     private const ulong Gb = 1UL << 30;
 
+    // A decisão D-6 está tomada (medido com o sinal simulado: 10 → 4 renderers e −37% de memória): ligado por omissão,
+    // já sem esperar por nada. Corre depois da 1.ª página e não mexe no motor.
     [Fact]
-    public void Tweak_IsOffByDefault_WaitingForD6()
+    public void Tweak_IsOnByDefault_SinceD6()
     {
         var tweak = Assert.Single(PerfTuning.Tweaks, t => t.Id == PerfTuning.SleepUnderPressure);
-        Assert.False(tweak.OnByDefault);
+        Assert.True(tweak.OnByDefault);
+        Assert.Null(tweak.Waits);
         Assert.False(tweak.BeforeFirstPaint);
-        Assert.Equal("D-6", tweak.Waits);
+        Assert.False(tweak.Engine);
+        Assert.Contains(PerfTuning.SleepUnderPressure, PerfTuning.Resolve(Exe, testValue: null));
+    }
+
+    // Para os braços A/B das medições (e para o recuo): desliga-se sozinho pela variável de teste ou pelo argumento,
+    // sem levar os outros atrás, e com todos pelo --eteris-sem-ajustes.
+    [Fact]
+    public void Tweak_TurnsOffByTheSwitches()
+    {
+        var others = PerfTuning.Defaults.Where(id => id != PerfTuning.SleepUnderPressure).Order().ToList();
+        Assert.Equal(others, PerfTuning.Resolve(Exe, "-e13").Order());
+        Assert.Equal(others, PerfTuning.Resolve([.. Exe, "--eteris-ajustes=-e13"], null).Order());
+        Assert.Empty(PerfTuning.Resolve([.. Exe, "--eteris-sem-ajustes"], null));
+    }
+
+    // D-6: o modo por omissão é o equilibrado (os 20 min de sempre, mais a pressão).
+    [Fact]
+    public void DefaultMode_IsBalanced()
+    {
+        var settings = new UserSettings();
+        Assert.Equal("equilibrado", MemoryPressure.ModeName(settings.SleepMinutes));
+        Assert.True(MemoryPressure.Applies(settings));
     }
 
     // ---------- O sinal ----------
@@ -120,7 +146,18 @@ public class MemoryPressureTests
         Assert.Null(new UserSettings().With("sleepPressure", "talvez"));
     }
 
-    // A opção só aparece nas Definições com o ajuste ligado (sem ele não faria nada).
+    // Com o ajuste ligado por omissão, a opção aparece nas Definições, ligada, e o utilizador pode desligá-la. (A
+    // bateria corre sem ETERIS_TEST_AJUSTES nem --eteris-ajustes: o processo de testes tem os ajustes por omissão.)
+    [Fact]
+    public void SettingsPage_ShowsTheOption_OnByDefault()
+    {
+        Assert.True(PerfTuning.IsOn(PerfTuning.SleepUnderPressure));
+        Assert.Contains("\"sleepPressure\":true", Eteris.Browser.Browser.SettingsPage.Render(new UserSettings()));
+        Assert.Contains("\"sleepPressure\":false",
+            Eteris.Browser.Browser.SettingsPage.Render(new UserSettings().With("sleepPressure", "false")!));
+    }
+
+    // A opção só aparece nas Definições com o ajuste ligado (desligado pelo interruptor, não faria nada).
     [Fact]
     public void SettingsPage_ShowsTheOptionOnlyWithTheTweak()
     {

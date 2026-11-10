@@ -5,7 +5,7 @@ using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
 
-// E13 do plano de desempenho da 0.2.14 (ajuste e13, desligado por omissão até à decisão D-6): de 15 em 15 s, com pouca
+// E13 do plano de desempenho da 0.2.14 (ajuste e13, ligado por omissão pela decisão D-6): de 15 em 15 s, com pouca
 // memória (Tabs/MemoryPressure.cs: o aviso do Windows, o commit livre, ou o sinal simulado ETERIS_TEST_PRESSAO das
 // medições), adormece UMA aba entre todas as janelas: a acordada usada há mais tempo que não está isenta. Um só
 // temporizador para o processo (as janelas partilham o fio da interface), para N janelas não adormecerem N abas.

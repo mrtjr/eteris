@@ -4,7 +4,8 @@ using Eteris.Browser.Data;
 
 namespace Eteris.Browser.Tabs;
 
-// E13 do plano de desempenho da 0.2.14 (ajuste e13, desligado por omissão até à decisão D-6 sobre o modo padrão). O sono
+// E13 do plano de desempenho da 0.2.14 (ajuste e13, ligado por omissão pela decisão D-6: o modo padrão é o equilibrado
+// e entra já com a rolagem restaurada; a opção «Adormecer também quando falta memória» das Definições desliga-o). O sono
 // por tempo (SleepPolicy) não reage com a memória apertada; com o ajuste, junta-se-lhe o sinal de pouca memória, como o
 // Tab Unloading do Firefox: o aviso do Windows (LowMemoryResourceNotification) ou o commit livre quase esgotado (as falhas
 // por falta de commit acontecem mesmo com RAM livre). Com pressão adormece UMA aba por intervalo, a usada há mais tempo,

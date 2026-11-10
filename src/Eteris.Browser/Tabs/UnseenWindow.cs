@@ -2,15 +2,17 @@ using System.Collections.Concurrent;
 
 namespace Eteris.Browser.Tabs;
 
-// E8 do plano de desempenho da 0.2.14 (ajuste e8, à espera do diagnóstico D4): quando a janela inteira não se vê, a
-// página à vista também se esconde, como no Chrome, no Firefox e no Brave (o rastreio de oclusão do Chromium só segue
-// janelas de topo; a página do Éteris vive numa janela filha). Regra pura; a janela em MainWindow.Unseen.cs.
+// E8 do plano de desempenho da 0.2.14 (ajuste e8, ligado por omissão desde o diagnóstico D4): com a janela minimizada,
+// noutra área de trabalho ou com a sessão bloqueada, a página à vista também se esconde, como no Chrome, no Firefox e
+// no Brave (o rastreio de oclusão do Chromium só segue janelas de topo; a página do Éteris vive numa janela filha).
+// Regra pura; a janela em MainWindow.Unseen.cs.
 public static class UnseenWindow
 {
     public enum Reason { None, Minimized, OtherDesktop, Locked }
 
     // Porque é que a janela não se vê (a primeira que se aplica). A janela tapada por outra aplicação fica de fora: pede o
-    // cálculo de oclusão com histerese (custo M no plano) e só se faz se o D4 mostrar que vale.
+    // cálculo de oclusão com histerese (custo M no plano). O D4 mediu-a: tapada, a página continua a desenhar, com ou
+    // sem este ajuste (o Chrome, o Firefox e o Brave param). Lacuna em aberto, por fazer.
     public static Reason Why(bool minimized, bool cloaked, bool locked)
         => minimized ? Reason.Minimized : locked ? Reason.Locked : cloaked ? Reason.OtherDesktop : Reason.None;
 

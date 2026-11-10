@@ -5,7 +5,7 @@ namespace Eteris.Browser.Infrastructure;
 //                    interruptor;
 //   BeforeFirstPaint mexe no caminho antes da 1.ª página (regra R-2 do sandbox): fica desligado por omissão até a rede de
 //                    segurança saber desligar os ajustes antes do sandbox (D-18, gancho Suspend);
-//   Waits            a decisão do dono ou o diagnóstico de que depende (D-4, D4…); com ela, desligado por omissão;
+//   Waits            a decisão do dono ou o diagnóstico de que depende (D-4, D6…); com ela, desligado por omissão;
 //   Engine           muda a configuração do motor (Shields/EnginePerformance.cs, ou o Local State no e16): o grupo
 //                    «motor» e o --eteris-sem-ajustes-motor ligam-nos e desligam-nos todos de uma vez.
 public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool BeforeFirstPaint = false, string? Waits = null,
@@ -20,6 +20,9 @@ public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool Be
 //                                         número de uma experiência para as suas entradas («e14» = e14.1…e14.6);
 //   ETERIS_TEST_AJUSTES=e3,-e5            o mesmo, para os braços A/B das medições (build/perf); inerte numa instalação,
 //                                         como os outros ETERIS_TEST_* (Infrastructure/PerfDiagnostics.cs).
+//
+// Ligados por omissão: e1, e4, e5 e, desde a medição da 0.2.14, e8 e e13. Cada um desliga-se sozinho com o sinal menos
+// (--eteris-ajustes=-e8, ETERIS_TEST_AJUSTES=-e8,-e13): é o braço «sem» dos A/B.
 //
 // O argumento ganha à variável, o --eteris-sem-ajustes-motor aos dois (nos do motor) e o --eteris-sem-ajustes a tudo. O
 // E2 (manifesto do Windows 10/11) não está aqui: é um recurso do exe, fixo na compilação. Lê-se uma vez (a linha de
@@ -73,16 +76,22 @@ public static class PerfTuning
             OnByDefault: false, Waits: "D6"),
         new(SmallBackForwardCache, "Voltar/Avançar instantâneo para as 3 últimas páginas de cada aba (o Chromium guarda 6): menos renderers vivos",
             OnByDefault: false, BeforeFirstPaint: true, Waits: "D-5", Engine: true),
+        // Ligado por omissão desde o diagnóstico D4 (medição da 0.2.14, página animada): com a janela minimizada a CPU
+        // cai de 6,47% para 0,59% de um núcleo (20 abas: 9,31% → 1,25%). A janela tapada por outra continua a desenhar,
+        // com ou sem o ajuste: fica de fora (Tabs/UnseenWindow.cs).
         new(HideWhenUnseen, "a página à vista deixa de desenhar com a janela minimizada, noutra área de trabalho ou com a sessão bloqueada (nunca com som, multimédia, captura ou Picture-in-Picture)",
-            OnByDefault: false, Waits: "D4"),
+            OnByDefault: true),
         new(UpdatesOnExitOnly, "as atualizações aplicam-se só ao sair do Éteris, nunca no arranque", OnByDefault: false,
             BeforeFirstPaint: true, Waits: "D-7"),
         new(EngineThreadStartup, "o motor prepara-se (pastas, limpeza do perfil, Local State, definições) e arranca na sua thread logo a seguir à instância única, em paralelo com a interface",
             OnByDefault: false, BeforeFirstPaint: true, Waits: "E9"),
         new(ReadyNewTab, "a 1.ª nova aba prepara-se em fundo durante o arranque; as definições e a sessão leem-se sem reflexão",
             OnByDefault: false, BeforeFirstPaint: true),
+        // Ligado por omissão pela decisão D-6 (modo equilibrado = o sono por tempo de sempre + a pressão, já com a
+        // rolagem restaurada). Medido com o sinal simulado, 8 abas: 10 → 4 renderers e 404 → 253 MB. Só atua quando o
+        // Windows sinaliza pouca memória, e a opção das Definições (Abas) desliga o sono por pressão.
         new(SleepUnderPressure, "com pouca memória, adormece uma aba de cada vez (a usada há mais tempo, com as isenções) e a rolagem volta ao acordar",
-            OnByDefault: false, Waits: "D-6"),
+            OnByDefault: true),
         new(OwnLinkBubble, "a bolha do link numa janela do tamanho do texto e o contorno do ecrã dividido na janela principal, fora da camada do tamanho da janela",
             OnByDefault: true),
         // Fase 2. Todas desligadas por omissão até ao seu A/B, uma de cada vez pela ordem do plano: mudam a configuração do
@@ -125,7 +134,7 @@ public static class PerfTuning
     // do Velopack.Run, o e11 depois da instância única, o e12 no App.OnStartup e na leitura do settings.json, e o e3 e o
     // e16 no Prepare, antes do Begin do StartupGuard. O marcador guarda se o arranque tinha ajustes antes da 1.ª página
     // (AnyBeforeFirstPaint, SandboxFallbackState.WithTweaks): sem nenhum, a queda não é deles e conta só para o sandbox
-    // (os e1, e4 e e5, ligados por omissão, correm depois).
+    // (os e1, e4, e5, e8 e e13, ligados por omissão, correm depois).
     public static void Suspend(string reason) => _suspended = string.IsNullOrWhiteSpace(reason) ? "rede de segurança" : reason;
 
     public static string? SuspendedBecause => _suspended;

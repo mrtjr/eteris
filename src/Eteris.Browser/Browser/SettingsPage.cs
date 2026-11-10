@@ -97,7 +97,8 @@ public static class SettingsPage
             engine = settings.SearchEngine,
             startup = settings.Startup,
             sleep = settings.SleepMinutes,
-            // Só com o ajuste e13 (sem ele a opção não faria nada): null esconde-a.
+            // O ajuste e13 está ligado por omissão: a opção aparece, ligada. Com o ajuste desligado pelo interruptor
+            // (ou pela rede de segurança do arranque) a opção não faria nada: null esconde-a.
             sleepPressure = PerfTuning.IsOn(PerfTuning.SleepUnderPressure) ? settings.SleepOnLowMemory : (bool?)null,
             archive = settings.ArchiveDays,
             archiveConfirmed = settings.ArchiveConfirmed,

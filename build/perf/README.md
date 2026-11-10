@@ -91,12 +91,12 @@ Os nomes `*.eteris-teste.example` vão para 127.0.0.1: no Éteris por `ETERIS_TE
 | `ETERIS_TEST_MUTE=1` | sem som nos dois motores (posto sempre pelos scripts) | `Infrastructure/TestSwitches.cs` |
 | `ETERIS_TEST_DEVTOOLS_PORT=<porta>` | DevTools do motor em 127.0.0.1 (`rastro.ps1`, `chrome://process-internals`) | idem |
 | `ETERIS_TEST_PURO=1` ou `=devtools,midia,camada,mica,animacoes` | braço «puro» (D5): sem as camadas do Éteris por cima do motor — sessões DevTools por aba e miniaturas, sondagem da central de multimédia, janela em camadas, Mica, animação eterna do ponto «a tocar» | `Infrastructure/PerfDiagnostics.cs` |
-| `ETERIS_TEST_CONTADORES=1` ou `=<caminho>` (`{pid}` trocado) | contadores dos mecanismos, uma linha por segundo: `wpf.lotes` (lotes do WPF ≈ fotogramas do processo principal; prova do E1), `camada.mostrar`/`esconder` e `bolha.mostrar`/`esconder` (E5: com o ajuste e5 a bolha do link deixa de ligar a camada), `janela.escondeu`/`voltou` (E8: páginas escondidas com a janela que não se vê; no `ocl.ps1` com `-Ambiente ETERIS_TEST_AJUSTES=e8`), `midia.sondagem` (E4), `sono.pressao` (E13: abas adormecidas por pouca memória), `pedidos`, `pedidos.us`, `pedidos.cancelados` (D10) | `Infrastructure/PerfCounters.cs` |
+| `ETERIS_TEST_CONTADORES=1` ou `=<caminho>` (`{pid}` trocado) | contadores dos mecanismos, uma linha por segundo: `wpf.lotes` (lotes do WPF ≈ fotogramas do processo principal; prova do E1), `camada.mostrar`/`esconder` e `bolha.mostrar`/`esconder` (E5: com o ajuste e5 a bolha do link deixa de ligar a camada), `janela.escondeu`/`voltou` (E8: páginas escondidas com a janela que não se vê; o e8 está ligado por omissão, e o braço sem ele é o `ocl.ps1` com `-Ambiente ETERIS_TEST_AJUSTES=-e8`), `midia.sondagem` (E4), `sono.pressao` (E13: abas adormecidas por pouca memória), `pedidos`, `pedidos.us`, `pedidos.cancelados` (D10) | `Infrastructure/PerfCounters.cs` |
 | `ETERIS_TEST_HOST_RULES=MAP *.eteris-teste.example 127.0.0.1` | `--host-resolver-rules`, só nomes `.example`, `.test`, `.invalid`, `.localhost` para 127.0.0.1 | `Infrastructure/PerfDiagnostics.cs` |
 | `ETERIS_TRACE_STARTUP=1` ou `=<caminho>` | rastro das fases do arranque e da memória; com as linhas `filho` (hora de criação de cada processo filho; o 1.º renderer = `renderer.processo`, D8) | `Infrastructure/StartupTrace.cs`, `StartupTrace.Children.cs` |
 | `ETERIS_TRACE_GC_AT=20,60` | GC completo antes das fotografias da memória desses segundos | idem |
-| `ETERIS_TEST_PRESSAO=1` | pouca memória simulada para o sono por pressão (E13, com `ETERIS_TEST_AJUSTES=e13`): uma aba adormece a cada 15 s, a usada há mais tempo; a pressão real (~25 GB reservados) só com a decisão D-16 | `Infrastructure/PerfDiagnostics.cs`, `Tabs/MemoryPressure.cs` |
-| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`, `motor`, `e14`) | liga e desliga os ajustes de desempenho das fases 1 e 2 (braços A/B com o mesmo binário); `motor` são os do motor (E7, E14, E15, E16) e `e14` as entradas e14.1…e14.6; o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, `--eteris-sem-ajustes-motor` desliga só os do motor e `--eteris-sem-ajustes` desliga todos (os dois valem também numa instalação: são o recuo) | `Infrastructure/PerfTuning.cs` |
+| `ETERIS_TEST_PRESSAO=1` | pouca memória simulada para o sono por pressão (E13; o e13 está ligado por omissão, e o braço sem ele leva `ETERIS_TEST_AJUSTES=-e13`): uma aba adormece a cada 15 s, a usada há mais tempo; a pressão real (~25 GB reservados) só com a decisão D-16 | `Infrastructure/PerfDiagnostics.cs`, `Tabs/MemoryPressure.cs` |
+| `ETERIS_TEST_AJUSTES=e3,-e5` (ou `tudo`, `nada`, `motor`, `e14`) | liga e desliga os ajustes de desempenho das fases 1 e 2 (braços A/B com o mesmo binário); os ligados por omissão (e1, e4, e5, e8, e13) desligam-se um a um com o sinal menos (`-e8`); `motor` são os do motor (E7, E14, E15, E16) e `e14` as entradas e14.1…e14.6; o argumento `--eteris-ajustes=…` faz o mesmo e ganha à variável, `--eteris-sem-ajustes-motor` desliga só os do motor e `--eteris-sem-ajustes` desliga todos (os dois valem também numa instalação: são o recuo) | `Infrastructure/PerfTuning.cs` |
 | `ETERIS_TEST_ENERGIA=0`, `=1` ou `=3` | com o ajuste e16, o estado da poupança de energia do Chromium escrito no Local State (passo A do E16: 3 contra 0, na tomada); sem a variável, o e16 escreve 1 («com bateria baixa») | `Infrastructure/PerfDiagnostics.cs`, `Infrastructure/EnergySaver.cs` |
 
 `ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`, `ETERIS_TEST_HOST_RULES`, `ETERIS_TEST_PRESSAO`, `ETERIS_TEST_ENERGIA` e
@@ -104,6 +104,21 @@ Os nomes `*.eteris-teste.example` vão para 127.0.0.1: no Éteris por `ETERIS_TE
 `wpf.lotes` ouve o `MediaContext.CommittingBatch` interno do WPF, nunca o `CompositionTarget.Rendering` (um ouvinte
 nesse evento obriga o WPF a desenhar todos os fotogramas e estragaria a prova). Se uma versão do WPF não tiver o evento,
 o ficheiro diz `wpf.lotes=indisponivel`.
+
+### Ajustes ligados por omissão
+
+| Ajuste | O que faz | Porquê ligado | Braço sem ele |
+|---|---|---|---|
+| `e1` | o ponto «a tocar» da central de multimédia só anima enquanto se vê | desde a fase 1 | `ETERIS_TEST_AJUSTES=-e1` |
+| `e4` | a central de multimédia sonda de 2 em 2 s só as abas à vista, quentes ou com som | desde a fase 1 | `ETERIS_TEST_AJUSTES=-e4` |
+| `e5` | a bolha do link numa janela do tamanho do texto, fora da camada do tamanho da janela | desde a fase 1 | `ETERIS_TEST_AJUSTES=-e5` |
+| `e8` | a página à vista deixa de desenhar com a janela **minimizada**, noutra área de trabalho ou com a sessão bloqueada; nunca com som, multimédia, câmara/microfone/ecrã ou Picture-in-Picture | D4 medido (página animada, CPU total): minimizada 6,47% → 0,59% de um núcleo; com 20 abas 9,31% → 1,25% | `ETERIS_TEST_AJUSTES=-e8` |
+| `e13` | com pouca memória, adormece uma aba de cada vez (a usada há mais tempo, com as isenções) e a rolagem volta ao acordar; a opção «Adormecer também quando falta memória» (Definições › Abas) aparece ligada e, desligada, deixa só o sono por tempo | decisão D-6 (modo equilibrado); com o sinal simulado e 8 abas: 10 → 4 renderers e 404 → 253 MB | `ETERIS_TEST_AJUSTES=-e13` |
+
+O e8 **não resolve a janela tapada por outra**: aí a página continua a desenhar a 60 fotogramas por segundo, com ou sem
+ele (8,96% contra 9,39%), enquanto o Chrome, o Firefox e o Brave param. Fica em aberto (o cálculo de oclusão com
+histerese do plano). O e13 mediu-se só com o sinal simulado: prova que o mecanismo adormece e liberta memória, não
+quando o Windows dá o sinal a sério (D-16). Todos os outros ajustes continuam desligados por omissão.
 
 ## Linhas de base
 

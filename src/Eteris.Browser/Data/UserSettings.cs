@@ -18,7 +18,8 @@ public sealed record UserSettings
     public string SearchEngine { get; set; } = "duckduckgo";
     public string Startup { get; set; } = "restore";
     public int SleepMinutes { get; set; } = 20;
-    // Adormecer também com pouca memória (ajuste e13, Tabs/MemoryPressure.cs); desligado = só o tempo conta.
+    // Adormecer também com pouca memória (ajuste e13, Tabs/MemoryPressure.cs; ligado por omissão, decisão D-6);
+    // desligado = só o tempo conta.
     public bool SleepOnLowMemory { get; set; } = true;
     // Arquivo automático: abas sem visita há N dias vão para o Arquivo (0 = nunca).
     public int ArchiveDays { get; set; } = Tabs.ArchivePolicy.DefaultDays;

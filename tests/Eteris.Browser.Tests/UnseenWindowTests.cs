@@ -5,10 +5,13 @@ using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser.Tests;
 
-// E8 do plano de desempenho da 0.2.14 (ajuste e8, à espera do D4): com a janela que não se vê, a página à vista também
-// se esconde — nunca com som, multimédia, captura ou Picture-in-Picture.
+// E8 do plano de desempenho da 0.2.14 (ajuste e8, ligado por omissão desde a medição D4): com a janela minimizada,
+// noutra área de trabalho ou com a sessão bloqueada, a página à vista também se esconde — nunca com som, multimédia,
+// captura ou Picture-in-Picture. A janela tapada por outra fica de fora (o e8 não a resolve).
 public class UnseenWindowTests
 {
+    private static readonly string[] Exe = [@"C:\x\Eteris.Browser.exe"];
+
     [Theory]
     [InlineData(false, false, false, UnseenWindow.Reason.None)]
     [InlineData(true, false, false, UnseenWindow.Reason.Minimized)]
@@ -41,12 +44,40 @@ public class UnseenWindowTests
         Assert.False(CaptureSessions.IsCapturing(424242));
     }
 
+    // O diagnóstico D4 mediu-se (página animada, janela minimizada: 6,47% → 0,59% de um núcleo com o e8): ligado por
+    // omissão, já sem esperar por nada. Corre depois da 1.ª página e não mexe no motor: fica fora da rede de segurança
+    // do arranque e do grupo «motor».
     [Fact]
-    public void Tweak_IsOffUntilTheDiagnostic()
+    public void Tweak_IsOnByDefault_SinceTheDiagnostic()
     {
         var tweak = Assert.Single(PerfTuning.Tweaks, t => t.Id == PerfTuning.HideWhenUnseen);
-        Assert.False(tweak.OnByDefault);
-        Assert.Equal("D4", tweak.Waits);
+        Assert.True(tweak.OnByDefault);
+        Assert.Null(tweak.Waits);
+        Assert.False(tweak.BeforeFirstPaint);
+        Assert.False(tweak.Engine);
+        Assert.Contains(PerfTuning.HideWhenUnseen, PerfTuning.Resolve(Exe, testValue: null));
+    }
+
+    // Para os braços A/B das medições (e para o recuo): desliga-se sozinho pela variável de teste ou pelo argumento,
+    // sem levar os outros atrás, e com todos pelo --eteris-sem-ajustes.
+    [Fact]
+    public void Tweak_TurnsOffByTheSwitches()
+    {
+        var others = PerfTuning.Defaults.Where(id => id != PerfTuning.HideWhenUnseen).Order().ToList();
+        Assert.Equal(others, PerfTuning.Resolve(Exe, "-e8").Order());
+        Assert.Equal(others, PerfTuning.Resolve([.. Exe, "--eteris-ajustes=-e8"], null).Order());
+        Assert.Empty(PerfTuning.Resolve([.. Exe, "--eteris-sem-ajustes"], null));
+    }
+
+    // O e8 não resolve a janela tapada por outra (medido: continua a desenhar): não há esse motivo na regra, e a
+    // descrição do ajuste não o promete.
+    [Fact]
+    public void CoveredWindow_IsNotPromised()
+    {
+        Assert.Equal(["None", "Minimized", "OtherDesktop", "Locked"], Enum.GetNames<UnseenWindow.Reason>());
+        var what = Assert.Single(PerfTuning.Tweaks, t => t.Id == PerfTuning.HideWhenUnseen).What;
+        Assert.DoesNotMatch("(?i)cobert|tapad|atrás de", what);
+        Assert.Contains("minimizada", what);
     }
 
     [Fact]
@@ -70,6 +101,19 @@ public class UnseenWindowTests
         Assert.Contains("ShowPageWindow(page, ArrivalPixels(page));", unseen);
         Assert.Contains("SystemEvents.SessionSwitch -= OnSession;", unseen);
         Assert.Contains("UnseenWindow.MayHide(tab.IsAudible, tab.Media, IsCapturing(browser), pictureInPicture: false)", unseen);
+    }
+
+    // Com a câmara, o microfone ou o ecrã em uso a página nunca se esconde: nem a da aba, nem o site fixado à vista na
+    // barra lateral; e quando não se consegue saber (o motor a fechar), conta como em uso.
+    [Fact]
+    public void Capture_KeepsEveryPageVisible_AndAnUnknownStateCountsAsCapturing()
+    {
+        var unseen = Source("MainWindow.Unseen.cs");
+        Assert.Contains("!_unseenPages.Contains(panel) && !IsCapturing(panel))", unseen);
+        Assert.Matches(@"private static bool IsCapturing\(ChromiumWebBrowser browser\)\s*\{\s*"
+            + @"try \{ return [^\n]*CaptureSessions\.IsCapturing\(core\.Identifier\); \}\s*catch \(Exception\) \{ return true; \}", unseen);
+        // As duas únicas chamadas que escondem uma página por a janela não se ver vêm depois da pergunta pela captura.
+        Assert.Equal(2, Regex.Matches(unseen, @"SetPageVisible\(\w+, false\);").Count);
     }
 
     [Fact]

@@ -707,7 +707,8 @@
     });
   });
 
-  // A opção do sono por pressão só existe com o ajuste e13 (Tabs/MemoryPressure.cs).
+  // A opção do sono por pressão só existe com o ajuste e13 (Tabs/MemoryPressure.cs), ligado por omissão: só fica
+  // escondida se o ajuste for desligado pelo interruptor.
   document.getElementById('sleepPressureItem').hidden = data.sleepPressure === null;
 
   document.querySelectorAll('input[data-key]').forEach(input => {

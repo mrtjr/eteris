@@ -58,7 +58,8 @@ public class PerfTuningTests
     {
         var on = PerfTuning.Resolve([.. Exe, "--eteris-ajustes=e14,-e14.6"], null);
         Assert.Equal(["e14.1", "e14.2", "e14.3", "e14.4", "e14.5"], on.Where(id => id.StartsWith("e14", StringComparison.Ordinal)).Order());
-        // «e1» é o ajuste e1, não o e13/e14…
+        // «e1» é o ajuste e1, não o e13/e14… (a partir de «nada»: o e13 já vem ligado por omissão).
+        Assert.Equal(["e1"], PerfTuning.Resolve(Exe, "nada,e1"));
         Assert.Equal(PerfTuning.Defaults.Append("e3").Order(), PerfTuning.Resolve([.. Exe, "--eteris-ajustes=e1,e3"], null).Order());
         Assert.Equal(PerfTuning.Defaults.Order(), PerfTuning.Resolve([.. Exe, "--eteris-ajustes=e9,e99"], null).Order());
     }
@@ -89,6 +90,23 @@ public class PerfTuningTests
     public void WithoutArguments_TheDefaultsHold()
         => Assert.Equal(PerfTuning.Defaults, PerfTuning.Resolve(Exe, testValue: null));
 
+    // Os ligados por omissão na 0.2.14: os três de sempre e, desde a medição, o e8 (janela minimizada: 6,47% → 0,59% de
+    // um núcleo) e o e13 (decisão D-6: sono também com pouca memória). Ligar mais um é decisão do dono, com medição.
+    [Fact]
+    public void Defaults_AreTheMeasuredOnes()
+        => Assert.Equal(["e1", "e13", "e4", "e5", "e8"], PerfTuning.Defaults.Order(StringComparer.Ordinal));
+
+    // Cada ligado por omissão desliga-se sozinho, pela variável de teste e pelo argumento (os braços A/B das medições
+    // futuras comparam com e sem ele no mesmo binário).
+    [Fact]
+    public void EveryDefault_TurnsOffAlone()
+        => Assert.All(PerfTuning.Defaults, id =>
+        {
+            var others = PerfTuning.Defaults.Where(o => o != id).Order().ToList();
+            Assert.Equal(others, PerfTuning.Resolve(Exe, "-" + id).Order());
+            Assert.Equal(others, PerfTuning.Resolve([.. Exe, "--eteris-ajustes=-" + id], null).Order());
+        });
+
     // Regra R-2 do plano do sandbox: nada de código novo antes da 1.ª página sem a rede de segurança que o desligue
     // primeiro (D-18, ligada ao StartupGuard desde a fusão com o sandbox). Ligá-los por omissão é decisão do dono: até
     // lá só se ligam por interruptor.
@@ -96,7 +114,8 @@ public class PerfTuningTests
     public void BeforeFirstPaint_AreOffByDefault()
         => Assert.All(PerfTuning.Tweaks.Where(t => t.BeforeFirstPaint), t => Assert.False(t.OnByDefault, t.Id));
 
-    // À espera de uma decisão do dono (D-4, D-5…) ou de um diagnóstico (D4): desligado por omissão.
+    // À espera de uma decisão do dono (D-4, D-5…) ou de um diagnóstico (D6, D9): desligado por omissão. O e8 e o e13 já
+    // não esperam (D4 medido, D-6 decidida) e por isso já não têm Waits.
     [Fact]
     public void Waiting_AreOffByDefault()
         => Assert.All(PerfTuning.Tweaks.Where(t => t.Waits is not null), t => Assert.False(t.OnByDefault, t.Id));
