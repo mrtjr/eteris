@@ -237,10 +237,10 @@ public partial class MainWindow
                 break;
             case SignInBarAction.OfferYes:
                 // Não bloqueia: o Windows Hello responde depois; as barras refrescam-se sozinhas (SyncService.Changed).
-                AnswerSecretsOfferFromBar();
+                AnswerSecretsOfferFromBar(true);
                 break;
             case SignInBarAction.OfferNo:
-                _ = SyncService.AnswerSecretsOfferAsync(false, _ => Task.FromResult(false));
+                AnswerSecretsOfferFromBar(false);
                 break;
             case SignInBarAction.OfferLater:
                 SyncService.CloseSecretsOffer();
@@ -250,17 +250,20 @@ public partial class MainWindow
         ReturnFocusToPage();
     }
 
-    // «Sim» na oferta única: o Windows Hello desta janela; recusado ou falhado, a oferta fica e o aviso diz porquê.
-    private async void AnswerSecretsOfferFromBar()
+    // A oferta única. «Sim»: o Windows Hello desta janela; recusado ou falhado, a oferta fica e o aviso diz porquê.
+    // «Não»: sem Windows. Uma falha mostra um texto fixo (a mensagem da exceção pode trazer caminhos locais).
+    private async void AnswerSecretsOfferFromBar(bool accept)
     {
         string? error;
         try
         {
-            error = await SyncService.AnswerSecretsOfferAsync(true,
-                purpose => ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken()));
+            error = accept
+                ? await SyncService.AnswerSecretsOfferAsync(true,
+                    purpose => ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken()))
+                : await SyncService.AnswerSecretsOfferAsync(false, _ => Task.FromResult(false));
         }
         catch (OperationCanceledException) { error = SyncChoices.NotConfirmed($"«{SyncChoices.AccountLine}» continua desligado"); }
-        catch (Exception e) { error = "Não foi possível concluir (" + e.Message + ")."; }
+        catch (Exception) { error = SyncChoices.CouldNotFinish; }
         if (error is not null) ShowToast(error);
     }
 }

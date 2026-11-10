@@ -127,6 +127,7 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Equal("", SyncChoices.AccountSince(null, long.MaxValue));
         Assert.Equal("", SyncChoices.AccountSince("x", 1_762_560_000_000_000));
         Assert.Equal("", SyncChoices.AccountSince("x", -1));
+        Assert.Equal("Não foi possível concluir.", SyncChoices.CouldNotFinish);
         Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe, cartões e documentos",
             PairingBarModel.Title(SyncChoices.Receives(true)));
 

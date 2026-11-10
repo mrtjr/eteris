@@ -67,6 +67,9 @@ internal static class SyncChoices
     public const string OfferYes = "Sim";
     public const string OfferNo = "Não";
 
+    // Uma falha ao responder à oferta, na barra (texto fixo: a mensagem da exceção pode trazer caminhos locais).
+    public const string CouldNotFinish = "Não foi possível concluir.";
+
     // O que o computador novo recebe, no pedido de aprovação (depois de «…quer entrar na sua conta e receber »).
     public static string Receives(bool accountSecrets)
         => accountSecrets ? "as suas palavras-passe, cartões e documentos" : PairingBarModel.DefaultReceives;
