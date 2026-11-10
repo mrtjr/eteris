@@ -62,6 +62,8 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => CloseBrowserMenu();
         // Fechado assim, com o teclado no menu: ao voltar à janela, o teclado volta a quem o tinha (a página…).
         Activated += (_, _) => RestoreFocusAfterBrowserMenuOnActivate();
+        // A barra de aprovação de um computador novo: só regista a candidata (nada se cria nem se lê aqui).
+        InitPairingBar();
         LocationChanged += (_, _) => CloseSuggestions();
         Closed += (_, _) => DisposeBrowsers();
         Closed += (_, _) => ForgetVaultWindow();

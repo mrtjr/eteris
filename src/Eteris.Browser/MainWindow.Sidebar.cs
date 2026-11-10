@@ -125,6 +125,7 @@ public partial class MainWindow
         PermissionBar.Margin = new Thickness(20 + margins.Left, 10, 0, 0);
         Toast.Margin = new Thickness(margins.Left, 0, margins.Right, 28);
         PlaceSignInBar(new Thickness(margins.Left, 0, margins.Right, 0));
+        PlacePairingBar(new Thickness(margins.Left, 0, margins.Right, 0));
         SetLinkBubbleOffset(new Thickness(12 + margins.Left, 0, 0, 12));
         SyncOverlayBounds();
     }

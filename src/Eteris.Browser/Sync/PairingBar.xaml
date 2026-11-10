@@ -1,0 +1,51 @@
+<!-- A barra de aprovação no computador que já está na conta (0.2.15): um computador novo pede para entrar e a pessoa
+     escreve aqui o código que ele mostra. Na camada, no estilo do pedido de permissão, sem animações. Não decide nada:
+     desenha a vista que PairingBarModel calculou e diz o que foi feito. Nunca toma o foco: os botões não são focáveis
+     (clicam-se com o rato) e nenhum é o botão por omissão; a caixa do código só recebe o teclado com um clique nela. -->
+<UserControl x:Class="Eteris.Browser.Sync.PairingBar" x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             UseLayoutRounding="True" SnapsToDevicePixels="True" MaxWidth="560" Focusable="False"
+             FontFamily="{DynamicResource UiFont}" Foreground="{DynamicResource TextBrush}">
+    <Border CornerRadius="18" Padding="18,14" BorderThickness="1"
+            Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid Width="30" Height="30" VerticalAlignment="Top">
+                <Ellipse Fill="{DynamicResource IrisBrush}" />
+                <TextBlock Text="&#xE72E;" FontFamily="{DynamicResource IconFont}" FontSize="14"
+                           Foreground="{DynamicResource AccentInkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock x:Name="AskText" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                <!-- O nome que o computador novo indicou: só informação, em letra pequena e sem negrito (nunca a prova). -->
+                <TextBlock x:Name="NameText" FontSize="12" FontWeight="Normal" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
+                <WrapPanel x:Name="Actions" Margin="0,10,0,0" Orientation="Horizontal">
+                    <Border x:Name="CodeFrame" CornerRadius="10" BorderThickness="1" Padding="10,5" Margin="0,2,8,2" Width="116"
+                            BorderBrush="{DynamicResource FieldBorderBrush}" Visibility="Collapsed">
+                        <TextBox x:Name="CodeBox" Style="{DynamicResource BareTextBox}" FontSize="15" MaxLength="7"
+                                 Focusable="True" IsTabStop="True" AcceptsReturn="False" InputMethod.IsInputMethodEnabled="False" />
+                    </Border>
+                    <Button x:Name="NotMeButton" Content="Não fui eu" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PillButton}" />
+                    <Button x:Name="LookButton" Content="Ver" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PrimaryPillButton}" />
+                    <Button x:Name="RevokeButton" Content="Retirar o acesso do Éteris" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PrimaryPillButton}" />
+                    <Button x:Name="CloseButton" Content="Fechar" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PillButton}" />
+                </WrapPanel>
+                <TextBlock x:Name="NoteText" FontSize="12.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

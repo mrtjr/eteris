@@ -248,8 +248,11 @@ public sealed class SyncChoicesTests : IDisposable
         // As rotas passam pelas decisões testadas aqui (e a confirmação vem do Windows, com a janela da aba).
         var routes = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
         Assert.Contains("SyncChoices.ChooseAsync(agent, group, on, purpose => ConfirmWithWindows(browserId, purpose))", routes);
-        // A rota que aprovava sem código saiu (D11): aprovar faz-se só na barra da janela, escrevendo o código.
+        // A rota que aprovava sem código saiu (D11): aprovar faz-se só na barra da janela, escrevendo o código, e a
+        // porta do Windows está no serviço, depois do código certo.
         Assert.DoesNotContain("\"/sync-approve\"", routes);
+        Assert.Contains("SyncChoices.MayApproveAsync(agent, confirm)",
+            File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs")));
         // Revisão: um código novo e remover um aparelho (que mostra um código novo) também pedem o Windows com segredos.
         Assert.Equal(2, routes.Split("SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))").Length - 1);
         Assert.DoesNotContain("case \"/sync-new-code\":\n                Sync.SyncService.Act", routes.Replace("\r\n", "\n"));

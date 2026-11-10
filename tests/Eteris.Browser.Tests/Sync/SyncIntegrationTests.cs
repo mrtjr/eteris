@@ -404,4 +404,76 @@ public class SyncIntegrationTests
         foreach (var file in new[] { Path.Combine(root, "Sync", "BrowserProfile.cs"), Path.Combine(root, "Data", "UserSettings.cs") })
             Assert.DoesNotContain("DeviceName", File.ReadAllText(file, Encoding.UTF8));
     }
+
+    // ---- barra de aprovação (0.2.15, T8) ---------------------------------------------------------------------------
+
+    private static string BrowserSrc(params string[] parts) => Path.Combine([GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", .. parts]);
+
+    // O corpo de um método (da assinatura até à chaveta que fecha ao nível de 4 espaços).
+    private static string Body(string code, string signature)
+    {
+        var start = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"não encontrei {signature}");
+        var end = code.IndexOf("\n    }", start, StringComparison.Ordinal);
+        Assert.True(end > start, $"não encontrei o fim de {signature}");
+        return code[start..end];
+    }
+
+    private static IEnumerable<string> BrowserFilesWith(string text)
+        => Directory.EnumerateFiles(BrowserSrc(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                        && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f, Encoding.UTF8).Contains(text, StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(BrowserSrc(), f).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal);
+
+    [Fact]
+    public void PairingBar_IsCreatedInCode_AndGoesThroughTheArbiter()
+    {
+        Assert.DoesNotContain("PairingBar", File.ReadAllText(BrowserSrc("MainWindow.xaml"), Encoding.UTF8));
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8);
+        Assert.Contains("AddToOverlay(", glue);
+        Assert.Contains("RegisterBar(Sync.WindowBar.PairingRequest", glue);
+        Assert.Contains("RefreshBars(", glue);
+        Assert.DoesNotContain("SyncService.Changed +=", glue);
+        Assert.Empty(BrowserFilesWith("WindowBarKind"));
+        Assert.False(File.Exists(BrowserSrc("Sync", "WindowBars.cs")));
+        // Só o «show» da candidata mexe na visibilidade da barra.
+        Assert.Equal(2, Regex.Matches(glue, @"\.Visibility\s*=").Count);
+        var show = Body(glue, "private void ShowPairingBar(");
+        Assert.Equal(2, Regex.Matches(show, @"\.Visibility\s*=").Count);
+        // O gancho no construtor tem nome neutro (MainWindow.xaml.cs continua sem SyncService).
+        var window = File.ReadAllText(BrowserSrc("MainWindow.xaml.cs"), Encoding.UTF8);
+        Assert.Contains("InitPairingBar();", window);
+        Assert.DoesNotContain("SyncService", window);
+        Assert.Contains("PlacePairingBar(", File.ReadAllText(BrowserSrc("MainWindow.Sidebar.cs"), Encoding.UTF8));
+    }
+
+    [Fact]
+    public void PairingBarState_NeverCreatesTheAgent()
+    {
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        var body = Body(service, "internal static PairingBarView PairingBarState()");
+        Assert.Contains("_agent", body);
+        Assert.Contains("PairingBarModel.From(", body);
+        Assert.DoesNotContain("Agent()", body);
+        // O único chamador no produto (a T10 troca-lhe só o terceiro argumento).
+        Assert.Equal(["Sync/SyncService.cs"], BrowserFilesWith("PairingBarModel.From("));
+        Assert.Single(Regex.Matches(service, @"PairingBarModel\.From\("));
+    }
+
+    // Plano §10.1 S1: nenhum caminho entrega a chave sem o código escrito E sem a porta do Windows.
+    [Fact]
+    public void ApproveWithCode_HasOneProductCaller_BehindTheWindowsGate()
+    {
+        Assert.Equal(["Sync/SyncService.cs"], BrowserFilesWith("ApproveWithCodeAsync("));
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        Assert.Single(Regex.Matches(service, @"ApproveWithCodeAsync\("));
+        var body = Body(service, "public static Task<PairingAnswer> ApprovePairingAsync(");
+        Assert.Contains("ApproveWithCodeAsync(session, typed, () => SyncChoices.MayApproveAsync(agent, confirm))", body);
+        // A barra chama-o com a porta do Windows da janela que a tem.
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8);
+        Assert.Contains("SyncService.ApprovePairingAsync(", glue);
+        Assert.Contains("ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken())", glue);
+    }
 }

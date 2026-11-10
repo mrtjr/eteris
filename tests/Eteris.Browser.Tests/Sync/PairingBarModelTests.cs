@@ -1,0 +1,92 @@
+using System.Reflection;
+using Eteris.Browser.Sync;
+using Eteris.Sync.Engine;
+
+namespace Eteris.Browser.Tests.Sync;
+
+// O que a barra de aprovação mostra (0.2.15, T8), sem janela: lógica pura sobre o estado da sincronização.
+public class PairingBarModelTests
+{
+    private const long Now = 1_762_560_000_000;
+
+    private static SyncStatus On(IReadOnlyList<HostRequest>? requests = null) => TestStatus.Of(SyncPhase.On, last: Now, requests: requests);
+
+    [Fact]
+    public void NoSync_OrNotOn_ShowsNothing()
+    {
+        var ready = new HostRequest("s", "Portátil", 3, Now);
+        Assert.Equal(PairingBarKind.None, PairingBarModel.From(null, Now, PairingBarModel.DefaultReceives).Kind);
+        foreach (var phase in new[] { SyncPhase.Off, SyncPhase.Starting, SyncPhase.Choose, SyncPhase.Pairing, SyncPhase.Stopped })
+        {
+            var status = TestStatus.Of(phase, requests: [ready]) with { WaitingRequests = 1, AnsweringSinceMs = Now };
+            Assert.Equal(PairingBarKind.None, PairingBarModel.From(status, Now, PairingBarModel.DefaultReceives).Kind);
+        }
+        Assert.Equal(PairingBarKind.None, PairingBarModel.From(On(), Now, PairingBarModel.DefaultReceives).Kind);
+    }
+
+    [Fact]
+    public void CountedRequest_ShowsWaiting()
+    {
+        var view = PairingBarModel.From(On() with { WaitingRequests = 1 }, Now, PairingBarModel.DefaultReceives);
+        Assert.Equal(PairingBarKind.Waiting, view.Kind);
+        Assert.Null(view.Session);
+        Assert.Null(view.Title);
+    }
+
+    [Fact]
+    public void Answering_ShowsConnecting_ForSixtySeconds()
+    {
+        var answering = On() with { AnsweringSinceMs = Now };
+        Assert.Equal(60_000, PairingBarModel.ConnectingShownMs);
+        Assert.Equal(PairingBarKind.Connecting, PairingBarModel.From(answering, Now, PairingBarModel.DefaultReceives).Kind);
+        Assert.Equal(PairingBarKind.Connecting, PairingBarModel.From(answering, Now + 59_999, PairingBarModel.DefaultReceives).Kind);
+        Assert.Equal(PairingBarKind.None, PairingBarModel.From(answering, Now + 61_000, PairingBarModel.DefaultReceives).Kind);
+        // Com um pedido só contado ao lado, volta a «Ver».
+        Assert.Equal(PairingBarKind.Waiting, PairingBarModel.From(answering with { WaitingRequests = 1 }, Now + 61_000, PairingBarModel.DefaultReceives).Kind);
+    }
+
+    [Fact]
+    public void ReadyRequests_ShowTheOldestOnly()
+    {
+        var status = On([new HostRequest("b", "Tablet", 3, Now), new HostRequest("a", "Portátil", 2, Now - 5_000)])
+            with { WaitingRequests = 2, AnsweringSinceMs = Now };
+        var view = PairingBarModel.From(status, Now, PairingBarModel.DefaultReceives);
+        Assert.Equal(PairingBarKind.Code, view.Kind);
+        Assert.Equal("a", view.Session);
+        Assert.Equal("Portátil", view.Name);
+        Assert.Equal(2, view.AttemptsLeft);
+        // Com a mesma hora, pela sessão: sempre o mesmo pedido à vista.
+        var tie = PairingBarModel.From(On([new HostRequest("d", "Tablet", 3, Now), new HostRequest("c", "Portátil", 3, Now)]), Now, PairingBarModel.DefaultReceives);
+        Assert.Equal("c", tie.Session);
+    }
+
+    [Fact]
+    public void Title_UsesTheReceivesParameter()
+    {
+        var status = On([new HostRequest("s", "Portátil", 3, Now)]);
+        Assert.Equal("as suas palavras-passe", PairingBarModel.DefaultReceives);
+        Assert.EndsWith("receber as suas palavras-passe", PairingBarModel.From(status, Now, PairingBarModel.DefaultReceives).Title);
+        Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe, cartões e documentos",
+            PairingBarModel.From(status, Now, "as suas palavras-passe, cartões e documentos").Title);
+        // Sem estado estático que se possa escrever (o fragmento vem sempre de quem chama).
+        const BindingFlags all = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        Assert.DoesNotContain(typeof(PairingBarModel).GetFields(all), f => !f.IsLiteral && !f.IsInitOnly);
+        Assert.DoesNotContain(typeof(PairingBarModel).GetProperties(all), p => p.CanWrite);
+    }
+
+    // Os textos da barra, à letra (a T15 confere-os aqui).
+    [Fact]
+    public void Texts_ToTheLetter()
+    {
+        Assert.Equal("Um computador novo quer entrar na sua conta.", PairingBarModel.Waiting);
+        Assert.Equal("A ligar ao computador novo…", PairingBarModel.Connecting);
+        Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe", PairingBarModel.Title(PairingBarModel.DefaultReceives));
+        Assert.Equal("Se foi você, escreva o código que ele mostra:", PairingBarModel.Ask);
+        Assert.Equal("Recusado. Um pedido destes só aparece se alguém entrou no Éteris com a sua conta Google. Mude a palavra-passe da Google.",
+            PairingBarModel.RefusedAdvice);
+        Assert.Equal("Três códigos errados: o pedido foi recusado. Peça outra vez no outro computador.", PairingBarModel.ThreeWrong);
+        Assert.Equal("Código errado. Tem mais 2 tentativas.", PairingBarModel.WrongCode(2));
+        Assert.Equal("Código errado. Tem mais 1 tentativa.", PairingBarModel.WrongCode(1));
+        Assert.Equal("Nome que o outro computador indicou: «Portátil»", PairingBarModel.NameLine("Portátil"));
+    }
+}

@@ -2,6 +2,7 @@ using System.IO;
 using Eteris.Browser.Infrastructure;
 using Eteris.Sync.Engine;
 using Eteris.Sync.Format;
+using Eteris.Sync.Pairing;
 using Eteris.Sync.Transport;
 
 namespace Eteris.Browser.Sync;
@@ -339,6 +340,31 @@ internal static class SyncService
             catch (Exception) { }
         });
     }
+
+    // ---- barra de aprovação (0.2.15) -------------------------------------------------------------------------------
+
+    // O destino de «Retirar o acesso do Éteris» nas barras. Um só sítio (a T12 muda-o para o item próprio).
+    internal const string RevokeAnchor = "#sincronizacao";
+
+    // O que a barra de aprovação mostra agora. Lê o campo (nunca cria o agente; sem agente, nada) e só memória: é
+    // chamado pelo «wants» da candidata, a cada RefreshBars.
+    internal static PairingBarView PairingBarState()
+    {
+        var agent = _agent;
+        return PairingBarModel.From(agent?.Status, Now(), PairingBarModel.DefaultReceives);
+    }
+
+    // A pessoa escreveu na barra o código que o computador novo mostra. «confirm» é a porta do Windows da janela que tem
+    // a barra: o agente só a chama depois do código certo, e só entrega a conta depois dela (quando há segredos em
+    // jogo). Não apanha SyncUserException: a barra mostra a mensagem.
+    public static Task<PairingAnswer> ApprovePairingAsync(string session, string typed, Func<Vault.ReauthPurpose, Task<bool>> confirm)
+    {
+        if (Agent() is not { } agent) return Task.FromResult(PairingAnswer.Gone);
+        return agent.ApproveWithCodeAsync(session, typed, () => SyncChoices.MayApproveAsync(agent, confirm));
+    }
+
+    // «Não fui eu»: recusa o pedido (o computador novo fica a saber).
+    public static void RefusePairing(string session) => Act("approve", a => a.RefuseAsync(session));
 
     private static (string Area, string Text)? _message;
 
