@@ -5,9 +5,10 @@ linhas de base, o A/A, as passagens com a ordem dos navegadores rodada e a anál
 confiança. Vieram das pastas de trabalho das medições da 0.2.3 à 0.2.13, limpas: sem caminhos de nenhuma máquina,
 tudo relativo a esta pasta e a uma pasta de trabalho fora do repositório.
 
-> **Ainda não foram corridas nesta forma.** Os scripts foram reescritos a partir dos que deram os números da
-> `docs/paridade.md` e do `docs/sandbox.md`, mas a primeira corrida (e os acertos que ela pedir) só acontece depois da
-> 0.2.13 sair. Até lá nada aqui é prova de nada.
+> **Corridas pela primeira vez na medição da 0.2.14** (2026-11-09; `docs/paridade.md`, «Medição da 0.2.14»), numa
+> cópia de trabalho com correções que ainda não voltaram a esta pasta: a árvore de processos sem PID reutilizados, o
+> teste do servidor local, o perfil novo do Firefox e os passos das 20 abas, do bfcache e da pressão de memória. Os
+> scripts desta pasta, tal como estão, não são exatamente os que deram esses números.
 
 ## Regras (valem para todas as corridas)
 
@@ -129,7 +130,7 @@ a janela ativada a partir de outra área de trabalho, a página segurada ou quen
 janela minimizada e a página que ainda não apresentou. A conferência da versão corrigiu um quinto, da mesma forma (só
 leitura e testes): a página cuja espera de apresentação desiste (um 1.º documento que leva mais de 9 s a acabar de
 carregar) ficava a desenhar com a janela minimizada até a aba sair e voltar; agora esconde-se quando a espera acaba.
-Antes do pacote, com o PC livre e num perfil de teste (cerca de 10 min):
+Antes do pacote, com o PC livre e num perfil de teste (cerca de 15 min):
 
 1. minimizar e restaurar com o cursor numa caixa de texto da página e continuar a escrever sem clicar — o foco do
    teclado: quando o WPF devolve o foco, a janela da página ainda está minimizada (o restauro dela vem a seguir, em
@@ -141,7 +142,10 @@ Antes do pacote, com o PC livre e num perfil de teste (cerca de 10 min):
    em menos de meio segundo, sem trocar de aba;
 4. bloquear e desbloquear a sessão (Win+L), também pelo dono;
 5. um link aberto por outra aplicação com o Éteris minimizado: vê-se a página antiga até a nova aparecer, nunca uma
-   área vazia.
+   área vazia;
+6. repetir a CPU da janela minimizada na publicação final (`ocl.ps1 -Estados visivel,minimizada -JanelaS 60`, 2 rondas):
+   o e8 foi reescrito depois da medição (os 0,59% são do commit `8046e32`, com o ajuste ligado só no seu braço) e as
+   outras cinco provas são funcionais, nenhuma volta a medir a CPU. Minimizada, tem de ficar perto de 0,6%.
 
 Se algum falhar e não houver tempo para o corrigir, o recuo é desligar o e8: `--eteris-ajustes=-e8` na linha de
 comandos (vale numa instalação), ou tirá-lo dos ligados por omissão (`OnByDefault` em `Infrastructure/PerfTuning.cs`).
@@ -155,7 +159,7 @@ para o e13 e o destaque «Abas que adormecem quando falta memória».
 - **L0** = a 0.2.13 publicada (sem sandbox): `build/publish.ps1` na tag `v0.2.13`. Serve para a comparação com as
   referências e para a discordância dos 19 contra 28 MB por aba.
 - **L1** = o ramo da 0.2.14 com o sandbox já fundido (publicação com o sandbox). **É a linha de base de todas as
-  experiências.** Este ramo ainda não tem o sandbox fundido: a L1 mede-se depois dessa fusão.
+  experiências.** Na medição da 0.2.14 foi a publicação do commit `8046e32` (o e8 e o e13 ainda desligados por omissão).
 - **L1c** = L1 com `--eteris-no-sandbox` (braço com `Extra = @('--eteris-no-sandbox')`): filhos nativos sem sandbox, para
   separar o custo do sandbox e para as verificações que têm de abrir os processos filhos de fora (D7).
 

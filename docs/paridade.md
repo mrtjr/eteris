@@ -22,7 +22,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 | 4b | Fluidez da navegação (espera por página, Voltar/Avançar, «piscar» depois de carregar) | — | — | — | desde a 0.2.9: 1.ª pintura ~0,3 s depois do clique (era ~1,25 s), Voltar 6 ms (era ~1,3 s), sem «piscar»; ver secção 1b e `docs/motor.md` | ✅ resolvido (0.2.9) |
 | 5 | Abas do motor de vídeo completas (Ctrl+F, zoom, imprimir, leitura) | — | — | — | em falta | alta |
 | 6 | Antifingerprinting | médio | forte (FPP/RFP) | forte («farbling») | **medido** (secção 6): a 0.2.9 era *mais* identificável do que o Chrome; no `main` (R0) deixou de o ser — dispositivos, língua, DNT e dicas do cliente como o Chrome. Canvas, WebGL e áudio continuam fixos (F1/F2) | alta |
-| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | 0.2.10, publicação como a da release: **625 ms** (0.2.9: 1132 ms na mesma sessão); **207 MB** com 1 aba e **320 MB** com 5 (0.2.9: 254 e 376 MB); ver secção 1c | ✅ arranque melhor do que o Firefox e a ~1,3× do Chrome; memória principal −47 MB, filhos iguais (0.2.10) |
+| 4d | Arranque até à 1.ª página (morno) e memória privada | 474 ms; 143 MB (1 aba), 194 MB (5) | 1079 ms; 340 MB, 453 MB | 426 ms; 141 MB, 199 MB | 0.2.10, publicação como a da release: **625 ms** (0.2.9: 1132 ms na mesma sessão); **207 MB** com 1 aba e **320 MB** com 5 (0.2.9: 254 e 376 MB); ver secção 1c; 0.2.14 (outra sessão e outro método, com sandbox): 735 ms, 223 MB com 1 aba e 322 MB com 5 — ver «Medição da 0.2.14» | ✅ arranque melhor do que o Firefox e a ~1,3× do Chrome; memória principal −47 MB, filhos iguais (0.2.10); 0.2.14: +40 ms do sandbox (1,44× o Chrome dessa sessão, 510 ms) |
 | 4c | Vídeo H.264/AAC (Twitch, Vimeo, MP4 direto, HLS…) | sim | sim (codecs do Windows) | sim | **no motor principal**, como o Firefox: compilação própria da CEF com os codecs do Windows (H.264/HEVC pela placa gráfica, AAC pelo Media Foundation, nenhum descodificador com patentes; MP4, Twitch, g1, BBC, Reddit, TikTok, Dailymotion, HLS, `.m4a` e `.aac` validados, ~2,4% de CPU a 1080p). Sem descodificação por hardware ou num Windows N, uma sonda no arranque devolve tudo ao motor de vídeo (WebView2), como antes. Publicado desde a 0.2.9; o CI não compila este motor (`docs/motor.md`, «Motor com codecs») | ✅ resolvido (0.2.9) |
 | 7 | Conteúdo com DRM (Netflix, Spotify) | sim | opcional | opcional | via motor de vídeo, **sempre com pergunta** (botão «Tocar no motor de vídeo»); o motor principal continua sem Widevine. Com DRM o site fala com o seu servidor de licenças e o CDM (Google/Microsoft) pode fazer provisionamento — inerente ao DRM, só depois de o utilizador aceitar | média |
 | 8 | Extensões | sim | sim | sim | não | média |
@@ -182,10 +182,11 @@ são os do ramo: renderers e armazenamento Untrusted (restritos), placa gráfica
 
 ### Medição da 0.2.14 (2026-11-09)
 
-Ferramentas de `build/perf/` (`README.md`: bateria padrão, rondas alternadas entre braços, medianas). Máquina: Ryzen 7
-7700X, 31,2 GB, Windows 11. Braços: **0.2.13** publicada, **0.2.14** publicada com sandbox e a mesma 0.2.14 com
-`--eteris-no-sandbox`; Chrome, Brave e Firefox com perfis novos temporários; páginas servidas localmente. Memória =
-memória privada sem o processo da placa gráfica; processador = % de um núcleo.
+Ferramentas: `build/perf/` (`README.md`: bateria padrão, rondas alternadas entre braços, medianas); a medição usou uma
+cópia com correções ainda por trazer para o repositório. Máquina: Ryzen 7 7700X, 31,2 GB, Windows 11. Braços:
+**0.2.13** publicada, a **0.2.14** no commit `8046e32`, publicada com sandbox (o e8 e o e13 ligados só nos seus
+braços), e a mesma 0.2.14 com `--eteris-no-sandbox`; Chrome, Brave e Firefox com perfis novos temporários; páginas
+servidas localmente. Memória = memória privada sem o processo da placa gráfica; processador = % de um núcleo.
 
 | O que | 0.2.13 | 0.2.14 | Chrome | Brave | Firefox |
 |---|---|---|---|---|---|
@@ -199,7 +200,7 @@ memória privada sem o processo da placa gráfica; processador = % de um núcleo
 | Processador, janela minimizada (animação) | 6,77 | 6,47 sem o ajuste e8, **0,59** com ele | 0,36 | 0,80 | 0,95 |
 | Processador, janela tapada por outra (animação) | 9,05 | 8,96 (o e8 não a resolve) | 0,28 | 0,09 | 0,33 |
 
-\\* arranque das referências: 4 rondas de outro passo da mesma noite (nele a 0.2.13 deu 773 e a 0.2.14 794).
+\* arranque das referências: 4 rondas de outro passo da mesma noite (nele a 0.2.13 deu 773 e a 0.2.14 794).
 
 - **Memória.** A 0.2.14 sem sandbox dá 222,5 MB com 1 aba e 326,3 MB com 5: o sandbox não custa memória. Com 20 abas,
   dos 60 s aos 5 min: 0.2.14 1037 → 1029, 0.2.13 1239 → 1260, Chrome 1279 → 1526 (35 → 45 processos de página: iframes
@@ -241,7 +242,8 @@ memória privada sem o processo da placa gráfica; processador = % de um núcleo
   8 s.
 - **Limites.** 20 abas: 1 ronda por braço; janela que não se vê e cenários curtos: 2 rondas — diferenças abaixo de
   ~10% nesses passos não são conclusivas. O indexador de pesquisa do Windows gastou ~32% de um núcleo durante toda a
-  medição, igual em todos os braços.
+  medição, igual em todos os braços. O e8 mudou depois da medição (revisão do fecho e conferência da versão); o valor
+  de 0,59% é o do código medido e não foi repetido no código final.
 
 ## 2. Sandbox — resolvido na 0.2.14: ligado por omissão na publicação (2026-11-08)
 

@@ -30,7 +30,9 @@ passar o `Alt` para a página e um link aberto logo a seguir ao arranque já nã
 
 ### Desempenho
 Medido na mesma máquina e na mesma noite contra a 0.2.13, o Chrome, o Brave e o Firefox (medianas; método, tabelas e
-limites em `docs/paridade.md`, «Medição da 0.2.14»; ferramentas em `build/perf/`).
+limites em `docs/paridade.md`, «Medição da 0.2.14»; ferramentas: `build/perf/` — a medição usou uma cópia com
+correções ainda por trazer para o repositório). Os números são do código medido (commit `8046e32`); o ajuste da
+janela minimizada foi revisto depois da medição e o seu valor não voltou a ser medido no código final.
 - **Menos memória:** 251 → 223 MB com 1 aba, 377 → 322 MB com 5 e 1239 → 1037 MB com 20. Com 20 abas fica abaixo do
   Chrome (1279 MB) e 11% acima do Brave (931 MB); com poucas abas ainda fica 60 a 80 MB acima dos dois.
 - **Parado, quase nada de processador:** com 20 abas abertas e paradas, 1,72% → 0,13% de um núcleo (Chrome 0,61%,
@@ -38,19 +40,25 @@ limites em `docs/paridade.md`, «Medição da 0.2.14»; ferramentas em `build/pe
 - A central de multimédia deixou de acordar todas as abas de 2 em 2 segundos (só as que estão à vista, as que saíram
   há pouco e as que têm som; as outras de 30 em 30), o ponto «a tocar» só anima enquanto se vê e o modo foco deixa de
   ler o rato com a janela inativa.
-- **Janela minimizada deixa de desenhar:** com uma página animada, 6,47% → 0,59% de um núcleo (9,31% → 1,25% com 20
-  abas), como nas três referências. Vale também noutra área de trabalho virtual e com a sessão bloqueada; nunca numa
-  página com som, multimédia, câmara, microfone ou ecrã em uso, ou Picture-in-Picture. Com a janela só tapada por
-  outra, a página continua a desenhar (o Chrome, o Firefox e o Brave param): fica em aberto.
+- **Janela minimizada deixa de desenhar:** com uma página animada, 6,77% de um núcleo na 0.2.13 (6,47% na 0.2.14 sem
+  o ajuste) → 0,59% (com 20 abas, 9,31% sem o ajuste → 1,25% com ele), como nas três referências. Vale também noutra
+  área de trabalho virtual e com a sessão bloqueada; nunca numa página com som, multimédia, câmara, microfone ou ecrã
+  em uso, ou Picture-in-Picture. Com a janela só tapada por outra, a página continua a desenhar (o Chrome, o Firefox e
+  o Brave param): fica em aberto.
 - **Com pouca memória no Windows, adormece uma aba de cada vez** — a usada há mais tempo; nunca as fixadas, as
   trancadas, as que tocam som nem as que usam a câmara, o microfone ou o ecrã — e, ao acordar, a página volta ao mesmo
   ponto. Opção nova em Definições › Abas, «Adormecer também quando falta memória» (ligada). Com o sinal simulado e 8
   abas: 10 → 4 processos de página e 404 → 253 MB.
 - **Troca de abas como no Chrome e no Brave:** 44 a 49 ms até a aba nova estar completa no ecrã (Chrome e Brave: 50 a
   56 ms), sem fotogramas errados em 36 trocas (numa passagem anterior apareceu 1 fotograma branco em 24: a vigiar).
+  A 1.ª troca para uma aba que ainda não tinha sido mostrada demora 108 a 116 ms (no Chrome e no Brave não se distingue
+  das outras: no máximo 62 a 73 ms); a 0.2.13 não foi medida nestes casos.
 - A bolha do endereço de um link (ao passar o rato) passa para uma janela do tamanho do texto, em vez de ligar a
   camada do tamanho da janela inteira.
 - Desenhar e rolar custam praticamente o mesmo que na 0.2.13 (animação 8,05% → 7,87%; rolagem 4,51% → 4,20%).
+- Em aberto: em quatro cenários curtos (janelas de 30 s que começam 8 s depois de abrir) a 0.2.14 ficou 1,4 a 2,9
+  pontos acima da 0.2.13; falta confirmar se é custo real, cauda do arranque ou o peso dos contadores de teste
+  (`docs/paridade.md`).
 - Os outros ajustes preparados nesta versão (cache dos shaders no disco, cache de Voltar/Avançar mais pequena, motor
   a arrancar em paralelo, funcionalidades do motor, poupança de energia do Chromium) ficam **desligados**: os que se
   mediram não mostraram ganho ou têm um custo (a poupança de energia corta para 30 fotogramas por segundo). Cada
