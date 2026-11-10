@@ -65,9 +65,9 @@
     <section id="sincronizacao">
       <h2>Sincronização com o Google Drive (opcional)</h2>
       <p>O Éteris pode guardar uma cópia <strong>cifrada</strong> dos seus dados na <strong>pasta oculta da aplicação</strong>
-        do seu Google Drive, para os levar para outro aparelho. É opcional, está <strong>desligada por omissão</strong> e
-        só começa depois de carregar em «Entrar com o Google» nas Definições › Sincronização. Sem isso, o Éteris não fala
-        com a Google.</p>
+        do seu Google Drive, para os levar para outro computador. É opcional, está <strong>desligada por omissão</strong>
+        e só começa depois de carregar em «Entrar com o Google» — no menu, nas boas-vindas ou nas Definições. Sem isso, o
+        Éteris não fala com a Google.</p>
 
       <h3>A permissão que o Éteris pede</h3>
       <p>Só uma: <code>https://www.googleapis.com/auth/drive.appdata</code> — ver e gerir os dados de configuração da
@@ -76,28 +76,36 @@
         A pasta não aparece na lista de ficheiros do Drive.</p>
 
       <h3>O que vai para o Drive</h3>
-      <p>Favoritos, Espaços, as definições que fazem sentido noutro aparelho, as decisões do Escudo por site e as notas.
-        Vai tudo em ficheiros <strong>cifrados no seu PC antes de sair</strong>, com nomes opacos. O histórico, as abas
-        abertas, as senhas, os cookies e a cache não vão.</p>
+      <p>Favoritos, Espaços, definições, decisões do Escudo, notas, palavras-passe, contactos e viagens; pagamentos e
+        documentos de identificação só se os ligar. Vai tudo em ficheiros <strong>cifrados no seu PC antes de
+        sair</strong>, com nomes opacos. O histórico, as abas abertas, cookies, cache e permissões dos sites não vão.</p>
 
-      <h3>Cifrado no PC, chave só nos seus aparelhos</h3>
+      <h3>Cifrado no PC, chave só nos seus computadores</h3>
       <p>A cifra é ponta a ponta (AES-256-GCM, com uma chave por ficheiro). A chave é gerada no seu computador e
-        <strong>nunca vai para a Google nem para o Éteris</strong>: fica nos seus aparelhos e no código de recuperação que
-        só você vê. Sem esse código e sem nenhum aparelho ligado, a cópia na nuvem não se consegue abrir — por ninguém.</p>
+        <strong>nunca vai para a Google nem para o Éteris</strong>: fica nos seus computadores e no seu kit de
+        recuperação, que pode guardar como ficheiro ou imprimir e voltar a ver num computador ligado, com o Windows Hello.
+        Sem o kit e sem nenhum computador ligado, a cópia na nuvem não se consegue abrir — por ninguém.</p>
 
       <h3>O que a Google vê</h3>
       <ul>
         <li>que a sua conta autorizou a aplicação «Éteris», e quando houve início de sessão;</li>
         <li>quando o Éteris sincroniza (horas e endereço IP dos pedidos), quantos ficheiros há e o tamanho aproximado;</li>
-        <li><strong>nunca</strong> o conteúdo: favoritos, endereços, títulos, notas, abas, definições ou nomes dos aparelhos.</li>
+        <li>quando um computador novo pede para entrar na sua conta e se foi recusado (esses pedidos têm nomes legíveis,
+          sem nenhum dado seu);</li>
+        <li><strong>nunca</strong> o conteúdo: favoritos, endereços, títulos, notas, abas, definições, palavras-passe ou
+          nomes dos aparelhos.</li>
       </ul>
-      <p>Para mostrar a conta no menu, o Éteris pede à API do Drive o nome e o e-mail da conta uma vez depois de entrar
-        (a Google já os conhece). Ficam guardados só neste computador, protegidos pelo Windows.</p>
+      <p>Para mostrar a conta no menu, o Éteris pede à API do Drive o nome e o e-mail da conta uma vez depois de cada
+        entrada (a Google já os conhece). Ficam guardados só neste computador, protegidos pelo Windows.</p>
 
       <h3>Como apagar e retirar o acesso</h3>
       <ul>
-        <li><strong>No Éteris:</strong> Definições › Sincronização › «Sair» apaga deste computador os tokens e a conta
-          guardada e revoga o acesso na Google.</li>
+        <li><strong>Sair deste computador:</strong> Definições › Sincronização › «Sair deste computador» apaga deste
+          computador os tokens e a conta guardada, sem falar com a Google; os seus outros computadores continuam ligados.
+          A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a chave».
+          A autorização dada à Google continua válida até a retirar.</li>
+        <li><strong>Retirar o acesso no Éteris:</strong> «Retirar o acesso do Éteris à conta Google» (Definições ›
+          Sincronização) revoga a autorização na Google e desliga todos os seus computadores.</li>
         <li><strong>Na Google:</strong> retire o acesso em
           <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> (Éteris › Remover acesso).</li>
         <li><strong>Os dados no Drive:</strong> em <a href="https://drive.google.com/">drive.google.com</a> › Definições ›
@@ -145,29 +153,32 @@
       <section>
         <h2>Google Drive sync (optional)</h2>
         <p>Éteris can keep an <strong>end-to-end encrypted</strong> copy of your data in the <strong>hidden application
-          data folder</strong> of your Google Drive, so you can take it to another device. It is optional, <strong>off by
-          default</strong>, and only starts after you click “Sign in with Google” in Settings › Sync. Until then, Éteris
-          does not talk to Google.</p>
+          data folder</strong> of your Google Drive, so you can take it to another computer. It is optional, <strong>off
+          by default</strong>, and only starts after you click “Sign in with Google” — in the menu, on the welcome page or
+          in Settings. Until then, Éteris does not talk to Google.</p>
         <h3>The permission Éteris requests</h3>
         <p>Only <code>https://www.googleapis.com/auth/drive.appdata</code> — see and manage the app's own configuration
           data in your Google Drive. With it, Éteris <strong>can only see its own hidden folder</strong>: it cannot see,
           read, list or change any other file in your Drive, nor your Gmail, contacts or calendar.</p>
         <h3>What goes to Drive</h3>
-        <p>Bookmarks, Spaces, the settings that make sense on another device, per-site Shield decisions and notes — all in
-          files <strong>encrypted on your PC before they leave</strong>, with opaque names. History, open tabs, passwords,
-          cookies and cache are not synced.</p>
-        <h3>Encrypted on your PC, key only on your devices</h3>
+        <p>Bookmarks, Spaces, settings, Shield decisions, notes, passwords, contact details and trips; payments and identity
+          documents only if you turn them on — all in files <strong>encrypted on your PC before they leave</strong>, with
+          opaque names. History, open tabs, cookies, cache and site permissions are not synced.</p>
+        <h3>Encrypted on your PC, key only on your computers</h3>
         <p>Encryption is end to end (AES-256-GCM, one key per file). The key is generated on your computer and
-          <strong>never goes to Google or to the Éteris project</strong>: it stays on your devices and in the recovery
-          code only you see. Without that code and without a connected device, nobody can open the cloud copy.</p>
+          <strong>never goes to Google or to the Éteris project</strong>: it stays on your computers and in your recovery
+          kit, which you can save as a file or print, and view again on a connected computer with Windows Hello. Without
+          the kit and without a connected computer, nobody can open the cloud copy.</p>
         <h3>What Google sees</h3>
         <p>That your account authorized “Éteris”; when Éteris syncs (request times and IP address), how many files there
-          are and their approximate size — <strong>never</strong> the content. To show your account in the menu, Éteris
-          asks the Drive API for the account's name and email once after sign-in; they are stored only on your computer,
-          protected by Windows.</p>
+          are and their approximate size; when a new computer asks to join your account and whether it was refused (those
+          requests have readable names and none of your data) — <strong>never</strong> the content. To show your account in
+          the menu, Éteris asks the Drive API for the account's name and email once after each sign-in; they are stored
+          only on your computer, protected by Windows.</p>
         <h3>How to delete and revoke access</h3>
         <ul>
-          <li><strong>In Éteris:</strong> Settings › Sync › “Sign out” deletes the tokens and the stored account from this computer and revokes access at Google.</li>
+          <li><strong>Sign out of this computer:</strong> Settings › Sync › “Sign out of this computer” deletes the tokens and the stored account from this computer, without talking to Google; your other computers stay connected. The key and the data stay on this computer unless you tick “also delete the key”. The authorisation given to Google stays valid until you remove it.</li>
+          <li><strong>Remove access in Éteris:</strong> “Remove Éteris's access to your Google account” (Settings › Sync) revokes the authorisation at Google and disconnects all your computers.</li>
           <li><strong>At Google:</strong> remove access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
           <li><strong>The data in Drive:</strong> <a href="https://drive.google.com/">drive.google.com</a> › Settings › Manage apps › Éteris › Options › “Delete hidden app data”.</li>
         </ul>
