@@ -84,7 +84,7 @@ internal static class SyncChoices
     {
         if (status is null) return (null, null);
         if (status is { InheritedSecrets: true, SecretsHere: true })
-            return (ReceivedText(true), new SignInBarButton("Abrir Definições", SignInBarAction.OpenSettings));
+            return (ReceivedText(true), new SignInBarButton("Abrir Definições", SignInBarAction.AccountSecrets));
         if (status is { Entry: SyncEntry.Created, AccountSecrets: false, SecretsHere: false })
             return (null, new SignInBarButton(AccountLink, SignInBarAction.AccountSecrets));
         return (null, null);

@@ -1087,7 +1087,11 @@
         return;
       }
       const target = (location.hash && document.getElementById(location.hash.slice(1))) || (data.focus && document.getElementById(data.focus));
-      if (openMoreFor(target) && target.closest('[hidden]') === null) target.scrollIntoView({ block: 'center' });
+      // Um destino em «Mais opções» ainda escondido (por exemplo, sem a sincronização ligada) leva, pelo menos, à secção.
+      if (openMoreFor(target)) {
+        if (target.closest('[hidden]') === null) target.scrollIntoView({ block: 'center' });
+        else $('sincronizacao').scrollIntoView();
+      }
     };
     const toAnchor = hash => { if (location.hash === hash) goToAnchor(); else location.hash = hash; };
     addEventListener('hashchange', goToAnchor);
@@ -1360,9 +1364,16 @@
       // Um apagar do Drive que não acabou (e já não está a correr): diz o que fazer, e «Ligar» passa a «Ligar sem acabar
       // de apagar» (nunca fica preso num apagar que não acaba).
       const deleteStuck = !!s.deleting && !!s.deleteError && !s.running;
-      $('syncOffText').textContent = deleteStuck
-        ? 'Ainda há dados do Éteris por apagar do Drive (o porquê está em «Apagar os meus dados…», mais abaixo). Pode tentar de novo, ou ligar já a sincronização sem acabar de apagar: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o kit de recuperação dela.'
-        : phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
+      // O porquê está em «Apagar os meus dados…», dentro de «Mais opções» (recolhido): uma ligação que o abre e leva lá.
+      const offText = $('syncOffText');
+      if (deleteStuck) {
+        const why = document.createElement('a');
+        why.href = '#syncDeleteItem';
+        why.textContent = '«Mais opções» › «Apagar os meus dados…»';
+        why.addEventListener('click', e => { e.preventDefault(); toAnchor('#syncDeleteItem'); });
+        offText.replaceChildren('Ainda há dados do Éteris por apagar do Drive (o porquê está em ', why,
+          '). Pode tentar de novo, ou ligar já a sincronização sem acabar de apagar: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o kit de recuperação dela.');
+      } else offText.textContent = phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
         : d.hasKey ? 'Ligue-a para continuar com a mesma conta (a chave ficou neste computador).'
         : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';
       $('syncStart').textContent = deleteStuck ? 'Ligar sem acabar de apagar' : phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';

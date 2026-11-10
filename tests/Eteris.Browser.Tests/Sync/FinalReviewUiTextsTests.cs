@@ -119,6 +119,21 @@ public class FinalReviewUiTextsTests
         Assert.Contains("Vault.SecretOnScreen.Show(", Source("Browser", "EterisSchemeHandlerFactory.cs"));
     }
 
+    // ---- I-06: os textos e as ligações levam ao item, mesmo dentro de «Mais opções» ----------------------------------
+
+    [Fact]
+    public void I06_SyncOffText_PointsIntoMoreOptions()
+    {
+        var page = Source("Browser", "settings.html");
+        Assert.DoesNotContain("«Apagar os meus dados…», mais abaixo", page);
+        var off = Body(page, "const deleteStuck = ", "$('syncStart').textContent");
+        Assert.Contains("«Mais opções» › «Apagar os meus dados…»", off);
+        Assert.Contains("toAnchor('#syncDeleteItem')", off);
+        // Um destino dentro de «Mais opções» que está escondido leva, pelo menos, à secção.
+        var go = Body(page, "const goToAnchor = () => {", "const toAnchor = ");
+        Assert.Contains("else $('sincronizacao').scrollIntoView();", go);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {

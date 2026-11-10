@@ -183,7 +183,8 @@ public sealed class SyncChoicesTests : IDisposable
 
         var inherited = SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Joined, InheritedSecrets = true, SecretsHere = true, AccountSecrets = true });
         Assert.Equal("Recebeu favoritos, palavras-passe, cartões e documentos", inherited.Text);
-        Assert.Equal(new SignInBarButton("Abrir Definições", SignInBarAction.OpenSettings), inherited.Link);
+        // Revisão final (I-06): a linha da escolha da conta, onde se desliga (não o topo da secção).
+        Assert.Equal(new SignInBarButton("Abrir Definições", SignInBarAction.AccountSecrets), inherited.Link);
 
         // Herdou mas a pessoa já desligou aqui: nada a dizer.
         Assert.Equal((null, null), SyncChoices.SyncedHooks(TestStatus.Of(SyncPhase.On) with { Entry = SyncEntry.Joined, InheritedSecrets = true, AccountSecrets = true }));

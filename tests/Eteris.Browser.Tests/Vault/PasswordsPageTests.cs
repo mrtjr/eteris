@@ -591,7 +591,10 @@ public sealed class PasswordsPageTests : IDisposable
                 Assert.Equal("Entrar com o Google", b.Groups[1].Value);
                 Assert.Matches(@"\bhidden\b", b.Value);
             });
-            Assert.Equal(count, System.Text.RegularExpressions.Regex.Matches(template, "<a [^>]*href=\"eteris://settings/#sincronizacao\"[^>]*>Sincronização →</a>").Count);
+            // Revisão final (I-06): levam ao tópico «O que passa entre PCs» (em «Mais opções»), não ao topo da secção.
+            Assert.Equal(count, System.Text.RegularExpressions.Regex.Matches(template, "<a [^>]*href=\"eteris://settings/#syncTopicItem\"[^>]*>Sincronização →</a>").Count);
+            Assert.DoesNotContain("eteris://settings/#sincronizacao\"", template);
+            Assert.Contains("a.link[href=\"eteris://settings/#syncTopicItem\"]", template);
         }
     }
 
