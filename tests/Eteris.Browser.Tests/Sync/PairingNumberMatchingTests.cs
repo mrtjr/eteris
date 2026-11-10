@@ -431,6 +431,24 @@ public sealed class PairingNumberMatchingTests : IDisposable
 
     private static int BadCount(Device device) => device.Store.Load()?.BadPairings?.Length ?? 0;
 
+    // «Não fui eu» noutra janela quando a aprovação já passou o código (porta do Windows ou entrega): não escreve o
+    // x-host nem conta; a aprovação segue (a porta do Windows é onde a pessoa ainda pode desistir).
+    [Fact]
+    public async Task NotMe_DuringAnApproval_DoesNothing()
+    {
+        var (casa, guest, session, code) = await ReadyAsync();
+        guest.Agent.ConfirmPairing();
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var approving = casa.Agent.ApproveWithCodeAsync(session, code, () => gate.Task);
+        await casa.Agent.RefuseAsync(session);
+        Assert.False(await HasStep(session, PairingProtocol.Refused));
+        Assert.Equal(0, BadCount(casa));
+        gate.SetResult(true);
+        Assert.Equal(PairingAnswer.Approved, await approving);
+        await Until(() => guest.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o portátil ligado");
+        Assert.Equal(0, BadCount(casa));
+    }
+
     // Um pedido escrito à mão a que a Casa responde e cujo passo 2 (também escrito à mão) não confere.
     private async Task AnsweredThenForgedAsync(Device casa, byte[] guestKeyFile)
     {

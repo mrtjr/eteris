@@ -1132,6 +1132,9 @@ public sealed class SyncAgent
         HostFlow? flow;
         lock (_gate)
         {
+            // Uma aprovação já passou o código (porta do Windows ou entrega): «Não fui eu» noutra janela não escreve
+            // o x-host por cima de uma entrega nem conta um pedido aprovado. Quem desiste fá-lo na porta do Windows.
+            if (_hosts.TryGetValue(session, out var approving) && approving.Approving) return;
             _hosts.Remove(session, out flow);
         }
         if (flow is null) return;
