@@ -134,7 +134,9 @@ public static class PerfTuning
     // do Velopack.Run, o e11 depois da instância única, o e12 no App.OnStartup e na leitura do settings.json, e o e3 e o
     // e16 no Prepare, antes do Begin do StartupGuard. O marcador guarda se o arranque tinha ajustes antes da 1.ª página
     // (AnyBeforeFirstPaint, SandboxFallbackState.WithTweaks): sem nenhum, a queda não é deles e conta só para o sandbox
-    // (os e1, e4, e5, e8 e e13, ligados por omissão, correm depois).
+    // (os e1, e4, e5, e8 e e13, ligados por omissão, correm depois; o e8 só deixa a vigia marcada no construtor da janela
+    // — a subscrição do SessionSwitch e o relógio nascem com o sinal da 1.ª página — e nunca esconde uma página que ainda
+    // não apresentou: MainWindow.Unseen.cs).
     public static void Suspend(string reason) => _suspended = string.IsNullOrWhiteSpace(reason) ? "rede de segurança" : reason;
 
     public static string? SuspendedBecause => _suspended;

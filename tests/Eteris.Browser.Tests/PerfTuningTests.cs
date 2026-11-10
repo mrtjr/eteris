@@ -189,7 +189,8 @@ public class PerfTuningTests
     }
 
     // A rede de segurança (D-18) só gasta o 1.º degrau quando a queda pode ser de um ajuste antes da 1.ª página: os ligados
-    // por omissão correm todos depois dela, por isso uma queda com a configuração de omissão continua a contar para o
+    // por omissão correm todos depois dela (o e8 só deixa a vigia marcada no construtor da janela e não esconde uma
+    // página que ainda não apresentou), por isso uma queda com a configuração de omissão continua a contar para o
     // sandbox.
     [Fact]
     public void BeforeFirstPaint_IsNoneWithTheDefaults()

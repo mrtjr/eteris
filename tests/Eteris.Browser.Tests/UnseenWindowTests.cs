@@ -45,8 +45,9 @@ public class UnseenWindowTests
     }
 
     // O diagnóstico D4 mediu-se (página animada, janela minimizada: 6,47% → 0,59% de um núcleo com o e8): ligado por
-    // omissão, já sem esperar por nada. Corre depois da 1.ª página e não mexe no motor: fica fora da rede de segurança
-    // do arranque e do grupo «motor».
+    // omissão, já sem esperar por nada. A vigia nasce depois da 1.ª página (o construtor da janela só a deixa marcada),
+    // nenhuma página se esconde antes de apresentar e não mexe no motor: fica fora da rede de segurança do arranque e
+    // do grupo «motor».
     [Fact]
     public void Tweak_IsOnByDefault_SinceTheDiagnostic()
     {
@@ -161,6 +162,42 @@ public class UnseenWindowTests
         Assert.DoesNotContain("ShouldShow", restore);
         Assert.Contains("if (_webPanelBrowsers.ContainsValue(page) && !(_sidebarOpen && ReferenceEquals(page, CurrentWebPanelBrowser))) return;", restore);
         Assert.Contains("ShowPageWindow(page, ArrivalPixels(page));", restore);
+    }
+
+    // Uma página que ainda não apresentou o 1.º fotograma não se esconde: escondida, o rAF não resolve, o arranque não é
+    // dado por bom (StartupGuard.Healthy) e uma queda dessa sessão, mesmo horas depois, contava contra o sandbox como
+    // «queda antes da 1.ª página». Esconde-se quando apresentar (depois do Healthy), se a janela continuar sem se ver.
+    [Fact]
+    public void PageThatHasNotPresented_IsNotHidden_UntilItPresents()
+    {
+        var hide = Method(Source("MainWindow.Unseen.cs"), "private void HideUnseenPages()");
+        var skip = hide.IndexOf("if (!_presentation.HasPresented(browser)) continue;", StringComparison.Ordinal);
+        Assert.True(skip > 0 && skip < hide.IndexOf("SetPageVisible(browser, false);", StringComparison.Ordinal), "a página por apresentar salta antes de ser escondida");
+        var pages = Source("MainWindow.PageVisibility.cs");
+        var wait = Method(pages, "private async Task WaitPresentedAsync(");
+        var healthy = wait.IndexOf("Infrastructure.StartupGuard.Current.Healthy();", StringComparison.Ordinal);
+        var keep = wait.IndexOf("KeepUnseenHidden();", StringComparison.Ordinal);
+        Assert.True(healthy > 0 && keep > healthy, "esconde-se depois de o arranque ser dado por bom");
+        Assert.Matches(@"_presentation\.Presented\(page, arrival\);\s*Infrastructure\.StartupGuard\.Current\.Healthy\(\);\s*(//[^\n]*\n\s*)*KeepUnseenHidden\(\);",
+            Method(pages, "private async Task ConfirmPresentedAsync("));
+    }
+
+    // O e8 não põe trabalho no arranque: o construtor da janela só deixa a vigia marcada para depois da 1.ª página
+    // (FirstPaint), e é aí que nascem a subscrição do SessionSwitch e o relógio da área de trabalho. O que corre no
+    // construtor é só a ordem do minimizar (o ReviewUnseen do OnWindowStateChanged), que não esconde nada antes de a
+    // página apresentar. Uma janela fechada antes disso não subscreve nada.
+    [Fact]
+    public void Watch_StartsAfterTheFirstPage_NotInTheWindowConstructor()
+    {
+        var watch = Method(Source("MainWindow.Unseen.cs"), "private void WatchUnseen()");
+        var then = watch.IndexOf("FirstPaint.App.Then(", StringComparison.Ordinal);
+        Assert.True(then > 0, "a vigia do e8 espera pela 1.ª página");
+        Assert.True(watch.IndexOf("SystemEvents.SessionSwitch += OnSession;", StringComparison.Ordinal) > then);
+        Assert.True(watch.IndexOf("new DispatcherTimer(", StringComparison.Ordinal) > then);
+        Assert.Matches(@"if \(closed\) return;", watch);
+        // Os comentários já não dizem que o e8 «corre depois» sem mais: dizem o que fica no construtor.
+        var tuning = Source(Path.Combine("Infrastructure", "PerfTuning.cs"));
+        Assert.Contains("o e8 só deixa a vigia marcada no construtor da janela", tuning);
     }
 
     // Com a câmara, o microfone ou o ecrã em uso a página nunca se esconde: nem a da aba, nem o site fixado à vista na

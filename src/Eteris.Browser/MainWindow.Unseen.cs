@@ -32,33 +32,44 @@ public partial class MainWindow
     private DispatcherTimer? _cloakTimer;
     private bool _sessionLocked;
 
+    // Chamado no construtor da janela, onde só deixa a vigia marcada: a subscrição do SessionSwitch (que regista a
+    // sessão no Windows) e o relógio da área de trabalho nascem depois da 1.ª página (FirstPaint), fora do arranque. A
+    // ordem do minimizar não passa por aqui: o OnWindowStateChanged chama o ReviewUnseen desde o construtor.
     private void WatchUnseen()
     {
         if (!PerfTuning.IsOn(PerfTuning.HideWhenUnseen)) return;
-        void OnSession(object? sender, SessionSwitchEventArgs e)
+        var closed = false;
+        Closed += (_, _) => closed = true;
+        FirstPaint.App.Then(() =>
         {
-            if (e.Reason is not (SessionSwitchReason.SessionLock or SessionSwitchReason.SessionUnlock)) return;
-            Dispatcher.InvokeAsync(() =>
+            if (closed) return;
+            void OnSession(object? sender, SessionSwitchEventArgs e)
             {
-                _sessionLocked = e.Reason == SessionSwitchReason.SessionLock;
-                ReviewUnseen();
-            });
-        }
-        SystemEvents.SessionSwitch += OnSession;
-        Closed += (_, _) =>
-        {
-            SystemEvents.SessionSwitch -= OnSession;
-            _cloakTimer?.Stop();
-        };
-        // Outra área de trabalho: um relógio, que anda e pára pela regra de UnseenWindow.Watches. Quem o acerta é o
-        // ReviewUnseen (em cada tique, ao ativar e ao mudar de estado) e a desativação; ninguém o pára por conta própria —
-        // parado ao ativar, uma janela ativada a partir de outra área (ainda tapada nesse instante) ficava com a página
-        // em branco até se trocar de aba.
-        _cloakTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = UnseenWindow.WatchEvery(_unseenReason) };
-        _cloakTimer.Tick += (_, _) => ReviewUnseen();
-        Deactivated += (_, _) => WatchCloak();
-        Activated += (_, _) => ReviewUnseen();
-        WatchCloak();
+                if (e.Reason is not (SessionSwitchReason.SessionLock or SessionSwitchReason.SessionUnlock)) return;
+                Dispatcher.InvokeAsync(() =>
+                {
+                    _sessionLocked = e.Reason == SessionSwitchReason.SessionLock;
+                    ReviewUnseen();
+                });
+            }
+            SystemEvents.SessionSwitch += OnSession;
+            Closed += (_, _) =>
+            {
+                SystemEvents.SessionSwitch -= OnSession;
+                _cloakTimer?.Stop();
+            };
+            // Outra área de trabalho: um relógio, que anda e pára pela regra de UnseenWindow.Watches. Quem o acerta é o
+            // ReviewUnseen (em cada tique, ao ativar e ao mudar de estado) e a desativação; ninguém o pára por conta
+            // própria — parado ao ativar, uma janela ativada a partir de outra área (ainda tapada nesse instante) ficava
+            // com a página em branco até se trocar de aba.
+            _cloakTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = UnseenWindow.WatchEvery(_unseenReason) };
+            _cloakTimer.Tick += (_, _) => ReviewUnseen();
+            Deactivated += (_, _) => WatchCloak();
+            Activated += (_, _) => ReviewUnseen();
+            // A janela pode já não estar ativa (ou já estar noutra área) quando a 1.ª página aparece.
+            ReviewUnseen();
+            WatchCloak();
+        });
     }
 
     // Chamado também pelo OnWindowStateChanged, antes de o CefSharp encolher as páginas.
@@ -90,11 +101,24 @@ public partial class MainWindow
         if (!timer.IsEnabled) timer.Start();
     }
 
+    // A janela continua sem se ver e o que está à vista mudou (uma página que só agora apresentou): esconde-se como o
+    // resto. Sem motivo, nada.
+    private void KeepUnseenHidden()
+    {
+        if (_unseenReason != UnseenWindow.Reason.None) HideUnseenPages();
+    }
+
     private void HideUnseenPages()
     {
         foreach (var (tab, browser) in _browsers.ToList())
         {
             if (!ShouldShow(tab, browser) || browser.Visibility != Visibility.Visible || _unseenPages.Contains(browser)) continue;
+            // Entrou e ainda não apresentou um fotograma (a 1.ª página do arranque, uma aba acabada de trocar): escondida,
+            // o rAF dela não resolvia e o arranque nunca era dado por bom (StartupGuard.Healthy) — uma queda dessa sessão,
+            // mesmo horas depois, contava contra o sandbox como «queda antes da 1.ª página». Esconde-se quando apresentar
+            // (KeepUnseenHidden, MainWindow.PageVisibility.cs); a que nunca chegar a apresentar continua a desenhar, como
+            // antes do e8.
+            if (!_presentation.HasPresented(browser)) continue;
             if (!UnseenWindow.MayHide(tab.IsAudible, tab.Media, IsCapturing(browser), pictureInPicture: false)) continue;
             SetPageVisible(browser, false);
             _unseenPages.Add(browser);

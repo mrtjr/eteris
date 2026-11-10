@@ -210,6 +210,9 @@ public partial class MainWindow
             // Uma página apareceu: o arranque correu bem (rede de segurança do sandbox).
             if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupGuard.Current.Healthy();
         }
+        // A janela deixou de se ver enquanto a página entrava (ajuste e8, MainWindow.Unseen.cs): só agora, apresentada e
+        // com o arranque dado por bom, se esconde como as outras.
+        KeepUnseenHidden();
         // A 1.ª troca do arranque acabou (com a página à vista, ou desistiu-se dela): o trabalho adiado pode correr.
         Infrastructure.FirstPaint.App.Signal();
     }
@@ -223,6 +226,8 @@ public partial class MainWindow
         if (PageSwap.NeedsMargin([presented])) await Task.Delay(PageSwap.PresentMargin);
         _presentation.Presented(page, arrival);
         Infrastructure.StartupGuard.Current.Healthy();
+        // Como em WaitPresentedAsync: a janela pode já não se ver.
+        KeepUnseenHidden();
     }
 
     // A página desenhou um fotograma do documento certo: o 1.º carregamento acabou (numa aba nova, antes dele só há o
