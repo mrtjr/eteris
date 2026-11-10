@@ -8,7 +8,9 @@ using Eteris.Sync.Transport;
 
 namespace Eteris.Browser.Tests.Sync;
 
-// O nome com que cada computador aparece aos outros: valor inicial, mudança, limpeza e o que chega de fora.
+// O nome com que cada computador aparece aos outros: valor inicial, mudança, limpeza e o que chega de fora. Os agentes
+// partilham um transporte em memória (ou o Drive falso); as esperas acordam com sinais e, no fim, os agentes param. No
+// disco só ficam os tokens da sessão falsa (o TokenStore é um ficheiro).
 public sealed class DeviceNameTests : IDisposable
 {
     private const string Hostile = "Portátil‮gpj.exe\r\nSegunda linha";
@@ -16,11 +18,13 @@ public sealed class DeviceNameTests : IDisposable
     private static readonly Func<TimeSpan, CancellationToken, Task> Quick = (_, ct) => Task.Delay(5, ct);
     private long _now = 1_762_560_000_000;
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "eteris-device-name-" + Guid.NewGuid().ToString("N"));
+    private readonly SyncTestCloud _cloud = new();
 
     private long Now() => _now;
 
     public void Dispose()
     {
+        _cloud.StopAll();
         try { Directory.Delete(_folder, recursive: true); }
         catch (IOException) { }
     }
@@ -31,8 +35,9 @@ public sealed class DeviceNameTests : IDisposable
     {
         var profile = new MemoryProfile();
         store ??= new MemoryStore();
-        var agent = new SyncAgent(transport ?? (() => new FolderTransport(_folder)), profile, store, name, Now, Quick)
+        var agent = new SyncAgent(transport ?? (() => _cloud), profile, store, name, Now, Quick)
             { PairingPoll = TimeSpan.FromMilliseconds(5) };
+        _cloud.Watch(name, agent);
         return new Device(agent, profile, store);
     }
 
@@ -42,14 +47,11 @@ public sealed class DeviceNameTests : IDisposable
         var oauth = new GoogleOAuth(http, new OAuthClientConfig(google.ClientId, null), Now);
         var session = new GoogleSession(oauth, new TokenStore(Path.Combine(_folder, "tokens-" + Guid.NewGuid().ToString("N")), new PlainProtector()), Now);
         session.Use(new OAuthTokens(google.ValidAccessToken, google.RefreshToken, _now + 3_600_000, GoogleEndpoints.Scope));
-        return () => new GoogleDriveTransport(http, session.AccessTokenAsync, (_, _) => Task.CompletedTask);
+        // Cada escrita e cada apagamento no Drive falso acorda as esperas do teste.
+        return () => _cloud.Signalling(new GoogleDriveTransport(http, session.AccessTokenAsync, (_, _) => Task.CompletedTask));
     }
 
-    private static async Task Until(Func<bool> condition, string what)
-    {
-        for (var i = 0; i < 1000 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition(), "À espera de: " + what);
-    }
+    private Task Until(Func<bool> condition, string what) => _cloud.WaitFor(condition, what);
 
     private static async Task Settle(params Device[] devices)
     {

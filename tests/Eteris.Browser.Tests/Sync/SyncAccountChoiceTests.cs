@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Text.Json.Nodes;
 using Eteris.Browser.Sync;
 using Eteris.Browser.Vault;
@@ -13,22 +12,19 @@ namespace Eteris.Browser.Tests.Sync;
 
 // Pagamentos e documentos como escolha da conta (0.2.15, T10, D4′): um só Windows Hello liga os dois grupos e grava a
 // escolha na conta; um computador novo que entra depois herda-a sem pedir nada; os que já estavam ligados (ou que já
-// estiveram numa conta) só recebem a oferta única. Tudo numa pasta temporária, sem rede nem conta Google.
+// estiveram numa conta) só recebem a oferta única. Tudo em memória (SyncTestCloud: sem disco, sem rede nem conta Google;
+// as esperas acordam com sinais, nunca com um orçamento de tempo), e no fim todos os agentes param.
 public sealed class SyncAccountChoiceTests : IDisposable
 {
     private static readonly Func<TimeSpan, CancellationToken, Task> Quick = (_, ct) => Task.Delay(5, ct);
     private long _now = 1_762_560_000_000;
-    private readonly string _folder = Path.Combine(Path.GetTempPath(), "eteris-account-choice-" + Guid.NewGuid().ToString("N"));
+    private readonly SyncTestCloud _cloud = new();
     private readonly List<ReauthPurpose> _asked = [];
     private bool _answer = true;
 
     private long Now() => _now;
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_folder, recursive: true); }
-        catch (IOException) { }
-    }
+    public void Dispose() => _cloud.StopAll();
 
     private Task<bool> Confirm(ReauthPurpose purpose)
     {
@@ -42,18 +38,15 @@ public sealed class SyncAccountChoiceTests : IDisposable
     {
         profile ??= new SecretMemoryProfile();
         store ??= new MemoryStore();
-        var agent = new SyncAgent(() => new FolderTransport(_folder), profile, store, name, Now, Quick) { PairingPoll = TimeSpan.FromMilliseconds(5) };
+        var agent = new SyncAgent(() => _cloud, profile, store, name, Now, Quick) { PairingPoll = TimeSpan.FromMilliseconds(5) };
+        _cloud.Watch(name, agent);
         return new Device(agent, profile, store);
     }
 
     // «Fechar e reabrir o Éteris»: um agente novo sobre o mesmo estado guardado e o mesmo perfil.
     private Device Reopen(Device device, string name) => NewDevice(name, device.Store, device.Profile);
 
-    private static async Task Until(Func<bool> condition, string what)
-    {
-        for (var i = 0; i < 3000 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition(), "À espera de: " + what);
-    }
+    private Task Until(Func<bool> condition, string what) => _cloud.WaitFor(condition, what);
 
     private static async Task Settle(params Device[] devices)
     {
@@ -101,13 +94,12 @@ public sealed class SyncAccountChoiceTests : IDisposable
         device ??= NewDevice(name);
         if (device.Agent.Status.Phase is SyncPhase.Off or SyncPhase.Stopped) await device.Agent.StartAsync();
         Assert.Equal(SyncPhase.Choose, device.Agent.Status.Phase);
+        var before = _cloud.PairingFiles(PairingProtocol.Request);
         device.Agent.RequestPairing();
-        for (var i = 0; i < 3000; i++)
-        {
-            await host.Agent.CheckRequestsAsync();
-            if (host.Agent.Status.Requests.Count == 1 && device.Agent.Status.Pairing?.Code is not null) break;
-            await Task.Delay(10);
-        }
+        await Until(() => _cloud.PairingFiles(PairingProtocol.Request) > before, "o pedido de " + name);
+        // O pedido já está escrito: uma procura chega (o 1-host fica escrito antes de CheckRequestsAsync voltar).
+        await host.Agent.CheckRequestsAsync();
+        await Until(() => host.Agent.Status.Requests.Count == 1 && device.Agent.Status.Pairing?.Code is not null, "o pedido de " + name + " pronto");
         Assert.Single(host.Agent.Status.Requests);
         var code = device.Agent.Status.Pairing!.Code!;
         device.Agent.ConfirmPairing();
@@ -130,7 +122,7 @@ public sealed class SyncAccountChoiceTests : IDisposable
     {
         _now += 1000;
         using var secret = AccountSecret.FromCode(host.Agent.RevealKit()!.Words);
-        var engine = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Motor de teste"), Now);
+        var engine = await SyncEngine.JoinAsync(_cloud, secret, DeviceIdentity.Create("Motor de teste"), Now);
         await engine.PullAsync();
         engine.Put(Collections.Settings, Collections.AccountSecretsKey, data);
         await engine.PushAsync();
@@ -445,7 +437,7 @@ public sealed class SyncAccountChoiceTests : IDisposable
         // Um aparelho que é só um motor (sem agente): não diz que grupos tem, como um Éteris 0.2.14.
         using (var secret = AccountSecret.FromCode(casa.Agent.RevealKit()!.Words))
         {
-            var old = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Antigo"), Now);
+            var old = await SyncEngine.JoinAsync(_cloud, secret, DeviceIdentity.Create("Antigo"), Now);
             await old.PullAsync();
         }
 
@@ -465,12 +457,12 @@ public sealed class SyncAccountChoiceTests : IDisposable
     public async Task OlderEteris_IgnoresTheRecord()
     {
         using var secret = AccountSecret.Create();
-        var writer = await SyncEngine.CreateAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Novo"), Now);
+        var writer = await SyncEngine.CreateAsync(_cloud, secret, DeviceIdentity.Create("Novo"), Now);
         writer.Put(Collections.Settings, "nao-conhecida", new JsonObject { ["value"] = "on", ["since"] = _now, ["by"] = writer.Device.Id });
         writer.Put(Collections.Settings, Collections.AccountSecretsKey, new JsonObject { ["value"] = "on", ["since"] = _now, ["by"] = writer.Device.Id });
         await writer.PushAsync();
 
-        var reader = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Antigo"), Now);
+        var reader = await SyncEngine.JoinAsync(_cloud, secret, DeviceIdentity.Create("Antigo"), Now);
         var profile = new MemoryProfile();
         var proposed = new List<string>();
         profile.Refuse = change =>

@@ -8,13 +8,16 @@ namespace Eteris.Browser.Tests.Sync;
 
 // O pedido de aprovação automático no computador novo (0.2.15, T7): só um computador sem nenhum estado desta conta
 // pede sozinho, e só na ronda do gesto de entrar ou de ligar. Um computador cuja conta desapareceu do Drive (e lá está
-// outra) não pede nada: mostra o alerta «conta substituída».
+// outra) não pede nada: mostra o alerta «conta substituída». O Drive é o falso (em memória) ou o transporte em memória
+// dos testes; as esperas acordam com sinais (escritas no transporte, Changed dos agentes, cada espera do agente), e no
+// fim todos os agentes param. No disco só ficam os tokens da sessão falsa (o TokenStore é um ficheiro).
 public sealed class AutoPairingTests : IDisposable
 {
     private long _now = 1_762_560_000_000;
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "eteris-auto-pairing-" + Guid.NewGuid().ToString("N"));
+    private readonly SyncTestCloud _cloud = new();
 
-    private long Now() => _now;
+    private long Now() => Interlocked.Read(ref _now);
 
     // As esperas do agente (sondagens do pedido): curtas, sem relógio real. Contadas: depois de uma espera, a sondagem
     // em curso já leu a hora de início (o relógio dos testes só avança depois disso).
@@ -23,11 +26,13 @@ public sealed class AutoPairingTests : IDisposable
     private Task Quick(TimeSpan _, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref _waits);
+        _cloud.Pulse();
         return Task.Delay(5, cancellationToken);
     }
 
     public void Dispose()
     {
+        _cloud.StopAll();
         try { Directory.Delete(_folder, recursive: true); }
         catch (IOException) { }
     }
@@ -45,6 +50,7 @@ public sealed class AutoPairingTests : IDisposable
             AutoPair = autoPair,
             PairingScreenVisible = visible,
         };
+        _cloud.Watch(name, agent);
         return new Device(agent, profile, store);
     }
 
@@ -61,15 +67,12 @@ public sealed class AutoPairingTests : IDisposable
 
     private static int Refusals(FakeGoogle google) => google.Files.Count(f => f.Name.EndsWith("/x-host", StringComparison.Ordinal));
 
-    // O computador que já está na conta procura e responde, até o computador novo ter o código.
-    private static async Task AnswerUntilCodeAsync(Device host, Device guest)
+    // O computador que já está na conta procura e responde (o pedido já está no Drive: uma procura chega), até o
+    // computador novo ter o código.
+    private async Task AnswerUntilCodeAsync(Device host, Device guest)
     {
-        for (var i = 0; i < 300 && guest.Agent.Status.Pairing?.Code is null; i++)
-        {
-            await host.Agent.CheckRequestsAsync();
-            await Task.Delay(20);
-        }
-        Assert.NotNull(guest.Agent.Status.Pairing?.Code);
+        await host.Agent.CheckRequestsAsync();
+        await Until(() => guest.Agent.Status.Pairing?.Code is not null, "o código no computador novo");
     }
 
     private Func<ISyncTransport> DriveFor(FakeGoogle google)
@@ -78,14 +81,11 @@ public sealed class AutoPairingTests : IDisposable
         var oauth = new GoogleOAuth(http, new OAuthClientConfig(google.ClientId, null), Now);
         var session = new GoogleSession(oauth, new TokenStore(Path.Combine(_folder, "tokens-" + Guid.NewGuid().ToString("N")), new PlainProtector()), Now);
         session.Use(new OAuthTokens(google.ValidAccessToken, google.RefreshToken, _now + 3_600_000, GoogleEndpoints.Scope));
-        return () => new GoogleDriveTransport(http, session.AccessTokenAsync, (_, _) => Task.CompletedTask);
+        // Cada escrita e cada apagamento no Drive falso acorda as esperas do teste.
+        return () => _cloud.Signalling(new GoogleDriveTransport(http, session.AccessTokenAsync, (_, _) => Task.CompletedTask));
     }
 
-    private static async Task Until(Func<bool> condition, string what)
-    {
-        for (var i = 0; i < 3000 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition(), "À espera de: " + what);
-    }
+    private Task Until(Func<bool> condition, string what) => _cloud.WaitFor(condition, what);
 
     private static int Requests(FakeGoogle google) => google.Files.Count(f => f.Name.EndsWith("/0-request", StringComparison.Ordinal));
 
@@ -257,10 +257,10 @@ public sealed class AutoPairingTests : IDisposable
     [Fact]
     public async Task LostTheRace_DoesNotAskByItself()
     {
-        Func<ISyncTransport> folder = () => new FolderTransport(_folder);
-        var casa = Pc("Casa", folder);
+        Func<ISyncTransport> memory = () => _cloud;
+        var casa = Pc("Casa", memory);
         await casa.Agent.StartAsync();
-        var hidden = new HideRootOnceTransport(new FolderTransport(_folder));
+        var hidden = new HideRootOnceTransport(_cloud);
         var trabalho = Pc("Trabalho", () => hidden, autoPair: true);
         await trabalho.Agent.StartAsync(false);
         Assert.True(await casa.Agent.RunAsync());
@@ -274,7 +274,7 @@ public sealed class AutoPairingTests : IDisposable
         // Perdeu a conta que criou: já teve chave, por isso nunca pede sozinho.
         Assert.False(SyncAgent.MayAutoRequest(left.Store.Load()));
         await Task.Delay(50);
-        Assert.False(Directory.Exists(Path.Combine(_folder, "eteris", "pair")));
+        Assert.Empty(_cloud.Paths(SyncPaths.Root + "pair/"));
     }
 
     [Fact]
@@ -487,7 +487,7 @@ public sealed class AutoPairingTests : IDisposable
     [Fact]
     public async Task Failures_AreTyped_WithoutNewExceptionTypes()
     {
-        var transport = new FolderTransport(_folder);
+        var transport = new MemoryTransport();
         var clock = 0L;
         Func<long> now = () => clock += 6 * 60_000;
         var session = await Eteris.Sync.Pairing.PairingRequests.OpenAsync(transport, () => 0);

@@ -127,16 +127,22 @@ internal sealed class MemoryStore : ISyncStore
     public void Delete() => _bytes = null;
 }
 
+// Os aparelhos de cada teste partilham um transporte em memória (SyncTestCloud: sem disco — uma pasta real em %TEMP% dá
+// erros passageiros com a bateria em paralelo) ou o Drive falso; as esperas acordam com sinais (Changed dos agentes e
+// cada escrita no transporte), nunca com um orçamento de tempo, e no fim todos os agentes param. No disco só ficam os
+// tokens da sessão falsa (o TokenStore é um ficheiro).
 public sealed class SyncAgentTests : IDisposable
 {
     private static readonly Func<TimeSpan, CancellationToken, Task> Quick = (_, ct) => Task.Delay(5, ct);
     private long _now = 1_762_560_000_000;
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "eteris-sync-agent-" + Guid.NewGuid().ToString("N"));
+    private readonly SyncTestCloud _cloud = new();
 
     private long Now() => _now;
 
     public void Dispose()
     {
+        _cloud.StopAll();
         try { Directory.Delete(_folder, recursive: true); }
         catch (IOException) { }
     }
@@ -147,14 +153,20 @@ public sealed class SyncAgentTests : IDisposable
     {
         profile ??= new MemoryProfile();
         store ??= new MemoryStore();
-        var agent = new SyncAgent(transport ?? (() => new FolderTransport(_folder)), profile, store, name, Now, Quick) { PairingPoll = TimeSpan.FromMilliseconds(5) };
+        var agent = new SyncAgent(transport ?? (() => _cloud), profile, store, name, Now, Quick) { PairingPoll = TimeSpan.FromMilliseconds(5) };
+        _cloud.Watch(name, agent);
         return new Device(agent, profile, store);
     }
 
-    private static async Task Until(Func<bool> condition, string what)
+    private Task Until(Func<bool> condition, string what) => _cloud.WaitFor(condition, what);
+
+    // O pedido de um computador novo já está no transporte: o anfitrião procura uma vez (o 1-host fica escrito antes de
+    // CheckRequestsAsync voltar) e espera-se pelo pedido pronto.
+    private async Task AnswerUntil(Device host, Func<bool> ready, string what)
     {
-        for (var i = 0; i < 1000 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition(), "À espera de: " + what);
+        await Until(() => _cloud.PairingFiles(Eteris.Sync.Pairing.PairingProtocol.Request) > 0, "o pedido");
+        await host.Agent.CheckRequestsAsync();
+        await Until(ready, what);
     }
 
     private static async Task Settle(params Device[] devices)
@@ -197,10 +209,11 @@ public sealed class SyncAgentTests : IDisposable
         // «Ver de novo»: guardado não quer dizer escondido para sempre.
         Assert.Equal(kit.Words, again.Agent.RevealKit()!.Words);
 
-        // Nenhum texto do perfil em claro na pasta (só ficheiros cifrados).
-        foreach (var file in Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories))
+        // Nenhum texto do perfil em claro no transporte (só ficheiros cifrados).
+        Assert.NotEmpty(_cloud.Memory.Files);
+        foreach (var (_, data) in _cloud.Memory.Files)
         {
-            var text = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(file));
+            var text = System.Text.Encoding.UTF8.GetString(data);
             Assert.DoesNotContain("wikipedia", text, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("comprar", text, StringComparison.Ordinal);
             Assert.DoesNotContain("Casa", text, StringComparison.Ordinal);
@@ -322,7 +335,7 @@ public sealed class SyncAgentTests : IDisposable
         // Um Éteris mais recente, na mesma conta, escreve um campo que estes não conhecem («folder»).
         using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.RevealKit()!.Words))
         {
-            var newer = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Mais recente"), Now);
+            var newer = await SyncEngine.JoinAsync(_cloud, secret, DeviceIdentity.Create("Mais recente"), Now);
             newer.Put(Collections.Bookmarks, "https://c.example/", new JsonObject { ["title"] = "C", ["folder"] = "Receitas" });
             await newer.SyncAsync();
         }
@@ -391,8 +404,7 @@ public sealed class SyncAgentTests : IDisposable
         var novo = NewDevice("Novo");
         await novo.Agent.StartAsync();
         novo.Agent.RequestPairing();
-        await Until(() => Directory.Exists(Path.Combine(_folder, "eteris", "pair")), "o pedido");
-        await Until(() => { casa.Agent.CheckRequestsAsync().Wait(); return casa.Agent.Status.Requests.Count == 1; }, "o pedido no anfitrião");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1, "o pedido no anfitrião");
         await casa.Agent.RefuseAsync(casa.Agent.Status.Requests[0].Session);
         await Until(() => novo.Agent.Status.Pairing?.Error is not null, "a recusa");
         Assert.Equal(SyncPhase.Choose, novo.Agent.Status.Phase);
@@ -450,7 +462,7 @@ public sealed class SyncAgentTests : IDisposable
         casa.Profile.Bookmark("https://fica.example/", "Fica");
         await Settle(casa, trabalho);
         await casa.Agent.DeleteCloudDataAsync();
-        Assert.Empty(Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories));
+        Assert.Empty(_cloud.Memory.Files);
         Assert.Equal(SyncPhase.Stopped, casa.Agent.Status.Phase);
         Assert.Contains("apagados", casa.Agent.Status.Notice);
         Assert.Equal("Fica", casa.Profile.Title("https://fica.example/"));
@@ -458,7 +470,7 @@ public sealed class SyncAgentTests : IDisposable
         // O outro aparelho para (não volta a criar a conta sozinho: isso desfazia o «apagar»).
         Assert.True(await trabalho.Agent.RunAsync());
         Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
-        Assert.Empty(Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories));
+        Assert.Empty(_cloud.Memory.Files);
         Assert.Equal("Fica", trabalho.Profile.Title("https://fica.example/"));
 
         // «Ligar outra vez» cria uma conta nova.
@@ -597,7 +609,7 @@ public sealed class SyncAgentTests : IDisposable
         var (casa, trabalho) = await TwoAsync();
         casa.Profile.Bookmark("https://fica.example/", "Fica");
         await Settle(casa, trabalho);
-        var preso = new StuckTransport(new FolderTransport(_folder), deletesBeforeStuck: 2);
+        var preso = new StuckTransport(_cloud, deletesBeforeStuck: 2);
         var aberta = NewDevice("Casa", () => preso, casa.Store, casa.Profile);
         using var fechar = new CancellationTokenSource();
         var apagar = aberta.Agent.DeleteCloudDataAsync(fechar.Token);
@@ -614,11 +626,8 @@ public sealed class SyncAgentTests : IDisposable
         return (casa, trabalho, NewDevice("Casa", store: casa.Store, profile: casa.Profile));
     }
 
-    private List<string> FilesInFolder()
-        => Directory.Exists(_folder)
-            ? Directory.EnumerateFiles(_folder, "*", SearchOption.AllDirectories)
-                .Select(f => Path.GetRelativePath(_folder, f).Replace(Path.DirectorySeparatorChar, '/')).Order(StringComparer.Ordinal).ToList()
-            : [];
+    // Os ficheiros do transporte, pelo nome («eteris/<cadeia>/…»).
+    private List<string> FilesInFolder() => [.. _cloud.Paths(string.Empty)];
 
     // Apaga os primeiros ficheiros e prende o pedido seguinte até ao fecho (o token de cancelamento).
     private sealed class StuckTransport(ISyncTransport inner, int deletesBeforeStuck) : ISyncTransport
@@ -810,7 +819,7 @@ public sealed class SyncAgentTests : IDisposable
     [Fact]
     public async Task RemoveDevice_InterruptedHalfway_FinishesOnTheNextRound_AndNobodyLosesTheKey()
     {
-        var flaky = new FlakyTransport(new FolderTransport(_folder));
+        var flaky = new FlakyTransport(_cloud);
         var casa = NewDevice("Casa", () => flaky);
         await casa.Agent.StartAsync();
         var trabalho = NewDevice("Trabalho");
@@ -888,13 +897,13 @@ public sealed class SyncAgentTests : IDisposable
         // O portátil (prestes a ser removido) inventa um aparelho na conta, com uma chave dele.
         using (var secret = Eteris.Sync.Crypto.AccountSecret.FromCode(casa.Agent.RevealKit()!.Words))
         {
-            var fake = await SyncEngine.JoinAsync(new FolderTransport(_folder), secret, DeviceIdentity.Create("Falso"), Now);
+            var fake = await SyncEngine.JoinAsync(_cloud, secret, DeviceIdentity.Create("Falso"), Now);
             fake.Put(Collections.Bookmarks, "https://isco.example/", new JsonObject { ["title"] = "isco" });
             await fake.SyncAsync();
         }
         await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
-        var rekeys = Path.Combine(_folder, "eteris", oldChain, "r");
-        Assert.Single(Directory.GetDirectories(rekeys)); // só o «trabalho»
+        var rekeys = SyncPaths.Root + oldChain + "/r/";
+        Assert.Single(_cloud.Paths(rekeys).Select(p => p[rekeys.Length..].Split('/')[0]).Distinct()); // só o «trabalho»
         Assert.Contains("«Falso»", casa.Agent.Status.Notice);
         Assert.True(await trabalho.Agent.RunAsync());
         Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
@@ -923,7 +932,8 @@ public sealed class SyncAgentTests : IDisposable
         var account = "conta-a";
         var store = new MemoryStore();
         var profile = new MemoryProfile();
-        var casa = new SyncAgent(() => new FolderTransport(_folder), profile, store, "Casa", Now, Quick) { AccountKey = () => account };
+        var casa = new SyncAgent(() => _cloud, profile, store, "Casa", Now, Quick) { AccountKey = () => account };
+        _cloud.Watch("Casa", casa);
         await casa.StartAsync();
         Assert.Equal(SyncPhase.On, casa.Status.Phase);
         Assert.Equal("conta-a", store.Load()!.Account);
@@ -960,7 +970,8 @@ public sealed class SyncAgentTests : IDisposable
 
         // A pausa por outra conta Google (o transporte ficou vazio: a casa cria uma conta nova).
         var account = "conta-a";
-        var casa = new SyncAgent(() => new FolderTransport(_folder), new MemoryProfile(), new MemoryStore(), "Casa", Now, Quick) { AccountKey = () => account };
+        var casa = new SyncAgent(() => _cloud, new MemoryProfile(), new MemoryStore(), "Casa", Now, Quick) { AccountKey = () => account };
+        _cloud.Watch("Casa", casa);
         await casa.StartAsync();
         Assert.Equal(SyncPhase.On, casa.Status.Phase);
         Assert.False(casa.Status.OtherAccount);
@@ -980,13 +991,13 @@ public sealed class SyncAgentTests : IDisposable
     {
         var (casa, trabalho) = await TwoAsync();
         var chain = casa.Store.Load()!.Engine!.ChainId;
-        var keys = Path.Combine(_folder, "eteris", chain, "keys");
-        var good = File.ReadAllBytes(keys);
+        var keys = SyncPaths.Keys(chain);
+        var good = _cloud.Memory.Files[keys];
         // JSON válido, mas a DEK embrulhada alterada: não abre com esta chave.
         var envelope = System.Text.Json.Nodes.JsonNode.Parse(good)!.AsObject();
         var dek = envelope["dek"]!.GetValue<string>();
         envelope["dek"] = (dek[0] == 'A' ? "B" : "A") + dek[1..];
-        File.WriteAllBytes(keys, System.Text.Encoding.UTF8.GetBytes(envelope.ToJsonString()));
+        _cloud.Memory.Replace(keys, System.Text.Encoding.UTF8.GetBytes(envelope.ToJsonString()));
 
         var reopened = NewDevice("Trabalho", store: trabalho.Store, profile: trabalho.Profile);
         Assert.True(await reopened.Agent.RunAsync());
@@ -994,7 +1005,7 @@ public sealed class SyncAgentTests : IDisposable
         Assert.NotNull(trabalho.Store.Load()!.Secret);
         Assert.NotNull(trabalho.Store.Load()!.Engine);
 
-        File.WriteAllBytes(keys, good);
+        _cloud.Memory.Replace(keys, good);
         await reopened.Agent.StartAsync();
         Assert.Equal(SyncPhase.On, reopened.Agent.Status.Phase);
     }
@@ -1009,15 +1020,14 @@ public sealed class SyncAgentTests : IDisposable
         var novo = NewDevice("Novo");
         await novo.Agent.StartAsync();
         novo.Agent.RequestPairing();
-        var pair = Path.Combine(_folder, "eteris", "pair");
-        await Until(() => Directory.Exists(pair) && Directory.EnumerateFiles(pair, "0-request", SearchOption.AllDirectories).Any(), "o pedido");
+        await Until(() => _cloud.PairingFiles("0-request") == 1, "o pedido");
 
         Assert.True(await casa.Agent.RunAsync());
         Assert.Equal(1, casa.Agent.Status.WaitingRequests);
-        Assert.Empty(Directory.EnumerateFiles(pair, "1-host", SearchOption.AllDirectories));
+        Assert.Equal(0, _cloud.PairingFiles("1-host"));
 
         await casa.Agent.CheckRequestsAsync();
-        Assert.Single(Directory.EnumerateFiles(pair, "1-host", SearchOption.AllDirectories));
+        Assert.Equal(1, _cloud.PairingFiles("1-host"));
         Assert.Equal(0, casa.Agent.Status.WaitingRequests);
         novo.Agent.CancelPairing();
     }
@@ -1055,7 +1065,7 @@ public sealed class SyncAgentTests : IDisposable
         var casa = NewDevice("Casa");
         casa.Profile.Bookmark("https://casa.example/", "Casa");
         await casa.Agent.StartAsync();
-        var hidden = new FlakyTransport(new FolderTransport(_folder)) { HideRootOnce = true };
+        var hidden = new FlakyTransport(_cloud) { HideRootOnce = true };
         var trabalho = NewDevice("Trabalho", () => hidden);
         trabalho.Profile.Bookmark("https://trabalho.example/", "Trabalho");
         await trabalho.Agent.StartAsync();
@@ -1065,7 +1075,7 @@ public sealed class SyncAgentTests : IDisposable
         var phases = new[] { casa.Agent.Status.Phase, trabalho.Agent.Status.Phase };
         Assert.Single(phases, p => p == SyncPhase.Choose);
         Assert.Single(phases, p => p == SyncPhase.On);
-        Assert.Single(Directory.EnumerateFiles(Path.Combine(_folder, "eteris"), "keys", SearchOption.AllDirectories));
+        Assert.Single(_cloud.Paths(), p => p.EndsWith("/keys", StringComparison.Ordinal));
         var (left, stayed) = casa.Agent.Status.Phase == SyncPhase.Choose ? (casa, trabalho) : (trabalho, casa);
         Assert.Contains("ao mesmo tempo", left.Agent.Status.Notice);
         await left.Agent.JoinWithCodeAsync(stayed.Agent.RevealKit()!.Words);
@@ -1420,8 +1430,7 @@ public sealed class SyncAgentTests : IDisposable
         var novo = NewDevice("Novo");
         await novo.Agent.StartAsync();
         novo.Agent.RequestPairing();
-        await Until(() => Directory.Exists(Path.Combine(_folder, "eteris", "pair")), "o pedido");
-        await Until(() => { casa.Agent.CheckRequestsAsync().Wait(); return casa.Agent.Status.Requests.Count == 1 && novo.Agent.Status.Pairing?.Code is not null; }, "o código");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && novo.Agent.Status.Pairing?.Code is not null, "o código");
         novo.Agent.ConfirmPairing();
         Assert.Equal(Eteris.Sync.Pairing.PairingAnswer.Approved,
             await casa.Agent.ApproveWithCodeAsync(casa.Agent.Status.Requests[0].Session, novo.Agent.Status.Pairing!.Code!));
@@ -1435,8 +1444,9 @@ public sealed class SyncAgentTests : IDisposable
     {
         foreach (var pending in new[] { true, false })
         {
-            var folder = Path.Combine(_folder, pending ? "por-guardar" : "guardado");
-            var casa = NewDevice("Casa", () => new FolderTransport(folder));
+            // Cada volta com o seu transporte (duas contas que não se veem).
+            var folder = new MemoryTransport();
+            var casa = NewDevice("Casa", () => folder);
             await casa.Agent.StartAsync();
             var old = casa.Store.Load()!;
             old.Kit = null;
@@ -1444,7 +1454,7 @@ public sealed class SyncAgentTests : IDisposable
             casa.Store.Save(old);
             _now += 1000;
 
-            var reopened = NewDevice("Casa", () => new FolderTransport(folder), casa.Store, casa.Profile);
+            var reopened = NewDevice("Casa", () => folder, casa.Store, casa.Profile);
             var kit = reopened.Agent.Status.Kit!;
             Assert.Equal(pending ? KitState.Pending : KitState.Saved, kit.State);
             Assert.Equal(_now, kit.SinceMs);
@@ -1460,7 +1470,8 @@ public sealed class SyncAgentTests : IDisposable
     [Fact]
     public async Task KnownDevices_Is1Alone_And2AfterASecondJoins()
     {
-        var sozinho = NewDevice("Sozinho", () => new FolderTransport(Path.Combine(_folder, "sozinho")));
+        var alone = new MemoryTransport();
+        var sozinho = NewDevice("Sozinho", () => alone);
         await sozinho.Agent.StartAsync();
         Assert.Equal(1, sozinho.Agent.Status.Kit!.KnownDevices);
 
@@ -1498,8 +1509,7 @@ public sealed class SyncAgentTests : IDisposable
         trabalho.Profile.Bookmark("https://trabalho.example/", "Trabalho");
         await trabalho.Agent.StartAsync();
         trabalho.Agent.RequestPairing();
-        await Until(() => Directory.Exists(Path.Combine(_folder, "eteris", "pair")), "o pedido");
-        await Until(() => { casa.Agent.CheckRequestsAsync().Wait(); return casa.Agent.Status.Requests.Count == 1 && trabalho.Agent.Status.Pairing?.Code is not null; }, "o código");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && trabalho.Agent.Status.Pairing?.Code is not null, "o código");
         trabalho.Agent.ConfirmPairing();
         Assert.Equal(Eteris.Sync.Pairing.PairingAnswer.Approved,
             await casa.Agent.ApproveWithCodeAsync(casa.Agent.Status.Requests[0].Session, trabalho.Agent.Status.Pairing!.Code!));
@@ -1513,7 +1523,7 @@ public sealed class SyncAgentTests : IDisposable
     [Fact]
     public async Task StartAsync_IsAlreadyStarting_BeforeItsFirstAwait()
     {
-        var gated = new GatedTransport(new FolderTransport(_folder));
+        var gated = new GatedTransport(_cloud);
         var casa = NewDevice("Casa", () => gated);
         await casa.Agent.StartAsync();
         Assert.Equal(SyncPhase.On, casa.Agent.Status.Phase);
@@ -1580,7 +1590,8 @@ public sealed class SyncAgentTests : IDisposable
         var oauth = new GoogleOAuth(http, new OAuthClientConfig(google.ClientId, null), Now);
         var session = new GoogleSession(oauth, new TokenStore(Path.Combine(_folder, "tokens-" + Guid.NewGuid().ToString("N")), new PlainProtector()), Now);
         session.Use(new OAuthTokens(google.ValidAccessToken, google.RefreshToken, _now + 3_600_000, GoogleEndpoints.Scope));
-        return () => new GoogleDriveTransport(http, session.AccessTokenAsync, (_, _) => Task.CompletedTask);
+        // Cada escrita e cada apagamento no Drive falso acorda as esperas do teste.
+        return () => _cloud.Signalling(new GoogleDriveTransport(http, session.AccessTokenAsync, (_, _) => Task.CompletedTask));
     }
 
     private async Task<(Device Casa, Device Trabalho)> TwoAsync()
