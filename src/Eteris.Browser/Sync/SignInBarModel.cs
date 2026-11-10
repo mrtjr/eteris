@@ -4,9 +4,9 @@ namespace Eteris.Browser.Sync;
 
 // A barra do início de sessão na janela (0.2.15): o que diz e que botões tem, a partir do estado do início de sessão
 // (SignInTracker) e do da sincronização. Decisão pura, sem WPF (testada em SignInBarModelTests).
-internal enum SignInBarKind { Waiting, NoBrowser, TimedOut, Refused, DriveDenied, NoNetwork, OtherAccount, Syncing, Synced, NeedsApproval }
+internal enum SignInBarKind { Waiting, NoBrowser, TimedOut, Refused, DriveDenied, NoNetwork, OtherAccount, Syncing, Synced, NeedsApproval, Expired }
 
-internal enum SignInBarAction { Cancel, CopyAddress, Retry, OpenSettings, ShowCode, Close }
+internal enum SignInBarAction { Cancel, CopyAddress, Retry, OpenSettings, ShowCode, Close, SignInAgain, NotNow }
 
 internal sealed record SignInBarButton(string Label, SignInBarAction Action, bool Primary = false);
 
@@ -63,6 +63,14 @@ internal static class SignInBarModel
                 return null;
         }
     }
+
+    // A sessão expirada (T11): a Google pediu para entrar outra vez. Nunca em janelas privadas; sem o e-mail (o
+    // «Entrar» leva-o só no endereço de autorização, como login_hint); fica até ser respondida ou a sessão voltar.
+    private static readonly SignInBarView ExpiredView = new(SignInBarKind.Expired,
+        "A sincronização está em pausa: a Google pediu para entrar outra vez.", null,
+        [new("Entrar", SignInBarAction.SignInAgain, Primary: true), new("Agora não", SignInBarAction.NotNow)], null);
+
+    internal static SignInBarView? Expired(bool expired, bool isPrivate) => isPrivate || !expired ? null : ExpiredView;
 
     private static SignInBarView Failure(SignInBarKind kind, string text) => new(kind, text, null, [Retry], ErrorHold);
 

@@ -402,6 +402,71 @@ public class SignInBarModelTests
         Assert.Equal([true, true], shows);
     }
 
+    // ---- sessão expirada (T11) ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Bar_Expired_HasTheExactText_EnterThenNotNow()
+    {
+        var view = SignInBarModel.Expired(true, false);
+        Assert.NotNull(view);
+        Assert.Equal(SignInBarKind.Expired, view.Kind);
+        Assert.Equal("A sincronização está em pausa: a Google pediu para entrar outra vez.", view.Text);
+        Assert.Null(view.Bold);
+        Assert.Null(view.HideAfter);
+        Assert.Equal(["Entrar", "Agora não"], Labels(view));
+        Assert.Equal([SignInBarAction.SignInAgain, SignInBarAction.NotNow], view.Buttons.Select(b => b.Action));
+        Assert.True(view.Buttons[0].Primary);
+        Assert.False(view.Buttons[1].Primary);
+        Assert.Null(SignInBarModel.Expired(false, false));
+    }
+
+    [Fact]
+    public void Bar_Expired_NeverInAPrivateWindow()
+    {
+        Assert.Null(SignInBarModel.Expired(true, true));
+        Assert.Null(SignInBarModel.Expired(false, true));
+    }
+
+    // As duas candidatas montadas como a janela as monta (MainWindow.SignInBar.cs), sobre o árbitro da T4.
+    private static (WindowBarSet Set, List<(WindowBar Kind, bool On)> Log) SignInAndExpired(SignInBarInput input, bool expired)
+    {
+        var set = new WindowBarSet();
+        var log = new List<(WindowBar, bool)>();
+        set.Register(WindowBar.SignIn, () => SignInBarModel.For(input) is not null, on => log.Add((WindowBar.SignIn, on)));
+        set.Register(WindowBar.SessionExpired, () => SignInBarModel.Expired(expired, false) is not null, on => log.Add((WindowBar.SessionExpired, on)));
+        return (set, log);
+    }
+
+    [Fact]
+    public void Bar_Expired_YieldsToASignInInProgress()
+    {
+        var input = new SignInBarInput(new SignInProgress(SignInStage.Waiting, null, null, At), null, "Ana Teste", false);
+        var (set, log) = SignInAndExpired(input, expired: true);
+        Assert.Equal(WindowBar.SignIn, set.Refresh());
+        Assert.Equal([(WindowBar.SignIn, true)], log.Where(e => e.On));
+        Assert.Contains((WindowBar.SessionExpired, false), log);
+        Assert.Equal("À espera do início de sessão no seu navegador…", SignInBarModel.For(input)!.Text);
+    }
+
+    [Fact]
+    public void Bar_Expired_ShowsWhenNothingElseWants()
+    {
+        var input = new SignInBarInput(SignInProgress.None, null, "Ana Teste", false);
+        Assert.Equal(SignInStage.Idle, input.Progress.Stage);
+        var (set, log) = SignInAndExpired(input, expired: true);
+        Assert.Equal(WindowBar.SessionExpired, set.Refresh());
+        // O controlo é partilhado: a do início de sessão esconde-se antes de a sessão expirada se mostrar.
+        Assert.Equal([(WindowBar.SignIn, false), (WindowBar.SessionExpired, true)], log);
+    }
+
+    [Fact]
+    public void Bar_NothingWanted_IsNull()
+    {
+        var (set, log) = SignInAndExpired(new SignInBarInput(SignInProgress.None, null, "Ana Teste", false), expired: false);
+        Assert.Null(set.Refresh());
+        Assert.Equal([(WindowBar.SignIn, false), (WindowBar.SessionExpired, false)], log);
+    }
+
     // Duas vistas iguais (os botões comparam-se elemento a elemento).
     private sealed class ViewComparer : IEqualityComparer<SignInBarView?>
     {

@@ -1083,6 +1083,49 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Contains("Entre outra vez", casa.Agent.Status.Error);
     }
 
+    // O aviso de sessão expirada (T11) ligado ao agente como o SyncService o liga: pergunta uma vez por abertura.
+    [Fact]
+    public async Task RevokedAuthorization_DrivesThePromptOnce()
+    {
+        var google = new FakeGoogle();
+        var casa = NewDevice("Casa", DriveFor(google));
+        var prompt = new Eteris.Browser.Sync.SessionExpiredPrompt();
+        var asked = 0;
+        casa.Agent.Changed += () => { if (prompt.Observe(casa.Agent.Status.NeedsSignIn)) asked++; };
+        await casa.Agent.StartAsync();
+        Assert.Equal(0, asked);
+        Assert.False(prompt.Pending);
+
+        google.Revoked.Add(google.RefreshToken);
+        google.ExpireAccessToken();
+        _now += 3_700_000;
+        casa.Profile.Bookmark("https://x.example/", "X");
+        Assert.False(await casa.Agent.RunAsync());
+        Assert.True(casa.Agent.Status.NeedsSignIn);
+        Assert.Equal(1, asked);
+        Assert.True(prompt.Pending);
+
+        // Outra ronda falhada (por exemplo «Sincronizar agora»): não volta a perguntar.
+        casa.Profile.Bookmark("https://y.example/", "Y");
+        Assert.False(await casa.Agent.RunAsync(force: true));
+        Assert.Equal(1, asked);
+
+        // Entrou outra vez (a autorização volta): a sincronização retoma e a pausa acaba.
+        google.Revoked.Clear();
+        await casa.Agent.StartAsync();
+        Assert.False(casa.Agent.Status.NeedsSignIn);
+        Assert.Null(casa.Agent.Status.Error);
+
+        // E se expirar outra vez na mesma abertura, fica calado.
+        google.Revoked.Add(google.RefreshToken);
+        google.ExpireAccessToken();
+        _now += 3_700_000;
+        casa.Profile.Bookmark("https://z.example/", "Z");
+        Assert.False(await casa.Agent.RunAsync());
+        Assert.True(casa.Agent.Status.NeedsSignIn);
+        Assert.Equal(1, asked);
+    }
+
     // «Sair» sem apagar a chave, com o código de recuperação ainda por guardar: continua à vista ao voltar.
     [Fact]
     public async Task SignOut_KeepingTheKey_TheRecoveryCodeStaysUntilSaved()

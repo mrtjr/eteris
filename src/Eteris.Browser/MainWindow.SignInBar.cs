@@ -34,6 +34,10 @@ public partial class MainWindow
     {
         if (IsPrivate) return;
         RegisterBar(WindowBar.SignIn, SignInBarWants, ShowSignInBar);
+        // A sessão expirada (T11): o aviso é partilhado por todas as janelas normais (SyncService), chega por
+        // SyncService.Changed e responder numa janela fecha-o em todas.
+        RegisterBar(WindowBar.SessionExpired, () => SyncService.SignInPrompt,
+            on => ShowInSignInBar(on ? SignInBarModel.Expired(true, IsPrivate) : null));
         // Os eventos chegam de qualquer thread; um só manipulador para os três.
         void changed() => Dispatcher.BeginInvoke(RefreshBars);
         GoogleSync.SignInChanged += changed;
@@ -171,6 +175,15 @@ public partial class MainWindow
                 break;
             case SignInBarAction.Close:
                 GoogleSync.ClearSignIn(_signInAtMs);
+                break;
+            case SignInBarAction.SignInAgain:
+                // A conta guardada vai como login_hint (só no endereço de autorização da Google). A barra do início de
+                // sessão toma o lugar desta («À espera…»); se já houver uma entrada em curso, o BeginSignIn não faz nada.
+                SyncService.DismissSignInPrompt();
+                GoogleSync.BeginSignIn(GoogleSync.ReentryHint());
+                break;
+            case SignInBarAction.NotNow:
+                SyncService.DismissSignInPrompt();
                 break;
         }
         RefreshBars();

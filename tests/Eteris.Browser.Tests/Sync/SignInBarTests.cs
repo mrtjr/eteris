@@ -115,6 +115,95 @@ public class SignInBarTests
         Assert.True(idle < wants.IndexOf("GoogleSync.Account", StringComparison.Ordinal));
     }
 
+    // ---- sessão expirada (T11) ---------------------------------------------------------------------------------------
+
+    private static string Source(params string[] parts)
+        => File.ReadAllText(Path.Combine([GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", .. parts])).Replace("\r\n", "\n");
+
+    // «Entrar» pré-escolhe a conta guardada (login_hint) e fecha o aviso em todas as janelas.
+    [Fact]
+    public void Expired_Enter_UsesTheSavedAccountAsHint()
+    {
+        var glue = Source("MainWindow.SignInBar.cs");
+        var actions = Body(glue, "private void OnSignInBarAction(");
+        Assert.Contains("GoogleSync.BeginSignIn(GoogleSync.ReentryHint())", actions);
+        Assert.Contains("SyncService.DismissSignInPrompt()", actions);
+        Assert.Contains("SignInBarAction.SignInAgain", actions);
+        Assert.Contains("SignInBarAction.NotNow", actions);
+    }
+
+    [Fact]
+    public void SyncService_RaisesNeedsSignIn_FromTheAgentsChange_NeverInFolderMode()
+    {
+        var service = Source("Sync", "SyncService.cs");
+        Assert.Contains("Expired.Observe(", service);
+        Assert.Contains("NeedsSignIn?.Invoke()", service);
+        Assert.Contains("public static event Action? NeedsSignIn;", service);
+        Assert.Contains("FolderMode", Body(service, "public static bool SignInPrompt"));
+        Assert.Contains("FolderMode", Handler(service));
+    }
+
+    // Responder à pergunta «a barra deve estar à vista?» nunca cria o agente (custo zero sem aviso, R9).
+    [Fact]
+    public void SyncService_SignInPrompt_DoesNotCreateTheAgent()
+    {
+        var prompt = Body(Source("Sync", "SyncService.cs"), "public static bool SignInPrompt");
+        Assert.DoesNotContain("Agent()", prompt);
+        Assert.Contains("_agent", prompt);
+        // O aviso pendente é o primeiro teste: sem ele não se lê mais nada.
+        var pending = prompt.IndexOf("Expired.Pending", StringComparison.Ordinal);
+        Assert.True(pending >= 0);
+        Assert.True(pending < prompt.IndexOf("FolderMode", StringComparison.Ordinal));
+        Assert.True(pending < prompt.IndexOf("_agent", StringComparison.Ordinal));
+    }
+
+    // Uma candidata do árbitro único da T4, não um segundo árbitro nem um controlo novo.
+    [Fact]
+    public void Expired_IsACandidateOfTheSingleArbiter()
+    {
+        var glue = Source("MainWindow.SignInBar.cs");
+        var register = glue.IndexOf("RegisterBar(WindowBar.SessionExpired", StringComparison.Ordinal);
+        if (register < 0) register = glue.IndexOf("RegisterBar(Sync.WindowBar.SessionExpired", StringComparison.Ordinal);
+        Assert.True(register >= 0, "a candidata SessionExpired não está registada");
+        var statement = glue[register..glue.IndexOf(';', register)];
+        Assert.Contains("SyncService.SignInPrompt", statement);
+        Assert.Contains("ShowInSignInBar(", statement);
+        // Registada em WireSignInBar, depois da guarda das janelas privadas e antes do RefreshBars final.
+        var wire = Body(glue, "private void WireSignInBar()");
+        var at = wire.IndexOf("WindowBar.SessionExpired", StringComparison.Ordinal);
+        Assert.True(wire.IndexOf("if (IsPrivate) return;", StringComparison.Ordinal) < at);
+        Assert.True(at < wire.LastIndexOf("RefreshBars();", StringComparison.Ordinal));
+        Assert.DoesNotContain("Choose(", Source("Sync", "SignInBarModel.cs"));
+        var window = Source("MainWindow.xaml.cs");
+        Assert.DoesNotContain("SessionExpired", window);
+        Assert.DoesNotContain("SignInPrompt", window);
+        foreach (var file in Directory.GetFiles(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser"), "MainWindow*.cs"))
+            Assert.DoesNotContain("SyncService.NeedsSignIn +=", File.ReadAllText(file));
+    }
+
+    // A corrida: o estado observa-se antes de as janelas serem avisadas, senão a barra podia nunca aparecer.
+    [Fact]
+    public void SyncService_ObservesBeforeNotifying()
+    {
+        var handler = Handler(Source("Sync", "SyncService.cs"));
+        var observe = handler.IndexOf("Expired.Observe(", StringComparison.Ordinal);
+        var changed = handler.IndexOf("Changed?.Invoke()", StringComparison.Ordinal);
+        var needs = handler.IndexOf("NeedsSignIn?.Invoke()", StringComparison.Ordinal);
+        Assert.True(observe >= 0 && changed >= 0 && needs >= 0);
+        Assert.True(observe < changed);
+        Assert.True(changed < needs);
+    }
+
+    // O manipulador de _agent.Changed em SyncService.Agent() (do «+=» até ao «};» que o fecha).
+    private static string Handler(string service)
+    {
+        var start = service.IndexOf("_agent.Changed +=", StringComparison.Ordinal);
+        Assert.True(start >= 0, "não encontrei _agent.Changed +=");
+        var end = service.IndexOf("};", start, StringComparison.Ordinal);
+        Assert.True(end > start);
+        return service[start..end];
+    }
+
     // O corpo de um método (da assinatura até à chaveta que o fecha, com a indentação de membro).
     private static string Body(string code, string signature)
     {

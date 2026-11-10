@@ -83,9 +83,40 @@ internal static class SyncService
                 // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
                 Log = m => System.Diagnostics.Debug.WriteLine("[sincronização] " + m),
             };
-            _agent.Changed += () => Changed?.Invoke();
+            // Observa primeiro e avisa depois: as janelas refrescam as barras a partir de Changed e têm de já encontrar o
+            // aviso pendente (o agendador para quando é preciso entrar, por isso pode não haver outra mudança).
+            SyncAgent agent = _agent;
+            _agent.Changed += () =>
+            {
+                var first = !FolderMode && Expired.Observe(agent.Status.NeedsSignIn);
+                Changed?.Invoke();
+                if (first) NeedsSignIn?.Invoke();
+            };
             return _agent;
         }
+    }
+
+    // ---- aviso de sessão expirada (0.2.15) --------------------------------------------------------------------------
+
+    // Uma vez por abertura do Éteris; só memória (nada em disco, nenhum pedido novo: reage às rondas que já se fazem).
+    private static readonly SessionExpiredPrompt Expired = new();
+
+    // A sincronização descobriu que é preciso entrar outra vez (uma vez por abertura). Qualquer thread. Não é um
+    // estado: «é preciso entrar» é SyncStatus.NeedsSignIn e «a barra deve estar à vista» é SignInPrompt.
+    public static event Action? NeedsSignIn;
+
+    // A barra «entre outra vez» deve estar à vista: ainda não respondida e o estado continua a pedi-lo. Barato e sem
+    // exceções: lê o campo (nunca cria o agente) e, sem aviso pendente, não lê mais nada.
+    public static bool SignInPrompt
+    {
+        get { return Expired.Pending && !FolderMode && _agent?.Status.NeedsSignIn == true; }
+    }
+
+    // «Entrar», «Agora não» (e, na T12, sair): o aviso não volta nesta abertura; todas as janelas o escondem.
+    public static void DismissSignInPrompt()
+    {
+        Expired.Dismiss();
+        Changed?.Invoke();
     }
 
     private static ISyncTransport Transport()
