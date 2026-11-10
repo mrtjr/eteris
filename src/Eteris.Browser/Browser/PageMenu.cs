@@ -72,7 +72,10 @@ public static class PageMenu
         }
         if (hasSelection)
         {
-            items.Add(new(PageCommand.SearchSelection, "", $"Pesquisar «{Quote(ctx.Selection)}» com {engineName}"));
+            // Só numa página web: numa página interna a seleção pode ser o kit ou uma palavra-passe, e iria no endereço
+            // para o motor de pesquisa e para o histórico.
+            if (ctx.IsWebPage)
+                items.Add(new(PageCommand.SearchSelection, "", $"Pesquisar «{Quote(ctx.Selection)}» com {engineName}"));
             if (!ctx.IsEditable && ctx.IsWebPage)
                 items.Add(new(PageCommand.CopyHighlightLink, "", "Copiar link para este destaque"));
             items.Add(null);

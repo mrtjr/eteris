@@ -145,7 +145,9 @@
   .stack { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
   /* O kit de recuperação à vista: 24 palavras numeradas em quatro colunas. */
   .kitwords { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 16px; margin: 10px 0 4px; padding-left: 28px;
-    font: 600 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+    font: 600 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    /* Não se selecionam: «Copiar» do menu levava-as para a área de transferência normal e «Pesquisar» para o motor. */
+    user-select: none; }
   .kitactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
   .kitwords[hidden] { display: none; }
   .stack[hidden], .item[hidden] { display: none; }
