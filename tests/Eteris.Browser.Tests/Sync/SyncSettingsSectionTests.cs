@@ -380,6 +380,21 @@ public class SyncSettingsSectionTests
         Assert.True(At(script, "anchorWaits = false") < start);
     }
 
+    // «Sair deste computador» que não saiu (a resposta chega ainda com sessão): o foco pendente para «Entrar com o
+    // Google» cai, para não saltar numa pintura muito posterior.
+    [Fact]
+    public void SignOut_ThatDidNotSignOut_DropsThePendingFocus()
+    {
+        var script = Script(Page());
+        var ask = At(script, "const askGoogle = (path, extra, quiet) => {");
+        var askBody = script[ask..script.IndexOf("\n    };", ask, StringComparison.Ordinal)];
+        Assert.Contains("if (seq === signOutSeq && d && d.google && d.google.state === 'signedIn' && focusAfterPaint === 'googleButton') focusAfterPaint = null;", askBody, StringComparison.Ordinal);
+        Assert.True(At(askBody, "focusAfterPaint = null;") < At(askBody, "paint(d);"));
+        Assert.Contains("return seq;", askBody, StringComparison.Ordinal);
+        Assert.Contains("signOutSeq = askGoogle('sync-google-out', forget ? '&forget=1' : '');", script, StringComparison.Ordinal);
+        Assert.True(At(script, "signOutSeq = 0") < ask);
+    }
+
     // R11 (c): a pesquisa das Definições encontra o que está dentro de «Mais opções» (e abre-o).
     [Fact]
     public void Search_FindsWhatIsInsideMoreOptions()

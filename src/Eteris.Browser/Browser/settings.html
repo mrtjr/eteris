@@ -956,7 +956,7 @@
     const googleNote = $('googleNote');
     const googleUrl = $('googleUrl');
     const syncSignOut = $('syncSignOut');
-    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null, anchorWaits = false;
+    let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null, anchorWaits = false, signOutSeq = 0;
     // Pedidos do estado (estado, conta, entrar, sair, ações): só a resposta mais recente desenha. Uma resposta
     // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
     const askGoogle = (path, extra, quiet) => {
@@ -964,7 +964,14 @@
       // Depois de uma ação (entrar, ligar, aprovar, procurar pedidos…), o resultado chega em segundo plano: pergunta
       // amiúde durante uns segundos. A procura periódica de pedidos (quiet) não conta como ação.
       if (path !== 'sync-status' && !quiet) quickUntil = Date.now() + 15000;
-      ask(path, d => { if (seq < googlePainted) return; googlePainted = seq; paint(d); }, extra);
+      ask(path, d => {
+        if (seq < googlePainted) return;
+        googlePainted = seq;
+        // «Sair deste computador» que não saiu (ainda com sessão): o foco para «Entrar com o Google» já não vem a propósito.
+        if (seq === signOutSeq && d && d.google && d.google.state === 'signedIn' && focusAfterPaint === 'googleButton') focusAfterPaint = null;
+        paint(d);
+      }, extra);
+      return seq;
     };
     // Nome e e-mail da conta: se há sessão sem conta guardada, pedem-se uma vez quando a secção fica à vista DEPOIS de
     // um gesto da pessoa na página (clique, tecla, roda, toque). Uma aba de Definições reposta no arranque não pede nada.
@@ -1606,7 +1613,7 @@
       syncSignOut.textContent = 'Sair deste computador';
       // O botão some com a sessão: o foco vai para «Entrar com o Google», que volta a aparecer.
       focusAfterPaint = 'googleButton';
-      askGoogle('sync-google-out', forget ? '&forget=1' : '');
+      signOutSeq = askGoogle('sync-google-out', forget ? '&forget=1' : '');
     });
     // «Entrar com o Google», «Cancelar» (à espera do início de sessão) ou «Ligar» (pasta de teste).
     googleButton.addEventListener('click', () => askGoogle(googleButton.dataset.state === 'waiting' ? 'sync-google-cancel' : 'sync-google'));
