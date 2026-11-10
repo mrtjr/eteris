@@ -55,12 +55,27 @@ internal static class PairingBarModel
     // qualquer escrita, incluindo os de largura total). Quem pede escolhe o nome depois de conhecer o código (o nome
     // segue selado no passo 4, o do código), e a barra nunca pode ter um código para copiar. Já limpo
     // (DeviceNameText); vazio → DeviceNameText.Unnamed.
+    //
+    // O código por extenso também não cabe: o nome corta em ShownNameMax caracteres (com «…»). Seis algarismos por
+    // extenso precisam de pelo menos 17 em português e 23 em inglês; os numerais chineses (um carácter por algarismo,
+    // mas letras para o Unicode) saem como os algarismos. Só a barra corta: a lista de aparelhos e o aviso de aprovado
+    // mostram o nome inteiro (DeviceNameText.Shown).
+    public const int ShownNameMax = 16;
+
+    private const string HanNumerals = "〇零一二三四五六七八九十百千万萬亿億壹弌贰貳弐叁參参弎肆伍陆陸柒捌玖拾佰仟两兩";
+
     public static string ShownName(string? name)
     {
         var text = new StringBuilder();
         foreach (var rune in (DeviceNameText.Clean(name) ?? "").EnumerateRunes())
-            if (Rune.GetUnicodeCategory(rune) is not (UnicodeCategory.DecimalDigitNumber or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber))
+            if (Rune.GetUnicodeCategory(rune) is not (UnicodeCategory.DecimalDigitNumber or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber)
+                && !HanNumerals.Contains(rune.ToString(), StringComparison.Ordinal))
                 text.Append(rune.ToString());
-        return DeviceNameText.Shown(text.ToString());
+        // Limpo outra vez: os espaços que ficaram juntos ao tirar os algarismos passam a um só.
+        var clean = DeviceNameText.Clean(text.ToString());
+        if (clean is null) return DeviceNameText.Unnamed;
+        var runes = clean.EnumerateRunes().ToList();
+        if (runes.Count <= ShownNameMax) return clean;
+        return string.Concat(runes.Take(ShownNameMax).Select(r => r.ToString())).TrimEnd(' ') + "…";
     }
 }

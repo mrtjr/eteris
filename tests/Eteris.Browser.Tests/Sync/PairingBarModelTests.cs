@@ -89,6 +89,31 @@ public class PairingBarModelTests
             is UnicodeCategory.DecimalDigitNumber or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber);
     }
 
+    // O código por extenso também não cabe: o nome mostrado corta em 16 caracteres (com «…»). Seis algarismos por
+    // extenso precisam de pelo menos 17 em português e 23 em inglês; os numerais chineses (um carácter por algarismo)
+    // saem como os algarismos. Um nome normal fica igual.
+    [Theory]
+    [InlineData("quatro oito dois nove um três", "quatro oito dois…")]
+    [InlineData("four eight two nine one three", "four eight two n…")]
+    [InlineData("四八二九一三", DeviceNameText.Unnamed)]
+    [InlineData("Portátil 四八二 九一三 sala", "Portátil sala")]
+    [InlineData("Portátil da sala", "Portátil da sala")]
+    [InlineData("Portátil da sala grande", "Portátil da sala…")]
+    [InlineData("Portátil da sal  a", "Portátil da sal…")]
+    [InlineData("１２３", DeviceNameText.Unnamed)]
+    public void RequestName_IsCutShortEnoughToHideSpelledOutCodes(string name, string shown)
+    {
+        Assert.Equal(16, PairingBarModel.ShownNameMax);
+        Assert.Equal(shown, PairingBarModel.ShownName(name));
+        if (shown != DeviceNameText.Unnamed)
+            Assert.True(shown.TrimEnd('…').EnumerateRunes().Count() <= PairingBarModel.ShownNameMax);
+        Assert.Equal(shown, PairingBarModel.From(On([new HostRequest("s", name, 3, Now)]), Now, PairingBarModel.DefaultReceives).Name);
+        Assert.Equal($"Nome que o outro computador indicou: «{shown}»", PairingBarModel.NameLine(name));
+        // Nunca as seis palavras do código.
+        foreach (var spelled in new[] { "quatro oito dois nove um três", "four eight two nine one three" })
+            Assert.False(spelled.Split(' ').All(w => shown.Contains(w, StringComparison.Ordinal)));
+    }
+
     [Fact]
     public void Title_UsesTheReceivesParameter()
     {
