@@ -10,12 +10,18 @@ internal sealed class SessionExpiredPrompt
     private bool _pending;
 
     // Chamado a cada mudança de estado. Devolve true só na primeira vez que needsSignIn é verdadeiro nesta abertura.
-    // Observe(false) nunca muda nada: a barra esconde-se pelo estado real, não por aqui.
+    // Observe(false) com um aviso por responder quer dizer que a sessão voltou por outro caminho (Definições, menu): o
+    // aviso acaba como se tivesse sido respondido, e uma nova expiração nesta abertura fica calada (R2). Antes da
+    // primeira expiração não muda nada (_pending já é falso e _asked fica como está).
     public bool Observe(bool needsSignIn)
     {
-        if (!needsSignIn) return false;
         lock (_gate)
         {
+            if (!needsSignIn)
+            {
+                _pending = false;
+                return false;
+            }
             if (_asked) return false;
             _asked = true;
             _pending = true;

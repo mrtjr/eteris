@@ -1115,8 +1115,10 @@ public sealed class SyncAgentTests : IDisposable
         await casa.Agent.StartAsync();
         Assert.False(casa.Agent.Status.NeedsSignIn);
         Assert.Null(casa.Agent.Status.Error);
+        // O aviso não respondido acaba com a sessão de volta (a barra não fica à espera de resposta).
+        Assert.False(prompt.Pending);
 
-        // E se expirar outra vez na mesma abertura, fica calado.
+        // E se expirar outra vez na mesma abertura, fica calado e a barra não volta.
         google.Revoked.Add(google.RefreshToken);
         google.ExpireAccessToken();
         _now += 3_700_000;
@@ -1124,6 +1126,7 @@ public sealed class SyncAgentTests : IDisposable
         Assert.False(await casa.Agent.RunAsync());
         Assert.True(casa.Agent.Status.NeedsSignIn);
         Assert.Equal(1, asked);
+        Assert.False(prompt.Pending);
     }
 
     // «Sair» sem apagar a chave, com o código de recuperação ainda por guardar: continua à vista ao voltar.

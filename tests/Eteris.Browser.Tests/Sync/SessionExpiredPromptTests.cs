@@ -35,9 +35,13 @@ public class SessionExpiredPromptTests
     {
         var prompt = new SessionExpiredPrompt();
         Assert.True(prompt.Observe(true));
-        // A sessão voltou por outro caminho (Definições, menu): a política não muda; a barra esconde-se pelo estado real.
+        Assert.True(prompt.Pending);
+        // A sessão voltou por outro caminho (Definições, menu) sem resposta à barra: o aviso acaba (R2, EM ABERTO 3)...
         Assert.False(prompt.Observe(false));
+        Assert.False(prompt.Pending);
+        // ...e uma nova expiração na mesma abertura fica calada e sem barra.
         Assert.False(prompt.Observe(true));
+        Assert.False(prompt.Pending);
     }
 
     [Fact]
