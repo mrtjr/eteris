@@ -58,6 +58,9 @@ public sealed record UserSettings
     // escolhido: sem esta marca, um pt-PT gravado passa à predefinida (SettingsStore.Load).
     public bool SiteLanguageChosen { get; set; }
     public string LastSeenVersion { get; set; } = string.Empty;
+    // A oferta «Entrar com o Google» depois de guardar uma palavra-passe já foi mostrada (uma só vez por perfil). Fica
+    // neste computador: não está na lista das definições que viajam nem no perfil exportado.
+    public bool SignInOffered { get; set; }
     public string NewTabTheme { get; set; } = "aurora";
     public string NewTabWallpaper { get; set; } = "coast";
     public string NewTabWallpaperMotion { get; set; } = "photo";
@@ -207,6 +210,18 @@ public static class Settings
         lock (Gate)
         {
             _current = updated = Current with { LastSeenVersion = version };
+            try { Store.Save(updated); } catch (Exception) { }
+        }
+    }
+
+    // A oferta de entrar com o Google depois de guardar uma palavra-passe foi mostrada (fora do With: a página não a
+    // muda). Se gravar falhar, a oferta pode voltar uma vez: não se perde nada.
+    public static void MarkSignInOffered()
+    {
+        lock (Gate)
+        {
+            var updated = Current with { SignInOffered = true };
+            _current = updated;
             try { Store.Save(updated); } catch (Exception) { }
         }
     }

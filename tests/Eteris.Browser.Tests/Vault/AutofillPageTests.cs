@@ -270,4 +270,23 @@ public sealed class AutofillPageTests : IDisposable
         Assert.Equal("recusado", (await _f.Post("autofill", "/save", CardForm(), "c=cards", authorized: false)).Body);
         Assert.Equal(0, _f.Reauth.Prompts);
     }
+
+    // «Entrar com o Google» (0.2.15, T13): o botão só sem sessão, e a rota só com o token.
+    [Fact]
+    public async Task Page_OffersSignIn_OnlyWithoutSession()
+    {
+        _f.Host.SignInOffer = true;
+        Assert.Contains("\"signIn\":true", (await _f.Get("autofill", "/")).Body);
+        _f.Host.SignInOffer = false;
+        Assert.Contains("\"signIn\":false", (await _f.Get("autofill", "/")).Body);
+    }
+
+    [Fact]
+    public async Task SignIn_NeedsTheToken()
+    {
+        Assert.Equal(VaultReply.Refused, await _f.Get("autofill", "/sign-in", authorized: false));
+        Assert.Equal(0, _f.Host.SignIns);
+        Assert.True(VaultFixture.Json(await _f.Get("autofill", "/sign-in"))["ok"]!.GetValue<bool>());
+        Assert.Equal(1, _f.Host.SignIns);
+    }
 }

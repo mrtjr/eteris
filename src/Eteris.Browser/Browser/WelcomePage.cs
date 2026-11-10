@@ -16,7 +16,9 @@ public static class WelcomePage
         return reader.ReadToEnd();
     });
 
-    public static string Render(UserSettings settings, IReadOnlyList<ImportSource> imports)
+    // offerSignIn: mostrar o passo «Já usa o Éteris noutro computador?» (quem chama decide, pela regra do início de
+    // sessão; aqui só se põe o valor nos dados da página).
+    public static string Render(UserSettings settings, IReadOnlyList<ImportSource> imports, bool offerSignIn = false)
     {
         var data = new
         {
@@ -26,6 +28,7 @@ public static class WelcomePage
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
             imports = imports.Select(i => new { id = i.Id, name = i.Name, count = i.Count }),
+            signIn = offerSignIn,
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

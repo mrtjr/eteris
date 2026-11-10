@@ -32,6 +32,7 @@
   .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
   .step { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; backdrop-filter: blur(18px); animation: rise .7s ease-out both; }
   .step:nth-child(2) { animation-delay: .08s; } .step:nth-child(3) { animation-delay: .16s; } .step:nth-child(4) { animation-delay: .24s; }
+  .step:nth-child(5) { animation-delay: .32s; } .step:nth-child(6) { animation-delay: .4s; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
   .num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 700; color: #0b0d13; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 50%, #fff), color-mix(in srgb, var(--accent-2) 60%, #fff)); margin-right: 10px; }
   h2 { font-size: 16px; font-weight: 600; display: flex; align-items: center; margin-bottom: 8px; }
@@ -98,15 +99,22 @@
       <label class="toggle"><span>DNS cifrado (Quad9)<small>O seu fornecedor deixa de ver que sites visita</small></span><input type="checkbox" id="dns"></label>
       <label class="toggle"><span>Esquecer os sites ao fechar<small>Apaga cookies e dados de sites em cada saída</small></span><input type="checkbox" data-key="clearOnExit"></label>
     </section>
-    <section class="step" style="grid-column: 1 / -1">
-      <h2><span class="num">5</span>Trazer palavras-passe do Chrome, Brave ou Firefox</h2>
+    <section class="step" id="signInStep" hidden>
+      <h2><span class="num">5</span>Já usa o Éteris noutro computador?</h2>
+      <p>Entre com o Google para trazer favoritos, palavras-passe e definições. O conteúdo vai cifrado: a chave fica nos seus computadores, a Google não a tem.</p>
+      <div class="choices">
+        <button class="on" id="signInGo">Entrar com o Google</button><button id="signInSkip">Agora não</button>
+      </div>
+    </section>
+    <section class="step" id="importStep" style="grid-column: 1 / -1">
+      <h2><span class="num" id="importNum">5</span>Trazer palavras-passe do Chrome, Brave ou Firefox</h2>
       <p>Exporte-as para um ficheiro CSV no navegador que usava — no Chrome e no Brave: Gestor de palavras-passe › Definições › Exportar palavras-passe; no Firefox: Palavras-passe › ⋯ › Exportar palavras-passe — e importe-o no Éteris. O ficheiro é lido pelo Éteris, nada sai do computador, e no fim pode enviá-lo para a Reciclagem.</p>
       <p><a class="go-link" href="eteris://passwords/#definicoes">Importar palavras-passe…</a></p>
     </section>
   </div>
   <div class="footer">
     <button class="go" id="go">Começar a navegar →</button>
-    <p>Sem contas. Sem telemetria. Tudo fica neste computador.</p>
+    <p><b>Sem conta obrigatória.</b> Sem telemetria. Sem sincronização, tudo fica neste computador.</p>
   </div>
 </main>
 <iframe id="sink" title=""></iframe>
@@ -150,6 +158,22 @@
     b.addEventListener('click', () => { b.disabled = true; probe.src = `eteris://${location.host}/import?from=${source.id}&t=${data.token}&n=${Date.now()}`; });
     imports.append(b);
   }
+  // «Entrar com o Google»: só sem sessão (data.signIn). O clique pede a rota com o token num iframe e fica aqui; o
+  // progresso é da barra da janela. Com o passo à vista, a importação passa a 6.ª e partilha a última linha.
+  const signInStep = document.getElementById('signInStep');
+  const importStep = document.getElementById('importStep');
+  const showSignIn = on => {
+    signInStep.hidden = !on;
+    document.getElementById('importNum').textContent = on ? '6' : '5';
+    importStep.style.gridColumn = on ? 'auto' : '1 / -1';
+  };
+  if (data.signIn) showSignIn(true);
+  const signInGo = document.getElementById('signInGo');
+  signInGo.addEventListener('click', () => {
+    sink.src = `eteris://${location.host}/sync-google?t=${data.token}&n=${Date.now()}`;
+    signInGo.disabled = true;
+  });
+  document.getElementById('signInSkip').addEventListener('click', () => showSignIn(false));
   document.getElementById('go').addEventListener('click', () => location.href = 'eteris://newtab/');
 </script>
 </body>

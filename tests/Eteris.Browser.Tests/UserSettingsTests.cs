@@ -60,6 +60,22 @@ public sealed class UserSettingsTests : IDisposable
         Assert.Equal(wallpaper, store.Load().NewTabWallpaper);
     }
 
+    // A marca «oferta de entrar com o Google já mostrada» (0.2.15, T13): falsa por omissão, a página não a muda, e um
+    // ficheiro antigo sem ela carrega com falso.
+    [Fact]
+    public void SignInOffered_IsLocal_AndThePageCannotSetIt()
+    {
+        Assert.False(new UserSettings().SignInOffered);
+        Assert.Null(new UserSettings().With("signInOffered", "true"));
+        Assert.Null(new UserSettings().With("SignInOffered", "true"));
+        File.WriteAllText(_path, "{\"SearchEngine\":\"brave\"}");
+        var loaded = new SettingsStore(_path).Load();
+        Assert.Equal("brave", loaded.SearchEngine);
+        Assert.False(loaded.SignInOffered);
+        new SettingsStore(_path).Save(loaded with { SignInOffered = true });
+        Assert.True(new SettingsStore(_path).Load().SignInOffered);
+    }
+
     [Fact]
     public void MissingOrCorruptFile_GivesDefaults()
     {

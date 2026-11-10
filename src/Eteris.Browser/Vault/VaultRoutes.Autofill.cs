@@ -29,6 +29,9 @@ public sealed partial class VaultRoutes
         {
             case "/list":
                 return VaultReply.Json(AutofillData());
+            case "/sign-in":
+                host.BeginSignIn();
+                return VaultReply.Json(new { ok = true });
             case "/reveal" when collection is { } c && r.Q("id") is { } id:
             {
                 if (c != VaultCollection.Contacts && !await AskAsync(r, ReauthPurpose.Reveal).ConfigureAwait(false)) return NotConfirmed();
@@ -131,6 +134,8 @@ public sealed partial class VaultRoutes
             afTravel = settings.AutofillTravel,
             payAskHello = settings.PaymentsAskHello,
             advice = gate.Advice,
+            // Sem sessão, o botão «Entrar com o Google» no lugar das ligações «Sincronização →».
+            signIn = host.OffersSignIn,
         };
     }
 

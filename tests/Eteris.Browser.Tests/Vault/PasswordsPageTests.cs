@@ -544,6 +544,57 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.Contains("Vault.VaultRoutes.CommitPendingOnExit();", File.ReadAllText(Path.Combine(src, "App.xaml.cs")));
     }
 
+    // ---- «Entrar com o Google» nas páginas do cofre (0.2.15, T13) ----
+
+    // Sem sessão, a ligação «Sincronização →» passa a botão; com sessão (ou sem a aplicação Google), fica como está.
+    [Fact]
+    public async Task Page_OffersSignIn_OnlyWithoutSession()
+    {
+        _f.Host.SignInOffer = true;
+        Assert.Contains("\"signIn\":true", (await _f.Get("passwords", "/")).Body);
+        _f.Host.SignInOffer = false;
+        Assert.Contains("\"signIn\":false", (await _f.Get("passwords", "/")).Body);
+    }
+
+    [Fact]
+    public async Task SignIn_NeedsTheToken()
+    {
+        Assert.Equal(VaultReply.Refused, await _f.Get("passwords", "/sign-in", authorized: false));
+        Assert.Equal(0, _f.Host.SignIns);
+        Assert.True(VaultFixture.Json(await _f.Get("passwords", "/sign-in"))["ok"]!.GetValue<bool>());
+        Assert.Equal(1, _f.Host.SignIns);
+    }
+
+    // A janela privada não chega ao anfitrião: nem a rota nem os dados da página (S31).
+    [Theory]
+    [InlineData("passwords")]
+    [InlineData("autofill")]
+    public async Task SignIn_RefusedInPrivateWindows(string host)
+    {
+        _f.Host.SignInOffer = true;
+        Assert.Equal(VaultReply.Refused, await _f.Get(host, "/sign-in", authorized: true, isPrivate: true));
+        Assert.Equal(VaultReply.Refused, await _f.Get(host, "/sign-in", authorized: false, isPrivate: true));
+        Assert.Equal(0, _f.Host.SignIns);
+        Assert.DoesNotContain("\"signIn\":true", (await _f.Get(host, "/", isPrivate: true)).Body);
+    }
+
+    // Um botão escondido ao lado de cada ligação «Sincronização →» (1 nas palavras-passe, 4 no preenchimento).
+    [Fact]
+    public void Templates_HaveTheSignInButtonNextToEverySyncLink()
+    {
+        foreach (var (template, count) in new[] { (PasswordsPage.Template, 1), (AutofillPage.Template, 4) })
+        {
+            var buttons = System.Text.RegularExpressions.Regex.Matches(template, @"<button[^>]*\bdata-sign-in\b[^>]*>([^<]*)</button>");
+            Assert.Equal(count, buttons.Count);
+            Assert.All(buttons, b =>
+            {
+                Assert.Equal("Entrar com o Google", b.Groups[1].Value);
+                Assert.Matches(@"\bhidden\b", b.Value);
+            });
+            Assert.Equal(count, System.Text.RegularExpressions.Regex.Matches(template, "<a [^>]*href=\"eteris://settings/#sincronizacao\"[^>]*>Sincronização →</a>").Count);
+        }
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

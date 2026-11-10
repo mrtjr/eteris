@@ -66,6 +66,12 @@ public interface IVaultHost
 
     // A sincronização está ligada neste computador com a linha «Palavras-passe».
     bool SyncsPasswords => false;
+
+    // «Entrar com o Google» no lugar da ligação «Sincronização →» (sem sessão; só disco, nada sai antes do clique).
+    bool OffersSignIn => false;
+
+    // O clique nesse botão: começa o início de sessão no navegador do sistema (o progresso é da barra da janela).
+    void BeginSignIn() { }
 }
 
 // As rotas das páginas do cofre (docs/palavras-passe.md, B2–B3). Regras: nenhum segredo no HTML inicial; mostrar,
@@ -154,6 +160,9 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
         {
             case "/list":
                 return VaultReply.Json(PasswordsData());
+            case "/sign-in":
+                host.BeginSignIn();
+                return VaultReply.Json(new { ok = true });
             case "/reveal" when r.Q("id") is { } id:
             {
                 if (!await AskAsync(r, ReauthPurpose.Reveal).ConfigureAwait(false)) return NotConfirmed();
@@ -253,6 +262,8 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
             advice = gate.Advice,
             // A linha «Palavras-passe» da sincronização está ligada aqui: apagar apaga também nos outros computadores.
             synced = host.SyncsPasswords,
+            // Sem sessão, o botão «Entrar com o Google» no lugar da ligação «Sincronização →».
+            signIn = host.OffersSignIn,
         };
     }
 

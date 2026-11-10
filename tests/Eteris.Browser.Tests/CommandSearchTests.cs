@@ -67,6 +67,32 @@ public class CommandSearchTests
         Assert.Single(CommandSearch.RankTitled("steampowered", items, i => i.Item1, i => i.Item2));
     }
 
+    // «Entrar com o Google (sincronização)» na paleta (0.2.15, T13): encontra-se por «google», «entrar» e
+    // «sincronização», com ou sem acento.
+    [Theory]
+    [InlineData("google")]
+    [InlineData("entrar")]
+    [InlineData("sincroniza")]
+    [InlineData("sincronizacao")]
+    public void SignIn_IsFoundByGoogleEntrarAndSincronizacao(string query)
+    {
+        var items = new[]
+        {
+            ("Definições", "Motor de pesquisa, arranque, abas e privacidade"),
+            (Eteris.Browser.Sync.SignInEntry.PaletteTitle, Eteris.Browser.Sync.SignInEntry.PaletteSubtitle),
+            ("Nova aba", "Abre uma aba nova"),
+        };
+        Assert.Contains(CommandSearch.RankTitled(query, items, i => i.Item1, i => i.Item2), i => i.Item1 == Eteris.Browser.Sync.SignInEntry.PaletteTitle);
+    }
+
+    [Fact]
+    public void Palette_AddsTheCommandOnlyThroughThePolicy()
+    {
+        var palette = System.IO.File.ReadAllText(System.IO.Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Palette.cs"));
+        Assert.Contains("SignInEntry.OffersNow(IsPrivate)", palette);
+        Assert.Contains("SignInEntry.PaletteTitle", palette);
+    }
+
     [Fact]
     public void Rank_EmptyQueryKeepsOriginalOrder()
         => Assert.Equal(["b", "a", "c"], CommandSearch.Rank("", ["b", "a", "c"], s => s));

@@ -21,6 +21,11 @@ internal sealed class FakeVaultHost : IVaultHost
     public int ImportDialogs, ExportDialogs, Shown, Hidden;
     public bool Synced;
     public bool SyncsPasswords => Synced;
+    // «Entrar com o Google» nas páginas do cofre (T13): se o botão aparece, e quantas vezes foi carregado.
+    public bool SignInOffer;
+    public int SignIns;
+    public bool OffersSignIn => SignInOffer;
+    public void BeginSignIn() => SignIns++;
     public UserSettings Current = new();
     public CancellationTokenSource Front = new();
 

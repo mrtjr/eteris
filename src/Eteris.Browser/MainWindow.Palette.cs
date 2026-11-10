@@ -209,6 +209,9 @@ public partial class MainWindow
         yield return new("", "Atalhos de teclado", "Todos os atalhos do Éteris numa só vista", "F1", ToggleShortcuts);
         yield return new("\uE789", "Novidades desta versão", "O que mudou no Éteris", null, () => OpenInternal(WhatsNewPage.Url));
         yield return new("", "Definições", "Motor de pesquisa, arranque, abas e privacidade", "Ctrl+,", OpenSettings);
+        // Só sem sessão e nunca na janela privada (a mesma regra da linha do menu); decidir só lê disco.
+        if (Sync.SignInEntry.OffersNow(IsPrivate))
+            yield return new("\uE753", Sync.SignInEntry.PaletteTitle, Sync.SignInEntry.PaletteSubtitle, null, Sync.SignInEntry.Begin);
         // Palavras-passe e preenchimento automático: as cinco páginas do submenu do menu do Éteris.
         foreach (var entry in Vault.VaultPages.Entries)
         {

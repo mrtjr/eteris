@@ -162,6 +162,7 @@
         <div class="item">
           <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, os cartões e o IBAN passam para os outros computadores só se ligar «Pagamentos» em «O que passa entre PCs» (desligado por omissão; ligar pede o Windows Hello). Vão com uma segunda cifra própria e nunca com o código de segurança.</span></div>
           <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+          <button class="link" data-sign-in hidden>Entrar com o Google</button>
         </div>
       </div>
     </section>
@@ -181,6 +182,7 @@
         <div class="item">
           <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, as moradas passam para os outros computadores (linha «Informações de contacto» em «O que passa entre PCs», ligada por omissão), com uma segunda cifra própria.</span></div>
           <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+          <button class="link" data-sign-in hidden>Entrar com o Google</button>
         </div>
       </div>
     </section>
@@ -200,6 +202,7 @@
         <div class="item">
           <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, os documentos só passam para os outros computadores se ligar «Documentos de identificação» em «O que passa entre PCs» (desligado por omissão; ligar pede o Windows Hello). Vão com uma segunda cifra própria.</span></div>
           <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+          <button class="link" data-sign-in hidden>Entrar com o Google</button>
         </div>
       </div>
     </section>
@@ -224,6 +227,7 @@
         <div class="item">
           <div class="label"><b>Sincronizar entre computadores</b><span>Com a sincronização ligada, os veículos e os programas passam para os outros computadores (linha «Viagens» em «O que passa entre PCs», ligada por omissão), com uma segunda cifra própria.</span></div>
           <a class="link" href="eteris://settings/#sincronizacao">Sincronização →</a>
+          <button class="link" data-sign-in hidden>Entrar com o Google</button>
         </div>
       </div>
     </section>
@@ -426,6 +430,17 @@
   addEventListener('hashchange', () => { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); mark(); });
   // A página saiu: todas as retenções dela saem.
   addEventListener('pagehide', () => ask('hide'));
+  // Sem sessão (data.signIn), «Entrar com o Google» no lugar de «Sincronização →»: começa o início de sessão no
+  // navegador do sistema e a página fica onde está (o progresso é da barra da janela).
+  if (data.signIn) {
+    document.querySelectorAll('a.link[href="eteris://settings/#sincronizacao"]').forEach(a => { a.hidden = true; });
+    document.querySelectorAll('button[data-sign-in]').forEach(b => {
+      b.hidden = false;
+      b.addEventListener('click', () => ask('sign-in', null, () => {
+        document.querySelectorAll('button[data-sign-in]').forEach(x => { x.disabled = true; });
+      }));
+    });
+  }
   render();
   if (location.hash) { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); }
   mark();

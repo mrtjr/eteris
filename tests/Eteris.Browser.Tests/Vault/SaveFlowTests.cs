@@ -224,4 +224,17 @@ public class SaveFlowTests
         Assert.True(SavePolicy.KeepsOfferAcrossNavigation(TimeSpan.FromSeconds(1)));
         Assert.False(SavePolicy.KeepsOfferAcrossNavigation(SavePolicy.RedirectGrace + TimeSpan.FromSeconds(1)));
     }
+
+    // 0.2.15 (T13): o aviso «Palavra-passe guardada» leva a oferta de entrar com o Google, pela regra de SignInEntry, e
+    // a marca «uma só vez» grava-se quando a oferta é mostrada. A palavra-passe gerada (guardada sem perguntar) não a leva.
+    [Fact]
+    public void SavedToast_OffersSignIn_ThroughThePolicy_AndMarksItOnce()
+    {
+        var vault = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Vault.cs")).Replace("\r\n", "\n");
+        var save = SignInEntryTests.Body(vault, "private void SaveOfferedPassword(");
+        Assert.Contains("SignInEntry.OffersAfterSave(", save);
+        Assert.Contains("MarkSignInOffered()", save);
+        Assert.Contains("SignInEntry.AfterSaveQuestion", save);
+        Assert.DoesNotContain("SignInEntry", SignInEntryTests.Body(vault, "private void ConfirmGeneratedPassword("));
+    }
 }

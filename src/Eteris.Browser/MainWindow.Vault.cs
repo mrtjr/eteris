@@ -919,6 +919,15 @@ public partial class MainWindow
             return;
         }
         DropSaveOffer(tab);
+        // A primeira palavra-passe nova guardada sem sessão leva a oferta de entrar com o Google, uma só vez por perfil
+        // (a marca grava-se quando a oferta é mostrada). O botão do aviso só responde ao rato: pelo teclado há a paleta
+        // e o menu.
+        if (Sync.SignInEntry.OffersAfterSave(offer.Kind, Sync.SignInEntry.OffersNow(IsPrivate), Data.Settings.Current.SignInOffered))
+        {
+            Data.Settings.MarkSignInOffered();
+            ShowToast("Palavra-passe guardada. " + Sync.SignInEntry.AfterSaveQuestion, new ToastAction(Sync.SignInEntry.Label, Sync.SignInEntry.Begin));
+            return;
+        }
         ShowToast(offer.Kind == SaveOfferKind.Update ? "Palavra-passe atualizada" : "Palavra-passe guardada");
     }
 
@@ -1085,6 +1094,12 @@ internal sealed class WindowsVaultHost : IVaultHost
     public IDisposable Schedule(TimeSpan delay, Action run) => Timers.Schedule(delay, run);
 
     public bool SyncsPasswords => Sync.SyncService.Agent() is { } agent && agent.EnabledCollections.Contains(Eteris.Sync.Model.Collections.Logins);
+
+    // isPrivate fixo: as rotas do cofre recusam a janela privada antes de chegarem aqui (nem a página com dados nem
+    // /sign-in passam).
+    public bool OffersSignIn => Sync.SignInEntry.OffersNow(isPrivate: false);
+
+    public void BeginSignIn() => Sync.SignInEntry.Begin();
 }
 
 // «Enviar o ficheiro CSV para a Reciclagem» depois de importar (o ficheiro tem todas as palavras-passe em claro).

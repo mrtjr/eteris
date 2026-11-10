@@ -84,7 +84,16 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
         if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
-            return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))));
+            return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
+                Sync.SignInEntry.OffersNow(privateContext)));
+        // «Entrar com o Google» das boas-vindas. A recusa da janela privada das rotas sync-* abaixo só vale para o host
+        // settings: esta rota faz ela própria as duas recusas (janela privada e token).
+        if (uri is { Host: "welcome", AbsolutePath: "/sync-google" })
+        {
+            if (privateContext || !InternalPages.IsAuthorized(request.Url)) return Text("recusado");
+            Sync.SignInEntry.Begin();
+            return Text("ok");
+        }
         // Definições › Sincronização (perfil cifrado, «Entrar com o Google»): nunca a partir da janela privada.
         if (uri is { Host: "settings" } && uri.AbsolutePath.StartsWith("/sync-", StringComparison.Ordinal))
             return privateContext ? Text("recusado") : SyncRoute(uri, request, browser.Identifier);
@@ -253,9 +262,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 }
             }
             case "/sync-google":
-                // Na pasta de teste não há conta: «Ligar» liga a sincronização por ela.
-                if (Sync.SyncService.FolderMode) Sync.SyncService.Start();
-                else Sync.GoogleSync.BeginSignIn();
+                // Na pasta de teste não há conta: «Ligar» liga a sincronização por ela (SignInEntry.Begin trata disso).
+                Sync.SignInEntry.Begin();
                 break;
             case "/sync-google-cancel":
                 Sync.GoogleSync.CancelSignIn();
