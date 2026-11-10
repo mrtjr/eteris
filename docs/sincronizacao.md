@@ -113,7 +113,8 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
     `RecoveryKit.FolderWarning`). O mesmo vale para «Imprimir para PDF» (é um ficheiro) e para uma impressora de rede.
   - **O lembrete.** Enquanto houver um só computador na conta e o kit não estiver guardado, uma barra na janela diz
     «Guarde o seu kit de recuperação. Se perder este computador, é com ele que recupera, na nuvem, os favoritos e as
-    palavras-passe.» [Guardar o kit] [Mais tarde] [Não quero…]. O lembrete volta de 30 em 30 dias enquanto houver um só computador na conta, e tem a opção «Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera».
+    palavras-passe.» [Guardar o kit] [Mais tarde] [Não quero…]. O lembrete volta de 30 em 30 dias enquanto houver um só
+    computador na conta, e tem a opção «Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera».
     (`RecoveryReminder.SnoozeDays` = 30; «Não quero» grava-se e o lembrete não volta; uma troca de chave repõe-no.) A
     linha do menu diz «Guarde o kit de recuperação» enquanto o kit não estiver guardado nem recusado.
   - O kit sozinho não abre nada: também é preciso entrar na sua conta Google (o kit desembrulha a chave que está no
@@ -139,7 +140,9 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   conta seguir (`SyncChoices.MayApproveAsync`). Depois de 3 pedidos recusados, expirados depois de respondidos ou com
   códigos errados em 24 h (`PairingFatigue.MaxBad`, `PairingFatigue.Window`) a barra deixa de abrir sozinha e o aviso
   fica nas Definições, com «Mostrar o pedido na barra». O nome do computador novo («Nome que o outro computador
-  indicou: …») não é prova de nada: a barra mostra-o pequeno, sem algarismos e cortado. Escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito.
+  indicou: …») não é prova de nada: a barra mostra-o pequeno, sem algarismos e cortado. Escrever o código só protege se
+  for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem
+  não deve ser escrito.
   Ou, sem o outro computador à mão: **«Usar o kit de recuperação»** (as 24 palavras, coladas ou abertas do ficheiro;
   os códigos antigos de 56 carateres continuam aceites; no corpo de um POST, nunca no endereço).
   Os ficheiros do pedido (`eteris/pair/<sessão>/0-request`, `1-host`, `2-guest`…, `x-host`) têm nomes legíveis e levam
@@ -229,13 +232,14 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   Sincronização › O que passa entre PCs) liga cartões, IBAN e documentos para a conta inteira: ligar pede a confirmação
   do Windows **no computador onde se liga** (`ReauthPurpose.SyncSecrets`) e grava a escolha, cifrada, num registo
   reservado da conta (`@account/secret-groups`, campos `value`, `since` e `by`; só `"on"` liga; um Éteris 0.2.14
-  ignora-o — provado por imitação, `SyncAccountChoiceTests.OlderEteris_IgnoresTheRecord`). Um computador **novo** (sem estado de sincronização anterior) que entra depois herda a escolha sem pedir de
-  novo e diz «Recebeu favoritos, palavras-passe, cartões e documentos». Um computador que já estava ligado — ou que já
-  esteve numa conta e entra noutra (por exemplo depois do alerta de conta substituída) — recebe uma oferta única: «Os
-  seus outros computadores sincronizam agora pagamentos e documentos. Receber também neste?» [Sim] [Não]; só recebe com
-  «Sim» e a confirmação do Windows. Desligar a linha neste computador só o desliga aqui e não apaga nada. A escolha é
-  de quem tem a chave da conta: a confirmação do Windows pedida num computador protege esse computador, não é
-  verificável pelos outros. O estado de cada aparelho leva, cifrado, o campo `groups` (os grupos que recebe).
+  ignora-o — provado por imitação, `SyncAccountChoiceTests.OlderEteris_IgnoresTheRecord`). Um computador **novo** (sem
+  estado de sincronização anterior) que entra depois herda a escolha sem pedir de novo e diz «Recebeu favoritos,
+  palavras-passe, cartões e documentos». Um computador que já estava ligado — ou que já esteve numa conta e entra noutra
+  (por exemplo depois do alerta de conta substituída) — recebe uma oferta única: «Os seus outros computadores
+  sincronizam agora pagamentos e documentos. Receber também neste?» [Sim] [Não]; só recebe com «Sim» e a confirmação do
+  Windows. Desligar a linha neste computador só o desliga aqui e não apaga nada. A escolha é de quem tem a chave da
+  conta: a confirmação do Windows pedida num computador protege esse computador, não é verificável pelos outros. O
+  estado de cada aparelho leva, cifrado, o campo `groups` (os grupos que recebe).
 - **Sessão expirada.** Quando a Google deixa de aceitar a sessão (`invalid_grant`, autorização retirada), aparece na
   janela, uma vez por abertura do Éteris, «A sincronização está em pausa: a Google pediu para entrar outra vez.»
   [Entrar] [Agora não]; nunca em janelas privadas nem na pasta de teste. «Entrar» pré-escolhe a conta (`login_hint`, só
@@ -457,7 +461,8 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
   ele aceitou?» (`PairingGuest.ConfirmCode`; «Sim» só conta 2 s depois de o código aparecer) e só depois abre o segredo
   (`WaitForSecretAsync` recusa sem isso).
 - **O limite do código escrito** (*number matching*): o anfitrião compara o que a pessoa escreve com o código do pedido,
-  não sabe de onde ela o tirou. Escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito.
+  não sabe de onde ela o tirou. Escrever o código só protege se for o código que está a ver no seu outro computador: um
+  código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito.
 - **Nada do utilizador em claro no transporte:** o passo 2 leva só a chave pública e o compromisso; o nome do aparelho
   convidado segue no passo 4, cifrado com a chave da sessão (mesmo que o anfitrião feche de repente e os ficheiros
   fiquem lá, a Google não lê «PC da Ana»). As chaves públicas têm de ser P-256 (outra curva é recusada logo).
@@ -538,10 +543,10 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
   menu diz «Conta Google ligada». O pedido corre fora do fio da interface (abrir o menu nunca espera pela rede nem
   pelo proxy do Windows), e o gesto que é o próprio clique em «Sair» não o lança.
 - **Onde fica:** `<perfil>\sync\google.account`, cifrado com DPAPI do utilizador do Windows (como os tokens, com outra
-  «entropia»). **Apagado deste computador ao «Sair».** O texto que vem da rede é limpo (sem caracteres de controlo, até 200 caracteres)
-  antes de ir para a interface. «Sair» a meio de um pedido: o pedido da conta é cancelado e a sessão e a conta mudam de
-  geração, por isso uma resposta que chegue depois (a renovação do token ou o `about.get`) já não grava `google.tokens`
-  nem `google.account`, nem mostra a conta antiga depois de se entrar com outra.
+  «entropia»). **Apagado deste computador ao «Sair».** O texto que vem da rede é limpo (sem caracteres de controlo, até
+  200 caracteres) antes de ir para a interface. «Sair» a meio de um pedido: o pedido da conta é cancelado e a sessão e a
+  conta mudam de geração, por isso uma resposta que chegue depois (a renovação do token ou o `about.get`) já não grava
+  `google.tokens` nem `google.account`, nem mostra a conta antiga depois de se entrar com outra.
 - **No menu**, numa janela normal e com o identificador da aplicação (`google-oauth.json`; sem ele as Definições
   dizem «indisponível nesta compilação» e o menu não oferece o que não se pode cumprir). Nas janelas privadas não
   aparece nada da conta. Com sessão, avatar (a letra com a tinta da cor de destaque), nome em negrito, e-mail e o estado
@@ -745,7 +750,9 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 - **Recuperação (D6):** sem o kit e sem nenhum computador ligado, a cópia na nuvem é irrecuperável. Não há
   «esqueci-me do kit». O lembrete do kit e a recusa «Não quero: aceito que, sem este computador, a cópia na nuvem não se
   recupera» dizem-no.
-- **A confirmação do Windows.** Onde se lê «com o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a palavra-passe do Windows. Se a conta do Windows não tiver nenhuma proteção, o Éteris avisa e não tem como confirmar que é você.
+- **A confirmação do Windows.** Onde se lê «com o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a
+  palavra-passe do Windows. Se a conta do Windows não tiver nenhuma proteção, o Éteris avisa e não tem como confirmar
+  que é você.
   (`ReauthGate.RequestAsync` passa com o conselho `ReauthGate.ProtectAccountAdvice`.) A confirmação pedida num
   computador protege esse computador; não é verificável pelos outros.
 - **Promessa (D1):** o README diz «Sem telemetria. Por omissão tudo fica no computador; a sincronização é opcional,
@@ -771,10 +778,10 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
   se foi recusado.
   (`eteris/pair/<sessão>/0-request` só com a hora, `1-host` com a chave pública do anfitrião, `x-host` numa recusa; o
   nome do computador novo vai cifrado com a chave da sessão.)
-- nos ficheiros de dados, os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)
-  e tamanhos aproximados (preenchidos a 1 KiB e, nos grandes, a «baldes» Padmé: um instantâneo de um perfil grande
-  pesa mais do que o de um pequeno; o número de palavras-passe também pesa no tamanho do instantâneo — a ordem de
-  grandeza, não o número); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
+- nos ficheiros de dados, os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos
+  (`eteris/<hex>/d/<hex>/000000000012`) e tamanhos aproximados (preenchidos a 1 KiB e, nos grandes, a «baldes» Padmé: um
+  instantâneo de um perfil grande pesa mais do que o de um pequeno; o número de palavras-passe também pesa no tamanho do
+  instantâneo — a ordem de grandeza, não o número); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
 - **nunca** o conteúdo: favoritos, URLs, títulos, notas, abas, definições, Espaços, decisões do Escudo, nomes dos
   aparelhos, palavras-passe, cartões, moradas, documentos — tudo dentro da cifra (os do cofre com uma segunda cifra
   própria). A chave nunca lá vai.

@@ -171,7 +171,6 @@ public sealed class SyncSecretRotationTests : IDisposable
             foreach (var field in fields.Keys)
                 Assert.Contains($"`{field}`", doc);
         foreach (var text in new[] { "secrets:v1", "secret-keys:v1", "eteris-secret|v1|", "O que passa entre PCs", "Quem tem o kit de recuperação ou um computador emparelhado tem também as palavras-passe", // 0.2.15: o código passou a kit
-
                      "o número de palavras-passe também pesa", "mude as dos sites importantes" })
             Assert.Contains(text, doc);
     }

@@ -55,9 +55,9 @@ para o projeto.
 - **O que mudou no que o Éteris pede à Google.** Ao voltar à janela do Éteris procura pedidos de computadores novos, no
   máximo uma vez a cada 5 minutos (ou logo, se uma ronda já tiver encontrado um pedido), só com a sincronização ligada e
   nunca antes da primeira ronda; o computador novo, enquanto espera pela aprovação, procura a resposta no Drive de 3 em
-  3 s (cada pedido dura 10 minutos e só se renova, até 30 minutos, com o pedido à vista). «Sair deste computador» já não revoga e não fala com a Google: a Google
-  continua a listar o Éteris até «Retirar o acesso…». A lista completa está em `eteris://privacy/` e em
-  `docs/sincronizacao.md`, «Quando sincroniza».
+  3 s (cada pedido dura 10 minutos e só se renova, até 30 minutos, com o pedido à vista). «Sair deste computador» já não
+  revoga e não fala com a Google: a Google continua a listar o Éteris até «Retirar o acesso…». A lista completa está em
+  `eteris://privacy/` e em `docs/sincronizacao.md`, «Quando sincroniza».
 - **O que vai, o que a Google vê e onde fica a chave**, sempre à vista em `eteris://privacy/#sincronizacao`, mesmo antes
   de entrar. A Google vê o que já via (que usa o Éteris, quando sincroniza, quantos ficheiros e o tamanho aproximado) e
   ainda quando um computador novo pede para entrar e se foi recusado; nunca o conteúdo.

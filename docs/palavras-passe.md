@@ -982,8 +982,8 @@ testadas.
 - **Documentação** (`docs/sincronizacao.md`): secção nova «Coleções secretas» (coleções, chaves naturais e campos, a
   cifra interna, o perfil com segredos, o tópico, emparelhamento, nova cadeia e `.eteris`), a linha das palavras-passe
   e a das chaves de acesso em «O que sincroniza», a ameaça «quem tem o kit de recuperação ou um computador emparelhado
-  tem também as palavras-passe…» (até à 0.2.14, «o código de recuperação ou um aparelho emparelhado») com o remédio, e em «O que a Google vê» que o número de palavras-passe também pesa no
-  tamanho do instantâneo (a ordem de grandeza).
+  tem também as palavras-passe…» (até à 0.2.14, «o código de recuperação ou um aparelho emparelhado») com o remédio, e
+  em «O que a Google vê» que o número de palavras-passe também pesa no tamanho do instantâneo (a ordem de grandeza).
 
 Testes: `Sync/SyncSecretRotationTests` — remover um de três aparelhos: todos os selos mudam (nenhuma `Key` antiga),
 abrem só com a `K_seg` nova (nem com a antiga, nem com a antiga com a cadeia nova), os que ficam continuam iguais e a
@@ -1096,7 +1096,9 @@ O que mudou depois da revisão de segurança e de experiência (testes em `Vault
   computador novo pedem-no com segredos em jogo (`SyncChoices.MayApproveAsync`); «Ver o kit», «Perdi um computador / foi
   roubado», «Começar do zero…» e «Foi eu — juntar este computador» (com segredos ligados aqui) pedem-no sempre; «Sair
   deste computador» e «Retirar o acesso…» não o pedem (só a confirmação na página); «Apagar todas» tem propósito e
-  texto próprios; a conta sem proteção volta a ser verificada passada a janela de graça ou ao bloquear. Onde se lê «com o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a palavra-passe do Windows. Se a conta do Windows não tiver nenhuma proteção, o Éteris avisa e não tem como confirmar que é você.
+  texto próprios; a conta sem proteção volta a ser verificada passada a janela de graça ou ao bloquear. Onde se lê «com
+  o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a palavra-passe do Windows. Se a conta do Windows
+  não tiver nenhuma proteção, o Éteris avisa e não tem como confirmar que é você.
 - **Segredos à vista.** Cada «Mostrar» e cada formulário de edição tem a sua retenção (`hold`); o `/hide` liberta só a
   sua e o `/keep` renova a do formulário enquanto estiver aberto. Editar mostra a palavra-passe mascarada.
 - **Acessibilidade.** Bolha anunciada sem tirar o teclado à página, F6 e o ícone de chave levam o teclado para ela;
