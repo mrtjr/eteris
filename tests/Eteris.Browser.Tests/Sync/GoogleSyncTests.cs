@@ -305,7 +305,9 @@ public class GoogleSyncTests
         await browser.Done;
         Assert.Equal(google.ValidAccessToken, tokens.AccessToken);
         Assert.Equal(google.RefreshToken, tokens.RefreshToken);
-        Assert.Contains("Pode fechar esta aba", browser.Page);
+        // Sem «Finish» o Éteris não sabe como ficou a sincronização: a página é a neutra.
+        Assert.Contains("Sessão iniciada. Volte ao Éteris para continuar.", browser.Page);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Neutral), browser.Page);
         Assert.StartsWith("http://127.0.0.1:", browser.Redirect);
     }
 
@@ -340,6 +342,343 @@ public class GoogleSyncTests
         var oauth2 = new GoogleOAuth(GoogleEndpoints.CreateClient(stingy), new OAuthClientConfig(stingy.ClientId, null), Now);
         var e = await Assert.ThrowsAsync<OAuthException>(() => oauth2.SignInAsync(new ConsentingBrowser(stingy), null, CancellationToken.None));
         Assert.Contains("pasta da aplicação", e.Message);
+    }
+
+    // ---- a página de fim (segura até se saber o que dizer) -------------------------------------------------------------
+
+    private static SignInOptions Options(IExternalBrowser browser, Func<OAuthTokens, CancellationToken, Task<SignInPageKind>>? finish = null,
+        Action? signedIn = null)
+        => new(browser) { Finish = finish, SignedIn = signedIn };
+
+    [Fact]
+    public async Task SignIn_HoldsThePage_UntilFinishChoosesTheText()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var decided = new TaskCompletionSource<SignInPageKind>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signIn = NewOAuth(google).SignInAsync(Options(browser, (_, _) =>
+        {
+            arrived.TrySetResult();
+            return decided.Task;
+        }), CancellationToken.None);
+        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Delay(200);
+        Assert.False(browser.Done.IsCompleted, "a página saiu antes de o Éteris saber o que dizer");
+        decided.SetResult(SignInPageKind.FirstDevice);
+        await signIn;
+        await browser.Done;
+        Assert.Contains("O Éteris começou a sincronizar", browser.Page);
+    }
+
+    [Theory]
+    [InlineData(SignInPageKind.FirstDevice)]
+    [InlineData(SignInPageKind.NeedsApproval)]
+    [InlineData(SignInPageKind.Resumed)]
+    [InlineData(SignInPageKind.Neutral)]
+    public async Task SignIn_Page_ShowsWhatFinishDecided(SignInPageKind kind)
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        await NewOAuth(google).SignInAsync(Options(browser, (_, _) => Task.FromResult(kind)), CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(SignInPage.Html(kind), browser.Page);
+    }
+
+    [Fact]
+    public async Task SignIn_FinishTooSlow_ShowsTheNeutralPage_AndStillReturnsTheTokens()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        var never = new TaskCompletionSource<SignInPageKind>();
+        var tokens = await NewOAuth(google).SignInAsync(Options(browser, (_, _) => never.Task) with { FinishTimeout = TimeSpan.FromMilliseconds(50) },
+            CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(google.ValidAccessToken, tokens.AccessToken);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Neutral), browser.Page);
+    }
+
+    [Fact]
+    public async Task SignIn_FinishThrows_ShowsTheNeutralPage()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        var tokens = await NewOAuth(google).SignInAsync(Options(browser, (_, _) => throw new IOException("disco cheio")), CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(google.RefreshToken, tokens.RefreshToken);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Neutral), browser.Page);
+    }
+
+    [Fact]
+    public async Task SignIn_Refused_ShowsTheErrorPage()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google) { Deny = "access_denied" };
+        var finished = 0;
+        var signedIn = 0;
+        var e = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(Options(browser, (_, _) =>
+        {
+            finished++;
+            return Task.FromResult(SignInPageKind.FirstDevice);
+        }, () => signedIn++), CancellationToken.None));
+        await browser.Done;
+        Assert.Equal(OAuthFailure.Refused, e.Failure);
+        Assert.Equal("O acesso foi recusado no ecrã da Google.", e.Message);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Refused), browser.Page);
+        Assert.Equal(0, finished);
+        Assert.Equal(0, signedIn);
+        Assert.Equal(0, google.Exchanges);
+    }
+
+    [Fact]
+    public async Task SignIn_MissingDrivePermission_ShowsTheDrivePage()
+    {
+        var google = new FakeGoogle { GrantScope = false };
+        var browser = new ConsentingBrowser(google);
+        var signedIn = 0;
+        var e = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(Options(browser, (_, _) => Task.FromResult(SignInPageKind.FirstDevice),
+            () => signedIn++), CancellationToken.None));
+        await browser.Done;
+        Assert.Equal(OAuthFailure.MissingScope, e.Failure);
+        Assert.True(e.NeedsSignIn);
+        Assert.Equal(SignInPage.Html(SignInPageKind.DriveDenied), browser.Page);
+        Assert.Equal(0, signedIn);
+    }
+
+    [Fact]
+    public async Task SignIn_ExchangeFails_NeverSaysSignedIn()
+    {
+        // O identificador da aplicação não confere: a Google recusa a troca do código (invalid_client).
+        var google = new FakeGoogle();
+        var oauth = new GoogleOAuth(GoogleEndpoints.CreateClient(google), new OAuthClientConfig("999-outra.apps.googleusercontent.com", null), Now);
+        var browser = new ConsentingBrowser(google);
+        var signedIn = 0;
+        var e = await Assert.ThrowsAsync<OAuthException>(() => oauth.SignInAsync(Options(browser, (_, _) => Task.FromResult(SignInPageKind.FirstDevice),
+            () => signedIn++), CancellationToken.None));
+        await browser.Done;
+        Assert.Equal(OAuthFailure.Other, e.Failure);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Refused), browser.Page);
+        Assert.DoesNotContain("Sessão iniciada", browser.Page);
+        Assert.Equal(0, signedIn);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task SignIn_Success_AsksForAttentionOnce(int omitRefreshToken)
+    {
+        var google = new FakeGoogle { OmitRefreshToken = omitRefreshToken };
+        var browser = new ConsentingBrowser(google);
+        var signedIn = 0;
+        var signedInBeforeFinish = false;
+        await NewOAuth(google).SignInAsync(Options(browser, (_, _) =>
+        {
+            signedInBeforeFinish = signedIn == 1;
+            return Task.FromResult(SignInPageKind.FirstDevice);
+        }, () => signedIn++), CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(1, signedIn);
+        Assert.True(signedInBeforeFinish);
+        Assert.Equal(1 + omitRefreshToken, google.Exchanges);
+    }
+
+    [Fact]
+    public async Task SignIn_WithoutARefreshToken_RedirectsTheSameTabToConsent()
+    {
+        var google = new FakeGoogle { OmitRefreshToken = 1 };
+        var browser = new ConsentingBrowser(google);
+        await NewOAuth(google).SignInAsync(Options(browser, (_, _) => Task.FromResult(SignInPageKind.Resumed)), CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(1, browser.Opens);
+        Assert.Equal(2, browser.Opened.Count);
+        var answers = browser.Answers.Where(a => a.Status != HttpStatusCode.NotFound).ToList();
+        Assert.Equal([HttpStatusCode.Redirect, HttpStatusCode.OK], answers.Select(a => a.Status));
+        var location = new Uri(answers[0].Headers["Location"]);
+        Assert.True(GoogleEndpoints.IsAllowedBrowserUrl(location));
+        Assert.Equal("consent", QueryOf(location.OriginalString)["prompt"]);
+        Assert.Equal(location.OriginalString, browser.Opened[1]);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Resumed), browser.Page);
+    }
+
+    [Theory]
+    [InlineData(200)]
+    [InlineData(302)]
+    [InlineData(400)]
+    [InlineData(404)]
+    public async Task Loopback_EveryAnswer_CarriesTheSafetyHeaders(int status)
+    {
+        var google = new FakeGoogle { OmitRefreshToken = 1 };
+        var browser = new ConsentingBrowser(google) { ForgeFirst = true };
+        await NewOAuth(google).SignInAsync(browser, null, CancellationToken.None);
+        await browser.Done;
+        var answer = browser.Answers.First(a => (int)a.Status == status);
+        Assert.Equal("text/html; charset=utf-8", answer.Headers["Content-Type"]);
+        Assert.Equal("no-store", answer.Headers["Cache-Control"]);
+        Assert.Equal("no-referrer", answer.Headers["Referrer-Policy"]);
+        Assert.Equal("nosniff", answer.Headers["X-Content-Type-Options"]);
+        Assert.Equal("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            answer.Headers["Content-Security-Policy"]);
+        Assert.Equal("close", answer.Headers["Connection"]);
+    }
+
+    private static bool PortAnswers(int port)
+    {
+        try
+        {
+            using var probe = new System.Net.Sockets.TcpClient();
+            probe.Connect(IPAddress.Loopback, port);
+            return true;
+        }
+        catch (System.Net.Sockets.SocketException) { return false; }
+    }
+
+    [Fact]
+    public async Task SignIn_TimesOut_WithATypedFailure()
+    {
+        var google = new FakeGoogle();
+        string? shown = null;
+        var started = DateTime.UtcNow;
+        var e = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(
+            new SignInOptions(new NoBrowser(), url => shown = url) { Timeout = TimeSpan.FromMilliseconds(150) }, CancellationToken.None));
+        Assert.Equal(OAuthFailure.TimedOut, e.Failure);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(5));
+        var port = new Uri(QueryOf(shown!)["redirect_uri"]).Port;
+        Assert.False(PortAnswers(port), "o recetor continua à escuta depois do prazo");
+    }
+
+    [Fact]
+    public async Task Loopback_SilentConnection_DoesNotBlockTheRealAnswer()
+    {
+        using (var plain = LoopbackReceiver.Start()) Assert.Equal(TimeSpan.FromSeconds(5), plain.RequestLineTimeout);
+        using var receiver = LoopbackReceiver.Start();
+        receiver.RequestLineTimeout = TimeSpan.FromMilliseconds(100);
+        // Uma ligação local que não envia nada: sem o prazo da linha, o recetor ficava preso nela até ao prazo geral.
+        using var silent = new System.Net.Sockets.TcpClient();
+        await silent.ConnectAsync(IPAddress.Loopback, receiver.Port);
+        using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var answer = receiver.WaitAsync("estado-certo", wait.Token);
+        using var local = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+        var page = local.GetStringAsync(receiver.RedirectUri + "?state=estado-certo&code=abc");
+        var response = await answer.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("abc", response.Code);
+        await receiver.CompleteAsync(SignInPageKind.Neutral, CancellationToken.None);
+        Assert.Equal(SignInPage.Html(SignInPageKind.Neutral), await page);
+    }
+
+    [Fact]
+    public async Task Loopback_WrongState_Gets400_AndTheWaitGoesOn()
+    {
+        var google = new FakeGoogle();
+        string? shown = null;
+        var signIn = NewOAuth(google).SignInAsync(new SignInOptions(new NoBrowser(), url => shown = url), CancellationToken.None);
+        Assert.NotNull(shown);
+        var redirect = QueryOf(shown!)["redirect_uri"];
+        using (var local = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+        {
+            using var forged = await local.GetAsync(redirect + "?error=access_denied&state=errado");
+            Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
+            var text = WebUtility.HtmlDecode(await forged.Content.ReadAsStringAsync());
+            Assert.Contains("Pedido não reconhecido pelo Éteris.", text);
+            Assert.DoesNotContain("access_denied", text);
+        }
+        Assert.False(signIn.IsCompleted, "um pedido com o «state» errado terminou a espera");
+        var consent = new ConsentingBrowser(google);
+        consent.TryOpen(shown!); // o pedido certo, a seguir
+        var tokens = await signIn.WaitAsync(TimeSpan.FromSeconds(10));
+        await consent.Done;
+        Assert.Equal(google.ValidAccessToken, tokens.AccessToken);
+        Assert.DoesNotContain("access_denied", consent.Page);
+    }
+
+    [Fact]
+    public async Task Loopback_StopsListening_OnceTheRightAnswerArrived()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var decided = new TaskCompletionSource<SignInPageKind>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signIn = NewOAuth(google).SignInAsync(Options(browser, (_, _) =>
+        {
+            arrived.TrySetResult();
+            return decided.Task;
+        }), CancellationToken.None);
+        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(PortAnswers(new Uri(browser.Redirect).Port), "a porta continua aberta enquanto a página espera");
+        decided.SetResult(SignInPageKind.FirstDevice);
+        await signIn;
+        await browser.Done;
+        Assert.Equal(SignInPage.Html(SignInPageKind.FirstDevice), browser.Page);
+    }
+
+    [Theory]
+    [InlineData("<script>alert(1)</script>", false)]
+    [InlineData(null, false)] // 5 000 caracteres
+    [InlineData("server_error", true)]
+    public async Task SignIn_ErrorFromTheQuery_IsReducedToASafeCode(string? error, bool named)
+    {
+        error ??= new string('x', 5_000);
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google) { Deny = error };
+        var e = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(browser, null, CancellationToken.None));
+        await browser.Done;
+        Assert.Equal(SignInPage.Html(SignInPageKind.Refused), browser.Page);
+        Assert.Equal(OAuthFailure.Refused, e.Failure);
+        Assert.DoesNotContain("<", e.Message);
+        Assert.DoesNotContain("script", e.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(e.Message.Length <= 200);
+        if (named) Assert.Contains(error, e.Message);
+        else Assert.Equal("A Google devolveu um erro.", e.Message);
+    }
+
+    [Fact]
+    public async Task Session_SignOut_ForgetsTheTokens_WithoutAnyRequest()
+    {
+        var google = new FakeGoogle();
+        var dir = Path.Combine(Path.GetTempPath(), "eteris-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new TokenStore(Path.Combine(dir, "google.tokens"), new PlainProtector());
+            var session = new GoogleSession(NewOAuth(google), store, Now);
+            session.Use(new OAuthTokens("a", google.RefreshToken, _now - 1, GoogleEndpoints.Scope)); // já expirado: a próxima leitura renova
+            // Uma renovação que começou antes de sair e só acaba depois.
+            var (arrived, release) = google.Hold("/token");
+            var renewal = session.AccessTokenAsync(false, CancellationToken.None);
+            await arrived.WaitAsync(TimeSpan.FromSeconds(10));
+            var before = google.Requests.Count;
+            session.SignOut();
+            Assert.False(session.IsSignedIn);
+            Assert.Null(store.Load());
+            release();
+            await Assert.ThrowsAsync<OAuthException>(() => renewal);
+            Assert.False(session.IsSignedIn);
+            Assert.Null(store.Load());
+            Assert.Equal(before, google.Requests.Count);
+            Assert.Empty(google.Revoked);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public async Task SignIn_StillWithoutARefreshToken_ShowsTheErrorPage()
+    {
+        var google = new FakeGoogle { OmitRefreshToken = 5 };
+        var browser = new ConsentingBrowser(google);
+        var finished = 0;
+        var signedIn = 0;
+        await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(Options(browser, (_, _) =>
+        {
+            finished++;
+            return Task.FromResult(SignInPageKind.FirstDevice);
+        }, () => signedIn++), CancellationToken.None));
+        await browser.Done;
+        Assert.Equal(SignInPage.Html(SignInPageKind.Refused), browser.Page);
+        Assert.Equal(0, finished);
+        Assert.Equal(0, signedIn);
+        Assert.Equal(2, browser.Opened.Count);
+        Assert.Equal(1, browser.Opens);
     }
 
     [Fact]
@@ -498,35 +837,82 @@ public class GoogleSyncTests
         public bool TryOpen(string url) => false;
     }
 
+    // Uma resposta do recetor, como o navegador a viu: o código e os cabeçalhos (nome → valores juntos por «, »).
+    internal sealed record LoopbackAnswer(HttpStatusCode Status, Dictionary<string, string> Headers);
+
     // Faz o que o navegador do sistema e o utilizador fariam: abre o ecrã da Google, aceita e segue o redirecionamento.
+    // Os redirecionamentos do recetor (302 para o consentimento) seguem-se à mão: o HttpClient seguia-os sozinho e ia
+    // pedir o endereço da Google à rede a sério. Cada 302 conta em «Opened» (é outro ecrã da Google), mas não em «Opens»
+    // (o navegador do sistema só foi aberto uma vez).
     private sealed class ConsentingBrowser(FakeGoogle google) : IExternalBrowser
     {
         public bool ForgeFirst { get; init; }
+        // O ecrã da Google responde com este «error» (e o «state» certo) em vez de um código: o utilizador recusou.
+        public string? Deny { get; init; }
+        // Corre antes das respostas (com o endereço do recetor): para meter uma ligação muda à frente, por exemplo.
+        public Func<string, Task>? Before { get; init; }
         public List<HttpStatusCode> Forged { get; } = [];
+        public List<LoopbackAnswer> Answers { get; } = [];
         public string Page { get; private set; } = string.Empty;
         public string Redirect { get; private set; } = string.Empty;
         public Task Done { get; private set; } = Task.CompletedTask;
         public List<string> Opened { get; } = [];
+        public int Opens { get; private set; }
 
         public bool TryOpen(string url)
         {
-            Opened.Add(url);
+            Opens++;
+            var (state, code) = Consent(url);
+            Done = Task.Run(async () =>
+            {
+                using var local = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+                if (Before is not null) await Before(Redirect);
+                await SendAsync(local, Redirect + "favicon.ico"); // o navegador pede isto também
+                if (ForgeFirst)
+                    foreach (var forged in new[] { "?error=nao_fui_eu&state=outro", "?error=access_denied", "?state=outro&code=roubado", "?code=sem-estado" })
+                        Forged.Add(await SendAsync(local, Redirect + forged));
+                while (true)
+                {
+                    var answer = Deny is { } error
+                        ? $"{Redirect}?error={Uri.EscapeDataString(error)}&state={Uri.EscapeDataString(state)}"
+                        : $"{Redirect}?state={Uri.EscapeDataString(state)}&code={Uri.EscapeDataString(code)}&scope=x";
+                    using var response = await local.GetAsync(answer);
+                    Record(response);
+                    if (response.StatusCode == HttpStatusCode.Redirect)
+                    {
+                        (state, code) = Consent(response.Headers.Location!.OriginalString);
+                        continue;
+                    }
+                    Page = await response.Content.ReadAsStringAsync();
+                    return;
+                }
+            });
+            return true;
+        }
+
+        // O ecrã da Google: confere o endereço, regista-o e devolve o «state» e o código que a Google mandaria.
+        private (string State, string Code) Consent(string url)
+        {
+            lock (Opened) Opened.Add(url);
             var uri = new Uri(url);
             Assert.True(GoogleEndpoints.IsAllowedBrowserUrl(uri));
             var query = LoopbackReceiver.ParseQuery(uri.Query.TrimStart('?'));
             Redirect = query["redirect_uri"];
-            var code = google.Authorize(query["code_challenge"], Redirect);
-            var state = query["state"];
-            Done = Task.Run(async () =>
-            {
-                using var local = new HttpClient();
-                await local.GetAsync(Redirect + "favicon.ico"); // o navegador pede isto também
-                if (ForgeFirst)
-                    foreach (var forged in new[] { "?error=nao_fui_eu&state=outro", "?error=access_denied", "?state=outro&code=roubado", "?code=sem-estado" })
-                        Forged.Add((await local.GetAsync(Redirect + forged)).StatusCode);
-                Page = await local.GetStringAsync($"{Redirect}?state={Uri.EscapeDataString(state)}&code={Uri.EscapeDataString(code)}&scope=x");
-            });
-            return true;
+            return (query["state"], google.Authorize(query["code_challenge"], Redirect));
+        }
+
+        private async Task<HttpStatusCode> SendAsync(HttpClient local, string url)
+        {
+            using var response = await local.GetAsync(url);
+            Record(response);
+            return response.StatusCode;
+        }
+
+        private void Record(HttpResponseMessage response)
+        {
+            var headers = response.Headers.Concat(response.Content.Headers)
+                .ToDictionary(h => h.Key, h => string.Join(", ", h.Value), StringComparer.OrdinalIgnoreCase);
+            lock (Answers) Answers.Add(new LoopbackAnswer(response.StatusCode, headers));
         }
     }
 }

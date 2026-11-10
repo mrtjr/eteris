@@ -51,11 +51,22 @@ public sealed record OAuthTokens(
     [property: JsonPropertyName("expires")] long ExpiresAtMs,
     [property: JsonPropertyName("scope")] string Scope);
 
+// Porque falhou uma entrada, para quem tem de escolher o que mostrar (a página de fim, a barra).
+public enum OAuthFailure
+{
+    Other,
+    TimedOut,     // ninguém respondeu no navegador dentro do prazo
+    Refused,      // o ecrã da Google devolveu um erro (a pessoa recusou, por exemplo)
+    MissingScope, // a permissão da pasta do Drive foi desmarcada
+}
+
 // NeedsSignIn: a autorização foi retirada ou expirou (invalid_grant, sem token de renovação, permissão desmarcada) —
 // não passa sozinha; é preciso entrar outra vez.
-public sealed class OAuthException(string message, bool needsSignIn = false) : Exception(message)
+public sealed class OAuthException(string message, bool needsSignIn = false, OAuthFailure failure = OAuthFailure.Other) : Exception(message)
 {
     public bool NeedsSignIn { get; } = needsSignIn;
+
+    public OAuthFailure Failure { get; } = failure;
 }
 
 // Abre um endereço no navegador do sistema (o Windows: ver Eteris.Browser/Sync/SystemBrowser.cs). Devolve false quando
@@ -81,10 +92,21 @@ public static class Pkce
 public sealed record AuthorizationResponse(string? Code, string? State, string? Error);
 
 // Recebe o redirecionamento da Google em http://127.0.0.1:<porta>/ (RFC 8252, «loopback»). Escuta só na interface de
-// loopback (nada chega de fora, e o Windows não pede regra na firewall), aceita um único pedido GET e fecha.
+// loopback (nada chega de fora, e o Windows não pede regra na firewall). O pedido certo não leva resposta logo: a
+// ligação fica guardada (o navegador mostra «a carregar») até quem chama saber o que dizer — CompleteAsync com a página
+// de fim, ou RedirectAsync para o ecrã da Google (a 2.ª volta, no mesmo separador).
 public sealed class LoopbackReceiver : IDisposable
 {
+    // As escritas não podem prender a entrada: o utilizador pode ter fechado o separador.
+    private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(2);
+
+    // A política deixa passar só o <style> e o SVG embutidos (o SVG não é um carregamento): nada de fora, nada de scripts.
+    internal const string ContentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+
     private readonly TcpListener _listener;
+    private readonly Lock _gate = new();
+    private TcpClient? _held;
+    private bool _stopped;
 
     private LoopbackReceiver(TcpListener listener)
     {
@@ -95,6 +117,10 @@ public sealed class LoopbackReceiver : IDisposable
     public int Port { get; }
 
     public string RedirectUri => $"http://127.0.0.1:{Port}/";
+
+    // Quanto se espera pela linha do pedido de cada ligação: uma ligação local que não envie nada não prende o recetor
+    // até ao prazo da entrada (a fila tem um só lugar). Passado o prazo, fecha-se sem resposta e espera-se pela seguinte.
+    internal TimeSpan RequestLineTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     public static LoopbackReceiver Start()
     {
@@ -111,31 +137,92 @@ public sealed class LoopbackReceiver : IDisposable
         var expected = Encoding.UTF8.GetBytes(expectedState);
         while (true)
         {
-            using var client = await _listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-            await using var stream = client.GetStream();
-            var requestLine = await ReadRequestLineAsync(stream, cancellationToken).ConfigureAwait(false);
-            var parts = requestLine?.Split(' ');
-            if (parts is not { Length: 3 } || parts[0] != "GET" || !parts[1].StartsWith("/?", StringComparison.Ordinal))
+            var client = await _listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
+            var keep = false;
+            try
             {
-                // O navegador pede também /favicon.ico: responde 404 e continua à espera do pedido certo.
-                await RespondAsync(stream, 404, "Não encontrado", cancellationToken).ConfigureAwait(false);
-                continue;
+                var stream = client.GetStream();
+                string? requestLine;
+                using (var line = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    line.CancelAfter(RequestLineTimeout);
+                    try { requestLine = await ReadRequestLineAsync(stream, line.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { continue; } // muda: fecha-se sem resposta
+                    catch (IOException) { continue; }
+                }
+                var parts = requestLine?.Split(' ');
+                if (parts is not { Length: 3 } || parts[0] != "GET" || !parts[1].StartsWith("/?", StringComparison.Ordinal))
+                {
+                    // O navegador pede também /favicon.ico: responde 404 e continua à espera do pedido certo.
+                    await WriteAsync(stream, 404, null, MessagePage("Não encontrado"), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                var query = ParseQuery(parts[1][2..]);
+                var response = new AuthorizationResponse(query.GetValueOrDefault("code"), query.GetValueOrDefault("state"), query.GetValueOrDefault("error"));
+                if (response.State is not { } state || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(state), expected))
+                {
+                    await WriteAsync(stream, 400, null, MessagePage("Pedido não reconhecido pelo Éteris."), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                // O pedido certo: a resposta espera por CompleteAsync ou RedirectAsync.
+                TcpClient? previous;
+                lock (_gate)
+                {
+                    previous = _held;
+                    _held = client;
+                }
+                previous?.Dispose();
+                keep = true;
+                return response;
             }
-            var query = ParseQuery(parts[1][2..]);
-            var response = new AuthorizationResponse(query.GetValueOrDefault("code"), query.GetValueOrDefault("state"), query.GetValueOrDefault("error"));
-            if (response.State is not { } state || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(state), expected))
+            finally
             {
-                await RespondAsync(stream, 400, "Pedido não reconhecido pelo Éteris.", cancellationToken).ConfigureAwait(false);
-                continue;
+                if (!keep) client.Dispose();
             }
-            var ok = response.Code is not null;
-            await RespondAsync(stream, 200, ok
-                ? "Sessão iniciada no Éteris. Pode fechar esta aba e voltar ao Éteris."
-                : "O Éteris não recebeu autorização. Pode fechar esta aba e tentar de novo no Éteris.", cancellationToken).ConfigureAwait(false);
-            return response;
         }
     }
 
+    // A página de fim, na ligação guardada (que depois se fecha). Sem ligação guardada, não faz nada.
+    public async Task CompleteAsync(SignInPageKind page, CancellationToken cancellationToken)
+    {
+        if (Take() is not { } client) return;
+        using (client)
+            await WriteAsync(client.GetStream(), 200, null, SignInPage.Html(page), cancellationToken).ConfigureAwait(false);
+    }
+
+    // Manda o separador que está à espera para o ecrã da Google (302), e só para lá.
+    public async Task RedirectAsync(string url, CancellationToken cancellationToken)
+    {
+        if (url.Any(char.IsControl) || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || !GoogleEndpoints.IsAllowedBrowserUrl(uri))
+            throw new InvalidOperationException("O recetor só redireciona para o ecrã de autorização da Google.");
+        if (Take() is not { } client) return;
+        using (client)
+            await WriteAsync(client.GetStream(), 302, url, string.Empty, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Deixa de aceitar ligações (a resposta certa já chegou e não há outra volta). A ligação guardada não é afetada.
+    public void StopListening()
+    {
+        lock (_gate)
+        {
+            if (_stopped) return;
+            _stopped = true;
+        }
+        _listener.Stop();
+    }
+
+    private TcpClient? Take()
+    {
+        lock (_gate)
+        {
+            var client = _held;
+            _held = null;
+            return client;
+        }
+    }
+
+    // Lê até ao fim dos cabeçalhos (ou o tampão encher) e devolve a primeira linha. Ler os cabeçalhos todos evita que,
+    // ao fechar, sobrem bytes por ler — o Windows respondia com um RST e o navegador perdia a página.
     private static async Task<string?> ReadRequestLineAsync(NetworkStream stream, CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
@@ -145,23 +232,42 @@ public sealed class LoopbackReceiver : IDisposable
             var read = await stream.ReadAsync(buffer.AsMemory(total), cancellationToken).ConfigureAwait(false);
             if (read == 0) break;
             total += read;
-            var text = Encoding.ASCII.GetString(buffer, 0, total);
-            var end = text.IndexOf("\r\n", StringComparison.Ordinal);
-            if (end >= 0) return text[..end];
+            if (buffer.AsSpan(0, total).IndexOf("\r\n\r\n"u8) >= 0) break;
         }
-        return null;
+        var text = Encoding.ASCII.GetString(buffer, 0, total);
+        var end = text.IndexOf("\r\n", StringComparison.Ordinal);
+        return end >= 0 ? text[..end] : null;
     }
 
-    private static async Task RespondAsync(NetworkStream stream, int status, string message, CancellationToken cancellationToken)
+    // As respostas 400 e 404: só o texto fixo de quem chama.
+    private static string MessagePage(string message)
+        => "<!doctype html><meta charset=\"utf-8\"><title>Éteris</title>"
+           + "<body style=\"font:16px system-ui;margin:3em;background:#111;color:#eee\"><p>" + WebUtility.HtmlEncode(message) + "</p>";
+
+    // O único sítio que escreve uma resposta: os cabeçalhos de segurança vão em todas (200, 302, 400 e 404). Um separador
+    // fechado ou lento não faz falhar a entrada.
+    private static async Task WriteAsync(NetworkStream stream, int status, string? location, string html, CancellationToken cancellationToken)
     {
-        var html = "<!doctype html><meta charset=\"utf-8\"><title>Éteris</title>"
-                   + "<body style=\"font:16px system-ui;margin:3em;background:#111;color:#eee\"><p>" + WebUtility.HtmlEncode(message) + "</p>";
         var body = Encoding.UTF8.GetBytes(html);
-        var reason = status switch { 200 => "OK", 400 => "Bad Request", _ => "Not Found" };
-        var head = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} {reason}\r\nContent-Type: text/html; charset=utf-8\r\n"
-                                           + $"Content-Length: {body.Length}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
-        await stream.WriteAsync(head, cancellationToken).ConfigureAwait(false);
-        await stream.WriteAsync(body, cancellationToken).ConfigureAwait(false);
+        var reason = status switch { 200 => "OK", 302 => "Found", 400 => "Bad Request", _ => "Not Found" };
+        var head = new StringBuilder($"HTTP/1.1 {status} {reason}\r\n");
+        if (location is not null) head.Append("Location: ").Append(location).Append("\r\n");
+        head.Append("Content-Type: text/html; charset=utf-8\r\n")
+            .Append("Content-Length: ").Append(body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n")
+            .Append("Cache-Control: no-store\r\n")
+            .Append("Referrer-Policy: no-referrer\r\n")
+            .Append("X-Content-Type-Options: nosniff\r\n")
+            .Append("Content-Security-Policy: ").Append(ContentSecurityPolicy).Append("\r\n")
+            .Append("Connection: close\r\n\r\n");
+        using var write = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        write.CancelAfter(WriteTimeout);
+        try
+        {
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(head.ToString()), write.Token).ConfigureAwait(false);
+            await stream.WriteAsync(body, write.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or SocketException or ObjectDisposedException) { }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
     }
 
     internal static Dictionary<string, string> ParseQuery(string query)
@@ -177,11 +283,29 @@ public sealed class LoopbackReceiver : IDisposable
         return result;
     }
 
-    public void Dispose() => _listener.Dispose();
+    // Fecha também a ligação guardada, se ninguém lhe respondeu: o separador nunca fica pendurado.
+    public void Dispose()
+    {
+        Take()?.Dispose();
+        _listener.Dispose();
+    }
 }
 
 // As opções de um início de sessão. As tarefas seguintes acrescentam-lhe propriedades «init».
-public sealed record SignInOptions(IExternalBrowser Browser, Action<string>? ShowUrl = null, string? LoginHint = null);
+public sealed record SignInOptions(IExternalBrowser Browser, Action<string>? ShowUrl = null, string? LoginHint = null)
+{
+    // Corre com os tokens na mão e a página do navegador em espera: devolve o texto a mostrar. Sem ele (ou se falhar
+    // ou passar de FinishTimeout) a página é a neutra.
+    public Func<OAuthTokens, CancellationToken, Task<SignInPageKind>>? Finish { get; init; }
+
+    // Uma vez por início de sessão bem-sucedido, antes de Finish (chamar a atenção para a janela do Éteris).
+    public Action? SignedIn { get; init; }
+
+    public TimeSpan FinishTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    // Prazo de toda a entrada (as duas voltas juntas). null = GoogleOAuth.SignInTimeout (5 min).
+    public TimeSpan? Timeout { get; init; }
+}
 
 // OAuth 2.0 para apps de computador (PKCE + loopback), com o navegador do sistema: a Google bloqueia o início de
 // sessão dentro de motores embutidos como a CEF («disallowed_useragent»), e o Éteris também não o quer lá dentro.
@@ -226,41 +350,87 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
     public Task<OAuthTokens> SignInAsync(IExternalBrowser browser, Action<string>? showUrl, CancellationToken cancellationToken)
         => SignInAsync(new SignInOptions(browser, showUrl), cancellationToken);
 
+    // O separador do navegador fica à espera durante a troca do código e o Finish de quem chama, e só então recebe a
+    // página com o texto verdadeiro (nunca «Sessão iniciada» se a troca falhou).
     public async Task<OAuthTokens> SignInAsync(SignInOptions options, CancellationToken cancellationToken)
     {
         // Um só recetor e um só prazo para as duas voltas.
         using var receiver = LoopbackReceiver.Start();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(SignInTimeout);
+        timeout.CancelAfter(options.Timeout ?? SignInTimeout);
         var hint = CleanLoginHint(options.LoginHint);
-        var tokens = await AuthorizeOnceAsync(receiver, options, PromptSelectAccount, hint, timeout.Token, cancellationToken).ConfigureAwait(false);
-        if (tokens.RefreshToken is not null) return tokens;
-        // Sem token de renovação a sessão morria ao fim de uma hora: repete-se uma vez, com «consent» e «state»/PKCE novos.
-        tokens = await AuthorizeOnceAsync(receiver, options, PromptConsent, hint, timeout.Token, cancellationToken).ConfigureAwait(false);
+        var tokens = await AuthorizeOnceAsync(receiver, options, PromptSelectAccount, hint, redirect: false, timeout.Token, cancellationToken).ConfigureAwait(false);
         if (tokens.RefreshToken is null)
-            throw new OAuthException("A Google não deu ao Éteris a autorização para manter a sessão. Tente entrar outra vez.");
+        {
+            // Sem token de renovação a sessão morria ao fim de uma hora: repete-se uma vez, com «consent» e «state»/PKCE
+            // novos, no mesmo separador (302 para o ecrã da Google).
+            tokens = await AuthorizeOnceAsync(receiver, options, PromptConsent, hint, redirect: true, timeout.Token, cancellationToken).ConfigureAwait(false);
+            if (tokens.RefreshToken is null)
+            {
+                await receiver.CompleteAsync(SignInPageKind.Refused, CancellationToken.None).ConfigureAwait(false);
+                throw new OAuthException("A Google não deu ao Éteris a autorização para manter a sessão. Tente entrar outra vez.");
+            }
+        }
+        // Não há outra volta: a porta fecha-se já, enquanto a página espera.
+        receiver.StopListening();
+        options.SignedIn?.Invoke();
+        var page = SignInPageKind.Neutral;
+        if (options.Finish is { } finish)
+        {
+            // Demorou, falhou ou foi cancelado: a página neutra, e a entrada continua (os tokens são devolvidos).
+            try { page = await finish(tokens, cancellationToken).WaitAsync(options.FinishTimeout, cancellationToken).ConfigureAwait(false); }
+            catch (Exception) { page = SignInPageKind.Neutral; }
+        }
+        await receiver.CompleteAsync(page, CancellationToken.None).ConfigureAwait(false);
         return tokens;
     }
 
+    // «redirect»: a 2.ª volta manda o separador que está à espera para o ecrã da Google em vez de abrir outro.
     private async Task<OAuthTokens> AuthorizeOnceAsync(LoopbackReceiver receiver, SignInOptions options, string prompt, string? loginHint,
-        CancellationToken timeoutToken, CancellationToken cancellationToken)
+        bool redirect, CancellationToken timeoutToken, CancellationToken cancellationToken)
     {
         var (verifier, challenge) = Pkce.Create();
         var state = Kdf.Base64Url(RandomNumberGenerator.GetBytes(16));
         var url = BuildAuthorizationUrl(receiver.RedirectUri, challenge, state, prompt, loginHint);
-        if (!options.Browser.TryOpen(url)) options.ShowUrl?.Invoke(url);
+        if (redirect) await receiver.RedirectAsync(url, cancellationToken).ConfigureAwait(false);
+        else if (!options.Browser.TryOpen(url)) options.ShowUrl?.Invoke(url);
 
         AuthorizationResponse response;
         try { response = await receiver.WaitAsync(state, timeoutToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new OAuthException("O início de sessão no navegador demorou demasiado. Tente de novo.");
+            throw new OAuthException("O início de sessão no navegador demorou demasiado. Tente de novo.", failure: OAuthFailure.TimedOut);
         }
         if (response.Error is { } error)
-            throw new OAuthException(error == "access_denied" ? "O acesso foi recusado no ecrã da Google." : "A Google devolveu um erro: " + error);
-        if (response.State != state) throw new OAuthException("Resposta da Google não confere (estado diferente): ignorada.");
-        if (response.Code is not { Length: > 0 } code) throw new OAuthException("A Google não devolveu código de autorização.");
-        return await ExchangeCodeAsync(code, verifier, receiver.RedirectUri, cancellationToken).ConfigureAwait(false);
+        {
+            await receiver.CompleteAsync(SignInPageKind.Refused, CancellationToken.None).ConfigureAwait(false);
+            throw new OAuthException(ErrorMessage(error), failure: OAuthFailure.Refused);
+        }
+        if (response.State != state || response.Code is not { Length: > 0 } code)
+        {
+            await receiver.CompleteAsync(SignInPageKind.Refused, CancellationToken.None).ConfigureAwait(false);
+            throw new OAuthException("A Google não devolveu código de autorização.");
+        }
+        try { return await ExchangeCodeAsync(code, verifier, receiver.RedirectUri, cancellationToken).ConfigureAwait(false); }
+        catch (OAuthException e) when (e.Failure == OAuthFailure.MissingScope)
+        {
+            await receiver.CompleteAsync(SignInPageKind.DriveDenied, CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+        catch
+        {
+            // Troca recusada, sem rede ou cancelada: o separador sabe que não entrou.
+            await receiver.CompleteAsync(SignInPageKind.Refused, CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    // O «error» da query vem de quem chamou o recetor: só um código curto em minúsculas entra na mensagem.
+    internal static string ErrorMessage(string error)
+    {
+        if (error == "access_denied") return "O acesso foi recusado no ecrã da Google.";
+        var safe = error.Length is > 0 and <= 40 && error.All(c => c is (>= 'a' and <= 'z') or '_');
+        return safe ? "A Google devolveu um erro: " + error : "A Google devolveu um erro.";
     }
 
     public Task<OAuthTokens> ExchangeCodeAsync(string code, string verifier, string redirectUri, CancellationToken cancellationToken)
@@ -311,7 +481,8 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
         var scope = parsed.Scope ?? string.Empty;
         // No ecrã da Google o utilizador pode desmarcar a permissão: sem ela não há sincronização.
         if (!scope.Split(' ').Contains(GoogleEndpoints.Scope))
-            throw new OAuthException("Sem a permissão para a pasta da aplicação no Google Drive, o Éteris não consegue sincronizar.", needsSignIn: true);
+            throw new OAuthException("Sem a permissão para a pasta da aplicação no Google Drive, o Éteris não consegue sincronizar.", needsSignIn: true,
+                OAuthFailure.MissingScope);
         return new OAuthTokens(access, parsed.RefreshToken ?? previousRefresh, nowMs() + Math.Max(60, parsed.ExpiresIn - 60) * 1000L, scope);
     }
 
@@ -409,18 +580,26 @@ public sealed class GoogleSession(GoogleOAuth oauth, TokenStore store, Func<long
         finally { _gate.Release(); }
     }
 
-    // Sair: apaga os tokens deste aparelho (já, e de modo que nenhuma renovação em curso os volte a gravar) e revoga
-    // na Google (melhor esforço).
+    // A metade local de «Sair», sem rede: apaga os tokens deste aparelho já, e de modo que nenhuma renovação em curso os
+    // volte a gravar (a geração sobe). A autorização na Google fica dada (os outros computadores continuam ligados).
+    public void SignOut() => Forget();
+
+    // Sair: SignOut e revoga na Google (melhor esforço).
     public async Task SignOutAsync(CancellationToken cancellationToken)
     {
-        OAuthTokens? tokens;
+        var tokens = Forget();
+        if (tokens is not null) await oauth.RevokeAsync(tokens.RefreshToken ?? tokens.AccessToken, cancellationToken).ConfigureAwait(false);
+    }
+
+    private OAuthTokens? Forget()
+    {
         lock (_state)
         {
             _generation++;
-            tokens = _tokens;
+            var tokens = _tokens;
             _tokens = null;
             store.Delete();
+            return tokens;
         }
-        if (tokens is not null) await oauth.RevokeAsync(tokens.RefreshToken ?? tokens.AccessToken, cancellationToken).ConfigureAwait(false);
     }
 }
