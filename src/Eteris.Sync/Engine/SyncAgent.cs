@@ -1710,8 +1710,19 @@ public sealed class SyncAgent
         }
     }
 
-    // O utilizador guardou o kit atual (ficheiro, ou «Já guardei o kit»).
-    public void MarkKitSaved() => ChangeKit(kit => kit.SavedId = kit.ForId);
+    // O utilizador guardou o kit atual (ficheiro, ou «Já guardei o kit»). Com «forId», só se for esse o kit atual (o que
+    // a página mostrou): uma cadeia nova entretanto não fica marcada como guardada sem ter sido vista.
+    public void MarkKitSaved(string? forId = null)
+    {
+        lock (_gate)
+        {
+            if (forId is not null && _saved?.Kit?.ForId != forId) return;
+        }
+        ChangeKit(kit =>
+        {
+            if (forId is null || kit.ForId == forId) kit.SavedId = kit.ForId;
+        });
+    }
 
     // «Mais tarde»: o lembrete não aparece na barra antes de «untilMs».
     public void SnoozeKit(long untilMs) => ChangeKit(kit => kit.SnoozedUntilMs = untilMs);

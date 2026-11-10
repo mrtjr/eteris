@@ -1055,7 +1055,9 @@
     const KIT_CHECK = 2000;
     const KIT_STALE = 'O seu kit de recuperação antigo deixou de valer (um computador foi removido). Guarde o novo.';
     const KIT_DECLINE = 'Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera';
-    let kitTimer = 0, kitCheck = 0, kitShownId = null, kitAck = false, kitKept = false, kitDeclineArmed = 0, kitNewArmed = 0;
+    // kitKeptId: o kit que foi copiado ou impresso (o único que «Já guardei o kit» pode marcar); kitPrintFrame: o
+    // documento de impressão, que tem as palavras e sai com elas.
+    let kitTimer = 0, kitCheck = 0, kitShownId = null, kitAck = false, kitKeptId = null, kitPrintFrame = null, kitDeclineArmed = 0, kitNewArmed = 0;
     const kitWordsShown = () => !$('syncKitWords').hidden;
     // As palavras só existem no ecrã enquanto estão à vista: um só sítio que as tira (e, com askHide, fecha o kit no
     // processo).
@@ -1068,6 +1070,7 @@
       $('syncKitShow').textContent = 'Ver o kit';
       clearTimeout(kitTimer); clearInterval(kitCheck);
       kitTimer = 0; kitCheck = 0; kitShownId = null;
+      if (kitPrintFrame) { kitPrintFrame.remove(); kitPrintFrame = null; }
       if (askHide && shown) post('sync-kit-hide', {}, () => {});
     };
     const showKitWords = r => {
@@ -1085,8 +1088,10 @@
       : kit.declined ? 'Escolheu não guardar o kit: sem este computador, a cópia na nuvem não se recupera.' : 'Ainda não guardou este kit.';
     const paintKit = (kit, d) => {
       show('syncKitItem', !!kit);
-      // Sem kit, ou outro kit (cadeia nova): as palavras que estavam à vista saem.
+      // Sem kit, ou outro kit (cadeia nova): as palavras que estavam à vista saem, e o kit copiado ou impresso deixa de
+      // contar (o novo ainda não foi visto).
       if (kitWordsShown() && (!kit || kit.id !== kitShownId)) hideKitWords(true);
+      if (!kit || kit.id !== kitKeptId) kitKeptId = null;
       if (!kit) return;
       const state = $('syncKitState');
       const key = kit.id + '|' + kitText(kit);
@@ -1095,17 +1100,17 @@
         const id = document.createElement('b'); id.textContent = kit.id;
         state.replaceChildren('O seu kit atual termina em ', id, '. ' + kitText(kit));
       }
-      // «Já guardei o kit» só depois de imprimir ou copiar, enquanto não estiver guardado.
-      $('syncKitSaved').hidden = !(kitKept && kit.state !== 'saved');
+      // «Já guardei o kit» só depois de imprimir ou copiar este mesmo kit, enquanto não estiver guardado.
+      $('syncKitSaved').hidden = !(kitKeptId === kit.id && kit.state !== 'saved');
       // «Não quero guardar o kit»: só com um computador, por guardar e ainda não recusado.
       $('syncKitDecline').hidden = !(kit.state !== 'saved' && !kit.declined && kit.devices <= 1);
       if (msg0(d, 'code')) note($('syncKitNote'), msg0(d, 'code'), true);
     };
     // Depois de imprimir ou copiar: o botão discreto «Já guardei o kit» (não marca nada sozinho).
-    const kept = () => {
-      kitKept = true;
+    const kept = (id = kitShownId) => {
+      kitKeptId = id;
       const kit = lastState && lastState.sync && lastState.sync.kit;
-      $('syncKitSaved').hidden = !(kit && kit.state !== 'saved');
+      $('syncKitSaved').hidden = !(kit && kitKeptId === kit.id && kit.state !== 'saved');
     };
     const kitReply = r => {
       if (!r) return;
@@ -1413,29 +1418,36 @@
     // Imprimir: o documento do kit num iframe próprio (não o dos pedidos, que o leria como resposta), e a impressão dele.
     $('syncKitPrint').addEventListener('click', () => {
       if (!kitWordsShown()) return;
+      const printId = kitShownId;
       const frame = document.createElement('iframe');
       frame.name = 'syncKitPrint' + (++sinks);
       frame.style.cssText = 'position: fixed; width: 0; height: 0; border: 0';
+      const drop = () => { frame.remove(); if (kitPrintFrame === frame) kitPrintFrame = null; };
       let printed = false;
       frame.addEventListener('load', () => {
         const doc = frame.contentDocument;
         if (printed || !doc || !doc.body || !doc.body.textContent.trim()) return; // o about:blank inicial
         printed = true;
         if (!doc.body.hasAttribute('data-eteris-kit')) {
-          frame.remove();
+          drop();
           hideKitWords(false);
           note($('syncKitNote'), 'O kit foi escondido. Carregue em «Ver o kit» outra vez.', true);
           return;
         }
-        frame.contentWindow.addEventListener('afterprint', () => frame.remove());
-        setTimeout(() => frame.remove(), 60000);
+        frame.contentWindow.addEventListener('afterprint', drop);
+        setTimeout(drop, 60000);
         frame.contentWindow.print();
-        kept();
+        kept(printId);
       });
+      if (kitPrintFrame) kitPrintFrame.remove();
+      kitPrintFrame = frame;
       document.body.append(frame);
       postTo('sync-kit-print', {}, frame.name);
     });
-    $('syncKitSaved').addEventListener('click', () => post('sync-kit-saved', {}, d => { kitKept = false; paint(d); }));
+    $('syncKitSaved').addEventListener('click', () => {
+      if (!kitKeptId) return;
+      post('sync-kit-saved', { id: kitKeptId }, d => { kitKeptId = null; paint(d); });
+    });
     // «Não quero guardar o kit» (dois cliques): o 1.º mostra o que se aceita; o 2.º, meio segundo depois e nos 8 s
     // seguintes, recusa (o lembrete acaba; o kit continua a poder ver-se e guardar-se).
     $('syncKitDecline').addEventListener('click', e => {

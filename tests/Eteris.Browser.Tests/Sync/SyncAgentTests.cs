@@ -1328,6 +1328,28 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Null(semChave.Agent.RevealKit());
     }
 
+    // «Já guardei o kit» diz de que kit se trata: outro kit (cadeia nova entretanto) não fica marcado como guardado.
+    [Fact]
+    public async Task MarkKitSaved_ForAnotherKit_MarksNothing()
+    {
+        var casa = NewDevice("Casa");
+        await casa.Agent.StartAsync();
+        var shown = casa.Agent.Status.Kit!.Id;
+        casa.Agent.MarkKitSaved();
+        _now += 1000;
+        await casa.Agent.NewRecoveryCodeAsync();
+        var fresh = casa.Agent.Status.Kit!;
+        Assert.Equal(KitState.Stale, fresh.State);
+        var saves = casa.Store.Saves;
+
+        casa.Agent.MarkKitSaved(shown == fresh.Id ? "outro" : shown);
+        Assert.Equal(KitState.Stale, casa.Agent.Status.Kit!.State);
+        Assert.Equal(saves, casa.Store.Saves);
+
+        casa.Agent.MarkKitSaved(fresh.Id);
+        Assert.Equal(KitState.Saved, casa.Agent.Status.Kit!.State);
+    }
+
     // Quem entra com o kit (palavras ou o código antigo) tem-no; quem entra por aprovação fica «por guardar».
     [Fact]
     public async Task JoinWithTheKit_CountsAsSaved_AndJoinByApproval_IsPending()

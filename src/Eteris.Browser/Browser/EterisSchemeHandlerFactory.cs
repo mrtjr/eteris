@@ -366,9 +366,10 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 return document;
             }
             case "/sync-kit-saved":
-                // «Já guardei o kit» (depois de imprimir ou copiar).
+                // «Já guardei o kit» (depois de imprimir ou copiar): só o kit que a página mostrou («id»); outro kit
+                // (cadeia nova entretanto) ou sem id, nada.
                 if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
-                Sync.SyncService.Agent()?.MarkKitSaved();
+                if (SyncForm.Parse(request).GetValueOrDefault("id") is { Length: > 0 } kitId) Sync.SyncService.Agent()?.MarkKitSaved(kitId);
                 break;
             case "/sync-kit-later":
                 if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
@@ -458,8 +459,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             {
                 // «shown»: os aparelhos que a página mostrava quando o utilizador decidiu (só esses recebem a chave nova).
                 var shown = InternalPages.Query(uri, "shown") is { Length: > 0 } list ? list.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-                // Remover um aparelho faz uma cadeia nova e mostra o código novo (que abre o cofre): com segredos em jogo,
-                // o Windows confirma primeiro (sempre).
+                // Remover um aparelho faz uma cadeia nova e o kit de recuperação passa a ser outro (por guardar): com
+                // segredos em jogo, o Windows confirma primeiro (sempre).
                 return new VaultResourceHandler(async () =>
                 {
                     if (Sync.SyncService.Agent() is { } agent)

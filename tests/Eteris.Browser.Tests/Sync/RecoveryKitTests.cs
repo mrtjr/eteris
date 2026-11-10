@@ -328,7 +328,10 @@ public class RecoveryKitTests
         Assert.Contains("VaultFrontToken().Register(", factory);
         Assert.Contains("\"Cache-Control\", \"no-store\"", factory);
         Assert.Contains("SyncChoices.NotConfirmed(\"o kit não foi mostrado\")", factory);
-        Assert.True(Count(factory, "MarkKitSaved()") >= 3);
+        Assert.True(Count(factory, "MarkKitSaved()") >= 2);
+        // «Já guardei o kit» só marca o kit que a página mostrou (o id vai no corpo; sem id não marca nada).
+        Assert.Contains("MarkKitSaved(kitId)", factory);
+        Assert.Contains("SyncForm.Parse(request).GetValueOrDefault(\"id\") is { Length: > 0 } kitId", factory);
         Assert.Equal(2, Count(factory, "SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))"));
         Assert.Contains("Headers[\"Cache-Control\"] = \"no-store\";", Source("Browser", "VaultResourceHandler.cs"));
     }
@@ -409,6 +412,18 @@ public class RecoveryKitTests
                      "!s.code", "lastState.sync.code", ">Já guardei<", "Código de recuperação — guarde-o agora", "Gerar um código novo",
                  })
             Assert.DoesNotContain(text, page);
+        // Os textos do lembrete que a página repete são os mesmos da barra.
+        Assert.Contains(RecoveryReminder.StaleText, page);
+        Assert.Contains(RecoveryReminder.Decline, page);
+        // «Já guardei o kit» é do kit que foi copiado ou impresso, e só dele (cadeia nova: o botão sai).
+        Assert.Contains("const kept = (id = kitShownId) => {\n      kitKeptId = id;", page);
+        Assert.Contains("kept(printId)", page);
+        Assert.Contains("if (!kit || kit.id !== kitKeptId) kitKeptId = null;", page);
+        Assert.Contains("$('syncKitSaved').hidden = !(kitKeptId === kit.id && kit.state !== 'saved')", page);
+        Assert.Contains("post('sync-kit-saved', { id: kitKeptId }", page);
+        Assert.DoesNotContain("kitKept = true", page);
+        // O documento de impressão (com as palavras) sai com as palavras.
+        Assert.Contains("if (kitPrintFrame) { kitPrintFrame.remove(); kitPrintFrame = null; }", page);
         Assert.Equal("Qualquer pessoa com acesso a este computador pode ver o kit.", RecoveryKit.UnprotectedNote);
         Assert.Equal("«Imprimir para PDF» cria um ficheiro com o kit: trate-o como o ficheiro do kit. Numa impressora partilhada, vá buscar a folha logo.",
             RecoveryKit.PrintNote);
