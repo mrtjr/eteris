@@ -1,0 +1,27 @@
+<!-- A barra do início de sessão (0.2.15): por cima da página, na camada, no estilo do pedido de permissão. Não decide
+     nada: mostra a vista que SignInBarModel calculou e diz que botão foi premido. Sem animações. O texto e os botões
+     (criados em código) partem linha quando a janela é estreita: a barra nunca passa da largura da janela. -->
+<UserControl x:Class="Eteris.Browser.Sync.SignInBar" x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             UseLayoutRounding="True" SnapsToDevicePixels="True" MaxWidth="720"
+             FontFamily="{DynamicResource UiFont}" Foreground="{DynamicResource TextBrush}">
+    <Border CornerRadius="18" Padding="14,10" BorderThickness="1"
+            Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid Width="30" Height="30" VerticalAlignment="Center">
+                <Ellipse Fill="{DynamicResource IrisBrush}" />
+                <TextBlock Text="&#xE895;" FontFamily="{DynamicResource IconFont}" FontSize="14"
+                           Foreground="{DynamicResource AccentInkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+            <Decorator x:Name="Body" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+</UserControl>
