@@ -1,5 +1,76 @@
 # Alterações
 
+## 0.2.15 — por publicar
+
+A versão do **login simples**: «Entrar com o Google» com um clique, a partir do menu, das boas-vindas ou das
+Definições, e a sincronização cifrada começa sozinha. Um computador novo pede para entrar sozinho e aprova-se
+escrevendo no computador ligado o código que o novo mostra; o código de recuperação passa a **kit de recuperação** de 24
+palavras, que se guarda, imprime e volta a ver; «Sair deste computador» deixa de desligar os outros, e há «Retirar o
+acesso do Éteris à conta Google» e «Perdi um computador / foi roubado». A chave continua a nunca ir para a Google nem
+para o projeto.
+
+### Conta e sincronização
+- **Entrar em qualquer sítio.** «Entrar com o Google» na linha da conta do menu ⋯ (que agora entra logo, em vez de abrir
+  as Definições), num passo novo das boas-vindas («Já usa o Éteris noutro computador?»), na paleta (Ctrl+K), no aviso
+  depois de guardar a primeira palavra-passe nova (uma só vez), nas páginas de palavras-passe e de preenchimento e nas
+  Definições. Não na Nova aba e nunca numa janela privada; sem o identificador da aplicação na instalação, nenhum
+  aparece. Uma barra na janela do Éteris diz o que está a acontecer («À espera do início de sessão no seu navegador…»,
+  «Sessão iniciada como *nome*. A sincronizar…», «Sincronizado.», ou o erro com «Tentar outra vez»), sem roubar o foco
+  do teclado.
+- **A conta escolhe-se no seu navegador.** O ecrã da Google abre com a escolha de conta (`prompt=select_account`); se a
+  Google não devolver a autorização para manter a sessão, o Éteris pede o consentimento uma vez e, sem ela, não aceita
+  a sessão. No fim, a página no navegador só responde depois de o Éteris trocar o código e diz o que falta («Pronto.»,
+  «Falta um passo no Éteris.», «O Éteris retomou a sincronização.»…); a janela do Éteris pisca na barra de tarefas.
+- **Sessão expirada, um aviso.** Quando a Google pede para entrar outra vez, aparece na janela, uma vez por abertura,
+  «A sincronização está em pausa: a Google pediu para entrar outra vez.» [Entrar] [Agora não]; «Entrar» pré-escolhe a
+  conta e retoma sem kit nem aprovação.
+- **Computador novo, aprovado com um número.** Ao entrar num computador sem nenhum estado desta conta, o pedido de
+  aprovação abre-se sozinho e o computador novo mostra um código de 6 algarismos; nos computadores ligados aparece uma
+  barra (ou, só com o teclado, a mesma caixa nas Definições) onde se escreve esse código. O computador ligado nunca mostra
+  o código; três códigos errados recusam; «Não fui eu» recusa e aconselha a mudar a palavra-passe da Google; depois de
+  3 pedidos maus em 24 h a barra deixa de abrir sozinha. Com palavras-passe ou outros dados do cofre em jogo, aprovar
+  pede a confirmação do Windows depois do código certo. Um computador que já esteve na conta e encontra outra no Drive
+  não pede sozinho: avisa que a conta foi apagada ou substituída.
+- **Kit de recuperação de 24 palavras.** Criar a conta já não mostra nem bloqueia nada: o kit (24 palavras em
+  português) vê-se em Definições › Sincronização com a confirmação do Windows, e guarda-se como ficheiro, imprime-se ou
+  copia-se (fora do histórico e da nuvem da área de transferência). O Éteris avisa antes de gravar numa pasta que vai
+  para a nuvem. Um lembrete na janela volta de 30 em 30 dias enquanto houver um só computador na conta, com «Não quero:
+  aceito que, sem este computador, a cópia na nuvem não se recupera». Os códigos de recuperação antigos continuam
+  aceites.
+- **O nome do computador** passa a «Éteris em …» nos computadores novos e muda-se em Definições › Sincronização; viaja
+  sempre cifrado. Os computadores já ligados mantêm o nome até o mudarem.
+- **Pagamentos e documentos são uma escolha da conta.** «Também pagamentos e documentos de identificação» liga cartões,
+  IBAN e documentos para a conta, com a confirmação do Windows no computador onde se liga; um computador novo que entra
+  depois recebe-os sem pedir de novo; um que já estava ligado recebe uma oferta única («Receber também neste?»).
+- **«Sair deste computador», «Retirar o acesso…» e «Perdi um computador».** Sair apaga só deste computador a sessão e a
+  conta guardada, sem falar com a Google: os outros continuam ligados, e a chave e os dados ficam aqui (a não ser que
+  marque «apagar também a chave»). «Retirar o acesso do Éteris à conta Google» revoga a autorização e desliga todos (o
+  Éteris só diz «retirado» quando a Google o confirma). «Perdi um computador / foi roubado» remove-o, troca a chave e
+  retira o acesso na Google; o que já estava nesse computador continua lá, e o kit antigo deixa de valer. E, antes de
+  entrar, «Começar do zero…» apaga a conta antiga da nuvem e cria uma nova a partir deste computador.
+- **Definições › Sincronização mais curta.** Sem sessão: uma frase, «Entrar com o Google» e «Como protegemos os seus
+  dados»; com sessão: o estado à frente («Ligada · última sincronização há…») e o resto em «Mais opções».
+
+### Privacidade
+- **O que mudou no que o Éteris pede à Google.** Ao voltar à janela do Éteris procura pedidos de computadores novos, no
+  máximo uma vez a cada 5 minutos (ou logo, se uma ronda já tiver encontrado um pedido), só com a sincronização ligada e
+  nunca antes da primeira ronda; o computador novo, enquanto espera pela aprovação, procura a resposta no Drive de 3 em
+  3 s (cada pedido dura 10 minutos e só se renova, até 30 minutos, com o pedido à vista). «Sair deste computador» já não revoga e não fala com a Google: a Google
+  continua a listar o Éteris até «Retirar o acesso…». A lista completa está em `eteris://privacy/` e em
+  `docs/sincronizacao.md`, «Quando sincroniza».
+- **O que vai, o que a Google vê e onde fica a chave**, sempre à vista em `eteris://privacy/#sincronizacao`, mesmo antes
+  de entrar. A Google vê o que já via (que usa o Éteris, quando sincroniza, quantos ficheiros e o tamanho aproximado) e
+  ainda quando um computador novo pede para entrar e se foi recusado; nunca o conteúdo.
+- **O que não mudou.** A chave nunca vai para a Google nem para o projeto; o único âmbito pedido é `drive.appdata`; no
+  arranque saem 0 pedidos para a Google; nada é pedido à Google antes de carregar em «Entrar com o Google».
+- A política de privacidade e a página do projeto (`docs/site/`) dizem o mesmo, em português e em inglês.
+
+### Por provar com conta real
+- A escolha de conta e o token de renovação sem repetir o consentimento, o `login_hint` na reentrada, a página de fim
+  nos três navegadores, «Sair deste computador» a deixar o Éteris listado na conta Google e «Retirar o acesso» a
+  desligar os outros, e o limite de 100 tokens de renovação por conta: feito e testado com o Google falso dos testes;
+  a lista completa está em `docs/sincronizacao.md`, «Por provar com conta real».
+
 ## 0.2.14 — 2026-11-09
 
 A versão das **páginas isoladas**. Como no Chrome, no Firefox e no Brave, cada página passa a correr **fechada num

@@ -37,8 +37,10 @@ public class PrivateSessionTests
     [Fact]
     public void WhatsNew_AnnouncesHttpsFirst()
     {
-        // Entre os destaques da 0.2.9 (os 8 a seguir aos 4 da 0.2.14, aos 3 da 0.2.13, aos 2 da 0.2.12, aos 2 da 0.2.11 e aos 5
-        // da 0.2.10).
-        Assert.Contains(WhatsNewPage.Highlights.Skip(16).Take(8), h => h.Detail.Contains("HTTPS", StringComparison.Ordinal));
+        // Entre os destaques da 0.2.9 (os 8 a seguir aos 4 da 0.2.15, aos 4 da 0.2.14, aos 3 da 0.2.13, aos 2 da 0.2.12,
+        // aos 2 da 0.2.11 e aos 5 da 0.2.10). Conta-se a partir do destaque do sandbox (o 1.º da 0.2.14), para uma versão
+        // nova não obrigar a mudar este índice.
+        var sandbox = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
+        Assert.Contains(WhatsNewPage.Highlights.Skip(sandbox + 16).Take(8), h => h.Detail.Contains("HTTPS", StringComparison.Ordinal));
     }
 }

@@ -25,6 +25,12 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.15 («Um login e pronto»; textos conferidos com o código: pontos de entrada da T13, aprovação escrevendo o
+        // código da T7/T8, kit de RecoveryCode.WordCount palavras da T5/T6, saídas da T12)
+        new("☁", "Um login e pronto", "Entre com o Google pelo menu ⋯, pelas boas-vindas ou pelas Definições: escolhe a conta no seu navegador e a sincronização cifrada começa sozinha."),
+        new("🔢", "Computador novo, aprovado com um número", "Ao entrar noutro computador, o pedido aparece nos que já estão ligados: escreva lá o código que o novo mostra e ele entra, sem copiar chaves."),
+        new("🗝", "Kit de recuperação em 24 palavras", "Guarde-o como ficheiro ou imprima-o, e volte a vê-lo num computador ligado, com o Windows Hello. Os códigos antigos continuam a servir."),
+        new("🚪", "Sair só deste computador", "«Sair deste computador» já não desliga os outros. Para desligar todos há «Retirar o acesso…»; se perdeu um, use «Perdi um computador»."),
         // 0.2.14
         new("🔐", SandboxTitle, "Como no Chrome, no Firefox e no Brave: cada página corre fechada, sem acesso aos seus ficheiros nem ao sistema. Se o isolamento falhar neste PC, o Éteris abre sem ele e avisa."),
         new("📉", LighterTitle, "Medido contra a 0.2.13: 11% a 16% menos memória e, com 20 abas abertas e paradas, o processador desce de 1,72% para 0,13% de um núcleo."),

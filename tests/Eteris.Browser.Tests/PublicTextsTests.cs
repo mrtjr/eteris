@@ -32,10 +32,43 @@ public class PublicTextsTests
 
     private static string SyncDoc() => Flat(Read("docs", "sincronizacao.md"));
 
+    // A entrada da 0.2.15 do CHANGELOG (do seu cabeçalho até ao «## » seguinte). As entradas antigas são história: dizem,
+    // com verdade para a época, que «Sair» revogava, e não se tocam.
+    private static string ChangelogEntry()
+    {
+        var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
+        var start = log.IndexOf("\n## 0.2.15", StringComparison.Ordinal);
+        Assert.True(start >= 0, "sem a entrada 0.2.15");
+        var end = log.IndexOf("\n## ", start + 1, StringComparison.Ordinal);
+        return log[start..(end < 0 ? log.Length : end)];
+    }
+
+    // Os destaques da versão nova nas Novidades (os que vêm antes dos da 0.2.14).
+    private static IEnumerable<Highlight> NewHighlights()
+        => WhatsNewPage.Highlights.TakeWhile(h => h.Title != WhatsNewPage.SandboxTitle);
+
     private static IEnumerable<(string Name, string Text)> PublicTexts()
     {
         foreach (var file in PublicFiles) yield return (string.Join('/', file), Flat(Read(file)));
         yield return (nameof(PrivacyPage.SyncException), PrivacyPage.SyncException);
+        foreach (var h in NewHighlights()) yield return ("Novidades: " + h.Title, h.Title + " " + h.Detail);
+        yield return ("CHANGELOG 0.2.15", Flat(ChangelogEntry()));
+    }
+
+    // R12: a entrada da 0.2.15 abre o CHANGELOG, sem data (o dono põe-na ao publicar), e a história fica como estava.
+    [Fact]
+    public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
+    {
+        var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
+        var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
+        Assert.Equal("## 0.2.15 — por publicar", headings[0]);
+        Assert.Equal("## 0.2.14 — 2026-11-09", headings[1]);
+        Assert.Single(headings, l => l.StartsWith("## 0.2.14", StringComparison.Ordinal));
+        Assert.Contains("## 0.2.14 — 2026-11-09\n\nA versão das **páginas isoladas**.", log);
+        Assert.Contains("## 0.2.13 — 2026-11-09\n\nA versão do **login completo**.", log);
+        var entry = Flat(ChangelogEntry());
+        foreach (var s in new[] { "Sair deste computador", "kit de recuperação", "drive.appdata" })
+            Assert.Contains(s, entry);
     }
 
     [Fact]
@@ -201,6 +234,9 @@ public class PublicTextsTests
     {
         foreach (var file in new[] { SiteFiles[0], SiteFiles[1], SiteFiles[2], ["README.md"] })
             Assert.DoesNotMatch(@"\bEdge\b", Read(file));
+        foreach (var h in WhatsNewPage.Highlights)
+            Assert.DoesNotMatch(@"\bEdge\b", h.Title + " " + h.Detail);
+        Assert.DoesNotMatch(@"\bEdge\b", ChangelogEntry());
     }
 
     private static readonly Regex Address = new(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", RegexOptions.Compiled);

@@ -28,6 +28,39 @@ public class WhatsNewTests
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
 
+    // 0.2.15 («Um login e pronto», T15): quatro destaques à frente, curtos — entrar com um clique, o computador novo
+    // aprovado com um número, o kit de 24 palavras e «Sair deste computador».
+    [Fact]
+    public void Highlights_LeadWithOneSignInIn0215()
+    {
+        string[] titles = ["Um login e pronto", "Computador novo, aprovado com um número", "Kit de recuperação em 24 palavras", "Sair só deste computador"];
+        Assert.Equal(titles, WhatsNewPage.Highlights.Take(titles.Length).Select(h => h.Title));
+        Assert.All(WhatsNewPage.Highlights.Take(titles.Length), h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.Contains("Entre com o Google", WhatsNewPage.Highlights[0].Detail);
+        Assert.Contains("cifrada", WhatsNewPage.Highlights[0].Detail);
+    }
+
+    // Os destaques da 0.2.15 só prometem o que o código faz: o kit tem RecoveryCode.WordCount palavras e volta a ver-se
+    // com o Windows Hello; sair não desliga os outros; nenhum diz «revoga», «Nova aba» (não oferece a entrada), «sempre»
+    // nem fala do Edge.
+    [Fact]
+    public void Highlights_0215_PromiseOnlyWhatShips()
+    {
+        var news = WhatsNewPage.Highlights.Take(4).ToList();
+        var kit = Assert.Single(news, h => h.Title.StartsWith("Kit de recuperação", StringComparison.Ordinal));
+        Assert.Contains("Windows Hello", kit.Detail);
+        Assert.Equal(24, Eteris.Sync.Crypto.RecoveryCode.WordCount);
+        Assert.Contains("24 palavras", kit.Title + " " + kit.Detail);
+        var exit = Assert.Single(news, h => h.Title == "Sair só deste computador");
+        Assert.Contains("Sair deste computador", exit.Detail);
+        Assert.Contains("Retirar o acesso", exit.Detail);
+        Assert.All(news, h =>
+        {
+            foreach (var s in new[] { "revoga", "Nova aba", "sempre", "Edge" })
+                Assert.DoesNotContain(s, h.Title + " " + h.Detail, StringComparison.Ordinal);
+        });
+    }
+
     // 0.2.14: abre com o isolamento das páginas, seguido dos 3 destaques do desempenho medido (memória e processador
     // com muitas abas, a janela minimizada e o sono com pouca memória): 4 destaques. A seguir vêm os 3 da 0.2.13, a
     // abrir com a conta Google e a sincronização cifrada, as palavras-passe e o preenchimento, e o pedido à Google dos
@@ -36,39 +69,44 @@ public class WhatsNewTests
     // arranque e a memória, seguidos da impressão digital; e depois os 8 da 0.2.9, a abrir com o vídeo no motor principal
     // (codecs do Windows). O destaque antigo que mandava o H.264 para o motor de vídeo saiu, e os destaques das seis
     // versões são curtos.
+    // 0.2.15 («Um login e pronto»): os 4 destaques novos vêm à frente e os da 0.2.14 começam a seguir (os índices
+    // contam-se a partir do destaque do sandbox, para uma versão nova não obrigar a renumerar).
     [Fact]
-    public void Highlights_LeadWithTheSandboxAndPerformanceThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
+    public void Highlights_LeadWithOneSignInThenTheSandboxAndPerformanceThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
     {
-        Assert.Equal(WhatsNewPage.SandboxTitle, WhatsNewPage.Highlights[0].Title);
-        Assert.Equal(WhatsNewPage.LighterTitle, WhatsNewPage.Highlights[1].Title);
-        Assert.Equal(WhatsNewPage.UnseenTitle, WhatsNewPage.Highlights[2].Title);
-        Assert.Equal(WhatsNewPage.PressureTitle, WhatsNewPage.Highlights[3].Title);
-        Assert.Equal("Conta Google e sincronização cifrada", WhatsNewPage.Highlights[4].Title);
-        Assert.Contains("Opcional", WhatsNewPage.Highlights[4].Detail);
-        Assert.Contains("cifrados no PC", WhatsNewPage.Highlights[4].Detail);
-        Assert.Contains("pasta oculta", WhatsNewPage.Highlights[4].Detail);
-        Assert.Contains("palavras-passe", WhatsNewPage.Highlights[4].Detail);
-        Assert.Equal("Palavras-passe e preenchimento", WhatsNewPage.Highlights[5].Title);
-        Assert.Contains("nunca o CVV", WhatsNewPage.Highlights[5].Detail);
-        Assert.Contains("Windows Hello", WhatsNewPage.Highlights[5].Detail);
-        Assert.Equal("Formulários sem pedidos à Google", WhatsNewPage.Highlights[6].Title);
-        Assert.Contains("verificação de fugas", WhatsNewPage.Highlights[6].Detail);
-        Assert.Contains("0 pedidos", WhatsNewPage.Highlights[6].Detail);
-        Assert.Equal("Menu do Éteris pelo teclado", WhatsNewPage.Highlights[7].Title);
-        Assert.Equal("Alt+F · Alt+E", WhatsNewPage.Highlights[7].Keys);
-        Assert.Contains("Esc", WhatsNewPage.Highlights[7].Detail);
-        Assert.Equal("Menu legível", WhatsNewPage.Highlights[8].Title);
-        Assert.Contains("quadrados", WhatsNewPage.Highlights[8].Detail);
-        Assert.Equal("No arranque, nada sai para a Google", WhatsNewPage.Highlights[9].Title);
-        Assert.Contains("eteris://privacy/", WhatsNewPage.Highlights[9].Detail);
-        Assert.Contains("service workers", WhatsNewPage.Highlights[10].Detail);
-        Assert.Equal("Arranque quase duas vezes mais rápido", WhatsNewPage.Highlights[11].Title);
-        Assert.Contains("0,6 s", WhatsNewPage.Highlights[11].Detail);
-        Assert.Equal("Menos memória", WhatsNewPage.Highlights[12].Title);
-        Assert.Contains(WhatsNewPage.Highlights.Skip(11).Take(5), h => h.Title == "Impressão digital como a do Chrome");
-        Assert.Equal("Vídeo no motor do Éteris", WhatsNewPage.Highlights[16].Title);
+        var at = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
+        Assert.Equal(4, at);
+        var rest = WhatsNewPage.Highlights.Skip(at).ToList();
+        Assert.Equal(WhatsNewPage.SandboxTitle, rest[0].Title);
+        Assert.Equal(WhatsNewPage.LighterTitle, rest[1].Title);
+        Assert.Equal(WhatsNewPage.UnseenTitle, rest[2].Title);
+        Assert.Equal(WhatsNewPage.PressureTitle, rest[3].Title);
+        Assert.Equal("Conta Google e sincronização cifrada", rest[4].Title);
+        Assert.Contains("Opcional", rest[4].Detail);
+        Assert.Contains("cifrados no PC", rest[4].Detail);
+        Assert.Contains("pasta oculta", rest[4].Detail);
+        Assert.Contains("palavras-passe", rest[4].Detail);
+        Assert.Equal("Palavras-passe e preenchimento", rest[5].Title);
+        Assert.Contains("nunca o CVV", rest[5].Detail);
+        Assert.Contains("Windows Hello", rest[5].Detail);
+        Assert.Equal("Formulários sem pedidos à Google", rest[6].Title);
+        Assert.Contains("verificação de fugas", rest[6].Detail);
+        Assert.Contains("0 pedidos", rest[6].Detail);
+        Assert.Equal("Menu do Éteris pelo teclado", rest[7].Title);
+        Assert.Equal("Alt+F · Alt+E", rest[7].Keys);
+        Assert.Contains("Esc", rest[7].Detail);
+        Assert.Equal("Menu legível", rest[8].Title);
+        Assert.Contains("quadrados", rest[8].Detail);
+        Assert.Equal("No arranque, nada sai para a Google", rest[9].Title);
+        Assert.Contains("eteris://privacy/", rest[9].Detail);
+        Assert.Contains("service workers", rest[10].Detail);
+        Assert.Equal("Arranque quase duas vezes mais rápido", rest[11].Title);
+        Assert.Contains("0,6 s", rest[11].Detail);
+        Assert.Equal("Menos memória", rest[12].Title);
+        Assert.Contains(rest.Skip(11).Take(5), h => h.Title == "Impressão digital como a do Chrome");
+        Assert.Equal("Vídeo no motor do Éteris", rest[16].Title);
         Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Title == "Vídeo em todos os sites");
-        Assert.All(WhatsNewPage.Highlights.Take(24), h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.All(WhatsNewPage.Highlights.Take(24 + at), x => Assert.True(x.Detail.Length <= 180, x.Title));
     }
 
     // Os 3 destaques do desempenho da 0.2.14 dizem só o que a medição contra a 0.2.13 deu (docs/paridade.md, «Medição da
@@ -94,7 +132,8 @@ public class WhatsNewTests
         Assert.Contains("usada há mais tempo", pressure.Detail);
         Assert.Contains("Definições › Abas", pressure.Detail);
 
-        var texts = WhatsNewPage.Highlights.Take(4).Select(h => h.Title + " " + h.Detail).ToList();
+        var first = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
+        var texts = WhatsNewPage.Highlights.Skip(first).Take(4).Select(h => h.Title + " " + h.Detail).ToList();
         Assert.All(texts, t =>
         {
             Assert.DoesNotContain("tapada", t, StringComparison.OrdinalIgnoreCase);
@@ -102,7 +141,7 @@ public class WhatsNewTests
             Assert.DoesNotContain("arranque", t, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Edge", t, StringComparison.Ordinal);
         });
-        Assert.All(WhatsNewPage.Highlights.Take(4), h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.All(WhatsNewPage.Highlights.Skip(first).Take(4), h => Assert.True(h.Detail.Length <= 180, h.Title));
     }
 
     // O texto do destaque do sono com pouca memória diz onde está a opção: ela existe nas Definições com esse nome de
@@ -134,8 +173,8 @@ public class WhatsNewTests
     [Fact]
     public void Highlights_AnnounceTheSandboxIn0214()
     {
-        var first = WhatsNewPage.Highlights[0];
-        Assert.Equal(WhatsNewPage.SandboxTitle, first.Title);
+        // Desde a 0.2.15 já não é o primeiro destaque: procura-se pelo título.
+        var first = Assert.Single(WhatsNewPage.Highlights, h => h.Title == WhatsNewPage.SandboxTitle);
         Assert.Contains("sandbox", first.Title, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Chrome", first.Detail);
         Assert.Contains("ficheiros", first.Detail);
