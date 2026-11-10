@@ -536,7 +536,8 @@ internal static class SyncService
         {
             SyncPhase.Stopped => "Sincronização parada",
             SyncPhase.Choose => "Falta juntar este computador à conta",
-            SyncPhase.Pairing => status.Pairing?.Code is { } code ? $"Confirme o código {code}" : "À espera da aprovação noutro computador",
+            // Este computador mostra o código; o outro escreve-o (PROPOSTA P1).
+            SyncPhase.Pairing => status.Pairing?.Code is { } code ? $"Escreva o código {code} no outro computador" : "À espera da aprovação noutro computador",
             SyncPhase.Starting => "A ligar…",
             _ when status.RecoveryCode is not null => "Guarde o código de recuperação",
             _ when status.Running => "A sincronizar…",
@@ -548,9 +549,12 @@ internal static class SyncService
     }
 
     // «none», «replaced», «waiting», «code», «joined», «timeUp», «stillWaiting», «refused», «failed».
-    internal static string GuestKind(GuestPairingKind kind)
+    internal static string GuestKind(GuestPairingKind kind) => Camel(kind);
+
+    // O nome de um valor como a página o lê («stillWaiting», «timeUp»…).
+    private static string Camel(Enum value)
     {
-        var name = kind.ToString();
+        var name = value.ToString();
         return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
@@ -566,7 +570,9 @@ internal static class SyncService
             needsSignIn = status.NeedsSignIn,
             notice = status.Notice,
             code = status.RecoveryCode,
-            pairing = status.Pairing is { } p ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error } : null,
+            pairing = status.Pairing is { } p
+                ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error, hostAnswered = p.HostAnswered, end = Camel(p.End) }
+                : null,
             // Sem o código de verificação: a página não o mostra (a aprovação é na barra da janela, escrevendo-o). Sem o
             // nome: quem pede escolhe-o e a página não o usa.
             requests = status.Requests.Select(r => new { id = r.Session }),

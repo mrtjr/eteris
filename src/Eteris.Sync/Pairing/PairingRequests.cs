@@ -79,10 +79,10 @@ public static class PairingRequests
         while (true)
         {
             if (await transport.ReadAsync(path + PairingProtocol.Refused, cancellationToken).ConfigureAwait(false) is not null)
-                throw new PairingException("O outro aparelho recusou o pedido.");
+                throw new PairingException("O outro aparelho recusou o pedido.") { Failure = PairingFailure.Refused };
             if (await transport.ReadAsync(path + PairingProtocol.HostKey, cancellationToken).ConfigureAwait(false) is not null)
                 return await PairingGuest.JoinAsync(transport, PairingProtocol.ShortCode(session), guestName, now, delay, cancellationToken).ConfigureAwait(false);
-            if (now() > deadline) throw new PairingException("Nenhum aparelho respondeu em 10 minutos. Comece de novo.");
+            if (now() > deadline) throw new PairingException("Nenhum aparelho respondeu em 10 minutos. Comece de novo.") { Failure = PairingFailure.TimedOut };
             await wait(pollInterval ?? TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
         }
     }

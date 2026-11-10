@@ -154,7 +154,14 @@ public static class PairingProtocol
     }
 }
 
-public class PairingException(string message) : Exception(message);
+// Porque é que um emparelhamento acabou: o prazo, a recusa do outro lado, ou outra coisa (mensagens que não conferem,
+// incompletas…). As mensagens e o tipo da exceção não mudam: quem precisa de distinguir lê Failure.
+public enum PairingFailure { Other, TimedOut, Refused }
+
+public class PairingException(string message) : Exception(message)
+{
+    public PairingFailure Failure { get; init; }
+}
 
 // Mensagens (JSON). Em claro só o que é público por natureza (chaves públicas, compromisso, nonces, hora); o nome do
 // convidado (passo 4) e o segredo (passo 5) vão em SealedFile, cifrados com a chave da sessão.
@@ -216,9 +223,9 @@ public abstract class PairingSide : IDisposable
         while (true)
         {
             if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
-                throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.");
+                throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.") { Failure = PairingFailure.Refused };
             if (await TryReadAsync(step, cancellationToken).ConfigureAwait(false) is { } message) return message;
-            if (Now() > deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.");
+            if (Now() > deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
             await Delay(PollInterval, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -310,7 +317,7 @@ public sealed class PairingHost : PairingSide
     public async Task ApproveAsync(AccountSecret secret, string hostName, CancellationToken cancellationToken = default)
     {
         if (_guestKey is null || _transcript is null) throw new InvalidOperationException("Ainda não há código de verificação.");
-        if (Now() > _deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.");
+        if (Now() > _deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
         var key = PairingProtocol.SessionKey(Key, _guestKey, Session, _transcript);
         var payload = Json.Bytes(new PairingSecret { Secret = Kdf.Base64Url(secret.ToBytes()), HostName = hostName });
         var sealedFile = SealedFile.Seal(key, SealedFile.Pairing, "pair", 1, PairingProtocol.SecretContext(Session, _transcript), payload);
@@ -362,7 +369,8 @@ public sealed class PairingGuest : PairingSide
         // Com QR, a chave do anfitrião vem do ecrã dele (autêntica); o transporte tem de dizer o mesmo.
         if (qrKey is not null && !CryptographicOperations.FixedTimeEquals(qrKey, hostKey))
             throw new PairingException("A chave do outro aparelho não confere com o QR: emparelhamento recusado.");
-        if (now() - offer.CreatedMs > (long)PairingProtocol.Lifetime.TotalMilliseconds) throw new PairingException("O emparelhamento expirou. Comece de novo.");
+        if (now() - offer.CreatedMs > (long)PairingProtocol.Lifetime.TotalMilliseconds)
+            throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
         using (PairingProtocol.ImportPublic(hostKey)) { }
         var guest = new PairingGuest(transport, session, hostKey, offer.CreatedMs + (long)PairingProtocol.Lifetime.TotalMilliseconds, guestName, now, delay);
         var commit = PairingProtocol.Commit(guest.PublicKey, hostKey, guest._guestNonce);
@@ -411,7 +419,7 @@ public sealed class PairingGuest : PairingSide
         while (true)
         {
             if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
-                throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.");
+                throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.") { Failure = PairingFailure.Refused };
             var bytes = await Transport.ReadAsync(Path(PairingProtocol.Sealed), cancellationToken).ConfigureAwait(false);
             if (bytes is not null)
             {
@@ -428,7 +436,7 @@ public sealed class PairingGuest : PairingSide
                 }
                 finally { CryptographicOperations.ZeroMemory(key); }
             }
-            if (Now() > _deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.");
+            if (Now() > _deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
             await Delay(PollInterval, cancellationToken).ConfigureAwait(false);
         }
     }

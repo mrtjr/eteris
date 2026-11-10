@@ -72,8 +72,17 @@ public enum SyncPhase
 // nunca sai do agente (este computador pede-o, não o mostra). «SeenMs»: a hora DESTE computador em que respondeu.
 public sealed record HostRequest(string Session, string Name, int AttemptsLeft, long SeenMs);
 
+// Como acabou o pedido de aprovação deste aparelho: ninguém respondeu (e a renovação parou), um aparelho respondeu mas
+// o prazo acabou, o outro recusou, ou outra falha.
+public enum GuestEnd { None, StillWaiting, TimeUp, Refused, Failed }
+
 // Este aparelho a entrar por aprovação noutro: o código a mostrar (quando há), e o resultado.
-public sealed record GuestPairing(string? Code, bool Confirmed, string? Error);
+public sealed record GuestPairing(string? Code, bool Confirmed, string? Error)
+{
+    // Um aparelho ligado respondeu ao pedido (o código só aparece depois disto).
+    public bool HostAnswered { get; init; }
+    public GuestEnd End { get; init; }
+}
 
 public sealed record DeviceInfo(string Id, string Name, string Kind, long LastSyncMs, bool IsThis);
 
@@ -111,6 +120,10 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
 
     // Fase Choose num aparelho sem nenhum estado desta conta (SyncAgent.MayAutoRequest): pode pedir a aprovação.
     public bool MayAutoPair { get; init; }
+
+    // Este aparelho acabou de entrar na conta (por aprovação ou pelo código de recuperação) e a primeira ronda ainda não
+    // acabou.
+    public bool JoinedNow { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -154,6 +167,8 @@ public sealed class SyncAgent
     private int _pendingDevices;
     private int _waiting;
     private GuestFlow? _guest;
+    // Entrou agora na conta (aprovação ou código de recuperação): até ao fim da primeira ronda. Só memória.
+    private bool _justJoined;
     // Porque é que o último «acabar de apagar» falhou (mostrado com «Tentar de novo» enquanto o apagar estiver por acabar).
     private string? _deleteError;
     private IReadOnlyList<DeviceInfo> _devices = [];
@@ -215,6 +230,9 @@ public sealed class SyncAgent
     // Pedir a aprovação noutro computador sozinho, na ronda do gesto de entrar ou de ligar (StartAsync), quando o
     // transporte já tem uma conta e este aparelho nunca teve estado dela (MayAutoRequest). Desligado por omissão.
     public bool AutoPair { get; init; }
+
+    // O ecrã do pedido está à vista neste aparelho (a interface diz). null = nunca: o pedido não se renova sozinho.
+    public Func<bool>? PairingScreenVisible { get; init; }
 
     // Pode pedir a aprovação sozinho? Só um aparelho sem nenhum estado de sincronização: nem chave, nem impressão
     // digital da conta, nem a marca de já ter tido uma (no modo pasta de teste não há impressão digital). «Sair» com
@@ -319,7 +337,11 @@ public sealed class SyncAgent
                 var requests = live.Where(h => h.Code is not null).OrderBy(h => h.Created).ThenBy(h => h.Session, StringComparer.Ordinal)
                     .Select(h => new HostRequest(h.Session, DeviceNameText.Shown(h.Name), PairingCode.MaxWrong - h.Wrong, h.Created)).ToList();
                 var answering = live.Where(h => h.Code is null).Select(h => h.Created).DefaultIfEmpty(0).Max();
-                var pairing = _guest is null ? null : new GuestPairing(_guest.Code, _guest.Confirm.Task.IsCompleted, _guest.Error);
+                var pairing = _guest is null ? null : new GuestPairing(_guest.Code, _guest.Confirm.Task.IsCompleted, _guest.Error)
+                {
+                    HostAnswered = _guest.HostAnswered,
+                    End = _guest.End,
+                };
                 return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, code, pairing, requests, _devices, _needsUpdate, _pendingDevices)
                 {
                     NeedsSignIn = _needsSignIn,
@@ -332,6 +354,7 @@ public sealed class SyncAgent
                     ChainReplaced = _saved?.Secret is not null
                         && (_phase == SyncPhase.Choose || (_phase == SyncPhase.Stopped && _saved.Stopped == GoneText)),
                     MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
+                    JoinedNow = _justJoined && _phase == SyncPhase.On,
                 };
             }
         }
@@ -487,7 +510,7 @@ public sealed class SyncAgent
                 try
                 {
                     // Se um «apagar» (ou «Sair») chegou entretanto, a entrada não grava nada e a ronda acaba aqui.
-                    await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false);
+                    await JoinCoreAsync(account, null, fresh: false, cancellationToken).ConfigureAwait(false);
                     return;
                 }
                 catch (WrongCodeException) { } // o registo dessa conta não abre: escolher como entrar
@@ -603,6 +626,7 @@ public sealed class SyncAgent
             _needsUpdate = report.NeedsUpdate;
             _pendingDevices = report.Pending.Count;
             _phase = SyncPhase.On;
+            _justJoined = false;
         }
     }
 
@@ -771,6 +795,7 @@ public sealed class SyncAgent
             saved.Stopped = reason;
             _store.Save(saved);
             _phase = SyncPhase.Stopped;
+            _justJoined = false;
             _notice = reason;
             _devices = [];
         }
@@ -803,7 +828,7 @@ public sealed class SyncAgent
             try
             {
                 // «Apagar…» ou «Sair» enquanto se entrava: nada foi gravado e não há ronda.
-                if (!await JoinCoreAsync(account, null, cancellationToken).ConfigureAwait(false)) return;
+                if (!await JoinCoreAsync(account, null, fresh: true, cancellationToken).ConfigureAwait(false)) return;
                 SavedSync saved;
                 lock (_gate) saved = _saved!;
                 await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -827,7 +852,9 @@ public sealed class SyncAgent
 
     // Entra na conta e grava-a. Devolve false (sem gravar nada) se, enquanto se lia a conta, começou um «apagar» ou o
     // utilizador saiu: como nas rondas (IsCurrent), nada grava depois de BeginCloudDeletion ou de «Sair».
-    private async Task<bool> JoinCoreAsync(AccountSecret account, string? from, CancellationToken cancellationToken)
+    // «fresh»: este aparelho entra agora na conta (aprovação ou código de recuperação), não volta com a chave guardada:
+    // até ao fim da primeira ronda o estado diz JoinedNow.
+    private async Task<bool> JoinCoreAsync(AccountSecret account, string? from, bool fresh, CancellationToken cancellationToken)
     {
         SavedSync? before;
         bool wasOn;
@@ -859,20 +886,25 @@ public sealed class SyncAgent
             _store.Save(_saved);
             _phase = SyncPhase.On;
             _guest = null;
+            if (fresh) _justJoined = true;
             _notice = from is null ? null : $"Este computador entrou na conta, aprovado em «{DeviceNameText.Shown(from)}».";
         }
+        // A interface desenha «entrou na conta» já, antes de a primeira ronda acabar.
+        if (fresh) Notify();
         return true;
     }
 
     // «Aprovar noutro computador»: abre o pedido, espera que um aparelho ligado responda, mostra o código de
     // verificação e, depois de o utilizador confirmar aqui (ConfirmPairing) e lá, recebe a conta e junta os dados.
+    // Enquanto nenhum aparelho responder, o pedido renova-se sozinho (sessão nova) só com o ecrã à vista e dentro dos
+    // limites de PairingRenewal; depois de um responder, a confirmação tem o prazo da sessão (PairingProtocol.Lifetime).
     public void RequestPairing()
     {
         GuestFlow flow;
         lock (_gate)
         {
             if (_guest is { Error: null }) return;
-            _guest = flow = new GuestFlow();
+            _guest = flow = new GuestFlow { FirstRequestMs = _now() };
             _phase = SyncPhase.Pairing;
             _error = null;
         }
@@ -883,30 +915,32 @@ public sealed class SyncAgent
             var transport = Transport();
             try
             {
-                session = await PairingRequests.OpenAsync(transport, _now, flow.Cancel.Token).ConfigureAwait(false);
-                flow.Session = session;
-                using var guest = await PairingRequests.WaitForHostAsync(transport, session, DeviceName, _now, _delay, PairingPoll, flow.Cancel.Token)
-                    .ConfigureAwait(false);
+                using var guest = await WaitForHostAsync(transport, flow).ConfigureAwait(false);
+                session = flow.Session;
+                lock (_gate) flow.HostAnswered = true;
+                Notify();
                 var code = await guest.WaitForCodeAsync(flow.Cancel.Token).ConfigureAwait(false);
                 lock (_gate) flow.Code = code;
                 Notify();
-                // À espera da confirmação do utilizador aqui; entretanto, o outro aparelho pode recusar.
+                // À espera da confirmação do utilizador aqui; entretanto, o outro aparelho pode recusar, e a sessão acaba.
                 while (!flow.Confirm.Task.IsCompleted)
                 {
-                    if (await PairingRequests.IsRefusedAsync(transport, session, flow.Cancel.Token).ConfigureAwait(false))
-                        throw new PairingException("O outro aparelho recusou o pedido.");
+                    if (await PairingRequests.IsRefusedAsync(transport, session!, flow.Cancel.Token).ConfigureAwait(false))
+                        throw new PairingException("O outro aparelho recusou o pedido.") { Failure = PairingFailure.Refused };
+                    if (_now() - flow.SessionStartMs > (long)PairingProtocol.Lifetime.TotalMilliseconds)
+                        throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
                     await Task.WhenAny(flow.Confirm.Task, (_delay ?? Task.Delay)(PairingPoll, flow.Cancel.Token)).ConfigureAwait(false);
                     flow.Cancel.Token.ThrowIfCancellationRequested();
                 }
                 guest.ConfirmCode();
                 using var account = await guest.WaitForSecretAsync(flow.Cancel.Token).ConfigureAwait(false);
-                await PairingRequests.CleanUpAsync(transport, session, CancellationToken.None).ConfigureAwait(false);
+                await PairingRequests.CleanUpAsync(transport, session!, CancellationToken.None).ConfigureAwait(false);
                 session = null;
                 await _run.WaitAsync(flow.Cancel.Token).ConfigureAwait(false);
                 SetRunning(true);
                 try
                 {
-                    if (await JoinCoreAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false))
+                    if (await JoinCoreAsync(account, guest.HostName, fresh: true, flow.Cancel.Token).ConfigureAwait(false))
                     {
                         SavedSync saved;
                         lock (_gate) saved = _saved!;
@@ -925,16 +959,49 @@ public sealed class SyncAgent
                 lock (_gate)
                 {
                     flow.Error = e is PairingException ? e.Message : Message(e);
+                    flow.End = e switch
+                    {
+                        // O prazo: antes de alguém responder (a renovação parou), ou depois (nunca renova).
+                        PairingException { Failure: PairingFailure.TimedOut } => flow.HostAnswered ? GuestEnd.TimeUp : GuestEnd.StillWaiting,
+                        PairingException { Failure: PairingFailure.Refused } => GuestEnd.Refused,
+                        _ => GuestEnd.Failed,
+                    };
                     if (_phase == SyncPhase.Pairing) _phase = SyncPhase.Choose;
                 }
-                if (session is not null)
+                // A sessão em curso (ainda não limpa) fica recusada: o outro aparelho deixa de esperar.
+                if ((session ?? (flow.HostAnswered ? null : flow.Session)) is { } open)
                 {
-                    try { await PairingRequests.RefuseAsync(transport, session, _now, CancellationToken.None).ConfigureAwait(false); }
+                    try { await PairingRequests.RefuseAsync(transport, open, _now, CancellationToken.None).ConfigureAwait(false); }
                     catch (Exception x) when (IsTransient(x)) { }
                 }
             }
             Notify();
         });
+    }
+
+    // Abre o pedido e espera que um aparelho ligado responda. Se ninguém responder no prazo e a renovação ainda valer
+    // (PairingRenewal: ninguém respondeu, ecrã à vista, meia hora, duas vezes), a sessão velha fica recusada (um aparelho
+    // que tenha respondido no último instante deixa de esperar) e abre-se outra no mesmo pedido, sem erro à vista.
+    private async Task<PairingGuest> WaitForHostAsync(ISyncTransport transport, GuestFlow flow)
+    {
+        while (true)
+        {
+            flow.SessionStartMs = _now();
+            var session = await PairingRequests.OpenAsync(transport, _now, flow.Cancel.Token).ConfigureAwait(false);
+            flow.Session = session;
+            try
+            {
+                return await PairingRequests.WaitForHostAsync(transport, session, DeviceName, _now, _delay, PairingPoll, flow.Cancel.Token)
+                    .ConfigureAwait(false);
+            }
+            catch (PairingException e) when (e.Failure == PairingFailure.TimedOut
+                && PairingRenewal.MayRenew(hostAnswered: false, PairingScreenVisible?.Invoke() == true, flow.FirstRequestMs, _now(), flow.Renewals))
+            {
+                try { await PairingRequests.RefuseAsync(transport, session, _now, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception x) when (IsTransient(x)) { }
+                lock (_gate) flow.Renewals++;
+            }
+        }
     }
 
     // O utilizador confirmou NESTE aparelho que o código é igual ao do outro.
@@ -1401,6 +1468,7 @@ public sealed class SyncAgent
             _waiting = 0;
             _devices = [];
             _secretsInAccount = false;
+            _justJoined = false;
             // Emparelhamentos a meio escrevem fora das rondas: param já (nada de pedidos novos depois do apagar).
             guest = _guest;
             _guest = null;
@@ -1549,6 +1617,7 @@ public sealed class SyncAgent
             _notice = null;
             _needsSignIn = false;
             _waiting = 0;
+            _justJoined = false;
             _phase = SyncPhase.Off;
             if (forgetKey)
             {
@@ -1638,6 +1707,13 @@ public sealed class SyncAgent
         public string? Session { get; set; }
         public string? Code { get; set; }
         public string? Error { get; set; }
+        // Um aparelho ligado respondeu (escreveu o 1-host): daqui em diante o pedido não se renova.
+        public bool HostAnswered { get; set; }
+        public GuestEnd End { get; set; }
+        // A hora do primeiro pedido da série (a janela de PairingRenewal) e a do início da sessão em curso (o prazo).
+        public long FirstRequestMs { get; init; }
+        public long SessionStartMs { get; set; }
+        public int Renewals { get; set; }
     }
 
     private sealed class HostFlow(string session, PairingHost host, long created)

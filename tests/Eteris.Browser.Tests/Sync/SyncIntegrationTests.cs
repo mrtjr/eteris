@@ -112,7 +112,8 @@ public class SyncIntegrationTests
             SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, last: now) with { WaitingRequests = 1 }, now));
         Assert.Equal("Guarde o código de recuperação", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, code: "X"), now));
         Assert.Equal("Falta juntar este computador à conta", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Choose), now));
-        Assert.Equal("Confirme o código 123 456", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Pairing, pairing: new("123 456", false, null)), now));
+        // O computador novo mostra o código e o outro escreve-o (T7, PROPOSTA P1).
+        Assert.Equal("Escreva o código 123 456 no outro computador", SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.Pairing, pairing: new("123 456", false, null)), now));
         // Um pedido pronto: a linha do menu nunca leva o código (o computador antigo pede-o, não o mostra).
         Assert.Equal("Um computador novo pede para entrar",
             SyncService.Summary(Status(Eteris.Sync.Engine.SyncPhase.On, requests: [new("s", "Portátil", 3, now)]), now));
