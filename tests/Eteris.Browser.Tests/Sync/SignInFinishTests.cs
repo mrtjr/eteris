@@ -31,6 +31,17 @@ public class SignInFinishTests
     public void Decide_Table(bool hadKey, SyncStatus? status, bool roundDone, SignInPageKind? expected)
         => Assert.Equal(expected, SignInFinish.Decide(hadKey, status, roundDone));
 
+    // A conta na nuvem foi apagada ou substituída (T7): a página não promete a aprovação noutro computador, que não vai
+    // acontecer sozinha (o alerta explica-o na janela).
+    [Fact]
+    public void Decide_ChainReplaced_IsNeutral()
+    {
+        var replaced = TestStatus.Of(SyncPhase.Choose) with { ChainReplaced = true };
+        Assert.Equal(SignInPageKind.Neutral, SignInFinish.Decide(hadKey: true, replaced, roundDone: false));
+        Assert.Equal(SignInPageKind.Neutral, SignInFinish.Decide(hadKey: false, replaced, roundDone: false));
+        Assert.Equal(SignInPageKind.NeedsApproval, SignInFinish.Decide(hadKey: false, TestStatus.Of(SyncPhase.Choose), roundDone: false));
+    }
+
     [Fact]
     public async Task Wait_ReturnsAsSoonAsThePhaseIsKnown_NotAtTheEndOfTheRound()
     {

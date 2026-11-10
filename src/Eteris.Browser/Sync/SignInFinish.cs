@@ -16,6 +16,8 @@ internal static class SignInFinish
             return roundDone ? SignInPageKind.Neutral : null;
         // Uma falha (ou a autorização por renovar) não promete nada.
         if (status.NeedsSignIn || status.Error is not null) return SignInPageKind.Neutral;
+        // A conta na nuvem foi apagada ou substituída (T7): ninguém vai aprovar sozinho; quem explica é o alerta na janela.
+        if (status.ChainReplaced) return SignInPageKind.Neutral;
         return status.Phase switch
         {
             SyncPhase.Choose or SyncPhase.Pairing => SignInPageKind.NeedsApproval,

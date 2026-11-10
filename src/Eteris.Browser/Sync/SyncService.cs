@@ -506,6 +506,9 @@ internal static class SyncService
             requests = status.Requests.Select(r => new { id = r.Session }),
             // Pedidos em série: a barra não abre sozinha e as Definições mostram o aviso.
             pairingQuiet = status.PairingQuiet,
+            // A conta na nuvem foi apagada ou substituída (alerta), e se este computador pode pedir a aprovação sozinho.
+            chainReplaced = status.ChainReplaced,
+            mayAutoPair = status.MayAutoPair,
             devices = status.Devices.Select(d => new
             {
                 id = d.Id, name = d.Name, me = d.IsThis,

@@ -46,6 +46,9 @@ public sealed class SavedSync
     // Quando acabaram mal os últimos pedidos de aparelhos novos a que este aparelho respondeu (PairingFatigue: com
     // muitos seguidos, a barra de aprovação deixa de abrir sozinha). Só horas: sem sessão, nome nem código.
     [JsonPropertyName("badPairs")] public long[]? BadPairings { get; set; }
+    // Este aparelho já teve a chave de uma conta (criou-a, entrou, perdeu a criação ao mesmo tempo, apagou os dados).
+    // Marca local: nunca sai deste computador. Um aparelho com ela nunca pede a aprovação sozinho (SyncAgent.AutoPair).
+    [JsonPropertyName("had")] public bool HadAccount { get; set; }
 }
 
 public interface ISyncStore
@@ -101,6 +104,13 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // Pedidos em série: vários pedidos acabaram mal há pouco e a barra de aprovação não abre sozinha (o aviso fica nas
     // Definições, com «Mostrar o pedido na barra»). Este aparelho continua a responder quando a pessoa procura.
     public bool PairingQuiet { get; init; }
+
+    // A conta deste aparelho desapareceu do transporte e lá está outra (fase Choose com a chave guardada), ou parou
+    // por a conta ter desaparecido (Stopped com a chave guardada): o alerta «conta substituída». Nunca pede sozinho.
+    public bool ChainReplaced { get; init; }
+
+    // Fase Choose num aparelho sem nenhum estado desta conta (SyncAgent.MayAutoRequest): pode pedir a aprovação.
+    public bool MayAutoPair { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -201,6 +211,16 @@ public sealed class SyncAgent
     // A conta do transporte com que se está agora (para o Google Drive, uma impressão digital da conta Google; null =
     // não se sabe, ou o transporte não tem contas). Só disco: nunca faz pedidos.
     public Func<string?>? AccountKey { get; init; }
+
+    // Pedir a aprovação noutro computador sozinho, na ronda do gesto de entrar ou de ligar (StartAsync), quando o
+    // transporte já tem uma conta e este aparelho nunca teve estado dela (MayAutoRequest). Desligado por omissão.
+    public bool AutoPair { get; init; }
+
+    // Pode pedir a aprovação sozinho? Só um aparelho sem nenhum estado de sincronização: nem chave, nem impressão
+    // digital da conta, nem a marca de já ter tido uma (no modo pasta de teste não há impressão digital). «Sair» com
+    // «apagar a chave» apaga o estado inteiro: o aparelho volta a ser novo.
+    internal static bool MayAutoRequest(SavedSync? saved)
+        => saved is null || (saved.Secret is null && saved.Account is null && !saved.HadAccount);
 
     // Registo de diagnóstico (nomes opacos do transporte, nunca dados): o que o apagar deixou de fora e porque falhou.
     public Action<string>? Log { get; init; }
@@ -309,6 +329,9 @@ public sealed class SyncAgent
                     OtherAccount = _phase == SyncPhase.Stopped && _notice == OtherAccountText,
                     AnsweringSinceMs = answering,
                     PairingQuiet = PairingFatigue.Quiet(_saved?.BadPairings, now),
+                    ChainReplaced = _saved?.Secret is not null
+                        && (_phase == SyncPhase.Choose || (_phase == SyncPhase.Stopped && _saved.Stopped == GoneText)),
+                    MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
                 };
             }
         }
@@ -354,11 +377,16 @@ public sealed class SyncAgent
             _store.Save(_saved);
         }
         Notify();
-        await RunAsync(force: true, cancellationToken).ConfigureAwait(false);
+        // A ronda do gesto: a única em que o aparelho novo pode pedir a aprovação sozinho (AutoPair).
+        await RunCoreAsync(force: true, gesture: true, cancellationToken).ConfigureAwait(false);
     }
 
     // Uma ronda: o que fizer falta (retomar, criar, sincronizar). Devolve false se falhou (o agendador espera mais).
-    public async Task<bool> RunAsync(bool force = false, CancellationToken cancellationToken = default)
+    // «force» não é um gesto (o agendador e os testes também a pedem): nenhuma ronda daqui pede a aprovação sozinha.
+    public Task<bool> RunAsync(bool force = false, CancellationToken cancellationToken = default)
+        => RunCoreAsync(force, gesture: false, cancellationToken);
+
+    private async Task<bool> RunCoreAsync(bool force, bool gesture, CancellationToken cancellationToken)
     {
         if (!Enabled) return true;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -382,7 +410,7 @@ public sealed class SyncAgent
                 else
                 {
                     if (!force && _phase is SyncPhase.Choose or SyncPhase.Pairing) return true;
-                    await SetUpAsync(saved, cancellationToken).ConfigureAwait(false);
+                    await SetUpAsync(saved, gesture, cancellationToken).ConfigureAwait(false);
                     if (_engine is null) return true;
                 }
             }
@@ -446,7 +474,7 @@ public sealed class SyncAgent
         }
     }
 
-    private async Task SetUpAsync(SavedSync saved, CancellationToken cancellationToken)
+    private async Task SetUpAsync(SavedSync saved, bool gesture, CancellationToken cancellationToken)
     {
         var chains = await ChainsAsync(cancellationToken).ConfigureAwait(false);
         // A chave ficou neste aparelho («Sair» sem a apagar, ou parou sem a apagar) e a conta ainda existe: entra outra
@@ -475,6 +503,7 @@ public sealed class SyncAgent
                 if (!IsCurrent(saved)) return;
                 _engine = engine;
                 saved.Secret = Kdf.Base64Url(account.ToBytes());
+                saved.HadAccount = true;
                 saved.Engine = engine.State;
                 saved.Baseline = null;
                 saved.Joined = null;
@@ -492,6 +521,9 @@ public sealed class SyncAgent
             _phase = SyncPhase.Choose;
         }
         Notify();
+        // O pedido automático: um por gesto, e só num aparelho que nunca teve estado desta conta (um com a chave de uma
+        // conta que desapareceu mostra o alerta «conta substituída» e não pede nada).
+        if (AutoPair && gesture && MayAutoRequest(saved)) RequestPairing();
     }
 
     private async Task<HashSet<string>> ChainsAsync(CancellationToken cancellationToken)
@@ -613,6 +645,7 @@ public sealed class SyncAgent
             if (!IsCurrent(saved)) return true;
             _engine = null;
             _devices = [];
+            saved.HadAccount = true;
             saved.Secret = null;
             saved.Engine = null;
             saved.Baseline = null;
@@ -674,6 +707,7 @@ public sealed class SyncAgent
                         if (!IsCurrent(saved)) return;
                         _engine = engine;
                         saved.Secret = Kdf.Base64Url(rekey.Secret!.ToBytes());
+                        saved.HadAccount = true;
                         saved.Engine = engine.State;
                         saved.Rotation = null;
                         saved.CreatedMs = 0;
@@ -730,6 +764,7 @@ public sealed class SyncAgent
             }
             if (keeps == StopKeeps.Nothing)
             {
+                saved.HadAccount = true;
                 saved.Secret = null;
                 saved.CodePending = false;
             }
@@ -811,6 +846,7 @@ public sealed class SyncAgent
             _saved.Enabled = true;
             _saved.Stopped = null;
             _saved.Secret = Kdf.Base64Url(account.ToBytes());
+            _saved.HadAccount = true;
             _saved.Engine = engine.State;
             _saved.Baseline = null; // primeira vez: junta sem perder nada (ProfileSync)
             _saved.Joined = null;
@@ -1258,6 +1294,7 @@ public sealed class SyncAgent
                     _engine = rotated;
                     ApplyChosenName(rotated);
                     saved.Secret = Kdf.Base64Url(secret.ToBytes());
+                    saved.HadAccount = true;
                     saved.Engine = rotated.State;
                     saved.Rotation = pending;
                     saved.CodePending = true;
@@ -1342,6 +1379,7 @@ public sealed class SyncAgent
             var saved = _saved ??= new SavedSync();
             saved.Enabled = false;
             saved.DeletePending = true;
+            saved.HadAccount = true;
             saved.Secret = null;
             saved.CodePending = false;
             saved.Engine = null;
