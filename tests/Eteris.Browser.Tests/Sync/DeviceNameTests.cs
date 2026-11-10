@@ -176,6 +176,23 @@ public sealed class DeviceNameTests : IDisposable
         AssertNowhereInTheClear(google, "Portátil da sala");
     }
 
+    // Mudar o nome logo ao abrir, antes da primeira ronda (sem motor carregado): a ronda seguinte leva o nome novo.
+    [Fact]
+    public async Task Rename_BeforeTheFirstRound_ReachesTheOtherComputers()
+    {
+        var google = new FakeGoogle();
+        var (casa, trabalho) = await TwoAsync(google);
+        var reopened = NewDevice("Éteris em X", DriveFor(google), trabalho.Store);
+        await reopened.Agent.RenameDeviceAsync("Escritório novo");
+        await Settle(reopened, casa);
+        await casa.Agent.RefreshDevicesAsync();
+        Assert.Contains(casa.Agent.Status.Devices, d => d.Name == "Escritório novo" && !d.IsThis);
+        Assert.DoesNotContain(casa.Agent.Status.Devices, d => d.Name == "Trabalho");
+        Assert.Equal("Escritório novo", trabalho.Store.Load()!.Engine!.Device.Name);
+        await reopened.Agent.RefreshDevicesAsync();
+        Assert.Equal("Escritório novo", reopened.Agent.Status.Devices.Single(d => d.IsThis).Name);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("\u0001")]

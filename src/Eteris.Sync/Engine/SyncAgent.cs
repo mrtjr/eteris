@@ -170,6 +170,13 @@ public sealed class SyncAgent
         return Task.CompletedTask;
     }
 
+    // O nome escolhido neste computador vale sobre o que o estado do motor traz (mudado sem motor carregado, antes da
+    // primeira ronda ou durante uma troca de chave; ou um motor refeito de um estado antigo). Chamar com _gate.
+    private void ApplyChosenName(SyncEngine engine)
+    {
+        if (_saved?.DeviceName is { } chosen && engine.Device.Name != chosen) engine.Rename(chosen);
+    }
+
     // Intervalo entre perguntas ao transporte enquanto se espera pelo outro aparelho no emparelhamento.
     public TimeSpan PairingPoll { get; init; } = TimeSpan.FromSeconds(3);
 
@@ -479,7 +486,11 @@ public sealed class SyncAgent
         SyncReport report;
         Dictionary<string, string> baseline;
         ProfileSyncOptions options;
-        lock (_gate) options = OptionsOf(saved);
+        lock (_gate)
+        {
+            options = OptionsOf(saved);
+            ApplyChosenName(engine);
+        }
         try
         {
             (report, baseline) = await ProfileSync.RunAsync(engine, _profile, saved.Baseline, DeviceName, options, cancellationToken).ConfigureAwait(false);
@@ -1095,6 +1106,7 @@ public sealed class SyncAgent
                     if (!IsCurrent(saved)) throw new SyncUserException("A sincronização foi desligada entretanto.");
                     // Guardado ANTES de mexer na conta antiga: uma falha a seguir continua na ronda seguinte.
                     _engine = rotated;
+                    ApplyChosenName(rotated);
                     saved.Secret = Kdf.Base64Url(secret.ToBytes());
                     saved.Engine = rotated.State;
                     saved.Rotation = pending;
