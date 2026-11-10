@@ -252,6 +252,30 @@ public class FinalReviewUiTextsTests
         Assert.DoesNotContain("catch (Exception e)", body);
     }
 
+    // ---- I-10: as três barras anunciam-se ao leitor de ecrã (LiveSetting sozinho não anuncia nada em WPF) -------------
+
+    [Fact]
+    public void I10_LiveRegion_CreatesThePeer_AndWaitsUntilVisible()
+    {
+        var helper = Source("Sync", "LiveRegion.cs");
+        Assert.Contains("UIElementAutomationPeer.CreatePeerForElement(element)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged)", helper);
+        Assert.Contains("IsVisibleChanged += OnBecameVisible", helper);
+        Assert.Contains("IsVisibleChanged -= OnBecameVisible", helper);
+        Assert.DoesNotContain("FromElement(", helper);
+    }
+
+    [Theory]
+    [InlineData("SignInBar.xaml.cs", "LiveRegion.Announce(Message)")]
+    [InlineData("PairingBar.xaml.cs", "LiveRegion.Announce(TitleText)")]
+    [InlineData("PairingBar.xaml.cs", "LiveRegion.Announce(NoteText)")]
+    [InlineData("GuestPairingBar.xaml.cs", "LiveRegion.Announce(block)")]
+    public void I10_TheBars_AnnounceWhatChanged(string file, string call)
+    {
+        var code = Source("Sync", file);
+        Assert.Contains(call, code);
+        Assert.DoesNotContain("UIElementAutomationPeer.FromElement(", code);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {

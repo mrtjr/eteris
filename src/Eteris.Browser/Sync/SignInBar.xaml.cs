@@ -85,11 +85,8 @@ internal sealed partial class SignInBar : UserControl
         return button;
     }
 
-    private void Announce()
-    {
-        try { UIElementAutomationPeer.FromElement(Message)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged); }
-        catch (InvalidOperationException) { }
-    }
+    // O par criado se ainda não existir, e o anúncio só quando a barra estiver à vista (LiveRegion).
+    private void Announce() => LiveRegion.Announce(Message);
 
     // Uma linha (frase à esquerda, botões à direita) quando cabe; senão a frase parte linha à largura disponível e os
     // botões vão para baixo, encostados à direita (e também partem linha entre si).

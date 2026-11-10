@@ -102,12 +102,14 @@ internal sealed partial class PairingBar : UserControl
         if (TitleText.Text == text) return;
         TitleText.Text = text;
         AutomationProperties.SetName(this, text);
+        LiveRegion.Announce(TitleText);
     }
 
     private void Note(string? text)
     {
         NoteText.Text = text ?? string.Empty;
         NoteText.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+        if (text is not null) LiveRegion.Announce(NoteText);
     }
 
     private void Buttons(bool box, bool notMe, bool look, bool revoke, bool close)

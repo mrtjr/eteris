@@ -153,8 +153,11 @@ internal sealed partial class GuestPairingBar : UserControl
 
     private static void Text(TextBlock block, string? text)
     {
-        if (block.Text != (text ?? string.Empty)) block.Text = text ?? string.Empty;
+        var changed = block.Text != (text ?? string.Empty);
+        if (changed) block.Text = text ?? string.Empty;
         block.Visibility = Of(text is not null);
+        // Só os textos com LiveSetting (título, corpo, nota) se anunciam, e só quando mudam.
+        if (changed && text is not null && AutomationProperties.GetLiveSetting(block) != AutomationLiveSetting.Off) LiveRegion.Announce(block);
     }
 
     private static void Visible(UIElement element, bool on) => element.Visibility = Of(on);
