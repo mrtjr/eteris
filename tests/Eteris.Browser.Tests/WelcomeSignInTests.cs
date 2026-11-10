@@ -96,4 +96,9 @@ public class WelcomeSignInTests
         Assert.Contains("!Sync.SignInEntry.OffersNow(false)", block);
         Assert.True(block.IndexOf("SignInEntry.OffersNow(", StringComparison.Ordinal) < block.IndexOf("Sync.SignInEntry.Begin()", StringComparison.Ordinal));
     }
+
+    // Revisão T13 (cosmético): com o passo novo escondido, a importação entra com o atraso de antes (.32s), não .4s.
+    [Fact]
+    public void Welcome_HiddenSignInStep_KeepsTheImportAnimationDelay()
+        => Assert.Contains(".step[hidden] + .step { animation-delay: .32s; }", WelcomePage.Render(new UserSettings(), [], offerSignIn: false));
 }

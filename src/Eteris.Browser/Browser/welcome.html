@@ -33,6 +33,8 @@
   .step { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; backdrop-filter: blur(18px); animation: rise .7s ease-out both; }
   .step:nth-child(2) { animation-delay: .08s; } .step:nth-child(3) { animation-delay: .16s; } .step:nth-child(4) { animation-delay: .24s; }
   .step:nth-child(5) { animation-delay: .32s; } .step:nth-child(6) { animation-delay: .4s; }
+  /* Com o passo «Entrar com o Google» escondido, o seguinte entra no lugar dele. */
+  .step[hidden] + .step { animation-delay: .32s; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
   .num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 700; color: #0b0d13; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 50%, #fff), color-mix(in srgb, var(--accent-2) 60%, #fff)); margin-right: 10px; }
   h2 { font-size: 16px; font-weight: 600; display: flex; align-items: center; margin-bottom: 8px; }
