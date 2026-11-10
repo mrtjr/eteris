@@ -74,6 +74,8 @@ public static class SettingsPage
             choices = isPrivate ? null : Sync.SyncChoices.Data(Sync.SyncService.Agent()?.EnabledCollections ?? Eteris.Sync.Model.SyncGroups.DefaultCollections,
                 Sync.SyncChoices.AccountChoice.Of(Sync.SyncService.Agent())),
             message = isPrivate ? null : Sync.SyncService.Message,
+            // Uma saída da conta a correr («revoke», «lost», «startover»): a página desativa os botões e pergunta amiúde.
+            busy = isPrivate ? null : Sync.SyncService.ExitBusy,
         };
     }
 

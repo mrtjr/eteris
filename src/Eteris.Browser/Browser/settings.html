@@ -465,7 +465,11 @@
             <span class="syncnote" id="googleNote"></span>
             <div class="code" id="googleUrl" hidden></div>
             <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o kit de recuperação ou outro computador)</small></label>
-            <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span></div>
+            <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span>
+            <!-- «Sair» é só deste computador (nada é revogado na Google); as mensagens das saídas ficam fora de syncBody
+                 (escondido sem sessão) e de qualquer <details>: depois de retirar o acesso, a mensagem vê-se. -->
+            <small class="syncnote" id="syncOutHelp" hidden>Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar «Retirar o acesso». A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a chave».</small>
+            <p class="syncnote" id="syncExitNote" role="status" style="white-space:pre-line" hidden></p></div>
           <button class="action" id="googleButton" aria-describedby="googleNote">Entrar com o Google</button>
         </div>
         <div class="syncbody" id="syncBody" hidden>
@@ -568,6 +572,13 @@
             <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
               <span class="syncnote" id="syncDeleteNote" role="status" hidden></span></div>
             <div class="stack"><button class="action" id="syncDeleteRetry" hidden>Tentar de novo</button><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
+          </div>
+          <!-- «Retirar o acesso do Éteris à conta Google»: revoga na Google (todos os computadores). Destino das barras
+               (SyncService.RevokeAnchor). Não existe na pasta de teste. -->
+          <div class="item" id="syncRevokeItem" hidden>
+            <div class="label"><b>Retirar o acesso do Éteris à conta Google</b><span>Revoga a autorização na Google e desliga todos os seus computadores. Também em myaccount.google.com/permissions.</span>
+              <span class="syncnote" id="syncRevokeQuestion" role="status" hidden>Todos os seus computadores saem da conta e têm de entrar outra vez. Os dados no Drive e a chave deste computador ficam.</span></div>
+            <div class="stack"><button class="action danger" id="syncRevoke">Retirar o acesso…</button><button class="action" id="syncRevokeCancel" hidden>Cancelar</button><button class="action danger" id="syncRevokeConfirm" hidden>Sim, retirar o acesso</button></div>
           </div>
         </div>
         <div class="item">
@@ -939,6 +950,8 @@
       else googleButton.removeAttribute('aria-label');
       googleButton.dataset.state = g.state;
       $('syncForgetRow').hidden = g.state !== 'signedIn';
+      // «Sair» só deste computador: o que fica aqui e que a Google continua a listar o Éteris (só com a conta Google).
+      $('syncOutHelp').hidden = !(g.state === 'signedIn' && !g.folder);
       accountKnown = !!g.account;
       if (g.state !== 'signedIn') accountAsked = false;
     };
@@ -957,8 +970,38 @@
       return item;
     };
     // Pedidos em série: vários pedidos acabaram mal e a barra deixou de abrir sozinha. Fica aqui o aviso, com as saídas.
-    // O destino de «Retirar o acesso do Éteris» (a T12 aponta-o para o item próprio).
-    const quietRevokeTarget = 'sincronizacao';
+    // «Retirar o acesso do Éteris»: o item próprio (#syncRevokeItem, SyncService.RevokeAnchor). Ao abrir a página nessa
+    // âncora, ou quando ela muda para lá, a vista vai ao item e o foco ao botão (se o item estiver à vista).
+    const focusRevoke = () => {
+      const item = $('syncRevokeItem');
+      if (location.hash !== '#syncRevokeItem' || item.hidden || item.closest('[hidden]') !== null) return;
+      item.scrollIntoView({ block: 'center' });
+      $('syncRevoke').focus();
+    };
+    const toAnchor = hash => { if (location.hash === hash) focusRevoke(); else location.hash = hash; };
+    addEventListener('hashchange', focusRevoke);
+    // «Retirar o acesso…»: a pergunta aparece por baixo, com «Cancelar» no lugar onde se carregou (molde de «Apagar…»),
+    // não aceita um clique no primeiro meio segundo e desarma-se sozinha ao fim de 10 s.
+    let revokeArmed = 0;
+    const disarmRevoke = focus => {
+      revokeArmed = 0;
+      $('syncRevokeConfirm').hidden = true; $('syncRevokeCancel').hidden = true; $('syncRevokeQuestion').hidden = true; $('syncRevoke').hidden = false;
+      if (focus) $('syncRevoke').focus();
+    };
+    $('syncRevoke').addEventListener('click', () => {
+      revokeArmed = Date.now();
+      $('syncRevoke').hidden = true; $('syncRevokeCancel').hidden = false; $('syncRevokeConfirm').hidden = false; $('syncRevokeQuestion').hidden = false;
+      $('syncRevokeCancel').focus();
+      setTimeout(() => { if (revokeArmed && Date.now() - revokeArmed >= 9900) disarmRevoke(false); }, 10000);
+    });
+    $('syncRevokeCancel').addEventListener('click', () => disarmRevoke(true));
+    $('syncRevokeConfirm').addEventListener('click', () => {
+      if (!revokeArmed || Date.now() - revokeArmed < ARM_GUARD) return;
+      disarmRevoke(false);
+      // A resposta chega em segundo plano (área «revoke», em #syncExitNote, à vista mesmo sem sessão).
+      $('syncRevoke').focus();
+      askGoogle('sync-google-revoke');
+    });
     const quietNotice = requests => {
       const item = document.createElement('div'); item.className = 'item syncalert';
       const label = document.createElement('div'); label.className = 'label';
@@ -968,7 +1011,7 @@
       const buttons = document.createElement('div'); buttons.className = 'stack';
       const revoke = document.createElement('button'); revoke.className = 'action'; revoke.id = 'syncQuietRevoke';
       revoke.dataset.key = 'quiet:revoke'; revoke.textContent = 'Retirar o acesso do Éteris';
-      revoke.addEventListener('click', () => document.getElementById(quietRevokeTarget)?.scrollIntoView({ block: 'start' }));
+      revoke.addEventListener('click', () => toAnchor('#syncRevokeItem'));
       buttons.append(revoke);
       if (requests.length) {
         // Recusa os pedidos prontos (o outro computador fica a saber).
@@ -1147,6 +1190,14 @@
       show('syncOfferItem', d.enabled && !!s.offer);
       note($('syncOfferNote'), msg0(d, 'offer'), true);
       show('syncDeleteItem', d.connected);
+      // «Retirar o acesso do Éteris à conta Google»: só com a conta Google (na pasta de teste não há Google).
+      show('syncRevokeItem', d.connected && !d.google.folder);
+      if ($('syncRevokeItem').hidden && revokeArmed) disarmRevoke(false);
+      // Uma saída da conta a correr: os botões das saídas ficam desativados até acabar.
+      $('syncRevoke').disabled = !!d.busy; $('syncRevokeConfirm').disabled = !!d.busy;
+      // As mensagens das saídas (fora de syncBody: depois de retirar o acesso, a mensagem tem de se ver). Nunca marcadas
+      // como erro: a página não sabe se a mensagem é de sucesso.
+      note($('syncExitNote'), msg0(d, 'revoke') || msg0(d, 'lost') || msg0(d, 'startover'));
       // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
       $('syncOffTitle').textContent = phase === 'stopped' ? 'A sincronização parou neste computador' : 'A sincronização está desligada neste computador';
       // Um apagar do Drive que não acabou (e já não está a correr): diz o que fazer, e «Ligar» passa a «Ligar sem acabar
@@ -1342,7 +1393,7 @@
       // quando o Éteris reabre e acaba o apagar sozinho): volta a perguntar daqui a pouco. Senão, de 20 em 20 s (só o
       // estado guardado: nenhum pedido à rede), para «há 2 min» e pedidos novos.
       const busy = d.google.state === 'waiting' || (d.google.state === 'signedIn' && d.google.pending) || s.running || joining
-        || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil
+        || s.phase === 'starting' || s.phase === 'pairing' || Date.now() < quickUntil || !!d.busy
         || (s.deleting && !s.deleteError && !(d.message && d.message.area === 'delete'));
       poll = setTimeout(() => askGoogle('sync-status'), busy ? 1500 : 20000);
       askLook();
@@ -1353,6 +1404,8 @@
       }
     };
     paint(initial);
+    // Aberta em #syncRevokeItem (as barras «Retirar o acesso do Éteris»): o foco vai para o botão.
+    focusRevoke();
     // O gesto que é o próprio «Sair» não pede a conta: o pedido sairia para a Google no instante em que se sai.
     const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && googleButton.contains(e.target);
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
@@ -1488,7 +1541,7 @@
     // «Foi eu»: o Éteris pede a confirmação do Windows quando há segredos ligados (a resposta chega depois dela). Nunca
     // recebe o foco. «Não fui eu» não pede nada: leva a «Retirar o acesso do Éteris».
     $('syncReplacedJoin').addEventListener('click', () => askGoogle('sync-replaced-join'));
-    $('syncReplacedNotMe').addEventListener('click', () => document.getElementById(quietRevokeTarget)?.scrollIntoView({ block: 'start' }));
+    $('syncReplacedNotMe').addEventListener('click', () => toAnchor('#syncRevokeItem'));
     $('syncPair').addEventListener('click', () => { focusAfterPaint = 'syncPairCancel'; askGoogle('sync-pair'); });
     // «Sim» só conta 2 s depois de o código aparecer e nunca recebe o foco (depois, o foco vai para «Cancelar»).
     $('syncPairConfirm').addEventListener('click', () => { if (Date.now() - codeShownAt < CONFIRM_GUARD) return; focusAfterPaint = 'syncPairCancel'; askGoogle('sync-pair-confirm'); });

@@ -338,10 +338,9 @@ public class GoogleAccountTests
         var refresh = session.AccessTokenAsync(false, CancellationToken.None);
         await arrived.WaitAsync(TimeSpan.FromSeconds(10));
 
-        // A revogação fica pendurada: a Google ainda responde à renovação pedida antes (o caso mais difícil).
-        var (_, releaseRevoke) = google.Hold("/revoke");
-        var signOut = session.SignOutAsync(CancellationToken.None);
-        Assert.False(session.IsSignedIn); // os tokens deste aparelho saem logo, antes da resposta da Google
+        // «Sair» é só local (T12): nada vai à Google.
+        session.SignOut();
+        Assert.False(session.IsSignedIn); // os tokens deste aparelho saem logo
         Assert.False(File.Exists(_tokenPath));
 
         release();
@@ -350,9 +349,33 @@ public class GoogleAccountTests
         Assert.Equal(1, google.Refreshes); // a Google renovou, mas a resposta já não é desta sessão
         Assert.False(session.IsSignedIn);
         Assert.False(File.Exists(_tokenPath));
+        Assert.Empty(google.Revoked);
+    }
+
+    // «Retirar o acesso» a meio de uma renovação: a renovação acaba primeiro (grava os tokens renovados) e a revogação
+    // responde depois. A Google confirmou: os tokens renovados também saem (não voltam ao disco nem à memória).
+    [Fact]
+    public async Task RevokeAccess_DuringTokenRefresh_DoesNotBringTheTokensBack()
+    {
+        var google = new FakeGoogle();
+        var (session, _, _) = Signed(google);
+        _now += 7_200_000; // mais de 1 h: o token de acesso expirou
+        var (arrived, release) = google.Hold("/token");
+        var refresh = session.AccessTokenAsync(false, CancellationToken.None);
+        await arrived.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var (revokeArrived, releaseRevoke) = google.Hold("/revoke");
+        var revoke = session.RevokeAccessAsync(CancellationToken.None);
+        await revokeArrived.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(session.IsSignedIn); // até a Google responder, nada sai
+
+        release();
+        await refresh.WaitAsync(TimeSpan.FromSeconds(10));
         releaseRevoke();
-        await signOut.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(RevokeOutcome.Revoked, await revoke.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.False(session.IsSignedIn);
         Assert.False(File.Exists(_tokenPath));
+        Assert.Equal([google.RefreshToken], google.Revoked);
     }
 
     // O pedido da conta está na rede quando se carrega em «Sair»: a resposta que chega depois não grava o nome e o
@@ -367,7 +390,7 @@ public class GoogleAccountTests
         await arrived.WaitAsync(TimeSpan.FromSeconds(10));
 
         accounts.Forget();
-        await session.SignOutAsync(CancellationToken.None);
+        session.SignOut();
         var notified = false;
         accounts.Changed += _ => notified = true;
         release();

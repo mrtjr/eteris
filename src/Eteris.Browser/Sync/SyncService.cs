@@ -331,14 +331,69 @@ internal static class SyncService
         Act("delete", a => a.FinishCloudDeletionAsync());
     }
 
-    // «Sair»: a sincronização para neste computador (a revogação na Google é do GoogleSync).
+    // «Sair»: a sincronização para neste computador. Nada é revogado na Google (só «Retirar o acesso», RevokeAccess);
+    // os tokens deste computador saem pelo GoogleSync.SignOut. Também a parte local das outras saídas.
     public static void SignOut(bool forgetKey)
     {
         // O kit aberto fecha-se já (as janelas voltam às capturas; copiar, guardar e imprimir deixam de valer).
         OpenKit.Close();
+        // Quem sai não fica com a barra de «sessão expirada» à vista.
+        DismissSignInPrompt();
         Agent()?.SignOut(forgetKey);
         lock (Gate) Schedule.Stop();
         Arm();
+    }
+
+    // ---- saídas da conta (0.2.15, T12): «Retirar o acesso», «Perdi um computador», «Começar do zero…» ---------------
+
+    private static volatile string? _exitBusy;
+
+    // A saída em curso («revoke», «lost», «startover») ou null: a página desativa os três botões e pergunta o estado amiúde.
+    public static string? ExitBusy => _exitBusy;
+
+    // Corre uma saída em segundo plano. Não usa Act (que apaga uma mensagem de sucesso posta dentro da ação): a mensagem
+    // final, de sucesso ou não, é a que a saída devolve, tal e qual. Uma de cada vez.
+    private static void Exit(string area, Func<Task<string>> run)
+    {
+        lock (Gate)
+        {
+            if (_exitBusy is not null) return;
+            _exitBusy = area;
+            _message = null;
+        }
+        Changed?.Invoke();
+        _ = Task.Run(async () =>
+        {
+            string message;
+            try { message = await run().ConfigureAwait(false); }
+            catch (Exception e) { message = "Não foi possível concluir (" + e.Message + ")."; }
+            // A mensagem e o fim chegam juntos à página (nunca «acabou» sem a mensagem).
+            lock (Gate)
+            {
+                _message = (area, message);
+                _exitBusy = null;
+            }
+            Changed?.Invoke();
+        });
+    }
+
+    // A revogação na Google, com um limite de 30 s.
+    private static async Task<Eteris.Sync.Google.RevokeOutcome> RevokeWithLimitAsync(CancellationToken cancellationToken)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(TimeSpan.FromSeconds(30));
+        return await GoogleSync.RevokeAccessAsync(limit.Token).ConfigureAwait(false);
+    }
+
+    // «Retirar o acesso do Éteris à conta Google» (já confirmado na página). Não existe na pasta de teste.
+    public static void RevokeAccess()
+    {
+        if (FolderMode) return;
+        Exit("revoke", async () =>
+        {
+            var (_, message) = await SyncExit.RevokeAsync(RevokeWithLimitAsync, () => SignOut(forgetKey: false), CancellationToken.None).ConfigureAwait(false);
+            return message;
+        });
     }
 
     // O utilizador abriu o menu do Éteris (⋯) ou tem a secção Sincronização à vista: procura pedidos de aparelhos novos
@@ -364,8 +419,9 @@ internal static class SyncService
 
     // ---- barra de aprovação (0.2.15) -------------------------------------------------------------------------------
 
-    // O destino de «Retirar o acesso do Éteris» nas barras. Um só sítio (a T12 muda-o para o item próprio).
-    internal const string RevokeAnchor = "#sincronizacao";
+    // O destino de «Retirar o acesso do Éteris» nas barras: o item próprio nas Definições (a página leva-lhe o foco).
+    // Um só sítio.
+    internal const string RevokeAnchor = "#syncRevokeItem";
 
     // O que a barra de aprovação mostra agora. Lê o campo (nunca cria o agente; sem agente, nada) e só memória: é
     // chamado pelo «wants» da candidata, a cada RefreshBars.

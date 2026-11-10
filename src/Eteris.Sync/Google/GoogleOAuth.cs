@@ -60,6 +60,15 @@ public enum OAuthFailure
     MissingScope, // a permissão da pasta do Drive foi desmarcada
 }
 
+// O resultado de «Retirar o acesso» (revogar na Google).
+public enum RevokeOutcome
+{
+    Revoked,        // a Google confirmou (200): a autorização do Éteris nesta conta acabou, em todos os computadores
+    AlreadyInvalid, // 400 invalid_token: o token DESTE computador já não valia; NÃO confirma a revogação
+    Failed,         // sem rede, outro erro da Google, tempo esgotado: nada mudou
+    NotSignedIn,    // sem sessão neste computador: não se pediu nada
+}
+
 // NeedsSignIn: a autorização foi retirada ou expirou (invalid_grant, sem token de renovação, permissão desmarcada) —
 // não passa sozinha; é preciso entrar outra vez.
 public sealed class OAuthException(string message, bool needsSignIn = false, OAuthFailure failure = OAuthFailure.Other) : Exception(message)
@@ -449,16 +458,30 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
             ["refresh_token"] = refreshToken,
         }, refreshToken, cancellationToken);
 
-    // «Sair»: a Google invalida o token (e o acesso da aplicação); o Éteris apaga a cópia local de qualquer forma.
-    public async Task<bool> RevokeAsync(string token, CancellationToken cancellationToken)
+    // «Retirar o acesso do Éteris à conta Google»: a Google invalida a autorização do Éteris nesta conta (todos os
+    // computadores). Só 200 é a confirmação. 400 «invalid_token» quer dizer que ESTE token já não valia — não diz nada
+    // sobre a autorização da conta nem sobre os tokens dos outros computadores. Qualquer outra resposta, sem rede ou o
+    // limite de tempo do cliente: Failed. O cancelamento de quem chama propaga-se.
+    public async Task<RevokeOutcome> RevokeAsync(string token, CancellationToken cancellationToken)
     {
         using var content = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token });
         try
         {
             using var response = await http.PostAsync(GoogleEndpoints.Revoke, content, cancellationToken).ConfigureAwait(false);
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode) return RevokeOutcome.Revoked;
+            if (response.StatusCode != HttpStatusCode.BadRequest) return RevokeOutcome.Failed;
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var json = JsonDocument.Parse(body);
+                return json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("error", out var error)
+                    && error.ValueKind == JsonValueKind.String && error.GetString() == "invalid_token"
+                    ? RevokeOutcome.AlreadyInvalid : RevokeOutcome.Failed;
+            }
+            catch (JsonException) { return RevokeOutcome.Failed; }
         }
-        catch (HttpRequestException) { return false; }
+        catch (HttpRequestException) { return RevokeOutcome.Failed; }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) { return RevokeOutcome.Failed; }
     }
 
     private async Task<OAuthTokens> TokenRequestAsync(Dictionary<string, string> form, string? previousRefresh, CancellationToken cancellationToken)
@@ -529,8 +552,9 @@ public sealed class TokenStore(string path, ISecretProtector protector)
 
 // Sessão com a Google: devolve sempre um token de acesso válido, renovando-o quando expira.
 // «Sair» pode chegar a meio de uma renovação (o pedido da conta renova o token): cada sessão tem uma geração, que
-// SignOutAsync e Use (um novo início de sessão) mudam, e uma renovação só fica com os tokens novos — e só os grava —
-// se a geração ainda for a mesma de quando começou. Sem isto os tokens voltavam ao disco depois de «Sair».
+// SignOut, RevokeAccessAsync (quando a sessão sai) e Use (um novo início de sessão) mudam, e uma renovação só fica com
+// os tokens novos — e só os grava — se a geração ainda for a mesma de quando começou. Sem isto os tokens voltavam ao
+// disco depois de «Sair».
 public sealed class GoogleSession(GoogleOAuth oauth, TokenStore store, Func<long> nowMs)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -580,26 +604,40 @@ public sealed class GoogleSession(GoogleOAuth oauth, TokenStore store, Func<long
         finally { _gate.Release(); }
     }
 
-    // A metade local de «Sair», sem rede: apaga os tokens deste aparelho já, e de modo que nenhuma renovação em curso os
-    // volte a gravar (a geração sobe). A autorização na Google fica dada (os outros computadores continuam ligados).
-    public void SignOut() => Forget();
-
-    // Sair: SignOut e revoga na Google (melhor esforço).
-    public async Task SignOutAsync(CancellationToken cancellationToken)
+    // «Sair deste computador», sem rede: apaga os tokens deste aparelho já, e de modo que nenhuma renovação em curso os
+    // volte a gravar (a geração sobe). Nada é revogado: a autorização na Google fica dada (os outros computadores
+    // continuam ligados).
+    public void SignOut()
     {
-        var tokens = Forget();
-        if (tokens is not null) await oauth.RevokeAsync(tokens.RefreshToken ?? tokens.AccessToken, cancellationToken).ConfigureAwait(false);
+        lock (_state) Forget();
     }
 
-    private OAuthTokens? Forget()
+    // «Retirar o acesso»: revoga na Google. Revoked: a Google confirmou. AlreadyInvalid: o token daqui já não valia (NÃO
+    // confirma a revogação). Nos dois casos os tokens daqui apagam-se (já não servem). Failed: fica tudo. Até a Google
+    // responder nada muda aqui; depois, só se apaga se ninguém entrou entretanto (a geração é a mesma) — uma renovação
+    // que acabou entretanto não muda a geração, e os tokens renovados também saem.
+    public async Task<RevokeOutcome> RevokeAccessAsync(CancellationToken cancellationToken)
     {
+        OAuthTokens? tokens;
+        long generation;
         lock (_state)
         {
-            _generation++;
-            var tokens = _tokens;
-            _tokens = null;
-            store.Delete();
-            return tokens;
+            tokens = _tokens;
+            generation = _generation;
         }
+        if (tokens is null) return RevokeOutcome.NotSignedIn;
+        var outcome = await oauth.RevokeAsync(tokens.RefreshToken ?? tokens.AccessToken, cancellationToken).ConfigureAwait(false);
+        if (outcome is RevokeOutcome.Revoked or RevokeOutcome.AlreadyInvalid)
+            lock (_state)
+                if (generation == _generation) Forget();
+        return outcome;
+    }
+
+    // Chamar dentro do _state.
+    private void Forget()
+    {
+        _generation++;
+        _tokens = null;
+        store.Delete();
     }
 }

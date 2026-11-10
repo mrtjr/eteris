@@ -576,15 +576,13 @@ public class GoogleSyncTests
             Assert.Contains(step, code);
     }
 
-    // «Sair» esquece o estado do início de sessão e o e-mail da reentrada (R12 da T4).
+    // «Sair» e «Retirar o acesso» esquecem o estado do início de sessão e o e-mail da reentrada (R12 da T4; T12).
     [Fact]
     public void SignOut_ResetsTheTracker()
     {
-        var code = File.ReadAllText(Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync", "GoogleSync.cs"));
-        var start = code.IndexOf("public static async Task SignOutAsync()", StringComparison.Ordinal);
-        Assert.True(start >= 0, "SignOutAsync não encontrado");
-        var end = code.IndexOf("\n    }", start, StringComparison.Ordinal);
-        Assert.Contains("Tracker.Reset()", code[start..end]);
+        var code = Src("Eteris.Browser", "Sync", "GoogleSync.cs");
+        Assert.Contains("Tracker.Reset()", Body(code, "public static void SignOut()"));
+        Assert.Contains("Tracker.Reset()", Body(code, "public static async Task<RevokeOutcome> RevokeAccessAsync("));
         Assert.Contains("internal static void ResetSignIn()", code);
     }
 
@@ -743,22 +741,255 @@ public class GoogleSyncTests
         Assert.Equal(1, browser.Opens);
     }
 
-    [Fact]
-    public async Task SignOut_RevokesAtGoogle_AndForgetsTheTokens()
+    // ---- «Sair deste computador» e «Retirar o acesso» (T12) ---------------------------------------------------------
+
+    // Uma sessão com tokens numa pasta temporária (apagada no fim de cada teste).
+    private (GoogleSession Session, TokenStore Store, string Dir) NewSession(FakeGoogle google, HttpMessageHandler? handler = null)
     {
-        var google = new FakeGoogle();
-        var http = GoogleEndpoints.CreateClient(google);
-        var oauth = new GoogleOAuth(http, new OAuthClientConfig(google.ClientId, null), Now);
         var dir = Path.Combine(Path.GetTempPath(), "eteris-test-" + Guid.NewGuid().ToString("N"));
+        var oauth = new GoogleOAuth(GoogleEndpoints.CreateClient(handler ?? google), new OAuthClientConfig(google.ClientId, null), Now);
         var store = new TokenStore(Path.Combine(dir, "google.tokens"), new PlainProtector());
         var session = new GoogleSession(oauth, store, Now);
-        session.Use(new OAuthTokens("a", google.RefreshToken, _now + 1000, GoogleEndpoints.Scope));
-        Assert.NotNull(store.Load());
-        await session.SignOutAsync(CancellationToken.None);
-        Assert.Equal([google.RefreshToken], google.Revoked);
-        Assert.Null(store.Load());
-        Assert.False(session.IsSignedIn);
-        Directory.Delete(dir, true);
+        session.Use(new OAuthTokens(google.ValidAccessToken, google.RefreshToken, _now + 3_600_000, GoogleEndpoints.Scope));
+        return (session, store, dir);
+    }
+
+    private static void Drop(string dir)
+    {
+        if (Directory.Exists(dir)) Directory.Delete(dir, true);
+    }
+
+    private static int RevokeRequests(FakeGoogle google)
+    {
+        lock (google.Requests) return google.Requests.Count(r => r == "POST https://oauth2.googleapis.com/revoke");
+    }
+
+    // «Sair» não revoga: o token de renovação continua a valer na Google (os outros computadores continuam ligados).
+    [Fact]
+    public async Task SignOut_TheTokenStaysValidAtGoogle()
+    {
+        var google = new FakeGoogle();
+        var (session, store, dir) = NewSession(google);
+        var (other, _, otherDir) = NewSession(google);
+        try
+        {
+            session.SignOut();
+            Assert.False(session.IsSignedIn);
+            Assert.Null(store.Load());
+            Assert.Empty(google.Revoked);
+            Assert.Equal(0, RevokeRequests(google));
+            Assert.False(string.IsNullOrEmpty(await other.AccessTokenAsync(true, CancellationToken.None)));
+        }
+        finally { Drop(dir); Drop(otherDir); }
+    }
+
+    [Fact]
+    public async Task RevokeAccess_OneRevocation_AndForgetsTheTokens()
+    {
+        var google = new FakeGoogle();
+        var (session, store, dir) = NewSession(google);
+        try
+        {
+            Assert.NotNull(store.Load());
+            Assert.Equal(RevokeOutcome.Revoked, await session.RevokeAccessAsync(CancellationToken.None));
+            Assert.Equal([google.RefreshToken], google.Revoked);
+            Assert.Equal(1, RevokeRequests(google));
+            Assert.Null(store.Load());
+            Assert.False(session.IsSignedIn);
+        }
+        finally { Drop(dir); }
+    }
+
+    [Fact]
+    public async Task RevokeAccess_GoogleFails_KeepsTheSession()
+    {
+        var google = new FakeGoogle { RevokeStatus = HttpStatusCode.ServiceUnavailable };
+        var (session, store, dir) = NewSession(google);
+        try
+        {
+            Assert.Equal(RevokeOutcome.Failed, await session.RevokeAccessAsync(CancellationToken.None));
+            Assert.True(session.IsSignedIn);
+            Assert.NotNull(store.Load());
+            Assert.Empty(google.Revoked);
+        }
+        finally { Drop(dir); }
+    }
+
+    [Fact]
+    public async Task RevokeAccess_NoNetwork_KeepsTheSession()
+    {
+        var google = new FakeGoogle();
+        var (session, store, dir) = NewSession(google, new NoNetwork());
+        try
+        {
+            Assert.Equal(RevokeOutcome.Failed, await session.RevokeAccessAsync(CancellationToken.None));
+            Assert.True(session.IsSignedIn);
+            Assert.NotNull(store.Load());
+        }
+        finally { Drop(dir); }
+    }
+
+    // 400 invalid_token: o token DESTE computador já não valia. Os tokens daqui saem (já não servem), mas isto não
+    // confirma que a autorização da conta foi retirada (o texto que a pessoa lê está em SyncExitTests).
+    [Fact]
+    public async Task RevokeAccess_AlreadyInvalid_ForgetsTheTokens()
+    {
+        var google = new FakeGoogle { RevokeStatus = HttpStatusCode.BadRequest, RevokeError = "invalid_token" };
+        var (session, store, dir) = NewSession(google);
+        try
+        {
+            var outcome = await session.RevokeAccessAsync(CancellationToken.None);
+            Assert.Equal(RevokeOutcome.AlreadyInvalid, outcome);
+            Assert.NotEqual(RevokeOutcome.Revoked, outcome);
+            Assert.Null(store.Load());
+            Assert.False(session.IsSignedIn);
+            Assert.Empty(google.Revoked);
+        }
+        finally { Drop(dir); }
+    }
+
+    [Fact]
+    public async Task RevokeAccess_OtherBadRequest_IsAFailure()
+    {
+        var google = new FakeGoogle { RevokeStatus = HttpStatusCode.BadRequest, RevokeError = "invalid_request" };
+        var (session, store, dir) = NewSession(google);
+        try
+        {
+            Assert.Equal(RevokeOutcome.Failed, await session.RevokeAccessAsync(CancellationToken.None));
+            Assert.True(session.IsSignedIn);
+            Assert.NotNull(store.Load());
+        }
+        finally { Drop(dir); }
+    }
+
+    [Fact]
+    public async Task RevokeAccess_NotSignedIn_AsksNothing()
+    {
+        var google = new FakeGoogle();
+        var (session, _, dir) = NewSession(google);
+        try
+        {
+            session.SignOut();
+            lock (google.Requests) google.Requests.Clear();
+            Assert.Equal(RevokeOutcome.NotSignedIn, await session.RevokeAccessAsync(CancellationToken.None));
+            Assert.Empty(google.Requests);
+        }
+        finally { Drop(dir); }
+    }
+
+    // Dois computadores na mesma conta Google, cada um com a sua sessão: «Sair» num não desliga o outro; «Retirar o
+    // acesso» desliga-o (fica «entre outra vez»).
+    [Fact]
+    public async Task RevokeAccess_SignsOutTheOtherComputers_SignOutDoesNot()
+    {
+        var google = new FakeGoogle();
+        var (casaSession, _, casaDir) = NewSession(google);
+        var (trabalhoSession, _, trabalhoDir) = NewSession(google);
+        try
+        {
+            var http = GoogleEndpoints.CreateClient(google);
+            var casa = new SyncAgent(() => new GoogleDriveTransport(http, casaSession.AccessTokenAsync, NoWait), new MemoryProfile(), new MemoryStore(), "Casa", Now);
+            var trabalhoProfile = new MemoryProfile();
+            var trabalho = new SyncAgent(() => new GoogleDriveTransport(http, trabalhoSession.AccessTokenAsync, NoWait), trabalhoProfile, new MemoryStore(), "Trabalho", Now);
+            await casa.StartAsync();
+            await trabalho.StartAsync();
+            await trabalho.JoinWithCodeAsync(casa.RevealKit()!.Words);
+            Assert.True(await trabalho.RunAsync());
+
+            casaSession.SignOut();
+            trabalhoProfile.Bookmark("https://depois-de-sair.example/", "Depois de sair");
+            Assert.True(await trabalho.RunAsync());
+            Assert.False(trabalho.Status.NeedsSignIn);
+
+            // A Casa entra outra vez e retira o acesso: a Trabalho fica sem autorização.
+            var (again, _, againDir) = NewSession(google);
+            try { Assert.Equal(RevokeOutcome.Revoked, await again.RevokeAccessAsync(CancellationToken.None)); }
+            finally { Drop(againDir); }
+            trabalhoProfile.Bookmark("https://depois-de-retirar.example/", "Depois de retirar");
+            Assert.False(await trabalho.RunAsync());
+            Assert.True(trabalho.Status.NeedsSignIn);
+        }
+        finally { Drop(casaDir); Drop(trabalhoDir); }
+    }
+
+    // Recorta o corpo de um membro: «=> …;» numa linha, ou do «{» até ao fecho com a mesma indentação.
+    internal static string Body(string code, string signature)
+    {
+        code = code.Replace("\r\n", "\n");
+        var start = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, signature + " não encontrado");
+        var lineStart = code.LastIndexOf('\n', start) + 1;
+        var indent = code[lineStart..start];
+        var after = start + signature.Length;
+        var arrow = code.IndexOf("=>", after, StringComparison.Ordinal);
+        var brace = code.IndexOf('{', after);
+        if (arrow >= 0 && (brace < 0 || arrow < brace) && code.IndexOf('\n', after) > arrow)
+            return code[after..code.IndexOf(";\n", arrow, StringComparison.Ordinal)];
+        var end = code.IndexOf("\n" + indent + "}", after, StringComparison.Ordinal);
+        Assert.True(end > after, signature + ": fecho não encontrado");
+        return code[after..end];
+    }
+
+    // O bloco de um «case» da fábrica de rotas, até ao «case» seguinte.
+    internal static string CaseBlock(string code, string label)
+    {
+        var start = code.IndexOf(label, StringComparison.Ordinal);
+        Assert.True(start >= 0, label + " não encontrado");
+        var next = code.IndexOf("            case \"", start + label.Length, StringComparison.Ordinal);
+        return code[start..(next < 0 ? code.Length : next)];
+    }
+
+    internal static string Src(params string[] parts) => File.ReadAllText(Path.Combine([FindRoot(), "src", .. parts])).Replace("\r\n", "\n");
+
+    [Fact]
+    public void SignOutRoute_NeverRevokes()
+    {
+        var factory = Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
+        var route = CaseBlock(factory, "case \"/sync-google-out\":");
+        Assert.DoesNotContain("Revoke", route);
+        Assert.Contains("Sync.GoogleSync.SignOut();", route);
+        var sync = Src("Eteris.Browser", "Sync", "GoogleSync.cs");
+        Assert.DoesNotContain("Revoke", Body(sync, "public static void SignOut()"));
+        var oauth = Src("Eteris.Sync", "Google", "GoogleOAuth.cs");
+        Assert.DoesNotContain("Revoke", Body(oauth, "public void SignOut()"));
+        Assert.DoesNotContain("SignOutAsync", sync);
+        Assert.DoesNotContain("SignOutAsync", oauth);
+        var service = Src("Eteris.Browser", "Sync", "SyncService.cs");
+        Assert.Contains("DismissSignInPrompt()", Body(service, "public static void SignOut(bool forgetKey)"));
+    }
+
+    [Fact]
+    public void RevokeRoute_Exists_AndTheAnchorPointsToIt()
+    {
+        var factory = Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
+        Assert.Contains("case \"/sync-google-revoke\" when !Sync.SyncService.FolderMode:", factory);
+        Assert.Contains("Sync.SyncService.RevokeAccess();", CaseBlock(factory, "case \"/sync-google-revoke\""));
+        Assert.Equal("#syncRevokeItem", Eteris.Browser.Sync.SyncService.RevokeAnchor);
+        var page = Src("Eteris.Browser", "Browser", "settings.html");
+        foreach (var text in new[] { "id=\"syncRevokeItem\"", "sync-google-revoke", "hashchange", "'#syncRevokeItem'" })
+            Assert.Contains(text, page);
+        // Os botões das Definições que levam a «Retirar o acesso» (T8 e T7) apontam para o item.
+        foreach (var handler in new[] { "revoke.addEventListener('click'", "$('syncReplacedNotMe').addEventListener('click'" })
+        {
+            var at = page.IndexOf(handler, StringComparison.Ordinal);
+            Assert.True(at >= 0, handler);
+            Assert.Contains("syncRevokeItem", page[at..page.IndexOf('\n', at)]);
+        }
+        Assert.Contains("revoke.id = 'syncQuietRevoke'", page);
+        // O destino vive num só sítio do código C#: SyncService.RevokeAnchor.
+        var browser = Path.Combine(FindRoot(), "src", "Eteris.Browser");
+        foreach (var file in Directory.EnumerateFiles(browser, "*.cs", SearchOption.AllDirectories))
+        {
+            if (Path.GetRelativePath(browser, file).Replace('\\', '/') == "Sync/SyncService.cs") continue;
+            Assert.DoesNotContain("#syncRevokeItem", File.ReadAllText(file));
+        }
+    }
+
+    // Sem rede: o pedido de revogação falha antes de chegar à Google.
+    private sealed class NoNetwork : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("sem rede");
     }
 
     [Fact]

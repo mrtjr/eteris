@@ -6,7 +6,8 @@ using Eteris.Sync.Google;
 namespace Eteris.Browser.Sync;
 
 // «Entrar com o Google» (Definições › Sincronização e menu da conta): início de sessão no navegador do sistema
-// (PKCE + loopback), tokens guardados com DPAPI no perfil e revogados ao «Sair». Sem o identificador da aplicação
+// (PKCE + loopback), tokens guardados com DPAPI no perfil e apagados deste computador ao «Sair» (só «Retirar o acesso do
+// Éteris à conta Google» os revoga na Google, e isso desliga todos os computadores). Sem o identificador da aplicação
 // (google-oauth.json, criado pelo dono na Google Cloud e copiado pelo build/publish.ps1) fica «indisponível nesta
 // compilação» e não faz pedido nenhum. Depois de entrar, a sincronização (SyncService) liga-se e usa o Drive
 // (DriveTransport: só a pasta oculta da aplicação).
@@ -231,14 +232,27 @@ internal static class GoogleSync
         lock (Gate) _signIn?.Cancel();
     }
 
-    public static async Task SignOutAsync()
+    // «Sair deste computador»: só local. Nada é revogado na Google (os outros computadores continuam ligados).
+    public static void SignOut()
     {
         Tracker.Reset();
-        var session = Session();
-        if (session is null) return;
         Accounts()?.Forget();
-        try { await session.SignOutAsync(CancellationToken.None); }
-        catch (Exception e) when (e is HttpRequestException or IOException) { }
+        Session()?.SignOut();
+    }
+
+    // «Retirar o acesso do Éteris à conta Google»: revoga. Com Revoked e AlreadyInvalid a sessão daqui ficou apagada:
+    // esquece também a conta guardada e o estado da entrada. Devolve o resultado tal e qual (o texto é do SyncExit:
+    // AlreadyInvalid não é «retirado»).
+    public static async Task<RevokeOutcome> RevokeAccessAsync(CancellationToken cancellationToken = default)
+    {
+        if (Session() is not { } session) return RevokeOutcome.NotSignedIn;
+        var outcome = await session.RevokeAccessAsync(cancellationToken).ConfigureAwait(false);
+        if (outcome is RevokeOutcome.Revoked or RevokeOutcome.AlreadyInvalid)
+        {
+            Tracker.Reset();
+            Accounts()?.Forget();
+        }
+        return outcome;
     }
 
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();

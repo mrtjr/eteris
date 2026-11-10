@@ -47,6 +47,14 @@ internal sealed class FakeGoogle : HttpMessageHandler
 
     public void ExpireAccessToken() => ValidAccessToken = "acesso-" + Guid.NewGuid().ToString("N")[..6];
 
+    // A resposta de «/revoke» (por omissão, 200 e o token fica revogado). Com valor: esse estado e, com RevokeError, um
+    // corpo JSON {"error": …}; nada é revogado.
+    public HttpStatusCode? RevokeStatus { get; set; }
+    public string? RevokeError { get; set; }
+
+    // «Entrar outra vez» depois de uma revogação: o token de renovação volta a valer.
+    public void Regrant() => Revoked.RemoveAll(t => t == RefreshToken);
+
     // Segura o próximo pedido a este caminho (por exemplo «/token» ou «/drive/v3/about») até o teste o libertar:
     // serve para meter «Sair» a meio de uma renovação ou de um pedido da conta. «Arrived» completa quando o pedido chega.
     private readonly Dictionary<string, (TaskCompletionSource Arrived, TaskCompletionSource Release)> _holds = new(StringComparer.Ordinal);
@@ -209,7 +217,12 @@ internal sealed class FakeGoogle : HttpMessageHandler
         var form = Query(await request.Content!.ReadAsStringAsync(cancellationToken));
         if (uri.AbsolutePath == "/revoke")
         {
+            // Uma resposta forçada (503, 400 invalid_token…): nada fica revogado.
+            if (RevokeStatus is { } status)
+                return RevokeError is { } error ? Json(status, new JsonObject { ["error"] = error }) : new HttpResponseMessage(status);
             Revoked.Add(form["token"]);
+            // Como a Google: a revogação invalida também os tokens de acesso já emitidos (todos os computadores).
+            if (form["token"] == RefreshToken) ExpireAccessToken();
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
         if (form.GetValueOrDefault("client_id") != ClientId) return Json(HttpStatusCode.Unauthorized, new JsonObject { ["error"] = "invalid_client" });

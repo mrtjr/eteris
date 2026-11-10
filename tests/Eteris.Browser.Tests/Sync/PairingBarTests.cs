@@ -205,7 +205,8 @@ public class PairingBarTests
         Assert.Contains("PairingBarModel.RefusedAdvice", glue);
         var service = File.ReadAllText(Src("Sync", "SyncService.cs"));
         Assert.Single(Regex.Matches(service, @"const string RevokeAnchor\b"));
-        Assert.Equal("#sincronizacao", SyncService.RevokeAnchor);
+        // O item próprio de «Retirar o acesso do Éteris à conta Google» (T12).
+        Assert.Equal("#syncRevokeItem", SyncService.RevokeAnchor);
     }
 
     [Fact]

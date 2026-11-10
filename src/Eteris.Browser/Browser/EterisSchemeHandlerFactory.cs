@@ -261,10 +261,16 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.GoogleSync.CancelSignIn();
                 break;
             case "/sync-google-out":
-                // A sincronização para já neste computador (com «forget=1», a cópia local da chave sai também); os
-                // tokens saem já e a revogação na Google segue em segundo plano.
+                // «Sair deste computador»: a sincronização para já aqui (com «forget=1», a cópia local da chave sai
+                // também) e os tokens e a conta guardada deste computador saem. Nada é revogado na Google: zero pedidos
+                // de rede, e os outros computadores continuam ligados.
                 Sync.SyncService.SignOut(InternalPages.Query(uri, "forget") == "1");
-                if (!Sync.SyncService.FolderMode) _ = Sync.GoogleSync.SignOutAsync();
+                if (!Sync.SyncService.FolderMode) Sync.GoogleSync.SignOut();
+                break;
+            case "/sync-google-revoke" when !Sync.SyncService.FolderMode:
+                // «Retirar o acesso do Éteris à conta Google» (já confirmado na página): revoga em segundo plano; a
+                // mensagem chega pela área «revoke». Não existe na pasta de teste (não há Google).
+                Sync.SyncService.RevokeAccess();
                 break;
             case "/sync-account":
                 // A secção Sincronização ficou à vista depois de um gesto do utilizador na página: se há sessão sem
