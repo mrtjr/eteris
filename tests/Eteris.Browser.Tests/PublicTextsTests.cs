@@ -321,4 +321,17 @@ public class PublicTextsTests
         foreach (var (name, text) in PublicTexts())
             Assert.False(text.Contains("nunca enviado", StringComparison.Ordinal), name);
     }
+
+    // O «Quando:» das Definições não promete mais do que o ActivationLook faz: com um pedido contado, voltar à janela
+    // procura logo (3.6, ponto 3).
+    [Fact]
+    public void Settings_SyncWhen_SaysActivationPassesAtOnceWithARequest()
+    {
+        var settings = Read("src", "Eteris.Browser", "Browser", "settings.html");
+        var m = Regex.Match(settings, "<span id=\"syncWhen\">(.*?)</span>", RegexOptions.Singleline);
+        Assert.True(m.Success);
+        var when = Flat(m.Groups[1].Value);
+        if (when.Contains("voltar à janela", StringComparison.Ordinal))
+            Assert.Contains("(no máximo uma vez a cada 5 minutos, ou logo se uma ronda já tiver encontrado um pedido)", when);
+    }
 }
