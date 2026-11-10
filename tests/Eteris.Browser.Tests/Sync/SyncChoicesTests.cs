@@ -123,6 +123,10 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Equal("Sim", SyncChoices.OfferYes);
         Assert.Equal("Não", SyncChoices.OfferNo);
         Assert.Equal("", SyncChoices.AccountSince(null, 0));
+        // «since» recebido fora do intervalo de datas: sem «Ligado em», sem exceção.
+        Assert.Equal("", SyncChoices.AccountSince(null, long.MaxValue));
+        Assert.Equal("", SyncChoices.AccountSince("x", 1_762_560_000_000_000));
+        Assert.Equal("", SyncChoices.AccountSince("x", -1));
         Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe, cartões e documentos",
             PairingBarModel.Title(SyncChoices.Receives(true)));
 

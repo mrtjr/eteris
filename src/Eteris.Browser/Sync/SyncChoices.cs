@@ -100,7 +100,8 @@ internal static class SyncChoices
     // escrever). «device» já vem limpo (SyncAgent.AccountSecretsBy). Data local, dd/MM/yyyy.
     public static string AccountSince(string? device, long sinceMs)
     {
-        if (sinceMs <= 0) return string.Empty;
+        // Um valor recebido: fora do intervalo das datas, nada (sem exceção).
+        if (sinceMs <= 0 || sinceMs > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()) return string.Empty;
         var day = DateTimeOffset.FromUnixTimeMilliseconds(sinceMs).ToLocalTime().ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
         return device is { Length: > 0 } ? $" Ligado em «{device}» em {day}." : $" Ligado em {day}.";
     }

@@ -697,4 +697,36 @@ public sealed class SyncAccountChoiceTests : IDisposable
         Assert.False(quarto.Agent.Status.SecretsOffer);
         Assert.True(quarto.Agent.Status.InheritedSecrets);
     }
+
+    // ---- revisão, ronda 1 ----------------------------------------------------------------------------------------
+
+    // «since» é um valor recebido: fora do intervalo de datas (microssegundos, long.MaxValue) ou no futuro conta como
+    // desconhecido (0), e as Definições continuam a abrir em todos os computadores da conta.
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(1_762_560_000_000_000)]
+    [InlineData(-5)]
+    [InlineData(253_402_300_800_000)]
+    public async Task AccountRecord_SinceOutOfRange_CountsAsUnknown(long since)
+    {
+        var (casa, trabalho) = await TwoAsync();
+        await WriteAccountRecordAsync(casa, new JsonObject { ["value"] = "on", ["since"] = since, ["by"] = "x" });
+        await Settle(casa, trabalho);
+        Assert.True(trabalho.Agent.AccountSecrets);
+        Assert.Equal(0, trabalho.Agent.AccountSecretsSinceMs);
+        Assert.Equal(0, casa.Agent.AccountSecretsSinceMs);
+        var enabled = SyncGroups.DefaultCollections.Concat(SyncGroups.AccountCollections).ToHashSet(StringComparer.Ordinal);
+        var row = SyncChoices.Rows(enabled, SyncChoices.AccountChoice.Of(trabalho.Agent)).Single(r => r.Id == SyncChoices.AccountRow);
+        Assert.Equal(SyncChoices.AccountText, row.Text);
+    }
+
+    [Fact]
+    public async Task AccountRecord_SinceInTheFuture_CountsAsUnknown()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        await WriteAccountRecordAsync(casa, new JsonObject { ["value"] = "on", ["since"] = _now + 2 * 86_400_000L, ["by"] = "x" });
+        await Settle(casa, trabalho);
+        Assert.True(trabalho.Agent.AccountSecrets);
+        Assert.Equal(0, trabalho.Agent.AccountSecretsSinceMs);
+    }
 }

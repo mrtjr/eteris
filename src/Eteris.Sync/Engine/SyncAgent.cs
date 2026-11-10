@@ -248,6 +248,7 @@ public sealed class SyncAgent
     // Quem ligou a escolha da conta e quando (lido no fim da última ronda; informação, não prova). Só memória.
     private string? _accountBy;
     private long _accountSince;
+    private static readonly long MaxDateMs = DateTimeOffset.MaxValue.ToUnixTimeMilliseconds();
     // Já se leram os estados dos aparelhos (e fixaram as chaves) com o motor atual: uma vez por sessão e conta, e de
     // novo quando aparece um aparelho desconhecido. Um aparelho que ainda não enviou nada só se conhece por aqui.
     private SyncEngine? _pinnedFor;
@@ -503,7 +504,9 @@ public sealed class SyncAgent
             ? by == engine.Device.Id ? DeviceNameText.Shown(engine.Device.Name)
             : engine.State.DeviceNames.TryGetValue(by, out var name) ? DeviceNameText.Shown(name) : null
             : null;
-        _accountSince = record is { Deleted: false, Data: { } data } && data["since"] is JsonValue since && since.TryGetValue<long>(out var ms) ? ms : 0;
+        // «since» é recebido: fora do intervalo das datas, ou mais de um dia no futuro, não se sabe quando (0).
+        _accountSince = record is { Deleted: false, Data: { } data } && data["since"] is JsonValue since && since.TryGetValue<long>(out var ms)
+            && ms > 0 && ms <= MaxDateMs && ms <= _now() + 86_400_000L ? ms : 0;
         saved.SecretsInAccount = _secretsInAccount || saved.AccountSecrets;
         if (!saved.InheritPending) return false;
         saved.InheritPending = false;
