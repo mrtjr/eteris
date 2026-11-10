@@ -97,19 +97,27 @@ internal static class GoogleSync
     internal static Eteris.Sync.Transport.ISyncTransport? DriveTransport()
         => Session() is { IsSignedIn: true } session ? new GoogleDriveTransport(Http(), session.AccessTokenAsync) : null;
 
+    // O estado que as Definições mostram. «waiting» só enquanto se espera pelo navegador do sistema (o tracker em
+    // Waiting): com os tokens já guardados e a sincronização a ligar, a entrada ainda está em curso mas a página diz o
+    // mesmo que a barra («Sessão iniciada»), não «À espera do início de sessão…».
+    internal static string StateFor(bool signingIn, SignInStage stage, bool signedIn)
+        => signingIn && stage == SignInStage.Waiting ? "waiting" : signedIn ? "signedIn" : "signedOut";
+
     public static Status Current()
     {
         if (Config is null)
             return new("unconfigured", UnavailableText, null);
         var signedIn = Session()?.IsSignedIn == true;
         var accounts = signedIn ? Accounts() : null;
+        var stage = Tracker.Current.Stage;
         lock (Gate)
         {
-            if (_signIn is not null)
+            var state = StateFor(_signIn is not null, stage, signedIn);
+            if (state == "waiting")
                 return new("waiting", _manualUrl is null
                     ? "À espera do início de sessão no navegador do sistema…"
                     : "Não encontrámos outro navegador: copie este endereço para um navegador (Firefox, Chrome, Brave…) e entre lá.", _manualUrl);
-            if (signedIn)
+            if (state == "signedIn")
             {
                 var account = accounts?.Current;
                 return new("signedIn", SignedInText(account), null, account, accounts?.Pending == true);
@@ -166,6 +174,9 @@ internal static class GoogleSync
                         if (after is not null && cancel.IsCancellationRequested) UndoSignIn();
                     }
                 }
+                // «Cancelar» entre a troca do código e o trabalho depois dos tokens: a entrada devolve os tokens sem
+                // lançar e nada foi guardado. É um cancelamento como os outros.
+                if (after is null) cancel.Token.ThrowIfCancellationRequested();
             }
             catch (OAuthException e)
             {
@@ -190,6 +201,9 @@ internal static class GoogleSync
             }
             finally
             {
+                // Antes de a entrada deixar de estar em curso (uma entrada nova só começa depois): se a barra ainda
+                // estiver em «À espera…», sai — «Cancelar» já não tinha o que cancelar.
+                Tracker.Settle();
                 lock (Gate)
                 {
                     _signIn = null;
@@ -235,6 +249,8 @@ internal static class GoogleSync
     // «Sair deste computador»: só local. Nada é revogado na Google (os outros computadores continuam ligados).
     public static void SignOut()
     {
+        // Uma entrada em curso para aqui: senão ainda podia acabar e voltar a ligar a sincronização depois de «Sair».
+        CancelSignIn();
         Tracker.Reset();
         Accounts()?.Forget();
         Session()?.SignOut();
@@ -250,6 +266,8 @@ internal static class GoogleSync
         var outcome = SyncExit.SessionAfterRevoke(await session.RevokeAccessAsync(cancellationToken).ConfigureAwait(false), session.IsSignedIn);
         if (outcome is RevokeOutcome.Revoked or RevokeOutcome.AlreadyInvalid)
         {
+            // Como em «Sair»: uma entrada em curso não volta a ligar a sincronização depois de o acesso ser retirado.
+            CancelSignIn();
             Tracker.Reset();
             Accounts()?.Forget();
         }

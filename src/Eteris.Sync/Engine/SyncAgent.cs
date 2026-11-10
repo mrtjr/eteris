@@ -356,6 +356,11 @@ public sealed class SyncAgent
         get { lock (_gate) return _saved?.Enabled == true; }
     }
 
+    private bool SignInNeeded
+    {
+        get { lock (_gate) return _needsSignIn; }
+    }
+
     // Há uma conta guardada neste aparelho (para retomar sem código depois de «Sair» sem apagar a chave).
     public bool HasKey
     {
@@ -1472,7 +1477,9 @@ public sealed class SyncAgent
     // é acompanhá-lo (lê o Drive de 2 em 2 s até o aparelho novo responder, no máximo 10 minutos).
     public async Task CheckRequestsAsync(CancellationToken cancellationToken = default)
     {
-        if (!Enabled || _engine is null) return;
+        // Com a autorização da Google por renovar (NeedsSignIn) nada se procura: cada tentativa era mais um pedido que
+        // não pode correr bem, e a pausa só acaba quando o utilizador entra outra vez.
+        if (!Enabled || _engine is null || SignInNeeded) return;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         try { await AnswerRequestsCoreAsync(answer: true, cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (IsTransient(e)) { }
@@ -1803,7 +1810,7 @@ public sealed class SyncAgent
 
     public async Task<IReadOnlyList<DeviceInfo>> RefreshDevicesAsync(CancellationToken cancellationToken = default)
     {
-        if (_engine is null) return Status.Devices;
+        if (_engine is null || SignInNeeded) return Status.Devices;
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         try { await RefreshDevicesCoreAsync(cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (IsTransient(e)) { }

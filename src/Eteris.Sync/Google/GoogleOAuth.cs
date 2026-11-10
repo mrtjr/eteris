@@ -434,12 +434,16 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
         }
     }
 
+    // Um «error» recebido (da query do recetor, da resposta do endpoint de tokens) só entra numa mensagem se for um
+    // código curto em minúsculas, como os da Google (invalid_request, access_denied…). Qualquer outro texto: null.
+    internal static string? SafeErrorCode(string? error)
+        => error is { Length: > 0 and <= 40 } && error.All(c => c is (>= 'a' and <= 'z') or '_') ? error : null;
+
     // O «error» da query vem de quem chamou o recetor: só um código curto em minúsculas entra na mensagem.
     internal static string ErrorMessage(string error)
     {
         if (error == "access_denied") return "O acesso foi recusado no ecrã da Google.";
-        var safe = error.Length is > 0 and <= 40 && error.All(c => c is (>= 'a' and <= 'z') or '_');
-        return safe ? "A Google devolveu um erro: " + error : "A Google devolveu um erro.";
+        return SafeErrorCode(error) is { } safe ? "A Google devolveu um erro: " + safe : "A Google devolveu um erro.";
     }
 
     public Task<OAuthTokens> ExchangeCodeAsync(string code, string verifier, string redirectUri, CancellationToken cancellationToken)
@@ -496,7 +500,9 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
         catch (JsonException) { parsed = null; }
         if (!response.IsSuccessStatusCode || parsed?.AccessToken is not { Length: > 0 } access)
         {
-            var error = parsed?.Error ?? ((int)response.StatusCode).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            // O «error» vem de fora (a Google, ou o que estiver no caminho): só um código curto entra na mensagem; senão,
+            // o número da resposta.
+            var error = SafeErrorCode(parsed?.Error) ?? ((int)response.StatusCode).ToString(System.Globalization.CultureInfo.InvariantCulture);
             throw error == "invalid_grant"
                 ? new OAuthException("A autorização da Google expirou ou foi retirada. Entre outra vez.", needsSignIn: true)
                 : new OAuthException("A Google recusou o pedido de sessão (" + error + ").");

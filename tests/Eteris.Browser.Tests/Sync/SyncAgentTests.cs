@@ -1092,6 +1092,40 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Contains("Entre outra vez", casa.Agent.Status.Error);
     }
 
+    // Em pausa por a autorização ter sido retirada ou ter expirado, procurar pedidos de computadores novos ou reler os
+    // aparelhos (abrir o menu, as Definições, voltar à janela) não faz pedido nenhum: cada tentativa batia no Drive e no
+    // endpoint de tokens, e nada se resolve sem entrar outra vez (revisão final, A-08).
+    [Fact]
+    public async Task RevokedAuthorization_LookingForRequestsOrDevices_MakesNoRequests()
+    {
+        var google = new FakeGoogle();
+        var casa = NewDevice("Casa", DriveFor(google));
+        await casa.Agent.StartAsync();
+        google.Revoked.Add(google.RefreshToken);
+        google.ExpireAccessToken();
+        _now += 3_700_000;
+        casa.Profile.Bookmark("https://x.example/", "X");
+        Assert.False(await casa.Agent.RunAsync());
+        Assert.True(casa.Agent.Status.NeedsSignIn);
+
+        var before = google.Requests.Count;
+        await casa.Agent.CheckRequestsAsync();
+        Assert.Single(await casa.Agent.RefreshDevicesAsync());
+        Assert.Equal(before, google.Requests.Count);
+        // No navegador, o momento de procurar nem chega ao agente.
+        var service = GoogleSyncTests.Src("Eteris.Browser", "Sync", "SyncService.cs");
+        Assert.Contains("NeedsSignIn", GoogleSyncTests.Body(service, "public static void Look(bool devices = false)"));
+        Assert.Contains("NeedsSignIn", GoogleSyncTests.Body(service, "public static void WindowActivated(bool privateWindow)"));
+
+        // Entrou outra vez: volta a procurar.
+        google.Revoked.Clear();
+        await casa.Agent.StartAsync();
+        Assert.False(casa.Agent.Status.NeedsSignIn);
+        var after = google.Requests.Count;
+        await casa.Agent.CheckRequestsAsync();
+        Assert.True(google.Requests.Count > after);
+    }
+
     // O aviso de sessão expirada (T11) ligado ao agente como o SyncService o liga: pergunta uma vez por abertura.
     [Fact]
     public async Task RevokedAuthorization_DrivesThePromptOnce()

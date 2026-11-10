@@ -473,6 +473,8 @@ internal static class SyncService
     public static void Look(bool devices = false)
     {
         if (!Enabled || Agent() is not { } agent) return;
+        // Em pausa até entrar outra vez (NeedsSignIn), como Touch: nenhum pedido ao Drive nem ao endpoint de tokens.
+        if (Guarded(() => agent.Status.NeedsSignIn, true)) return;
         lock (Gate)
         {
             if (Now() - _lastLook < 5_000 && !devices) return;
@@ -603,6 +605,8 @@ internal static class SyncService
         if (_agent is not { } agent) return;
         // Na thread da IU, em cada ativação da janela: sem estado, nada.
         if (Guarded(() => Enabled ? agent.Status : null, null) is not { } status) return;
+        // Em pausa até entrar outra vez (NeedsSignIn): voltar à janela não é um momento de rede.
+        if (status.NeedsSignIn) return;
         // Com a barra calada (pedidos em série), um pedido contado já não dá direito a procurar logo: 5 minutos.
         var counted = status.PairingQuiet ? 0 : status.WaitingRequests;
         if (Activation.TryPass(Now(), counted, firstRoundDone: true)) Look();

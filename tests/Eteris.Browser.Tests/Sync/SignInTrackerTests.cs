@@ -36,6 +36,31 @@ public class SignInTrackerTests
         Assert.Equal(1, raised());
     }
 
+    // O fim da tarefa da entrada (revisão final, A-08): se ainda estiver «à espera» sem entrada nenhuma a correr, sai
+    // (a barra não fica presa com um «Cancelar» que já não faz nada); os outros estados ficam como estão.
+    [Fact]
+    public void Tracker_Settle_LeavesWaiting_AndKeepsEveryOtherState()
+    {
+        var (tracker, raised) = NewTracker();
+        tracker.Settle();
+        Assert.Equal(0, raised());
+        tracker.Begin("ana.teste@example.com");
+        tracker.Settle();
+        Assert.Equal(SignInStage.Idle, tracker.Current.Stage);
+        Assert.Null(tracker.LastHint);
+        Assert.Equal(2, raised());
+
+        tracker.Begin(null);
+        tracker.SignedIn();
+        tracker.Settle();
+        Assert.Equal(SignInStage.Done, tracker.Current.Stage);
+        tracker.Begin("ana.teste@example.com");
+        tracker.Failed(new OAuthException("recusado", failure: OAuthFailure.Refused));
+        tracker.Settle();
+        Assert.Equal(SignInStage.Refused, tracker.Current.Stage);
+        Assert.Equal("ana.teste@example.com", tracker.LastHint);
+    }
+
     [Fact]
     public void Tracker_ManualUrl_OnlyWhileWaiting()
     {

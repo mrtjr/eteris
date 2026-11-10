@@ -49,6 +49,8 @@ internal sealed class FakeGoogle : HttpMessageHandler
 
     // A resposta de «/revoke» (por omissão, 200 e o token fica revogado). Com valor: esse estado e, com RevokeError, um
     // corpo JSON {"error": …}; nada é revogado.
+    // O /token responde 400 com este «error» (um proxy, ou um servidor que não é a Google, pode devolver qualquer texto).
+    public string? TokenError { get; set; }
     public HttpStatusCode? RevokeStatus { get; set; }
     public string? RevokeError { get; set; }
 
@@ -225,6 +227,7 @@ internal sealed class FakeGoogle : HttpMessageHandler
             if (form["token"] == RefreshToken) ExpireAccessToken();
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
+        if (TokenError is { } tokenError) return Json(HttpStatusCode.BadRequest, new JsonObject { ["error"] = tokenError });
         if (form.GetValueOrDefault("client_id") != ClientId) return Json(HttpStatusCode.Unauthorized, new JsonObject { ["error"] = "invalid_client" });
         var scope = GrantScope ? "https://www.googleapis.com/auth/drive.appdata" : "";
         if (form.GetValueOrDefault("grant_type") == "authorization_code")

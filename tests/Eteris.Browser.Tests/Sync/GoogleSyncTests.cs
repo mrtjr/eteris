@@ -11,6 +11,8 @@ using Eteris.Sync.Google;
 using Eteris.Sync.Model;
 using Eteris.Sync.Pairing;
 
+using Stage = Eteris.Browser.Sync.SignInStage;
+
 namespace Eteris.Browser.Tests.Sync;
 
 public class GoogleSyncTests
@@ -940,6 +942,92 @@ public class GoogleSyncTests
     }
 
     internal static string Src(params string[] parts) => File.ReadAllText(Path.Combine([FindRoot(), "src", .. parts])).Replace("\r\n", "\n");
+
+    // ---- revisão final da 0.2.15 (A-08) -----------------------------------------------------------------------------
+
+    // «Cancelar» entre a troca do código e o trabalho depois dos tokens: a entrada devolve os tokens sem lançar. O
+    // GoogleSync confere-o ele (é um cancelamento: nada foi guardado) e, aconteça o que acontecer, não deixa a barra em
+    // «À espera…» sem entrada nenhuma a correr.
+    [Fact]
+    public async Task SignIn_CancelledRightBeforeTheFinish_DoesNotThrow_AndGoogleSyncSettles()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        var cancelled = new CancellationToken(canceled: true);
+        var tokens = await NewOAuth(google).SignInAsync(Options(browser, (_, _) => Task.FromCanceled<SignInPageKind>(cancelled)), CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(google.RefreshToken, tokens.RefreshToken);
+
+        var begin = Body(Src("Eteris.Browser", "Sync", "GoogleSync.cs"), "public static void BeginSignIn(string? loginHint = null)");
+        Assert.Contains("if (after is null) cancel.Token.ThrowIfCancellationRequested();", begin);
+        var settle = begin.IndexOf("Tracker.Settle();", StringComparison.Ordinal);
+        var cleared = begin.IndexOf("_signIn = null;", StringComparison.Ordinal);
+        Assert.True(settle >= 0 && settle < cleared, "Tracker.Settle() tem de vir antes de a entrada deixar de estar em curso");
+    }
+
+    // As Definições só dizem «À espera do início de sessão…» enquanto se espera pelo navegador: com os tokens guardados e
+    // a sincronização a ligar, dizem o mesmo que a barra («Sessão iniciada»).
+    [Fact]
+    public void SettingsState_IsWaiting_OnlyWhileTheBrowserIsAwaited()
+    {
+        Assert.Equal("waiting", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: true, Stage.Waiting, signedIn: false));
+        Assert.Equal("waiting", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: true, Stage.Waiting, signedIn: true));
+        Assert.Equal("signedIn", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: true, Stage.Done, signedIn: true));
+        Assert.Equal("signedIn", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: false, Stage.Idle, signedIn: true));
+        Assert.Equal("signedOut", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: true, Stage.Done, signedIn: false));
+        Assert.Equal("signedOut", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: false, Stage.Refused, signedIn: false));
+        Assert.Equal("signedOut", Eteris.Browser.Sync.GoogleSync.StateFor(signingIn: false, Stage.Waiting, signedIn: false));
+        var current = Body(Src("Eteris.Browser", "Sync", "GoogleSync.cs"), "public static Status Current()");
+        Assert.Contains("StateFor(_signIn is not null, stage, signedIn)", current);
+        Assert.DoesNotContain("if (_signIn is not null)", current);
+    }
+
+    // «Sair» e «Retirar o acesso» cancelam uma entrada em curso (que, de outro modo, ainda podia acabar e voltar a ligar
+    // a sincronização).
+    [Fact]
+    public void SignOut_AndRevoke_CancelASignInInProgress()
+    {
+        var sync = Src("Eteris.Browser", "Sync", "GoogleSync.cs");
+        foreach (var signature in new[] { "public static void SignOut()", "public static async Task<RevokeOutcome> RevokeAccessAsync(CancellationToken cancellationToken = default)" })
+        {
+            var body = Body(sync, signature);
+            var cancel = body.IndexOf("CancelSignIn();", StringComparison.Ordinal);
+            var reset = body.IndexOf("Tracker.Reset();", StringComparison.Ordinal);
+            Assert.True(cancel >= 0 && reset > cancel, signature + ": CancelSignIn() antes de Tracker.Reset()");
+        }
+        // E cancelar é só isso: pede o cancelamento da entrada em curso, se houver.
+        Assert.Contains("lock (Gate) _signIn?.Cancel();", Body(sync, "public static void CancelSignIn()"));
+    }
+
+    // O campo «error» da resposta do endpoint de tokens vem de fora: só um código curto em minúsculas (como os da
+    // Google) entra na mensagem mostrada; qualquer outro texto fica de fora.
+    [Theory]
+    [InlineData("<b>Entre em exemplo.example e escreva a sua palavra-passe</b>")]
+    [InlineData("Invalid Client")]
+    [InlineData("erro\r\ncom linhas")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public async Task TokenEndpointError_ThatIsNotAShortCode_StaysOutOfTheMessage(string raw)
+    {
+        var google = new FakeGoogle { TokenError = raw };
+        var failed = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(new ConsentingBrowser(google), null, CancellationToken.None));
+        Assert.Equal("A Google recusou o pedido de sessão (400).", failed.Message);
+        Assert.False(failed.NeedsSignIn);
+    }
+
+    [Fact]
+    public async Task TokenEndpointError_ShortCode_IsShown_AndInvalidGrantStillAsksToSignIn()
+    {
+        var google = new FakeGoogle { TokenError = "invalid_client" };
+        var failed = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(new ConsentingBrowser(google), null, CancellationToken.None));
+        Assert.Equal("A Google recusou o pedido de sessão (invalid_client).", failed.Message);
+        google.TokenError = "invalid_grant";
+        var expired = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(new ConsentingBrowser(google), null, CancellationToken.None));
+        Assert.True(expired.NeedsSignIn);
+        Assert.Null(GoogleOAuth.SafeErrorCode(null));
+        Assert.Null(GoogleOAuth.SafeErrorCode(""));
+        Assert.Null(GoogleOAuth.SafeErrorCode("Invalid_grant"));
+        Assert.Equal("invalid_request", GoogleOAuth.SafeErrorCode("invalid_request"));
+    }
 
     [Fact]
     public void SignOutRoute_NeverRevokes()

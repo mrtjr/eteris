@@ -83,6 +83,11 @@ internal sealed class SignInTracker(Func<long> now)
     // O «some sozinha» (ou «Fechar») de um estado terminal: só limpa se o estado ainda for o mesmo (mesmo AtMs).
     public void Clear(long atMs) => Set(() => _current.Ended && _current.AtMs == atMs && GoIdle());
 
+    // O fim da tarefa da entrada: se ainda estiver à espera (a entrada acabou sem dizer como — por exemplo um «Cancelar»
+    // que chegou entre a troca do código e o trabalho depois dos tokens), não fica presa em «À espera…» sem entrada
+    // nenhuma a correr. Os outros estados ficam como estão.
+    public void Settle() => Set(() => _current.Stage == SignInStage.Waiting && GoIdle());
+
     // Sair da conta (ou retirar o acesso): esquece tudo, de qualquer estado.
     public void Reset() => Set(GoIdle);
 
