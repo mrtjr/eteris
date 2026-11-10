@@ -160,6 +160,8 @@
   }
   // «Entrar com o Google»: só sem sessão (data.signIn). O clique pede a rota com o token num iframe e fica aqui; o
   // progresso é da barra da janela. Com o passo à vista, a importação passa a 6.ª e partilha a última linha.
+  // O iframe é novo em cada clique e sai no load (nunca o sink partilhado): navegar um iframe que já existe deixa o
+  // pedido na história, e Atrás/Avançar voltaria a abrir a Google sem clique.
   const signInStep = document.getElementById('signInStep');
   const importStep = document.getElementById('importStep');
   const showSignIn = on => {
@@ -170,8 +172,14 @@
   if (data.signIn) showSignIn(true);
   const signInGo = document.getElementById('signInGo');
   signInGo.addEventListener('click', () => {
-    sink.src = `eteris://${location.host}/sync-google?t=${data.token}&n=${Date.now()}`;
     signInGo.disabled = true;
+    const frame = document.createElement('iframe');
+    frame.hidden = true;
+    frame.addEventListener('load', () => {
+      if (frame.contentDocument && frame.contentDocument.body && frame.contentDocument.body.textContent.trim()) frame.remove();
+    });
+    document.body.append(frame);
+    frame.src = `eteris://${location.host}/sync-google?t=${data.token}&n=${Date.now()}`;
   });
   document.getElementById('signInSkip').addEventListener('click', () => showSignIn(false));
   document.getElementById('go').addEventListener('click', () => location.href = 'eteris://newtab/');

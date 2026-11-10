@@ -67,4 +67,33 @@ public class WelcomeSignInTests
         Assert.Contains("InternalPages.IsAuthorized(request.Url)", block);
         Assert.Contains("Sync.SignInEntry.Begin()", block);
     }
+
+    // Revisão T13: o clique não navega o iframe persistente «sink» (Atrás/Avançar repunha /sync-google nele e abria a
+    // Google sem gesto; e um tema escolhido a seguir cancelava o pedido). Um iframe novo por clique, removido no load.
+    [Fact]
+    public void Welcome_SignInClick_UsesItsOwnFrame_NotTheSharedSink()
+    {
+        var html = WelcomePage.Render(new UserSettings(), [], offerSignIn: true).Replace("\r\n", "\n");
+        Assert.DoesNotMatch(new Regex(@"sink\.src\s*=\s*`[^`]*sync-google"), html);
+        var start = html.IndexOf("signInGo.addEventListener('click'", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var handler = html[start..html.IndexOf("\n  });\n", start, StringComparison.Ordinal)];
+        Assert.Contains("/sync-google?t=", handler);
+        Assert.Contains("document.createElement('iframe')", handler);
+        Assert.Contains(".remove()", handler);
+        Assert.DoesNotMatch(new Regex(@"\bsink\b|\bsend\("), handler);
+    }
+
+    // Revisão T13: com a sessão já ligada (outra janela, ou a página reposta pela história), a rota não começa outro
+    // início de sessão. Só disco, como a regra que mostra o passo.
+    [Fact]
+    public void WelcomeRoute_RefusesWhenTheOfferNoLongerHolds()
+    {
+        var factory = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs")).Replace("\r\n", "\n");
+        var start = factory.IndexOf("Host: \"welcome\", AbsolutePath: \"/sync-google\"", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var block = factory[start..factory.IndexOf("\n        }\n", start, StringComparison.Ordinal)];
+        Assert.Contains("!Sync.SignInEntry.OffersNow(false)", block);
+        Assert.True(block.IndexOf("SignInEntry.OffersNow(", StringComparison.Ordinal) < block.IndexOf("Sync.SignInEntry.Begin()", StringComparison.Ordinal));
+    }
 }

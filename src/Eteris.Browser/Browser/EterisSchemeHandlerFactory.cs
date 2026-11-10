@@ -87,10 +87,11 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
                 Sync.SignInEntry.OffersNow(privateContext)));
         // «Entrar com o Google» das boas-vindas. A recusa da janela privada das rotas sync-* abaixo só vale para o host
-        // settings: esta rota faz ela própria as duas recusas (janela privada e token).
+        // settings: esta rota faz ela própria as duas recusas (janela privada e token). Recusa também quando a oferta já
+        // não vale (sessão ligada entretanto, ou a página reposta pela história): só disco, a mesma regra do passo.
         if (uri is { Host: "welcome", AbsolutePath: "/sync-google" })
         {
-            if (privateContext || !InternalPages.IsAuthorized(request.Url)) return Text("recusado");
+            if (privateContext || !InternalPages.IsAuthorized(request.Url) || !Sync.SignInEntry.OffersNow(false)) return Text("recusado");
             Sync.SignInEntry.Begin();
             return Text("ok");
         }
