@@ -50,14 +50,16 @@ internal static class SyncService
 
     public static bool Enabled => Available && Connected && Agent()?.Enabled == true;
 
-    public static string DeviceName
+    // O valor inicial do nome deste computador. O nome em vigor (o que o utilizador escolheu) é Agent()?.DeviceName.
+    public static string DeviceName => DeviceNameFor(Environment.MachineName,
+        FolderMode ? Path.GetFileName(AppPaths.Root.TrimEnd('\\', '/')) : null);
+
+    // «Éteris em {nome do Windows}»; no modo pasta de teste, com o nome do perfil entre parênteses (dois perfis no mesmo
+    // computador distinguem-se). Sempre limpo e com 60 caracteres no máximo.
+    internal static string DeviceNameFor(string? windowsName, string? testProfile)
     {
-        get
-        {
-            var name = Environment.MachineName;
-            // Dois perfis de teste no mesmo computador: o nome do perfil distingue-os.
-            return FolderMode ? $"{name} ({Path.GetFileName(AppPaths.Root.TrimEnd('\\', '/'))})" : name;
-        }
+        var name = DeviceNameText.Default(windowsName);
+        return testProfile is null ? name : DeviceNameText.Clean($"{name} ({testProfile})") ?? name;
     }
 
     public const string WhatSyncs =
@@ -449,6 +451,8 @@ internal static class SyncService
             summary = Summary(status, nowMs),
             // Aprovar um aparelho novo entrega-lhe também segredos (o pedido diz isso e o «Aprovar» pede o Windows Hello).
             secrets = Agent()?.HasSecrets == true,
+            // O nome em vigor deste computador (para as Definições; só vem do agente local, nunca de outro aparelho).
+            deviceName = Agent()?.DeviceName,
         };
 }
 

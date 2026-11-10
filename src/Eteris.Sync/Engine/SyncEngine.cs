@@ -115,6 +115,13 @@ public sealed class SyncEngine
 
     public DeviceIdentity Device => State.Device;
 
+    // O nome novo segue no próximo estado do aparelho e nos próximos lotes (ambos cifrados). O Id e o tipo não mudam.
+    public void Rename(string name)
+    {
+        State.Device = State.Device with { Name = name };
+        State.DeviceNames[State.Device.Id] = name;
+    }
+
     public string ChainId => _keys.ChainId;
 
     public ISyncTransport Transport => _transport;

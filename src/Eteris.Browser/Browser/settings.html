@@ -120,7 +120,8 @@
   .syncbody[hidden] { display: none; }
   .code { font: 600 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; word-spacing: .3em; user-select: all;
     background: rgba(0, 0, 0, .3); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-top: 8px; overflow-wrap: anywhere; }
-  .code[hidden], .syncnote[hidden] { display: none; }
+  .code[hidden], .syncnote[hidden], #syncNameForm[hidden], #syncNameChange[hidden], #syncNameText[hidden] { display: none; }
+  #syncNameInput { font-family: inherit; }
   .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
   .syncnote.bad { color: #ffb3c1; }
   .syncheld { margin: 6px 0 0; padding-left: 18px; color: #ffd8a8; font-size: 12.8px; line-height: 1.45; }
@@ -494,6 +495,17 @@
             <div class="stack"><button class="action" id="syncPairConfirm" hidden>O outro computador mostra este código</button><button class="action" id="syncPairCancel">Cancelar</button></div>
           </div>
           <div id="syncRequests"></div>
+          <div class="item" id="syncNameItem" hidden>
+            <div class="label"><b>Nome deste computador</b><span id="syncNameText"></span>
+              <form class="syncform left" id="syncNameForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off" hidden>
+                <input type="text" name="name" id="syncNameInput" maxlength="60" spellcheck="false" aria-label="Nome deste computador">
+                <button class="action" type="submit" id="syncNameSave">Guardar</button>
+                <button class="action" type="button" id="syncNameCancel">Cancelar</button>
+              </form>
+              <span class="syncnote" id="syncNameHint">É o nome que os seus outros computadores veem. Viaja cifrado.</span>
+              <span class="syncnote" id="syncNameNote" role="status" hidden></span></div>
+            <button class="action" id="syncNameChange">Mudar</button>
+          </div>
           <div class="item" id="syncDevicesItem" hidden>
             <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e aparece aqui um código de recuperação novo.</span>
               <ul class="devices" id="syncDevices"></ul>
@@ -909,6 +921,7 @@
       show('syncOffItem', d.connected && (phase === 'off' || phase === 'stopped'));
       show('syncChooseItem', d.enabled && phase === 'choose');
       show('syncPairItem', d.enabled && phase === 'pairing');
+      show('syncNameItem', d.enabled);
       show('syncDevicesItem', d.enabled && phase === 'on' && (s.devices || []).length > 0);
       show('syncDeleteItem', d.connected);
       // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
@@ -1038,12 +1051,42 @@
       }
       paintTopic(d);
       note($('syncDevicesNote'), msg && msg.area === 'devices' ? msg.text : '', true);
+      // Nome deste computador: o nome atual (textContent) e, se a última ação falhou, porquê.
+      if (!nameEditing) $('syncNameText').textContent = s.deviceName || '';
+      note($('syncNameNote'), msg && msg.area === 'device-name' ? msg.text : '', true);
       // O porquê de um apagar que não acabou: a mensagem da última ação ou, depois de reabrir, o estado (deleteError).
       const deleteError = (msg && msg.area === 'delete' ? msg.text : '') || (s.deleting && !s.running ? s.deleteError || '' : '');
       note($('syncDeleteNote'), deleteError || (s.deleting ? 'A apagar os dados do Éteris do Google Drive…' : ''), !!deleteError);
       show('syncDeleteRetry', !!s.deleting && !!deleteError && !s.running);
       return s;
     };
+    // «Mudar» troca o nome por um campo com «Guardar» e «Cancelar»; o novo nome vai por POST (nunca no endereço).
+    let nameEditing = false;
+    const editName = on => {
+      nameEditing = on;
+      $('syncNameForm').hidden = !on;
+      $('syncNameChange').hidden = on;
+      $('syncNameText').hidden = on;
+      if (on) { $('syncNameInput').value = $('syncNameText').textContent; $('syncNameInput').focus(); $('syncNameInput').select(); }
+      else $('syncNameChange').focus();
+    };
+    $('syncNameChange').addEventListener('click', () => { note($('syncNameNote'), ''); editName(true); });
+    $('syncNameCancel').addEventListener('click', () => { note($('syncNameNote'), ''); editName(false); });
+    $('syncNameInput').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); editName(false); } });
+    const nameForm = $('syncNameForm');
+    nameForm.action = `eteris://${location.host}/sync-device-name?t=${data.token}`;
+    nameForm.addEventListener('submit', e => {
+      e.preventDefault();
+      if (!$('syncNameInput').value.trim()) { note($('syncNameNote'), 'Escreva um nome para este computador.', true); return; }
+      quickUntil = Date.now() + 15000;
+      const seq = ++googleAsked;
+      nameForm.target = sinkFor(d => {
+        if (d && d.google) { if (seq >= googlePainted) { googlePainted = seq; paint(d); } }
+        else note($('syncNameNote'), d.message || 'Pedido recusado.', true);
+      }).name;
+      nameForm.submit();
+      editName(false);
+    });
     const msg0 = (d, area) => d.message && d.message.area === area ? d.message.text : '';
     // «O que passa entre PCs»: as linhas só se reconstroem quando mudam (uma sondagem não tira o foco do teclado).
     let topicKey = null;

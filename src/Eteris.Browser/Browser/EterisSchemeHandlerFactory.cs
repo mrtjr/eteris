@@ -307,6 +307,13 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Act("join", agent => agent.JoinWithCodeAsync(code));
                 break;
             }
+            case "/sync-device-name":
+            {
+                // O nome novo vai no corpo de um POST (nunca no endereço).
+                var name = SyncForm.Parse(request).GetValueOrDefault("name");
+                Sync.SyncService.Act("device-name", agent => agent.RenameDeviceAsync(name));
+                break;
+            }
             case "/sync-approve" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
                 // Com segredos em jogo, o aparelho novo recebe-os: o Windows confirma primeiro (sempre).
                 return new VaultResourceHandler(async () =>

@@ -375,4 +375,30 @@ public class SyncIntegrationTests
         foreach (var part in new[] { "## A exceção de rede", "appDataFolder", "drive.appdata", "PKCE", "127.0.0.1", "O que a Google vê", "Google Cloud Console", "google-oauth.json" })
             Assert.Contains(part, doc);
     }
+
+    [Fact]
+    public void DeviceName_StartsFromTheDefault_AndIsChangedByPost()
+    {
+        var root = Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser");
+        var service = File.ReadAllText(Path.Combine(root, "Sync", "SyncService.cs"), Encoding.UTF8);
+        Assert.Contains("DeviceNameText.Default(", service);
+        var routes = File.ReadAllText(Path.Combine(root, "Browser", "EterisSchemeHandlerFactory.cs"), Encoding.UTF8);
+        var start = routes.IndexOf("\"/sync-device-name\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, "falta a rota /sync-device-name");
+        var end = routes.IndexOf("break;", start, StringComparison.Ordinal);
+        var block = routes[start..end];
+        Assert.Contains("SyncForm.Parse(request)", block);
+        Assert.DoesNotContain("InternalPages.Query", block);
+
+        var page = File.ReadAllText(Path.Combine(root, "Browser", "settings.html"), Encoding.UTF8);
+        Assert.Contains("Nome deste computador", page);
+        Assert.Contains("Mudar", page);
+        Assert.DoesNotContain("innerHTML", page);
+        var item = page.IndexOf("syncNameItem", StringComparison.Ordinal);
+        Assert.True(item >= 0);
+        Assert.Contains("textContent", page[item..]);
+
+        foreach (var file in new[] { Path.Combine(root, "Sync", "BrowserProfile.cs"), Path.Combine(root, "Data", "UserSettings.cs") })
+            Assert.DoesNotContain("DeviceName", File.ReadAllText(file, Encoding.UTF8));
+    }
 }

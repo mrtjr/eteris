@@ -44,7 +44,7 @@ public sealed record RotationPending
 // Estado local de um aparelho (o anfitrião guarda-o protegido: DPAPI no Windows). Não vai para o transporte.
 public sealed class SyncState
 {
-    [JsonPropertyName("device")] public required DeviceIdentity Device { get; init; }
+    [JsonPropertyName("device")] public required DeviceIdentity Device { get; set; }
     [JsonPropertyName("chain")] public required string ChainId { get; set; }
     [JsonPropertyName("next")] public long NextSeq { get; set; } = 1;
     [JsonPropertyName("read")] public Dictionary<string, long> Read { get; set; } = new(StringComparer.Ordinal);

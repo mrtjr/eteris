@@ -41,6 +41,8 @@ public sealed class SavedSync
     // «Apagar os meus dados do Éteris» por acabar: a sincronização já está desligada aqui (gravado antes do primeiro
     // pedido) e falta apagar no transporte o que ainda lá está. Ao abrir, o anfitrião acaba; «Ligar» acaba primeiro.
     [JsonPropertyName("deleting")] public bool DeletePending { get; set; }
+    // O nome deste computador escolhido no Éteris (local, protegido; nunca vai em claro para o transporte).
+    [JsonPropertyName("name")] public string? DeviceName { get; set; }
 }
 
 public interface ISyncStore
@@ -141,13 +143,32 @@ public sealed class SyncAgent
         _store = store;
         _now = now;
         _delay = delay;
-        DeviceName = deviceName;
         _saved = store.Load();
+        // O nome escolhido aqui; senão o que o estado do motor já tem (ligado antes desta versão); senão o de omissão.
+        DeviceName = DeviceNameText.Clean(_saved?.DeviceName) ?? DeviceNameText.Clean(_saved?.Engine?.Device.Name) ?? deviceName;
         _phase = _saved is { Enabled: true } ? SyncPhase.On : _saved?.Stopped is not null ? SyncPhase.Stopped : SyncPhase.Off;
         _notice = _saved?.Stopped;
     }
 
-    public string DeviceName { get; }
+    public string DeviceName { get; private set; }
+
+    // Muda o nome deste computador. Local e imediato; os outros computadores veem-no depois da próxima ronda.
+    public Task RenameDeviceAsync(string? name, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var clean = DeviceNameText.Clean(name) ?? throw new SyncUserException("Escreva um nome para este computador.");
+        lock (_gate)
+        {
+            if (clean == DeviceName) return Task.CompletedTask;
+            _saved ??= new SavedSync();
+            _saved.DeviceName = clean;
+            DeviceName = clean;
+            _engine?.Rename(clean);
+            _store.Save(_saved);
+        }
+        Notify();
+        return Task.CompletedTask;
+    }
 
     // Intervalo entre perguntas ao transporte enquanto se espera pelo outro aparelho no emparelhamento.
     public TimeSpan PairingPoll { get; init; } = TimeSpan.FromSeconds(3);
@@ -248,7 +269,7 @@ public sealed class SyncAgent
                     code = account.ToCode();
                 }
                 var requests = _hosts.Values.Where(h => h.Code is not null && _now() - h.Created < (long)PairingProtocol.Lifetime.TotalMilliseconds)
-                    .Select(h => new HostRequest(h.Session, h.Name ?? "Aparelho sem nome", h.Code!, h.Created)).ToList();
+                    .Select(h => new HostRequest(h.Session, DeviceNameText.Shown(h.Name), h.Code!, h.Created)).ToList();
                 var pairing = _guest is null ? null : new GuestPairing(_guest.Code, _guest.Confirm.Task.IsCompleted, _guest.Error);
                 return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, code, pairing, requests, _devices, _needsUpdate, _pendingDevices)
                 {
@@ -627,8 +648,8 @@ public sealed class SyncAgent
                         saved.LastCompactMs = 0;
                         saved.LastCompactSeq = 0;
                         _store.Save(saved);
-                        _notice = rekey.FromName.Length > 0
-                            ? $"A conta mudou de chave em «{rekey.FromName}» (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado."
+                        _notice = DeviceNameText.Clean(rekey.FromName) is { } deNome
+                            ? $"A conta mudou de chave em «{deNome}» (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado."
                             : "A conta mudou de chave (um aparelho foi removido, ou há um código de recuperação novo). Este computador continua ligado.";
                     }
                     // Só agora, com a conta nova guardada, as mensagens saem do transporte (melhor esforço).
@@ -767,7 +788,7 @@ public sealed class SyncAgent
             _store.Save(_saved);
             _phase = SyncPhase.On;
             _guest = null;
-            _notice = from is null ? null : $"Este computador entrou na conta, aprovado em «{from}».";
+            _notice = from is null ? null : $"Este computador entrou na conta, aprovado em «{DeviceNameText.Shown(from)}».";
         }
         return true;
     }
@@ -966,7 +987,7 @@ public sealed class SyncAgent
         lock (_gate)
         {
             _hosts.Remove(session);
-            _notice = $"«{flow.Name}» foi aprovado: os dados juntam-se nesse computador.";
+            _notice = $"«{DeviceNameText.Shown(flow.Name)}» foi aprovado: os dados juntam-se nesse computador.";
         }
         flow.Host.Dispose();
         Notify();
@@ -1005,14 +1026,14 @@ public sealed class SyncAgent
         if (_engine is not { } engine) return;
         var states = await engine.DevicesAsync(cancellationToken).ConfigureAwait(false);
         var list = states
-            .Select(s => new DeviceInfo(s.Device, s.Name.Length > 0 ? s.Name : "Aparelho sem nome", s.Kind, s.LastSyncMs, s.Device == engine.Device.Id))
+            .Select(s => new DeviceInfo(s.Device, DeviceNameText.Shown(s.Name), s.Kind, s.LastSyncMs, s.Device == engine.Device.Id))
             .OrderByDescending(d => d.IsThis).ThenByDescending(d => d.LastSyncMs).ToList();
         if (!list.Any(d => d.IsThis)) list.Insert(0, new DeviceInfo(engine.Device.Id, engine.Device.Name, engine.Device.Kind, engine.State.LastPullMs, true));
         // Depois de uma troca de chave, os aparelhos que ficaram ainda não escreveram o seu estado na conta nova: entram
         // na lista pela chave fixada (à espera da chave nova), para continuarem à vista e receberem uma troca seguinte.
         foreach (var peer in engine.State.PeerKeys.Keys)
             if (!list.Any(d => d.Id == peer))
-                list.Add(new DeviceInfo(peer, engine.State.DeviceNames.TryGetValue(peer, out var name) && name.Length > 0 ? name : "Aparelho sem nome", "pc", 0, false));
+                list.Add(new DeviceInfo(peer, DeviceNameText.Shown(engine.State.DeviceNames.GetValueOrDefault(peer)), "pc", 0, false));
         lock (_gate)
         {
             if (!ReferenceEquals(_engine, engine)) return;
@@ -1064,7 +1085,7 @@ public sealed class SyncAgent
             if (!ReferenceEquals(_engine, engine) || !IsCurrentLocked(saved)) throw new SyncUserException("A sincronização mudou entretanto. Tente outra vez.");
             var newcomers = engine.State.DeviceNames.Keys.Concat(engine.State.PeerKeys.Keys).Concat(engine.State.Read.Keys)
                 .Where(d => d != engine.Device.Id && d != device && !seen.Contains(d)).Distinct(StringComparer.Ordinal)
-                .Select(d => engine.State.DeviceNames.TryGetValue(d, out var n) && n.Length > 0 ? $"«{n}»" : "um aparelho sem nome").ToList();
+                .Select(d => DeviceNameText.Clean(engine.State.DeviceNames.GetValueOrDefault(d)) is { } clean ? $"«{clean}»" : "um aparelho sem nome").ToList();
 
             var (rotated, secret, pending) = await engine.StartRotationAsync(device, staying, cancellationToken).ConfigureAwait(false);
             using (secret)
