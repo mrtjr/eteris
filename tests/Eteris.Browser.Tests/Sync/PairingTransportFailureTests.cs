@@ -141,6 +141,22 @@ public sealed class PairingTransportFailureTests : IDisposable
         await FinishAsync(casa, novo, session, code);
     }
 
+    // Com o pedido pronto na Casa (à espera de a pessoa escrever o código), a Casa continua a acompanhá-lo: as falhas do
+    // transporte nessa sondagem também não o tiram da barra.
+    [Fact]
+    public async Task Failures_WhileTheReadyRequestWaitsForTheCode_KeepItOnTheBar()
+    {
+        var (casa, novo) = await TwoAsync();
+        var (session, code) = await ReadyAsync(casa, novo);
+        casa.Transport.Fail("read", "/x-host", times: 5, Folder);
+        await _cloud.WaitFor(() => casa.Transport.Left("read", "/x-host") == 0, "as cinco falhas");
+        Assert.Single(casa.Agent.Status.Requests);
+        Assert.Equal(0, BadCount(casa));
+        // E a própria entrega confere a recusa antes de escrever: essa leitura também se repete.
+        casa.Transport.Fail("read", "/x-host", times: 2, HttpTimeout);
+        await FinishAsync(casa, novo, session, code);
+    }
+
     // A limpeza dos ficheiros do pedido é de melhor esforço e vem depois de entrar: uma falha aí não deita fora a conta
     // que o outro computador acabou de entregar.
     [Fact]

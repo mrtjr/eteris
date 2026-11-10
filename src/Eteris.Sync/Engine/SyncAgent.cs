@@ -1464,6 +1464,12 @@ public sealed class SyncAgent
                         flow.Name = host.GuestName;
                         flow.Code = code;
                     }
+                    Notify();
+                    // O pedido está pronto, à espera de que a pessoa escreva o código. Continua a ser acompanhado, ao
+                    // ritmo de sempre, até ser aprovado, recusado ou expirar: o computador novo pode desistir («Não», o
+                    // tempo dele acabou, pediu outra vez) e esse pedido tem de sair da barra sem gesto nenhum — senão
+                    // o código do pedido seguinte era comparado com o deste, e três erros contavam como um pedido mau.
+                    await FollowReadyRequestAsync(transport, host, flow).ConfigureAwait(false);
                 }
                 // Qualquer exceção acaba aqui (nenhuma fica por observar com o fluxo «a responder» para sempre). As
                 // falhas passageiras do transporte já se repetem dentro da espera; só chegam cá as que não passaram.
@@ -1472,14 +1478,7 @@ public sealed class SyncAgent
                     // Ainda era deste aparelho (não saiu por «Sair», apagar, «Não fui eu» ou pelo prazo, que já tratam
                     // de si). A sessão fica nas acabadas: o 1-host já existe, por isso o pedido não volta a ser listado
                     // e nenhum fluxo novo a retomava.
-                    var mine = false;
-                    lock (_gate)
-                        if (_hosts.TryGetValue(session, out var current) && ReferenceEquals(current, flow))
-                        {
-                            mine = _hosts.Remove(session);
-                            _ended[session] = _now();
-                        }
-                    host.Dispose();
+                    //
                     // O pedido acabou do outro lado depois de este aparelho responder: recusa ou cancelamento escrito
                     // por quem pede (x-host), mensagens que não conferem (incluindo uma chave ou um ficheiro ilegível,
                     // FormatException/CryptographicException, e um compromisso dirigido a outro anfitrião), ou o prazo.
@@ -1488,7 +1487,21 @@ public sealed class SyncAgent
                     // falha que ninguém esperava conta também (na dúvida, foi o que estava no Drive). Não contam: parar
                     // deste lado (cancelado) e um erro de rede, da sessão da Google ou da pasta.
                     var passes = e is OperationCanceledException || (IsTransient(e) && e is not (FormatException or CryptographicException));
-                    if (mine && !passes) NoteBadPairing(flow);
+                    bool mine, approving;
+                    lock (_gate)
+                    {
+                        mine = _hosts.TryGetValue(session, out var current) && ReferenceEquals(current, flow);
+                        approving = flow.Approving;
+                        if (mine)
+                        {
+                            // Sair da lista e contar é um só passo (quem lê o estado nunca vê um sem o outro).
+                            _hosts.Remove(session);
+                            _ended[session] = _now();
+                            if (!passes) CountBadPairing(flow);
+                        }
+                    }
+                    // Uma aprovação ainda a meio (a entrega) usa a chave da sessão: quem tirou o fluxo trata dela.
+                    if (mine || !approving) host.Dispose();
                 }
                 Notify();
             });
@@ -1515,18 +1528,46 @@ public sealed class SyncAgent
         }
     }
 
+    // Um pedido pronto continua a ser acompanhado: lê a recusa do outro lado (x-host) de PollInterval em PollInterval
+    // (2 s) até o pedido acabar. Sai por exceção: o pedido cancelado do outro lado ou o prazo (PairingException: o fluxo
+    // sai e conta), ou parado deste lado (cancelado: aprovado, «Não fui eu», três erros, «Sair»). Uma aprovação a meio
+    // (porta do Windows ou entrega) fica com o pedido: a entrega confere a recusa antes de escrever. As falhas
+    // passageiras do transporte não acabam com nada.
+    private async Task FollowReadyRequestAsync(ISyncTransport transport, PairingHost host, HostFlow flow)
+    {
+        var lifetime = (long)PairingProtocol.Lifetime.TotalMilliseconds;
+        while (true)
+        {
+            bool withdrawn;
+            try { withdrawn = await PairingRequests.IsRefusedAsync(transport, flow.Session, flow.Cancel.Token).ConfigureAwait(false); }
+            catch (Exception e) when (PairingProtocol.IsTransportFailure(e, flow.Cancel.Token)) { withdrawn = false; }
+            bool approving;
+            lock (_gate) approving = flow.Approving;
+            if (!approving)
+            {
+                if (withdrawn) throw new PairingException("O outro aparelho cancelou o pedido.") { Failure = PairingFailure.Refused };
+                if (_now() - flow.Created >= lifetime)
+                    throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
+            }
+            await (_delay ?? Task.Delay)(host.PollInterval, flow.Cancel.Token).ConfigureAwait(false);
+        }
+    }
+
     // Um pedido a que este aparelho respondeu acabou mal (PairingFatigue). Cada sessão conta uma vez. Grava (só horas).
     private void NoteBadPairing(HostFlow flow)
     {
-        lock (_gate)
-        {
-            _ended[flow.Session] = _now();
-            if (flow.CountedBad || _saved is not { } saved) return;
-            flow.CountedBad = true;
-            saved.BadPairings = PairingFatigue.Add(saved.BadPairings, _now());
-            _store.Save(saved);
-        }
+        lock (_gate) CountBadPairing(flow);
         Notify();
+    }
+
+    // Chamar dentro do _gate; quem chama avisa (Notify) depois de o largar.
+    private void CountBadPairing(HostFlow flow)
+    {
+        _ended[flow.Session] = _now();
+        if (flow.CountedBad || _saved is not { } saved) return;
+        flow.CountedBad = true;
+        saved.BadPairings = PairingFatigue.Add(saved.BadPairings, _now());
+        _store.Save(saved);
     }
 
     // «Mostrar o pedido na barra» (um gesto nas Definições, com a barra calada pelos pedidos em série): a contagem
@@ -1604,16 +1645,29 @@ public sealed class SyncAgent
             if (!_hosts.TryGetValue(session, out var still) || !ReferenceEquals(still, flow) || flow.Cancel.IsCancellationRequested)
                 return PairingAnswer.Gone;
         }
-        await ApproveAsync(flow, secret, cancellationToken).ConfigureAwait(false);
-        return PairingAnswer.Approved;
+        return await ApproveAsync(flow, secret, cancellationToken).ConfigureAwait(false) ? PairingAnswer.Approved : PairingAnswer.Gone;
     }
 
-    // A entrega (passo 5). Privada: nenhuma rota nem interface entrega a conta sem o código escrito.
-    private async Task ApproveAsync(HostFlow flow, string secret, CancellationToken cancellationToken)
+    // A entrega (passo 5). Privada: nenhuma rota nem interface entrega a conta sem o código escrito. Devolve false (sem
+    // entregar nada) se o computador novo desistiu entretanto: o pedido sai e conta como os outros que acabam mal.
+    private async Task<bool> ApproveAsync(HostFlow flow, string secret, CancellationToken cancellationToken)
     {
         var session = flow.Session;
         using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
         try { await flow.Host.ApproveAsync(account, DeviceName, cancellationToken).ConfigureAwait(false); }
+        catch (PairingException e) when (e.Failure == PairingFailure.Refused)
+        {
+            lock (_gate)
+            {
+                flow.Approving = false;
+                if (_hosts.TryGetValue(session, out var current) && ReferenceEquals(current, flow)) _hosts.Remove(session);
+                CountBadPairing(flow);
+            }
+            flow.Cancel.Cancel();
+            flow.Host.Dispose();
+            Notify();
+            return false;
+        }
         catch (Exception e) when (e is PairingException || IsTransient(e))
         {
             lock (_gate) flow.Approving = false;
@@ -1631,8 +1685,11 @@ public sealed class SyncAgent
                 _store.Save(saved);
             }
         }
+        // Aprovado: quem acompanhava o pedido para.
+        flow.Cancel.Cancel();
         flow.Host.Dispose();
         Notify();
+        return true;
     }
 
     public async Task RefuseAsync(string session, CancellationToken cancellationToken = default)

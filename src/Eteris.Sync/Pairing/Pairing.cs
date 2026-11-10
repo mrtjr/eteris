@@ -81,6 +81,20 @@ public static class PairingProtocol
         }
     }
 
+    // A leitura de um passo fora de um ciclo de espera: repete-se como as escritas.
+    internal static async Task<byte[]?> ReadAsync(ISyncTransport transport, string path, Func<TimeSpan, CancellationToken, Task> delay,
+        TimeSpan interval, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return await transport.ReadAsync(path, cancellationToken).ConfigureAwait(false); }
+            catch (Exception e) when (attempt < WriteAttempts && IsTransportFailure(e, cancellationToken))
+            {
+                await delay(interval, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
     internal static ECDiffieHellman NewKey() => ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
 
     internal static byte[] PublicKey(ECDiffieHellman key) => key.PublicKey.ExportSubjectPublicKeyInfo();
@@ -349,7 +363,8 @@ public sealed class PairingHost : PairingSide
     }
 
     // O utilizador confirmou o código (escreveu aqui o que o convidado mostra, e bateu): entrega o segredo, cifrado só
-    // para o convidado.
+    // para o convidado. Antes de escrever, confere que o convidado não desistiu entretanto (x-host): um pedido cancelado
+    // do outro lado não recebe a conta nem fica «aprovado» (PairingFailure.Refused).
     public async Task ApproveAsync(AccountSecret secret, string hostName, CancellationToken cancellationToken = default)
     {
         if (_guestKey is null || _transcript is null) throw new InvalidOperationException("Ainda não há código de verificação.");
@@ -358,6 +373,8 @@ public sealed class PairingHost : PairingSide
         var payload = Json.Bytes(new PairingSecret { Secret = Kdf.Base64Url(secret.ToBytes()), HostName = hostName });
         var sealedFile = SealedFile.Seal(key, SealedFile.Pairing, "pair", 1, PairingProtocol.SecretContext(Session, _transcript), payload);
         CryptographicOperations.ZeroMemory(key);
+        if (await PairingProtocol.ReadAsync(Transport, Path(PairingProtocol.Refused), Delay, PollInterval, cancellationToken).ConfigureAwait(false) is not null)
+            throw new PairingException("O outro aparelho cancelou o pedido.") { Failure = PairingFailure.Refused };
         await PairingProtocol.WriteAsync(Transport, Path(PairingProtocol.Sealed), sealedFile, Delay, PollInterval, cancellationToken).ConfigureAwait(false);
     }
 

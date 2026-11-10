@@ -454,6 +454,101 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.Contains("nameLine = PairingBarModel.NameLine(r.Name)", service, StringComparison.Ordinal);
     }
 
+    // ---- o pedido que acaba no computador novo depois de pronto (revisão final, A-03) ------------------------------
+
+    // No computador novo a pessoa responde «Não» (ou o tempo acaba) e pede outra vez: na Casa o pedido velho sai da
+    // barra sozinho, sem gesto, e o que ela mostra é o pedido novo — o código novo serve à primeira.
+    [Fact]
+    public async Task ReadyRequest_CancelledOnTheNewComputer_LeavesTheBar_AndTheNewOneShows()
+    {
+        var (casa, guest, old, _) = await ReadyAsync();
+        guest.Agent.CancelPairing();
+        await Until(() => casa.Agent.Status.Requests.Count == 0 && BadCount(casa) == 1, "o pedido cancelado fora da barra");
+        Assert.Equal(PairingBarKind.None, PairingBarModel.From(casa.Agent.Status, _now, PairingBarModel.DefaultReceives).Kind);
+        Assert.Equal(PairingAnswer.Gone, await casa.Agent.ApproveWithCodeAsync(old, "123 456"));
+
+        var before = RequestFiles();
+        guest.Agent.RequestPairing();
+        await WaitFor(() => RequestFiles() > before, "o pedido novo");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && guest.Agent.Status.Pairing?.Code is not null, "o pedido novo pronto");
+        var view = PairingBarModel.From(casa.Agent.Status, _now, PairingBarModel.DefaultReceives);
+        Assert.Equal(PairingBarKind.Code, view.Kind);
+        Assert.NotEqual(old, view.Session);
+        Assert.Equal(PairingCode.MaxWrong, view.AttemptsLeft);
+        guest.Agent.ConfirmPairing();
+        Assert.Equal(PairingAnswer.Approved, await casa.Agent.ApproveWithCodeAsync(view.Session!, guest.Agent.Status.Pairing!.Code!));
+        await Until(() => guest.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o portátil ligado");
+        Assert.Equal(0, BadCount(casa));
+    }
+
+    // O código certo num pedido que o outro lado cancelou entretanto (o x-host já lá está, ainda ninguém o viu): a Casa
+    // confere a recusa antes de entregar. Nada é escrito, ninguém é «aprovado», e o pedido sai.
+    [Fact]
+    public async Task RightCode_OnARequestCancelledOnTheOtherSide_DeliversNothing()
+    {
+        var (casa, _, session, code) = await ReadyAsync();
+        // A porta do Windows está aberta quando a recusa chega ao transporte (a sondagem deixa o pedido à aprovação).
+        async Task<bool> Gate()
+        {
+            await PairingRequests.RefuseAsync(Cloud, session, Now);
+            return true;
+        }
+        Assert.Equal(PairingAnswer.Gone, await casa.Agent.ApproveWithCodeAsync(session, code, Gate));
+        Assert.False(await HasStep(session, PairingProtocol.Sealed));
+        Assert.DoesNotContain("foi aprovado", casa.Agent.Status.Notice ?? "");
+        Assert.Empty(casa.Agent.Status.Requests);
+        Assert.Equal(1, BadCount(casa));
+        Assert.Equal(PairingAnswer.Gone, await casa.Agent.ApproveWithCodeAsync(session, code));
+    }
+
+    // Depois de aprovado, ninguém fica a sondar o transporte por esse pedido.
+    [Fact]
+    public async Task ReadyRequest_IsFollowedOnlyUntilItEnds()
+    {
+        var reads = new CountingTransport(_cloud);
+        var casa = NewDevice("Casa", transport: () => reads);
+        await casa.Agent.StartAsync();
+        casa.Agent.MarkKitSaved();
+        var guest = await GuestAsync("Portátil");
+        await AnswerUntil(casa, () => casa.Agent.Status.Requests.Count == 1 && guest.Agent.Status.Pairing?.Code is not null, "o pedido pronto");
+        var session = casa.Agent.Status.Requests[0].Session;
+        // Pronto e à espera do código: a Casa continua a perguntar pela recusa.
+        var ready = reads.Refusals(session);
+        await Until(() => reads.Refusals(session) >= ready + 3, "a sondagem do pedido pronto");
+        guest.Agent.ConfirmPairing();
+        Assert.Equal(PairingAnswer.Approved, await casa.Agent.ApproveWithCodeAsync(session, guest.Agent.Status.Pairing!.Code!));
+        await Until(() => guest.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o portátil ligado");
+        var after = reads.Refusals(session);
+        await Task.Delay(100);
+        Assert.InRange(reads.Refusals(session), after, after + 1);
+    }
+
+    // Conta as leituras do x-host de cada sessão feitas por este computador (e avisa as esperas do teste).
+    private sealed class CountingTransport(SignalTransport inner) : ISyncTransport
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _refusals = new(StringComparer.Ordinal);
+
+        public int Refusals(string session) => _refusals.GetValueOrDefault(SyncPaths.Pairing(session) + PairingProtocol.Refused);
+
+        public string Name => inner.Name;
+
+        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default) => inner.ListAsync(prefix, cancellationToken);
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
+        {
+            if (path.EndsWith("/" + PairingProtocol.Refused, StringComparison.Ordinal))
+            {
+                _refusals.AddOrUpdate(path, 1, (_, n) => n + 1);
+                inner.Signal();
+            }
+            return inner.ReadAsync(path, cancellationToken);
+        }
+
+        public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default) => inner.WriteAsync(path, data, cancellationToken);
+
+        public Task DeleteAsync(string path, CancellationToken cancellationToken = default) => inner.DeleteAsync(path, cancellationToken);
+    }
+
     // ---- pedidos em série (R18) ------------------------------------------------------------------------------------
 
     // Um pedido escrito à mão a que a Casa responde e que o outro lado cancela (x-host) antes de haver código.
@@ -751,6 +846,8 @@ public sealed class PairingNumberMatchingTests : IDisposable
     private sealed class SignalTransport(ISyncTransport inner, Action changed) : ISyncTransport
     {
         public string Name => inner.Name;
+
+        public void Signal() => changed();
 
         public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default) => inner.ListAsync(prefix, cancellationToken);
 
