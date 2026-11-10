@@ -37,6 +37,13 @@ public partial class MainWindow
 
     private async void CapturePage(bool fullPage)
     {
+        // Com o kit de recuperação ou uma palavra-passe à vista, as janelas já saem das capturas do Windows; a do próprio
+        // Éteris também não grava o segredo (num PNG em Imagens e na área de transferência normal).
+        if (Infrastructure.CaptureShield.SecretVisible)
+        {
+            ShowToast("Há um segredo à vista: a captura não foi feita.");
+            return;
+        }
         if (_capturing || ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
         _capturing = true;
         try

@@ -106,6 +106,19 @@ public class FinalReviewUiTextsTests
         Assert.DoesNotContain("SizeChanged += (_, _) => PlaceSignInBar(", wire);
     }
 
+    // ---- I-05: a captura do próprio Éteris não grava o kit nem uma palavra-passe à vista -------------------------------
+
+    [Fact]
+    public void I05_OwnScreenshot_RefusesWhileASecretIsOnScreen()
+    {
+        var capture = Body(Source("MainWindow.Screenshot.cs"), "private async void CapturePage(bool fullPage)", "_capturing = true;");
+        var guard = capture.IndexOf("if (Infrastructure.CaptureShield.SecretVisible)", StringComparison.Ordinal);
+        Assert.True(guard >= 0, "sem a guarda do segredo à vista");
+        Assert.Contains("ShowToast(\"Há um segredo à vista: a captura não foi feita.\");", capture[guard..]);
+        // O kit à vista segura o mesmo segredo (SecretOnScreen → CaptureShield.HoldSecret).
+        Assert.Contains("Vault.SecretOnScreen.Show(", Source("Browser", "EterisSchemeHandlerFactory.cs"));
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {
