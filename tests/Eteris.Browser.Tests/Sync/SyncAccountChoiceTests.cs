@@ -729,4 +729,19 @@ public sealed class SyncAccountChoiceTests : IDisposable
         Assert.True(trabalho.Agent.AccountSecrets);
         Assert.Equal(0, trabalho.Agent.AccountSecretsSinceMs);
     }
+
+    // Quem ligou e quando é da conta atual: ao sair dela (terminar sessão) não fica o da cadeia anterior.
+    [Fact]
+    public async Task AccountChoice_WhoAndWhen_AreForgottenOnSignOut()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        Assert.Null(await SyncChoices.ChooseAccountAsync(casa.Agent, Confirm));
+        await Settle(casa, trabalho);
+        Assert.Equal("Casa", trabalho.Agent.AccountSecretsBy);
+        Assert.NotEqual(0, trabalho.Agent.AccountSecretsSinceMs);
+
+        trabalho.Agent.SignOut(forgetKey: true);
+        Assert.Null(trabalho.Agent.AccountSecretsBy);
+        Assert.Equal(0, trabalho.Agent.AccountSecretsSinceMs);
+    }
 }

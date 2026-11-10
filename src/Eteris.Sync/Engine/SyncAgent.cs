@@ -245,7 +245,8 @@ public sealed class SyncAgent
     // «Sincronizado.» só existe a seguir a uma entrada nesta abertura). Só memória.
     private SyncEntry _entry;
     private bool _inheritedNow;
-    // Quem ligou a escolha da conta e quando (lido no fim da última ronda; informação, não prova). Só memória.
+    // Quem ligou a escolha da conta e quando (lido no fim da última ronda; informação, não prova; esquecido ao mudar de
+    // conta, com _inheritedNow). Só memória.
     private string? _accountBy;
     private long _accountSince;
     private static readonly long MaxDateMs = DateTimeOffset.MaxValue.ToUnixTimeMilliseconds();
@@ -773,6 +774,8 @@ public sealed class SyncAgent
                 saved.OfferAnswered = false;
                 _entry = SyncEntry.Created;
                 _inheritedNow = false;
+                _accountBy = null;
+                _accountSince = 0;
                 _phase = SyncPhase.On;
                 _store.Save(saved);
             }
@@ -941,6 +944,8 @@ public sealed class SyncAgent
             saved.InheritPending = false;
             _entry = SyncEntry.None;
             _inheritedNow = false;
+            _accountBy = null;
+            _accountSince = 0;
             _store.Save(saved);
             _phase = SyncPhase.Choose;
             _notice = "Outro computador criou a conta de sincronização ao mesmo tempo que este. Junte este computador a essa conta (aprovação no outro computador ou o código de recuperação dele): os dados deste computador juntam-se aos da conta, nada se perde.";
@@ -1067,6 +1072,8 @@ public sealed class SyncAgent
             _justJoined = false;
             _entry = SyncEntry.None;
             _inheritedNow = false;
+            _accountBy = null;
+            _accountSince = 0;
             _notice = reason;
             _devices = [];
         }
@@ -1183,6 +1190,8 @@ public sealed class SyncAgent
             }
             _entry = fresh ? SyncEntry.Joined : SyncEntry.None;
             _inheritedNow = false;
+            _accountBy = null;
+            _accountSince = 0;
             _store.Save(_saved);
             _phase = SyncPhase.On;
             _guest = null;
@@ -1771,6 +1780,8 @@ public sealed class SyncAgent
             _store.Save(saved);
             _entry = SyncEntry.None;
             _inheritedNow = false;
+            _accountBy = null;
+            _accountSince = 0;
             _deleteError = null;
             _engine = null;
             _pinnedFor = null;
@@ -1935,6 +1946,8 @@ public sealed class SyncAgent
             _justJoined = false;
             _entry = SyncEntry.None;
             _inheritedNow = false;
+            _accountBy = null;
+            _accountSince = 0;
             _phase = SyncPhase.Off;
             if (forgetKey)
             {
