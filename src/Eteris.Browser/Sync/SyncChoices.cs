@@ -62,6 +62,11 @@ internal static class SyncChoices
     // quem o vê pode juntar outro computador e receber tudo. Pede o Windows Hello como aprovar um aparelho (sempre).
     public static Task<bool> MayRenewKeyAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm) => MayApproveAsync(agent, confirm);
 
+    // «Foi eu — juntar este computador» (alerta de conta substituída): com coleções secretas ligadas NESTE computador,
+    // juntá-lo à conta que está agora no Drive manda para lá as palavras-passe. O Windows confirma primeiro (sempre).
+    public static async Task<bool> MayJoinReplacedAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm)
+        => !agent.EnabledCollections.Any(Collections.IsSecret) || await confirm(ReauthPurpose.JoinReplacedAccount).ConfigureAwait(false);
+
     public const string ApproveWarning =
         "Esse computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.";
 

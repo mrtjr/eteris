@@ -1,0 +1,72 @@
+<!-- O computador novo a entrar na conta (0.2.15, T7): o cartão do pedido de aprovação e o alerta «conta substituída».
+     Na camada, no estilo da barra de aprovação, sem animações. Não decide nada: desenha a vista que GuestPairingModel
+     calculou e diz o que foi premido. Nunca toma o foco: nada aqui é focável e nenhum botão é o botão por omissão. -->
+<UserControl x:Class="Eteris.Browser.Sync.GuestPairingBar" x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             UseLayoutRounding="True" SnapsToDevicePixels="True" MaxWidth="560" Focusable="False"
+             FontFamily="{DynamicResource UiFont}" Foreground="{DynamicResource TextBrush}">
+    <UserControl.Resources>
+        <!-- «Não tenho o outro computador à mão»: uma ligação (texto sublinhado), não um botão. -->
+        <Style x:Key="GuestLink" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource IrisBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <TextBlock Background="Transparent" TextDecorations="Underline" FontSize="12.5"
+                                   Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <Border CornerRadius="18" Padding="18,14" BorderThickness="1"
+            Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource FieldBorderBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid Width="30" Height="30" VerticalAlignment="Top">
+                <Ellipse Fill="{DynamicResource IrisBrush}" />
+                <TextBlock Text="&#xE895;" FontFamily="{DynamicResource IconFont}" FontSize="14"
+                           Foreground="{DynamicResource AccentInkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="Collapsed" />
+                <!-- O código só aparece aqui, e só quando o outro computador respondeu. -->
+                <TextBlock x:Name="CodeText" FontSize="26" FontWeight="SemiBold" Margin="0,6,0,0" Visibility="Collapsed" />
+                <TextBlock x:Name="BodyText" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+                <TextBlock x:Name="LineText" FontSize="12.5" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
+                <WrapPanel x:Name="Actions" Margin="0,10,0,0" Orientation="Horizontal" Visibility="Collapsed">
+                    <Button x:Name="YesButton" Content="Sim" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PrimaryPillButton}" />
+                    <Button x:Name="NoButton" Content="Não" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PillButton}" />
+                    <Button x:Name="AskAgainButton" Content="Pedir outra vez" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PrimaryPillButton}" />
+                    <Button x:Name="ReplacedJoinButton" Content="Foi eu — juntar este computador" Focusable="False" Margin="0,2,8,2"
+                            Visibility="Collapsed" Style="{DynamicResource PillButton}" />
+                    <Button x:Name="ReplacedNotMeButton" Content="Não fui eu" Focusable="False" Margin="0,2,8,2" Visibility="Collapsed"
+                            Style="{DynamicResource PillButton}" />
+                </WrapPanel>
+                <TextBlock x:Name="ConsequenceText" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
+                <Button x:Name="NoOtherLink" Content="Não tenho o outro computador à mão" Margin="0,8,0,0" HorizontalAlignment="Left"
+                        Visibility="Collapsed" Style="{StaticResource GuestLink}" />
+                <TextBlock x:Name="NoteText" FontSize="12.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Foreground="{DynamicResource TextMutedBrush}" Visibility="Collapsed" />
+            </StackPanel>
+            <Button x:Name="CloseButton" Grid.Column="2" Content="&#xE8BB;" FontSize="10" Width="26" Height="26" Margin="6,0,-4,0"
+                    VerticalAlignment="Top" Focusable="False" Visibility="Collapsed"
+                    Style="{DynamicResource IconButton}" FontFamily="{DynamicResource IconFont}" />
+        </Grid>
+    </Border>
+</UserControl>

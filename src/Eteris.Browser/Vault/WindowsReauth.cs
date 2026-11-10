@@ -48,6 +48,8 @@ public enum ReauthPurpose
     ExportProfileSecrets,
     SyncSecrets,
     ApproveDevice,
+    // «Foi eu — juntar este computador» depois de a conta de sincronização ter sido substituída (com segredos ligados).
+    JoinReplacedAccount,
 }
 
 public static class ReauthPolicy
@@ -57,7 +59,8 @@ public static class ReauthPolicy
     public const bool DefaultAskWhenFillingPayments = true;
 
     public static bool IsAlways(ReauthPurpose purpose)
-        => purpose is ReauthPurpose.Export or ReauthPurpose.ExportProfileSecrets or ReauthPurpose.SyncSecrets or ReauthPurpose.ApproveDevice;
+        => purpose is ReauthPurpose.Export or ReauthPurpose.ExportProfileSecrets or ReauthPurpose.SyncSecrets or ReauthPurpose.ApproveDevice
+            or ReauthPurpose.JoinReplacedAccount;
 
     public static bool Needs(ReauthPurpose purpose, bool askPasswords, bool askPayments) => purpose switch
     {
@@ -81,6 +84,8 @@ public static class ReauthPolicy
         ReauthPurpose.ExportProfileSecrets => "O Éteris quer pôr as palavras-passe, os pagamentos e os documentos no perfil exportado.",
         ReauthPurpose.SyncSecrets => "O Éteris quer sincronizar pagamentos ou documentos com os seus outros computadores.",
         ReauthPurpose.ApproveDevice => "O Éteris quer dar as suas palavras-passe a outro computador.",
+        // PROPOSTA (P3).
+        ReauthPurpose.JoinReplacedAccount => "O Éteris quer juntar este computador a outra conta de sincronização.",
         _ => "O Éteris quer confirmar que é você.",
     };
 }

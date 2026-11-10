@@ -479,6 +479,12 @@
             <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
             <button class="action" id="syncStart">Ligar a sincronização</button>
           </div>
+          <div class="item syncalert" id="syncReplacedItem" hidden>
+            <div class="label"><b>A conta de sincronização na nuvem foi apagada ou substituída noutro computador.</b><span>Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.</span>
+              <span class="syncnote">Se juntar este computador, as palavras-passe e os outros dados dele passam a ser enviados para a conta que está agora na nuvem.</span>
+              <span class="syncnote" id="syncReplacedNote" role="status" hidden></span></div>
+            <div class="stack"><button class="action" id="syncReplacedJoin">Foi eu — juntar este computador</button><button class="action" id="syncReplacedNotMe">Não fui eu</button></div>
+          </div>
           <div class="item" id="syncChooseItem" hidden>
             <div class="label"><b>Este Google Drive já tem dados do Éteris</b><span>Junte este computador à sua conta de sincronização: aprove-o noutro computador onde o Éteris já sincroniza, ou use o código de recuperação. Os dados deste computador juntam-se aos da conta — nada se perde.</span>
               <span class="syncnote">Perdeu o código e não tem outro computador ligado? Pode <a href="#syncDeleteItem" id="syncLostLink">apagar os dados do Éteris no Drive</a> e começar de novo com uma conta nova (perde-se o que só estava na nuvem; os dados deste computador ficam).</span>
@@ -995,6 +1001,13 @@
       // Entrar num aparelho novo. O botão volta quando a junção acabou: deu certo (a fase muda), deu erro (a mensagem
       // «join»), ou a ronda acabou sem nada (por exemplo sem rede). O código só sai do campo quando deu certo.
       const msg = d.message || null;
+      // O computador novo (cartão e alerta): a página decide só pelo «guest» do estado (as regras são do Éteris).
+      const guest = s.guest || 'none';
+      // A conta na nuvem foi apagada ou substituída: o alerta, com «Foi eu» (a confirmação do Windows) e «Não fui eu».
+      // Com ele, «Aprovar noutro computador» não aparece (não há atalho sem a confirmação).
+      show('syncReplacedItem', d.connected && guest === 'replaced');
+      note($('syncReplacedNote'), msg && msg.area === 'replaced' ? msg.text : '', true);
+      $('syncPair').hidden = guest === 'replaced';
       if (joining) {
         if (phase !== 'choose') { joining = false; $('syncJoinCode').value = ''; }
         else if (msg && msg.area === 'join') joining = false;
@@ -1222,6 +1235,10 @@
       focusAfterPaint = 'syncCodeSaved';
       askGoogle('sync-new-code');
     });
+    // «Foi eu»: o Éteris pede a confirmação do Windows quando há segredos ligados (a resposta chega depois dela). Nunca
+    // recebe o foco. «Não fui eu» não pede nada: leva a «Retirar o acesso do Éteris».
+    $('syncReplacedJoin').addEventListener('click', () => askGoogle('sync-replaced-join'));
+    $('syncReplacedNotMe').addEventListener('click', () => document.getElementById(quietRevokeTarget)?.scrollIntoView({ block: 'start' }));
     $('syncPair').addEventListener('click', () => { focusAfterPaint = 'syncPairCancel'; askGoogle('sync-pair'); });
     $('syncPairConfirm').addEventListener('click', () => { $('syncPairCancel').focus(); askGoogle('sync-pair-confirm'); });
     $('syncPairCancel').addEventListener('click', () => askGoogle('sync-pair-cancel'));

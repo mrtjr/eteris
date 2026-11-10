@@ -291,8 +291,17 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Agent()?.AcknowledgeCode();
                 break;
             case "/sync-pair":
-                Sync.SyncService.Agent()?.RequestPairing();
+                // «Aprovar noutro computador» e «Pedir outra vez». Com a conta substituída não pede (só «Foi eu», com a
+                // confirmação do Windows).
+                Sync.SyncService.AskPairingAgain();
                 break;
+            case "/sync-replaced-join":
+                // «Foi eu — juntar este computador»: com segredos ligados aqui, o Windows confirma primeiro (sempre).
+                return new VaultResourceHandler(async () =>
+                {
+                    await Sync.SyncService.JoinAfterReplacedAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false);
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
             case "/sync-pair-confirm":
                 Sync.SyncService.Agent()?.ConfirmPairing();
                 break;

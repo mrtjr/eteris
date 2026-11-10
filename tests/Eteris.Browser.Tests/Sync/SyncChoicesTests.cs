@@ -39,6 +39,27 @@ public sealed class SyncChoicesTests : IDisposable
     private SyncAgent Agent(SecretMemoryProfile? profile = null)
         => new(() => new FolderTransport(Path.Combine(_root, "pasta")), profile ?? new SecretMemoryProfile(), new MemoryStore(), "Casa", () => 1_762_560_000_000);
 
+    // «Foi eu — juntar este computador» (conta substituída, T7): com segredos ligados NESTE computador (as palavras-passe
+    // estão ligadas por omissão), o Windows confirma primeiro, sempre; sem nenhum, não pergunta.
+    [Fact]
+    public async Task ReplacedJoin_WithLocalSecrets_AsksWindows()
+    {
+        var agent = Agent();
+        _answer = false;
+        Assert.False(await SyncChoices.MayJoinReplacedAsync(agent, Confirm));
+        Assert.Equal([ReauthPurpose.JoinReplacedAccount], _asked);
+        _answer = true;
+        Assert.True(await SyncChoices.MayJoinReplacedAsync(agent, Confirm));
+        Assert.Equal(2, _asked.Count);
+        agent.SetCollections(Collections.Secret, on: false);
+        _asked.Clear();
+        _answer = false;
+        Assert.True(await SyncChoices.MayJoinReplacedAsync(agent, Confirm));
+        Assert.Empty(_asked);
+        Assert.True(ReauthPolicy.IsAlways(ReauthPurpose.JoinReplacedAccount));
+        Assert.Equal("O Éteris quer juntar este computador a outra conta de sincronização.", ReauthPolicy.Message(ReauthPurpose.JoinReplacedAccount));
+    }
+
     [Fact]
     public void Rows_AreThoseOfSection46_InOrder_WithTheDefaultsOfD1()
     {

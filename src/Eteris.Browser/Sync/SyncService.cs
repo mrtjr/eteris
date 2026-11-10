@@ -400,6 +400,65 @@ internal static class SyncService
         if (Activation.TryPass(Now(), counted, firstRoundDone: true)) Look();
     }
 
+    // ---- o computador novo: cartão do pedido e alerta «conta substituída» (0.2.15, T7) -------------------------------
+
+    // O que as barras do computador novo mostram agora. Lê o campo (nunca cria o agente; sem agente, nada) e só memória:
+    // é chamado pelos «wants» das candidatas, a cada RefreshBars.
+    internal static GuestPairingView GuestPairingState() => GuestPairingModel.From(_agent?.Status);
+
+    private static volatile bool _replacedDismissed;
+    private static volatile bool _guestCardOpen = true;
+
+    // «Não fui eu» no alerta: a barra do alerta não volta até o Éteris fechar (o alerta continua nas Definições).
+    internal static bool ReplacedAlertDismissed => _replacedDismissed;
+
+    // Só memória: sem rede, sem agente.
+    internal static void DismissReplacedAlert()
+    {
+        _replacedDismissed = true;
+        Changed?.Invoke();
+    }
+
+    // O cartão do computador novo está aberto (por omissão) ou recolhido («Fechar»). Partilhado por todas as janelas,
+    // só memória. «Ver código», «Foi eu», «Pedir outra vez» e um pedido novo voltam a abri-lo.
+    internal static bool GuestCardOpen => _guestCardOpen;
+
+    internal static void SetGuestCard(bool open)
+    {
+        if (_guestCardOpen == open) return;
+        _guestCardOpen = open;
+        Changed?.Invoke();
+    }
+
+    // «Foi eu — juntar este computador» (alerta de conta substituída): junta este computador à conta que está AGORA no
+    // Drive. Com segredos ligados aqui, o Windows confirma primeiro (sempre). true = o pedido foi lançado; false = não
+    // foi confirmado, ou já não se aplica. Não apanha as exceções da confirmação: quem chama trata.
+    public static async Task<bool> JoinAfterReplacedAsync(Func<Vault.ReauthPurpose, Task<bool>> confirm)
+    {
+        if (Agent() is not { } agent || !agent.Status.ChainReplaced) return false;
+        if (!await SyncChoices.MayJoinReplacedAsync(agent, confirm).ConfigureAwait(false))
+        {
+            Say("replaced", SyncChoices.NotConfirmed("este computador não foi juntado à conta"));
+            return false;
+        }
+        lock (Gate) if (_message?.Area == "replaced") _message = null;
+        SetGuestCard(true);
+        // Parada por a conta ter desaparecido: a ronda do gesto («Ligar outra vez») vê a conta que lá está agora.
+        if (agent.Status.Phase == SyncPhase.Stopped) await StartAsync().ConfigureAwait(false);
+        if (agent.Status.Phase == SyncPhase.Choose) agent.RequestPairing();
+        return true;
+    }
+
+    // «Pedir outra vez» (cartão) e a rota /sync-pair (Definições). Com a conta substituída não pede: o único caminho é
+    // JoinAfterReplacedAsync, com a confirmação do Windows.
+    public static void AskPairingAgain()
+    {
+        if (Agent() is not { } agent || agent.Status.ChainReplaced) return;
+        if (agent.Status.Phase != SyncPhase.Choose) return;
+        SetGuestCard(true);
+        agent.RequestPairing();
+    }
+
     private static (string Area, string Text)? _message;
 
     // A mensagem da última ação que falhou (código errado, pedido expirado…), com a parte da página onde aparece.
@@ -488,6 +547,13 @@ internal static class SyncService
         };
     }
 
+    // «none», «replaced», «waiting», «code», «joined», «timeUp», «stillWaiting», «refused», «failed».
+    internal static string GuestKind(GuestPairingKind kind)
+    {
+        var name = kind.ToString();
+        return char.ToLowerInvariant(name[0]) + name[1..];
+    }
+
     public static object StatusData(SyncStatus? status, long nowMs) => status is null
         ? new { phase = "off" }
         : new
@@ -509,6 +575,8 @@ internal static class SyncService
             // A conta na nuvem foi apagada ou substituída (alerta), e se este computador pode pedir a aprovação sozinho.
             chainReplaced = status.ChainReplaced,
             mayAutoPair = status.MayAutoPair,
+            // O que o computador novo mostra (o cartão e o alerta): a página decide só por isto.
+            guest = GuestKind(GuestPairingModel.From(status).Kind),
             devices = status.Devices.Select(d => new
             {
                 id = d.Id, name = d.Name, me = d.IsThis,

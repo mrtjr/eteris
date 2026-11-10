@@ -126,6 +126,7 @@ public partial class MainWindow
         Toast.Margin = new Thickness(margins.Left, 0, margins.Right, 28);
         PlaceSignInBar(new Thickness(margins.Left, 0, margins.Right, 0));
         PlacePairingBar(new Thickness(margins.Left, 0, margins.Right, 0));
+        PlaceGuestBar(new Thickness(margins.Left, 0, margins.Right, 0));
         SetLinkBubbleOffset(new Thickness(12 + margins.Left, 0, 0, 12));
         SyncOverlayBounds();
     }

@@ -53,6 +53,8 @@ public partial class MainWindow
         // O pedido de permissão de um site e o procurar na página nunca ficam tapados: a barra desce para baixo deles.
         PermissionBar.SizeChanged += (_, _) => PlaceSignInBar(_signInBarMargins);
         FindBar.SizeChanged += (_, _) => PlaceSignInBar(_signInBarMargins);
+        // O computador novo (T7): o alerta «conta substituída» e o cartão do pedido de aprovação.
+        WireGuestPairing();
         // Uma janela aberta a meio de um início de sessão mostra logo a barra; com tudo parado, nada se cria nem se lê.
         RefreshBars();
     }

@@ -567,4 +567,111 @@ public class SyncIntegrationTests
         Assert.Contains("SyncService.ApprovePairingAsync(", glue);
         Assert.Contains("ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken())", glue);
     }
+
+    // ---- o computador novo (0.2.15, T7) -----------------------------------------------------------------------------
+
+    // O texto de um «case» do switch das rotas: de «case "<rota>"» até ao «case» seguinte.
+    private static string RouteCase(string routes, string path)
+    {
+        var start = routes.IndexOf("case \"" + path + "\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"não encontrei a rota {path}");
+        var end = routes.IndexOf("case \"", start + 6, StringComparison.Ordinal);
+        return end < 0 ? routes[start..] : routes[start..end];
+    }
+
+    // Um membro com corpo de expressão: da assinatura ao primeiro «;».
+    private static string Expression(string code, string signature)
+    {
+        var start = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"não encontrei {signature}");
+        return code[start..code.IndexOf(';', start)];
+    }
+
+    private static void Before(string code, string first, string second)
+    {
+        var a = code.IndexOf(first, StringComparison.Ordinal);
+        var b = code.IndexOf(second, StringComparison.Ordinal);
+        Assert.True(a >= 0, $"falta {first}");
+        Assert.True(b >= 0, $"falta {second}");
+        Assert.True(a < b, $"{first} devia vir antes de {second}");
+    }
+
+    // «Foi eu — juntar este computador» passa sempre pela confirmação do Windows; com a conta substituída, nem a rota
+    // antiga de pedir nem «Pedir outra vez» criam um pedido.
+    [Fact]
+    public void ReplacedJoin_HasNoWayAroundTheGate()
+    {
+        var routes = File.ReadAllText(BrowserSrc("Browser", "EterisSchemeHandlerFactory.cs"), Encoding.UTF8);
+        Assert.Contains("JoinAfterReplacedAsync(purpose => ConfirmWithWindows(browserId, purpose))", RouteCase(routes, "/sync-replaced-join"));
+        Assert.Contains("AskPairingAgain()", RouteCase(routes, "/sync-pair"));
+        Assert.DoesNotContain("Agent()?.RequestPairing()", routes);
+
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        Before(Body(service, "public static async Task<bool> JoinAfterReplacedAsync("), "SyncChoices.MayJoinReplacedAsync(", "RequestPairing(");
+        Before(Body(service, "public static void AskPairingAgain()"), "ChainReplaced", "RequestPairing(");
+        // Os únicos chamadores de RequestPairing no navegador: estes dois.
+        Assert.Equal(["Sync/SyncService.cs"], BrowserFilesWith("RequestPairing("));
+        Assert.Equal(2, Regex.Matches(service, @"RequestPairing\(").Count);
+
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.GuestPairing.cs"), Encoding.UTF8);
+        Assert.Contains("JoinAfterReplacedAsync(", glue);
+        Assert.DoesNotContain("RequestPairing(", glue);
+        Assert.Contains("ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken())", glue);
+    }
+
+    // «Não fui eu» no alerta: nada sai para a rede; a barra esconde-se e as Definições abrem onde se retira o acesso.
+    [Fact]
+    public void NotMe_DoesNothingOnTheNetwork_AndPointsToRevoke()
+    {
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        var dismiss = Body(service, "internal static void DismissReplacedAlert()");
+        foreach (var forbidden in new[] { "Agent()", "Look(", "RequestPairing(", "Start" })
+            Assert.DoesNotContain(forbidden, dismiss);
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.GuestPairing.cs"), Encoding.UTF8);
+        Assert.Contains("DismissReplacedAlert()", glue);
+        Assert.Contains("SyncService.RevokeAnchor", glue);
+        Assert.DoesNotContain("\"#syncRevokeItem\"", glue);
+    }
+
+    // As barras do computador novo nascem em código, na camada, e passam pelo ponto único da T4 (uma de cada vez).
+    [Fact]
+    public void GuestBars_AreCreatedInCode_AndGoThroughTheArbiter()
+    {
+        Assert.DoesNotContain("GuestPairingBar", File.ReadAllText(BrowserSrc("MainWindow.xaml"), Encoding.UTF8));
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.GuestPairing.cs"), Encoding.UTF8);
+        Assert.Contains("AddToOverlay(", glue);
+        Assert.Contains("RegisterBar(Sync.WindowBar.AccountReplaced", glue);
+        Assert.Contains("RefreshBars(", glue);
+        Assert.DoesNotContain("SyncService.Changed +=", glue);
+        // Só o «show» comum mexe na visibilidade.
+        var show = Body(glue, "private void ShowGuestBar(");
+        Assert.Matches(@"Visibility\s*=", show);
+        Assert.Empty(Regex.Matches(glue.Replace(show, ""), @"Visibility\s*="));
+        var signIn = File.ReadAllText(BrowserSrc("MainWindow.SignInBar.cs"), Encoding.UTF8);
+        var wire = Body(signIn, "private void WireSignInBar()");
+        Before(wire, "if (IsPrivate) return;", "WireGuestPairing();");
+        Assert.True(wire.IndexOf("WireGuestPairing();", StringComparison.Ordinal) < wire.LastIndexOf("RefreshBars();", StringComparison.Ordinal));
+        var window = File.ReadAllText(BrowserSrc("MainWindow.xaml.cs"), Encoding.UTF8);
+        Assert.DoesNotContain("GuestPairing", window);
+        Assert.DoesNotContain("SyncService", window);
+        Assert.DoesNotContain("GuestPairing", File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8));
+        Assert.Empty(BrowserFilesWith("WindowBarKind"));
+        Assert.Contains("PlaceGuestBar(", File.ReadAllText(BrowserSrc("MainWindow.Sidebar.cs"), Encoding.UTF8));
+        // O estado lê o campo do agente: nunca o cria (as candidatas perguntam a cada RefreshBars, também no arranque).
+        var state = Expression(File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8), "internal static GuestPairingView GuestPairingState()");
+        Assert.Contains("_agent", state);
+        Assert.DoesNotContain("Agent()", state);
+    }
+
+    // Na página, «Foi eu» nunca recebe o foco.
+    [Fact]
+    public void Page_ReplacedJoin_IsNeverFocused()
+    {
+        var page = File.ReadAllText(BrowserSrc("Browser", "settings.html"), Encoding.UTF8);
+        Assert.Contains("id=\"syncReplacedItem\"", page);
+        Assert.Contains("askGoogle('sync-replaced-join')", page);
+        Assert.DoesNotContain("focusAfterPaint = 'syncReplacedJoin'", page);
+        Assert.DoesNotContain("$('syncReplacedJoin').focus()", page);
+        Assert.DoesNotContain("autofocus", page);
+    }
 }
