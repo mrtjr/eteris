@@ -990,10 +990,12 @@
     };
     // Pedidos em série: vários pedidos acabaram mal e a barra deixou de abrir sozinha. Fica aqui o aviso, com as saídas.
     // «Retirar o acesso do Éteris»: o item próprio (#syncRevokeItem, SyncService.RevokeAnchor). Ao abrir a página nessa
-    // âncora, ou quando ela muda para lá, a vista vai ao item e o foco ao botão (se o item estiver à vista).
+    // âncora, ou quando ela muda para lá, a vista vai ao item e o foco ao botão. Com o item escondido (pasta de teste,
+    // sem ligação), a vista vai à secção Sincronização, como antes.
     const focusRevoke = () => {
+      if (location.hash !== '#syncRevokeItem') return;
       const item = $('syncRevokeItem');
-      if (location.hash !== '#syncRevokeItem' || item.hidden || item.closest('[hidden]') !== null) return;
+      if (item.hidden || item.closest('[hidden]') !== null) { $('sincronizacao').scrollIntoView(); return; }
       item.scrollIntoView({ block: 'center' });
       $('syncRevoke').focus();
     };

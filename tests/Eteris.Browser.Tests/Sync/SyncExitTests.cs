@@ -668,6 +668,19 @@ public sealed class SyncExitTests : IDisposable
     // ---- a página -----------------------------------------------------------------------------------------------------
 
     [Fact]
+    public void RevokeAnchor_WithTheItemHidden_GoesToTheSection()
+    {
+        // M1 da revisão: na pasta de teste (ou sem ligação) o item está escondido; «Não fui eu» e o botão do aviso
+        // continuam a levar à secção, como antes.
+        var page = GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html");
+        var start = page.IndexOf("const focusRevoke = () => {", StringComparison.Ordinal);
+        Assert.True(start > 0);
+        var body = page[start..page.IndexOf("const toAnchor", start, StringComparison.Ordinal)];
+        Assert.Contains("$('sincronizacao').scrollIntoView(", body);
+        Assert.True(body.IndexOf("$('sincronizacao').scrollIntoView(", StringComparison.Ordinal) < body.IndexOf("$('syncRevoke').focus()", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ExitPage_HasTheTexts_AndTheNoteOutsideTheBody()
     {
         var page = GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html");
