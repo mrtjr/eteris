@@ -521,6 +521,7 @@
             <button class="action" id="syncPair">Aprovar noutro computador</button>
           </div>
           <div id="syncRequests"></div>
+          <span class="syncnote" id="syncRequestsNote" role="status" hidden></span>
           <div class="item" id="syncNameItem" hidden>
             <div class="label"><b>Nome deste computador</b><span id="syncNameText"></span>
               <form class="syncform left" id="syncNameForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off" hidden>
@@ -978,13 +979,37 @@
     // Pedidos e aparelhos: só se reconstroem quando a lista muda (as sondagens de 1,5 s não tiram o foco do teclado, não
     // desarmam um «Remover» à espera da confirmação).
     let requestsKey = null, devicesKey = null;
-    // Há pedidos de aparelhos novos prontos: diz onde responder (na barra da janela; aqui não se aprova).
-    const requestsNotice = () => {
+    // Um pedido pronto de um aparelho novo, com os textos da barra da janela: aprova-se escrevendo o código que ele mostra
+    // (só com o teclado: Tab até à caixa, Enter envia). O código vai no corpo de um POST e sai da caixa logo a seguir;
+    // a página nunca põe o foco aqui sozinha. «Não fui eu» só recusa.
+    let requestBoxes = 0;
+    const requestItem = (r, s) => {
       const item = document.createElement('div'); item.className = 'item syncalert';
       const label = document.createElement('div'); label.className = 'label';
-      const title = document.createElement('b'); title.textContent = 'Um computador novo quer entrar na sua conta.';
-      const text = document.createElement('span'); text.textContent = 'Responda na barra que aparece no cimo da janela do Éteris.';
-      label.append(title, text);
+      const title = document.createElement('b'); title.textContent = s.requestTitle;
+      const name = document.createElement('span'); name.textContent = r.nameLine;
+      const form = document.createElement('form'); form.className = 'syncform left'; form.autocomplete = 'off';
+      const input = document.createElement('input');
+      input.type = 'text'; input.id = 'syncRequestCode' + (++requestBoxes); input.inputMode = 'numeric'; input.autocomplete = 'off';
+      input.spellcheck = false; input.maxLength = 12; input.setAttribute('aria-label', s.requestBox);
+      input.dataset.key = 'req:' + r.id + ':code';
+      const question = document.createElement('label'); question.className = 'syncnote'; question.htmlFor = input.id; question.textContent = s.requestAsk;
+      const ok = document.createElement('button'); ok.className = 'action'; ok.type = 'submit'; ok.dataset.key = 'req:' + r.id + ':ok'; ok.textContent = 'Aprovar';
+      const no = document.createElement('button'); no.className = 'action'; no.type = 'button'; no.dataset.key = 'req:' + r.id + ':no'; no.textContent = 'Não fui eu';
+      no.addEventListener('click', () => { no.disabled = true; askGoogle('sync-refuse', `&id=${encodeURIComponent(r.id)}`); });
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        quickUntil = Date.now() + 15000;
+        const seq = ++googleAsked;
+        post('sync-request-code', { id: r.id, code: input.value }, d => {
+          if (d && d.google) { if (seq >= googlePainted) { googlePainted = seq; paint(d); } }
+          else note($('syncRequestsNote'), d.message || 'Pedido recusado.', true);
+        });
+        // O código não fica no ecrã (nem depois de um erro: escreve-se outra vez).
+        input.value = '';
+      });
+      form.append(input, ok, no);
+      label.append(title, name, question, form);
       item.append(label);
       return item;
     };
@@ -1299,19 +1324,23 @@
       const joinError = msg && msg.area === 'join' ? msg.text : '';
       note($('syncJoinNote'), joinError || (phase === 'choose' && !joining ? s.notice : '') || (joining ? 'A abrir a conta e a juntar os dados…' : ''), !!joinError);
       paintPair(s, guest);
-      // Pedidos de aparelhos novos: este computador nunca mostra o código; aprova-se na barra da janela, escrevendo o
-      // código que o computador novo mostra. Aqui só se diz onde responder.
+      // Pedidos de aparelhos novos: este computador nunca mostra o código; aprova-se na barra da janela ou aqui, sempre
+      // escrevendo o código que o computador novo mostra (o mais antigo primeiro, pela ordem do estado). Com a barra
+      // calada (pedidos em série) só o aviso, sem caixas.
       const box = $('syncRequests');
       const requests = d.enabled ? s.requests || [] : [];
       const quiet = d.enabled && !!s.pairingQuiet;
-      const rKey = JSON.stringify([quiet, requests.map(r => r.id)]);
+      const rKey = JSON.stringify([quiet, s.requestTitle, requests.map(r => [r.id, r.nameLine])]);
       if (rKey !== requestsKey) {
         requestsKey = rKey;
         const focused = keyOfFocus(box);
-        box.replaceChildren(...(quiet ? [quietNotice(requests)] : requests.length ? [requestsNotice()] : []));
+        // O que se estava a escrever numa caixa não se perde quando a lista muda (chega outro pedido, por exemplo).
+        const typing = new Map([...box.querySelectorAll('input[data-key]')].map(i => [i.dataset.key, i.value]));
+        box.replaceChildren(...(quiet ? [quietNotice(requests)] : requests.map(r => requestItem(r, s))));
+        for (const i of box.querySelectorAll('input[data-key]')) if (typing.has(i.dataset.key)) i.value = typing.get(i.dataset.key);
         refocus(box, focused);
       }
-      if (msg && msg.area === 'approve') note($('syncNotice'), msg.text, true);
+      note($('syncRequestsNote'), msg && msg.area === 'approve' ? msg.text : '', true);
       // Aparelhos.
       const list = $('syncDevices');
       const devices = s.devices || [];

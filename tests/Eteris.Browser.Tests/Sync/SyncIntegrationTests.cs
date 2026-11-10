@@ -616,6 +616,28 @@ public class SyncIntegrationTests
         Assert.DoesNotContain("e.Message +", body);
     }
 
+    // Cada pedido pronto tem nas Definições a sua caixa (alcançável com Tab, Enter envia): o código vai por POST, a caixa
+    // esvazia-se logo, e a página nunca põe o foco lá sozinha.
+    [Fact]
+    public void Page_RequestBox_IsKeyboardOnly_AndNeverFocused()
+    {
+        var page = File.ReadAllText(BrowserSrc("Browser", "settings.html"), Encoding.UTF8).Replace("\r\n", "\n");
+        var start = page.IndexOf("    const requestItem =", StringComparison.Ordinal);
+        Assert.True(start >= 0, "não encontrei requestItem");
+        var end = page.IndexOf("\n    const ", start + 1, StringComparison.Ordinal);
+        Assert.True(end > start);
+        var item = page[start..end];
+        foreach (var needed in new[] { "post('sync-request-code', { id: r.id, code: input.value }", "autocomplete", "s.requestAsk", "s.requestBox",
+                     "r.nameLine", "s.requestTitle", "input.value = ''", "Aprovar", "Não fui eu" })
+            Assert.Contains(needed, item);
+        Assert.DoesNotContain(".focus(", item);
+        Assert.DoesNotContain("innerHTML", item);
+        Assert.Contains("id=\"syncRequestsNote\"", page);
+        Assert.DoesNotContain("requestsNotice", page);
+        Assert.DoesNotContain("sync-approve", page);
+        Assert.DoesNotContain("r.code", page);
+    }
+
     // ---- o computador novo (0.2.15, T7) -----------------------------------------------------------------------------
 
     // O texto de um «case» do switch das rotas: de «case "<rota>"» até ao «case» seguinte.

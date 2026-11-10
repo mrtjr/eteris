@@ -427,9 +427,9 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Contains("Incluir palavras-passe, pagamentos e documentos", html);
         Assert.Contains("abre também o cofre de palavras-passe", html);
         Assert.Contains("esqueci-me do kit", SyncChoices.Intro);
-        // Aprovar um computador novo faz-se na barra da janela, escrevendo o código (0.2.15, T8): as Definições só
-        // dizem onde responder e já não têm caminho para aprovar.
-        Assert.Contains("Responda na barra que aparece no cimo da janela do Éteris", html);
+        // Aprovar um computador novo faz-se na barra da janela ou nas Definições, sempre escrevendo o código (0.2.15,
+        // T8 e T8K): a página envia-o por POST, e não há caminho para aprovar sem ele.
+        Assert.Contains("post('sync-request-code', { id: r.id, code: input.value }", html);
         Assert.DoesNotContain("sync-approve", html);
         // A caixa vem desmarcada.
         Assert.DoesNotContain("id=\"exportSecrets\" checked", html);
@@ -437,8 +437,8 @@ public sealed class SyncChoicesTests : IDisposable
         // As rotas passam pelas decisões testadas aqui (e a confirmação vem do Windows, com a janela da aba).
         var routes = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
         Assert.Contains("SyncChoices.ChooseAsync(agent, group, on, purpose => ConfirmWithWindows(browserId, purpose))", routes);
-        // A rota que aprovava sem código saiu (D11): aprovar faz-se só na barra da janela, escrevendo o código, e a
-        // porta do Windows está no serviço, depois do código certo.
+        // A rota que aprovava sem código saiu (D11): aprova-se na barra ou nas Definições, sempre escrevendo o código, e
+        // a porta do Windows está no serviço, depois do código certo.
         Assert.DoesNotContain("\"/sync-approve\"", routes);
         Assert.Contains("SyncChoices.MayApproveAsync(agent, confirm)",
             File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs")));
