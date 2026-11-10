@@ -1350,6 +1350,19 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(KitState.Saved, casa.Agent.Status.Kit!.State);
     }
 
+    // Um segredo guardado ilegível não impede o agente de nascer (sem kit, como sem chave).
+    [Fact]
+    public void CorruptSecret_DoesNotBreakTheAgent()
+    {
+        foreach (var secret in new[] { "!!!não é base64!!!", "AAAA" })
+        {
+            var store = new MemoryStore();
+            store.Save(new SavedSync { Enabled = true, Secret = secret });
+            var agent = NewDevice("Casa", store: store).Agent;
+            Assert.Null(agent.Status.Kit);
+        }
+    }
+
     // Quem entra com o kit (palavras ou o código antigo) tem-no; quem entra por aprovação fica «por guardar».
     [Fact]
     public async Task JoinWithTheKit_CountsAsSaved_AndJoinByApproval_IsPending()

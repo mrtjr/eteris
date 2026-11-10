@@ -220,17 +220,25 @@ public sealed class SyncAgent
         _delay = delay;
         _saved = store.Load();
         // O registo do kit: migra um estado da 0.2.14 (sem registo) e corrige um que não corresponda ao segredo. Só em
-        // memória: vai para o disco na gravação seguinte.
+        // memória: vai para o disco na gravação seguinte. Um segredo ilegível não impede o agente de nascer: fica sem kit
+        // (a ronda dá o erro dela, como antes).
         if (_saved?.Secret is { } kept)
         {
-            using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(kept));
-            if (_saved.Kit is null)
+            try
             {
-                var id = account.KitId;
-                _saved.Kit = new KitRecord { ForId = id, SavedId = _saved.CodePending ? null : id, SinceMs = _now() };
-                _saved.CodePending = false;
+                using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(kept));
+                if (_saved.Kit is null)
+                {
+                    var id = account.KitId;
+                    _saved.Kit = new KitRecord { ForId = id, SavedId = _saved.CodePending ? null : id, SinceMs = _now() };
+                    _saved.CodePending = false;
+                }
+                else KitFor(_saved, account);
             }
-            else KitFor(_saved, account);
+            catch (Exception e) when (e is FormatException or ArgumentException)
+            {
+                _saved.Kit = null;
+            }
         }
         // O nome escolhido aqui; senão o que o estado do motor já tem (ligado antes desta versão); senão o de omissão.
         DeviceName = DeviceNameText.Clean(_saved?.DeviceName) ?? DeviceNameText.Clean(_saved?.Engine?.Device.Name) ?? deviceName;
