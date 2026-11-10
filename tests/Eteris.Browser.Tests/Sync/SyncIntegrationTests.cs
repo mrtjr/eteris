@@ -746,6 +746,16 @@ public class SyncIntegrationTests
         Assert.DoesNotContain("(s.pairing && s.pairing.error)", page);
     }
 
+    // O pedido automático do computador novo está ligado no Éteris (o agente só o faz na ronda do gesto e num computador
+    // sem nenhum estado desta conta; AutoPairingTests). É a linha que se reverte se a aprovação com código sair.
+    [Fact]
+    public void AutoPair_IsOnInTheBrowser()
+    {
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        Assert.Contains("AutoPair = true,", Body(service, "public static SyncAgent? Agent()"));
+        Assert.Single(Regex.Matches(service, @"AutoPair = true"));
+    }
+
     // Na página, «Foi eu» nunca recebe o foco.
     [Fact]
     public void Page_ReplacedJoin_IsNeverFocused()

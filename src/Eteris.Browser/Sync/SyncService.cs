@@ -90,6 +90,9 @@ internal static class SyncService
             _agent = new SyncAgent(Transport, profile, store, DeviceName, Now)
             {
                 AccountKey = AccountKey,
+                // O computador novo pede a aprovação sozinho na ronda do gesto de entrar (só sem nenhum estado desta
+                // conta). Depende da aprovação com o código escrito no outro computador (T8): sai com ela.
+                AutoPair = true,
                 // O pedido do computador novo só se renova com o ecrã dele à vista (cartão ou Definições, há menos de 15 s).
                 PairingScreenVisible = () => Now() - Interlocked.Read(ref _pairingSeen) < 15_000,
                 // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
