@@ -79,9 +79,9 @@ public partial class MainWindow
         bar.CodeEntered += OnPairingCode;
         bar.NotMe += session =>
         {
-            // «Não fui eu»: recusa o pedido e fica o conselho (só nesta janela) até «Fechar» ou «Retirar o acesso».
-            Sync.SyncService.RefusePairing(session);
-            _pairingAdvice = PairingBarModel.RefusedAdvice;
+            // «Não fui eu»: recusa o pedido e fica o conselho (só nesta janela) até «Fechar» ou «Retirar o acesso». Só
+            // quando a recusa aconteceu: com uma aprovação desse pedido já a meio, nada é recusado.
+            if (Sync.SyncService.RefusePairing(session)) _pairingAdvice = PairingBarModel.RefusedAdvice;
             AfterPairingAction(returnFocus: true);
         };
         bar.LookRequested += () =>

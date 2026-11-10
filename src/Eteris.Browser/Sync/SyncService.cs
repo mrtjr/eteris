@@ -563,8 +563,16 @@ internal static class SyncService
         }
     }
 
-    // «Não fui eu»: recusa o pedido (o computador novo fica a saber).
-    public static void RefusePairing(string session) => Act("approve", a => a.RefuseAsync(session));
+    // «Não fui eu»: recusa o pedido (o computador novo fica a saber). Devolve se recusou — com uma aprovação desse
+    // pedido já a meio (porta do Windows, entrega) nada é recusado e a barra não diz «Recusado». A decisão é imediata
+    // (o agente tira o pedido já, sem rede); a escrita da recusa segue em segundo plano.
+    public static bool RefusePairing(string session)
+    {
+        if (Agent() is not { } agent) return false;
+        if (Guarded(() => agent.BeginRefuse(session), null) is not { } write) return false;
+        Act("approve", _ => write(CancellationToken.None));
+        return true;
+    }
 
     // «Mostrar o pedido na barra» (Definições, com a barra calada pelos pedidos em série): um gesto que repõe a
     // contagem. Sem rede; lê o campo do agente (não o cria).

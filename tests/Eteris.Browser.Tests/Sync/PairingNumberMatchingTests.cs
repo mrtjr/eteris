@@ -323,7 +323,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
     public async Task NotMe_WritesRefusal_AndRemovesTheRequest()
     {
         var (casa, guest, session, code) = await ReadyAsync();
-        await casa.Agent.RefuseAsync(session);
+        Assert.True(await casa.Agent.RefuseAsync(session));
         Assert.True(await HasStep(session, PairingProtocol.Refused));
         Assert.False(await HasStep(session, PairingProtocol.Sealed));
         Assert.Empty(casa.Agent.Status.Requests);
@@ -618,7 +618,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         guest.Agent.ConfirmPairing();
         var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var approving = casa.Agent.ApproveWithCodeAsync(session, code, () => gate.Task);
-        await casa.Agent.RefuseAsync(session);
+        Assert.False(await casa.Agent.RefuseAsync(session));
         Assert.False(await HasStep(session, PairingProtocol.Refused));
         Assert.Equal(0, BadCount(casa));
         gate.SetResult(true);

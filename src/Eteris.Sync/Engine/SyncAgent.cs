@@ -807,7 +807,8 @@ public sealed class SyncAgent
         lock (_gate)
         {
             if (!IsCurrent(saved)) return;
-            _phase = SyncPhase.Choose;
+            // Um pedido de aprovação que já estava a correr (ligar ou entrar outra vez a meio dele) continua à vista.
+            _phase = _guest is { Error: null } ? SyncPhase.Pairing : SyncPhase.Choose;
         }
         Notify();
         // O pedido automático: um por gesto, e só num aparelho que nunca teve estado desta conta (um com a chave de uma
@@ -1074,10 +1075,19 @@ public sealed class SyncAgent
 
     private void Stop(SavedSync saved, string reason, StopKeeps keeps)
     {
+        GuestFlow? guest;
+        List<HostFlow> hosts;
         lock (_gate)
         {
             // Um «apagar» começou entretanto: o aviso dele fica (esta ronda já não é a deste aparelho).
             if (!ReferenceEquals(_saved, saved) || saved.DeletePending) return;
+            // Com a sincronização parada, nenhum pedido de aprovação continua a sondar o transporte (nem o deste
+            // aparelho, nem os dos computadores novos a que respondeu), como em «Sair».
+            guest = _guest;
+            _guest = null;
+            hosts = _hosts.Values.ToList();
+            _hosts.Clear();
+            _waiting = 0;
             _engine = null;
             saved.Enabled = false;
             if (keeps != StopKeeps.Everything)
@@ -1108,6 +1118,8 @@ public sealed class SyncAgent
             _notice = reason;
             _devices = [];
         }
+        guest?.Cancel.Cancel();
+        foreach (var host in hosts) host.Cancel.Cancel();
         Notify();
     }
 
@@ -1241,14 +1253,25 @@ public sealed class SyncAgent
     public void RequestPairing()
     {
         GuestFlow flow;
+        var alive = false;
         lock (_gate)
         {
-            if (_guest is { Error: null }) return;
-            _guest = flow = new GuestFlow { FirstRequestMs = _now() };
-            _phase = SyncPhase.Pairing;
-            _error = null;
+            if (_guest is { Error: null })
+            {
+                // Já há um pedido vivo: não se abre outro, mas fica à vista (uma ronda pode ter mudado a fase).
+                alive = true;
+                flow = _guest;
+                if (_phase == SyncPhase.Choose) _phase = SyncPhase.Pairing;
+            }
+            else
+            {
+                _guest = flow = new GuestFlow { FirstRequestMs = _now() };
+                _phase = SyncPhase.Pairing;
+                _error = null;
+            }
         }
         Notify();
+        if (alive) return;
         _ = Task.Run(async () =>
         {
             string? session = null;
@@ -1324,7 +1347,8 @@ public sealed class SyncAgent
                         PairingException { Failure: PairingFailure.Refused } => GuestEnd.Refused,
                         _ => GuestEnd.Failed,
                     };
-                    if (_phase == SyncPhase.Pairing) _phase = SyncPhase.Choose;
+                    // Só o pedido em curso mexe na fase: um que já foi cancelado ou trocado por outro não esconde o novo.
+                    if (ReferenceEquals(_guest, flow) && _phase == SyncPhase.Pairing) _phase = SyncPhase.Choose;
                 }
                 // A sessão em curso (ainda não entregue) fica recusada: o outro aparelho deixa de esperar. Não quando a
                 // causa é o transporte: a escrita falhava também, e uma recusa conta lá como um pedido mau.
@@ -1605,7 +1629,8 @@ public sealed class SyncAgent
         lock (_gate)
         {
             _hosts.TryGetValue(session, out flow);
-            if (flow?.Code is not { } expected || _saved?.Secret is not { } saved
+            // Só com a sincronização ligada: parada ou em pausa, a chave guardada não se entrega a ninguém.
+            if (flow?.Code is not { } expected || _saved is not { Enabled: true, Secret: { } saved }
                 || _now() - flow.Created >= (long)PairingProtocol.Lifetime.TotalMilliseconds)
                 return PairingAnswer.Gone;
             // Um 2.º Enter enquanto o 1.º ainda está na porta do Windows ou na rede não volta a entregar a conta.
@@ -1657,13 +1682,18 @@ public sealed class SyncAgent
         return await ApproveAsync(flow, secret, cancellationToken).ConfigureAwait(false) ? PairingAnswer.Approved : PairingAnswer.Gone;
     }
 
+    private const string NotDeliveredText = "Não foi possível entregar a conta ao computador novo. Tente outra vez.";
+
     // A entrega (passo 5). Privada: nenhuma rota nem interface entrega a conta sem o código escrito. Devolve false (sem
     // entregar nada) se o computador novo desistiu entretanto: o pedido sai e conta como os outros que acabam mal.
     private async Task<bool> ApproveAsync(HostFlow flow, string secret, CancellationToken cancellationToken)
     {
         var session = flow.Session;
-        using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
-        try { await flow.Host.ApproveAsync(account, DeviceName, cancellationToken).ConfigureAwait(false); }
+        try
+        {
+            using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
+            await flow.Host.ApproveAsync(account, DeviceName, cancellationToken).ConfigureAwait(false);
+        }
         catch (PairingException e) when (e.Failure == PairingFailure.Refused)
         {
             lock (_gate)
@@ -1681,6 +1711,14 @@ public sealed class SyncAgent
         {
             lock (_gate) flow.Approving = false;
             throw new SyncUserException(e is PairingException ? e.Message : Message(e));
+        }
+        catch (Exception e)
+        {
+            // Uma falha que ninguém esperava também devolve o pedido: senão ficava «ocupado» (e «Não fui eu» sem
+            // efeito) até expirar. Nunca a mensagem crua.
+            lock (_gate) flow.Approving = false;
+            Log?.Invoke($"A entrega da conta falhou de forma inesperada ({e.GetType().Name}).");
+            throw new SyncUserException(NotDeliveredText);
         }
         lock (_gate)
         {
@@ -1701,24 +1739,38 @@ public sealed class SyncAgent
         return true;
     }
 
-    public async Task RefuseAsync(string session, CancellationToken cancellationToken = default)
+    // «Não fui eu» (ou «Recusar» nas Definições). Devolve se recusou: false quando o pedido já não existe ou quando uma
+    // aprovação dele já vai a meio (BeginRefuse).
+    public async Task<bool> RefuseAsync(string session, CancellationToken cancellationToken = default)
+    {
+        if (BeginRefuse(session) is not { } write) return false;
+        await write(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    // A parte imediata de «Não fui eu» (sem rede): tira o pedido e conta-o. Devolve a escrita da recusa por fazer (o
+    // computador novo fica a saber), ou null se nada foi recusado — quem mostra «Recusado» só o diz neste caso.
+    public Func<CancellationToken, Task>? BeginRefuse(string session)
     {
         HostFlow? flow;
         lock (_gate)
         {
             // Uma aprovação já passou o código (porta do Windows ou entrega): «Não fui eu» noutra janela não escreve
             // o x-host por cima de uma entrega nem conta um pedido aprovado. Quem desiste fá-lo na porta do Windows.
-            if (_hosts.TryGetValue(session, out var approving) && approving.Approving) return;
+            if (_hosts.TryGetValue(session, out var approving) && approving.Approving) return null;
             _hosts.Remove(session, out flow);
         }
-        if (flow is null) return;
+        if (flow is null) return null;
         flow.Cancel.Cancel();
         // «Não fui eu» (ou «Recusar» nas Definições): conta para os pedidos em série.
         NoteBadPairing(flow);
-        try { await flow.Host.RefuseAsync(cancellationToken).ConfigureAwait(false); }
-        catch (Exception e) when (IsTransient(e)) { }
-        flow.Host.Dispose();
-        Notify();
+        return async cancellationToken =>
+        {
+            try { await flow.Host.RefuseAsync(cancellationToken).ConfigureAwait(false); }
+            catch (Exception e) when (IsTransient(e) || e is OperationCanceledException) { }
+            flow.Host.Dispose();
+            Notify();
+        };
     }
 
     // ---- aparelhos, remover, apagar, sair ---------------------------------------------------------------------------
