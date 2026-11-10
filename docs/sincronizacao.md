@@ -931,3 +931,12 @@ Acrescentados na 0.2.15 («Um login e pronto»):
 - `DeviceNameTests` (o nome do computador, sempre cifrado), `SyncAccountChoiceTests` (pagamentos e documentos como
   escolha da conta, a herança e a oferta), `SyncExitTests` (sair, retirar o acesso, perdi um computador, começar do zero)
   e `SyncSettingsSectionTests` (Definições › Sincronização mais curta).
+- Revisão final da 0.2.15 (o agente): `SyncAgentThreadingTests` (o estado lido e gravado de outra thread a meio de uma
+  ronda: o estado guardado é sempre uma cópia, nunca o estado vivo do motor; um assinante de `Changed` que lança não
+  estraga a operação), `PairingTransportFailureTests` (uma falha passageira do transporte em cada espera e em cada
+  escrita do emparelhamento não acaba com o pedido; ficheiros selados e segredos que não conferem),
+  `PairingFlowStateTests` (a entrega que falha, ligar outra vez com um pedido vivo, a pausa que para os pedidos, «Não
+  fui eu» que diz se recusou, a primeira ronda falhada depois da aprovação) e `SecretFileTests` (apagar a chave e os
+  tokens com o ficheiro preso por outro processo). Em `PairingNumberMatchingTests`: o pedido cancelado no computador
+  novo que sai da barra sozinho e o teto de 3 pedidos acompanhados (`ManyRequests_OnlyKAreAnswered`). Os testes com
+  vários agentes partilham o `SyncTestCloud` (transporte em memória com sinais; esperas sem orçamento de tempo).
