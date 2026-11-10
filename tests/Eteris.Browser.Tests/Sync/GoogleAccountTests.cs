@@ -274,8 +274,42 @@ public class GoogleAccountTests
         Assert.Equal(new[] { "", "Conta Google ligada", "Sincronização desligada" }, pending);
 
         var (signIn, signInName) = OnSta(() => Row(MainWindow.MenuAccountRow.SignIn, null));
-        Assert.Equal("Entrar com o Google…", signIn[1]);
-        Assert.Equal("Entrar com o Google. Abre a sincronização nas Definições", signInName);
+        Assert.Equal(new[] { "", "Entrar com o Google…", "Sincronize favoritos e palavras-passe, cifrados ponta a ponta" }, signIn);
+        Assert.Equal("Entrar com o Google. Abre o seu navegador para escolher a conta Google", signInName);
+        // A mesma frase como dica; a linha da conta (sem pausa) não a tem.
+        Assert.Equal("Abre o seu navegador para escolher a conta Google", OnSta(() => RowTip(MainWindow.MenuAccountRow.SignIn, null)));
+        Assert.Null(OnSta(() => RowTip(MainWindow.MenuAccountRow.Account, new GoogleAccount("ana Teste", "ana.teste@example.com"))));
+    }
+
+    // A linha entra direto: sem sessão começa o início de sessão; em pausa (a Google pediu para entrar outra vez)
+    // entra com o e-mail guardado; só a linha da conta em ordem abre as Definições. No modo da pasta de teste o
+    // «entrar» é ligar a pasta (como a rota das Definições).
+    [Theory]
+    [InlineData("SignIn", false, false, "SignIn")]
+    [InlineData("SignIn", false, true, "SignIn")]
+    [InlineData("Account", false, true, "SignInAgain")]
+    [InlineData("Account", false, false, "OpenSettings")]
+    [InlineData("SignIn", true, false, "StartTestFolder")]
+    [InlineData("SignIn", true, true, "StartTestFolder")]
+    [InlineData("Account", true, true, "OpenSettings")]
+    [InlineData("Account", true, false, "OpenSettings")]
+    [InlineData("None", false, false, "OpenSettings")]
+    [InlineData("None", false, true, "OpenSettings")]
+    [InlineData("None", true, false, "OpenSettings")]
+    [InlineData("None", true, true, "OpenSettings")]
+    public void MenuRow_Action_SignsInDirectly_AndOnlyTheAccountRowOpensSettings(string kind, bool folderMode, bool needsSignIn, string expected)
+        => Assert.Equal(expected, MainWindow.BrowserMenuAccountAction(Enum.Parse<MainWindow.MenuAccountRow>(kind), folderMode, needsSignIn).ToString());
+
+    [Fact]
+    public void Menu_SignInRow_CallsBeginSignIn_NotTheSettingsPage()
+    {
+        var menu = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.BrowserMenu.cs"));
+        Assert.Contains("GoogleSync.BeginSignIn();", menu);
+        Assert.Contains("GoogleSync.BeginSignIn(GoogleSync.ReentryHint());", menu);
+        Assert.Contains("RunBrowserMenuAction(popup, () => RunBrowserMenuAccount(kind))", menu);
+        Assert.DoesNotContain("RunBrowserMenuAction(popup, () => OpenInternal(SettingsPage.Url + \"#sincronizacao\"))", menu);
+        // A pausa e o e-mail só se leem no clique, nunca ao construir a linha.
+        Assert.DoesNotContain("ReentryHint", menu[..menu.IndexOf("private Button? BuildBrowserMenuAccount", StringComparison.Ordinal)]);
     }
 
     [Fact]
@@ -454,6 +488,9 @@ public class GoogleAccountTests
         var button = MainWindow.BrowserMenuAccountButton(kind, account, new Style(typeof(Button)));
         return (Texts((DependencyObject)button.Content).Select(t => t.Text).ToArray(), AutomationProperties.GetName(button));
     }
+
+    private static string? RowTip(MainWindow.MenuAccountRow kind, GoogleAccount? account)
+        => MainWindow.BrowserMenuAccountButton(kind, account, new Style(typeof(Button))).ToolTip as string;
 
     private static IEnumerable<TextBlock> Texts(DependencyObject root)
     {

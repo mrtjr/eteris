@@ -468,7 +468,8 @@ public partial class MainWindow
         var kind = BrowserMenuAccountRow(IsPrivate, available, available && SyncService.Connected);
         if (kind == MenuAccountRow.None) return null;
         var button = BrowserMenuAccountButton(kind, kind == MenuAccountRow.Account ? GoogleSync.Account : null, rowStyle);
-        button.Click += (_, _) => RunBrowserMenuAction(popup, () => OpenInternal(SettingsPage.Url + "#sincronizacao"));
+        // A ação decide-se no clique (o estado pode mudar com o menu aberto); abrir o menu não inicia nada.
+        button.Click += (_, _) => RunBrowserMenuAction(popup, () => RunBrowserMenuAccount(kind));
         if (kind != MenuAccountRow.Account) return button;
         // A linha atualiza-se se o menu ainda estiver aberto: a conta chegou, a sincronização acabou uma ronda, ou um
         // aparelho novo pediu para entrar.
@@ -490,6 +491,31 @@ public partial class MainWindow
         return button;
     }
 
+    // O que o clique na linha faz. Sem sessão entra logo (o navegador do sistema); com a sincronização em pausa por a
+    // Google ter pedido para entrar outra vez, entra com a conta guardada como pista; com a sessão em ordem abre as
+    // Definições. No modo da pasta de teste não há Google: «entrar» é ligar a pasta, como na rota das Definições.
+    internal enum MenuAccountAction { OpenSettings, SignIn, SignInAgain, StartTestFolder }
+
+    internal static MenuAccountAction BrowserMenuAccountAction(MenuAccountRow kind, bool folderMode, bool needsSignIn)
+        => kind switch
+        {
+            MenuAccountRow.SignIn => folderMode ? MenuAccountAction.StartTestFolder : MenuAccountAction.SignIn,
+            MenuAccountRow.Account when needsSignIn && !folderMode => MenuAccountAction.SignInAgain,
+            _ => MenuAccountAction.OpenSettings,
+        };
+
+    private void RunBrowserMenuAccount(MenuAccountRow kind)
+    {
+        switch (BrowserMenuAccountAction(kind, SyncService.FolderMode, SyncService.Status?.NeedsSignIn == true))
+        {
+            case MenuAccountAction.SignIn: GoogleSync.BeginSignIn(); break;
+            // O e-mail lê-se antes de BeginSignIn (que esquece a conta antiga) e vai só em memória.
+            case MenuAccountAction.SignInAgain: GoogleSync.BeginSignIn(GoogleSync.ReentryHint()); break;
+            case MenuAccountAction.StartTestFolder: SyncService.Start(); break;
+            default: OpenInternal(SettingsPage.Url + "#sincronizacao"); break;
+        }
+    }
+
     internal static Button BrowserMenuAccountButton(MenuAccountRow kind, GoogleAccount? account, Style rowStyle)
     {
         // Item de menu como as outras linhas (para o leitor de ecrã e para a numeração «1 de N»).
@@ -504,16 +530,17 @@ public partial class MainWindow
     {
         var signedIn = kind == MenuAccountRow.Account;
         var known = signedIn && account is { IsEmpty: false };
-        // Sem sessão, a linha abre a secção Sincronização das Definições (onde o início de sessão mostra o estado e, sem
-        // outro navegador, o endereço para copiar): as reticências dizem que há mais um passo.
+        // Sem sessão, a linha abre o navegador do sistema para escolher a conta (BrowserMenuAccountAction): as
+        // reticências dizem que há mais um passo, no navegador. Em pausa a ação é a mesma (a conta vai como pista).
         var folder = SyncService.FolderMode;
+        var paused = signedIn && !folder && SyncService.Status?.NeedsSignIn == true;
         var title = !signedIn ? (folder ? "Ligar à pasta de teste…" : "Entrar com o Google…")
             : folder ? "Pasta de teste"
             : known ? (string.IsNullOrWhiteSpace(account!.Name) ? account.Email! : account.Name!) : "Conta Google ligada";
         var detail = !folder && known && !string.IsNullOrWhiteSpace(account!.Name) && !string.IsNullOrWhiteSpace(account.Email) ? account.Email : null;
         // Com sessão, o estado da sincronização («Sincronizado há 2 min», «A sincronizar…», um pedido de um aparelho
         // novo com o código); sem ela, o convite.
-        var state = signedIn ? SyncService.Summary(SyncService.Status, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : "Sincronização cifrada de ponta a ponta";
+        var state = signedIn ? SyncService.Summary(SyncService.Status, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : "Sincronize favoritos e palavras-passe, cifrados ponta a ponta";
 
         var avatar = new Border
         {
@@ -562,9 +589,13 @@ public partial class MainWindow
         row.Children.Add(avatar);
         row.Children.Add(lines);
         button.Content = row;
+        const string OpensBrowser = "Abre o seu navegador para escolher a conta Google";
         AutomationProperties.SetName(button, signedIn
-            ? $"{(folder ? "Pasta de teste" : $"Conta Google: {(known ? account!.Label : "ligada")}")}. {state}. Abre a sincronização nas Definições"
-            : $"{(folder ? "Ligar à pasta de teste" : "Entrar com o Google")}. Abre a sincronização nas Definições");
+            ? $"{(folder ? "Pasta de teste" : $"Conta Google: {(known ? account!.Label : "ligada")}")}. {state}. {(paused ? OpensBrowser : "Abre a sincronização nas Definições")}"
+            : folder ? "Ligar à pasta de teste"
+            : $"Entrar com o Google. {OpensBrowser}");
+        // A dica só na linha que abre o navegador (sem sessão); em pausa, o nome acessível diz o mesmo.
+        button.ToolTip = !signedIn && !folder ? OpensBrowser : null;
     }
 
     internal static Border BrowserMenuHeading(bool isPrivate)
