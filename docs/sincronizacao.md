@@ -468,6 +468,17 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
   fiquem lá, a Google não lê «PC da Ana»). As chaves públicas têm de ser P-256 (outra curva é recusada logo).
 - A sessão expira em 10 minutos e os ficheiros são apagados no fim. O transporte é o mesmo da sincronização (os dois
   aparelhos com a mesma conta Google, ou a mesma pasta).
+- **Falhas passageiras do transporte** (a rede cai um instante, o Drive responde tarde, a pasta não se lê): quem espera
+  tenta outra vez no intervalo seguinte, até ao prazo de sempre, e as escritas dos passos repetem a mesma mensagem até
+  3 vezes (`PairingProtocol.IsTransportFailure`). Só as mensagens que não conferem acabam com o pedido — e contam para
+  os pedidos em série.
+- **Um pedido pronto continua a ser acompanhado** enquanto espera pelo código: o aparelho ligado lê a recusa do outro
+  lado de 2 em 2 s, até o pedido ser aprovado, recusado ou expirar. Se o aparelho novo desistir (ou pedir outra vez), o
+  pedido velho sai da barra sozinho; e a entrega confere a recusa antes de escrever o passo 5.
+- **No máximo 3 pedidos acompanhados de cada vez** (`PairingRequests.MaxAnswered`): os outros ficam só contados e são
+  respondidos numa procura seguinte, quando houver vaga. Cada pedido acompanhado é uma tentativa em 1 000 000 de
+  acertar no código que o aparelho novo verdadeiro mostra; uma vaga só se liberta com um pedido que acaba, e um pedido
+  falso só acaba mal (pedidos em série).
 
 ### Transportes
 

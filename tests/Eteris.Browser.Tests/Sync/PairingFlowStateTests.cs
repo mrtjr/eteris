@@ -154,7 +154,8 @@ public sealed class PairingFlowStateTests : IDisposable
         await Task.Delay(50);
         var reads = casa.Transport.Reads;
         await Task.Delay(100);
-        Assert.Equal(reads, casa.Transport.Reads);
+        // Quando muito, a leitura que já ia a meio em cada pedido (quem continuasse a sondar somava dezenas).
+        Assert.InRange(casa.Transport.Reads, reads, reads + 2);
         Assert.False(_cloud.Has(SyncPaths.Pairing(forged) + PairingProtocol.Refused));
         Assert.Equal(0, casa.Store.Load()!.BadPairings?.Length ?? 0);
     }
@@ -188,7 +189,7 @@ public sealed class PairingFlowStateTests : IDisposable
         await Task.Delay(50);
         var reads = novo.Transport.Reads;
         await Task.Delay(100);
-        Assert.Equal(reads, novo.Transport.Reads);
+        Assert.InRange(novo.Transport.Reads, reads, reads + 2);
     }
 
     // ---- A-06 (4): «Não fui eu» diz se recusou -----------------------------------------------------------------------

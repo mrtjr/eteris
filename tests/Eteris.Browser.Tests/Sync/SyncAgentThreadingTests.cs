@@ -200,12 +200,13 @@ public sealed class SyncAgentThreadingTests : IDisposable
         reader.Start();
         try
         {
-            // As rondas: em cada uma há registos novos (caixa de saída, lotes) e um aparelho novo por fixar.
-            for (var round = 0; round < 60 && failure is null; round++)
+            // As rondas: em cada uma há registos novos (caixa de saída, lotes) e, nas primeiras 60, um aparelho novo por
+            // fixar. Continuam até o leitor ter lido bastante ao mesmo tempo (numa máquina lenta ou carregada, mais rondas).
+            for (var round = 0; (round < 60 || Interlocked.Read(ref reads) < 300) && round < 600 && failure is null; round++)
             {
                 _now += 1000;
                 for (var i = 0; i < 10; i++) casa.Profile.Bookmark($"https://exemplo.example/{round}/{i}", "Página");
-                await AddPeerAsync(casa, "Par " + round);
+                if (round < 60) await AddPeerAsync(casa, "Par " + round);
                 Assert.True(await casa.Agent.RunAsync());
                 await casa.Agent.RefreshDevicesAsync();
             }
@@ -216,7 +217,7 @@ public sealed class SyncAgentThreadingTests : IDisposable
             Assert.True(reader.Join(TimeSpan.FromMinutes(2)), "o leitor não parou");
         }
         Assert.Null(failure);
-        Assert.True(Interlocked.Read(ref reads) > 200, "só " + reads + " leituras");
+        Assert.True(Interlocked.Read(ref reads) >= 300, "só " + reads + " leituras");
         Assert.Null(casa.Agent.Status.Error);
     }
 
