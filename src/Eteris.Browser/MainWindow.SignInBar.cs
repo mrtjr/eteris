@@ -39,6 +39,11 @@ public partial class MainWindow
         // SyncService.Changed e responder numa janela fecha-o em todas.
         RegisterBar(WindowBar.SessionExpired, () => SyncService.SignInPrompt,
             on => ShowInSignInBar(on ? SignInBarModel.Expired(true, IsPrivate) : null));
+        // O lembrete do kit de recuperação (T5): a prioridade mais baixa; partilhado por todas as janelas normais
+        // (SyncService), responder numa fecha-o em todas. As rondas levantam SyncService.Changed: sem temporizador.
+        RegisterBar(Sync.WindowBar.KitReminder,
+            () => SyncService.KitBar(IsPrivate) is not null,
+            on => ShowInSignInBar(on ? Sync.SignInBarModel.KitReminder(SyncService.KitBar(IsPrivate)) : null));
         // Os eventos chegam de qualquer thread; um só manipulador para os três.
         void changed() => Dispatcher.BeginInvoke(RefreshBars);
         GoogleSync.SignInChanged += changed;
@@ -198,6 +203,17 @@ public partial class MainWindow
                 break;
             case SignInBarAction.NotNow:
                 SyncService.DismissSignInPrompt();
+                break;
+            case SignInBarAction.SaveKit:
+                // Não mostra o kit: quem o mostra é a secção das Definições, depois da confirmação do Windows.
+                SyncService.KitBarAnswered();
+                OpenInternal(SettingsPage.Url + "#syncKitItem");
+                break;
+            case SignInBarAction.KitLater:
+                SyncService.SnoozeKit();
+                break;
+            case SignInBarAction.KitDecline:
+                SyncService.DeclineKit();
                 break;
         }
         RefreshBars();

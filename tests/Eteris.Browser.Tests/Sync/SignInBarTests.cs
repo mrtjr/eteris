@@ -193,6 +193,44 @@ public class SignInBarTests
             Assert.DoesNotContain("SyncService.NeedsSignIn +=", File.ReadAllText(file));
     }
 
+    // O lembrete do kit (T5): uma candidata do árbitro único da T4, prioridade 5, sem controlo novo.
+    [Fact]
+    public void KitReminder_IsACandidateOfTheSingleArbiter()
+    {
+        var glue = Source("MainWindow.SignInBar.cs");
+        var register = glue.IndexOf("RegisterBar(Sync.WindowBar.KitReminder", StringComparison.Ordinal);
+        if (register < 0) register = glue.IndexOf("RegisterBar(WindowBar.KitReminder", StringComparison.Ordinal);
+        Assert.True(register >= 0, "a candidata KitReminder não está registada");
+        var statement = glue[register..glue.IndexOf(';', register)];
+        Assert.Contains("SyncService.KitBar(IsPrivate)", statement);
+        Assert.Contains("SignInBarModel.KitReminder(", statement);
+        Assert.Contains("ShowInSignInBar(", statement);
+        var wire = Body(glue, "private void WireSignInBar()");
+        var at = wire.IndexOf("WindowBar.KitReminder", StringComparison.Ordinal);
+        Assert.True(wire.IndexOf("if (IsPrivate) return;", StringComparison.Ordinal) < at);
+        Assert.True(at < wire.LastIndexOf("RefreshBars();", StringComparison.Ordinal));
+        var actions = Body(glue, "private void OnSignInBarAction(");
+        Assert.Contains("SyncService.SnoozeKit()", actions);
+        Assert.Contains("SyncService.DeclineKit()", actions);
+        Assert.Contains("SyncService.KitBarAnswered()", actions);
+        Assert.Contains("#syncKitItem", actions);
+        Assert.DoesNotContain("Choose(", Source("Sync", "SignInBarModel.cs"));
+        var window = Source("MainWindow.xaml.cs");
+        Assert.DoesNotContain("KitReminder", window);
+        Assert.DoesNotContain("KitBar", window);
+    }
+
+    // Responder «a barra do kit deve estar à vista?» nunca cria o agente nem lê o disco.
+    [Fact]
+    public void SyncService_KitBar_DoesNotCreateTheAgent()
+    {
+        var bar = Body(Source("Sync", "SyncService.cs"), "public static KitReminderView? KitBar(");
+        Assert.DoesNotContain("Agent()", bar);
+        Assert.DoesNotContain("Enabled", bar);
+        Assert.Contains("_agent", bar);
+        Assert.Contains("RecoveryReminder.Decide(", bar);
+    }
+
     // A corrida: o estado observa-se antes de as janelas serem avisadas, senão a barra podia nunca aparecer.
     [Fact]
     public void SyncService_ObservesBeforeNotifying()

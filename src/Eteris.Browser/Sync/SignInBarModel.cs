@@ -4,9 +4,9 @@ namespace Eteris.Browser.Sync;
 
 // A barra do início de sessão na janela (0.2.15): o que diz e que botões tem, a partir do estado do início de sessão
 // (SignInTracker) e do da sincronização. Decisão pura, sem WPF (testada em SignInBarModelTests).
-internal enum SignInBarKind { Waiting, NoBrowser, TimedOut, Refused, DriveDenied, NoNetwork, OtherAccount, Syncing, Synced, NeedsApproval, Expired }
+internal enum SignInBarKind { Waiting, NoBrowser, TimedOut, Refused, DriveDenied, NoNetwork, OtherAccount, Syncing, Synced, NeedsApproval, Expired, KitReminder }
 
-internal enum SignInBarAction { Cancel, CopyAddress, Retry, OpenSettings, ShowCode, Close, SignInAgain, NotNow }
+internal enum SignInBarAction { Cancel, CopyAddress, Retry, OpenSettings, ShowCode, Close, SignInAgain, NotNow, SaveKit, KitLater, KitDecline }
 
 internal sealed record SignInBarButton(string Label, SignInBarAction Action, bool Primary = false);
 
@@ -74,6 +74,23 @@ internal static class SignInBarModel
         [new("Entrar", SignInBarAction.SignInAgain, Primary: true), new("Agora não", SignInBarAction.NotNow)], null);
 
     internal static SignInBarView? Expired(bool expired, bool isPrivate) => isPrivate || !expired ? null : ExpiredView;
+
+    // O lembrete do kit de recuperação (T5): sempre os três botões, por esta ordem; fica até ser respondido. As mesmas
+    // instâncias a cada pedido (o controlo não refaz os botões nem repete o anúncio).
+    private static readonly SignInBarButton[] KitButtons =
+    [
+        new(RecoveryReminder.Save, SignInBarAction.SaveKit, Primary: true),
+        new(RecoveryReminder.Later, SignInBarAction.KitLater),
+        new(RecoveryReminder.Decline, SignInBarAction.KitDecline),
+    ];
+
+    private static readonly SignInBarView KitView = new(SignInBarKind.KitReminder,
+        RecoveryReminder.Title + " " + RecoveryReminder.Body, RecoveryReminder.Title, KitButtons, null);
+
+    private static readonly SignInBarView KitStaleView = new(SignInBarKind.KitReminder, RecoveryReminder.StaleText, null, KitButtons, null);
+
+    internal static SignInBarView? KitReminder(KitReminderView? view)
+        => view is not { Bar: true } ? null : view.Stale ? KitStaleView : KitView;
 
     private static SignInBarView Failure(SignInBarKind kind, string text) => new(kind, text, null, [Retry], ErrorHold);
 

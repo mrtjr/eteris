@@ -495,6 +495,50 @@ public class SignInBarModelTests
         Assert.Equal([(WindowBar.SignIn, false), (WindowBar.SessionExpired, false)], log);
     }
 
+    // ---- lembrete do kit de recuperação (T5) -----------------------------------------------------------------------
+
+    [Fact]
+    public void KitReminder_View_AlwaysHasTheThreeButtons()
+    {
+        string[] labels = [RecoveryReminder.Save, RecoveryReminder.Later, RecoveryReminder.Decline];
+        SignInBarAction[] actions = [SignInBarAction.SaveKit, SignInBarAction.KitLater, SignInBarAction.KitDecline];
+
+        var view = SignInBarModel.KitReminder(new KitReminderView(true, true, false))!;
+        Assert.Equal(SignInBarKind.KitReminder, view.Kind);
+        Assert.Equal(RecoveryReminder.Title + " " + RecoveryReminder.Body, view.Text);
+        Assert.Equal(RecoveryReminder.Title, view.Bold);
+        Assert.Equal(labels, view.Buttons.Select(b => b.Label));
+        Assert.Equal(actions, view.Buttons.Select(b => b.Action));
+        Assert.Equal([true, false, false], view.Buttons.Select(b => b.Primary));
+        Assert.Null(view.HideAfter);
+
+        var stale = SignInBarModel.KitReminder(new KitReminderView(true, true, true))!;
+        Assert.Equal(SignInBarKind.KitReminder, stale.Kind);
+        Assert.Equal(RecoveryReminder.StaleText, stale.Text);
+        Assert.Null(stale.Bold);
+        Assert.Equal(labels, stale.Buttons.Select(b => b.Label));
+        Assert.Equal(actions, stale.Buttons.Select(b => b.Action));
+        Assert.Null(stale.HideAfter);
+
+        Assert.Null(SignInBarModel.KitReminder(null));
+        Assert.Null(SignInBarModel.KitReminder(new KitReminderView(true, false, false)));
+    }
+
+    [Fact]
+    public void KitReminder_IsTheLowestPriorityCandidate()
+    {
+        foreach (var other in new[] { WindowBar.PairingRequest, WindowBar.AccountReplaced, WindowBar.SignIn, WindowBar.SessionExpired })
+        {
+            var (set, log, _) = NewSet((WindowBar.KitReminder, true), (other, true));
+            Assert.Equal(other, set.Refresh());
+            Assert.Contains((WindowBar.KitReminder, false), log);
+            Assert.DoesNotContain((WindowBar.KitReminder, true), log);
+        }
+        var (alone, aloneLog, _) = NewSet((WindowBar.KitReminder, true), (WindowBar.SignIn, false));
+        Assert.Equal(WindowBar.KitReminder, alone.Refresh());
+        Assert.Contains((WindowBar.KitReminder, true), aloneLog);
+    }
+
     // Duas vistas iguais (os botões comparam-se elemento a elemento).
     private sealed class ViewComparer : IEqualityComparer<SignInBarView?>
     {

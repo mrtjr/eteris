@@ -474,6 +474,49 @@ internal static class SyncService
         agent.RequestPairing();
     }
 
+    // ---- lembrete do kit de recuperação (0.2.15, T5) ----------------------------------------------------------------
+
+    // Quando este processo começou a usar a sincronização: um segredo que já cá estava antes é «a abertura seguinte».
+    private static readonly long SessionStartMs = Now();
+    // A barra do lembrete já foi respondida nesta abertura (qualquer dos três botões). Sob Gate; só memória.
+    private static bool _kitAnswered;
+
+    // A barra do lembrete do kit, ou null. Barata (contrato das candidatas da T4): lê só o agente que já existe (o
+    // campo), nunca o cria, e não faz E/S. Vale também na pasta de teste.
+    public static KitReminderView? KitBar(bool isPrivate)
+    {
+        SyncAgent? agent;
+        lock (Gate)
+        {
+            agent = _agent;
+            if (agent is null || _kitAnswered || isPrivate) return null;
+        }
+        var status = agent.Status;
+        var view = RecoveryReminder.Decide(new KitReminderInput(status.Kit, status.Phase == SyncPhase.On, isPrivate, SessionStartMs, false), Now());
+        return view.Bar ? view : null;
+    }
+
+    // Respondida (qualquer botão): não volta nesta abertura; todas as janelas a escondem.
+    public static void KitBarAnswered()
+    {
+        lock (Gate) _kitAnswered = true;
+        Changed?.Invoke();
+    }
+
+    // «Mais tarde»: 30 dias (RecoveryReminder.SnoozeDays).
+    public static void SnoozeKit()
+    {
+        _agent?.SnoozeKit(RecoveryReminder.SnoozeUntil(Now()));
+        KitBarAnswered();
+    }
+
+    // «Não quero: aceito que…»: acaba com o lembrete (barra e menu), também depois de reiniciar.
+    public static void DeclineKit()
+    {
+        _agent?.DeclineKit();
+        KitBarAnswered();
+    }
+
     private static (string Area, string Text)? _message;
 
     // A mensagem da última ação que falhou (código errado, pedido expirado…), com a parte da página onde aparece.
@@ -554,7 +597,7 @@ internal static class SyncService
             // Este computador mostra o código; o outro escreve-o (PROPOSTA P1).
             SyncPhase.Pairing => status.Pairing?.Code is { } code ? $"Escreva o código {code} no outro computador" : "À espera da aprovação noutro computador",
             SyncPhase.Starting => "A ligar…",
-            _ when status.Kit is { State: not KitState.Saved, Declined: false } => "Guarde o kit de recuperação",
+            _ when RecoveryReminder.MenuLine(status.Kit) => RecoveryReminder.MenuText,
             _ when status.Running => "A sincronizar…",
             _ when status.Error is not null => "Por sincronizar: o Éteris tenta outra vez sozinho",
             _ when status.NeedsUpdate => "Atualize o Éteris para sincronizar tudo",
