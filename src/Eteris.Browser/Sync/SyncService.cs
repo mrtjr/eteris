@@ -373,7 +373,10 @@ internal static class SyncService
         OpenKit.Close();
         // Quem sai não fica com a barra de «sessão expirada» à vista.
         DismissSignInPrompt();
-        Agent()?.SignOut(forgetKey);
+        // A chave que não se conseguiu apagar do disco (caso raro: SecretFile): a sincronização parou na mesma, o resto
+        // de «Sair» segue (os tokens da Google saem) e a mensagem fica para a página (área «signout»).
+        try { Agent()?.SignOut(forgetKey); }
+        catch (SyncUserException e) { Say("signout", e.Message); }
         lock (Gate) Schedule.Stop();
         Arm();
     }
@@ -903,8 +906,11 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
     {
         try
         {
-            if (!File.Exists(path)) return null;
-            return Json.Parse<SavedSync>(protector.Unprotect(File.ReadAllBytes(path)));
+            // Um «apagar» que ficou por fazer (o ficheiro estava preso por outro processo): acaba agora; enquanto não
+            // acabar, não há estado — a chave que a pessoa mandou apagar nunca volta a ser lida (SecretFile).
+            if (!SecretFile.MayRead(path) || !File.Exists(path)) return null;
+            var bytes = File.ReadAllBytes(path);
+            return bytes.Length == 0 ? null : Json.Parse<SavedSync>(protector.Unprotect(bytes));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or System.Security.Cryptography.CryptographicException)
         {
@@ -915,6 +921,7 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
     public void Save(SavedSync saved)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        SecretFile.BeforeWrite(path);
         var temp = path + ".tmp";
         // Até ao disco antes de trocar: «desligada, a apagar» tem de valer mesmo que o Éteris (ou o Windows) feche logo a
         // seguir.
@@ -924,11 +931,11 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
             stream.Flush(flushToDisk: true);
         }
         File.Move(temp, path, overwrite: true);
+        SecretFile.AfterWrite(path);
     }
 
-    public void Delete()
-    {
-        try { File.Delete(path); }
-        catch (IOException) { }
-    }
+    // «Sair» com «apagar a chave»: o ficheiro e o temporário saem. Se o Windows não deixar apagar agora (preso por outro
+    // processo, sem permissão), fica marcado para apagar e esvaziado no que der: a abertura seguinte não retoma com a
+    // chave que a pessoa mandou apagar. Só lança (IOException) se nem isso foi possível.
+    public void Delete() => SecretFile.Delete(path);
 }

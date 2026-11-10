@@ -536,8 +536,11 @@ public sealed class TokenStore(string path, ISecretProtector protector)
     {
         try
         {
-            if (!File.Exists(path)) return null;
-            return JsonSerializer.Deserialize<OAuthTokens>(protector.Unprotect(File.ReadAllBytes(path)));
+            // Um «Sair» que não conseguiu apagar o ficheiro (preso por outro processo) acaba agora: os tokens que a
+            // pessoa mandou apagar nunca voltam a ser lidos (Format.SecretFile).
+            if (!Format.SecretFile.MayRead(path) || !File.Exists(path)) return null;
+            var bytes = File.ReadAllBytes(path);
+            return bytes.Length == 0 ? null : JsonSerializer.Deserialize<OAuthTokens>(protector.Unprotect(bytes));
         }
         catch (Exception e) when (e is IOException or JsonException or CryptographicException or UnauthorizedAccessException) { return null; }
     }
@@ -545,15 +548,16 @@ public sealed class TokenStore(string path, ISecretProtector protector)
     public void Save(OAuthTokens tokens)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Format.SecretFile.BeforeWrite(path);
         var temp = path + ".tmp";
         File.WriteAllBytes(temp, protector.Protect(JsonSerializer.SerializeToUtf8Bytes(tokens)));
         File.Move(temp, path, overwrite: true);
+        Format.SecretFile.AfterWrite(path);
     }
 
-    public void Delete()
-    {
-        if (File.Exists(path)) File.Delete(path);
-    }
+    // O ficheiro e o temporário saem; se o Windows não deixar apagar agora, fica marcado para apagar (e esvaziado no que
+    // der). Só lança (IOException) se nem isso foi possível.
+    public void Delete() => Format.SecretFile.Delete(path);
 }
 
 // Sessão com a Google: devolve sempre um token de acesso válido, renovando-o quando expira.

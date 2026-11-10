@@ -2157,6 +2157,7 @@ public sealed class SyncAgent
     {
         GuestFlow? guest;
         List<HostFlow> hosts;
+        var keyLeft = false;
         lock (_gate)
         {
             guest = _guest;
@@ -2181,7 +2182,13 @@ public sealed class SyncAgent
             {
                 if (_saved is not null) _saved.Enabled = false; // uma ronda em curso com este objeto já não grava
                 _saved = null;
-                _store.Delete();
+                // O disco não deixou apagar o estado: «Sair» acaba na mesma (em baixo) e só depois o diz.
+                try { _store.Delete(); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    keyLeft = true;
+                    Log?.Invoke($"«Sair»: o estado guardado não se apagou ({e.GetType().Name}).");
+                }
             }
             else if (_saved is not null)
             {
@@ -2192,7 +2199,11 @@ public sealed class SyncAgent
         guest?.Cancel.Cancel();
         foreach (var host in hosts) host.Cancel.Cancel();
         Notify();
+        if (keyLeft) throw new SyncUserException(KeyNotDeletedText);
     }
+
+    private const string KeyNotDeletedText =
+        "A sincronização parou neste computador, mas não se conseguiu apagar a chave do disco: ao abrir o Éteris outra vez, a sincronização pode voltar a ligar-se. Feche os outros programas que estejam a usar a pasta do Éteris e saia outra vez.";
 
     // ---- kit de recuperação -----------------------------------------------------------------------------------------
 
