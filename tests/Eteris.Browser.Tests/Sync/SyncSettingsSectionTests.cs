@@ -351,6 +351,18 @@ public class SyncSettingsSectionTests
         Assert.True(At(script, "let deleteOpened = false;") < start);
     }
 
+    // #sincronizacao-mais não é o id de nenhum elemento: o realce da navegação lateral, ao carregar, trata-o como
+    // #syncMore (fica em «Sincronização»).
+    [Fact]
+    public void Navigation_PinsSync_ForTheMoreOptionsAnchor()
+    {
+        var page = Page();
+        var start = At(page, "addEventListener('scroll', () => markSection(true)");
+        var nav = page[start..At(page, "// ---------- Procurar nas definições ----------")];
+        Assert.Contains("location.hash === '#sincronizacao-mais' ? document.getElementById('syncMore')", nav, StringComparison.Ordinal);
+        Assert.Contains("if (target) pin(target.closest('section')?.id);", nav, StringComparison.Ordinal);
+    }
+
     // R11 (c): a pesquisa das Definições encontra o que está dentro de «Mais opções» (e abre-o).
     [Fact]
     public void Search_FindsWhatIsInsideMoreOptions()

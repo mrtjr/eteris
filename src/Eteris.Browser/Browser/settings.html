@@ -1896,7 +1896,9 @@
     if (section) pin(section.id); else byHand = true;
   });
   addEventListener('scroll', () => markSection(true), { passive: true });
-  const target = (location.hash && document.getElementById(location.hash.slice(1))) || (data.focus && document.getElementById(data.focus));
+  // #sincronizacao-mais é o «Mais opções» da Sincronização (não é o id de nenhum elemento).
+  const target = (location.hash === '#sincronizacao-mais' ? document.getElementById('syncMore') : null)
+    || (location.hash && document.getElementById(location.hash.slice(1))) || (data.focus && document.getElementById(data.focus));
   if (target) pin(target.closest('section')?.id);
   markSection();
 
