@@ -50,6 +50,10 @@ internal static class GoogleSync
 
     public static GoogleAccount? Account => SignedIn ? Accounts()?.Current : null;
 
+    // O e-mail da conta guardada, só quando há tokens no disco (reentrada); senão null. Ler ANTES de BeginSignIn: a entrada
+    // esquece a conta antiga.
+    internal static string? ReentryHint() => SignedIn ? Account?.Email : null;
+
     public static bool AccountPending => Accounts()?.Pending == true;
 
     // Uma ação do utilizador (abrir o menu, abrir a secção Sincronização) quer mostrar a conta: se há sessão e nenhuma
@@ -88,7 +92,9 @@ internal static class GoogleSync
         }
     }
 
-    public static void BeginSignIn()
+    // «loginHint»: o e-mail da conta guardada neste computador, só na reentrada (ver ReentryHint). Vai em memória, nunca
+    // por um endereço «eteris://».
+    public static void BeginSignIn(string? loginHint = null)
     {
         if (Config is not { } config) return;
         CancellationTokenSource cancel;
@@ -104,7 +110,7 @@ internal static class GoogleSync
             try
             {
                 var oauth = new GoogleOAuth(Http(), config, Now);
-                var tokens = await oauth.SignInAsync(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, cancel.Token);
+                var tokens = await oauth.SignInAsync(new SignInOptions(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, loginHint), cancel.Token);
                 Session()?.Use(tokens);
                 // Logo a seguir a entrar (ação do utilizador): com que conta (antes de ligar a sincronização, para ela
                 // saber se a sessão é da mesma conta Google de antes — com outra, fica em pausa sem apagar nada).

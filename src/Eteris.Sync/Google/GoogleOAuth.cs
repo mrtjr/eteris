@@ -180,13 +180,23 @@ public sealed class LoopbackReceiver : IDisposable
     public void Dispose() => _listener.Dispose();
 }
 
+// As opções de um início de sessão. As tarefas seguintes acrescentam-lhe propriedades «init».
+public sealed record SignInOptions(IExternalBrowser Browser, Action<string>? ShowUrl = null, string? LoginHint = null);
+
 // OAuth 2.0 para apps de computador (PKCE + loopback), com o navegador do sistema: a Google bloqueia o início de
 // sessão dentro de motores embutidos como a CEF («disallowed_useragent»), e o Éteris também não o quer lá dentro.
 public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<long> nowMs)
 {
     public static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(5);
 
-    public string BuildAuthorizationUrl(string redirectUri, string challenge, string state)
+    public const string PromptSelectAccount = "select_account";
+    public const string PromptConsent = "consent";
+
+    // «select_account» só pede a escolha da conta: quem já deu o acesso não volta a passar pelo ecrã de consentimento.
+    // «access_type=offline» pede o token de renovação (sincronizar sem pedir sessão a cada arranque). Se a Google não o
+    // devolver, SignInAsync repete uma vez com «consent» (que o força). O «login_hint» só vem de quem chama, na reentrada.
+    public string BuildAuthorizationUrl(string redirectUri, string challenge, string state,
+        string prompt = PromptSelectAccount, string? loginHint = null)
     {
         var query = new Dictionary<string, string>
         {
@@ -197,26 +207,51 @@ public sealed class GoogleOAuth(HttpClient http, OAuthClientConfig config, Func<
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256",
             ["state"] = state,
-            // Token de renovação (para sincronizar sem pedir sessão a cada arranque) e o ecrã sempre mostrado.
             ["access_type"] = "offline",
-            ["prompt"] = "consent",
+            ["prompt"] = prompt,
         };
+        if (CleanLoginHint(loginHint) is { } hint) query["login_hint"] = hint;
         return GoogleEndpoints.Authorize + "?" + string.Join('&', query.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
     }
 
-    // Fluxo completo. «showUrl» é chamado quando não há navegador do sistema utilizável (mostrar para copiar).
-    public async Task<OAuthTokens> SignInAsync(IExternalBrowser browser, Action<string>? showUrl, CancellationToken cancellationToken)
+    // Aparado, sem caracteres de controlo, com «@» e no máximo 254 caracteres; senão null (omite-se em silêncio).
+    public static string? CleanLoginHint(string? email)
     {
-        using var receiver = LoopbackReceiver.Start();
-        var (verifier, challenge) = Pkce.Create();
-        var state = Kdf.Base64Url(RandomNumberGenerator.GetBytes(16));
-        var url = BuildAuthorizationUrl(receiver.RedirectUri, challenge, state);
-        if (!browser.TryOpen(url)) showUrl?.Invoke(url);
+        var hint = email?.Trim();
+        if (string.IsNullOrEmpty(hint) || hint.Length > 254 || !hint.Contains('@') || hint.Any(char.IsControl)) return null;
+        return hint;
+    }
 
+    // Fluxo completo. «showUrl» é chamado quando não há navegador do sistema utilizável (mostrar para copiar).
+    public Task<OAuthTokens> SignInAsync(IExternalBrowser browser, Action<string>? showUrl, CancellationToken cancellationToken)
+        => SignInAsync(new SignInOptions(browser, showUrl), cancellationToken);
+
+    public async Task<OAuthTokens> SignInAsync(SignInOptions options, CancellationToken cancellationToken)
+    {
+        // Um só recetor e um só prazo para as duas voltas.
+        using var receiver = LoopbackReceiver.Start();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(SignInTimeout);
+        var hint = CleanLoginHint(options.LoginHint);
+        var tokens = await AuthorizeOnceAsync(receiver, options, PromptSelectAccount, hint, timeout.Token, cancellationToken).ConfigureAwait(false);
+        if (tokens.RefreshToken is not null) return tokens;
+        // Sem token de renovação a sessão morria ao fim de uma hora: repete-se uma vez, com «consent» e «state»/PKCE novos.
+        tokens = await AuthorizeOnceAsync(receiver, options, PromptConsent, hint, timeout.Token, cancellationToken).ConfigureAwait(false);
+        if (tokens.RefreshToken is null)
+            throw new OAuthException("A Google não deu ao Éteris a autorização para manter a sessão. Tente entrar outra vez.");
+        return tokens;
+    }
+
+    private async Task<OAuthTokens> AuthorizeOnceAsync(LoopbackReceiver receiver, SignInOptions options, string prompt, string? loginHint,
+        CancellationToken timeoutToken, CancellationToken cancellationToken)
+    {
+        var (verifier, challenge) = Pkce.Create();
+        var state = Kdf.Base64Url(RandomNumberGenerator.GetBytes(16));
+        var url = BuildAuthorizationUrl(receiver.RedirectUri, challenge, state, prompt, loginHint);
+        if (!options.Browser.TryOpen(url)) options.ShowUrl?.Invoke(url);
+
         AuthorizationResponse response;
-        try { response = await receiver.WaitAsync(state, timeout.Token).ConfigureAwait(false); }
+        try { response = await receiver.WaitAsync(state, timeoutToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new OAuthException("O início de sessão no navegador demorou demasiado. Tente de novo.");

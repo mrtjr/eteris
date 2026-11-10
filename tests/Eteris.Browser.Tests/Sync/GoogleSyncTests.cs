@@ -172,6 +172,128 @@ public class GoogleSyncTests
         Assert.DoesNotContain("client_secret", url.Query);
     }
 
+    private static Dictionary<string, string> QueryOf(string url) => LoopbackReceiver.ParseQuery(new Uri(url).Query.TrimStart('?'));
+
+    private GoogleOAuth NewOAuth(FakeGoogle google)
+        => new(GoogleEndpoints.CreateClient(google), new OAuthClientConfig(google.ClientId, null), Now);
+
+    [Fact]
+    public void AuthorizationUrl_AsksToChooseTheAccount_NotConsent()
+    {
+        var oauth = new GoogleOAuth(new HttpClient(), new OAuthClientConfig("1-x.apps.googleusercontent.com", null), Now);
+        var url = oauth.BuildAuthorizationUrl("http://127.0.0.1:51234/", "desafio", "estado");
+        var query = QueryOf(url);
+        Assert.Equal("select_account", query["prompt"]);
+        Assert.DoesNotContain("consent", new Uri(url).Query);
+        Assert.False(query.ContainsKey("login_hint"));
+    }
+
+    [Fact]
+    public void AuthorizationUrl_LoginHint_OnlyWhenGiven()
+    {
+        var oauth = new GoogleOAuth(new HttpClient(), new OAuthClientConfig("1-x.apps.googleusercontent.com", null), Now);
+        var url = oauth.BuildAuthorizationUrl("http://127.0.0.1:51234/", "desafio", "estado", loginHint: "ana.teste@example.com");
+        Assert.Equal("ana.teste@example.com", QueryOf(url)["login_hint"]);
+        Assert.True(GoogleEndpoints.IsAllowedBrowserUrl(new Uri(url)));
+        foreach (var bad in new[] { null, "", "   ", "sem-arroba", "ana@example.com\nX=1", new string('a', 300) + "@example.com" })
+        {
+            var plain = oauth.BuildAuthorizationUrl("http://127.0.0.1:51234/", "desafio", "estado", loginHint: bad);
+            Assert.False(QueryOf(plain).ContainsKey("login_hint"));
+            Assert.True(GoogleEndpoints.IsAllowedBrowserUrl(new Uri(plain)));
+        }
+    }
+
+    [Theory]
+    [InlineData(GoogleOAuth.PromptConsent)]
+    [InlineData(GoogleOAuth.PromptSelectAccount)]
+    public void AuthorizationUrl_KeepsPkceStateAndScope_WithAnyPrompt(string prompt)
+    {
+        var oauth = new GoogleOAuth(new HttpClient(), new OAuthClientConfig("1-x.apps.googleusercontent.com", null), Now);
+        var url = oauth.BuildAuthorizationUrl("http://127.0.0.1:51234/", "desafio", "estado", prompt);
+        var query = QueryOf(url);
+        Assert.Equal(prompt, query["prompt"]);
+        Assert.Equal("https://www.googleapis.com/auth/drive.appdata", query["scope"]);
+        Assert.Equal("S256", query["code_challenge_method"]);
+        Assert.Equal("desafio", query["code_challenge"]);
+        Assert.Equal("estado", query["state"]);
+        Assert.Equal("http://127.0.0.1:51234/", query["redirect_uri"]);
+        Assert.Equal("code", query["response_type"]);
+        Assert.Equal("offline", query["access_type"]);
+        Assert.DoesNotContain("client_secret", url);
+    }
+
+    [Fact]
+    public async Task SignIn_PassesTheHintToTheBrowser_OnlyOnReentry()
+    {
+        var google = new FakeGoogle();
+        var oauth = NewOAuth(google);
+        var withHint = new ConsentingBrowser(google);
+        await oauth.SignInAsync(new SignInOptions(withHint, null, "ana.teste@example.com"), CancellationToken.None);
+        await withHint.Done;
+        Assert.Equal("ana.teste@example.com", QueryOf(withHint.Opened[0])["login_hint"]);
+
+        var without = new ConsentingBrowser(google);
+        await oauth.SignInAsync(without, null, CancellationToken.None);
+        await without.Done;
+        Assert.False(QueryOf(without.Opened[0]).ContainsKey("login_hint"));
+    }
+
+    [Fact]
+    public async Task SignIn_WithoutARefreshToken_RepeatsOnceWithConsent()
+    {
+        var google = new FakeGoogle { OmitRefreshToken = 1 };
+        var browser = new ConsentingBrowser(google);
+        var tokens = await NewOAuth(google).SignInAsync(browser, null, CancellationToken.None);
+        await browser.Done;
+        Assert.Equal(2, browser.Opened.Count);
+        var first = QueryOf(browser.Opened[0]);
+        var second = QueryOf(browser.Opened[1]);
+        Assert.Equal("select_account", first["prompt"]);
+        Assert.Equal("consent", second["prompt"]);
+        Assert.NotEqual(first["state"], second["state"]);
+        Assert.NotEqual(first["code_challenge"], second["code_challenge"]);
+        Assert.Equal(first["redirect_uri"], second["redirect_uri"]);
+        Assert.Equal(google.RefreshToken, tokens.RefreshToken);
+        Assert.Equal(2, google.Exchanges);
+    }
+
+    [Fact]
+    public async Task SignIn_WithARefreshToken_DoesNotAskForConsent()
+    {
+        var google = new FakeGoogle();
+        var browser = new ConsentingBrowser(google);
+        await NewOAuth(google).SignInAsync(browser, null, CancellationToken.None);
+        await browser.Done;
+        Assert.Single(browser.Opened);
+        Assert.Equal(1, google.Exchanges);
+    }
+
+    [Fact]
+    public async Task SignIn_StillWithoutARefreshToken_FailsAndDoesNotLoop()
+    {
+        var google = new FakeGoogle { OmitRefreshToken = 5 };
+        var browser = new ConsentingBrowser(google);
+        var e = await Assert.ThrowsAsync<OAuthException>(() => NewOAuth(google).SignInAsync(browser, null, CancellationToken.None));
+        await browser.Done;
+        Assert.False(e.NeedsSignIn);
+        Assert.Equal("A Google não deu ao Éteris a autorização para manter a sessão. Tente entrar outra vez.", e.Message);
+        Assert.Equal(2, browser.Opened.Count);
+        Assert.Equal(2, google.Exchanges);
+    }
+
+    [Fact]
+    public void SignInHint_NeverTravelsInAnEterisAddress()
+    {
+        var root = FindRoot();
+        foreach (var file in new[] { Path.Combine("Browser", "EterisSchemeHandlerFactory.cs"), Path.Combine("Browser", "settings.html") })
+        {
+            var text = File.ReadAllText(Path.Combine(root, "src", "Eteris.Browser", file));
+            Assert.DoesNotContain("login_hint", text);
+            Assert.DoesNotContain("loginHint", text);
+        }
+        Assert.Contains("BeginSignIn(string? loginHint = null)", File.ReadAllText(Path.Combine(root, "src", "Eteris.Browser", "Sync", "GoogleSync.cs")));
+    }
+
     [Fact]
     public async Task SignIn_EndToEnd_ThroughTheLoopback()
     {
@@ -384,9 +506,11 @@ public class GoogleSyncTests
         public string Page { get; private set; } = string.Empty;
         public string Redirect { get; private set; } = string.Empty;
         public Task Done { get; private set; } = Task.CompletedTask;
+        public List<string> Opened { get; } = [];
 
         public bool TryOpen(string url)
         {
+            Opened.Add(url);
             var uri = new Uri(url);
             Assert.True(GoogleEndpoints.IsAllowedBrowserUrl(uri));
             var query = LoopbackReceiver.ParseQuery(uri.Query.TrimStart('?'));

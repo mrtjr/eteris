@@ -24,6 +24,9 @@ internal sealed class FakeGoogle : HttpMessageHandler
     public string RefreshToken { get; } = "renovacao-1";
     public int PageSize { get; init; } = 3;
     public bool GrantScope { get; init; } = true;
+    // Quantas trocas de código respondem SEM «refresh_token» (decrementa em cada uma); «Exchanges» conta as trocas.
+    public int OmitRefreshToken { get; set; }
+    public int Exchanges { get; private set; }
     public List<string> Requests { get; } = [];
     public List<string> Revoked { get; } = [];
     public int Refreshes { get; private set; }
@@ -217,10 +220,17 @@ internal sealed class FakeGoogle : HttpMessageHandler
             var challenge = Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(form["code_verifier"]))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             if (challenge != issued.Challenge || form["redirect_uri"] != issued.Redirect)
                 return Json(HttpStatusCode.BadRequest, new JsonObject { ["error"] = "invalid_grant" });
-            return Json(HttpStatusCode.OK, new JsonObject
+            Exchanges++;
+            var granted = new JsonObject
             {
                 ["access_token"] = ValidAccessToken, ["refresh_token"] = RefreshToken, ["expires_in"] = 3599, ["scope"] = scope, ["token_type"] = "Bearer",
-            });
+            };
+            if (OmitRefreshToken > 0)
+            {
+                OmitRefreshToken--;
+                granted.Remove("refresh_token");
+            }
+            return Json(HttpStatusCode.OK, granted);
         }
         if (form.GetValueOrDefault("grant_type") == "refresh_token")
         {
