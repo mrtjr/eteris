@@ -103,6 +103,51 @@ public class UnseenWindowTests
         Assert.Contains("UnseenWindow.MayHide(tab.IsAudible, tab.Media, IsCapturing(browser), pictureInPicture: false)", unseen);
     }
 
+    // O relógio que vê a área de trabalho (o DWM não avisa quando destapa a janela). Parado com a janela ativa e à
+    // vista, e com ela minimizada; a andar com ela à vista e não ativa, mesmo acabada de restaurar sem ativar. E, escondida
+    // por estar noutra área, anda até a janela se voltar a ver, mesmo ativa: clicar no ícone do Éteris a partir de outra
+    // área (ou o Alt+Tab) ativa a janela antes de o Windows a destapar, e sem o relógio a página ficava em branco.
+    [Theory]
+    [InlineData(true, false, UnseenWindow.Reason.None, false)]
+    [InlineData(false, false, UnseenWindow.Reason.None, true)]
+    [InlineData(true, true, UnseenWindow.Reason.Minimized, false)]
+    [InlineData(false, true, UnseenWindow.Reason.Minimized, false)]
+    [InlineData(true, false, UnseenWindow.Reason.OtherDesktop, true)]
+    [InlineData(false, false, UnseenWindow.Reason.OtherDesktop, true)]
+    [InlineData(true, false, UnseenWindow.Reason.Locked, false)]
+    [InlineData(false, false, UnseenWindow.Reason.Locked, true)]
+    public void Watch_RunsUntilTheWindowIsSeenAgain(bool active, bool minimized, UnseenWindow.Reason reason, bool expected)
+        => Assert.Equal(expected, UnseenWindow.Watches(active, minimized, reason));
+
+    // De segundo a segundo à espera de a janela ir para outra área; quatro vezes por segundo à espera de ela voltar (é o
+    // tempo que a página fica por desenhar numa janela que já se vê).
+    [Fact]
+    public void Watch_IsFasterWhileWaitingForTheWindowToComeBack()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(250), UnseenWindow.WatchEvery(UnseenWindow.Reason.OtherDesktop));
+        foreach (var reason in new[] { UnseenWindow.Reason.None, UnseenWindow.Reason.Minimized, UnseenWindow.Reason.Locked })
+            Assert.Equal(TimeSpan.FromSeconds(1), UnseenWindow.WatchEvery(reason));
+    }
+
+    // A janela segue a regra em todos os sítios onde o estado muda: ao ativar (revê e só pára se a regra disser), ao
+    // desativar, ao mudar de estado (o OnWindowStateChanged chama o ReviewUnseen: minimizar pára, restaurar sem ativar
+    // recomeça) e em cada tique. Nenhum deles pára o relógio por conta própria.
+    [Fact]
+    public void Window_FollowsTheWatchRule_OnActivationDeactivationStateAndTick()
+    {
+        var unseen = Source("MainWindow.Unseen.cs");
+        Assert.Contains("UnseenWindow.Watches(IsActive, WindowState == WindowState.Minimized, _unseenReason)", unseen);
+        Assert.Contains("UnseenWindow.WatchEvery(_unseenReason)", unseen);
+        Assert.Contains("Activated += (_, _) => ReviewUnseen();", unseen);
+        Assert.Contains("Deactivated += (_, _) => WatchCloak();", unseen);
+        Assert.Contains("_cloakTimer.Tick += (_, _) => ReviewUnseen();", unseen);
+        // O ReviewUnseen acerta o relógio no fim, com o motivo já atualizado, mude ele ou não.
+        Assert.Matches(@"else HideUnseenPages\(\);\s*\}\s*WatchCloak\(\);\s*\}", unseen);
+        // Só a regra (e o fecho da janela) param o relógio.
+        Assert.Equal(2, Regex.Matches(unseen, @"\.Stop\(\);").Count);
+        Assert.DoesNotContain("_cloakTimer.Stop();\n            ReviewUnseen();", unseen.Replace("\r\n", "\n"));
+    }
+
     // Com a câmara, o microfone ou o ecrã em uso a página nunca se esconde: nem a da aba, nem o site fixado à vista na
     // barra lateral; e quando não se consegue saber (o motor a fechar), conta como em uso.
     [Fact]

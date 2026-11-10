@@ -16,6 +16,19 @@ public static class UnseenWindow
     public static Reason Why(bool minimized, bool cloaked, bool locked)
         => minimized ? Reason.Minimized : locked ? Reason.Locked : cloaked ? Reason.OtherDesktop : Reason.None;
 
+    // O relógio que vê a área de trabalho (o DWM não avisa esta janela quando a tapa ou destapa). Anda enquanto a janela
+    // está à vista e não ativa (mudar de área de trabalho desativa-a) — também logo depois de restaurada sem ser
+    // ativada. E, escondida por estar noutra área, anda até se voltar a ver, mesmo ativa: ativar uma janela de outra área
+    // (o ícone do Éteris, o Alt+Tab) é o que leva o Windows a mudar de área, e a ativação chega antes de o DWM a destapar.
+    // Minimizada não precisa dele: quem a traz de volta é a mudança de estado.
+    public static bool Watches(bool active, bool minimized, Reason reason)
+        => reason == Reason.OtherDesktop || (!active && !minimized);
+
+    // De quanto em quanto tempo: devagar à espera de a janela ir para outra área, depressa à espera de ela voltar (é o
+    // tempo que a página fica por desenhar numa janela que já se vê).
+    public static TimeSpan WatchEvery(Reason reason)
+        => reason == Reason.OtherDesktop ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromSeconds(1);
+
     // Uma página com som, com multimédia já começada (o Picture-in-Picture de um vídeo), com a câmara, o microfone ou o
     // ecrã partilhados, ou com uma janela Picture-in-Picture de documento, continua à vista: escondê-la cortava a chamada,
     // pausava o vídeo flutuante ou mudava o que o site faz com a janela tapada.

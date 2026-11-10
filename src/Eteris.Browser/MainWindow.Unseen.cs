@@ -20,7 +20,8 @@ namespace Eteris.Browser;
 //   - minimizar: o StateChanged desta janela corre antes do do CefSharp (que põe todas as páginas a 0×0, leitura 7 do
 //     plano): a página fica escondida antes de encolher, a ordem do T5 (docs/motor.md);
 //   - área de trabalho: uma janela noutra área de trabalho fica «cloaked» pelo DWM (DWMWA_CLOAKED), o mesmo sinal que o
-//     Chromium usa; vê-se de segundo a segundo só enquanto a janela não está ativa;
+//     Chromium usa; vê-se por um relógio (UnseenWindow.Watches): de segundo a segundo com a janela à vista e não ativa,
+//     quatro vezes por segundo enquanto ela está noutra área, até voltar a ver-se (mesmo já ativa);
 //   - sessão bloqueada: SystemEvents.SessionSwitch.
 // Nunca esconde uma página com som, com multimédia começada, com captura autorizada ou com Picture-in-Picture
 // (Tabs/UnseenWindow.cs). Ao restaurar, as páginas voltam depois de o CefSharp lhes devolver o tamanho.
@@ -49,16 +50,15 @@ public partial class MainWindow
             SystemEvents.SessionSwitch -= OnSession;
             _cloakTimer?.Stop();
         };
-        // Outra área de trabalho: só enquanto a janela não está ativa (mudar de área de trabalho desativa-a).
-        _cloakTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => ReviewUnseen(), Dispatcher);
-        _cloakTimer.Stop();
-        Deactivated += (_, _) => _cloakTimer.Start();
-        Activated += (_, _) =>
-        {
-            _cloakTimer.Stop();
-            ReviewUnseen();
-        };
-        StateChanged += (_, _) => { if (WindowState == WindowState.Minimized) _cloakTimer.Stop(); };
+        // Outra área de trabalho: um relógio, que anda e pára pela regra de UnseenWindow.Watches. Quem o acerta é o
+        // ReviewUnseen (em cada tique, ao ativar e ao mudar de estado) e a desativação; ninguém o pára por conta própria —
+        // parado ao ativar, uma janela ativada a partir de outra área (ainda tapada nesse instante) ficava com a página
+        // em branco até se trocar de aba.
+        _cloakTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = UnseenWindow.WatchEvery(_unseenReason) };
+        _cloakTimer.Tick += (_, _) => ReviewUnseen();
+        Deactivated += (_, _) => WatchCloak();
+        Activated += (_, _) => ReviewUnseen();
+        WatchCloak();
     }
 
     // Chamado também pelo OnWindowStateChanged, antes de o CefSharp encolher as páginas.
@@ -66,10 +66,28 @@ public partial class MainWindow
     {
         if (!PerfTuning.IsOn(PerfTuning.HideWhenUnseen) || !IsLoaded) return;
         var reason = UnseenWindow.Why(WindowState == WindowState.Minimized, IsCloaked(), _sessionLocked);
-        if (reason == _unseenReason) return;
-        _unseenReason = reason;
-        if (reason == UnseenWindow.Reason.None) RestoreUnseenPages();
-        else HideUnseenPages();
+        if (reason != _unseenReason)
+        {
+            _unseenReason = reason;
+            if (reason == UnseenWindow.Reason.None) RestoreUnseenPages();
+            else HideUnseenPages();
+        }
+        WatchCloak();
+    }
+
+    // Liga, desliga e acerta o passo do relógio da área de trabalho (UnseenWindow.Watches e WatchEvery).
+    private void WatchCloak()
+    {
+        if (_cloakTimer is not { } timer) return;
+        if (!UnseenWindow.Watches(IsActive, WindowState == WindowState.Minimized, _unseenReason))
+        {
+            timer.Stop();
+            return;
+        }
+        // Só quando muda: acertar o intervalo ou voltar a ligar um relógio a andar recomeçava a contagem.
+        var every = UnseenWindow.WatchEvery(_unseenReason);
+        if (timer.Interval != every) timer.Interval = every;
+        if (!timer.IsEnabled) timer.Start();
     }
 
     private void HideUnseenPages()
