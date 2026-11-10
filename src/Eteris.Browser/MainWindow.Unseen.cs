@@ -133,13 +133,15 @@ public partial class MainWindow
         }, DispatcherPriority.Loaded);
     }
 
-    // O caminho da aba fria (ShowPageWindow), só para as que ainda devem estar à vista.
+    // O caminho da aba fria (ShowPageWindow), para todas as que continuam visíveis no WPF: a que está à vista, a que
+    // ficou segurada por cima da que entra (um link aberto por outra aplicação com a janela minimizada abre a aba antes
+    // de a janela voltar: a página antiga é a que se vê até a nova apresentar) e a que ficou quente (volta sem esperar
+    // por fotograma nenhum). Minimizada, qualquer delas era uma janela vazia. As que entretanto se esconderam no WPF
+    // ficam como estão, e um site fixado só volta se for o que está à vista na barra lateral.
     private void RestoreUnseenPage(ChromiumWebBrowser page)
     {
         if (page.IsDisposed || page.Visibility != Visibility.Visible) return;
-        var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, page)).Key;
-        var shown = tab is not null ? ShouldShow(tab, page) : _sidebarOpen && ReferenceEquals(page, CurrentWebPanelBrowser);
-        if (!shown) return;
+        if (_webPanelBrowsers.ContainsValue(page) && !(_sidebarOpen && ReferenceEquals(page, CurrentWebPanelBrowser))) return;
         ShowPageWindow(page, ArrivalPixels(page));
         PerfCounters.Add("janela.voltou");
     }

@@ -148,6 +148,21 @@ public class UnseenWindowTests
         Assert.DoesNotContain("_cloakTimer.Stop();\n            ReviewUnseen();", unseen.Replace("\r\n", "\n"));
     }
 
+    // Quando a janela se volta a ver, voltam todas as páginas escondidas que continuam visíveis no WPF, não só a da aba
+    // ativa: a que ficou segurada por cima da que entra (um link aberto por outra aplicação com o Éteris minimizado abre
+    // a aba antes de a janela voltar, e a página antiga é a que se vê até a nova apresentar) e a que ficou quente (volta
+    // sem esperar por fotograma nenhum). Minimizada, qualquer delas era uma janela vazia. Um site fixado só volta se for
+    // o que está à vista na barra lateral.
+    [Fact]
+    public void Restore_BringsBackEveryPageStillVisible_NotOnlyTheActiveTab()
+    {
+        var restore = Method(Source("MainWindow.Unseen.cs"), "private void RestoreUnseenPage(ChromiumWebBrowser page)");
+        Assert.Contains("if (page.IsDisposed || page.Visibility != Visibility.Visible) return;", restore);
+        Assert.DoesNotContain("ShouldShow", restore);
+        Assert.Contains("if (_webPanelBrowsers.ContainsValue(page) && !(_sidebarOpen && ReferenceEquals(page, CurrentWebPanelBrowser))) return;", restore);
+        Assert.Contains("ShowPageWindow(page, ArrivalPixels(page));", restore);
+    }
+
     // Com a câmara, o microfone ou o ecrã em uso a página nunca se esconde: nem a da aba, nem o site fixado à vista na
     // barra lateral; e quando não se consegue saber (o motor a fechar), conta como em uso.
     [Fact]
@@ -166,6 +181,16 @@ public class UnseenWindowTests
     {
         Assert.Contains("if (allowed) Tabs.CaptureSessions.Started(browserId);", Source(Path.Combine("Permissions", "SitePermissionHandler.cs")));
         Assert.Matches(@"if \(!e\.Frame\.IsMain\) return;\s*//[^\n]*\n\s*CaptureSessions\.Ended\(e\.Browser\.Identifier\);", Source("MainWindow.xaml.cs"));
+    }
+
+    // O texto de um método (da assinatura até à chaveta que o fecha, com a indentação dos membros da classe).
+    private static string Method(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"sem «{signature}»");
+        var end = source.IndexOf("\n    }", start, StringComparison.Ordinal);
+        Assert.True(end > start, $"«{signature}» sem fim");
+        return source[start..(end + 6)];
     }
 
     private static readonly string Root = FindRoot();
