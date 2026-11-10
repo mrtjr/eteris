@@ -661,16 +661,17 @@ internal static class SyncService
         Changed?.Invoke();
     }
 
-    // Uma ação do utilizador nas Definições, em segundo plano (as rotas da página não esperam pela rede).
+    // Uma ação do utilizador nas Definições, em segundo plano (as rotas da página não esperam pela rede). A mensagem
+    // final de uma saída (SyncExit.IsExitArea) não sai por uma ação que acabe bem (SyncExit.AfterAction).
     public static void Act(string area, Func<SyncAgent, Task> action)
     {
         if (Agent() is null) return;
         Hook();
-        lock (Gate) _message = null;
+        lock (Gate) _message = SyncExit.AfterAction(_message, area, null);
         _ = Task.Run(async () =>
         {
             var error = await RunAsync(action).ConfigureAwait(false);
-            lock (Gate) _message = error is null ? null : (area, error);
+            lock (Gate) _message = SyncExit.AfterAction(_message, area, error);
             Changed?.Invoke();
         });
     }

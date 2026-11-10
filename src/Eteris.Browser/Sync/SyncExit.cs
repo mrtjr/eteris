@@ -57,6 +57,17 @@ internal static class SyncExit
     public const string StartOverDone = "Conta nova criada a partir deste computador. A antiga foi apagada da nuvem: os seus outros computadores vão dizer que a conta foi apagada ou substituída. Guarde o kit novo.";
     public const string StartOverNotDone = "A conta antiga foi apagada, mas entretanto apareceu outra neste Google Drive. Escolha como entrar.";
 
+    // ---- a mensagem da página ------------------------------------------------------------------------------------------
+
+    // As partes da página das saídas (SyncService.Exit).
+    public static bool IsExitArea(string? area) => area is "revoke" or "lost" or "startover";
+
+    // A mensagem que fica no espaço único da página no início (error null) e no fim de uma ação das Definições
+    // (SyncService.Act): o erro dela, se houver; sem erro, a mensagem final de uma saída fica (o conselho sobre as
+    // palavras-passe, a sessão Google…); qualquer outra sai.
+    public static (string Area, string Text)? AfterAction((string Area, string Text)? current, string area, string? error)
+        => error is not null ? (area, error) : current is { } m && IsExitArea(m.Area) ? m : null;
+
     // ---- «Retirar o acesso» --------------------------------------------------------------------------------------------
 
     // Revoga. Done = a Google CONFIRMOU (só Revoked). stopHere corre sempre que a sessão daqui ficou apagada (Revoked e

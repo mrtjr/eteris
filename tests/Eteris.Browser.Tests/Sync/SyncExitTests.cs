@@ -668,6 +668,24 @@ public sealed class SyncExitTests : IDisposable
     // ---- a página -----------------------------------------------------------------------------------------------------
 
     [Fact]
+    public void AnAction_DoesNotEraseTheExitMessage()
+    {
+        // M2 da revisão: um «Remover» ou «Sincronizar agora» que acabe bem depois de uma saída não apaga a mensagem final
+        // dela; a de outra ação sai; um erro da ação nova aparece.
+        foreach (var area in new[] { "revoke", "lost", "startover" })
+        {
+            Assert.Equal((area, "fim"), SyncExit.AfterAction((area, "fim"), "devices", null));
+            Assert.Equal(("devices", "erro"), SyncExit.AfterAction((area, "fim"), "devices", "erro"));
+        }
+        Assert.Null(SyncExit.AfterAction(("devices", "antigo"), "devices", null));
+        Assert.Null(SyncExit.AfterAction(null, "devices", null));
+        var service = GoogleSyncTests.Src("Eteris.Browser", "Sync", "SyncService.cs");
+        var act = GoogleSyncTests.Body(service, "public static void Act(");
+        Assert.DoesNotContain("_message = null", act);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(act, System.Text.RegularExpressions.Regex.Escape("SyncExit.AfterAction(_message, area,")).Count);
+    }
+
+    [Fact]
     public void RevokeAnchor_WithTheItemHidden_GoesToTheSection()
     {
         // M1 da revisão: na pasta de teste (ou sem ligação) o item está escondido; «Não fui eu» e o botão do aviso
