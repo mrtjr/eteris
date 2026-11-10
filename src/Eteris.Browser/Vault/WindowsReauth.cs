@@ -55,6 +55,8 @@ public enum ReauthPurpose
     // «Perdi um computador / foi roubado»: remover o aparelho e retirar o acesso do Éteris à conta Google (sempre, haja
     // ou não segredos na conta).
     LostDevice,
+    // «Começar do zero…»: apagar a conta de sincronização da nuvem e criar uma nova a partir deste computador (sempre).
+    StartOver,
 }
 
 public static class ReauthPolicy
@@ -65,7 +67,8 @@ public static class ReauthPolicy
 
     public static bool IsAlways(ReauthPurpose purpose)
         => purpose is ReauthPurpose.Export or ReauthPurpose.ExportProfileSecrets or ReauthPurpose.SyncSecrets or ReauthPurpose.ApproveDevice
-            or ReauthPurpose.JoinReplacedAccount or ReauthPurpose.ShowRecoveryKit or ReauthPurpose.LostDevice;
+            or ReauthPurpose.JoinReplacedAccount or ReauthPurpose.ShowRecoveryKit or ReauthPurpose.LostDevice
+            or ReauthPurpose.StartOver;
 
     public static bool Needs(ReauthPurpose purpose, bool askPasswords, bool askPayments) => purpose switch
     {
@@ -94,6 +97,7 @@ public static class ReauthPolicy
         ReauthPurpose.ShowRecoveryKit => "O Éteris quer mostrar o seu kit de recuperação.",
         // PROPOSTA (T12).
         ReauthPurpose.LostDevice => "O Éteris quer remover um computador da sua conta e retirar o acesso do Éteris à conta Google.",
+        ReauthPurpose.StartOver => "O Éteris quer apagar a conta de sincronização na nuvem e criar uma nova a partir deste computador.",
         _ => "O Éteris quer confirmar que é você.",
     };
 }

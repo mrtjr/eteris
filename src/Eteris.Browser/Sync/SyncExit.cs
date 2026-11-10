@@ -135,4 +135,35 @@ internal static class SyncExit
         => Lines(LostDone, LostHere, LostKeeps, LostAdvice(secretCollections), LostGoogle);
 
     private static string Lines(params string[] lines) => string.Join("\n", lines.Where(l => l.Length > 0));
+
+    // ---- «Começar do zero…» -------------------------------------------------------------------------------------------
+
+    // A confirmação escrita: «começar do zero», sem contar espaços a mais, maiúsculas nem acentos.
+    public static bool StartOverWordMatches(string? typed) => typed is not null && Plain(typed) == Plain(StartOverWord);
+
+    private static string Plain(string text)
+    {
+        var spaced = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+        var decomposed = spaced.Normalize(System.Text.NormalizationForm.FormD);
+        return new string(decomposed.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
+    }
+
+    // A porta do Windows de «Começar do zero…»: sempre. true = pode continuar.
+    public static Task<bool> MayStartOverAsync(Func<ReauthPurpose, Task<bool>> confirm) => confirm(ReauthPurpose.StartOver);
+
+    // Só num computador que ainda não entrou na conta (Choose, Pairing): apaga a conta antiga da nuvem (o «Apagar» que já
+    // existe) e cria uma nova a partir deste computador (a ronda do gesto, com o Drive vazio, cria a conta; o que está
+    // aqui sobe nela).
+    public static async Task<(bool Done, string Message)> StartOverAsync(SyncAgent agent, CancellationToken cancellationToken)
+    {
+        if (agent.Status.Phase is not (SyncPhase.Choose or SyncPhase.Pairing)) return (false, StartOverWrongPhase);
+        try
+        {
+            agent.CancelPairing();
+            await agent.DeleteCloudDataAsync(cancellationToken).ConfigureAwait(false);
+            await agent.StartAsync(switchAccount: true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (SyncUserException e) { return (false, e.Message); }
+        return agent.Status.Phase == SyncPhase.On ? (true, StartOverDone) : (false, agent.Status.Error ?? StartOverNotDone);
+    }
 }

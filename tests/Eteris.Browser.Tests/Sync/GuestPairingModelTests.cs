@@ -175,21 +175,6 @@ public class GuestPairingModelTests
         Assert.DoesNotContain("O outro computador mostra este código", html, StringComparison.Ordinal);
     }
 
-    // «Começar do zero…» não é desta tarefa (T12); a saída que já existe fica. (As 24 palavras entraram com a T5d.)
-    [Fact]
-    public void StartOver_IsNotOfferedByThisTask()
-    {
-        var root = GoogleSyncTests.FindRoot();
-        var page = System.IO.File.ReadAllText(System.IO.Path.Combine(root, "src", "Eteris.Browser", "Browser", "settings.html"));
-        var model = System.IO.File.ReadAllText(System.IO.Path.Combine(root, "src", "Eteris.Browser", "Sync", "GuestPairingModel.cs"));
-        foreach (var text in new[] { page, model })
-        {
-            Assert.DoesNotContain("Começar do zero", text, StringComparison.Ordinal);
-        }
-        Assert.Contains("syncLostLink", page, StringComparison.Ordinal);
-        Assert.Contains("Perdeu o código e não tem outro computador ligado?", page, StringComparison.Ordinal);
-    }
-
     // Os textos do alerta, à letra (P2 e «Fechar» são propostas para o dono), e os mesmos na página das Definições.
     [Fact]
     public void ReplacedTexts_ToTheLetter()

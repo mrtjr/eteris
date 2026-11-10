@@ -502,8 +502,14 @@
           </div>
           <div class="item" id="syncChooseItem" hidden>
             <div class="label"><b>Este Google Drive já tem dados do Éteris</b><span>Junte este computador à sua conta de sincronização: aprove-o noutro computador onde o Éteris já sincroniza, ou use o kit de recuperação. Os dados deste computador juntam-se aos da conta — nada se perde.</span>
-              <span class="syncnote">Perdeu o código e não tem outro computador ligado? Pode <a href="#syncDeleteItem" id="syncLostLink">apagar os dados do Éteris no Drive</a> e começar de novo com uma conta nova (perde-se o que só estava na nuvem; os dados deste computador ficam).</span>
               <span class="syncnote" id="syncKitHelp">Para entrar sem o outro computador, use o seu <b>kit de recuperação</b> (24 palavras ou o código de 56 caracteres).</span>
+              <!-- Sem kit nem outro computador: «Começar do zero…», com uma confirmação escrita e o Windows (sempre). -->
+              <span class="syncnote">Não tem nada disto? <a href="#syncChooseItem" id="syncStartOver">Começar do zero…</a></span>
+              <div id="syncStartOverPanel" hidden>
+                <span class="syncnote">A conta antiga na nuvem é apagada. O que só estava nela perde-se. O que está neste computador fica e passa para a conta nova.</span>
+                <label class="syncnote" for="syncStartOverWord">Para confirmar, escreva começar do zero:</label>
+                <div class="syncform left"><input type="text" id="syncStartOverWord" spellcheck="false" autocomplete="off"><button class="action" type="button" id="syncStartOverCancel">Cancelar</button><button class="action danger" type="button" id="syncStartOverConfirm" disabled>Começar do zero</button></div>
+              </div>
               <button class="action" type="button" id="syncKitPaste">Colar o kit</button>
               <button class="action" type="button" id="syncKitOpenFile">Abrir o ficheiro do kit…</button>
               <form class="syncform left" id="syncJoinForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off">
@@ -1241,6 +1247,7 @@
       if ($('syncRevokeItem').hidden && revokeArmed) disarmRevoke(false);
       // Uma saída da conta a correr: os botões das saídas ficam desativados até acabar.
       $('syncRevoke').disabled = !!d.busy; $('syncRevokeConfirm').disabled = !!d.busy;
+      if (d.busy) $('syncStartOverConfirm').disabled = true; // volta a ativar-se com a palavra certa (ao escrever)
       // As mensagens das saídas (fora de syncBody: depois de retirar o acesso, a mensagem tem de se ver). Nunca marcadas
       // como erro: a página não sabe se a mensagem é de sucesso.
       note($('syncExitNote'), msg0(d, 'revoke') || msg0(d, 'lost') || msg0(d, 'startover'));
@@ -1700,8 +1707,30 @@
       $('syncDelete').focus();
       askGoogle('sync-delete-cloud');
     });
-    // «Perdeu o código?»: leva a «Apagar os meus dados…» e põe lá o foco.
-    $('syncLostLink').addEventListener('click', e => { e.preventDefault(); $('syncDeleteItem').scrollIntoView({ block: 'center' }); $('syncDelete').focus(); });
+    // «Começar do zero…»: abre o painel com o que acontece e a caixa da confirmação escrita; «Começar do zero» só fica
+    // ativo com a palavra certa (sem contar espaços a mais, maiúsculas nem acentos; o Éteris confere outra vez) e o
+    // Windows confirma depois (sempre).
+    const startOverPlain = text => text.trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+    const startOverReady = () => startOverPlain($('syncStartOverWord').value) === 'comecar do zero' && !(lastState && lastState.busy);
+    const closeStartOver = focus => {
+      $('syncStartOverPanel').hidden = true; $('syncStartOverWord').value = ''; $('syncStartOverConfirm').disabled = true;
+      if (focus) $('syncStartOver').focus();
+    };
+    $('syncStartOver').addEventListener('click', e => {
+      e.preventDefault();
+      $('syncStartOverPanel').hidden = false;
+      $('syncStartOverConfirm').disabled = !startOverReady();
+      $('syncStartOverWord').focus();
+    });
+    $('syncStartOverWord').addEventListener('input', () => { $('syncStartOverConfirm').disabled = !startOverReady(); });
+    $('syncStartOverCancel').addEventListener('click', () => closeStartOver(true));
+    $('syncStartOverConfirm').addEventListener('click', () => {
+      if (!startOverReady()) return;
+      const word = $('syncStartOverWord').value;
+      closeStartOver(false);
+      // A resposta chega depois do Windows; a mensagem fica na área «startover», em #syncExitNote.
+      askGoogle('sync-start-over', '&word=' + encodeURIComponent(word));
+    });
   })();
 
   // Realce da navegação. As últimas secções são curtas e a página não as consegue pôr no topo: pela posição, um clique

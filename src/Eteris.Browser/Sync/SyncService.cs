@@ -412,6 +412,20 @@ internal static class SyncService
         });
     }
 
+    // «Começar do zero…» (a palavra e o Windows já confirmados): apaga a conta antiga da nuvem e cria uma nova a partir
+    // deste computador. Só antes de entrar (SyncExit confere a fase).
+    public static void StartOver()
+    {
+        if (Agent() is not { } agent) return;
+        Hook();
+        Exit("startover", async () =>
+        {
+            var (_, message) = await SyncExit.StartOverAsync(agent, CancellationToken.None).ConfigureAwait(false);
+            AfterExit(agent);
+            return message;
+        });
+    }
+
     // Acerta o agendador depois de uma saída que deixou a sincronização ligada aqui (com ela parada, não se arma).
     private static void AfterExit(SyncAgent agent)
     {

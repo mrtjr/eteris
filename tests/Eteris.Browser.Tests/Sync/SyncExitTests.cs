@@ -477,6 +477,114 @@ public sealed class SyncExitTests : IDisposable
             Assert.DoesNotContain(text, result.Message);
     }
 
+    // ---- «Começar do zero…» -------------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("começar do zero", true)]
+    [InlineData(" Começar  do Zero ", true)]
+    [InlineData("comecar do zero", true)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("apagar", false)]
+    [InlineData("começar", false)]
+    [InlineData("começar do zero já", false)]
+    public void StartOver_WordMustMatch(string? typed, bool matches)
+        => Assert.Equal(matches, SyncExit.StartOverWordMatches(typed));
+
+    // As cadeias (contas) que estão no transporte, pelo registo de chaves.
+    private async Task<List<string>> ChainsAsync()
+    {
+        var chains = new List<string>();
+        foreach (var path in await new FolderTransport(Folder).ListAsync(SyncPaths.Root))
+            if (SyncPaths.TryParseKeys(path, out var chain)) chains.Add(chain);
+        return chains;
+    }
+
+    [Fact]
+    public async Task StartOver_OnlyBeforeJoining()
+    {
+        var casa = NewPc("Casa");
+        await casa.Agent.StartAsync();
+        var chains = await ChainsAsync();
+        Assert.Single(chains);
+        var (done, message) = await SyncExit.StartOverAsync(casa.Agent, CancellationToken.None);
+        Assert.False(done);
+        Assert.Equal(SyncExit.StartOverWrongPhase, message);
+        Assert.Equal(chains, await ChainsAsync());
+        Assert.Equal(SyncPhase.On, casa.Agent.Status.Phase);
+        Assert.True(casa.Agent.Enabled);
+    }
+
+    // «Casa» criou a conta; «Novo» (sem kit nem outro computador à mão) começa do zero a partir dos seus dados.
+    private async Task<(Pc Casa, Pc Novo, string OldChain)> StartedOverAsync()
+    {
+        var casa = NewPc("Casa");
+        casa.Profile.Plain.Bookmark("https://a.example/", "A");
+        await casa.Agent.StartAsync();
+        var oldChain = Assert.Single(await ChainsAsync());
+        var novo = NewPc("Novo");
+        novo.Profile.Plain.Bookmark("https://b.example/", "B");
+        await novo.Agent.StartAsync();
+        Assert.Contains(novo.Agent.Status.Phase, new[] { SyncPhase.Choose, SyncPhase.Pairing });
+
+        var (done, message) = await SyncExit.StartOverAsync(novo.Agent, CancellationToken.None);
+        Assert.True(done, message);
+        Assert.Equal(SyncExit.StartOverDone, message);
+        return (casa, novo, oldChain);
+    }
+
+    [Fact]
+    public async Task StartOver_DeletesTheOldAccount_AndCreatesANewOne_KeepingLocalData()
+    {
+        var (casa, novo, oldChain) = await StartedOverAsync();
+        Assert.Equal(SyncPhase.On, novo.Agent.Status.Phase);
+        var chain = Assert.Single(await ChainsAsync());
+        Assert.NotEqual(oldChain, chain);
+        Assert.NotEqual(casa.Store.Load()!.Secret, novo.Store.Load()!.Secret);
+        Assert.Equal("B", novo.Profile.Plain.Title("https://b.example/"));
+        Assert.Null(novo.Profile.Plain.Title("https://a.example/"));
+        Assert.Equal(KitState.Pending, novo.Agent.Status.Kit!.State);
+    }
+
+    // O outro computador vê a conta desaparecer: para, não pede nada sozinho e guarda a chave (o alerta é da T7).
+    [Fact]
+    public async Task StartOver_TheOtherComputer_StopsAndAsksNothingByItself()
+    {
+        var (casa, _, _) = await StartedOverAsync();
+        await casa.Agent.RunAsync();
+        Assert.Equal(SyncPhase.Stopped, casa.Agent.Status.Phase);
+        Assert.Null(casa.Agent.Status.Pairing);
+        Assert.True(casa.Agent.HasKey);
+    }
+
+    [Fact]
+    public async Task StartOver_AsksWindowsAlways()
+    {
+        _answer = false;
+        Assert.False(await SyncExit.MayStartOverAsync(Confirm));
+        Assert.Equal([ReauthPurpose.StartOver], _asked);
+        _answer = true;
+        Assert.True(await SyncExit.MayStartOverAsync(Confirm));
+        Assert.True(ReauthPolicy.IsAlways(ReauthPurpose.StartOver));
+        Assert.StartsWith("O Éteris quer ", ReauthPolicy.Message(ReauthPurpose.StartOver));
+    }
+
+    [Fact]
+    public void StartOverRoute_ChecksTheWord_ThenWindows_ThenActs()
+    {
+        var factory = GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
+        var route = GoogleSyncTests.CaseBlock(factory, "case \"/sync-start-over\"");
+        var word = route.IndexOf("StartOverWordMatches(", StringComparison.Ordinal);
+        var windows = route.IndexOf("MayStartOverAsync(purpose => ConfirmWithWindows(browserId, purpose))", StringComparison.Ordinal);
+        var act = route.IndexOf("SyncService.StartOver()", StringComparison.Ordinal);
+        Assert.True(word >= 0 && windows > word && act > windows, route);
+        var page = GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html");
+        foreach (var text in new[] { "id=\"syncStartOver\"", "Não tem nada disto?", "Começar do zero…", SyncExit.StartOverText, "sync-start-over" })
+            Assert.Contains(text, page);
+        Assert.DoesNotContain("syncLostLink", page);
+        Assert.DoesNotContain("Perdeu o código e não tem outro computador ligado?", page);
+    }
+
     // ---- a página -----------------------------------------------------------------------------------------------------
 
     [Fact]

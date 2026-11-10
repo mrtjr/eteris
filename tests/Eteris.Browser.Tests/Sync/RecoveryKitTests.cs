@@ -485,8 +485,8 @@ public class RecoveryKitTests
             Assert.Contains(text, page);
         foreach (var text in new[] { "Código de recuperação (14 grupos de 4)", "Usar o código de recuperação", "Escreva o código de recuperação." })
             Assert.DoesNotContain(text, page);
-        // Até à T12c, que retira a nota syncLostLink e esta afirmação.
-        foreach (var text in new[] { "id=\"syncKitHelp\"", "id=\"syncKitPaste\"", "id=\"syncJoinButton\"", "id=\"syncLostLink\"", "method=\"post\"" })
+        // (A nota syncLostLink saiu na T12c: o caminho sem kit nem outro computador é «Começar do zero…», em SyncExitTests.)
+        foreach (var text in new[] { "id=\"syncKitHelp\"", "id=\"syncKitPaste\"", "id=\"syncJoinButton\"", "method=\"post\"" })
             Assert.Contains(text, page);
         Assert.Equal("Para entrar sem o outro computador, use o seu kit de recuperação (24 palavras ou o código de 56 caracteres).", GuestPairingModel.UseKit);
         // Na página, «kit de recuperação» vai a negrito: as duas metades da frase, antes e depois.

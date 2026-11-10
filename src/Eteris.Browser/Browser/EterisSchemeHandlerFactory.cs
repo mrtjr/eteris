@@ -501,6 +501,20 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                 });
             }
+            case "/sync-start-over":
+            {
+                // «Começar do zero…» (só antes de entrar): primeiro a palavra escrita, depois SEMPRE o Windows, e só então
+                // apagar a conta antiga da nuvem e criar uma nova a partir deste computador.
+                var word = InternalPages.Query(uri, "word");
+                return new VaultResourceHandler(async () =>
+                {
+                    if (!Sync.SyncExit.StartOverWordMatches(word)) Sync.SyncService.Say("startover", Sync.SyncExit.StartOverWrongWord);
+                    else if (await Sync.SyncExit.MayStartOverAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                        Sync.SyncService.StartOver();
+                    else Sync.SyncService.Say("startover", Sync.SyncChoices.NotConfirmed("a conta na nuvem não foi apagada"));
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
             case "/sync-delete-cloud":
                 Sync.SyncService.DeleteCloud();
                 break;

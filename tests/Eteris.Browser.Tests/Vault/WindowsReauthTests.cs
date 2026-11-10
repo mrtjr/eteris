@@ -90,7 +90,8 @@ public class WindowsReauthTests
         await gate.RequestAsync(WindowA, ReauthPurpose.Reveal);
         Assert.True(await gate.RequestAsync(WindowA, ReauthPurpose.Export));
         Assert.Equal(2, fake.Prompts);
-        foreach (var always in new[] { ReauthPurpose.Export, ReauthPurpose.SyncSecrets, ReauthPurpose.ApproveDevice, ReauthPurpose.ExportProfileSecrets, ReauthPurpose.LostDevice })
+        foreach (var always in new[] { ReauthPurpose.Export, ReauthPurpose.SyncSecrets, ReauthPurpose.ApproveDevice, ReauthPurpose.ExportProfileSecrets, ReauthPurpose.LostDevice,
+                     ReauthPurpose.StartOver })
             Assert.True(ReauthPolicy.IsAlways(always), always.ToString());
         var fresh = Gate(fake = new FakeReauth());
         await fresh.RequestAsync(WindowA, ReauthPurpose.Export);
