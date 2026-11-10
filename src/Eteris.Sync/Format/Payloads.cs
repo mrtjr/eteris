@@ -44,6 +44,8 @@ public sealed record DeviceStatePayload
     [JsonPropertyName("last")] public long LastSyncMs { get; init; }
     // Chave pública estática do aparelho (SPKI P-256, base64url): os outros fixam-na na primeira vez que a veem.
     [JsonPropertyName("pub")] public string? PublicKey { get; init; }
+    // Ids dos grupos (SyncGroups) ligados por inteiro neste aparelho. null = um Éteris que ainda não o diz.
+    [JsonPropertyName("groups")] public IReadOnlyList<string>? Groups { get; init; }
 }
 
 // Conta nova entregue a um aparelho que fica, quando outro faz «nova cadeia» para tirar um terceiro da conta.

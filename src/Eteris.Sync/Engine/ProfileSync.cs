@@ -131,9 +131,14 @@ public static class ProfileSync
     {
         var index = new Dictionary<string, LocalItem>(StringComparer.Ordinal);
         foreach (var item in items)
-            if (Fields.ContainsKey(item.Collection) && options.IsEnabled(item.Collection)) index[Id(item.Collection, item.Key)] = item;
+            if (Fields.ContainsKey(item.Collection) && options.IsEnabled(item.Collection) && !IsReserved(item.Collection, item.Key))
+                index[Id(item.Collection, item.Key)] = item;
         return index;
     }
+
+    // Os registos reservados da conta (a escolha da conta, 0.2.15) nunca passam pelo perfil: nem se propõem nem se leem
+    // dele (por defesa, um perfil que devolvesse uma chave destas é ignorado).
+    private static bool IsReserved(string collection, string key) => collection == Collections.Settings && Collections.IsReservedSetting(key);
 
     // O que o motor tem, no formato do perfil local (o que este aparelho devia ter).
     public static Dictionary<string, LocalItem> Desired(SyncEngine engine) => Account(engine, null, ProfileSyncOptions.Default).Items;
@@ -171,7 +176,7 @@ public static class ProfileSync
                 continue;
             }
             if (record.Deleted || record.Data is null || record.Collection == Collections.Notes || !Fields.TryGetValue(record.Collection, out var fields)
-                || !options.IsEnabled(record.Collection)) continue;
+                || !options.IsEnabled(record.Collection) || IsReserved(record.Collection, record.Key)) continue;
             if (Collections.IsSecret(record.Collection))
             {
                 if (secrets is null) continue;

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Eteris.Sync.Crypto;
 using Eteris.Sync.Format;
@@ -53,7 +54,22 @@ public sealed class SavedSync
     // Este aparelho já teve a chave de uma conta (criou-a, entrou, perdeu a criação ao mesmo tempo, apagou os dados).
     // Marca local: nunca sai deste computador. Um aparelho com ela nunca pede a aprovação sozinho (SyncAgent.AutoPair).
     [JsonPropertyName("had")] public bool HadAccount { get; set; }
+    // Entrou agora na conta (aprovação ou kit) sem nenhum estado de sincronização anterior: na primeira ronda completa
+    // herda a escolha da conta (pagamentos e documentos), se houver.
+    [JsonPropertyName("inherit")] public bool InheritPending { get; set; }
+    // A oferta «receber também neste?» já foi respondida (ou este aparelho fez a escolha / herdou-a).
+    [JsonPropertyName("offerDone")] public bool OfferAnswered { get; set; }
+    // Última leitura do registo da conta (fim da última ronda completa), ou a escolha feita aqui e ainda por escrever.
+    [JsonPropertyName("acctSecrets")] public bool AccountSecrets { get; set; }
+    // Há segredos em jogo na conta (registos secretos vivos, ou a escolha ligada), visto no fim da última ronda
+    // completa. null = este aparelho ainda não acabou uma ronda nesta conta: conta como «há».
+    [JsonPropertyName("secretsSeen")] public bool? SecretsInAccount { get; set; }
+    // A escolha da conta feita aqui e ainda por escrever no motor: "on", "off" ou null. A ronda seguinte escreve-a.
+    [JsonPropertyName("choiceOut")] public string? AccountChoiceOut { get; set; }
 }
+
+// Como este aparelho entrou na conta NESTA execução do Éteris (só memória): criou-a, ou entrou nela (aprovação ou kit).
+public enum SyncEntry { None, Created, Joined }
 
 // O kit de recuperação do segredo guardado, neste computador. Os estados derivam-se (nunca se gravam como tais):
 // guardado ⇔ SavedId == ForId; deixou de valer ⇔ SavedId de outro kit; por guardar ⇔ SavedId nulo.
@@ -113,7 +129,11 @@ public sealed record GuestPairing(string? Code, bool Confirmed, string? Error)
     public GuestEnd End { get; init; }
 }
 
-public sealed record DeviceInfo(string Id, string Name, string Kind, long LastSyncMs, bool IsThis);
+public sealed record DeviceInfo(string Id, string Name, string Kind, long LastSyncMs, bool IsThis)
+{
+    // Recebe pagamentos e documentos (os dois grupos ligados). null = não se sabe (um Éteris antigo não o diz).
+    public bool? PaymentsAndDocuments { get; init; }
+}
 
 public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessMs, string? Error, string? Notice,
     GuestPairing? Pairing, IReadOnlyList<HostRequest> Requests, IReadOnlyList<DeviceInfo> Devices, bool NeedsUpdate, int PendingDevices)
@@ -156,6 +176,21 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // Este aparelho acabou de entrar na conta (por aprovação ou pelo código de recuperação) e a primeira ronda ainda não
     // acabou.
     public bool JoinedNow { get; init; }
+
+    // A conta sincroniza pagamentos e documentos (a escolha da conta, 0.2.15).
+    public bool AccountSecrets { get; init; }
+
+    // Este aparelho tem cards, ibans e idDocs ligados.
+    public bool SecretsHere { get; init; }
+
+    // Este aparelho deve mostrar a oferta única «receber também neste?».
+    public bool SecretsOffer { get; init; }
+
+    // Criou a conta / entrou nela nesta execução do Éteris.
+    public SyncEntry Entry { get; init; }
+
+    // Herdou a escolha da conta nesta execução do Éteris (recebeu os pagamentos e os documentos sem pedir).
+    public bool InheritedSecrets { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (kit de recuperação ou aprovação), sincroniza, emparelha,
@@ -206,6 +241,13 @@ public sealed class SyncAgent
     private IReadOnlyList<DeviceInfo> _devices = [];
     // A conta tem registos secretos vivos (visto no fim da última ronda; o motor só se lê dentro de uma ronda).
     private bool _secretsInAccount;
+    // Como este aparelho entrou na conta nesta execução, e se herdou a escolha da conta: até o Éteris fechar (a barra
+    // «Sincronizado.» só existe a seguir a uma entrada nesta abertura). Só memória.
+    private SyncEntry _entry;
+    private bool _inheritedNow;
+    // Quem ligou a escolha da conta e quando (lido no fim da última ronda; informação, não prova). Só memória.
+    private string? _accountBy;
+    private long _accountSince;
     // Já se leram os estados dos aparelhos (e fixaram as chaves) com o motor atual: uma vez por sessão e conta, e de
     // novo quando aparece um aparelho desconhecido. Um aparelho que ainda não enviou nada só se conhece por aqui.
     private SyncEngine? _pinnedFor;
@@ -336,29 +378,157 @@ public sealed class SyncAgent
         lock (_gate)
         {
             _saved ??= new SavedSync();
-            var enabled = EnabledOf(_saved).ToHashSet(StringComparer.Ordinal);
-            var joined = JoinedOf(_saved).ToHashSet(StringComparer.Ordinal);
-            foreach (var collection in collections)
-            {
-                if (on) enabled.Add(collection);
-                else enabled.Remove(collection);
-                joined.Remove(collection);
-            }
-            _saved.Collections = enabled.Order(StringComparer.Ordinal).ToList();
-            _saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
+            Choose(_saved, collections, on);
             _store.Save(_saved);
         }
         Notify();
     }
 
-    // Há segredos em jogo neste aparelho (coleções secretas ligadas ou registos secretos na conta): aprovar um aparelho
-    // novo entrega-lhe também as palavras-passe, os pagamentos e os documentos.
+    // Liga ou desliga coleções no estado (sem gravar). Não mexe na escolha da conta nem na oferta (desligar aqui não
+    // muda a conta). Chamar dentro do _gate.
+    private static void Choose(SavedSync saved, IEnumerable<string> collections, bool on)
+    {
+        var enabled = EnabledOf(saved).ToHashSet(StringComparer.Ordinal);
+        var joined = JoinedOf(saved).ToHashSet(StringComparer.Ordinal);
+        foreach (var collection in collections)
+        {
+            if (on) enabled.Add(collection);
+            else enabled.Remove(collection);
+            joined.Remove(collection);
+        }
+        saved.Collections = enabled.Order(StringComparer.Ordinal).ToList();
+        saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
+    }
+
+    // Há segredos em jogo neste aparelho (coleções secretas ligadas, registos secretos na conta, ou a conta com a
+    // escolha de pagamentos e documentos ligada): aprovar um aparelho novo entrega-lhe também as palavras-passe, os
+    // pagamentos e os documentos. Um aparelho numa conta que ainda não acabou uma ronda nela não sabe: conta como «há»
+    // (quem aprovar passa pela porta do Windows sempre que possa haver segredos em jogo).
     public bool HasSecrets
     {
         get
         {
-            lock (_gate) return EnabledOf(_saved).Any(Model.Collections.IsSecret) || _secretsInAccount;
+            lock (_gate)
+                return EnabledOf(_saved).Any(Model.Collections.IsSecret) || _secretsInAccount
+                    || (_saved is { Secret: not null } saved && saved.SecretsInAccount != false);
         }
+    }
+
+    // ---- escolha da conta: pagamentos e documentos (0.2.15) --------------------------------------------------------
+
+    // O que o aparelho que herdou diz, na barra «Sincronizado.» e (com ponto final) na nota do estado.
+    public const string InheritedText = "Recebeu favoritos, palavras-passe, cartões e documentos";
+
+    // A conta sincroniza pagamentos e documentos (a última leitura, ou a escolha feita aqui). Só disco.
+    public bool AccountSecrets
+    {
+        get { lock (_gate) return _saved is { Secret: not null, AccountSecrets: true }; }
+    }
+
+    // Este aparelho deve mostrar a oferta única «receber também neste?». Barato (só memória): serve o «wants» da barra.
+    public bool SecretsOffer
+    {
+        get { lock (_gate) return OfferOf(_saved); }
+    }
+
+    // A conta tem a escolha ligada, este aparelho já estava (ou já esteve) noutra conta quando ela foi feita, ainda não
+    // respondeu e falta-lhe algum dos dois grupos. Chamar dentro do _gate.
+    private static bool OfferOf(SavedSync? saved)
+        => saved is { Enabled: true, Secret: not null, AccountSecrets: true, OfferAnswered: false, InheritPending: false } s
+            && !Model.SyncGroups.AccountCollections.All(EnabledOf(s).Contains);
+
+    // O nome do aparelho que ligou a escolha (já limpo: é um nome recebido) e quando. null / 0 = não se sabe.
+    public string? AccountSecretsBy
+    {
+        get { lock (_gate) return _accountBy; }
+    }
+
+    public long AccountSecretsSinceMs
+    {
+        get { lock (_gate) return _accountSince; }
+    }
+
+    // Grava a escolha da conta. Não usa o motor (só se usa dentro de uma ronda): fica por escrever e a ronda seguinte
+    // escreve-a. Quem chama já passou pela porta do Windows (o anfitrião).
+    public void SetAccountSecrets(bool on)
+    {
+        lock (_gate)
+        {
+            if (_saved is not { Enabled: true, Secret: not null } saved) throw new SyncUserException(NotOnText);
+            saved.AccountChoiceOut = on ? "on" : "off";
+            saved.AccountSecrets = on;
+            saved.OfferAnswered = true;
+            if (on) saved.SecretsInAccount = true;
+            _store.Save(saved);
+        }
+        Notify();
+    }
+
+    // A resposta à oferta única: «Sim» liga aqui os dois grupos (o anfitrião já pediu o Windows Hello); «Não» fecha-a
+    // para sempre neste computador (os interruptores continuam nas Definições).
+    public void AnswerSecretsOffer(bool accept)
+    {
+        lock (_gate)
+        {
+            if (_saved is not { } saved) return;
+            saved.OfferAnswered = true;
+            if (accept) Choose(saved, Model.SyncGroups.AccountCollections, on: true);
+            _store.Save(saved);
+        }
+        Notify();
+    }
+
+    private const string NotOnText = "A sincronização não está ligada neste computador.";
+
+    // A escolha da conta por escrever (SetAccountSecrets) entra no motor no início da ronda, antes do passo do perfil:
+    // segue no envio desta ronda; se a ronda falhar, fica na caixa de saída guardada. Chamar dentro do _gate.
+    private void WriteAccountChoice(SavedSync saved, SyncEngine engine)
+    {
+        if (saved.AccountChoiceOut is not { } choice) return;
+        engine.Put(Model.Collections.Settings, Model.Collections.AccountSecretsKey,
+            new JsonObject { ["value"] = choice, ["since"] = _now(), ["by"] = engine.Device.Id });
+        saved.AccountChoiceOut = null;
+    }
+
+    // Lê o registo da conta no fim do passo do perfil e, num aparelho que acabou de entrar sem estado anterior, herda a
+    // escolha (liga pagamentos e documentos, sem os pôr nas já juntas: a ronda junta-os já a seguir). Valor desconhecido
+    // ou ilegível = desligado. Devolve true se herdou agora. Chamar dentro do _gate; quem chama grava.
+    private bool ReadAccountChoice(SavedSync saved, SyncEngine engine)
+    {
+        var record = engine.Get(Model.Collections.Settings, Model.Collections.AccountSecretsKey);
+        var on = record is { Deleted: false } && record.Text("value") == "on";
+        if (saved.AccountChoiceOut is null) saved.AccountSecrets = on;
+        // «by» é o id de um aparelho: o nome é o deste (já limpo) ou um nome recebido, que se limpa antes de mostrar.
+        _accountBy = record is { Deleted: false } && record.Text("by") is { } by
+            ? by == engine.Device.Id ? DeviceNameText.Shown(engine.Device.Name)
+            : engine.State.DeviceNames.TryGetValue(by, out var name) ? DeviceNameText.Shown(name) : null
+            : null;
+        _accountSince = record is { Deleted: false, Data: { } data } && data["since"] is JsonValue since && since.TryGetValue<long>(out var ms) ? ms : 0;
+        saved.SecretsInAccount = _secretsInAccount || saved.AccountSecrets;
+        if (!saved.InheritPending) return false;
+        saved.InheritPending = false;
+        if (!saved.AccountSecrets) return false;
+        var enabled = EnabledOf(saved).ToHashSet(StringComparer.Ordinal);
+        enabled.UnionWith(Model.SyncGroups.AccountCollections);
+        saved.Collections = enabled.Order(StringComparer.Ordinal).ToList();
+        saved.OfferAnswered = true;
+        _inheritedNow = true;
+        return true;
+    }
+
+    // Acrescenta uma frase ao aviso do estado (uma vez). Chamar dentro do _gate.
+    private void AddNotice(string text)
+    {
+        if (_notice?.EndsWith(text, StringComparison.Ordinal) == true) return;
+        _notice = string.IsNullOrEmpty(_notice) ? text : _notice + " " + text;
+    }
+
+    // Uma conta nova (criada ou entrada) começa sem nada lido da escolha da conta. Chamar dentro do _gate.
+    private static void ResetAccountChoice(SavedSync saved)
+    {
+        saved.AccountSecrets = false;
+        saved.SecretsInAccount = null;
+        saved.AccountChoiceOut = null;
     }
 
     // As já juntadas (um estado de antes das linhas: com base, as coleções que existiam antes das secretas).
@@ -403,6 +573,11 @@ public sealed class SyncAgent
                         && (_phase == SyncPhase.Choose || (_phase == SyncPhase.Stopped && _saved.Stopped == GoneText)),
                     MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
                     JoinedNow = _justJoined && _phase == SyncPhase.On,
+                    AccountSecrets = _saved is { Secret: not null, AccountSecrets: true },
+                    SecretsHere = Model.SyncGroups.AccountCollections.All(EnabledOf(_saved).Contains),
+                    SecretsOffer = OfferOf(_saved),
+                    Entry = _entry,
+                    InheritedSecrets = _inheritedNow,
                 };
             }
         }
@@ -516,6 +691,10 @@ public sealed class SyncAgent
         SavedSync? saved;
         lock (_gate) saved = _saved;
         if (saved is not { Enabled: true, Secret: not null }) return false;
+        // A escolha da conta feita aqui e ainda por escrever (também depois de reabrir o Éteris).
+        lock (_gate)
+            if (saved.AccountChoiceOut is not null)
+                return true;
         ProfileSyncOptions options;
         lock (_gate) options = OptionsOf(saved);
         return ProfileSync.CountLocalChanges(_profile, saved.Baseline, options) > 0;
@@ -584,6 +763,13 @@ public sealed class SyncAgent
                 saved.Joined = null;
                 saved.CreatedMs = _now();
                 saved.Account = AccountKey?.Invoke();
+                // Conta nova: sem escolha da conta, nada a herdar nem a oferecer; «há segredos?» fica por saber até ao fim
+                // da primeira ronda (conta como «há»).
+                ResetAccountChoice(saved);
+                saved.InheritPending = false;
+                saved.OfferAnswered = false;
+                _entry = SyncEntry.Created;
+                _inheritedNow = false;
                 _phase = SyncPhase.On;
                 _store.Save(saved);
             }
@@ -613,40 +799,59 @@ public sealed class SyncAgent
     private async Task CycleAsync(SavedSync saved, CancellationToken cancellationToken)
     {
         var engine = _engine!;
-        SyncReport report;
-        Dictionary<string, string> baseline;
-        ProfileSyncOptions options;
-        lock (_gate)
+        // Atribuído sempre na primeira passagem do ciclo abaixo (ou a ronda sai por exceção ou por «return»).
+        SyncReport report = null!;
+        var inheritedHere = false;
+        // Herdar a escolha da conta liga pagamentos e documentos a meio da ronda: o passo do perfil repete-se uma vez,
+        // com as opções novas, para os cartões e os documentos chegarem já nesta ronda (antes de LastSuccessMs mudar).
+        for (var pass = 0; pass < 2; pass++)
         {
-            options = OptionsOf(saved);
-            ApplyChosenName(engine);
-        }
-        try
-        {
-            (report, baseline) = await ProfileSync.RunAsync(engine, _profile, saved.Baseline, DeviceName, options, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            // O que ficou na caixa de saída (e o que já se leu) fica guardado mesmo que a ronda falhe a meio.
+            Dictionary<string, string> baseline;
+            ProfileSyncOptions options;
             lock (_gate)
-                if (IsCurrent(saved) && ReferenceEquals(_engine, engine))
+            {
+                options = OptionsOf(saved);
+                // O estado do aparelho diz aos outros que grupos recebe (lista de aparelhos).
+                engine.DeviceGroups = Model.SyncGroups.GroupsOn(EnabledOf(saved));
+                if (pass == 0)
                 {
-                    saved.Engine = engine.State;
-                    _store.Save(saved);
+                    ApplyChosenName(engine);
+                    WriteAccountChoice(saved, engine);
                 }
-        }
-        lock (_gate)
-        {
-            if (!IsCurrent(saved) || !ReferenceEquals(_engine, engine)) return;
-            // As coleções que fizeram a ronda inteira já estão juntas (as ligadas entretanto ficam por juntar).
-            var joined = JoinedOf(saved).ToHashSet(StringComparer.Ordinal);
-            var enabledNow = EnabledOf(saved);
-            joined.UnionWith(report.Joined.Where(c => options.IsEnabled(c) && enabledNow.Contains(c)));
-            saved.Baseline = baseline;
-            saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
-            _store.Save(saved);
-            _secretsInAccount = engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection));
-            if (_profile is ILocalNotices notices && notices.TakeNotice() is { } notice) _notice = notice;
+            }
+            try
+            {
+                (report, baseline) = await ProfileSync.RunAsync(engine, _profile, saved.Baseline, DeviceName, options, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // O que ficou na caixa de saída (e o que já se leu) fica guardado mesmo que a ronda falhe a meio.
+                lock (_gate)
+                    if (IsCurrent(saved) && ReferenceEquals(_engine, engine))
+                    {
+                        saved.Engine = engine.State;
+                        _store.Save(saved);
+                    }
+            }
+            bool inherited;
+            lock (_gate)
+            {
+                if (!IsCurrent(saved) || !ReferenceEquals(_engine, engine)) return;
+                // As coleções que fizeram a ronda inteira já estão juntas (as ligadas entretanto ficam por juntar).
+                var joined = JoinedOf(saved).ToHashSet(StringComparer.Ordinal);
+                var enabledNow = EnabledOf(saved);
+                joined.UnionWith(report.Joined.Where(c => options.IsEnabled(c) && enabledNow.Contains(c)));
+                saved.Baseline = baseline;
+                saved.Joined = joined.Order(StringComparer.Ordinal).ToList();
+                _secretsInAccount = engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection));
+                if (_profile is ILocalNotices notices && notices.TakeNotice() is { } notice) _notice = notice;
+                inherited = ReadAccountChoice(saved, engine);
+                inheritedHere |= inherited;
+                // O aviso fica também na nota do estado (a barra «Sincronizado.» só existe a seguir a uma entrada).
+                if (inheritedHere) AddNotice(InheritedText + ".");
+                _store.Save(saved);
+            }
+            if (!inherited) break;
         }
         if (await LeaveDuplicateAsync(saved, engine, cancellationToken).ConfigureAwait(false)) return;
         await engine.PushAsync(cancellationToken).ConfigureAwait(false);
@@ -729,6 +934,10 @@ public sealed class SyncAgent
             saved.CodePending = false;
             saved.CreatedMs = 0;
             saved.Rotation = null;
+            ResetAccountChoice(saved);
+            saved.InheritPending = false;
+            _entry = SyncEntry.None;
+            _inheritedNow = false;
             _store.Save(saved);
             _phase = SyncPhase.Choose;
             _notice = "Outro computador criou a conta de sincronização ao mesmo tempo que este. Junte este computador a essa conta (aprovação no outro computador ou o código de recuperação dele): os dados deste computador juntam-se aos da conta, nada se perde.";
@@ -846,11 +1055,15 @@ public sealed class SyncAgent
                 saved.Secret = null;
                 saved.Kit = null;
                 saved.CodePending = false;
+                ResetAccountChoice(saved);
+                saved.InheritPending = false;
             }
             saved.Stopped = reason;
             _store.Save(saved);
             _phase = SyncPhase.Stopped;
             _justJoined = false;
+            _entry = SyncEntry.None;
+            _inheritedNow = false;
             _notice = reason;
             _devices = [];
         }
@@ -921,11 +1134,14 @@ public sealed class SyncAgent
     private async Task<bool> JoinCoreAsync(AccountSecret account, string? from, bool fresh, CancellationToken cancellationToken)
     {
         SavedSync? before;
-        bool wasOn;
+        bool wasOn, hadBefore;
         lock (_gate)
         {
             before = _saved;
             wasOn = before?.Enabled == true;
+            // Já teve estado de sincronização (chave, conta, ou a marca de já ter tido): lido AQUI, antes de o 2.º cadeado
+            // gravar a chave nova e a marca no mesmo objeto. Só um aparelho sem estado herda a escolha da conta.
+            hadBefore = !MayAutoRequest(before);
         }
         var engine = await SyncEngine.JoinAsync(Transport(), account, DeviceIdentity.Create(DeviceName), _now, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -949,6 +1165,21 @@ public sealed class SyncAgent
             _saved.Rotation = null;
             _saved.CreatedMs = 0;
             _saved.Account = AccountKey?.Invoke() ?? _saved.Account;
+            // A escolha da conta lê-se outra vez no fim da primeira ronda. Ao voltar com a chave guardada, uma escolha
+            // feita aqui e ainda por escrever continua por escrever (é a mesma conta).
+            var pendingChoice = fresh ? null : _saved.AccountChoiceOut;
+            ResetAccountChoice(_saved);
+            _saved.AccountChoiceOut = pendingChoice;
+            _saved.AccountSecrets = pendingChoice == "on";
+            if (fresh)
+            {
+                // Computador novo: herda na primeira ronda. Já esteve numa conta (cadeia substituída e «Foi eu», kit novo
+                // sem ter apagado o estado, removido e aprovado de novo): não herda; recebe a oferta única.
+                _saved.InheritPending = !hadBefore;
+                _saved.OfferAnswered = false;
+            }
+            _entry = fresh ? SyncEntry.Joined : SyncEntry.None;
+            _inheritedNow = false;
             _store.Save(_saved);
             _phase = SyncPhase.On;
             _guest = null;
@@ -1355,10 +1586,19 @@ public sealed class SyncAgent
     {
         if (_engine is not { } engine) return;
         var states = await engine.DevicesAsync(cancellationToken).ConfigureAwait(false);
+        // Pagamentos e documentos: deste aparelho, pelo que está ligado agora; dos outros, pelo estado que escreveram (um
+        // Éteris antigo não o diz: null).
+        bool here;
+        lock (_gate) here = Model.SyncGroups.AccountCollections.All(EnabledOf(_saved).Contains);
         var list = states
-            .Select(s => new DeviceInfo(s.Device, DeviceNameText.Shown(s.Name), s.Kind, s.LastSyncMs, s.Device == engine.Device.Id))
+            .Select(s => new DeviceInfo(s.Device, DeviceNameText.Shown(s.Name), s.Kind, s.LastSyncMs, s.Device == engine.Device.Id)
+            {
+                PaymentsAndDocuments = s.Device == engine.Device.Id ? here
+                    : s.Groups is null ? null : Model.SyncGroups.AccountGroups.All(s.Groups.Contains),
+            })
             .OrderByDescending(d => d.IsThis).ThenByDescending(d => d.LastSyncMs).ToList();
-        if (!list.Any(d => d.IsThis)) list.Insert(0, new DeviceInfo(engine.Device.Id, engine.Device.Name, engine.Device.Kind, engine.State.LastPullMs, true));
+        if (!list.Any(d => d.IsThis))
+            list.Insert(0, new DeviceInfo(engine.Device.Id, engine.Device.Name, engine.Device.Kind, engine.State.LastPullMs, true) { PaymentsAndDocuments = here });
         // Depois de uma troca de chave, os aparelhos que ficaram ainda não escreveram o seu estado na conta nova: entram
         // na lista pela chave fixada (à espera da chave nova), para continuarem à vista e receberem uma troca seguinte.
         foreach (var peer in engine.State.PeerKeys.Keys)
@@ -1523,7 +1763,11 @@ public sealed class SyncAgent
             saved.Rotation = null;
             saved.CreatedMs = 0;
             saved.Stopped = DeletingText;
+            ResetAccountChoice(saved);
+            saved.InheritPending = false;
             _store.Save(saved);
+            _entry = SyncEntry.None;
+            _inheritedNow = false;
             _deleteError = null;
             _engine = null;
             _pinnedFor = null;
@@ -1686,6 +1930,8 @@ public sealed class SyncAgent
             _needsSignIn = false;
             _waiting = 0;
             _justJoined = false;
+            _entry = SyncEntry.None;
+            _inheritedNow = false;
             _phase = SyncPhase.Off;
             if (forgetKey)
             {

@@ -37,6 +37,14 @@ public static class Collections
 
     public const string NotesKey = "notes";
 
+    // Escolha da conta (0.2.15): a conta sincroniza pagamentos e documentos. Registo de «settings» com chave reservada,
+    // fora de SyncableSettings: nenhum perfil o aplica como definição. Campos: «value» ("on"/"off"; só "on" conta como
+    // ligado), «since» (ms) e «by» (id do aparelho que o escreveu), estes dois só informativos.
+    public const string AccountSecretsKey = "@account/secret-groups";
+
+    // Chaves de «settings» reservadas ao Éteris (começam por «@»): nunca são definições de um perfil.
+    public static bool IsReservedSetting(string key) => key.StartsWith('@');
+
     // Definições que viajam entre aparelhos. Fora da lista ficam as que são deste computador (janela, GPU, sandbox,
     // pasta de transferências, barra lateral aberta…) e as de privacidade que dependem da rede local.
     public static readonly IReadOnlySet<string> SyncableSettings = new HashSet<string>(StringComparer.Ordinal)

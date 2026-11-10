@@ -115,6 +115,10 @@ public sealed class SyncEngine
 
     public DeviceIdentity Device => State.Device;
 
+    // Os grupos ligados por inteiro neste aparelho (quem usa o motor diz; null = não diz, como um Éteris antigo): vão no
+    // estado do aparelho, cifrado, para a lista de aparelhos dos outros. Só memória: o agente põe-nos em cada ronda.
+    public IReadOnlyList<string>? DeviceGroups { get; set; }
+
     // O nome novo segue no próximo estado do aparelho e nos próximos lotes (ambos cifrados). O Id e o tipo não mudam.
     public void Rename(string name)
     {
@@ -672,6 +676,7 @@ public sealed class SyncEngine
             Read = new Dictionary<string, long>(State.Read, StringComparer.Ordinal),
             LastSyncMs = State.LastPullMs,
             PublicKey = DevicePublicKey,
+            Groups = DeviceGroups,
         };
         var file = SealedFile.Seal(_keys.FileKey(SealedFile.DeviceState, context), SealedFile.DeviceState, ChainId, _keys.Generation, context, Json.Bytes(payload));
         await _transport.WriteAsync(SyncPaths.State(ChainId, Device.Id), file, cancellationToken).ConfigureAwait(false);
@@ -791,6 +796,7 @@ public sealed class SyncEngine
         try
         {
             engine = await CreateAsync(_transport, secret, Device, _now, Options, cancellationToken).ConfigureAwait(false);
+            engine.DeviceGroups = DeviceGroups;
             engine.State.DeviceKey = State.DeviceKey;
             foreach (var (peer, pub) in keep) engine.State.PeerKeys[peer] = pub;
             // Os IDs opacos dependem da DEK: os registos são reescritos com os IDs da cadeia nova, com a mesma versão.

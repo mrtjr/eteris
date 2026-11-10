@@ -7,8 +7,12 @@ public sealed record SyncGroup(string Id, IReadOnlyList<string> Collections, boo
 
 public static class SyncGroups
 {
+    public const string Payments = "payments";
+    public const string Documents = "documents";
+
     // Decisão D-1 do dono: Pagamentos e Documentos de identificação aparecem, desligados por omissão e com o Windows
-    // Hello para ligar; as outras linhas ficam ligadas.
+    // Hello para ligar; as outras linhas ficam ligadas. Desde a 0.2.15 (D4) há também a escolha da conta, que liga os
+    // dois de uma vez e que os computadores que entram depois herdam (SyncAgent); as omissões daqui não mudam.
     public static readonly IReadOnlyList<SyncGroup> All =
     [
         new("bookmarks", [Collections.Bookmarks], DefaultOn: true, AskToEnable: false),
@@ -17,13 +21,24 @@ public static class SyncGroups
         new("shield", [Collections.Shield], DefaultOn: true, AskToEnable: false),
         new("notes", [Collections.Notes], DefaultOn: true, AskToEnable: false),
         new("passwords", [Collections.Logins, Collections.LoginsNever], DefaultOn: true, AskToEnable: false),
-        new("payments", [Collections.Cards, Collections.Ibans], DefaultOn: false, AskToEnable: true),
+        new(Payments, [Collections.Cards, Collections.Ibans], DefaultOn: false, AskToEnable: true),
         new("contacts", [Collections.Contacts], DefaultOn: true, AskToEnable: false),
-        new("documents", [Collections.IdDocs], DefaultOn: false, AskToEnable: true),
+        new(Documents, [Collections.IdDocs], DefaultOn: false, AskToEnable: true),
         new("travel", [Collections.Travel], DefaultOn: true, AskToEnable: false),
     ];
 
+    // Os grupos que a escolha da conta liga de uma vez (0.2.15, D4).
+    public static readonly IReadOnlyList<string> AccountGroups = [Payments, Documents];
+
+    // As coleções desses grupos: cards, ibans, idDocs.
+    public static IReadOnlySet<string> AccountCollections { get; } =
+        All.Where(g => AccountGroups.Contains(g.Id)).SelectMany(g => g.Collections).ToHashSet(StringComparer.Ordinal);
+
     public static SyncGroup? Find(string? id) => All.FirstOrDefault(g => g.Id == id);
+
+    // Os ids dos grupos ligados por inteiro num aparelho com estas coleções (o campo «groups» do estado do aparelho).
+    public static IReadOnlyList<string> GroupsOn(IReadOnlySet<string> enabled)
+        => All.Where(g => g.Collections.All(enabled.Contains)).Select(g => g.Id).ToList();
 
     // As coleções ligadas num aparelho que ainda não escolheu.
     public static IReadOnlySet<string> DefaultCollections { get; } =

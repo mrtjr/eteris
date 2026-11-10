@@ -43,9 +43,56 @@ internal static class SyncChoices
 
     public static string NotConfirmed(string what) => $"Não foi confirmado com o Windows: {what}.";
 
-    // Liga ou desliga uma linha neste computador. Devolve a mensagem de erro (null = feito).
+    // ---- escolha da conta: pagamentos e documentos (0.2.15, D4) -----------------------------------------------------
+
+    // A linha da escolha da conta no tópico (o id vai na rota /sync-choose, como as outras).
+    public const string AccountRow = "account";
+
+    public const string AccountLine = "Também pagamentos e documentos de identificação";
+
+    private const string NotOnHere = "A sincronização não está ligada neste computador.";
+
+    // Onde e quando a escolha foi ligada (PROPOSTA de texto; informação, não prova: qualquer aparelho da conta a pode
+    // escrever). «device» já vem limpo (SyncAgent.AccountSecretsBy). Data local, dd/MM/yyyy.
+    public static string AccountSince(string? device, long sinceMs)
+    {
+        if (sinceMs <= 0) return string.Empty;
+        var day = DateTimeOffset.FromUnixTimeMilliseconds(sinceMs).ToLocalTime().ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        return device is { Length: > 0 } ? $" Ligado em «{device}» em {day}." : $" Ligado em {day}.";
+    }
+
+    // Um só Windows Hello para os dois grupos; grava a escolha na conta (os computadores que entrarem depois herdam-na).
+    // null = feito; senão a mensagem para a página. Sem a sincronização ligada (ou ainda sem conta) aqui, recusa sem
+    // pedir o Windows.
+    public static async Task<string?> ChooseAccountAsync(SyncAgent agent, Func<ReauthPurpose, Task<bool>> confirm)
+    {
+        if (!agent.Enabled || !agent.HasKey) return NotOnHere;
+        if (!await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false)) return NotConfirmed($"«{AccountLine}» continua desligado");
+        try { agent.SetAccountSecrets(true); }
+        catch (SyncUserException e) { return e.Message; }
+        agent.SetCollections(SyncGroups.AccountCollections, true);
+        return null;
+    }
+
+    // A resposta à oferta única («receber também neste?»). «Sim» pede o Windows Hello: recusado, a oferta fica por
+    // responder e nada muda.
+    public static async Task<string?> AnswerOfferAsync(SyncAgent agent, bool accept, Func<ReauthPurpose, Task<bool>> confirm)
+    {
+        if (accept && !await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false)) return NotConfirmed($"«{AccountLine}» continua desligado");
+        agent.AnswerSecretsOffer(accept);
+        return null;
+    }
+
+    // Liga ou desliga uma linha neste computador. Devolve a mensagem de erro (null = feito). A linha da conta liga com a
+    // escolha da conta; desligá-la só desliga os dois grupos aqui (a conta fica como está: desligar não apaga nada).
     public static async Task<string?> ChooseAsync(SyncAgent agent, string groupId, bool on, Func<ReauthPurpose, Task<bool>> confirm)
     {
+        if (groupId == AccountRow)
+        {
+            if (on) return await ChooseAccountAsync(agent, confirm).ConfigureAwait(false);
+            agent.SetCollections(SyncGroups.AccountCollections, false);
+            return null;
+        }
         if (SyncGroups.Find(groupId) is not { } group) return "Esta linha não existe.";
         if (on && group.AskToEnable && !await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false))
             return NotConfirmed($"«{Texts[group.Id].Title}» continua desligado");
