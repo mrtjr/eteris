@@ -95,6 +95,17 @@ internal static class SyncService
                 AutoPair = true,
                 // O pedido do computador novo só se renova com o ecrã dele à vista (cartão ou Definições, há menos de 15 s).
                 PairingScreenVisible = () => Now() - Interlocked.Read(ref _pairingSeen) < 15_000,
+                // A primeira ronda a seguir a uma aprovação corre no agente, fora do agendador: quando acaba, o agendador
+                // acerta-se como depois de «Ligar» (nova tentativa em 30 s se falhou, o período de sempre se correu bem).
+                RoundEnded = ok =>
+                {
+                    lock (Gate)
+                    {
+                        Schedule.Now(Now());
+                        Schedule.Done(Now(), ok);
+                    }
+                    Arm();
+                },
                 // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
                 Log = m => System.Diagnostics.Debug.WriteLine("[sincronização] " + m),
             };

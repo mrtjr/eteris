@@ -1,4 +1,5 @@
 using System.IO;
+using Eteris.Browser.Sync;
 using Eteris.Sync.Engine;
 using Eteris.Sync.Pairing;
 using Eteris.Sync.Transport;
@@ -15,6 +16,7 @@ public sealed class PairingFlowStateTests : IDisposable
     private long _now = 1_762_560_000_000;
     private readonly SyncTestCloud _cloud = new();
     private string? _account = "conta-a";
+    private readonly List<(string Name, bool Ok)> _rounds = [];
 
     private long Now() => _now;
 
@@ -31,6 +33,11 @@ public sealed class PairingFlowStateTests : IDisposable
         {
             PairingPoll = TimeSpan.FromMilliseconds(1),
             AccountKey = () => _account,
+            RoundEnded = ok =>
+            {
+                lock (_rounds) _rounds.Add((name, ok));
+                _cloud.Pulse();
+            },
         };
         _cloud.Watch(name, agent);
         return new Device(agent, profile, store, transport);
@@ -218,6 +225,82 @@ public sealed class PairingFlowStateTests : IDisposable
         Assert.Contains("public static bool RefusePairing(string session)", service);
     }
 
+    // ---- A-07: a primeira ronda a seguir à aprovação, e uma ronda cuja contagem dos pedidos falha -------------------
+
+    private List<(string Name, bool Ok)> Rounds()
+    {
+        lock (_rounds) return [.. _rounds];
+    }
+
+    // A conta chegou e a entrada correu bem, mas a primeira ronda falha (a rede caiu): fica à vista como qualquer ronda
+    // falhada — o cartão deixa de dizer «entrou na conta. A sincronizar…» — e o anfitrião é avisado para marcar nova
+    // tentativa (em vez de esperar pela ronda periódica).
+    [Fact]
+    public async Task FirstRound_FailingRightAfterTheApproval_ShowsTheError_AndAsksForARetry()
+    {
+        var (casa, novo) = await TwoAsync();
+        var (session, code) = await ReadyAsync(casa, novo);
+        novo.Agent.ConfirmPairing();
+        // A listagem da conta (só existe dentro da ronda, depois de entrar) falha uma vez.
+        novo.Transport.FailList(casa.Store.Load()!.Engine!.ChainId + "/", 1, () => new IOException("pasta inacessível"));
+        Assert.Equal(PairingAnswer.Approved, await casa.Agent.ApproveWithCodeAsync(session, code));
+        await _cloud.WaitFor(() => Rounds().Count == 1, "o fim da primeira ronda");
+        var status = novo.Agent.Status;
+        Assert.Equal(SyncPhase.On, status.Phase);
+        Assert.False(status.Running);
+        Assert.NotNull(status.Error);
+        Assert.Null(status.Pairing);
+        Assert.NotEqual(GuestPairingKind.Joined, GuestPairingModel.From(status).Kind);
+        Assert.Equal([("Portátil", false)], Rounds());
+
+        // A tentativa seguinte (a do agendador) corre bem: nada se perdeu.
+        Assert.True(await novo.Agent.RunAsync());
+        Assert.Null(novo.Agent.Status.Error);
+        Assert.False(novo.Agent.Status.JoinedNow);
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.True(await novo.Agent.RunAsync());
+        Assert.Equal("Wikipédia", novo.Profile.Title("https://pt.wikipedia.org/"));
+        Assert.Equal("Do portátil", casa.Profile.Title("https://portatil.example/"));
+    }
+
+    // Quando corre bem, o anfitrião também fica a saber (a ronda não passou pelo agendador).
+    [Fact]
+    public async Task FirstRound_AfterTheApproval_TellsTheHostItEnded()
+    {
+        var (casa, novo) = await TwoAsync();
+        var (session, code) = await ReadyAsync(casa, novo);
+        novo.Agent.ConfirmPairing();
+        Assert.Equal(PairingAnswer.Approved, await casa.Agent.ApproveWithCodeAsync(session, code));
+        await _cloud.WaitFor(() => Rounds().Count == 1, "o fim da primeira ronda");
+        Assert.Equal([("Portátil", true)], Rounds());
+        Assert.Null(novo.Agent.Status.Error);
+
+        // No navegador o sinal acerta o agendador (nova tentativa depois de uma falha, o período depois de correr bem).
+        var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs"));
+        Assert.Contains("RoundEnded = ok =>", service);
+        Assert.Contains("Schedule.Done(Now(), ok);", service);
+    }
+
+    // Contar os pedidos de computadores novos é o último passo de uma ronda: se essa listagem falhar, a ronda — que já
+    // enviou e recebeu tudo — conta como boa.
+    [Fact]
+    public async Task Round_ThatAlreadySynced_IsNotAFailure_WhenCountingTheRequestsFails()
+    {
+        var (casa, _) = await TwoAsync();
+        _now += 60_000;
+        casa.Profile.Bookmark("https://exemplo.example/", "Novo");
+        casa.Transport.FailList("pair/", 1, () => new IOException("pasta inacessível"));
+        Assert.True(await casa.Agent.RunAsync());
+        Assert.Null(casa.Agent.Status.Error);
+        Assert.Equal(_now, casa.Agent.Status.LastSuccessMs);
+        Assert.Equal(0, casa.Transport.ListFaultsLeft);
+        // A sessão da Google por renovar não passa calada: a ronda falha e o estado pede para entrar outra vez.
+        _now += 60_000;
+        casa.Transport.FailList("pair/", 1, () => new Eteris.Sync.Google.OAuthException("A sessão da Google acabou.", needsSignIn: true));
+        Assert.False(await casa.Agent.RunAsync());
+        Assert.True(casa.Agent.Status.NeedsSignIn);
+    }
+
     // ---- o transporte dos testes: conta leituras, falha ou segura uma escrita ----------------------------------------
 
     private sealed class ScriptedTransport(ISyncTransport inner, Action pulse) : ISyncTransport
@@ -225,6 +308,7 @@ public sealed class PairingFlowStateTests : IDisposable
         private readonly Lock _gate = new();
         private readonly List<(string End, Func<Exception> Make)> _failWrites = [];
         private readonly List<(string End, Func<Exception> Make, int Left)> _failReads = [];
+        private readonly List<(string End, Func<Exception> Make, int Left)> _failLists = [];
         private readonly List<Hold> _holds = [];
         private int _reads;
 
@@ -268,10 +352,37 @@ public sealed class PairingFlowStateTests : IDisposable
             return hold;
         }
 
-        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+        // As próximas «times» listagens cujo prefixo acaba em «end» falham.
+        public void FailList(string end, int times, Func<Exception> make)
+        {
+            lock (_gate) _failLists.Add((end, make, times));
+        }
+
+        public int ListFaultsLeft
+        {
+            get { lock (_gate) return _failLists.Sum(f => f.Left); }
+        }
+
+        public async Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _reads);
-            return inner.ListAsync(prefix, cancellationToken);
+            Exception? failure = null;
+            lock (_gate)
+            {
+                var at = _failLists.FindIndex(f => f.Left > 0 && prefix.EndsWith(f.End, StringComparison.Ordinal));
+                if (at >= 0)
+                {
+                    var fault = _failLists[at];
+                    _failLists[at] = (fault.End, fault.Make, fault.Left - 1);
+                    failure = fault.Make();
+                }
+            }
+            if (failure is not null)
+            {
+                pulse();
+                throw failure;
+            }
+            return await inner.ListAsync(prefix, cancellationToken);
         }
 
         public async Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)

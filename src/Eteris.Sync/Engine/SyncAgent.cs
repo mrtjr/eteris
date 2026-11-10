@@ -340,6 +340,11 @@ public sealed class SyncAgent
     internal static bool MayAutoRequest(SavedSync? saved)
         => saved is null || (saved.Secret is null && saved.Account is null && !saved.HadAccount);
 
+    // A primeira ronda a seguir a uma entrada por aprovação acabou (true: correu bem). Essa ronda é o agente que a
+    // corre, fora do agendador do anfitrião: com este sinal o anfitrião marca a tentativa seguinte quando ela falha,
+    // em vez de esperar pela ronda periódica. Chamado de qualquer thread.
+    public Action<bool>? RoundEnded { get; init; }
+
     // Registo de diagnóstico (nomes opacos do transporte, nunca dados): o que o apagar deixou de fora e porque falhou.
     public Action<string>? Log { get; init; }
 
@@ -904,8 +909,11 @@ public sealed class SyncAgent
             }
         }
         // Numa ronda, os pedidos de aparelhos novos só se contam (para o menu dizer que há um): responder-lhes faz
-        // pedidos durante minutos e só acontece quando o utilizador abre o menu ou a secção Sincronização.
-        await AnswerRequestsCoreAsync(answer: false, cancellationToken).ConfigureAwait(false);
+        // pedidos durante minutos e só acontece quando o utilizador abre o menu ou a secção Sincronização. Se a
+        // contagem falhar de passagem, a ronda — que já enviou e recebeu tudo — não conta como falhada (a sessão da
+        // Google por renovar não passa calada: tem de ficar no estado).
+        try { await AnswerRequestsCoreAsync(answer: false, cancellationToken).ConfigureAwait(false); }
+        catch (Exception e) when (IsTransient(e) && e is not Google.OAuthException { NeedsSignIn: true }) { }
         var done = Snapshot(engine);
         lock (_gate)
         {
@@ -1308,18 +1316,29 @@ public sealed class SyncAgent
                 session = null;
                 await _run.WaitAsync(flow.Cancel.Token).ConfigureAwait(false);
                 SetRunning(true);
+                bool joined = false, synced = false;
                 try
                 {
-                    if (await JoinDeliveredAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false))
+                    joined = await JoinDeliveredAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false);
+                    if (joined)
                     {
                         SavedSync saved;
                         lock (_gate) saved = _saved!;
                         await CycleAsync(saved, flow.Cancel.Token).ConfigureAwait(false);
+                        synced = true;
                     }
+                }
+                // Já entrou (o pedido acabou e deixou de ser o deste aparelho): uma primeira ronda que falha é uma ronda
+                // falhada como as outras — fica no estado (o cartão deixa de dizer «entrou na conta. A sincronizar…») e
+                // o anfitrião marca a tentativa seguinte (RoundEnded), que trata também de uma conta que mudou de chave.
+                catch (Exception e) when (joined && (IsTransient(e) || e is ChainGoneException))
+                {
+                    Fail(e);
                 }
                 finally
                 {
                     EndRun();
+                    if (joined && !flow.Cancel.IsCancellationRequested) EndedRound(synced);
                     // Não depois de «Sair» nem de «Apagar…» (o pedido parado): nenhum pedido novo ao transporte.
                     if (!flow.Cancel.IsCancellationRequested)
                     {
@@ -1360,6 +1379,13 @@ public sealed class SyncAgent
             }
             Notify();
         });
+    }
+
+    // Nunca deixa sair uma exceção do anfitrião para a tarefa do pedido.
+    private void EndedRound(bool ok)
+    {
+        try { RoundEnded?.Invoke(ok); }
+        catch (Exception e) { Log?.Invoke($"O aviso do fim da ronda falhou ({e.GetType().Name})."); }
     }
 
     private const string UnexpectedPairingText = "Não foi possível juntar este computador (erro inesperado). Peça outra vez.";
