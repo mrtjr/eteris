@@ -134,7 +134,7 @@ public static class PrivacyPage
             new("no-google", "No arranque, nada sai para a Google",
                 googleStillOn.Count == 0
                     ? "Nem o relógio de rede do Chromium (clients2.google.com) nem a verificação do «Modo IA» da pesquisa Google (www.google.com, com os cookies da Google): a Google só recebe um pedido quando pesquisa nela ou abre um site dela."
-                      + (s.SyncOn ? " " + SyncException : "")
+                      + (s.SyncOn ? " " + SyncException + " " + SyncSees : "")
                     : "Ainda ligados no motor: " + string.Join(", ", googleStillOn) + ".",
                 googleStillOn.Count == 0),
             new("cookies", "Cookies de terceiros bloqueados",
@@ -223,13 +223,44 @@ public static class PrivacyPage
     // A exceção que o utilizador escolheu: com sessão Google para a sincronização, os pedidos dela (cifrados, para a pasta
     // oculta da aplicação no Drive dele, por um cliente próprio que só fala com os endereços da Google necessários — nada
     // pelo motor), a renovação da sessão, o nome e o e-mail da conta e as ações que o próprio utilizador pede.
+    // Os momentos são a lista do teste NetworkMoments_ClosedListOfCallers (SyncIntegrationTests): quem acrescentar um
+    // momento de rede acrescenta-o a esse teste e a esta frase. Os números são os das constantes (SyncSchedule,
+    // PairingProtocol.Lifetime, PollInterval, ActivationLook.Interval); PrivacyPageTests confere-os.
+    // Texto do plano (0.2.15, §3.5) com as variantes do código: «sincronizar agora» na lista; «Sair deste computador» fora
+    // dela, porque não faz nenhum pedido (a rota /sync-google-out não revoga).
     public const string SyncException =
         "Exceção que escolheu: com sessão iniciada na Google para a sincronização, o Éteris fala com a Google por um cliente próprio (não pelo motor). "
-        + "Com o Google Drive — só a pasta oculta da aplicação, tudo cifrado neste computador — 30 s depois de abrir (ou 10 s depois de uma alteração, se for antes), "
-        + "10 s depois de uma alteração, de 10 em 10 minutos e quando abre o menu do Éteris (⋯) ou tem a secção Sincronização das Definições à vista, para ver pedidos de outros computadores "
+        + "Com o Google Drive (só a pasta oculta da aplicação, tudo cifrado neste computador): 30 s depois de abrir (ou 10 s depois de uma alteração, se for antes), "
+        + "10 s depois de uma alteração, de 10 em 10 minutos, e quando abre o menu do Éteris (⋯), volta à janela do Éteris (no máximo uma vez a cada 5 minutos, "
+        + "ou logo se uma ronda já tiver encontrado um pedido) ou tem a secção Sincronização das Definições à vista, para ver pedidos de outros computadores "
         + "(ao responder a um, acompanha-o de 2 em 2 s até acabar, no máximo 10 minutos). "
         + "Com oauth2.googleapis.com, para renovar a sessão quando expira. Uma vez, para saber o nome e o e-mail da conta. "
-        + "E nas ações que pedir nas Definições: entrar, «Sincronizar agora», aprovar ou recusar um computador, remover um aparelho, apagar os dados do Drive e sair (que retira a autorização na Google).";
+        + "E nas ações que pedir: entrar, sincronizar agora, aprovar ou recusar um computador, remover um aparelho, apagar os dados do Drive e "
+        + "retirar o acesso do Éteris à conta Google (que desliga todos os computadores). Sair deste computador não fala com a Google.";
+
+    // O que a Google vê (plano §3.5, à letra). Fecha a exceção na promessa «no-google» e está no bloco de sincronização.
+    public const string SyncSees =
+        "A Google vê que usa o Éteris, quando sincroniza, quantos ficheiros há e o tamanho aproximado deles. Não vê o que está lá dentro.";
+
+    // A chave (plano §3.5), com a condição real do Windows ao aprovar: SyncChoices.MayApproveAsync só o pede com segredos
+    // em jogo (agent.HasSecrets). Sem marcação: a página escreve-a com textContent.
+    public const string SyncKey =
+        "A chave da sincronização é criada no seu computador e nunca vai para a Google nem para o projeto Éteris. "
+        + "Para pôr outro computador na conta, aprova-o num computador que já esteja ligado (com o Windows Hello, quando há palavras-passe ou outros dados do cofre em jogo) "
+        + "ou usa o seu kit de recuperação. Sem nenhum computador ligado e sem o kit, a cópia na nuvem não se recupera, por ninguém.";
+
+    // O que vai (plano §3.6 (2), à letra).
+    public const string SyncGoes =
+        "Favoritos, Espaços, definições, decisões do Escudo, notas, palavras-passe, contactos e viagens; pagamentos e documentos de identificação só se os ligar. "
+        + "O histórico, as abas abertas, cookies, cache e permissões dos sites não vão.";
+
+    // PROPOSTA (título do bloco; o dono aprova).
+    public const string SyncBlockTitle = "Se ligar a sincronização";
+
+    // O bloco «Se ligar a sincronização» de eteris://privacy/#sincronizacao: sempre igual (com ou sem sessão, com a
+    // sincronização ligada ou desligada, também numa janela privada), para quem ainda não entrou poder ler o que vai ser
+    // enviado. Não é uma promessa (nada nele se mede) e não faz pedidos.
+    public static object SyncBlock => new { title = SyncBlockTitle, goes = SyncGoes, sees = SyncSees, key = SyncKey };
 
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
@@ -295,6 +326,7 @@ public static class PrivacyPage
         {
             promises = promises.Select(p => new { id = p.Id, title = p.Title, detail = p.Detail, kept = p.Kept, live = p.Live, fix = p.Fix }),
             report = ReportJson(events, today ?? DateOnly.FromDateTime(DateTime.Today)),
+            sync = SyncBlock,
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

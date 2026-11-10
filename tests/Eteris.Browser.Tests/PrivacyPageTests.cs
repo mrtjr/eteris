@@ -76,7 +76,10 @@ public class PrivacyPageTests
         Assert.DoesNotContain("sincronização", off.Detail);
         var on = Find(Good() with { SyncOn = true }, "no-google");
         Assert.True(on.Kept);
-        Assert.EndsWith(PrivacyPage.SyncException, on.Detail);
+        // A exceção é o que fecha a lista dos momentos; a frase do que a Google vê fecha a promessa (0.2.15).
+        Assert.Contains(PrivacyPage.SyncException, on.Detail);
+        Assert.EndsWith(PrivacyPage.SyncException + " " + PrivacyPage.SyncSees, on.Detail);
+        Assert.EndsWith(PrivacyPage.SyncSees, on.Detail);
         Assert.Contains("30 s depois de abrir", on.Detail);
         Assert.Contains("cifrado", on.Detail);
         // A lista é a de verdade: o menu é o «⋯», a renovação da sessão e as ações do utilizador também contam, e não
@@ -87,6 +90,126 @@ public class PrivacyPageTests
         Assert.Contains("de 2 em 2 s", on.Detail);
         Assert.DoesNotContain("e mais nada", on.Detail);
         Assert.DoesNotContain("menu da conta", on.Detail);
+    }
+
+    // 0.2.15 (T8): voltar à janela do Éteris também procura pedidos, com o limite de ActivationLook.
+    [Fact]
+    public void SyncException_NamesComingBackToTheWindow_AndItsLimit()
+    {
+        Assert.Contains("volta à janela do Éteris", PrivacyPage.SyncException);
+        Assert.Contains("no máximo uma vez a cada 5 minutos, ou logo se uma ronda já tiver encontrado um pedido", PrivacyPage.SyncException);
+    }
+
+    // 0.2.15 (T12): «Sair deste computador» não fala com a Google; «Retirar o acesso…» revoga e desliga todos. A
+    // variante confere-se pela fonte: a rota de sair não revoga.
+    [Fact]
+    public void SyncException_SaysSignOutIsLocal_AndRemovingAccessDisconnectsEveryone()
+    {
+        var factory = Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
+        Assert.DoesNotContain("Revoke", Sync.GoogleSyncTests.CaseBlock(factory, "case \"/sync-google-out\":"));
+        var text = PrivacyPage.SyncException;
+        Assert.Contains("retirar o acesso do Éteris à conta Google (que desliga todos os computadores)", text);
+        Assert.DoesNotContain("sair (que retira a autorização na Google)", text);
+        Assert.EndsWith("Sair deste computador não fala com a Google.", text);
+        Assert.DoesNotContain("sair deste computador e", text);
+        Assert.Contains("entrar, sincronizar agora, aprovar ou recusar um computador", text);
+    }
+
+    // R13: cada número da exceção é o da constante do código; se uma mudar, este teste obriga a mudar o texto.
+    [Fact]
+    public void SyncException_NumbersMatchTheCode()
+    {
+        var text = PrivacyPage.SyncException;
+        Assert.Contains("30 s depois de abrir", text);
+        Assert.Equal(30, Eteris.Sync.Engine.SyncSchedule.StartupDelay.TotalSeconds);
+        Assert.Contains("10 s depois de uma alteração", text);
+        Assert.Equal(10, Eteris.Sync.Engine.SyncSchedule.ChangeDelay.TotalSeconds);
+        Assert.Contains("de 10 em 10 minutos", text);
+        Assert.Equal(10, Eteris.Sync.Engine.SyncSchedule.Period.TotalMinutes);
+        Assert.Contains("de 2 em 2 s", text);
+        Assert.Contains("public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(2);",
+            Sync.GoogleSyncTests.Src("Eteris.Sync", "Pairing", "Pairing.cs"));
+        Assert.Contains("no máximo 10 minutos", text);
+        Assert.Equal(10, Eteris.Sync.Pairing.PairingProtocol.Lifetime.TotalMinutes);
+        Assert.Contains("a cada 5 minutos", text);
+        Assert.Equal(TimeSpan.FromMinutes(5), Eteris.Browser.Sync.ActivationLook.Interval);
+    }
+
+    // A frase da chave (plano §3.5, com a condição do Windows que o código tem). Vive no bloco sempre visível, não na
+    // promessa das palavras-passe.
+    [Fact]
+    public void SyncKey_SaysWhereTheKeyLives()
+    {
+        var key = PrivacyPage.SyncKey;
+        Assert.Contains("nunca vai para a Google nem para o projeto Éteris", key);
+        Assert.Contains("kit de recuperação", key);
+        Assert.Contains("não se recupera, por ninguém", key);
+        Assert.DoesNotContain("*", key);
+        foreach (var syncOn in new[] { false, true })
+            Assert.DoesNotContain(key, Find(Good() with { SyncOn = syncOn }, "passwords").Detail);
+    }
+
+    [Fact]
+    public void WithSyncOff_ThePromisesSayNothingAboutTheException()
+    {
+        foreach (var p in PrivacyPage.Promises(Good()))
+        {
+            Assert.DoesNotContain(PrivacyPage.SyncException, p.Detail);
+            Assert.DoesNotContain(PrivacyPage.SyncSees, p.Detail);
+        }
+        Assert.Contains("Com a sincronização desligada, não saem deste computador.", Find(Good(), "passwords").Detail);
+    }
+
+    private static string PrivacyTemplate()
+        => Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "privacy.html");
+
+    // R15 (S33): o bloco «Se ligar a sincronização» está sempre na página, com a sincronização ligada ou desligada.
+    [Fact]
+    public void PrivacyPage_AlwaysHasTheSyncBlock()
+    {
+        foreach (var syncOn in new[] { false, true })
+        {
+            var html = PrivacyPage.Render(Good() with { SyncOn = syncOn });
+            Assert.Contains("<section id=\"sincronizacao\"", html);
+            Assert.Contains("\"sync\":{\"title\":", html);
+        }
+        Assert.Equal("Favoritos, Espaços, definições, decisões do Escudo, notas, palavras-passe, contactos e viagens; pagamentos e documentos de identificação só se os ligar. O histórico, as abas abertas, cookies, cache e permissões dos sites não vão.",
+            PrivacyPage.SyncGoes);
+        Assert.Equal("A Google vê que usa o Éteris, quando sincroniza, quantos ficheiros há e o tamanho aproximado deles. Não vê o que está lá dentro.",
+            PrivacyPage.SyncSees);
+        Assert.Equal("Se ligar a sincronização", PrivacyPage.SyncBlockTitle);
+        var page = PrivacyTemplate();
+        foreach (var part in new[] { "title", "goes", "sees", "key" })
+            Assert.Matches(@"\.textContent = data\.sync\." + part + ";", page);
+        Assert.DoesNotContain("innerHTML", page);
+        Assert.True(page.IndexOf("<section id=\"sincronizacao\"", StringComparison.Ordinal) < page.IndexOf("<h2>Promessas</h2>", StringComparison.Ordinal));
+    }
+
+    // R15 e a outra metade do teste 16 da T14: quem ainda não entrou lê o que vai para a Google, e a ligação das
+    // Definições aponta para este bloco.
+    [Fact]
+    public void SignedOut_CanReadWhatGoesToGoogle_BeforeSigningIn()
+    {
+        var html = PrivacyPage.Render(Good());
+        Assert.Contains("<section id=\"sincronizacao\"", html);
+        // O conteúdo não depende do estado: SyncBlock é uma propriedade estática, sem State.
+        Assert.NotNull(typeof(PrivacyPage).GetProperty(nameof(PrivacyPage.SyncBlock))?.GetGetMethod());
+        Assert.Contains("href=\"eteris://privacy/#sincronizacao\"", Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html"));
+    }
+
+    // R15: o bloco é uma explicação, não uma promessa medida, e não dá à página nenhum poder de rede novo.
+    [Fact]
+    public void SyncBlock_IsNotAPromise_AndAddsNoNetworkPower()
+    {
+        string[] ids = ["gpc-header", "gpc-js", "ad-apis", "quiet", "passwords", "no-google", "cookies", "jars", "referrer", "language",
+            "hints", "lan", "bounce", "cname", "webrtc", "dns", "recall", "gpu-cache", "engine-tuning"];
+        foreach (var syncOn in new[] { false, true })
+            Assert.Equal(ids, PrivacyPage.Promises(Good() with { SyncOn = syncOn }).Select(p => p.Id));
+        var page = PrivacyTemplate();
+        Assert.Contains("content=\"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'\"", page);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "Content-Security-Policy"));
+        Assert.DoesNotContain("fetch(", page);
+        Assert.DoesNotContain("XMLHttpRequest", page);
     }
 
     [Fact]

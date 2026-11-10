@@ -82,6 +82,9 @@
   .trow a.go { white-space: nowrap; text-decoration: none; color: var(--text); font-size: 13px; padding: 9px 15px; border-radius: 12px;
     background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), color-mix(in srgb, var(--accent-2) 45%, transparent)); }
   .trow a.go:hover { filter: brightness(1.15); }
+  /* Se ligar a sincronização (sempre à vista; as cores vêm das variáveis dos dois temas) */
+  .sync p { padding: 14px 20px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .sync p + p { border-top: 1px solid var(--line); }
 
   /* Tema claro (o servidor acrescenta class="light" ao <html>) */
   html.light { --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0; --line: rgba(20, 24, 40, .1); --card: rgba(255, 255, 255, .8); --ok: #059669; --bad: #e11d48; }
@@ -125,6 +128,13 @@
     </div>
   </section>
 
+  <!-- O que vai para a Google se ligar a sincronização: sempre à vista, com ou sem sessão (a ligação «Como protegemos os
+       seus dados» das Definições vem para aqui). HTML estático para a âncora funcionar ao abrir; o texto vem dos dados. -->
+  <section id="sincronizacao" class="sync" aria-labelledby="s-title">
+    <h2 id="s-title"></h2>
+    <div class="card"><p id="s-goes"></p><p id="s-sees"></p><p id="s-key"></p></div>
+  </section>
+
   <h2>Promessas</h2>
   <div class="score" id="score"></div>
   <div class="card" id="list" role="list"></div>
@@ -133,6 +143,11 @@
 <script type="application/json" id="data">{{DATA}}</script>
 <script>
   const data = JSON.parse(document.getElementById('data').textContent);
+  // Se ligar a sincronização: o que vai, o que a Google vê e onde fica a chave (iguais em qualquer estado).
+  document.getElementById('s-title').textContent = data.sync.title;
+  document.getElementById('s-goes').textContent = data.sync.goes;
+  document.getElementById('s-sees').textContent = data.sync.sees;
+  document.getElementById('s-key').textContent = data.sync.key;
   // Verificações feitas aqui mesmo, pelo JavaScript da página (o mesmo que um site veria).
   const live = {
     gpc: () => navigator.globalPrivacyControl === true
