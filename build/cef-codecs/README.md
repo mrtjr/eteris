@@ -239,7 +239,7 @@ sandbox». O fluxo `.github/workflows/release.yml` **não consegue compilar este
 objetos, 5–10 horas de compilação oficial, muito acima do disco, ~14 GB, e do tempo, 6 h, dos *runners* alojados do
 GitHub): no push de uma tag `v*` só compila e corre os testes, sem pack nem upload. A publicação pelo CI existe só
 para emergências, por `workflow_dispatch` com o input `sem_codecs` = true, e sai com o runtime do NuGet, sem codecs
-e sem sandbox (`publish.ps1 -NoSandbox` e `pack.ps1 -NoSandbox`).
+e sem sandbox (`publish.ps1 -NoSandbox` e `pack.ps1 -NoSandbox`) nem login Google (`pack.ps1 -SemLogin`).
 
 ## Licenças
 

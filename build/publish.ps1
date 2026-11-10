@@ -11,8 +11,8 @@
 # falhar, a pasta publish\ é apagada.
 # -GoogleOAuthJson <caminho> (docs/sincronizacao.md): o identificador da aplicação Google («App para computador»,
 # descarregado da Google Cloud) vai para a pasta publish e o «Entrar com o Google» fica disponível. Nunca no repositório
-# (.gitignore). Sem ele publica sem login: a secção Sincronização diz «indisponível nesta compilação». A marca
-# eteris-build.json diz se o levou (google_oauth), nunca o client_id.
+# (.gitignore). Sem ele publica sem login: a secção Sincronização diz «indisponível nesta compilação», e o pack.ps1 só
+# empacota essa publicação com -SemLogin. A marca eteris-build.json diz se o levou (google_oauth), nunca o client_id.
 param([string]$Version = "0.2.13", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0,
   [string]$SandboxClientDll = "", [string]$GoogleOAuthJson = "")
 $ErrorActionPreference = "Stop"
@@ -160,7 +160,7 @@ if ($oauth) {
   Copy-Item -LiteralPath $GoogleOAuthJson -Destination (Join-Path $publishDir "google-oauth.json")
   "Login Google: google-oauth.json copiado (cliente «App para computador», client_id $(([string]$oauth.installed.client_id).Split('-')[0])-…)"
 } else {
-  Write-Warning "Publicado SEM login Google (falta -GoogleOAuthJson): a secção Sincronização e o menu dizem «indisponível nesta compilação»."
+  Write-Warning "Publicado SEM login Google (falta -GoogleOAuthJson): a secção Sincronização e o menu dizem «indisponível nesta compilação». O pack.ps1 só a empacota com -SemLogin."
 }
 
 # Marca do fim (só aqui, com tudo verificado): o pack.ps1 exige-a e ela vai na instalação como registo da release.

@@ -90,9 +90,10 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
    compilações. Se alguma verificação falhar depois de começar, a pasta `publish\` é apagada.
 4. **Empacotar**: `.\build\pack.ps1 -Version X.Y.Z`. Só empacota uma pasta `publish\` com o `eteris-build.json` da
    versão pedida e com sandbox; uma publicação de emergência sem sandbox só com `-NoSandbox` também no `pack.ps1` (o
-   `release.yml` passa-o). O `mainExe` continua `Eteris.Browser.exe` (agora o bootstrap), por isso os atalhos de quem
-   atualiza continuam válidos; a ACL do serviço de rede é dada pelos ganchos do Velopack ao instalar e ao atualizar
-   (provado na «3.ª prova do Velopack», em baixo).
+   `release.yml` passa-o). Recusa também uma publicação sem login Google (sem `-GoogleOAuthJson` no passo 3), salvo com
+   `-SemLogin` (`docs/motor.md`, «Como publicar», passo 4; o `release.yml` passa-o). O `mainExe` continua
+   `Eteris.Browser.exe` (agora o bootstrap), por isso os atalhos de quem atualiza continuam válidos; a ACL do serviço de
+   rede é dada pelos ganchos do Velopack ao instalar e ao atualizar (provado na «3.ª prova do Velopack», em baixo).
 5. **Testar** a pasta `publish\` num perfil de teste: `chrome://sandbox` (renderers Lockdown/Untrusted, GPU Low) e
    `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`. Fora de uma instalação a pasta não
    tem a ACL, por isso aí o serviço de rede aparece «Not Sandboxed» (normal).

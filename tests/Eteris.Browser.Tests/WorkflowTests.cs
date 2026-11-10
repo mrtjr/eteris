@@ -52,6 +52,9 @@ public class WorkflowTests
         Assert.Contains("publish.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);
         // E o pack.ps1 só empacota uma publicação sem sandbox quando isso é pedido.
         Assert.Contains("pack.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", publish);
+        // Nem tem o google-oauth.json (nunca no repositório): o pack.ps1 recusa uma publicação sem login Google, salvo
+        // com -SemLogin (SandboxPublishTests).
+        Assert.Contains("pack.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox -SemLogin", publish);
         Assert.DoesNotContain("publish.ps1", verify);
         Assert.Matches(@"sem_codecs:\n(\s+\w+:.*\n)*?\s+required: true\n(\s+\w+:.*\n)*?\s+type: boolean", yml);
     }

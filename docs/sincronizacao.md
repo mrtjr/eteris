@@ -607,7 +607,9 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
      «Limited Use» — e termos), para o GitHub Pages.
 8. Publicar com o login: `.\build\publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho do google-oauth.json>`
    (`docs/motor.md`, «Como publicar»). O ficheiro **não entra no repositório** (`.gitignore`); o `client_id` passa a
-   ir com o programa (é público por natureza nas apps de computador; quem protege a troca é o PKCE).
+   ir com o programa (é público por natureza nas apps de computador; quem protege a troca é o PKCE). Desde a 0.2.14 o
+   `build/pack.ps1` **recusa empacotar uma publicação sem ele** (só com `-SemLogin`, para a publicação de emergência
+   pelo CI): uma release oficial nunca sai com a sincronização «indisponível nesta compilação» por esquecimento.
 
 ## Testes
 

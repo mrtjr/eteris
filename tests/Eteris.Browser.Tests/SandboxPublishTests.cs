@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -137,6 +138,82 @@ public class SandboxPublishTests
         Assert.DoesNotMatch(@"client_id\s*=", publish);
         // A limpeza antiga «nunca um google-oauth.json esquecido» já não faz falta: publish\ é apagada no início.
         Assert.DoesNotContain("$oauthTarget", publish);
+    }
+
+    // Decisão 2 do plano do sandbox da 0.2.14: uma release oficial leva o login Google. O pack.ps1 recusa, antes de
+    // empacotar, uma publicação sem ele (a marca com google_oauth = false, ou sem o publish\google-oauth.json), a dizer
+    // como publicar com -GoogleOAuthJson; -SemLogin empacota assim mesmo, com aviso (a publicação de emergência pelo CI,
+    // que não tem o ficheiro), e é recusado numa publicação que o leva, como o -NoSandbox numa publicação com sandbox.
+    [Fact]
+    public void Pack_RefusesAPublishWithoutGoogleLogin_UnlessSemLogin()
+    {
+        var pack = Read("build", "pack.ps1");
+        Assert.Contains("[switch]$SemLogin", pack);
+        Assert.Contains("[bool]$build.google_oauth", pack);
+        Assert.Contains("\"publish\\google-oauth.json\"", pack);
+        var refusal = pack.IndexOf("if (-not $SemLogin) { throw \"publish\\ é uma publicação SEM login Google", StringComparison.Ordinal);
+        Assert.True(refusal > 0, "pack.ps1 sem a recusa de uma publicação sem login Google");
+        Assert.True(refusal < pack.IndexOf("vpk pack", StringComparison.Ordinal), "a recusa vem antes de empacotar");
+        var message = pack[refusal..pack.IndexOf('\n', refusal)];
+        Assert.Contains("build\\publish.ps1 -Version $Version -GoogleOAuthJson <caminho do google-oauth.json>", message);
+        Assert.Contains("-SemLogin", message);
+        Assert.Contains("Write-Warning \"Pacote SEM login Google (-SemLogin)", pack);
+        Assert.Contains("throw \"publish\\ é uma publicação COM login Google e foi pedido -SemLogin\"", pack);
+        // Só se vê se o ficheiro existe: o conteúdo (o client_id) nunca é lido nem escrito pelo pack.ps1.
+        Assert.DoesNotMatch(@"(Get-Content|ReadAll\w+|Copy-Item|Move-Item)[^\r\n]*google-oauth", pack);
+        Assert.DoesNotContain("client_id", pack);
+        // O CI não tem o google-oauth.json: a publicação de emergência pede as duas exceções.
+        Assert.Contains("pack.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox -SemLogin", Read(".github", "workflows", "release.yml"));
+    }
+
+    // O mesmo, a correr o pack.ps1 verdadeiro numa cópia com uma pasta publish\ falsa (só a marca): todos os casos são
+    // recusas, que saem antes do vpk — e o PATH do processo fica só com o sistema, para o vpk nunca correr daqui.
+    // «login»: a marca diz google_oauth; «file»: há um publish\google-oauth.json (vazio, feito aqui).
+    [Theory]
+    [InlineData(false, false, "", "SEM login Google")]
+    [InlineData(true, false, "", "SEM login Google")]
+    [InlineData(false, true, "", "SEM login Google")]
+    [InlineData(true, true, "-SemLogin", "COM login Google e foi pedido -SemLogin")]
+    // Com o login (ou sem ele e com -SemLogin) passa esta verificação e pára na seguinte: a pasta é COM sandbox.
+    [InlineData(true, true, "-NoSandbox", "COM sandbox e foi pedido -NoSandbox")]
+    [InlineData(false, false, "-NoSandbox -SemLogin", "COM sandbox e foi pedido -NoSandbox")]
+    public async Task Pack_RunOnAFakePublish_RefusesBeforePacking(bool login, bool file, string switches, string expected)
+    {
+        var dir = Directory.CreateTempSubdirectory("eteris-pack-");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "build"));
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "publish"));
+            var script = Path.Combine(dir.FullName, "build", "pack.ps1");
+            File.Copy(Path.Combine(Root(), "build", "pack.ps1"), script);
+            File.WriteAllText(Path.Combine(dir.FullName, "publish", "eteris-build.json"),
+                              "{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": " + (login ? "true" : "false") + " }");
+            if (file) File.WriteAllText(Path.Combine(dir.FullName, "publish", "google-oauth.json"), "{}");
+            var start = new ProcessStartInfo("powershell.exe")
+            {
+                RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+            };
+            start.Environment["PATH"] = Environment.SystemDirectory;
+            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Version", "9.9.9" })
+                start.ArgumentList.Add(argument);
+            foreach (var argument in switches.Split(' ', StringSplitOptions.RemoveEmptyEntries)) start.ArgumentList.Add(argument);
+            using var shell = Process.Start(start)!;
+            var error = shell.StandardError.ReadToEndAsync();
+            var output = await shell.StandardOutput.ReadToEndAsync();
+            Assert.True(shell.WaitForExit(60_000), "powershell.exe não acabou em 60 s");
+            // Sem a saída nas mensagens: traz o caminho da pasta temporária, com o perfil (o registo do CI é público).
+            // E sem espaços nem quebras: o PowerShell parte as linhas do erro pela largura da consola.
+            var all = Regex.Replace(output + await error, @"\s+", "");
+            bool Said(string text) => all.Contains(Regex.Replace(text, @"\s+", ""), StringComparison.Ordinal);
+            Assert.True(shell.ExitCode != 0, "o pack.ps1 não recusou");
+            Assert.True(Said(expected), $"o pack.ps1 não recusou com «{expected}»");
+            // Uma só recusa: a do login não aparece quando a publicação o leva ou o -SemLogin a aceita, e só ela diz como
+            // publicar; o aviso do -SemLogin só aparece quando ele foi preciso.
+            Assert.True(Said("-GoogleOAuthJson") == (expected == "SEM login Google"), "a recusa do login (e só ela) diz como publicar com ele");
+            Assert.True(Said("Pacote SEM login Google (-SemLogin)") == (switches.Contains("-SemLogin") && !login), "o aviso do -SemLogin");
+            Assert.False(Directory.Exists(Path.Combine(dir.FullName, "Releases")), "o pack.ps1 empacotou");
+        }
+        finally { dir.Delete(recursive: true); }
     }
 
     [Fact]

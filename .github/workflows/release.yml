@@ -107,5 +107,6 @@ jobs:
       - name: Descarregar releases anteriores para gerar pacotes delta
         run: vpk download github --repoUrl $env:REPO_URL --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
         continue-on-error: true
-      - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox
+      # O CI também não tem o google-oauth.json (nunca no repositório): sai sem login Google, e o pack.ps1 só o aceita a pedido.
+      - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox -SemLogin
       - run: vpk upload github --repoUrl $env:REPO_URL --publish --releaseName "Éteris $env:RELEASE_TAG (sem codecs)" --tag $env:RELEASE_TAG --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases

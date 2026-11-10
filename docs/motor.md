@@ -137,9 +137,10 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    o identificador da aplicação Google («App para computador», descarregado da Google Cloud; nunca no repositório, está
    no `.gitignore`) para `publish\google-oauth.json`, depois de verificar (antes de compilar) que é um cliente
    `installed` com `client_id` e endereços da Google; sem ele publica **sem login** (a secção Sincronização diz
-   «indisponível nesta compilação») e avisa. Recusa um runtime que não seja o validado (modo, commit, versão do
-   `libcef.dll`, SHA256 de cada ficheiro do manifesto); com o sandbox (a omissão) recusa também a falta do feed ou da
-   DLL cliente, verifica a DLL contra o motor (`verify-client.ps1`) e confirma a forma publicada (`Eteris.Browser.exe` =
+   «indisponível nesta compilação») e avisa — e o passo 4 só empacota essa publicação com `-SemLogin`. Recusa um
+   runtime que não seja o validado (modo, commit, versão do `libcef.dll`, SHA256 de cada ficheiro do manifesto);
+   com o sandbox (a omissão) recusa também a falta do feed ou da DLL cliente,
+   verifica a DLL contra o motor (`verify-client.ps1`) e confirma a forma publicada (`Eteris.Browser.exe` =
    bootstrap com a marca e a versão, `Eteris.Browser.dll` = DLL cliente, `Eteris.App.dll`, CefSharp com
    `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
    para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
@@ -156,7 +157,13 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).
 4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`. Só
    empacota uma `publish\` com o `eteris-build.json` dessa versão e com sandbox (uma publicação `-NoSandbox` só com
-   `-NoSandbox` também aqui).
+   `-NoSandbox` também aqui). **Recusa uma publicação sem login Google** (desde a 0.2.14): se a marca disser
+   `google_oauth` = false ou faltar o `publish\google-oauth.json`, pára antes de empacotar e diz para publicar de novo
+   com `publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho>` (passo 2) — uma release oficial sem ele deixaria o
+   «Entrar com o Google» «indisponível nesta compilação» para toda a gente. `-SemLogin` empacota assim mesmo, com um
+   aviso (só para a publicação de emergência pelo CI ou um pacote de teste); numa publicação que leva o login, o
+   `-SemLogin` é recusado, como o `-NoSandbox` numa publicação com sandbox. O `pack.ps1` só vê se o ficheiro existe,
+   nunca o lê.
 5. Testar o executável de `publish\` num perfil de teste (abre, navega, `eteris://whatsnew/` com a versão nova, um MP4
    H.264 toca no motor principal, sem processos `msedgewebview2` filhos; `chrome://sandbox` com os renderers
    Lockdown/Untrusted e a GPU Low, e `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`;
@@ -172,7 +179,8 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
 
 A publicação pelo CI ficou só para **emergências** (esta máquina indisponível): `workflow_dispatch` do `release.yml`
 com a tag e o input obrigatório `sem_codecs` = true. Sai com o runtime do NuGet, sem codecs e sem sandbox
-(`publish.ps1 -NoSandbox`: o CI não tem o motor próprio, que traz o bootstrap, nem o CefSharp com o patch): a sonda do arranque
+(`publish.ps1 -NoSandbox`: o CI não tem o motor próprio, que traz o bootstrap, nem o CefSharp com o patch) e sem login
+Google (`pack.ps1 -NoSandbox -SemLogin`: o `google-oauth.json` nunca está no repositório): a sonda do arranque
 (`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
 antes da 0.2.9. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
 dono e o CI descarregá-lo e verificá-lo pelo SHA256 do manifesto; um runner próprio com o checkout em `C:\cef`.
