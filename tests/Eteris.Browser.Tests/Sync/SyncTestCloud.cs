@@ -9,11 +9,13 @@ namespace Eteris.Browser.Tests.Sync;
 // existe contra um bloqueio e diz o estado de cada agente.
 internal sealed class SyncTestCloud : ISyncTransport
 {
-    private static readonly TimeSpan HangGuard = TimeSpan.FromMinutes(2);
     private readonly SemaphoreSlim _pulse = new(0);
     private readonly List<(string Name, SyncAgent Agent)> _agents = [];
 
     public MemoryTransport Memory { get; } = new();
+
+    // Só contra um bloqueio; nunca é o caminho normal de um teste.
+    public TimeSpan Guard { get; init; } = TimeSpan.FromMinutes(2);
 
     public string Name => Memory.Name;
 
@@ -51,7 +53,7 @@ internal sealed class SyncTestCloud : ISyncTransport
         var guard = System.Diagnostics.Stopwatch.StartNew();
         while (!condition())
         {
-            var left = HangGuard - guard.Elapsed;
+            var left = Guard - guard.Elapsed;
             if (left <= TimeSpan.Zero) Assert.Fail("À espera de: " + what + " | " + Describe());
             await _pulse.WaitAsync(left);
         }
@@ -63,7 +65,7 @@ internal sealed class SyncTestCloud : ISyncTransport
         var guard = System.Diagnostics.Stopwatch.StartNew();
         while (!await condition())
         {
-            var left = HangGuard - guard.Elapsed;
+            var left = Guard - guard.Elapsed;
             if (left <= TimeSpan.Zero) Assert.Fail("À espera de: " + what + " | " + Describe());
             await _pulse.WaitAsync(left);
         }

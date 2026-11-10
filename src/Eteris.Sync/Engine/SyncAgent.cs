@@ -1265,7 +1265,11 @@ public sealed class SyncAgent
                 // À espera da confirmação do utilizador aqui; entretanto, o outro aparelho pode recusar, e a sessão acaba.
                 while (!flow.Confirm.Task.IsCompleted)
                 {
-                    if (await PairingRequests.IsRefusedAsync(transport, session!, flow.Cancel.Token).ConfigureAwait(false))
+                    bool refused;
+                    try { refused = await PairingRequests.IsRefusedAsync(transport, session!, flow.Cancel.Token).ConfigureAwait(false); }
+                    // O transporte falhou de passagem: o código continua à vista e pergunta-se outra vez no intervalo seguinte.
+                    catch (Exception e) when (PairingProtocol.IsTransportFailure(e, flow.Cancel.Token)) { refused = false; }
+                    if (refused)
                         throw new PairingException("O outro aparelho recusou o pedido.") { Failure = PairingFailure.Refused };
                     if (_now() - flow.SessionStartMs > (long)PairingProtocol.Lifetime.TotalMilliseconds)
                         throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
@@ -1274,13 +1278,16 @@ public sealed class SyncAgent
                 }
                 guest.ConfirmCode();
                 using var account = await guest.WaitForSecretAsync(flow.Cancel.Token).ConfigureAwait(false);
-                await PairingRequests.CleanUpAsync(transport, session!, CancellationToken.None).ConfigureAwait(false);
+                // A conta chegou: a sessão acabou bem (daqui em diante nunca se escreve a recusa). Os ficheiros dela só
+                // saem depois de entrar, em melhor esforço: uma falha a limpar não deita fora a conta que o outro
+                // computador acabou de entregar (e de dizer «foi aprovado»).
+                var delivered = session!;
                 session = null;
                 await _run.WaitAsync(flow.Cancel.Token).ConfigureAwait(false);
                 SetRunning(true);
                 try
                 {
-                    if (await JoinCoreAsync(account, guest.HostName, fresh: true, flow.Cancel.Token).ConfigureAwait(false))
+                    if (await JoinDeliveredAsync(account, guest.HostName, flow.Cancel.Token).ConfigureAwait(false))
                     {
                         SavedSync saved;
                         lock (_gate) saved = _saved!;
@@ -1290,14 +1297,26 @@ public sealed class SyncAgent
                 finally
                 {
                     EndRun();
+                    // Não depois de «Sair» nem de «Apagar…» (o pedido parado): nenhum pedido novo ao transporte.
+                    if (!flow.Cancel.IsCancellationRequested)
+                    {
+                        try { await PairingRequests.CleanUpAsync(transport, delivered, flow.Cancel.Token).ConfigureAwait(false); }
+                        catch (Exception x) when (IsTransient(x) || x is OperationCanceledException) { }
+                    }
                 }
             }
-            catch (OperationCanceledException) { }
-            catch (Exception e) when (e is PairingException or WrongCodeException or ChainGoneException || IsTransient(e))
+            // O pedido foi parado («Sair», apagar, cancelar): nada a dizer. O limite de tempo do cliente HTTP também é uma
+            // OperationCanceledException, mas com o pedido vivo: essa cai em baixo, como falha do transporte.
+            catch (OperationCanceledException) when (flow.Cancel.IsCancellationRequested) { }
+            catch (Exception e)
             {
+                var transportFailure = PairingProtocol.IsTransportFailure(e, flow.Cancel.Token);
+                var known = e is PairingException or WrongCodeException or ChainGoneException || IsTransient(e) || transportFailure;
+                if (!known) Log?.Invoke($"O pedido de aprovação acabou com uma falha inesperada ({e.GetType().Name}).");
                 lock (_gate)
                 {
-                    flow.Error = e is PairingException ? e.Message : Message(e);
+                    // Nunca a mensagem crua de uma exceção que ninguém esperava.
+                    flow.Error = e is PairingException ? e.Message : known ? Message(e) : UnexpectedPairingText;
                     flow.End = e switch
                     {
                         // O prazo: antes de alguém responder (a renovação parou), ou depois (nunca renova).
@@ -1307,8 +1326,9 @@ public sealed class SyncAgent
                     };
                     if (_phase == SyncPhase.Pairing) _phase = SyncPhase.Choose;
                 }
-                // A sessão em curso (ainda não limpa) fica recusada: o outro aparelho deixa de esperar.
-                if ((session ?? (flow.HostAnswered ? null : flow.Session)) is { } open)
+                // A sessão em curso (ainda não entregue) fica recusada: o outro aparelho deixa de esperar. Não quando a
+                // causa é o transporte: a escrita falhava também, e uma recusa conta lá como um pedido mau.
+                if (!transportFailure && (session ?? (flow.HostAnswered ? null : flow.Session)) is { } open)
                 {
                     try { await PairingRequests.RefuseAsync(transport, open, _now, CancellationToken.None).ConfigureAwait(false); }
                     catch (Exception x) when (IsTransient(x)) { }
@@ -1316,6 +1336,22 @@ public sealed class SyncAgent
             }
             Notify();
         });
+    }
+
+    private const string UnexpectedPairingText = "Não foi possível juntar este computador (erro inesperado). Peça outra vez.";
+
+    // A entrada com a conta que o outro computador acabou de entregar: ler o registo de chaves pode falhar de passagem,
+    // e a conta só existe aqui em memória — repete-se como as escritas dos passos, em vez de a deitar fora.
+    private async Task<bool> JoinDeliveredAsync(AccountSecret account, string? from, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return await JoinCoreAsync(account, from, fresh: true, cancellationToken).ConfigureAwait(false); }
+            catch (Exception e) when (attempt < PairingProtocol.WriteAttempts && PairingProtocol.IsTransportFailure(e, cancellationToken))
+            {
+                await (_delay ?? Task.Delay)(PairingPoll, cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     // Abre o pedido e espera que um aparelho ligado responda. Se ninguém responder no prazo e a renovação ainda valer
@@ -1326,7 +1362,7 @@ public sealed class SyncAgent
         while (true)
         {
             flow.SessionStartMs = _now();
-            var session = await PairingRequests.OpenAsync(transport, _now, flow.Cancel.Token).ConfigureAwait(false);
+            var session = await PairingRequests.OpenAsync(transport, _now, flow.Cancel.Token, _delay, PairingPoll).ConfigureAwait(false);
             flow.Session = session;
             try
             {
@@ -1429,22 +1465,30 @@ public sealed class SyncAgent
                         flow.Code = code;
                     }
                 }
-                catch (Exception e) when (e is PairingException or OperationCanceledException || IsTransient(e))
+                // Qualquer exceção acaba aqui (nenhuma fica por observar com o fluxo «a responder» para sempre). As
+                // falhas passageiras do transporte já se repetem dentro da espera; só chegam cá as que não passaram.
+                catch (Exception e)
                 {
                     // Ainda era deste aparelho (não saiu por «Sair», apagar, «Não fui eu» ou pelo prazo, que já tratam
-                    // de si).
+                    // de si). A sessão fica nas acabadas: o 1-host já existe, por isso o pedido não volta a ser listado
+                    // e nenhum fluxo novo a retomava.
                     var mine = false;
                     lock (_gate)
                         if (_hosts.TryGetValue(session, out var current) && ReferenceEquals(current, flow))
+                        {
                             mine = _hosts.Remove(session);
+                            _ended[session] = _now();
+                        }
                     host.Dispose();
                     // O pedido acabou do outro lado depois de este aparelho responder: recusa ou cancelamento escrito
                     // por quem pede (x-host), mensagens que não conferem (incluindo uma chave ou um ficheiro ilegível,
                     // FormatException/CryptographicException, e um compromisso dirigido a outro anfitrião), ou o prazo.
                     // Tudo isto quem escreve no Drive consegue provocar, por isso conta para os pedidos em série (dois
-                    // aparelhos desta conta a responder ao mesmo pedido no mesmo instante custa, raramente, um). Não
-                    // contam: parar deste lado (cancelado) e um erro de rede ou da pasta.
-                    if (mine && e is PairingException or FormatException or CryptographicException) NoteBadPairing(flow);
+                    // aparelhos desta conta a responder ao mesmo pedido no mesmo instante custa, raramente, um); uma
+                    // falha que ninguém esperava conta também (na dúvida, foi o que estava no Drive). Não contam: parar
+                    // deste lado (cancelado) e um erro de rede, da sessão da Google ou da pasta.
+                    var passes = e is OperationCanceledException || (IsTransient(e) && e is not (FormatException or CryptographicException));
+                    if (mine && !passes) NoteBadPairing(flow);
                 }
                 Notify();
             });
@@ -2146,12 +2190,14 @@ public sealed class SyncAgent
     // Status.NeedsSignIn: o anfitrião para o agendador até o utilizador entrar outra vez.
     public static bool IsTransient(Exception e)
         => e is HttpRequestException or IOException or TaskCanceledException { CancellationToken.IsCancellationRequested: false } or TimeoutException
+            // O limite de tempo do cliente HTTP: o token da exceção vem cancelado (é o do limite), com a TimeoutException dentro.
+            or TaskCanceledException { InnerException: TimeoutException }
             or UnauthorizedAccessException or CryptographicException or FormatException or Google.OAuthException or UnsupportedFormatException;
 
     public static string Message(Exception e) => e switch
     {
         Google.OAuthException o => o.Message,
-        HttpRequestException or TaskCanceledException or TimeoutException => "Sem ligação ao Google Drive. O Éteris tenta outra vez sozinho.",
+        HttpRequestException or OperationCanceledException or TimeoutException => "Sem ligação ao Google Drive. O Éteris tenta outra vez sozinho.",
         IOException or UnauthorizedAccessException => "A pasta de sincronização não está acessível. O Éteris tenta outra vez sozinho.",
         WrongCodeException w => w.Message,
         UnsupportedFormatException u => u.Message,

@@ -50,6 +50,37 @@ public static class PairingProtocol
     internal const string Sealed = "5-host";
     internal const string Refused = "x-host";
 
+    // Quantas vezes se tenta a escrita de um passo (sempre a MESMA mensagem) quando o transporte falha de passagem.
+    internal const int WriteAttempts = 3;
+
+    // Uma falha do transporte que passa sozinha (a rede, a pasta, o limite de tempo do cliente HTTP). Durante as esperas
+    // do emparelhamento não acaba com o pedido: espera-se o intervalo e tenta-se outra vez, até ao prazo de sempre (o
+    // prazo continua a ser a única saída por tempo). Não é uma falha destas: parar o pedido («stopped», o token dele,
+    // cancelado), a autorização da Google por renovar (NeedsSignIn: não passa sozinha) e as mensagens que não conferem
+    // (FormatException, CryptographicException: essas acabam com o pedido e contam).
+    public static bool IsTransportFailure(Exception e, CancellationToken stopped)
+        => e is HttpRequestException or IOException or UnauthorizedAccessException or TimeoutException
+            or Google.OAuthException { NeedsSignIn: false }
+           || (e is OperationCanceledException && !stopped.IsCancellationRequested);
+
+    // A escrita de um passo: a mesma mensagem, até WriteAttempts vezes, com o intervalo da espera entre elas.
+    internal static async Task WriteAsync(ISyncTransport transport, string path, byte[] data, Func<TimeSpan, CancellationToken, Task> delay,
+        TimeSpan interval, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await transport.WriteAsync(path, data, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception e) when (attempt < WriteAttempts && IsTransportFailure(e, cancellationToken))
+            {
+                await delay(interval, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
     internal static ECDiffieHellman NewKey() => ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
 
     internal static byte[] PublicKey(ECDiffieHellman key) => key.PublicKey.ExportSubjectPublicKeyInfo();
@@ -210,7 +241,7 @@ public abstract class PairingSide : IDisposable
     private protected string Path(string step) => SyncPaths.Pairing(Session) + step;
 
     private protected Task WriteAsync(string step, PairingMessage message, CancellationToken cancellationToken)
-        => Transport.WriteAsync(Path(step), Json.Bytes(message), cancellationToken);
+        => PairingProtocol.WriteAsync(Transport, Path(step), Json.Bytes(message), Delay, PollInterval, cancellationToken);
 
     private protected async Task<PairingMessage?> TryReadAsync(string step, CancellationToken cancellationToken)
     {
@@ -222,9 +253,14 @@ public abstract class PairingSide : IDisposable
     {
         while (true)
         {
-            if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
-                throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.") { Failure = PairingFailure.Refused };
-            if (await TryReadAsync(step, cancellationToken).ConfigureAwait(false) is { } message) return message;
+            try
+            {
+                if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
+                    throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.") { Failure = PairingFailure.Refused };
+                if (await TryReadAsync(step, cancellationToken).ConfigureAwait(false) is { } message) return message;
+            }
+            // O transporte falhou de passagem: a espera continua (a mesma leitura, no intervalo seguinte).
+            catch (Exception e) when (PairingProtocol.IsTransportFailure(e, cancellationToken)) { }
             if (Now() > deadline) throw new PairingException("O emparelhamento expirou. Comece de novo.") { Failure = PairingFailure.TimedOut };
             await Delay(PollInterval, cancellationToken).ConfigureAwait(false);
         }
@@ -322,7 +358,7 @@ public sealed class PairingHost : PairingSide
         var payload = Json.Bytes(new PairingSecret { Secret = Kdf.Base64Url(secret.ToBytes()), HostName = hostName });
         var sealedFile = SealedFile.Seal(key, SealedFile.Pairing, "pair", 1, PairingProtocol.SecretContext(Session, _transcript), payload);
         CryptographicOperations.ZeroMemory(key);
-        await Transport.WriteAsync(Path(PairingProtocol.Sealed), sealedFile, cancellationToken).ConfigureAwait(false);
+        await PairingProtocol.WriteAsync(Transport, Path(PairingProtocol.Sealed), sealedFile, Delay, PollInterval, cancellationToken).ConfigureAwait(false);
     }
 
     public Task RefuseAsync(CancellationToken cancellationToken = default)
@@ -364,6 +400,14 @@ public sealed class PairingGuest : PairingSide
         var (session, qrKey) = PairingProtocol.ParseInvitation(invitation);
         var bytes = await transport.ReadAsync(SyncPaths.Pairing(session) + PairingProtocol.HostKey, cancellationToken).ConfigureAwait(false)
                     ?? throw new PairingException("Não encontrei este emparelhamento: confirme que os dois aparelhos usam a mesma conta Google (ou a mesma pasta).");
+        return await JoinAsync(transport, session, qrKey, bytes, guestName, now, delay, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Com a resposta do anfitrião (passo 1) já lida: quem espera pela resposta (PairingRequests.WaitForHostAsync) lê-a
+    // no seu ciclo, onde uma falha de leitura não acaba com o pedido; daqui em diante só há a escrita do passo 2.
+    internal static async Task<PairingGuest> JoinAsync(ISyncTransport transport, string session, byte[]? qrKey, byte[] bytes, string guestName,
+        Func<long> now, Func<TimeSpan, CancellationToken, Task>? delay, CancellationToken cancellationToken)
+    {
         var offer = Json.Parse<PairingMessage>(bytes);
         var hostKey = Kdf.FromBase64Url(offer.Key ?? throw new PairingException("Convite incompleto."));
         // Com QR, a chave do anfitrião vem do ecrã dele (autêntica); o transporte tem de dizer o mesmo.
@@ -418,9 +462,15 @@ public sealed class PairingGuest : PairingSide
         if (!_confirmed) throw new InvalidOperationException("O utilizador ainda não confirmou neste aparelho que os códigos são iguais.");
         while (true)
         {
-            if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
-                throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.") { Failure = PairingFailure.Refused };
-            var bytes = await Transport.ReadAsync(Path(PairingProtocol.Sealed), cancellationToken).ConfigureAwait(false);
+            byte[]? bytes = null;
+            try
+            {
+                if (await Transport.ReadAsync(Path(PairingProtocol.Refused), cancellationToken).ConfigureAwait(false) is not null)
+                    throw new PairingException("O outro aparelho recusou ou cancelou o emparelhamento.") { Failure = PairingFailure.Refused };
+                bytes = await Transport.ReadAsync(Path(PairingProtocol.Sealed), cancellationToken).ConfigureAwait(false);
+            }
+            // O transporte falhou de passagem: a espera continua.
+            catch (Exception e) when (PairingProtocol.IsTransportFailure(e, cancellationToken)) { }
             if (bytes is not null)
             {
                 var key = PairingProtocol.SessionKey(Key, _hostKey, Session, _transcript);
@@ -430,7 +480,9 @@ public sealed class PairingGuest : PairingSide
                     HostName = payload.HostName;
                     return AccountSecret.FromBytes(Kdf.FromBase64Url(payload.Secret));
                 }
-                catch (CryptographicException)
+                // Não abre, não se lê, ou o segredo não tem o tamanho certo: tudo isto é «não confere» (quem escreve no
+                // transporte consegue provocá-lo), nunca uma exceção que quem espera não trate.
+                catch (Exception e) when (e is CryptographicException or FormatException or ArgumentException)
                 {
                     throw new PairingException("A resposta do outro aparelho não confere (alguém se meteu no meio?): emparelhamento recusado.");
                 }

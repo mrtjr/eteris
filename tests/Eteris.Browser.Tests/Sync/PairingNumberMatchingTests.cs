@@ -650,24 +650,33 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.Equal(1, BadCount(casa));
     }
 
-    // Parar o agente a meio de um pedido (sair, fechar) e um erro de transporte não contam.
+    // Parar o agente a meio de um pedido (sair, fechar) e um erro de transporte não contam. O erro de transporte nem
+    // acaba com o pedido: a Casa continua à espera e, quando o transporte volta, o código chega.
     [Fact]
     public async Task Requests_StoppedHere_OrTransportErrors_DoNotCount()
     {
-        var flaky = new FlakyTransport(_cloud);
+        var flaky = new FlakyTransport(_cloud, Pulse);
         var casa = NewDevice("Casa", transport: () => flaky);
         await casa.Agent.StartAsync();
         casa.Agent.MarkKitSaved();
 
-        // Erro de transporte enquanto espera pelo computador novo.
-        await PairingRequests.OpenAsync(Cloud, Now);
+        // Erro de transporte enquanto espera pelo computador novo: várias sondagens falhadas e o pedido continua.
+        var session = await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         flaky.Fail = true;
-        await Until(() => casa.Agent.Status.AnsweringSinceMs == 0, "o fim do pedido por erro de transporte");
+        var before = flaky.Failures;
+        await Until(() => flaky.Failures >= before + 5, "cinco sondagens falhadas");
+        Assert.NotEqual(0, casa.Agent.Status.AnsweringSinceMs);
+        Assert.Equal(0, BadCount(casa));
+        // O transporte volta: o computador novo segue o pedido e o código chega à Casa.
         flaky.Fail = false;
+        using var guest = await PairingRequests.WaitForHostAsync(Cloud, session, "Portátil", Now, Quick, TimeSpan.FromMilliseconds(5));
+        await guest.WaitForCodeAsync();
+        await Until(() => casa.Agent.Status.Requests.Count == 1, "o código na Casa");
+        Assert.Equal("Portátil", casa.Agent.Status.Requests[0].Name);
         Assert.Equal(0, BadCount(casa));
 
-        // Sair a meio de um pedido.
+        // Sair a meio de um pedido (o de cima, já com código, e um novo ainda sem ele).
         await PairingRequests.OpenAsync(Cloud, Now);
         await AnswerUntil(casa, () => casa.Agent.Status.AnsweringSinceMs != 0, "a resposta da Casa");
         casa.Agent.SignOut(forgetKey: false);
@@ -694,24 +703,48 @@ public sealed class PairingNumberMatchingTests : IDisposable
         }
     }
 
-    // Transporte que, com Fail, falha como uma pasta inacessível.
-    private sealed class FlakyTransport(ISyncTransport inner) : ISyncTransport
+    // Transporte que, com Fail, falha como uma pasta inacessível (e avisa as esperas do teste em cada falha).
+    private sealed class FlakyTransport(ISyncTransport inner, Action failed) : ISyncTransport
     {
+        private int _failures;
+
         public volatile bool Fail;
+
+        public int Failures => Volatile.Read(ref _failures);
 
         public string Name => inner.Name;
 
+        private void Check()
+        {
+            if (!Fail) return;
+            Interlocked.Increment(ref _failures);
+            failed();
+            throw new IOException("pasta inacessível");
+        }
+
         public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
-            => Fail ? throw new IOException("pasta inacessível") : inner.ListAsync(prefix, cancellationToken);
+        {
+            Check();
+            return inner.ListAsync(prefix, cancellationToken);
+        }
 
         public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
-            => Fail ? throw new IOException("pasta inacessível") : inner.ReadAsync(path, cancellationToken);
+        {
+            Check();
+            return inner.ReadAsync(path, cancellationToken);
+        }
 
         public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default)
-            => Fail ? throw new IOException("pasta inacessível") : inner.WriteAsync(path, data, cancellationToken);
+        {
+            Check();
+            return inner.WriteAsync(path, data, cancellationToken);
+        }
 
         public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
-            => Fail ? throw new IOException("pasta inacessível") : inner.DeleteAsync(path, cancellationToken);
+        {
+            Check();
+            return inner.DeleteAsync(path, cancellationToken);
+        }
     }
 
     // Transporte em memória que avisa cada escrita e cada apagamento (as esperas acordam com isto, não com o relógio).

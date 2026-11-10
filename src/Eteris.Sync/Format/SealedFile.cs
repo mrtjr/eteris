@@ -109,6 +109,8 @@ public static class SealedFile
         using (var aes = new AesGcm(key, 16))
             aes.Decrypt(file.Slice(header.Length, 12), file.Slice(header.Length + 12, cipherLength), file[^16..], plain,
                 Aad(file[..header.Length], chain, context));
+        // Selado com a chave certa mas sem sítio para o comprimento (quem tem a chave também pode escrever lixo).
+        if (plain.Length < 4) throw new FormatException("Conteúdo cortado.");
         var length = BinaryPrimitives.ReadInt32BigEndian(plain);
         if (length < 0 || length > plain.Length - 4) throw new FormatException("Comprimento interno inválido.");
         var body = plain.AsSpan(4, length);
@@ -137,12 +139,20 @@ public static class SealedFile
         using var brotli = new BrotliStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();
         var buffer = new byte[81920];
-        int read;
-        while ((read = brotli.Read(buffer)) > 0)
+        try
         {
-            // Um lote verdadeiro tem poucos MB: mais do que isto é um ficheiro feito para esgotar a memória.
-            if (output.Length + read > MaxPlainBytes) throw new FormatException("Conteúdo grande demais.");
-            output.Write(buffer, 0, read);
+            int read;
+            while ((read = brotli.Read(buffer)) > 0)
+            {
+                // Um lote verdadeiro tem poucos MB: mais do que isto é um ficheiro feito para esgotar a memória.
+                if (output.Length + read > MaxPlainBytes) throw new FormatException("Conteúdo grande demais.");
+                output.Write(buffer, 0, read);
+            }
+        }
+        // O descompressor recusa o conteúdo: é um ficheiro que não se lê, como os outros (quem lê trata FormatException).
+        catch (Exception e) when (e is InvalidOperationException or InvalidDataException or IOException)
+        {
+            throw new FormatException("Conteúdo comprimido ilegível.", e);
         }
         return output.ToArray();
     }

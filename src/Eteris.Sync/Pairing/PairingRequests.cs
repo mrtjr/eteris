@@ -20,12 +20,14 @@ namespace Eteris.Sync.Pairing;
 // saem no fim.
 public static class PairingRequests
 {
-    // Aparelho novo: abre o pedido e devolve a sessão.
-    public static async Task<string> OpenAsync(ISyncTransport transport, Func<long> now, CancellationToken cancellationToken = default)
+    // Aparelho novo: abre o pedido e devolve a sessão. A escrita repete-se como as dos outros passos
+    // (PairingProtocol.WriteAsync).
+    public static async Task<string> OpenAsync(ISyncTransport transport, Func<long> now, CancellationToken cancellationToken = default,
+        Func<TimeSpan, CancellationToken, Task>? delay = null, TimeSpan? pollInterval = null)
     {
         var session = PairingProtocol.NewSession();
-        await transport.WriteAsync(SyncPaths.Pairing(session) + PairingProtocol.Request, Json.Bytes(new PairingMessage { CreatedMs = now() }),
-            cancellationToken).ConfigureAwait(false);
+        await PairingProtocol.WriteAsync(transport, SyncPaths.Pairing(session) + PairingProtocol.Request, Json.Bytes(new PairingMessage { CreatedMs = now() }),
+            delay ?? Task.Delay, pollInterval ?? TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
         return session;
     }
 
@@ -78,10 +80,17 @@ public static class PairingRequests
         var path = SyncPaths.Pairing(session);
         while (true)
         {
-            if (await transport.ReadAsync(path + PairingProtocol.Refused, cancellationToken).ConfigureAwait(false) is not null)
-                throw new PairingException("O outro aparelho recusou o pedido.") { Failure = PairingFailure.Refused };
-            if (await transport.ReadAsync(path + PairingProtocol.HostKey, cancellationToken).ConfigureAwait(false) is not null)
-                return await PairingGuest.JoinAsync(transport, PairingProtocol.ShortCode(session), guestName, now, delay, cancellationToken).ConfigureAwait(false);
+            byte[]? answer = null;
+            try
+            {
+                if (await transport.ReadAsync(path + PairingProtocol.Refused, cancellationToken).ConfigureAwait(false) is not null)
+                    throw new PairingException("O outro aparelho recusou o pedido.") { Failure = PairingFailure.Refused };
+                answer = await transport.ReadAsync(path + PairingProtocol.HostKey, cancellationToken).ConfigureAwait(false);
+            }
+            // O transporte falhou de passagem: a espera continua (PairingProtocol.IsTransportFailure).
+            catch (Exception e) when (PairingProtocol.IsTransportFailure(e, cancellationToken)) { }
+            if (answer is not null)
+                return await PairingGuest.JoinAsync(transport, session, null, answer, guestName, now, delay, cancellationToken).ConfigureAwait(false);
             if (now() > deadline) throw new PairingException("Nenhum aparelho respondeu em 10 minutos. Comece de novo.") { Failure = PairingFailure.TimedOut };
             await wait(pollInterval ?? TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
         }

@@ -2,7 +2,6 @@ using System.IO;
 using Eteris.Browser.Sync;
 using Eteris.Sync.Crypto;
 using Eteris.Sync.Engine;
-using Eteris.Sync.Format;
 using Eteris.Sync.Transport;
 
 namespace Eteris.Browser.Tests.Sync;
