@@ -29,9 +29,14 @@ public class PairingFatigueTests
         Assert.Equal([Now - 2, Now - 1, Now], many);
         Assert.Equal([Now], PairingFatigue.Add([Now - 25 * Hour], Now));
 
-        // Uma hora no futuro (relógio mexido) conta como «agora»: não cala a barra para sempre.
-        Assert.True(PairingFatigue.Quiet([Now + 1000 * Hour, Now, Now], Now));
-        Assert.False(PairingFatigue.Quiet([Now + 1000 * Hour, Now, Now], Now + 25 * Hour));
-        Assert.Equal([Now, Now], PairingFatigue.Add([Now + 1000 * Hour], Now));
+        // Uma hora no futuro (relógio mexido) conta como «agora»; mais de uma janela no futuro não conta (com o relógio
+        // recuado, a barra não fica calada até o relógio passar essas horas).
+        Assert.True(PairingFatigue.Quiet([Now + Hour, Now, Now], Now));
+        Assert.True(PairingFatigue.Quiet([Now + 24 * Hour, Now, Now], Now));
+        Assert.False(PairingFatigue.Quiet([Now + 1000 * Hour, Now, Now], Now));
+        Assert.False(PairingFatigue.Quiet([Now + 1000 * Hour, Now + 1000 * Hour, Now + 1000 * Hour], Now));
+        Assert.False(PairingFatigue.Quiet([Now + Hour, Now, Now], Now + 25 * Hour));
+        Assert.Equal([Now, Now], PairingFatigue.Add([Now + Hour], Now));
+        Assert.Equal([Now], PairingFatigue.Add([Now + 1000 * Hour], Now));
     }
 }
