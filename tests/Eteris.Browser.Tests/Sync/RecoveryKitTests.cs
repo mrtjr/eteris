@@ -323,7 +323,10 @@ public class RecoveryKitTests
         Assert.DoesNotContain("OpenKit.Close(", open);
         Assert.DoesNotContain("/sync-code-saved", factory);
         Assert.DoesNotContain("AcknowledgeCode", factory);
-        Assert.Equal(Count(factory, "case \"/sync-kit-"),
+        // Cada rota do kit recusa o que não for POST; fora do kit, só a aprovação nas Definições (T8K,
+        // «/sync-request-code») tem a mesma guarda.
+        Assert.Contains("case \"/sync-request-code\"", factory);
+        Assert.Equal(Count(factory, "case \"/sync-kit-") + 1,
             Count(factory, "\"POST\", StringComparison.OrdinalIgnoreCase)) return Text(\"recusado\");"));
         Assert.Contains("VaultFrontToken().Register(", factory);
         Assert.Contains("\"Cache-Control\", \"no-store\"", factory);

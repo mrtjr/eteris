@@ -16,7 +16,7 @@ internal sealed partial class PairingBar : UserControl
     public PairingBar()
     {
         InitializeComponent();
-        AutomationProperties.SetName(CodeBox, "Código que o outro computador mostra");
+        AutomationProperties.SetName(CodeBox, PairingBarModel.CodeBoxName);
         // Os leitores de ecrã anunciam o que muda (a barra aparece sem levar o foco).
         AutomationProperties.SetLiveSetting(TitleText, AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(NoteText, AutomationLiveSetting.Polite);

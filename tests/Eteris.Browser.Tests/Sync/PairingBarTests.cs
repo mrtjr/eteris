@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Eteris.Browser.Sync;
@@ -141,6 +142,15 @@ public class PairingBarTests
         Assert.All(buttons, b => Assert.Equal((false, false), b));
         Assert.DoesNotContain("IsDefault", File.ReadAllText(Src("Sync", "PairingBar.xaml")));
         Assert.DoesNotContain("IsCancel", File.ReadAllText(Src("Sync", "PairingBar.xaml")));
+    }
+
+    // O nome acessível da caixa é o mesmo nas Definições (T8K): uma só constante.
+    [Fact]
+    public void CodeBox_AccessibleName_IsTheSharedConstant()
+    {
+        var name = Sta(() => AutomationProperties.GetName(new PairingBar().CodeBox), nameof(CodeBox_AccessibleName_IsTheSharedConstant));
+        Assert.Equal(PairingBarModel.CodeBoxName, name);
+        Assert.Contains("AutomationProperties.SetName(CodeBox, PairingBarModel.CodeBoxName);", File.ReadAllText(Src("Sync", "PairingBar.xaml.cs")));
     }
 
     [Fact]

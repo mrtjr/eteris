@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Eteris.Sync.Engine;
+using Eteris.Sync.Pairing;
 
 namespace Eteris.Browser.Sync;
 
@@ -50,6 +51,29 @@ internal static class PairingBarModel
         => attemptsLeft == 1 ? "Código errado. Tem mais 1 tentativa." : $"Código errado. Tem mais {attemptsLeft} tentativas.";
 
     public static string NameLine(string name) => $"Nome que o outro computador indicou: «{ShownName(name)}»";
+
+    // ---- aprovar nas Definições só com o teclado (T8K) ---------------------------------------------------------------
+
+    // O nome acessível da caixa do código, na barra e nas Definições.
+    public const string CodeBoxName = "Código que o outro computador mostra";
+    // A página tem um botão: sem nota, quem envia um texto incompleto não sabe porque nada aconteceu (a barra cala-se).
+    public const string TypeSixDigits = "Escreva os 6 algarismos que o outro computador mostra.";
+    public const string GoneNote = "Este pedido já não está à espera.";
+
+    // Aprovar fora da barra (Definições) só quando a barra o deixaria: sincronização ligada e barra não calada (R18).
+    public static bool MayApproveHere(SyncStatus? status) => status is { Phase: SyncPhase.On, PairingQuiet: false };
+
+    // A nota da página para cada resposta (a mesma que a barra mostra; null = nada a dizer). O aviso «… foi aprovado» é o
+    // Notice do agente; Busy = outra aprovação a meio (na barra ou noutra aba).
+    public static string? PageNote(PairingAnswer answer, int attemptsLeft) => answer switch
+    {
+        PairingAnswer.WrongCode => WrongCode(attemptsLeft),
+        PairingAnswer.Refused => ThreeWrong,
+        PairingAnswer.NotConfirmed => SyncChoices.NotConfirmed("o pedido continua à espera"),
+        PairingAnswer.Incomplete => TypeSixDigits,
+        PairingAnswer.Gone => GoneNote,
+        _ => null,
+    };
 
     // O nome de um pedido, pronto a mostrar neste computador: sem nenhum carácter numérico (Unicode Nd, Nl e No, de
     // qualquer escrita, incluindo os de largura total). Quem pede escolhe o nome depois de conhecer o código (o nome

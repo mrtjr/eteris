@@ -471,8 +471,24 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Act("device-name", agent => agent.RenameDeviceAsync(name));
                 break;
             }
-            // Aprovar um computador novo não tem rota: faz-se só na barra da janela, escrevendo o código que ele mostra
-            // (0.2.15, «number matching»). Recusar é sempre seguro e fica aqui.
+            // Aprovar um computador novo faz-se na barra da janela ou aqui, sempre escrevendo o código que ele mostra
+            // (0.2.15, «number matching»): não há rota que aprove sem o código.
+            case "/sync-request-code":
+            {
+                // Aprovar nas Definições só com o teclado (T8K): o mesmo caminho da barra. O código vai no corpo de um POST
+                // (nunca no endereço); a porta do Windows é a da janela desta aba. O formulário lê-se já (o IRequest só
+                // vale agora).
+                if (!string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)) return Text("recusado");
+                var form = SyncForm.Parse(request);
+                if (form.GetValueOrDefault("id") is not { Length: > 0 } session) return Text("recusado");
+                var typed = form.GetValueOrDefault("code") ?? string.Empty;
+                return new VaultResourceHandler(async () =>
+                {
+                    await Sync.SyncService.ApprovePairingFromPageAsync(session, typed, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false);
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
+            }
+            // Recusar é sempre seguro e fica aqui.
             case "/sync-refuse" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
                 Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
                 break;

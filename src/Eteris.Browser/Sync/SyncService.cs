@@ -508,6 +508,38 @@ internal static class SyncService
         return agent.ApproveWithCodeAsync(session, typed, () => SyncChoices.MayApproveAsync(agent, confirm));
     }
 
+    // Definições › Sincronização, só com o teclado (T8K): o mesmo caminho da barra (ApprovePairingAsync, com a porta do
+    // Windows da janela da aba). Só quando a barra o deixaria (ligada e não calada pelos pedidos em série). A resposta
+    // vai para a área «approve» da página, com os textos da barra.
+    public static async Task ApprovePairingFromPageAsync(string session, string typed, Func<Vault.ReauthPurpose, Task<bool>> confirm)
+    {
+        if (!PairingBarModel.MayApproveHere(_agent?.Status))
+        {
+            Say("approve", PairingBarModel.GoneNote);
+            return;
+        }
+        try
+        {
+            var answer = await ApprovePairingAsync(session, typed, confirm).ConfigureAwait(false);
+            var left = _agent?.Status.Requests.FirstOrDefault(r => r.Session == session)?.AttemptsLeft ?? 0;
+            Say("approve", PairingBarModel.PageNote(answer, left));
+        }
+        catch (SyncUserException e)
+        {
+            // Não se entregou (sem rede, o pedido expirou entretanto…): o pedido continua e diz-se porquê.
+            Say("approve", e.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            Say("approve", PairingBarModel.PageNote(PairingAnswer.NotConfirmed, 0));
+        }
+        catch (Exception)
+        {
+            // Nunca a mensagem crua de uma exceção inesperada na página.
+            Say("approve", SyncChoices.CouldNotFinish);
+        }
+    }
+
     // «Não fui eu»: recusa o pedido (o computador novo fica a saber).
     public static void RefusePairing(string session) => Act("approve", a => a.RefuseAsync(session));
 
@@ -765,9 +797,13 @@ internal static class SyncService
             pairing = status.Pairing is { } p
                 ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error, hostAnswered = p.HostAnswered, end = Camel(p.End) }
                 : null,
-            // Sem o código de verificação: a página não o mostra (a aprovação é na barra da janela, escrevendo-o). Sem o
-            // nome: quem pede escolhe-o e a página não o usa.
-            requests = status.Requests.Select(r => new { id = r.Session }),
+            // Sem o código de verificação: a página não o mostra (aprova-se na barra ou nas Definições, escrevendo-o).
+            // O nome só passa limpo e cortado, como na barra (quem pede escolhe-o depois de conhecer o código).
+            requests = status.Requests.Select(r => new { id = r.Session, nameLine = PairingBarModel.NameLine(r.Name) }),
+            // Os textos de cada pedido nas Definições: os da barra (T8K).
+            requestTitle = PairingBarModel.Title(SyncChoices.Receives(status.AccountSecrets)) + ".",
+            requestAsk = PairingBarModel.Ask,
+            requestBox = PairingBarModel.CodeBoxName,
             // Pedidos em série: a barra não abre sozinha e as Definições mostram o aviso.
             pairingQuiet = status.PairingQuiet,
             // A conta na nuvem foi apagada ou substituída (alerta), e se este computador pode pedir a aprovação sozinho.

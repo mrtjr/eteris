@@ -570,10 +570,50 @@ public class SyncIntegrationTests
         Assert.Single(Regex.Matches(service, @"ApproveWithCodeAsync\("));
         var body = Body(service, "public static Task<PairingAnswer> ApprovePairingAsync(");
         Assert.Contains("ApproveWithCodeAsync(session, typed, () => SyncChoices.MayApproveAsync(agent, confirm))", body);
-        // A barra chama-o com a porta do Windows da janela que a tem.
+        // A barra e a rota das Definições chamam-no (pelo ApprovePairingAsync), cada uma com a porta do Windows da sua
+        // janela.
         var glue = File.ReadAllText(BrowserSrc("MainWindow.PairingBar.cs"), Encoding.UTF8);
         Assert.Contains("SyncService.ApprovePairingAsync(", glue);
         Assert.Contains("ReauthGate.Shared.RequestAsync(new WindowInteropHelper(this).Handle, purpose, VaultFrontToken())", glue);
+    }
+
+    // Aprovar nas Definições só com o teclado (T8K): a rota recebe o código no corpo de um POST e segue o caminho da
+    // barra (ApprovePairingAsync, com a porta do Windows da janela da aba); nunca chama o agente diretamente.
+    [Fact]
+    public void PageApproval_GoesThroughTheBarsPath()
+    {
+        var routes = File.ReadAllText(BrowserSrc("Browser", "EterisSchemeHandlerFactory.cs"), Encoding.UTF8);
+        var route = RouteCase(routes, "/sync-request-code");
+        Assert.Contains("string.Equals(request.Method, \"POST\"", route);
+        Assert.Contains("SyncForm.Parse(request)", route);
+        Assert.Contains("Sync.SyncService.ApprovePairingFromPageAsync(session, typed, purpose => ConfirmWithWindows(browserId, purpose))", route);
+        Assert.DoesNotContain("InternalPages.Query(uri, \"code\")", route);
+        Assert.DoesNotContain("Query(uri, \"id\")", route);
+        Assert.DoesNotContain("ApproveWithCodeAsync", route);
+        // Só pelo SyncRoute: com o testemunho da página e nunca numa janela privada.
+        var syncRoute = Body(routes, "private static IResourceHandler SyncRoute(");
+        Assert.Contains("case \"/sync-request-code\":", syncRoute);
+        const string authorized = "if (!InternalPages.IsAuthorized(request.Url)) return Text(\"recusado\");";
+        Assert.True(syncRoute.IndexOf(authorized, StringComparison.Ordinal) is >= 0 and var at
+            && at < syncRoute.IndexOf("switch (", StringComparison.Ordinal), "o SyncRoute não começa pelo testemunho");
+        Assert.Contains("return privateContext ? Text(\"recusado\") : SyncRoute(uri, request, browser.Identifier);", routes);
+        // Listas fechadas: a barra e o serviço aprovam; a rota só chama a variante da página.
+        Assert.Equal(["MainWindow.PairingBar.cs", "Sync/SyncService.cs"], BrowserFilesWith("ApprovePairingAsync("));
+        Assert.Equal(["Browser/EterisSchemeHandlerFactory.cs", "Sync/SyncService.cs"], BrowserFilesWith("ApprovePairingFromPageAsync("));
+    }
+
+    // As mesmas regras da barra: só com a sincronização ligada e a barra não calada, e as respostas pela nota da página
+    // (nunca a mensagem crua de uma exceção inesperada).
+    [Fact]
+    public void PageApproval_SameRulesAsTheBar()
+    {
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        var body = Body(service, "public static async Task ApprovePairingFromPageAsync(");
+        Before(body, "PairingBarModel.MayApproveHere(_agent?.Status)", "ApprovePairingAsync(session, typed, confirm)");
+        foreach (var needed in new[] { "Say(\"approve\"", "catch (SyncUserException", "catch (OperationCanceledException", "SyncChoices.CouldNotFinish" })
+            Assert.Contains(needed, body);
+        Assert.DoesNotContain("ApproveWithCodeAsync", body);
+        Assert.DoesNotContain("e.Message +", body);
     }
 
     // ---- o computador novo (0.2.15, T7) -----------------------------------------------------------------------------

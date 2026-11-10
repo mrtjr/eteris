@@ -422,7 +422,8 @@ public sealed class PairingNumberMatchingTests : IDisposable
     }
 
     // Um computador novo com o cliente mudado escolhe como nome o próprio código: só o conhece no passo 4, mas o nome
-    // segue selado nesse mesmo passo. A barra da Casa nunca o mostra (nem as páginas internas levam o nome).
+    // segue selado nesse mesmo passo. A barra da Casa nunca o mostra (as páginas internas só levam a linha da barra,
+    // limpa e cortada).
     [Fact]
     public async Task GuestNamedAfterTheCode_TheBarShowsNoDigits()
     {
@@ -450,6 +451,7 @@ public sealed class PairingNumberMatchingTests : IDisposable
         Assert.DoesNotContain(PairingBarModel.NameLine(view.Name!), char.IsDigit);
         var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs"));
         Assert.DoesNotContain("name = r.Name", service, StringComparison.Ordinal);
+        Assert.Contains("nameLine = PairingBarModel.NameLine(r.Name)", service, StringComparison.Ordinal);
     }
 
     // ---- pedidos em série (R18) ------------------------------------------------------------------------------------

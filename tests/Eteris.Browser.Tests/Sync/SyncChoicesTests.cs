@@ -151,6 +151,29 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Contains("\"receivesSecrets\":null", json);
     }
 
+    // Aprovar nas Definições só com o teclado (T8K): cada pedido leva para a página os textos da barra (título, linha do
+    // nome limpa e cortada, pergunta, nome da caixa) e nunca o código (não existe em HostRequest).
+    [Fact]
+    public void StatusData_Requests_CarryTheBarTexts_NeverTheCode()
+    {
+        const long now = 1_762_560_000_000;
+        var status = TestStatus.Of(SyncPhase.On, requests: [new HostRequest("s1", "Código 482 913", 3, now)]);
+        var json = System.Text.Json.JsonSerializer.Serialize(SyncService.StatusData(status, now));
+        var node = JsonNode.Parse(json)!.AsObject();
+        var request = node["requests"]!.AsArray().Single()!.AsObject();
+        Assert.Equal("s1", (string?)request["id"]);
+        Assert.Equal(PairingBarModel.NameLine("Código 482 913"), (string?)request["nameLine"]);
+        Assert.DoesNotContain((string)request["nameLine"]!, char.IsDigit);
+        Assert.Equal(["id", "nameLine"], request.Select(p => p.Key).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain("482", json, StringComparison.Ordinal);
+        Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe.", (string?)node["requestTitle"]);
+        Assert.Equal(PairingBarModel.Ask, (string?)node["requestAsk"]);
+        Assert.Equal(PairingBarModel.CodeBoxName, (string?)node["requestBox"]);
+
+        var secrets = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(SyncService.StatusData(status with { AccountSecrets = true }, now)))!;
+        Assert.Equal("Um computador quer entrar na sua conta e receber as suas palavras-passe, cartões e documentos.", (string?)secrets["requestTitle"]);
+    }
+
     // Os ganchos do estado «Sincronizado.» da barra (T4): o aviso de herança no computador novo, e a ligação discreta
     // no computador que criou a conta.
     [Fact]

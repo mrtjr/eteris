@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using Eteris.Browser.Sync;
 using Eteris.Sync.Engine;
+using Eteris.Sync.Pairing;
 
 namespace Eteris.Browser.Tests.Sync;
 
@@ -142,5 +143,45 @@ public class PairingBarModelTests
         Assert.Equal("Código errado. Tem mais 2 tentativas.", PairingBarModel.WrongCode(2));
         Assert.Equal("Código errado. Tem mais 1 tentativa.", PairingBarModel.WrongCode(1));
         Assert.Equal("Nome que o outro computador indicou: «Portátil»", PairingBarModel.NameLine("Portátil"));
+    }
+
+    // ---- aprovar nas Definições só com o teclado (T8K) ---------------------------------------------------------------
+
+    // A nota da página para cada resposta diz o mesmo que a barra (null = nada a dizer: o aviso de aprovado é do agente,
+    // e «Busy» é outra aprovação a meio).
+    [Theory]
+    [InlineData(PairingAnswer.WrongCode, 2, "Código errado. Tem mais 2 tentativas.")]
+    [InlineData(PairingAnswer.WrongCode, 1, "Código errado. Tem mais 1 tentativa.")]
+    [InlineData(PairingAnswer.Refused, 0, "Três códigos errados: o pedido foi recusado. Peça outra vez no outro computador.")]
+    [InlineData(PairingAnswer.NotConfirmed, 3, "Não foi confirmado com o Windows: o pedido continua à espera.")]
+    [InlineData(PairingAnswer.Incomplete, 3, "Escreva os 6 algarismos que o outro computador mostra.")]
+    [InlineData(PairingAnswer.Gone, 0, "Este pedido já não está à espera.")]
+    [InlineData(PairingAnswer.Approved, 0, null)]
+    [InlineData(PairingAnswer.Busy, 3, null)]
+    public void PageNote_SaysWhatTheBarSays(PairingAnswer answer, int attemptsLeft, string? expected)
+    {
+        Assert.Equal(expected, PairingBarModel.PageNote(answer, attemptsLeft));
+        // Os sete valores estão todos cobertos acima.
+        Assert.Equal(7, Enum.GetValues<PairingAnswer>().Length);
+    }
+
+    // Aprovar fora da barra só quando a barra o deixaria: sincronização ligada e barra não calada (pedidos em série).
+    [Fact]
+    public void MayApproveHere_OnlyWhenOn_AndNotQuiet()
+    {
+        Assert.True(PairingBarModel.MayApproveHere(TestStatus.Of(SyncPhase.On)));
+        Assert.False(PairingBarModel.MayApproveHere(TestStatus.Of(SyncPhase.On) with { PairingQuiet = true }));
+        foreach (var phase in new[] { SyncPhase.Choose, SyncPhase.Off, SyncPhase.Stopped })
+            Assert.False(PairingBarModel.MayApproveHere(TestStatus.Of(phase)));
+        Assert.False(PairingBarModel.MayApproveHere(null));
+    }
+
+    // Os textos novos da página, à letra (a T15 confere-os aqui).
+    [Fact]
+    public void PageTexts_AreTheBarsTexts()
+    {
+        Assert.Equal("Código que o outro computador mostra", PairingBarModel.CodeBoxName);
+        Assert.Equal("Escreva os 6 algarismos que o outro computador mostra.", PairingBarModel.TypeSixDigits);
+        Assert.Equal("Este pedido já não está à espera.", PairingBarModel.GoneNote);
     }
 }
