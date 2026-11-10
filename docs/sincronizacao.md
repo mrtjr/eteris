@@ -8,10 +8,19 @@ verificação da marca (nome e logótipo no ecrã de consentimento) continua opc
 (opção B): o início de sessão na Google faz-se no **navegador do sistema** (OAuth 2.0 para apps de computador, PKCE e
 redirecionamento por loopback `127.0.0.1`), os dados do Éteris ficam na **pasta oculta da aplicação** (`appDataFolder`)
 do Google Drive do utilizador, com o âmbito `https://www.googleapis.com/auth/drive.appdata` (não sensível), e vão
-**sempre cifrados ponta a ponta no PC**: a chave nunca vai para a Google. A chave passa entre aparelhos por aprovação
-num aparelho já ligado (o aparelho novo mostra um código, o outro mostra o pedido com o mesmo código) ou pelo código de
-recuperação mostrado uma vez. Base: `C:\cef\notas\viabilidade\viab-sync.md`, `viab-login.md` e `viab-sintese.md`
-(D1–D7).
+**sempre cifrados ponta a ponta no PC**: a chave nunca vai para a Google nem para o projeto Éteris. A chave passa
+entre computadores por aprovação num computador já ligado (desde a 0.2.15: o computador novo mostra um código de 6
+algarismos e escreve-se esse código no computador ligado) ou pelo **kit de recuperação** (24 palavras; os códigos
+antigos de 56 carateres continuam aceites), que se pode guardar, imprimir e voltar a ver. Base:
+`C:\cef\notas\viabilidade\viab-sync.md`, `viab-login.md` e `viab-sintese.md` (D1–D7).
+
+**0.2.15 «Um login e pronto».** Entra-se com um clique em «Entrar com o Google» em vários sítios (menu ⋯, boas-vindas,
+paleta, oferta depois de guardar a primeira palavra-passe, páginas de palavras-passe e de preenchimento, Definições);
+o pedido de um computador novo faz-se sozinho e aprova-se escrevendo um número; o código de recuperação passou a kit;
+«Sair deste computador» deixou de revogar o acesso na Google e há «Retirar o acesso do Éteris à conta Google» e «Perdi
+um computador / foi roubado»; pagamentos e documentos passaram a ser uma escolha da conta; e voltar à janela do Éteris
+é mais um momento em que o Éteris procura pedidos no Drive. As secções abaixo descrevem o comportamento atual; onde
+ajuda quem lê o código antigo, «(até à 0.2.14: …)».
 
 ## O que existe
 
@@ -20,8 +29,11 @@ recuperação mostrado uma vez. Base: `C:\cef\notas\viabilidade\viab-sync.md`, `
 | Biblioteca `Eteris.Sync` (net10.0, sem WPF, sem pacotes; partilhável com o Android) | `src/Eteris.Sync` | pronta |
 | Modelo de registos, IDs estáveis e opacos, HLC, lápides, fusão (notas a três) | `Model/`, `Merge/`, `Engine/` | pronta |
 | Formato cifrado (lotes, instantâneos, estado, perfil exportado) | `Format/` | pronta |
-| Chaves: segredo de conta, código de recuperação, DEK embrulhada, «nova cadeia» entregue aos que ficam | `Crypto/`, `Engine/SyncEngine.cs` | pronta |
-| Emparelhamento (ECDH efémero + código de verificação), também pedido pelo aparelho novo | `Pairing/` | pronto, com ecrã |
+| Chaves: segredo de conta, kit de recuperação (24 palavras BIP39 em português, `RecoveryCode`; o código antigo de 56 carateres continua aceite), DEK embrulhada, «nova cadeia» entregue aos que ficam | `Crypto/`, `Engine/SyncEngine.cs` | pronta |
+| Emparelhamento (ECDH efémero + código de verificação), pedido sozinho pelo computador novo e aprovado escrevendo o código no computador ligado (`PairingCode`, `PairingFatigue`, `PairingRenewal`) | `Pairing/` | pronto, com barras |
+| Entrar, a barra do início de sessão, a página de fim e o aviso de sessão expirada | `Google/GoogleOAuth.cs`, `Google/SignInPage.cs`; `src/Eteris.Browser/Sync/GoogleSync.cs`, `SignInEntry.cs`, `SignInBarModel.cs`, `SessionExpiredPrompt.cs` | pronto (0.2.15) |
+| Kit de recuperação: ver, guardar, imprimir, copiar, lembrete | `src/Eteris.Browser/Sync/RecoveryKit.cs`, `KitGate.cs`, `RecoveryReminder.cs` | pronto (0.2.15) |
+| Saídas: «Sair deste computador», «Retirar o acesso…», «Perdi um computador», «Começar do zero…» | `src/Eteris.Browser/Sync/SyncExit.cs` | pronto (0.2.15) |
 | O aparelho na conta: criar, entrar, juntar, remover, apagar, sair (`SyncAgent`) e o perfil local (`ProfileSync`) | `Engine/SyncAgent.cs`, `Engine/ProfileSync.cs` | pronto |
 | Quando sincronizar (`SyncSchedule`) | `Engine/SyncSchedule.cs` | pronto |
 | Transportes: pasta local e Google Drive `appDataFolder` (REST, multipart e resumable) | `Transport/`, `Google/` | prontos |
@@ -54,7 +66,7 @@ quando o utilizador carregar em «Ligar a sincronização»). Exportar/importar 
 | Notas | sim | fusão a três por linhas; ao entrar num aparelho com notas diferentes, as dele ficam por baixo das da conta com um título; não se aplicam enquanto o utilizador está a escrever |
 | Histórico | **não** (nesta versão) | — |
 | Abas abertas | **não** (nesta versão) | a biblioteca tem a coleção `tabs` («abas noutros aparelhos»), mas o Éteris não a publica |
-| Palavras-passe e preenchimento automático | sim (o cofre próprio do Éteris), com uma **segunda cifra** por registo | sete coleções **secretas** (`logins`, `loginsNever`, `cards`, `ibans`, `contacts`, `idDocs`, `travel`): ver «Coleções secretas». Cada computador escolhe no tópico «O que passa entre PCs»; Pagamentos e Documentos de identificação vêm desligados e ligá-los pede o Windows Hello. O gestor do Chromium continua desligado (`credentials_enable_service = false`, verificação de fugas desligada); a janela privada lê o cofre para preencher e não lhe muda nada, nem a «última utilização», que por isso nunca sobe da janela privada. O histórico local das palavras-passe não sobe |
+| Palavras-passe e preenchimento automático | sim (o cofre próprio do Éteris), com uma **segunda cifra** por registo | sete coleções **secretas** (`logins`, `loginsNever`, `cards`, `ibans`, `contacts`, `idDocs`, `travel`): ver «Coleções secretas». Cada computador escolhe no tópico «O que passa entre PCs»; Pagamentos e Documentos de identificação são uma escolha da conta (desligados numa conta nova; ver «Pagamentos e documentos: escolha da conta»). O gestor do Chromium continua desligado (`credentials_enable_service = false`, verificação de fugas desligada); a janela privada lê o cofre para preencher e não lhe muda nada, nem a «última utilização», que por isso nunca sobe da janela privada. O histórico local das palavras-passe não sobe |
 | Chaves de acesso | **não** | ficam no Windows Hello ou na chave de segurança (o WebAuthn segue para a janela do Windows: `docs/palavras-passe.md`, E2) |
 | Cookies, transferências, zoom por site, permissões, leitura para mais tarde, sessões guardadas | não | — |
 
@@ -62,29 +74,90 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 
 ## Os fluxos
 
-- **Primeiro aparelho.** Depois de entrar (ou de «Ligar a sincronização»), se a pasta da aplicação não tiver nenhuma
-  conta (`eteris/<cadeia>/keys`), o Éteris cria-a, envia os dados deste computador e mostra o **código de recuperação**
-  com «Copiar» e «Já guardei» e o aviso: *sem este código e sem outro computador ligado, os dados na nuvem não se
-  recuperam*. O código fica à vista (Definições e linha do menu: «Guarde o código de recuperação») até «Já guardei» —
-  também depois de reabrir o Éteris — e nunca mais aparece.
-- **Aparelho seguinte.** Se já houver conta, a secção oferece:
-  - **«Aprovar noutro computador»**: este aparelho abre um pedido (`eteris/pair/<sessão>/0-request`, só a hora) e diz
-    «abra o menu (Alt+F) ou Definições › Sincronização no outro computador». Numa ronda agendada, o aparelho ligado só
-    conta o pedido (o menu diz «Um computador novo pede para entrar»); responde ao protocolo de emparelhamento quando o
-    utilizador abre o menu do Éteris (⋯) ou tem a secção Sincronização à vista (a página volta a procurar de 5 em 5 s
-    enquanto estiver à vista, até 10 minutos depois do último gesto). Dois aparelhos ligados que respondam ao mesmo
-    pedido não se atrapalham: o aparelho novo diz a que chave de anfitrião se compromete (`for` no passo 2) e o outro
-    desiste calado. Responder mostra «*nome do aparelho* quer juntar-se à sincronização» com o **código de verificação** de 6 algarismos; o
-    aparelho novo mostra o mesmo código e o botão «O outro computador mostra este código». O utilizador confirma nos
-    dois («Aprovar» no ligado); só então a conta segue, cifrada para o aparelho novo. Sem QR (sem bibliotecas novas).
-  - **«Usar o código de recuperação»** (no corpo de um POST, nunca no endereço).
+- **Entrar.** Um clique em «Entrar com o Google» chega: na linha da conta do menu ⋯ («Entrar com o Google…»,
+  «Sincronize favoritos e palavras-passe, cifrados ponta a ponta»), no passo «Já usa o Éteris noutro computador?» das
+  boas-vindas, na paleta (Ctrl+K, «Entrar com o Google (sincronização)»), no aviso depois de guardar a primeira
+  palavra-passe nova («Ter as suas palavras-passe noutros computadores?», uma só vez, marca só local), nas páginas
+  `eteris://passwords/` e `eteris://autofill/`, e nas Definições › Sincronização. **A Nova aba não oferece.** Nenhum
+  destes pontos faz pedidos ao aparecer: todos chamam o mesmo `SignInEntry.Begin()` (ou a linha do menu e a barra,
+  `GoogleSync.BeginSignIn`) só no clique (testes `SignInEntryTests.Begin_IsOnlyCalledFromUserActions`,
+  `SettingsRoute_AndTheEntryPoints_ShareOneBegin`, `NewTab_HasNoSignInEntry`, `Deciding_OnlyReadsDisk`). Numa janela
+  privada não há conta: nenhum ponto de entrada aparece e as rotas de conta respondem «recusado». Sem
+  `google-oauth.json` na instalação a sincronização fica indisponível, nenhum ponto de entrada aparece e nada é pedido
+  à Google.
+  O ecrã da Google abre no navegador do sistema com a escolha de conta (`prompt=select_account`, ver «Início de
+  sessão»). Enquanto se espera, uma **barra** na janela do Éteris diz o que está a acontecer: «À espera do início de
+  sessão no seu navegador…» [Cancelar]; sem navegador, «Abra este endereço noutro navegador para entrar na Google.»
+  [Copiar endereço]; depois «Sessão iniciada como *nome*. A sincronizar…» e «Sincronizado.», que some sozinha (4 s;
+  12 s com uma ligação); os erros («O início de sessão demorou demasiado.», «A Google não deu autorização ao Éteris.»,
+  «Entrou, mas sem a permissão do Drive o Éteris não sincroniza.», «Sem ligação à Google. Tente de novo.») ficam 20 s
+  com «Tentar outra vez». A barra nunca rouba o foco do teclado, não tem animações e **nunca aparece em janelas
+  privadas**. Há uma barra de cada vez: pedido de aprovação, conta substituída, início de sessão (ou o cartão do
+  computador novo), sessão expirada, lembrete do kit e oferta de pagamentos e documentos, por esta ordem
+  (`WindowBars.Pick`). No fim, a página no navegador do sistema diz o que falta (seis textos: «Pronto. O Éteris começou
+  a sincronizar…», «Falta um passo no Éteris…», «O Éteris retomou a sincronização…», a falta da permissão do Drive, a
+  neutra e a recusa), e a janela do Éteris pisca na barra de tarefas (e vem para a frente se o Windows deixar).
+- **Primeiro computador.** Depois de entrar (ou de «Ligar a sincronização»), se a pasta da aplicação não tiver nenhuma
+  conta (`eteris/<cadeia>/keys`), o Éteris cria-a e envia os dados deste computador. **Nada é pedido nem bloqueia ao
+  criar a conta.** O segredo da conta fica guardado neste computador e vê-se como **kit de recuperação**: 24 palavras da
+  lista BIP39 em português (`RecoveryCode.WordCount` = 24; `AccountSecret.ToWords()`). Em Definições › Sincronização ›
+  «Kit de recuperação»: «Ver o kit» (pede **sempre** a confirmação do Windows, `ReauthPurpose.ShowRecoveryKit`; aberto,
+  fica à vista no máximo 5 minutos, `KitUnlock.Limit`, e esconde-se ao mudar de aba), «Guardar como ficheiro…»,
+  «Imprimir» e «Copiar». Copiar usa a área de transferência segura: o kit não fica no histórico nem na nuvem da área de
+  transferência e sai ao fim de 60 s. A página diz «O seu kit atual termina em XXXX» (uma impressão digital de 4
+  carateres, nunca o kit). O kit antigo deixa de valer quando se remove um computador ou se gera um kit novo: as
+  Definições dizem-no e pedem que se guarde o novo.
+  - **O ficheiro do kit.** O Éteris nunca envia o kit a ninguém: o ficheiro fica onde o guardar. Se essa pasta for
+    sincronizada com uma nuvem (OneDrive, Google Drive, Dropbox), o kit vai com ela — o Éteris avisa antes de gravar
+    numa pasta dessas, ou em qualquer pasta que não reconheça como deste computador (`RecoveryKit.Folder`,
+    `RecoveryKit.FolderWarning`). O mesmo vale para «Imprimir para PDF» (é um ficheiro) e para uma impressora de rede.
+  - **O lembrete.** Enquanto houver um só computador na conta e o kit não estiver guardado, uma barra na janela diz
+    «Guarde o seu kit de recuperação. Se perder este computador, é com ele que recupera, na nuvem, os favoritos e as
+    palavras-passe.» [Guardar o kit] [Mais tarde] [Não quero…]. O lembrete volta de 30 em 30 dias enquanto houver um só computador na conta, e tem a opção «Não quero: aceito que, sem este computador, a cópia na nuvem não se recupera».
+    (`RecoveryReminder.SnoozeDays` = 30; «Não quero» grava-se e o lembrete não volta; uma troca de chave repõe-no.) A
+    linha do menu diz «Guarde o kit de recuperação» enquanto o kit não estiver guardado nem recusado.
+  - O kit sozinho não abre nada: também é preciso entrar na sua conta Google (o kit desembrulha a chave que está no
+    Drive). E a Google sozinha também não (não tem a chave).
+  - (Até à 0.2.14: o código de recuperação de 14 grupos de 4 aparecia uma vez, com «Copiar» e «Já guardei», e nunca
+    mais.)
+- **Computador novo.** Depois de entrar num computador **sem nenhum estado desta conta**, se a conta já existir no
+  Drive, o pedido de aprovação abre-se sozinho na ronda do gesto (`SyncAgent.AutoPair`, `SyncAgent.MayAutoRequest`; uma
+  ronda agendada nunca pede). Um computador que já esteve numa conta e encontra outra cadeia no Drive **não pede
+  sozinho**: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão («Foi eu» pede o Windows com
+  segredos ligados neste computador; «Não fui eu» leva a «Retirar o acesso»). O computador novo mostra um cartão:
+  «Falta um passo no outro computador.» e, quando o outro responde, «Escreva este código no outro computador:» com o
+  código de 6 algarismos; depois «Escreveu … no outro computador e ele aceitou?» [Sim] [Não] («Sim» só conta 2 s depois
+  de o código aparecer). Enquanto espera, procura a resposta no Drive de 3 em 3 s (`SyncAgent.PairingPoll`); se ninguém
+  responder em 10 minutos, renova o pedido sozinho só com o cartão ou a secção à vista, até 30 minutos e no máximo três
+  sessões por gesto (`PairingRenewal.Window`, `MaxRenewals`); depois, «Ainda à espera?» com [Pedir outra vez].
+  Nos computadores ligados, o pedido aparece numa **barra** («Um computador quer entrar na sua conta e receber as suas
+  palavras-passe.» e «Se foi você, escreva o código que ele mostra:») ou nas Definições › Sincronização (a mesma caixa,
+  só com o teclado: Tab até à caixa, os 6 algarismos e Enter). **Aprovar é escrever no computador ligado o código que o
+  novo mostra**: o computador ligado nunca mostra o código (`SyncAgent.ApproveWithCodeAsync`). Três códigos errados
+  recusam o pedido (`PairingCode.MaxWrong` = 3); um código incompleto não conta. «Não fui eu» recusa e aconselha a mudar
+  a palavra-passe da Google. Com segredos em jogo, a confirmação do Windows vem **depois** do código certo e antes de a
+  conta seguir (`SyncChoices.MayApproveAsync`). Depois de 3 pedidos recusados, expirados depois de respondidos ou com
+  códigos errados em 24 h (`PairingFatigue.MaxBad`, `PairingFatigue.Window`) a barra deixa de abrir sozinha e o aviso
+  fica nas Definições, com «Mostrar o pedido na barra». O nome do computador novo («Nome que o outro computador
+  indicou: …») não é prova de nada: a barra mostra-o pequeno, sem algarismos e cortado. Escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito.
+  Ou, sem o outro computador à mão: **«Usar o kit de recuperação»** (as 24 palavras, coladas ou abertas do ficheiro;
+  os códigos antigos de 56 carateres continuam aceites; no corpo de um POST, nunca no endereço).
+  Os ficheiros do pedido (`eteris/pair/<sessão>/0-request`, `1-host`, `2-guest`…, `x-host`) têm nomes legíveis e levam
+  só a hora, chaves públicas de uso único e números aleatórios; o nome do computador novo vai cifrado com a chave da
+  sessão. Dois computadores ligados que respondam ao mesmo pedido não se atrapalham: o novo diz a que chave de
+  anfitrião se compromete (`for` no passo 2) e o outro desiste calado.
   Depois, **junta os dados sem perder nada**: o que só existia neste PC sobe; o que já existe na conta vale
   (definições, títulos, Espaços); notas diferentes juntam-se.
+- **O nome do computador.** Por omissão «Éteris em *nome do Windows*» (`DeviceNameText.Default`); muda-se em
+  Definições › Sincronização › Mais opções › «Nome deste computador». O nome viaja sempre cifrado: no passo 4 do
+  emparelhamento (com a chave da sessão), no estado do aparelho e nos lotes (com a chave da conta); o `0-request` leva só
+  a hora. Os outros computadores veem o nome novo na ronda seguinte.
 - **Alterações** nos dois sentidos, com conflitos resolvidos por HLC (ganha a última ronda que as enviou) e lápides
   (o apagado não volta). O que o utilizador muda a meio de uma ronda que traz outra versão fica e segue na seguinte.
-- **Aparelhos**: lista nas Definições (nome, «este computador», quando sincronizou) com **«Remover»** (duas vezes, para
-  confirmar). Remover faz **nova cadeia**: segredo e chaves novos, tudo recifrado, a cadeia antiga apagada, um código
-  de recuperação novo mostrado uma vez. Os aparelhos que ficam recebem a conta nova sozinhos: cada aparelho tem uma
+- **Aparelhos**: lista nas Definições › Sincronização › Mais opções (nome, «este computador», quando sincronizou, «·
+  recebe pagamentos e documentos») com **«Remover»** (duas vezes, para confirmar). Remover faz **nova cadeia**: segredo
+  e chaves novos, tudo recifrado, a cadeia antiga apagada, e um kit de recuperação novo (o antigo deixa de valer, em
+  todos os computadores). Os aparelhos que ficam recebem a conta nova sozinhos: cada aparelho tem uma
   chave estática P-256 (no estado local, DPAPI) cuja parte pública vai no seu estado cifrado; os outros fixam-na na
   primeira vez que a veem; a conta nova vai em `eteris/<cadeia antiga>/r/<aparelho>/<de>`, cifrada com ECDH entre as
   chaves estáticas de quem remove e de quem fica. O removido não tem mensagem para si e não consegue forjar uma (não tem
@@ -101,10 +174,11 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
     Depois da troca, os que ficaram continuam na lista (pela chave fixada) até escreverem o seu estado na conta nova.
   - A mensagem diz **quem foi removido e quem fica**: um remetente que outra mensagem válida dá como removido é recusado
     (o removido também tinha as chaves fixadas e podia deixar uma «conta nova» dele); remetentes que se contradizem, ou
-    contas novas diferentes, **param sem escolher** (junta-se outra vez com o código ou por aprovação); as chaves do
+    contas novas diferentes, **param sem escolher** (junta-se outra vez com o kit ou por aprovação); as chaves do
     removido não passam para a conta nova. As mensagens só saem do Drive **depois** de a conta nova ficar guardada, e um
     aparelho desligado durante **duas remoções seguidas** segue as duas (até 8 saltos).
-  - **«Gerar um código de recuperação novo»** (Definições, com confirmação): a mesma troca de chave, sem tirar ninguém.
+  - **«Gerar um kit novo…»** (Definições, com confirmação; com segredos em jogo pede a confirmação do Windows): a mesma
+    troca de chave, sem tirar ninguém. (Até à 0.2.14: «Gerar um código de recuperação novo».)
 - **Parar não apaga a chave.** Conta desaparecida (dados apagados, este aparelho removido, outra conta Google), registo
   de chaves que não abre (alterado ou danificado) ou outra conta Google: a sincronização para ou fica em pausa, a chave
   fica (e, nos dois últimos casos, o estado todo). O estado guarda uma impressão digital da conta Google (não o e-mail):
@@ -119,11 +193,54 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 - **Dois computadores a criar a conta ao mesmo tempo** (Drive vazio para os dois): na primeira meia hora, enquanto
   estiver sozinho na conta que criou, cada um confere se há outra; a de identificador menor fica e o outro sai da sua
   (apaga-a do Drive) e volta a «escolher como entrar», sem perder nada deste computador.
-- **«Sair»** (Definições, botão da conta): a sincronização para neste aparelho e os tokens são apagados e revogados na
-  Google (como antes). Com «Ao sair, apagar também a chave da sincronização deste computador», o estado local sai todo
-  e voltar exige o código ou outro aparelho (com o código de recuperação ainda por guardar, pede confirmação); sem ela,
-  entrar outra vez retoma sem código e o código por guardar continua à vista até «Já guardei». Uma ronda a meio não
-  volta a gravar a chave depois de «Sair».
+- **«Sair deste computador»** (Definições › Sincronização › Mais opções): a sincronização para neste computador e os
+  tokens e a conta guardada **deste computador** são apagados. «Sair deste computador» não revoga nada e não faz
+  nenhum pedido à Google (zero pedidos de rede; teste `GoogleSyncTests.SignOutRoute_NeverRevokes`): os outros
+  computadores continuam ligados. Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar
+  «Retirar o acesso». A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a
+  chave». A autorização dada à Google continua válida até a retirar (o token deste computador deixa de estar no disco,
+  mas não é revogado). Com «Ao sair, apagar também a chave da sincronização deste computador», o estado local sai todo
+  e voltar exige o kit ou outro computador (com o kit ainda por guardar, pede confirmação); sem ela, entrar outra vez
+  retoma sem kit nem aprovação. Uma ronda a meio não volta a gravar a chave depois de «Sair». (Até à 0.2.14: «Sair»
+  também revogava os tokens na Google.)
+- **«Retirar o acesso do Éteris à conta Google»** (Definições › Sincronização › Mais opções, com confirmação na página;
+  não existe na pasta de teste): revoga a autorização na Google (`oauth2.googleapis.com/revoke`) e desliga todos os
+  computadores — os outros só dão por isso na ronda seguinte (não é instantâneo) e passam a «Sincronização em pausa:
+  entre outra vez». Os dados no Drive e a chave deste computador ficam. O Éteris só diz que o acesso «foi retirado»
+  quando a Google o confirma (`RevokeOutcome.Revoked`); se a sessão deste computador na Google já não era válida, diz que
+  não conseguiu confirmar e manda entrar outra vez e repetir, ou usar myaccount.google.com/permissions
+  (`SyncExit.RevokeUnconfirmed`); se a Google não responder, nada se apaga e diz para tentar outra vez.
+- **«Perdi um computador / foi roubado»** (Definições › Sincronização › Mais opções › Aparelhos ligados; pede sempre a
+  confirmação do Windows, `ReauthPurpose.LostDevice`): primeiro remove o aparelho e troca a chave da conta, e só com a
+  troca acabada retira o acesso do Éteris na Google (`SyncExit.LostDeviceAsync`). O que já estava nesse computador
+  continua lá: daqui em diante ele não recebe nada novo. O Éteris diz também: «O aparelho removido já tinha as suas
+  palavras-passe: mude as dos sites importantes.» e, se tinha cartões ou documentos, «trate-os como vistos»; «Se a sua
+  conta Google estava aberta num navegador desse computador, termine essa sessão na conta Google e mude a palavra-passe
+  da Google»; e que este computador também saiu da conta Google e que o kit antigo deixou de valer: entra-se outra vez
+  em cada computador e guarda-se o kit novo. Se a Google não confirmar a revogação, o Éteris diz que o aparelho foi
+  removido mas o acesso não ficou confirmado como retirado (`SyncExit.LostNotRevoked`, `SyncExit.LostUnconfirmed`).
+  Na pasta de teste só há o passo 1.
+- **«Começar do zero…»** (no ecrã de entrada, só antes de este computador entrar numa conta; pede que se escreva
+  «começar do zero» e sempre a confirmação do Windows, `ReauthPurpose.StartOver`): apaga a conta antiga da nuvem (o
+  mesmo «Apagar os meus dados do Éteris no Google Drive») e cria uma nova a partir deste computador. O que só estava na
+  conta antiga perde-se; o que está neste computador fica e passa para a conta nova. Os outros computadores dizem que a
+  conta foi apagada ou substituída e não pedem nada sozinhos.
+- **Pagamentos e documentos: escolha da conta.** «Também pagamentos e documentos de identificação» (Definições ›
+  Sincronização › O que passa entre PCs) liga cartões, IBAN e documentos para a conta inteira: ligar pede a confirmação
+  do Windows **no computador onde se liga** (`ReauthPurpose.SyncSecrets`) e grava a escolha, cifrada, num registo
+  reservado da conta (`@account/secret-groups`, campos `value`, `since` e `by`; só `"on"` liga; um Éteris 0.2.14
+  ignora-o — provado por imitação, `SyncAccountChoiceTests.OlderEteris_IgnoresTheRecord`). Um computador **novo** (sem estado de sincronização anterior) que entra depois herda a escolha sem pedir de
+  novo e diz «Recebeu favoritos, palavras-passe, cartões e documentos». Um computador que já estava ligado — ou que já
+  esteve numa conta e entra noutra (por exemplo depois do alerta de conta substituída) — recebe uma oferta única: «Os
+  seus outros computadores sincronizam agora pagamentos e documentos. Receber também neste?» [Sim] [Não]; só recebe com
+  «Sim» e a confirmação do Windows. Desligar a linha neste computador só o desliga aqui e não apaga nada. A escolha é
+  de quem tem a chave da conta: a confirmação do Windows pedida num computador protege esse computador, não é
+  verificável pelos outros. O estado de cada aparelho leva, cifrado, o campo `groups` (os grupos que recebe).
+- **Sessão expirada.** Quando a Google deixa de aceitar a sessão (`invalid_grant`, autorização retirada), aparece na
+  janela, uma vez por abertura do Éteris, «A sincronização está em pausa: a Google pediu para entrar outra vez.»
+  [Entrar] [Agora não]; nunca em janelas privadas nem na pasta de teste. «Entrar» pré-escolhe a conta (`login_hint`, só
+  na reentrada; ver «Início de sessão») e retoma com a chave guardada, sem kit nem aprovação. O aviso não faz nenhum
+  pedido novo: é descoberto pela ronda que já existia.
 - **«Apagar os meus dados do Éteris no Google Drive»** (com confirmação): apaga todos os ficheiros do Éteris da pasta
   da aplicação (todas as contas e pedidos, e os duplicados com o mesmo nome; lista outra vez até a pasta ficar vazia, no
   máximo 4 passagens), **sem revogar** nem sair da conta Google. A confirmação aparece por baixo, com «Cancelar» no
@@ -160,10 +277,20 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 | **10 s depois da última alteração local** (favorito, definição, Escudo, Espaço, notas) | espera agregadora: várias alterações seguidas vão num lote; e só há rede se a comparação local (sem rede) encontrar alguma coisa por enviar |
 | **De 10 em 10 minutos** com o Éteris aberto | para receber o que os outros aparelhos mudaram |
 | **Ao entrar**, ao ligar, ao entrar num aparelho novo, e em **«Sincronizar agora»** | ação do utilizador |
-| Ao abrir o menu do Éteris (⋯), ou com a secção Sincronização à vista (depois de um gesto; de 5 em 5 s, até 10 min depois do último gesto) | procura pedidos de aparelhos novos e responde-lhes (e relê a lista de aparelhos nas Definições); ao responder a um pedido, acompanha-o de 2 em 2 s até ele acabar (no máximo 10 min) |
-| Numa ronda agendada | os pedidos de aparelhos novos só se **contam** (para o menu dizer «Um computador novo pede para entrar»); não se responde a nenhum sem o utilizador abrir o menu ou a secção |
-| Uma vez, depois de entrar (ou ao abrir o menu ou a secção, com a sincronização ligada, se a conta ainda não estiver guardada) | o nome e o e-mail da conta (`about.get`) |
+| Ao abrir o menu do Éteris (⋯), ou com a secção Sincronização à vista (depois de um gesto; de 5 em 5 s, até 10 min depois do último gesto), ou em «Ver» na barra de um pedido contado | procura pedidos de computadores novos e responde-lhes (e relê a lista de aparelhos nas Definições); ao responder a um pedido, acompanha-o de 2 em 2 s até ele acabar (no máximo 10 min) |
+| **Ao voltar à janela do Éteris** (no máximo uma vez a cada 5 minutos, ou logo se uma ronda já tiver encontrado um pedido) — só com sessão e a sincronização ligada, nunca antes da 1.ª ronda desta abertura, nunca numa janela privada | procura pedidos de computadores novos (`ActivationLook.Interval` = 5 min; decisão D8′) |
+| Numa ronda agendada | os pedidos de computadores novos só se **contam** (para o menu dizer «Um computador novo pede para entrar» e a barra mostrar «Um computador novo quer entrar na sua conta.» com «Ver»); não se responde a nenhum sem um gesto |
+| No computador novo, à espera de aprovação (parte da ação «entrar») | procura a resposta no Drive de 3 em 3 s; o pedido dura 10 min e renova-se sozinho só com o cartão ou a secção à vista, até 30 min e no máximo três sessões por gesto |
+| Uma vez depois de cada entrada (ou ao abrir o menu ou a secção, com a sincronização ligada, se a conta ainda não estiver guardada) | o nome e o e-mail da conta (`about.get`) |
 | Quando o token de acesso expira (cerca de 1 h), no próximo pedido | renovação da sessão em `oauth2.googleapis.com/token` |
+| Nas ações que o utilizador pede: entrar, sincronizar agora, aprovar ou recusar um computador, remover um aparelho (e «Perdi um computador»), gerar um kit novo (troca a chave da conta no Drive), ligar uma linha de «O que passa entre PCs» ou aceitar pagamentos e documentos (fazem logo uma ronda), apagar os dados do Drive (e «Começar do zero…») e retirar o acesso do Éteris à conta Google | ação do utilizador. **Sair deste computador não fala com a Google.** Mudar o nome do computador só grava e segue na ronda seguinte |
+
+Esta lista é a do teste de varrimento `SyncIntegrationTests.NetworkMoments_ClosedListOfCallers` (quem chama
+`SyncService.Look(` e `WindowActivated(`: a rota `sync-look` das Definições, o menu, a barra de aprovação e a ativação da
+janela) e a de `PrivacyPage.SyncException` (a exceção que `eteris://privacy/` mostra com a sincronização ligada). Quem
+acrescentar um momento de rede acrescenta-o a esse teste e à exceção (e a esta tabela); os números são os das
+constantes (`SyncSchedule.StartupDelay`, `ChangeDelay`, `Period`, `PairingProtocol.Lifetime`, `PollInterval`,
+`ActivationLook.Interval`), que `PrivacyPageTests.SyncException_NumbersMatchTheCode` confere.
 
 Sem rede, com a Google em baixo ou a pasta inacessível: tenta outra vez sozinho, com espera crescente (30 s, 1, 2, 4,
 8, 16 e depois de 30 em 30 min), sem avisos; as alterações locais não encurtam a espera; o que estava por enviar fica
@@ -172,10 +299,11 @@ Google tiver expirado ou sido retirada** (`invalid_grant`, permissão desmarcada
 menu diz «Sincronização em pausa: entre outra vez» e as Definições mostram «Entrar outra vez» (sem revogar nada nem
 mexer na chave), como o «Sincronização em pausa · Iniciar sessão novamente» do Chrome.
 
-**Estado visível:** Definições › Sincronização («Sincronizado há 2 min», «A sincronizar…», o erro em claro) e a linha
-da conta no menu («Sincronizado há 2 min», «A sincronizar…», «Pedido de *nome* · código 123 456», «Um computador novo
-pede para entrar», «Guarde o código de recuperação», «Por sincronizar: o Éteris tenta outra vez sozinho»,
-«Sincronização em pausa: entre outra vez»).
+**Estado visível:** Definições › Sincronização, à frente, «Ligada · última sincronização há 2 min» («A ligar…», «A
+sincronizar…», «Ligada · a primeira sincronização está a caminho»; `SyncService.Headline`), o erro em claro e, em «Mais
+opções», o resto; e a linha da conta no menu («Sincronizado há 2 min», «A sincronizar…», «Escreva o código 123 456 no
+outro computador», «Um computador novo pede para entrar», «Guarde o kit de recuperação», «Por sincronizar: o Éteris
+tenta outra vez sozinho», «Sincronização em pausa: entre outra vez»).
 
 ## Pasta de teste (`ETERIS_TEST_SYNC_FOLDER`)
 
@@ -254,9 +382,12 @@ eteris/pair/<sessão>/…     mensagens de um emparelhamento (apagadas no fim)
 
 ### Cifra
 
-- **Segredo de conta R:** 256 bits do gerador do sistema (nunca de uma senha). Escrito como **código de recuperação**:
-  13 grupos de 4 carateres base32 Crockford + 1 grupo de controlo (20 bits de SHA-256), lido com tolerância
-  (minúsculas, espaços, O→0, I/L→1); uma gralha é recusada.
+- **Segredo de conta R:** 256 bits do gerador do sistema (nunca de uma senha). Escrito como **kit de recuperação**:
+  24 palavras da lista BIP39 em português (256 bits + 8 de soma de controlo, 11 bits por palavra;
+  `RecoveryCode.EncodeWords`, lista embutida em `Eteris.Sync.dll` com o SHA-256 fixado num teste), lidas com tolerância
+  (maiúsculas, espaços, quebras de linha, vírgulas, numeração, acentos; cada palavra pelas 4 primeiras letras). O
+  formato antigo continua aceite: **código de recuperação** de 13 grupos de 4 carateres base32 Crockford + 1 grupo de
+  controlo (20 bits de SHA-256), lido com tolerância (minúsculas, espaços, O→0, I/L→1); uma gralha é recusada.
 - `KEK = HKDF-SHA256(R, "kek")`, `cadeia = HKDF(R, "chain-id")` (nome opaco da pasta).
 - **DEK** aleatória, embrulhada pela KEK com AES-256-GCM (cadeia e geração como dados associados).
 - Por ficheiro: `chave = HKDF(DEK, "file:<tipo>:<contexto>")` — uma chave por ficheiro, nonce aleatório de 96 bits.
@@ -279,17 +410,24 @@ eteris/pair/<sessão>/…     mensagens de um emparelhamento (apagadas no fim)
 - **Nonces:** a chave de cada ficheiro deriva do seu nome lógico, mas não é «uma cifra por chave» (o estado do aparelho
   é recifrado a cada sincronização, e um lote que falhou é recifrado igual). Vale o nonce aleatório de 96 bits com
   poucas cifras por chave (milhares, longe do limite de 2^32).
-- **Nova cadeia** (aparelho perdido ou código exposto): segredo novo, DEK nova, tudo recifrado com IDs novos na cadeia
-  nova, e a antiga apagada. Os outros aparelhos recebem o código novo.
+- **Nova cadeia** (aparelho perdido ou kit exposto): segredo novo, DEK nova, tudo recifrado com IDs novos na cadeia
+  nova, e a antiga apagada. Os outros aparelhos recebem a conta nova; o kit novo vê-se em cada um e o antigo deixa de
+  valer.
 - Tudo na biblioteca padrão do .NET 10 (`HKDF`, `AesGcm`, `HMACSHA256`, `ECDiffieHellman`, `BrotliStream`).
 
 ### Emparelhamento (aprovação num aparelho já ligado)
 
 Na interface do PC, quem começa é o **aparelho novo** (`PairingRequests`): abre um pedido `0-request` (só a hora) e o
 aparelho ligado responde como anfitrião na mesma sessão (`PairingHost.AnswerAsync`); daí em diante é o protocolo de
-baixo. Um pedido que ninguém fez (escrito por quem controla o transporte) aparece no aparelho ligado, mas sem um ecrã
-com o mesmo código ao lado o utilizador não o aprova: o texto do pedido diz «só aprove se estiver a ligar esse
-computador agora e ele mostrar este mesmo código». O QR (para um telemóvel) continua na biblioteca.
+baixo. Desde a 0.2.15 (*number matching*, decisão D11) o anfitrião **nunca mostra o código**: o convidado mostra-o e a
+pessoa escreve-o no anfitrião, que o compara em tempo constante (`SyncAgent.ApproveWithCodeAsync`, `PairingCode`). Um
+pedido que ninguém fez (escrito por quem controla o transporte) aparece no aparelho ligado sem nada para copiar: o
+código só existe no ecrã do convidado. Três códigos errados recusam o pedido (escreve-se `x-host`); «Não fui eu»
+também. A aprovação faz-se na barra da janela ou em Definições › Sincronização (rota `POST /sync-request-code`, campos
+`id` e `code`; recusa GET, janelas privadas e pedidos sem o testemunho da página); a rota `/sync-approve` (aprovar sem
+código) saiu. Com a barra calada por pedidos em série (`PairingFatigue`), as Definições também não aprovam até
+«Mostrar o pedido na barra». Um pedido com a hora mais de 2 minutos no futuro é ignorado (`PairingProtocol.ClockSkew`).
+Uma sessão já respondida por um anfitrião não é aprovada por outro. O QR (para um telemóvel) continua na biblioteca.
 
 ```
 QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256 do anfitrião>   (ou só o código curto)
@@ -297,8 +435,8 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
 2 convidado → transporte  chave pública do convidado + compromisso SHA-256(pkC ‖ pkA ‖ nC)
 3 anfitrião → transporte  nonce nA (só depois do compromisso)
 4 convidado → transporte  nonce nC (abre o compromisso) + nome do convidado cifrado com a chave da sessão
-   os dois ecrãs mostram o código de verificação: 6 algarismos de SHA-256(sessão ‖ pkA ‖ pkC ‖ nA ‖ nC)
-   o utilizador confirma NO ANFITRIÃO que são iguais
+   o convidado mostra o código de verificação: 6 algarismos de SHA-256(sessão ‖ pkA ‖ pkC ‖ nA ‖ nC)
+   o utilizador ESCREVE-O NO ANFITRIÃO, que o calcula e compara sem o mostrar (três erros recusam)
 5 anfitrião → transporte  R cifrado com ECDH(pkA, pkC) → HKDF → AES-256-GCM (transcrito como dados associados)
    o utilizador confirma TAMBÉM NO CONVIDADO que o código é igual; só então o convidado abre o passo 5
 ```
@@ -310,9 +448,11 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
   o código curto `XXXX-XXXX-XXXX-XXXX` dá só a sessão, e quem garante as chaves é o código de verificação.
 - **Confirmação dos dois lados.** Com o código curto, quem controla o transporte pode pôr a sua chave no passo 1 e
   fazer de anfitrião só para o convidado, escrevendo logo o seu passo 5 (com a SUA conta, para o convidado passar a
-  cifrar tudo com uma chave que o atacante tem). Por isso o convidado também pergunta «o código é igual ao do outro
-  ecrã?» (`PairingGuest.ConfirmCode`) e só depois abre o segredo (`WaitForSecretAsync` recusa sem isso). Depois de o
-  receber, o ecrã mostra o nome do anfitrião e o código outra vez antes de juntar o aparelho à conta.
+  cifrar tudo com uma chave que o atacante tem). Por isso o convidado também pergunta «Escreveu … no outro computador e
+  ele aceitou?» (`PairingGuest.ConfirmCode`; «Sim» só conta 2 s depois de o código aparecer) e só depois abre o segredo
+  (`WaitForSecretAsync` recusa sem isso).
+- **O limite do código escrito** (*number matching*): o anfitrião compara o que a pessoa escreve com o código do pedido,
+  não sabe de onde ela o tirou. Escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito.
 - **Nada do utilizador em claro no transporte:** o passo 2 leva só a chave pública e o compromisso; o nome do aparelho
   convidado segue no passo 4, cifrado com a chave da sessão (mesmo que o anfitrião feche de repente e os ficheiros
   fiquem lá, a Google não lê «PC da Ana»). As chaves públicas têm de ser P-256 (outra curva é recusada logo).
@@ -334,12 +474,34 @@ QR no anfitrião:  eteris-par:1:<sessão 80 bits>:<chave pública efémera P-256
 - **Se o predefinido for o próprio Éteris**, usa outro navegador instalado (Firefox, Chrome, Brave… da lista do
   Windows); sem nenhum, mostra o endereço para copiar. O ecrã da Google nunca abre dentro do Éteris.
 - **PKCE** (S256) e `state` aleatório; o redirecionamento chega a `http://127.0.0.1:<porta>/`, num recetor que escuta só
-  na interface de loopback (nada de fora lhe chega e o Windows não pede regra na firewall), aceita um único pedido e
-  fecha. `access_type=offline` para o token de renovação. Se o utilizador desmarcar a permissão no ecrã da Google, o
-  Éteris diz que sem ela não sincroniza.
+  na interface de loopback (nada de fora lhe chega e o Windows não pede regra na firewall). `access_type=offline` para
+  o token de renovação. Se o utilizador desmarcar a permissão no ecrã da Google, o Éteris diz que sem ela não
+  sincroniza.
+- **Escolha de conta (0.2.15):** o pedido de autorização leva `prompt=select_account` (a Google mostra a escolha de
+  conta, não o consentimento outra vez). Se a Google não devolver token de renovação, o Éteris repete **uma vez**, no
+  mesmo separador (302) e com `state` e PKCE novos, com `prompt=consent`; se mesmo assim não vier, a entrada falha:
+  **uma sessão sem token de renovação nunca é aceite**. Na reentrada (sessão expirada, ou a linha do menu em pausa) o
+  pedido leva também `login_hint` com o e-mail da conta guardada, para a Google a pré-escolher: o e-mail vai **só** no
+  endereço da Google, aberto no navegador do sistema (fica no histórico desse navegador), nunca num endereço `eteris://`
+  nem em registos (`GoogleSync.ReentryHint()`, `GoogleOAuth.CleanLoginHint`; teste
+  `SignInHint_NeverTravelsInAnEterisAddress`). Depois de «Sair» não há e-mail guardado e a entrada seguinte vai sem ele.
+- **O recetor segura a resposta** até o Éteris trocar o código e ler a pasta (no máximo cerca de 10 s), para a página
+  de fim dizer a verdade: seis textos (`SignInPage`: «Pronto.» com «O Éteris começou a sincronizar…» ou «…retomou a
+  sincronização…», «Falta um passo no Éteris.», a falta da permissão do Drive, a neutra «Sessão iniciada. Volte ao
+  Éteris para continuar.» e a recusa). A página não tem scripts, endereços externos nem o e-mail. Todas as respostas
+  levam `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, uma CSP fechada e
+  `Connection: close`; a linha do pedido tem prazo de 5 s, um `state` errado leva 400 e a espera continua, e a porta
+  fecha-se logo que chega a resposta certa. Com sucesso, a janela do Éteris pisca na barra de tarefas (e vem para a
+  frente se o Windows deixar). A entrada inteira tem um prazo de 5 minutos; «Cancelar» na barra fecha a porta.
 - **Tokens** guardados em `<perfil>\sync\google.tokens`, cifrados com DPAPI do utilizador do Windows.
-- **Sair** apaga os tokens e a conta guardada deste computador e revoga os tokens na Google
-  (`oauth2.googleapis.com/revoke`).
+- **«Sair deste computador»** apaga os tokens e a conta guardada deste computador e **não** revoga nada (zero pedidos;
+  `GoogleSession.SignOut`). **«Retirar o acesso do Éteris à conta Google»** revoga em `oauth2.googleapis.com/revoke`
+  (`GoogleSession.RevokeAccessAsync`) e só apaga os tokens daqui quando a Google responde (revogado, ou o token já não
+  valia). (Até à 0.2.14, «Sair» revogava.)
+- **Limite de 100 tokens de renovação.** A Google guarda no máximo 100 tokens de renovação por conta e por cliente
+  OAuth. Como «Sair deste computador» já não revoga, cada entrada nova deixa um token válido na Google; ao passar o
+  limite, a Google invalida o mais antigo sem aviso, e esse computador passa a «Sincronização em pausa: entre outra
+  vez». «Retirar o acesso…» limpa todos. (Limite da documentação da Google; não foi medido.)
 - **`client_id`:** lido de `google-oauth.json` ao lado do `Eteris.Browser.exe` (vai com a instalação) ou na pasta do
   perfil (testes). Aceita o JSON que a consola da Google descarrega (`{"installed": {…}}`). Sem ele: «indisponível nesta compilação»
   e nenhum pedido. O `client_secret` das apps de computador não é segredo (vai com o programa; a Google sabe-o); quem
@@ -361,7 +523,7 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
   servidor novo (é o mesmo `www.googleapis.com` do Drive) e o `fields` limita a resposta ao nome e ao e-mail.
 - **Sem foto:** seria outro pedido a outro servidor (`lh3.googleusercontent.com`). O avatar é a inicial do nome num
   círculo com o gradiente da íris.
-- **Quando:** logo a seguir a um início de sessão bem-sucedido; e, se já havia sessão sem conta guardada (quem entrou
+- **Quando:** logo a seguir a cada início de sessão bem-sucedido; e, se já havia sessão sem conta guardada (quem entrou
   antes desta versão), **uma vez** quando o utilizador abre o menu do navegador ou a secção Sincronização das
   Definições (na página, só depois de um gesto da pessoa — clique, tecla, roda, toque — com a secção à vista: uma aba de
   Definições reposta no arranque não pede nada). Em segundo plano; a linha do menu atualiza-se se ainda estiver aberta.
@@ -371,20 +533,31 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
   menu diz «Conta Google ligada». O pedido corre fora do fio da interface (abrir o menu nunca espera pela rede nem
   pelo proxy do Windows), e o gesto que é o próprio clique em «Sair» não o lança.
 - **Onde fica:** `<perfil>\sync\google.account`, cifrado com DPAPI do utilizador do Windows (como os tokens, com outra
-  «entropia»). **Apagado ao «Sair».** O texto que vem da rede é limpo (sem caracteres de controlo, até 200 caracteres)
+  «entropia»). **Apagado deste computador ao «Sair».** O texto que vem da rede é limpo (sem caracteres de controlo, até 200 caracteres)
   antes de ir para a interface. «Sair» a meio de um pedido: o pedido da conta é cancelado e a sessão e a conta mudam de
   geração, por isso uma resposta que chegue depois (a renovação do token ou o `about.get`) já não grava `google.tokens`
   nem `google.account`, nem mostra a conta antiga depois de se entrar com outra.
 - **No menu**, numa janela normal e com o identificador da aplicação (`google-oauth.json`; sem ele as Definições
   dizem «indisponível nesta compilação» e o menu não oferece o que não se pode cumprir). Nas janelas privadas não
   aparece nada da conta. Com sessão, avatar (a letra com a tinta da cor de destaque), nome em negrito, e-mail e o estado
-  da sincronização; sem sessão, «Entrar com o Google…». Abrir o menu procura pedidos de aparelhos novos (ação do
-  utilizador) e a linha atualiza-se se o menu ainda estiver aberto. As duas abrem `eteris://settings/#sincronizacao` e têm nome para leitores de ecrã. Pelo teclado (Alt+F) a
+  da sincronização; sem sessão, «Entrar com o Google…» com «Sincronize favoritos e palavras-passe, cifrados ponta a
+  ponta» e a dica «Abre o seu navegador para escolher a conta Google». Abrir o menu procura pedidos de aparelhos novos
+  (ação do utilizador) e a linha atualiza-se se o menu ainda estiver aberto. **Desde a 0.2.15 a linha sem sessão entra
+  logo** (abre o navegador do sistema, `GoogleSync.BeginSignIn`; a barra da janela segue o resto); com a sincronização
+  em pausa por sessão expirada, entra com a conta guardada como pista (`login_hint`); só com a sessão em ordem a linha
+  abre `eteris://settings/#sincronizacao` (`MainWindow.BrowserMenuAccountAction`). Na pasta de teste, a linha liga à
+  pasta. As linhas têm nome para leitores de ecrã. (Até à 0.2.14 a linha sem sessão abria as Definições.) Pelo teclado (Alt+F) a
   linha da conta é a primeira paragem; aberto com o rato, o foco fica em «Nova aba», para o convite não aparecer
   realçado em cada abertura. O menu cresce até à altura da janela (sem o antigo teto fixo de 665 px, o menu inteiro
   com a linha da conta cabe numa janela normal) e, numa janela baixa, a barra de deslocamento tem as cores do tema.
-- **Nas Definições**, com sessão a linha chama-se «Conta Google» e o botão «Sair» anuncia-se como «Sair da conta
-  Google». Numa janela privada as Definições não mostram nada da conta e a secção Sincronização fica indisponível.
+- **Nas Definições** (0.2.15, mais curtas): sem sessão, o título, a frase «Os seus favoritos, palavras-passe e
+  definições em todos os seus computadores, cifrados ponta a ponta.», o botão «Entrar com o Google» e a ligação «Como
+  protegemos os seus dados» (para `eteris://privacy/#sincronizacao`, o bloco «Se ligar a sincronização», sempre à vista,
+  também antes de entrar); com sessão, a linha «Conta Google», o estado à frente («Ligada · última sincronização há…»)
+  e o que pede uma decisão (pedidos, kit, oferta, alertas); o resto vive em «Mais opções» (sincronizar agora, nome do
+  computador, aparelhos e «Perdi um computador», o tópico «O que passa entre PCs», «Sair deste computador» — anunciado
+  aos leitores de ecrã como «Sair da conta Google» —, «Retirar o acesso…» e «Apagar os meus dados…»). Numa janela
+  privada as Definições não mostram nada da conta e a secção Sincronização fica indisponível.
 
 ### Perfil cifrado num ficheiro
 
@@ -467,25 +640,34 @@ da conta e a deste computador vai para o histórico. Apagar deixa uma lápide (c
 | Decisões do Escudo | `shield` | ligado | Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site |
 | Notas | `notes` | ligado | O texto das notas |
 | Palavras-passe | `logins`, `loginsNever` | ligado | Palavras-passe, notas e sites onde nunca guardar |
-| Pagamentos | `cards`, `ibans` | **desligado**; ligar pede o Windows Hello | Cartões (sem o código de segurança) e IBAN |
+| Também pagamentos e documentos de identificação (escolha da conta, 0.2.15) | `cards`, `ibans`, `idDocs` | **desligado** numa conta nova; ligar pede o Windows Hello uma vez e grava a escolha da conta | Cartões (sem o código de segurança), IBAN e documentos |
+| Pagamentos | `cards`, `ibans` | **desligado** (segue a escolha da conta); ligar pede o Windows Hello | Cartões (sem o código de segurança) e IBAN |
 | Informações de contacto | `contacts` | ligado | Nomes, moradas, e-mails e telefones |
-| Documentos de identificação | `idDocs` | **desligado**; ligar pede o Windows Hello | Passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF |
+| Documentos de identificação | `idDocs` | **desligado** (segue a escolha da conta); ligar pede o Windows Hello | Passaporte, carta de condução/CNH, Cartão de Cidadão/RG, NIF/CPF |
 | Viagens | `travel` | ligado | Veículos e programas de fidelidade |
 | Abas abertas | — | — | Não passam: ficam em cada computador (sem interruptor) |
 | Chaves de acesso | — | — | Não passam: ficam no Windows Hello ou na chave de segurança (sem interruptor) |
 
-Decisão D-1 do dono: Pagamentos e Documentos aparecem, desligados por omissão, e ligá-los pede o Windows Hello
-(sempre, sem a janela de graça). Desligar uma linha para de enviar e de aplicar essas coleções e **não apaga nada**,
-nem aqui nem na conta; ligar outra vez faz a primeira junção só dessa linha (`SavedSync.Joined`). Texto do topo:
-«Tudo é cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a
-chave nunca lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador
-escolhe o que recebe: desligar uma linha não apaga nada. Quem perder o código de recuperação e todos os computadores
-perde estes dados: não há «esqueci-me do código».»
+Decisão D-1 do dono (até à 0.2.14: uma regra por computador, desligados por omissão) passou a **escolha da conta**
+na 0.2.15 (D4′; ver «Os fluxos», «Pagamentos e documentos: escolha da conta»): numa conta nova vêm desligados; a linha
+«Também pagamentos e documentos de identificação» liga-os para a conta com um Windows Hello (`ReauthPurpose.SyncSecrets`,
+sempre que se pede, nunca com a janela de graça) e grava a escolha no registo reservado `@account/secret-groups`
+(coleção `settings`, cifrado como os outros; nunca aplicado como definição nem apagado); um computador **novo** que
+entra depois herda-a; um que já estava ligado recebe uma oferta única. Desligar uma linha neste computador para de
+enviar e de aplicar essas coleções aqui e **não apaga nada**, nem aqui nem na conta, nem muda a escolha da conta; ligar
+outra vez faz a primeira junção só dessa linha (`SavedSync.Joined`). Texto do topo (`SyncChoices.Intro`): «Tudo é
+cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca
+lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que
+recebe: desligar uma linha não apaga nada. Quem perder o kit de recuperação e todos os computadores perde estes dados:
+não há «esqueci-me do kit».»
 
 **Emparelhamento, nova cadeia e exportar.**
 
-- **Aprovar um aparelho novo** com segredos em jogo (coleções do cofre ligadas aqui ou registos secretos na conta): o
-  pedido diz «Este computador vai receber também as suas palavras-passe…» e «Aprovar» pede o Windows Hello (sempre).
+- **Aprovar um aparelho novo** com segredos em jogo (`SyncAgent.HasSecrets`: coleções do cofre ligadas aqui, registos
+  secretos na conta, a escolha da conta ligada, ou ainda sem uma ronda completa que o diga): a barra diz «Um computador
+  quer entrar na sua conta e receber as suas palavras-passe» (com a escolha da conta ligada, «…palavras-passe, cartões
+  e documentos») e, depois do código certo, pede a confirmação do Windows (`SyncChoices.MayApproveAsync`; sem segredos
+  em jogo, não pede).
 - **Nova cadeia / remover aparelho:** os selos voltam a ser feitos com a `K_seg` nova (outra `Key`, outro selo; os
   dados associados com a cadeia nova); o aparelho removido não abre nada da cadeia nova. O aviso diz «O aparelho
   removido já tinha as suas palavras-passe: mude as dos sites importantes».
@@ -493,7 +675,9 @@ perde estes dados: não há «esqueci-me do código».»
   Windows Hello (sempre) e leva o cofre inteiro, cada item selado com chaves derivadas da chave do ficheiro (o código
   novo, mostrado uma vez, abre também os selos). Ao importar, os itens entram no cofre e, com a mesma chave natural,
   vale o do ficheiro (a anterior fica no histórico).
-- **Código de recuperação:** o texto que o mostra diz que com ele se abre também o cofre de palavras-passe.
+- **Kit de recuperação:** o texto que o mostra diz que com ele (e a conta Google) se abre também o cofre de
+  palavras-passe; por isso «Ver o kit» pede sempre a confirmação do Windows e «Gerar um kit novo…» pede-a com segredos
+  em jogo.
 
 ## A exceção de rede
 
@@ -504,7 +688,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 |---|---|
 | `https://accounts.google.com/o/oauth2/v2/auth` | ecrã de consentimento — aberto no **navegador do sistema**, nunca pedido pelo cliente HTTP |
 | `https://oauth2.googleapis.com/token` | trocar o código por tokens e renová-los |
-| `https://oauth2.googleapis.com/revoke` | revogar ao «Sair» |
+| `https://oauth2.googleapis.com/revoke` | revogar em «Retirar o acesso do Éteris à conta Google» (e no passo 2 de «Perdi um computador»); «Sair deste computador» não o usa |
 | `https://www.googleapis.com/drive/v3/files…` | listar, ler e apagar na pasta oculta da aplicação |
 | `https://www.googleapis.com/upload/drive/v3/files…` | enviar (multipart, resumable, PATCH) |
 | `https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)` | nome e e-mail da conta, para o menu e as Definições (ver «A conta no menu»: só depois de uma ação do utilizador) |
@@ -514,9 +698,13 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
   `/drive/v3/about`; `oauth2` só
   `/token` e `/revoke`). Sem cookies, sem redirecionamentos automáticos, sem os cabeçalhos do motor; `User-Agent`
   `Eteris-Sync/1`.
-- Só corre depois de o utilizador carregar em «Entrar com o Google»; com a sincronização ligada, nos momentos de
-  «Quando sincroniza» (30 s depois de abrir, salvo se o utilizador mudar alguma coisa antes: então 10 s depois dessa
-  alteração).
+- Só corre depois de o utilizador carregar em «Entrar com o Google» (em qualquer dos pontos de entrada); com a
+  sincronização ligada, nos momentos de «Quando sincroniza» (30 s depois de abrir, salvo se o utilizador mudar alguma
+  coisa antes: então 10 s depois dessa alteração). No arranque saem 0 pedidos para a Google, com ou sem sessão.
+- O endereço do ecrã de consentimento leva `prompt=select_account` (escolha de conta), `login_hint` só na reentrada, e
+  o recuo `prompt=consent` uma só vez quando a Google não devolve token de renovação (ver «Início de sessão»). O âmbito
+  continua a ser só `drive.appdata`. A 0.2.15 não acrescentou nenhum endereço: a sessão expirada, a escolha de conta e
+  voltar à janela usam os que já estavam nesta tabela.
 - **DNS e proxy:** por não passar pelo motor, este cliente **não usa o «DNS cifrado»** escolhido nas Definições. Os
   nomes `oauth2.googleapis.com` e `www.googleapis.com` são resolvidos pelo **DNS do Windows**, em claro: o fornecedor
   de internet (ou quem gere a rede) vê que o computador fala com a API da Google e quando — não o que diz, que vai em
@@ -537,35 +725,46 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 
 | Quem | O que consegue | O que não consegue |
 |---|---|---|
-| **A Google** (ou quem entrar na conta Google) | ver que a conta usa o Éteris, quando sincroniza (horas dos ficheiros, IP dos pedidos), quantos ficheiros e os tamanhos (preenchidos: dão a ordem de grandeza do perfil, não o número de favoritos); apagar ficheiros ou não os entregar (o Éteris deixa-os pendentes) | ler favoritos, notas, abas, definições, nomes dos aparelhos ou URLs; alterar ou trocar ficheiros sem ser detetado; abrir a conta Éteris sem o código |
+| **A Google** (ou quem entrar na conta Google) | ver que a conta usa o Éteris, quando sincroniza (horas dos ficheiros, IP dos pedidos), quantos ficheiros e os tamanhos (preenchidos: dão a ordem de grandeza do perfil, não o número de favoritos); quando um computador novo pede para entrar e se foi recusado (os ficheiros dos pedidos têm nomes legíveis); apagar ficheiros ou não os entregar (o Éteris deixa-os pendentes) | ler favoritos, notas, abas, definições, nomes dos aparelhos ou URLs; alterar ou trocar ficheiros sem ser detetado; abrir a conta Éteris sem o kit |
 | **Quem fotografa o QR** | nada | — |
-| **Quem escreve um pedido falso de aparelho novo** (controla o transporte) | fazer aparecer «*nome* quer juntar-se» no aparelho ligado | receber a conta sem o utilizador carregar em «Aprovar» com um ecrã ao lado a mostrar o mesmo código |
-| **Um aparelho removido** (tem o código antigo) | ler o que já tinha | ler ou escrever na conta nova; forjar a mensagem com a conta nova para os outros (precisava das chaves privadas deles) |
-| **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador confirmar códigos iguais no anfitrião; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
-| **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador) | — remédio: «Nova cadeia» noutro aparelho e retirar o acesso na conta Google |
+| **Quem escreve um pedido falso de aparelho novo** (controla o transporte, ou entrou no Éteris com a conta Google da pessoa) | fazer aparecer «Um computador quer entrar na sua conta…» no computador ligado; depois de 3 pedidos maus em 24 h a barra cala-se e o aviso fica nas Definições | receber a conta: o computador ligado não mostra nenhum código para copiar, e o código só existe no ecrã do computador novo; três códigos errados recusam |
+| **Quem dita um código à pessoa** (por telefone, por mensagem) | levá-la a escrever no computador ligado o código do computador dele | — limite do *number matching*: escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito. Remédio: «Perdi um computador» (remove e troca a chave) |
+| **Quem apaga ou substitui a conta no Drive** | fazer um computador que já esteve na conta encontrar outra cadeia | que esse computador peça aprovação sozinho: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão (`SyncStatus.ChainReplaced`, `SavedSync.HadAccount`); «Foi eu» pede o Windows com segredos ligados neste computador |
+| **Um aparelho removido** (tem o kit antigo) | ler o que já tinha (o que já estava nesse computador continua lá) | ler ou escrever na conta nova; forjar a mensagem com a conta nova para os outros (precisava das chaves privadas deles) |
+| **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000; com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador escrever no anfitrião o código que o convidado verdadeiro mostra; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
+| **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador; o que já estava nesse computador) | — remédio: «Perdi um computador / foi roubado» noutro computador (remove, troca a chave e retira o acesso na Google) e mudar as palavras-passe importantes |
 | **Quem tem um ficheiro `.eteris`** | nada sem o código | — |
-| **Quem tem o código de recuperação ou um aparelho emparelhado** | tudo o que a conta tem: **Quem tem o código de recuperação ou um aparelho emparelhado tem também as palavras-passe, pagamentos e documentos** (das linhas que algum aparelho sincroniza) | — remédio: «Nova cadeia» (remover o aparelho ou gerar um código novo) **e mudar as palavras-passe** dos sites importantes, porque o que já foi lido não se desfaz |
+| **Quem tem o kit de recuperação ou um computador emparelhado** | tudo o que a conta tem: **Quem tem o kit de recuperação ou um computador emparelhado tem também as palavras-passe, pagamentos e documentos** (das linhas que algum aparelho sincroniza); o kit sozinho não chega, é preciso também a conta Google | — remédio: «Nova cadeia» (remover o aparelho, «Perdi um computador» ou gerar um kit novo) **e mudar as palavras-passe** dos sites importantes, porque o que já foi lido não se desfaz |
 | **O Éteris (o projeto)** | nada: não há servidor do Éteris | — |
 
-- **Recuperação (D6):** sem o código e sem nenhum aparelho ligado, a cópia na nuvem é irrecuperável. Não há
-  «esqueci-me do código». Isto tem de ser dito ao utilizador quando o código aparece.
+- **Recuperação (D6):** sem o kit e sem nenhum computador ligado, a cópia na nuvem é irrecuperável. Não há
+  «esqueci-me do kit». O lembrete do kit e a recusa «Não quero: aceito que, sem este computador, a cópia na nuvem não se
+  recupera» dizem-no.
+- **A confirmação do Windows.** Onde se lê «com o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a palavra-passe do Windows. Se a conta do Windows não tiver nenhuma proteção, o Éteris avisa e não tem como confirmar que é você.
+  (`ReauthGate.RequestAsync` passa com o conselho `ReauthGate.ProtectAccountAdvice`.) A confirmação pedida num
+  computador protege esse computador; não é verificável pelos outros.
 - **Promessa (D1):** o README diz «Sem telemetria. Por omissão tudo fica no computador; a sincronização é opcional,
   cifrada de ponta a ponta e desligada por omissão». Em `eteris://privacy/`, «No arranque, nada sai para a Google»
   continua verdadeira por omissão (é medida no motor) e, com a sincronização ligada, diz a exceção escolhida pelo
-  utilizador: os pedidos da sincronização, cifrados, para o Drive dele, 30 s depois de abrir (ou 10 s depois de uma
-  alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e ao abrir o menu do Éteris (⋯) ou com a
-  secção Sincronização à vista (pedidos de outros computadores, acompanhados de 2 em 2 s quando se responde a um), a
-  renovação da sessão em `oauth2.googleapis.com`, o nome e o e-mail da conta, e as ações que o utilizador pede
-  (`PrivacyPage.SyncException`; teste `NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`). A exceção aparece também
-  com sessão Google e a sincronização desligada (uma sessão da 0.2.10–0.2.12); aí, abrir o menu já não pede a conta.
+  utilizador (`PrivacyPage.SyncException`, os momentos de «Quando sincroniza», com a frase do que a Google vê,
+  `PrivacyPage.SyncSees`; testes `NoGoogle_WithSyncOn_StaysKept_AndStatesTheException` e
+  `SyncException_NumbersMatchTheCode`). A exceção aparece também com sessão Google e a sincronização desligada (uma
+  sessão da 0.2.10–0.2.12); aí, abrir o menu já não pede a conta. Desde a 0.2.15, a página tem também o bloco «Se
+  ligar a sincronização» (`eteris://privacy/#sincronizacao`, `PrivacyPage.SyncBlock`), **sempre à vista** — mesmo antes
+  de entrar —, com o que vai para a Google, o que ela vê e onde fica a chave; não é uma promessa medida e não faz
+  pedidos. É para ele que aponta «Como protegemos os seus dados» nas Definições.
 
 ### O que a Google vê
 
 - que esta conta Google autorizou a aplicação «Éteris» (aparece em *myaccount.google.com › Segurança › Ligações a apps*),
   e quando houve início de sessão e renovação de tokens;
-- que o Éteris pediu o nome e o e-mail da conta (`about.get`, uma vez depois de entrar — a Google já os conhece; nada
-  do Éteris vai nesse pedido além do token);
-- os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)
+- que o Éteris pediu o nome e o e-mail da conta (`about.get`, uma vez depois de cada entrada — a Google já os conhece;
+  nada do Éteris vai nesse pedido além do token); na reentrada, o e-mail vai no endereço do ecrã de consentimento
+  (`login_hint`);
+- quando um computador novo pede para entrar e se foi recusado. Os pedidos para juntar um computador novo são a exceção: têm nomes legíveis e levam só a hora, chaves públicas de uso único e números aleatórios — nenhum dado seu. A Google fica a saber quando um computador novo pede para entrar e se foi recusado.
+  (`eteris/pair/<sessão>/0-request` só com a hora, `1-host` com a chave pública do anfitrião, `x-host` numa recusa; o
+  nome do computador novo vai cifrado com a chave da sessão.)
+- nos ficheiros de dados, os pedidos à API do Drive: horas, endereço IP, quantos ficheiros, nomes opacos (`eteris/<hex>/d/<hex>/000000000012`)
   e tamanhos aproximados (preenchidos a 1 KiB e, nos grandes, a «baldes» Padmé: um instantâneo de um perfil grande
   pesa mais do que o de um pequeno; o número de palavras-passe também pesa no tamanho do instantâneo — a ordem de
   grandeza, não o número); o espaço ocupado conta na quota do Drive do utilizador (poucos MB);
@@ -575,6 +774,37 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 
 O utilizador pode apagar os dados da pasta oculta em *Google Drive › Definições › Gerir aplicações › Éteris › Eliminar
 dados ocultos da app*, e retirar o acesso em *myaccount.google.com/permissions*.
+
+## Por provar com conta real (0.2.15)
+
+A 0.2.15 foi feita e testada com o Google falso dos testes (`FakeGoogle`) e com a pasta de teste; as provas com a
+conta Google real não foram autorizadas durante a implementação. Os textos públicos descrevem o que o código faz
+segundo a documentação da Google; estas provas confirmam-no, e se alguma falhar mudam os textos das afirmações
+correspondentes. **Nenhuma se faz na instância do dono:** perfil de teste (`--user-data-dir`), em silêncio, repondo a
+área de transferência.
+
+| Prova | O quê | Tarefa que a prepara | Precisa da conta real? | Estado |
+|---|---|---|---|---|
+| 1 | Revogar num perfil põe o outro em «Sincronização em pausa» | T12 | sim | por fazer |
+| 2 | Segunda autorização com `prompt=select_account`: vem token de renovação? (e o recuo com `prompt=consent`) | T1, T2 | sim | por fazer |
+| 3 | `login_hint` com duas contas abertas: a certa vem pré-escolhida? | T1, T11 | sim | por fazer |
+| 4 | Entrar com o Firefox, o Chrome e o Brave como navegador predefinido, e com o Éteris predefinido | T2, T4 | sim | por fazer |
+| 5 | O piscar na barra de tarefas e a barra de sessão iniciada | T2, T4 | sim | por fazer |
+| 6 | Segundo computador: aprovação pela barra (e nas Definições, só com o teclado), confirmação do Windows; pedido renovado | T7, T8 | sim | por fazer |
+| 7 | Sessão expirada: retirar o acesso em myaccount → aviso → «Entrar» → retoma sem kit | T11 | sim | por fazer |
+| 8 | Kit: guardar como ficheiro, imprimir para PDF, entrar no 2.º perfil com as palavras e com o formato antigo | T5, T6 | sim | por fazer |
+| 9 | Pagamentos e documentos: ligar num perfil → o outro aprovado recebe a oferta | T10 | sim | por fazer |
+| 10 | «Sair deste computador» num perfil não desliga o outro e deixa o Éteris listado em myaccount.google.com/permissions; «Retirar o acesso» desliga os dois e tira-o de lá | T12 | sim | por fazer |
+| 11 | Reentrada sem `prompt`; consentimento granular com um só âmbito (desmarcar o Drive dá a página da permissão em falta) | T1, T4 | sim | por fazer |
+| 12 | Código certo, código errado três vezes, pedido escrito à mão | T8, T8K | não: pasta de teste | por fazer |
+| 13 | Cadeia substituída: «Começar do zero» num perfil, alerta no outro | T7 (alerta), T12c («Começar do zero…») | não: pasta de teste | por fazer |
+| 14 | Remover um perfil: o kit do outro passa a «deixou de valer» | T5 | não: pasta de teste | por fazer |
+| 15 | Depois de «Copiar», o Win+V não mostra o kit (repor a área de transferência no fim) | T5 | não | por fazer |
+
+E ainda, sem prova numerada: o comportamento ao passar os 100 tokens de renovação (nunca medido); a contagem real de
+pedidos ao voltar à janela, com um proxy numa sessão verdadeira; o que a Google mostra sobre a pasta da aplicação e
+sobre os pedidos de emparelhamento; o corpo real do 400 de `/revoke` para um token já inválido; e um `invalid_grant`
+real (só simulado).
 
 ## O que o dono tem de fazer (Google Cloud Console)
 
@@ -629,8 +859,11 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   (casos limpos, conflito, textos enormes); perfil exportado (ida e volta, código errado, adulteração, sal por ficheiro).
 - `GoogleSyncTests` — **Google Drive falso em memória** (OAuth com PKCE, list com páginas, multipart lido dos bytes,
   resumable, PATCH, 401 com renovação, 429/503 com novas tentativas), 3 aparelhos e emparelhamento pelo Drive falso,
-  início de sessão de ponta a ponta pelo loopback, endereço para copiar, estado forjado, permissão em falta, «Sair»
-  revoga, `google-oauth.json`, e a **exceção de rede** (lista de endereços, recusa antes de sair, varrimento do código).
+  início de sessão de ponta a ponta pelo loopback, endereço para copiar, estado forjado, permissão em falta,
+  `prompt=select_account` e o recuo `prompt=consent`, `login_hint` só na reentrada e nunca num endereço `eteris://`,
+  a página de fim segurada e os cabeçalhos do recetor, «Sair deste computador» sem nenhum pedido
+  (`SignOutRoute_NeverRevokes`) e «Retirar o acesso» com uma revogação, `google-oauth.json`, e a **exceção de rede**
+  (lista de endereços, recusa antes de sair, varrimento do código).
 - `GoogleAccountTests` — conta gravada cifrada com DPAPI (nada legível no ficheiro, outra «entropia» não abre), apagada
   ao sair, **nenhum pedido ao montar a sessão e ler o estado** (o arranque), o pedido só por `RequestIfMissing` (menu e
   rota `sync-account`) ou depois de entrar (varrimento do código: nada no `App.xaml.cs`/`MainWindow.xaml.cs`, nenhum
@@ -640,9 +873,11 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   nesta compilação», definições que viajam (e as que não), notas importadas, DPAPI (também o estado da sincronização),
   navegador do sistema, formulário POST, **o arranque só marca a 1.ª ronda para 30 s depois** (varrimento do
   `App.xaml.cs` e do `SyncService.AfterFirstPaint`), a pasta de teste ignorada na versão instalada, o resumo da linha
-  do menu, e que este documento regista a exceção.
-- `SyncAgentTests` — **dois aparelhos** com a pasta e com o **Drive falso**: criar a conta e o código só até «Já
-  guardei», entrar pelo **código de recuperação** e pela **aprovação noutro computador** (o mesmo código nos dois,
+  do menu, que este documento regista a exceção, e `NetworkMoments_ClosedListOfCallers` — a lista fechada de quem
+  procura pedidos (`SyncService.Look(` e `WindowActivated(`), a mesma de «Quando sincroniza» e de
+  `PrivacyPage.SyncException`.
+- `SyncAgentTests` — **dois aparelhos** com a pasta e com o **Drive falso**: criar a conta sem pedir nada (kit por
+  guardar), entrar pelo **kit de recuperação** e pela **aprovação noutro computador** (o código escrito no anfitrião,
   nenhum nome em claro nos ficheiros do pedido, ficheiros apagados no fim), recusa, junção sem perder nada (o que só
   existia aqui sobe, a conta vale, notas juntas), alterações nos dois sentidos, **conflitos**, **lápides**, alteração a
   meio de uma ronda, alteração recusada que não ressuscita, campos desconhecidos preservados, **remover um aparelho**
@@ -659,4 +894,26 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   pedidos só contados nas rondas; coleção ilegível não apaga; dois computadores a criar a conta; autorização retirada;
   código novo), `SyncPairingTests.TwoHostsAnswerTheSameRequest_TheOneNotChosenStepsAsideQuietly`,
   `GoogleSyncTests.Drive_CreateThatFailsAfterCreating_LeavesOneFile_AndDeleteRemovesDuplicates` e `PrivateShieldTests`.
-- `PrivacyPageTests.NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`.
+- `PrivacyPageTests.NoGoogle_WithSyncOn_StaysKept_AndStatesTheException`, `SyncException_NumbersMatchTheCode` (os
+  números da exceção cruzados com as constantes), `PrivacyPage_AlwaysHasTheSyncBlock` e
+  `SignedOut_CanReadWhatGoesToGoogle_BeforeSigningIn` (o bloco «Se ligar a sincronização»).
+- `PublicTextsTests` (raiz dos testes) — os textos públicos (política, sítio, README, este documento e
+  `docs/palavras-passe.md`, Novidades e a entrada da versão no CHANGELOG) não voltam a dizer o que deixou de ser verdade.
+
+Acrescentados na 0.2.15 («Um login e pronto»):
+
+- Entrar: `SignInEntryTests` (os pontos de entrada, a Nova aba sem nenhum, nada antes do clique), `WelcomeSignInTests`
+  (o passo das boas-vindas), `SignInTrackerTests`, `SignInBarModelTests` e `SignInBarTests` (a barra e o árbitro das
+  barras), `SignInPageTests` (os seis textos da página de fim), `SignInFinishTests`, `WindowAttentionTests` (o piscar),
+  `SessionExpiredPromptTests` (o aviso de sessão expirada, uma vez por abertura) e o auxiliar `TestStatus`.
+- Kit de recuperação: `RecoveryWordsTests` (as 24 palavras, os vetores BIP39, a lista fixada por SHA-256, os códigos
+  antigos aceites), `RecoveryKitTests` (ver, guardar, imprimir, copiar, a porta do Windows, as pastas na nuvem) e
+  `RecoveryReminderTests` (o lembrete de 30 em 30 dias).
+- Computador novo e aprovação: `AutoPairingTests` (o pedido sozinho só sem estado desta conta, a conta substituída),
+  `PairingRenewalTests`, `GuestPairingModelTests`, `GuestPairingBarTests`, `GuestPairingServiceTests` (o cartão do
+  computador novo), `PairingCodeTests`, `PairingNumberMatchingTests` (aprovar escrevendo o código, três erros, «Não fui
+  eu», pedidos forjados), `PairingBarModelTests`, `PairingBarTests`, `PairingFatigueTests` e `ActivationLookTests`
+  (voltar à janela, no máximo de 5 em 5 minutos).
+- `DeviceNameTests` (o nome do computador, sempre cifrado), `SyncAccountChoiceTests` (pagamentos e documentos como
+  escolha da conta, a herança e a oferta), `SyncExitTests` (sair, retirar o acesso, perdi um computador, começar do zero)
+  e `SyncSettingsSectionTests` (Definições › Sincronização mais curta).

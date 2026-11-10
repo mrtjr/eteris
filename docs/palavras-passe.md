@@ -12,7 +12,7 @@ Decisões do dono em vigor (as recomendadas no desenho):
 
 | # | Decisão |
 |---|---|
-| D-1 | Pagamentos e Documentos de identificação aparecem no tópico «O que passa entre PCs», **desligados por omissão**, com Windows Hello para ligar; os outros ligados |
+| D-1 | Pagamentos e Documentos de identificação aparecem no tópico «O que passa entre PCs», desligados numa conta nova; desde a 0.2.15 são uma **escolha da conta** («Também pagamentos e documentos de identificação»: ligar pede o Windows Hello no computador onde se liga; um computador novo que entra depois herda-a; quem já estava ligado recebe uma oferta única); os outros ligados. (Até à 0.2.14: uma regra por computador, «desligados por omissão», com Windows Hello para ligar.) |
 | D-2 | O número fiscal (**NIF** em Portugal, **CPF** no Brasil) entra nos Documentos de identificação |
 | D-3 | Janela privada: preenche a pedido, mas **não oferece guardar nem gerar** |
 | D-4 | Verificação de fugas (Pwned Passwords por prefixo) fica **para depois da v1** |
@@ -142,7 +142,9 @@ repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-pas
 - **Quando pede** (`ReauthPolicy`, decisão D-5): mostrar, copiar ou editar um segredo e ver números completos — sim;
   preencher palavras-passe — não por omissão (interruptor deste PC); preencher cartões, IBAN e documentos — sim por
   omissão (desligar o interruptor também pede); **exportar, pôr segredos no perfil exportado, ligar Pagamentos ou
-  Documentos na sincronização e aprovar um aparelho — sempre, sem janela de graça**.
+  Documentos na sincronização (ou a escolha da conta) e ver o kit de recuperação — sempre, nunca com a janela de
+  graça**; aprovar um computador novo e gerar um kit novo — só com segredos em jogo, também nunca com a janela de graça
+  (0.2.15; ver «Reautenticação» no fim).
 - **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; a versão
   instalada ignora-a, como as outras `ETERIS_TEST_*` (`TestSwitches.ReauthFor`).
 
@@ -292,7 +294,7 @@ pelo teclado e pelo rato, nos dois temas, e a secção das Definições (`defini
   vai para o histórico) ou «Manter as atuais»; resumo «6 importadas, 1 substituída, 1 inválida»; no fim, «Enviar o
   ficheiro CSV para a Reciclagem» (`SHFileOperation` com anular). A escolha «manter as duas» do desenho não existe
   (o cofre tem um item por site e utilizador).
-- **Exportar:** dois cliques (o segundo diz «Ficheiro em claro»), reautenticação **sempre** (sem janela de graça),
+- **Exportar:** dois cliques (o segundo diz «Ficheiro em claro»), reautenticação **sempre** (nunca com a janela de graça),
   diálogo «Guardar como» nativo, aviso nativo se a pasta for do OneDrive, do Dropbox ou do Google Drive (e nada se grava
   se o utilizador disser que não), formato do Chrome em UTF-8.
 - **«Apagar todas as palavras-passe…»:** dois cliques e reautenticação; apaga as palavras-passe e os «nunca» (com
@@ -340,8 +342,8 @@ guardada e reposta):
   - **Pagamentos:** cartões («Visa •••• 1111 · validade 08/29 · titular · alcunha», marcados «Fora da validade»)
     e IBAN («PT50 •••• 0154»); «Preencher automaticamente pagamentos»; «Pedir o Windows Hello ao preencher pagamentos»
     (ligado por omissão, D-5; desligá-lo pede o Windows Hello e, recusado, fica ligado); a ligação «Sincronizar entre
-    computadores» diz que os pagamentos ficarão desligados por omissão (D-1) e que a sincronização do cofre ainda não
-    existe.
+    computadores» diz que os cartões e o IBAN só passam para os outros computadores se os ligar: desde a 0.2.15, é uma
+    escolha da conta (D-1). (Na altura do bloco B, a sincronização do cofre ainda não existia.)
   - **Informações de contacto:** moradas com etiqueta; o formulário muda com o país (`AutofillPage.AddressForm`):
     Portugal (Apelido, Morada, Andar/porta, Código postal 0000-000, Localidade, Distrito), Brasil (Sobrenome,
     Logradouro, Complemento, Bairro, CEP 00000-000, Cidade, Estado) e os outros (Código postal, Região).
@@ -872,7 +874,8 @@ Prova ao vivo: nenhuma (biblioteca pura).
   menos Pagamentos (`cards`, `ibans`) e Documentos de identificação (`idDocs`). Um estado de antes destas linhas conta
   como já juntado nas coleções que existiam (favoritos, Espaços, definições, Escudo, notas); as secretas juntam-se na
   primeira ronda. `SyncAgent.HasSecrets` diz se aprovar um aparelho novo lhe entrega segredos (D4): linhas do cofre ligadas aqui, ou
-  registos secretos na conta (visto no fim de cada ronda, sem ler o motor fora dela).
+  registos secretos na conta (visto no fim de cada ronda, sem ler o motor fora dela) e, desde a 0.2.15, também a escolha
+  da conta ligada ou um estado ainda sem uma ronda completa que o diga.
 
 Testes: `Sync/SyncSecretProfileTests` (um perfil em memória com cofre e chave local própria por aparelho) — omissões da
 decisão D-1 e escolha guardada; **nenhum segredo nem site em claro** no transporte, no estado do motor, na base nem nos
@@ -931,17 +934,31 @@ ligado).
   Omissões da decisão D-1. A rota `sync-choose` passa por `SyncChoices.ChooseAsync`: ligar Pagamentos ou Documentos
   pede o Windows Hello (`ReauthPurpose.SyncSecrets`, sempre, sem a janela de graça) e, recusado, a linha fica desligada
   com «Não foi confirmado com o Windows: … continua desligado». Ligar uma linha marca uma ronda já.
-- **Aprovar um aparelho novo** (`sync-approve`, `SyncChoices.MayApproveAsync`): com segredos em jogo (coleções do cofre
-  ligadas aqui ou registos secretos na conta) o pedido diz «Este computador vai receber também as suas palavras-passe,
-  informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello»
-  e «Aprovar» pede-o (`ApproveDevice`, sempre); recusado, o pedido continua à espera.
+- **Escolha da conta (0.2.15, D4′):** antes de «Pagamentos», a linha «Também pagamentos e documentos de identificação»
+  («Cartões (sem o código de segurança), IBAN e documentos. Ligar pede o Windows Hello uma vez; os computadores que
+  entrarem depois recebem-nos sem pedir de novo.»; a mesma rota `sync-choose`, com `g=account`, e
+  `SyncChoices.ChooseAccountAsync`) liga os dois grupos neste computador e grava a escolha da conta, cifrada, no
+  registo reservado `@account/secret-groups`. A regra nova: a escolha é da conta; um computador **novo** (sem estado de
+  sincronização anterior) que entra depois herda-a, sem pedir; um que já estava ligado — ou que já esteve noutra conta —
+  recebe uma oferta única, na barra e nas Definições («Os seus outros computadores sincronizam agora pagamentos e
+  documentos. Receber também neste?» [Sim] (Windows Hello) [Não]; rota `sync-offer`), e só recebe com «Sim» e a
+  confirmação do Windows. Desligar a linha «Pagamentos» ou «Documentos de identificação» num computador só o desliga
+  aí e não muda a escolha da conta (desfazer a escolha da conta não tem interface na 0.2.15). A confirmação do Windows
+  protege o computador onde se pede; qualquer computador com a chave da conta pode escrever a escolha.
+- **Aprovar um aparelho novo** (0.2.15: escrevendo no computador ligado o código que o novo mostra; a rota
+  `sync-approve` saiu e há `sync-request-code`; `SyncChoices.MayApproveAsync`): com segredos em jogo
+  (`SyncAgent.HasSecrets`) a barra diz «Um computador quer entrar na sua conta e receber as suas palavras-passe» (com a
+  escolha da conta ligada, «…palavras-passe, cartões e documentos») e, depois do código certo, pede o Windows Hello
+  (`ApproveDevice`, nunca com a janela de graça); recusado, o pedido continua à espera. Sem segredos em jogo, não pede.
 - **`.eteris`** (`ProfileTransfer`, `ProfileArchive`): sem o cofre por omissão. A caixa «Incluir palavras-passe,
   pagamentos e documentos» (desmarcada) pede o Windows Hello (`ExportProfileSecrets`, sempre) **antes** de decifrar o que
   quer que seja; leva o cofre inteiro, cada item selado com chaves derivadas da chave do ficheiro (`ArchiveSeals`), por
   isso nem dentro do ficheiro aberto há um segredo fora dos selos. Ao importar, os itens entram no cofre (com a mesma
   chave natural vale o do ficheiro; a anterior fica no histórico) e o resumo diz quantos.
-- **Código de recuperação:** o texto diz «Com este código abre-se também o cofre de palavras-passe (e os pagamentos e
-  documentos, se os sincronizar)» e aconselha guardá-lo também fora do próprio cofre.
+- **Kit de recuperação** (0.2.15; até à 0.2.14, «código de recuperação»): 24 palavras, que se veem em Definições ›
+  Sincronização › «Kit de recuperação» com a confirmação do Windows (sempre), e se guardam como ficheiro, imprimem ou
+  copiam (pela área de transferência segura). O texto diz que quem tiver o kit e a conta Google abre também o cofre e
+  aconselha guardá-lo fora deste computador; os códigos antigos de 56 carateres continuam aceites.
 
 Testes: `Sync/SyncChoicesTests` — as doze linhas pela ordem, os textos (os dois nomes de cada documento) e as omissões;
 Pagamentos e Documentos pedem o Windows (`SyncSecrets`, sempre) e, recusado, ficam desligados; desligar não pede; as
@@ -953,18 +970,19 @@ testadas.
 
 ## D5. Nova cadeia e documentação da sincronização
 
-- **Nova cadeia** (remover um aparelho ou gerar um código novo; `SyncEngine.StartRotationAsync`): cada registo secreto é
+- **Nova cadeia** (remover um aparelho, «Perdi um computador» ou gerar um kit novo — até à 0.2.14, «código novo»;
+  `SyncEngine.StartRotationAsync`): cada registo secreto é
   aberto com as chaves da cadeia antiga e **selado de novo** com as da nova (outra `Key` opaca, outro selo, dados
   associados com a cadeia nova); as lápides também (levam a chave natural selada). Um aparelho que fica e recebe a conta
   nova volta a selar o que ele próprio tinha escrito (`RestageOwn`), com as chaves dos selos da cadeia antiga que o motor
   guarda no seu estado (protegido por DPAPI; um estado de antes destas chaves deixa-os para o perfil voltar a enviar).
   O aparelho removido não abre nada da cadeia nova.
 - **Aviso** ao remover um aparelho com segredos na conta: «O aparelho removido já tinha as suas palavras-passe: mude as
-  dos sites importantes.» (gerar só um código novo não o diz).
+  dos sites importantes.» (gerar só um kit novo não o diz).
 - **Documentação** (`docs/sincronizacao.md`): secção nova «Coleções secretas» (coleções, chaves naturais e campos, a
   cifra interna, o perfil com segredos, o tópico, emparelhamento, nova cadeia e `.eteris`), a linha das palavras-passe
-  e a das chaves de acesso em «O que sincroniza», a ameaça «quem tem o código de recuperação ou um aparelho emparelhado
-  tem também as palavras-passe…» com o remédio, e em «O que a Google vê» que o número de palavras-passe também pesa no
+  e a das chaves de acesso em «O que sincroniza», a ameaça «quem tem o kit de recuperação ou um computador emparelhado
+  tem também as palavras-passe…» (até à 0.2.14, «o código de recuperação ou um aparelho emparelhado») com o remédio, e em «O que a Google vê» que o número de palavras-passe também pesa no
   tamanho do instantâneo (a ordem de grandeza).
 
 Testes: `Sync/SyncSecretRotationTests` — remover um de três aparelhos: todos os selos mudam (nenhuma `Key` antiga),
@@ -1021,6 +1039,9 @@ só as linhas escolhidas em «O que passa entre PCs» passam para os outros comp
 no Drive, com uma segunda cifra (e, desligada, que não saem deste computador; teste
 `VaultClearDataTests.Promise_PasswordsGoToNoOne_SaysWhatTheSyncDoes`).
 
+0.2.15: ver `docs/sincronizacao.md` (pagamentos e documentos como escolha da conta, o kit de recuperação, aprovar
+escrevendo o código).
+
 ## E2. Chaves de acesso pelo Windows (prova)
 
 Sem código: só a prova de que o WebAuthn das páginas segue para a janela do Windows (risco R7 do desenho) e a
@@ -1071,8 +1092,11 @@ O que mudou depois da revisão de segurança e de experiência (testes em `Vault
   `.eteris` com segredos deixa-os de fora e di-lo; «Preencher com…» mostra uma linha desativada; as páginas têm uma
   página de erro própria.
 - **Reautenticação.** Desligar «Pedir o Windows Hello ao preencher palavras-passe» pede o Windows Hello (aqui e nas
-  Definições); «Novo código de recuperação» e «Remover aparelho» pedem-no com segredos em jogo; «Apagar todas» tem
-  propósito e texto próprios; a conta sem proteção volta a ser verificada passada a janela de graça ou ao bloquear.
+  Definições); «Gerar um kit novo…» (até à 0.2.14, «Novo código de recuperação»), «Remover aparelho» e aprovar um
+  computador novo pedem-no com segredos em jogo (`SyncChoices.MayApproveAsync`); «Ver o kit», «Perdi um computador / foi
+  roubado», «Começar do zero…» e «Foi eu — juntar este computador» (com segredos ligados aqui) pedem-no sempre; «Sair
+  deste computador» e «Retirar o acesso…» não o pedem (só a confirmação na página); «Apagar todas» tem propósito e
+  texto próprios; a conta sem proteção volta a ser verificada passada a janela de graça ou ao bloquear. Onde se lê «com o Windows Hello», é a confirmação do Windows: Windows Hello, PIN ou a palavra-passe do Windows. Se a conta do Windows não tiver nenhuma proteção, o Éteris avisa e não tem como confirmar que é você.
 - **Segredos à vista.** Cada «Mostrar» e cada formulário de edição tem a sua retenção (`hold`); o `/hide` liberta só a
   sua e o `/keep` renova a do formulário enquanto estiver aberto. Editar mostra a palavra-passe mascarada.
 - **Acessibilidade.** Bolha anunciada sem tirar o teclado à página, F6 e o ícone de chave levam o teclado para ela;

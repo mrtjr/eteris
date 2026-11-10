@@ -605,7 +605,7 @@
                 <span class="syncnote" id="syncTopicNote" role="status" hidden></span></div>
             </div>
             <div class="item">
-              <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris (ou 10 s depois de uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora»; com esta secção à vista ou ao abrir o menu (⋯), procura pedidos de outros computadores. Sem rede, volta a tentar sozinho.</span></div>
+              <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris (ou 10 s depois de uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora»; com esta secção à vista, ao abrir o menu (⋯) ou ao voltar à janela do Éteris (no máximo uma vez a cada 5 minutos), procura pedidos de outros computadores. Sem rede, volta a tentar sozinho.</span></div>
             </div>
             <!-- «Sair» é só deste computador (nada é revogado na Google). -->
             <div class="item" id="syncSignOutItem" hidden>
@@ -1359,7 +1359,7 @@
       // de apagar» (nunca fica preso num apagar que não acaba).
       const deleteStuck = !!s.deleting && !!s.deleteError && !s.running;
       $('syncOffText').textContent = deleteStuck
-        ? 'Ainda há dados do Éteris por apagar do Drive (o porquê está em «Apagar os meus dados…», mais abaixo). Pode tentar de novo, ou ligar já a sincronização sem acabar de apagar: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o código de recuperação dela.'
+        ? 'Ainda há dados do Éteris por apagar do Drive (o porquê está em «Apagar os meus dados…», mais abaixo). Pode tentar de novo, ou ligar já a sincronização sem acabar de apagar: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o kit de recuperação dela.'
         : phase === 'stopped' && s.notice ? s.notice + (s.deleting ? '' : ' Pode ligá-la outra vez.')
         : d.hasKey ? 'Ligue-a para continuar com a mesma conta (a chave ficou neste computador).'
         : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';

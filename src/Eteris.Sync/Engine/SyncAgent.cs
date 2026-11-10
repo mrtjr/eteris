@@ -970,7 +970,7 @@ public sealed class SyncAgent
             _accountSince = 0;
             _store.Save(saved);
             _phase = SyncPhase.Choose;
-            _notice = "Outro computador criou a conta de sincronização ao mesmo tempo que este. Junte este computador a essa conta (aprovação no outro computador ou o código de recuperação dele): os dados deste computador juntam-se aos da conta, nada se perde.";
+            _notice = "Outro computador criou a conta de sincronização ao mesmo tempo que este. Junte este computador a essa conta (aprovação no outro computador ou o kit de recuperação dele): os dados deste computador juntam-se aos da conta, nada se perde.";
         }
         return true;
     }
@@ -1106,13 +1106,13 @@ public sealed class SyncAgent
         "A sincronização parou: a conta de sincronização deste computador já não está neste Google Drive — os dados foram apagados, este computador foi removido noutro aparelho, ou a sessão é de outra conta Google. A chave ficou neste computador; nada daqui foi apagado.";
 
     private const string ConflictText =
-        "A sincronização parou: dois aparelhos deixaram a este computador contas novas que não batem certo (um deles pode ter sido removido da conta). Para continuar, junte este computador outra vez à conta, com o código de recuperação novo ou por aprovação noutro computador.";
+        "A sincronização parou: dois aparelhos deixaram a este computador contas novas que não batem certo (um deles pode ter sido removido da conta). Para continuar, junte este computador outra vez à conta, com o kit de recuperação novo ou por aprovação noutro computador.";
 
     private const string WrongKeysText =
         "A sincronização parou: o registo de chaves da conta no Google Drive não abre com a chave guardada neste computador (foi alterado ou danificou-se). A chave ficou neste computador; nada foi apagado.";
 
     private const string OtherAccountText =
-        "A sincronização está em pausa: a sessão é de outra conta Google, diferente da que este computador usa para sincronizar. Nada foi apagado. Para continuar com a conta anterior, saia e entre com ela; para sincronizar com esta, carregue em «Ligar outra vez» (para voltar depois à anterior será preciso o código de recuperação dela ou outro computador).";
+        "A sincronização está em pausa: a sessão é de outra conta Google, diferente da que este computador usa para sincronizar. Nada foi apagado. Para continuar com a conta anterior, saia e entre com ela; para sincronizar com esta, carregue em «Ligar outra vez» (para voltar depois à anterior será preciso o kit de recuperação dela ou outro computador).";
 
     // ---- entrar num aparelho novo -----------------------------------------------------------------------------------
 
@@ -1924,7 +1924,7 @@ public sealed class SyncAgent
             : $" Ficaram {count} ficheiros com nomes que o Éteris não reconhece (não foram apagados).";
 
     private const string StartAnywayText =
-        "Para ligar já a sincronização, carregue em «Ligar sem acabar de apagar»: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o código de recuperação dela (ou volte a «Apagar…» mais tarde).";
+        "Para ligar já a sincronização, carregue em «Ligar sem acabar de apagar»: o que ficou no Drive fica lá e, se a conta antiga ainda lá estiver, este computador pede o kit de recuperação dela (ou volte a «Apagar…» mais tarde).";
 
     // «Ligar sem acabar de apagar»: o utilizador desiste de acabar o apagar que falhou (fica no transporte o que lá
     // estava) e liga a sincronização a seguir (StartAsync). Nunca fica preso num apagar que não acaba.

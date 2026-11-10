@@ -113,6 +113,12 @@ public class PrivacyPageTests
         Assert.EndsWith("Sair deste computador não fala com a Google.", text);
         Assert.DoesNotContain("sair deste computador e", text);
         Assert.Contains("entrar, sincronizar agora, aprovar ou recusar um computador", text);
+        // Pedidos imediatos que o plano não listava: gerar um kit novo troca a chave no Drive (/sync-new-code); ligar
+        // uma linha do tópico ou aceitar a oferta faz logo uma ronda (SyncService.SyncNow).
+        Assert.Contains("gerar um kit novo", text);
+        Assert.Contains("ligar uma linha de «O que passa entre PCs» ou aceitar pagamentos e documentos", text);
+        Assert.Contains("if (error is null && on) Sync.SyncService.SyncNow();", factory);
+        Assert.Contains("a.NewRecoveryCodeAsync()", Sync.GoogleSyncTests.CaseBlock(factory, "case \"/sync-new-code\":"));
     }
 
     // R13: cada número da exceção é o da constante do código; se uma mudar, este teste obriga a mudar o texto.

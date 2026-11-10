@@ -28,10 +28,13 @@ public class PublicTextsTests
 
     // Os ficheiros públicos de texto. Lista fechada.
     private static readonly string[][] SiteFiles = [["docs", "site", "privacidade.html"], ["docs", "site", "index.html"], ["docs", "site", "termos.html"]];
+    private static readonly string[][] PublicFiles = [.. SiteFiles, ["README.md"], ["docs", "sincronizacao.md"], ["docs", "palavras-passe.md"]];
+
+    private static string SyncDoc() => Flat(Read("docs", "sincronizacao.md"));
 
     private static IEnumerable<(string Name, string Text)> PublicTexts()
     {
-        foreach (var file in SiteFiles) yield return (string.Join('/', file), Flat(Read(file)));
+        foreach (var file in PublicFiles) yield return (string.Join('/', file), Flat(Read(file)));
         yield return (nameof(PrivacyPage.SyncException), PrivacyPage.SyncException);
     }
 
@@ -108,6 +111,9 @@ public class PublicTextsTests
         foreach (var (name, text) in PublicTexts())
             foreach (var s in old)
                 Assert.False(text.Contains(s, StringComparison.Ordinal), $"{name} ainda diz «{s}»");
+        var doc = SyncDoc();
+        Assert.Contains("«Sair deste computador»", doc);
+        Assert.Contains("não revoga", doc);
     }
 
     // O kit de recuperação volta a ver-se (T5): nenhum texto diz que o código aparece uma vez e nunca mais.
@@ -117,8 +123,67 @@ public class PublicTextsTests
         foreach (var (name, text) in PublicTexts())
             foreach (var s in new[] { "nunca mais aparece", "código de recuperação mostrado uma única vez", "recovery code shown once", "recovery code only you see" })
                 Assert.False(text.Contains(s, StringComparison.Ordinal), $"{name} ainda diz «{s}»");
-        foreach (var file in SiteFiles)
+        // docs/sincronizacao.md diz «mostrado uma única vez» do código do perfil exportado (.eteris), que é verdade.
+        foreach (var file in new[] { SiteFiles[0], SiteFiles[1], SiteFiles[2], ["README.md"] })
             Assert.DoesNotContain("mostrado uma única vez", Flat(Read(file)));
+    }
+
+    // R9 e R8: pagamentos e documentos são uma escolha da conta; e o limite de tokens de renovação da Google.
+    [Fact]
+    public void Docs_SayPaymentsAndDocumentsAreAnAccountChoice()
+    {
+        Assert.Contains("escolha da conta", Flat(Read("docs", "palavras-passe.md")));
+        Assert.Contains("escolha da conta", SyncDoc());
+        Assert.Contains("100 tokens de renovação", SyncDoc());
+    }
+
+    // R13: o tamanho do kit e o lembrete coincidem com as constantes (a T6 está no ramo: 24 palavras).
+    [Fact]
+    public void Docs_NameTheKitSize_AndItMatchesTheCode()
+    {
+        Assert.Equal(24, Eteris.Sync.Crypto.RecoveryCode.WordCount);
+        Assert.Contains("24 palavras", Flat(Read("README.md")));
+        Assert.Contains("24 palavras", SyncDoc());
+        Assert.Equal(30, Eteris.Browser.Sync.RecoveryReminder.SnoozeDays);
+        Assert.Contains("de 30 em 30 dias", SyncDoc());
+        foreach (var (name, text) in PublicTexts())
+            Assert.False(text.Contains("durante 30 dias", StringComparison.Ordinal), name);
+    }
+
+    [Fact]
+    public void Readme_DescribesTheNewFlow()
+    {
+        var readme = Flat(Read("README.md"));
+        foreach (var s in new[] { "kit de recuperação", "Sair deste computador", "Retirar o acesso" })
+            Assert.Contains(s, readme);
+        Assert.DoesNotContain("o mesmo código nos dois ecrãs", readme);
+    }
+
+    // R18: os momentos de rede dos documentos são os do teste de varrimento e os da exceção da página de privacidade.
+    [Fact]
+    public void NetworkMoments_AreTheOnesTheExceptionNames()
+    {
+        var doc = SyncDoc();
+        Assert.Contains("NetworkMoments_ClosedListOfCallers", doc);
+        var activation = File.Exists(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "ActivationLook.cs"));
+        Assert.Equal(activation, PrivacyPage.SyncException.Contains("volta à janela do Éteris", StringComparison.Ordinal));
+        Assert.Equal(activation, doc.Contains("ao voltar à janela do Éteris", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("menu do Éteris (⋯)", PrivacyPage.SyncException);
+        Assert.Contains("secção Sincronização das Definições à vista", PrivacyPage.SyncException);
+        if (GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html").Contains("id=\"syncNow\"", StringComparison.Ordinal))
+            Assert.Contains("sincronizar agora", PrivacyPage.SyncException);
+    }
+
+    // Os textos da interface que ainda diziam «código de recuperação» (a conta duplicada, a conta substituída, outra conta
+    // Google, ligar sem acabar de apagar) passaram a «kit de recuperação» (0.2.15): o código antigo continua aceite, mas é
+    // o kit que a pessoa tem. Só as cadeias entre aspas: os comentários podem falar do formato antigo.
+    [Fact]
+    public void UiTexts_SayTheKit_NotTheOldRecoveryCode()
+    {
+        foreach (Match m in Regex.Matches(GoogleSyncTests.Src("Eteris.Sync", "Engine", "SyncAgent.cs"), "\"[^\"\\n]*\""))
+            Assert.DoesNotContain("código de recuperação", m.Value);
+        foreach (Match m in Regex.Matches(GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html"), "'[^'\\n]*'"))
+            Assert.DoesNotContain("código de recuperação", m.Value);
     }
 
     // As palavras-passe sincronizam desde a 0.2.13: a lista do que não vai não as pode ter.
@@ -134,7 +199,7 @@ public class PublicTextsTests
     [Fact]
     public void PublicTexts_DoNotNameOtherBrowsersThanTheThree()
     {
-        foreach (var file in SiteFiles)
+        foreach (var file in new[] { SiteFiles[0], SiteFiles[1], SiteFiles[2], ["README.md"] })
             Assert.DoesNotMatch(@"\bEdge\b", Read(file));
     }
 
@@ -152,7 +217,8 @@ public class PublicTextsTests
     [Fact]
     public void PublicTexts_CarryNoPersonalData()
     {
-        foreach (var file in SiteFiles)
+        string[][] files = [.. PublicFiles, ["CHANGELOG.md"]];
+        foreach (var file in files)
             foreach (Match m in Address.Matches(Read(file)))
                 Assert.True(IsExampleDomain(m.Value), $"{string.Join('/', file)} tem um endereço fora dos domínios de exemplo");
         // Em src/, tests/ e docs/: nenhum endereço num fornecedor de correio de pessoas.
@@ -190,6 +256,8 @@ public class PublicTextsTests
         var (pt, en) = Languages(Policy());
         Assert.Single(Regex.Matches(pt, Regex.Escape("Onde se lê «com o Windows Hello», é a confirmação do Windows")));
         Assert.Single(Regex.Matches(en, Regex.Escape("it means the Windows confirmation")));
+        foreach (var doc in new[] { SyncDoc(), Flat(Read("docs", "palavras-passe.md")) })
+            Assert.Single(Regex.Matches(doc, Regex.Escape("Onde se lê «com o Windows Hello», é a confirmação do Windows")));
         foreach (var (name, text) in PublicTexts())
             Assert.False(text.Contains("sem janela de graça", StringComparison.Ordinal), name);
     }
@@ -204,6 +272,16 @@ public class PublicTextsTests
         Assert.Contains("o ficheiro fica onde o guardar", policy);
         // O que «Sair deste computador» deixa: a frase da própria interface (T12).
         Assert.Contains(Eteris.Browser.Sync.SyncExit.SignOutKeeps, policy);
+        var doc = SyncDoc();
+        Assert.Contains("0-request", doc);
+        Assert.Contains(Eteris.Browser.Sync.SyncExit.SignOutKeeps, doc);
+        Assert.Contains("Os pedidos para juntar um computador novo são a exceção", doc);
+        Assert.Contains("o ficheiro fica onde o guardar", doc);
+        if (GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs").Contains("\"/sync-lost\"", StringComparison.Ordinal))
+            Assert.Contains("O que já estava nesse computador continua lá", doc);
+        // A49 (S22): o limite do código escrito.
+        if (GoogleSyncTests.Src("Eteris.Sync", "Engine", "SyncAgent.cs").Contains("ApproveWithCodeAsync(", StringComparison.Ordinal))
+            Assert.Contains("Escrever o código só protege se for o código que está a ver no seu outro computador", doc);
         foreach (var (name, text) in PublicTexts())
             Assert.False(text.Contains("nunca enviado", StringComparison.Ordinal), name);
     }

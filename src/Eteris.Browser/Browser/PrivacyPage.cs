@@ -227,7 +227,9 @@ public static class PrivacyPage
     // momento de rede acrescenta-o a esse teste e a esta frase. Os números são os das constantes (SyncSchedule,
     // PairingProtocol.Lifetime, PollInterval, ActivationLook.Interval); PrivacyPageTests confere-os.
     // Texto do plano (0.2.15, §3.5) com as variantes do código: «sincronizar agora» na lista; «Sair deste computador» fora
-    // dela, porque não faz nenhum pedido (a rota /sync-google-out não revoga).
+    // dela, porque não faz nenhum pedido (a rota /sync-google-out não revoga). Acrescentadas por serem pedidos imediatos
+    // que o plano não listava: «gerar um kit novo» (troca a chave da conta no Drive, /sync-new-code) e ligar uma linha do
+    // tópico ou aceitar a oferta de pagamentos e documentos (fazem logo uma ronda, SyncService.SyncNow).
     public const string SyncException =
         "Exceção que escolheu: com sessão iniciada na Google para a sincronização, o Éteris fala com a Google por um cliente próprio (não pelo motor). "
         + "Com o Google Drive (só a pasta oculta da aplicação, tudo cifrado neste computador): 30 s depois de abrir (ou 10 s depois de uma alteração, se for antes), "
@@ -235,7 +237,8 @@ public static class PrivacyPage
         + "ou logo se uma ronda já tiver encontrado um pedido) ou tem a secção Sincronização das Definições à vista, para ver pedidos de outros computadores "
         + "(ao responder a um, acompanha-o de 2 em 2 s até acabar, no máximo 10 minutos). "
         + "Com oauth2.googleapis.com, para renovar a sessão quando expira. Uma vez, para saber o nome e o e-mail da conta. "
-        + "E nas ações que pedir: entrar, sincronizar agora, aprovar ou recusar um computador, remover um aparelho, apagar os dados do Drive e "
+        + "E nas ações que pedir: entrar, sincronizar agora, aprovar ou recusar um computador, remover um aparelho, gerar um kit novo, "
+        + "ligar uma linha de «O que passa entre PCs» ou aceitar pagamentos e documentos, apagar os dados do Drive e "
         + "retirar o acesso do Éteris à conta Google (que desliga todos os computadores). Sair deste computador não fala com a Google.";
 
     // O que a Google vê (plano §3.5, à letra). Fecha a exceção na promessa «no-google» e está no bloco de sincronização.
