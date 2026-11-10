@@ -28,6 +28,8 @@ namespace Eteris.Browser;
 public partial class MainWindow
 {
     private readonly List<ChromiumWebBrowser> _unseenPages = [];
+    // Páginas com Picture-in-Picture, que ficam à vista até a janela se voltar a ver.
+    private readonly HashSet<ChromiumWebBrowser> _unseenKept = [];
     private UnseenWindow.Reason _unseenReason;
     private DispatcherTimer? _cloakTimer;
     private bool _sessionLocked;
@@ -65,7 +67,13 @@ public partial class MainWindow
             _cloakTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = UnseenWindow.WatchEvery(_unseenReason) };
             _cloakTimer.Tick += (_, _) => ReviewUnseen();
             Deactivated += (_, _) => WatchCloak();
-            Activated += (_, _) => ReviewUnseen();
+            Activated += (_, _) =>
+            {
+                // Só se ativa uma janela numa sessão desbloqueada: se o aviso do desbloqueio se perder, a página não fica
+                // escondida para sempre (com a janela dada por «sem se ver», cada página que entra também se esconde).
+                _sessionLocked = false;
+                ReviewUnseen();
+            };
             // A janela pode já não estar ativa (ou já estar noutra área) quando a 1.ª página aparece.
             ReviewUnseen();
             WatchCloak();
@@ -80,7 +88,11 @@ public partial class MainWindow
         if (reason != _unseenReason)
         {
             _unseenReason = reason;
-            if (reason == UnseenWindow.Reason.None) RestoreUnseenPages();
+            if (reason == UnseenWindow.Reason.None)
+            {
+                _unseenKept.Clear();
+                RestoreUnseenPages();
+            }
             else HideUnseenPages();
         }
         WatchCloak();
@@ -101,18 +113,20 @@ public partial class MainWindow
         if (!timer.IsEnabled) timer.Start();
     }
 
-    // A janela continua sem se ver e o que está à vista mudou (uma página que só agora apresentou): esconde-se como o
-    // resto. Sem motivo, nada.
+    // A janela continua sem se ver e o que está à vista mudou (uma disposição, uma página que só agora apresentou):
+    // esconde-se como o resto. Sem motivo, nada.
     private void KeepUnseenHidden()
     {
         if (_unseenReason != UnseenWindow.Reason.None) HideUnseenPages();
     }
 
+    // Corre quando a janela deixa de se ver e outra vez enquanto ela continuar assim (KeepUnseenHidden): o que já está
+    // escondido fica como está.
     private void HideUnseenPages()
     {
         foreach (var (tab, browser) in _browsers.ToList())
         {
-            if (!ShouldShow(tab, browser) || browser.Visibility != Visibility.Visible || _unseenPages.Contains(browser)) continue;
+            if (!ShouldShow(tab, browser) || browser.Visibility != Visibility.Visible || _unseenKept.Contains(browser)) continue;
             // Entrou e ainda não apresentou um fotograma (a 1.ª página do arranque, uma aba acabada de trocar): escondida,
             // o rAF dela não resolvia e o arranque nunca era dado por bom (StartupGuard.Healthy) — uma queda dessa sessão,
             // mesmo horas depois, contava contra o sandbox como «queda antes da 1.ª página». Esconde-se quando apresentar
@@ -120,14 +134,17 @@ public partial class MainWindow
             // antes do e8.
             if (!_presentation.HasPresented(browser)) continue;
             if (!UnseenWindow.MayHide(tab.IsAudible, tab.Media, IsCapturing(browser), pictureInPicture: false)) continue;
+            // Também a que já está na lista: pode ter saído e voltado fria entretanto (restaurada pelo ShowPages).
             SetPageVisible(browser, false);
+            if (_unseenPages.Contains(browser)) continue;
             _unseenPages.Add(browser);
             PerfCounters.Add("janela.escondeu");
             // Picture-in-Picture de documento não se vê daqui: pergunta-se à página e, se tiver, volta já.
             _ = CheckUnseenPictureInPictureAsync(browser);
         }
         // O site fixado à vista na barra lateral (sem som conhecido: só se esconde se não tiver captura).
-        if (_sidebarOpen && CurrentWebPanelBrowser is { Visibility: Visibility.Visible } panel && !_unseenPages.Contains(panel) && !IsCapturing(panel))
+        if (_sidebarOpen && CurrentWebPanelBrowser is { Visibility: Visibility.Visible } panel && !_unseenKept.Contains(panel)
+            && !_unseenPages.Contains(panel) && !IsCapturing(panel))
         {
             SetPageVisible(panel, false);
             _unseenPages.Add(panel);
@@ -140,7 +157,12 @@ public partial class MainWindow
         try
         {
             var result = await PageScript.EvaluateAsync(browser, UnseenWindow.PictureInPictureScript, TimeSpan.FromMilliseconds(500));
-            if (result.Success && result.Result is "1" && _unseenPages.Remove(browser)) RestoreUnseenPage(browser);
+            if (result.Success && result.Result is "1" && _unseenPages.Remove(browser))
+            {
+                // Fica de fora até a janela se voltar a ver: sem isto, cada disposição escondia-a e mostrava-a outra vez.
+                _unseenKept.Add(browser);
+                RestoreUnseenPage(browser);
+            }
         }
         catch (Exception) { }
     }

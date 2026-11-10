@@ -121,12 +121,17 @@ public partial class MainWindow
         foreach (var element in pages.Select(p => p.Element).Where(showing.Contains))
         {
             element.Visibility = Visibility.Visible;
-            if (element is ChromiumWebBrowser cef && cef.IsBrowserInitialized) SetPageVisible(cef, true);
+            // A que o ajuste e8 escondeu (a janela não se vê: MainWindow.Unseen.cs) continua escondida: mostrá-la aqui
+            // punha-a outra vez a desenhar, minimizada, até a janela mudar de estado.
+            if (element is ChromiumWebBrowser cef && cef.IsBrowserInitialized && !_unseenPages.Contains(cef)) SetPageVisible(cef, true);
         }
         foreach (var element in cooling.Concat(hidden)) HidePage(element);
         if (held.Count > 0) _ = HideWhenShownAsync(arriving, held);
         // Sem nenhuma a segurar, ninguém espera pela que entrou: só se regista quando apresenta (para poder ficar quente).
         else if (arriving.Count > 0) _ = WaitPresentedAsync(arriving);
+        // A janela não se vê (ajuste e8): o que esta disposição pôs à vista (uma aba quente que voltou a ser a ativa)
+        // esconde-se como o resto; a que entrou fria esconde-se quando apresentar (WaitPresentedAsync).
+        KeepUnseenHidden();
     }
 
     // Há uma troca de páginas a meio: uma página que entrou ainda não apresentou, ou uma que saiu ainda está por cima.

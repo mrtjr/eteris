@@ -139,7 +139,7 @@ public class UnseenWindowTests
         var unseen = Source("MainWindow.Unseen.cs");
         Assert.Contains("UnseenWindow.Watches(IsActive, WindowState == WindowState.Minimized, _unseenReason)", unseen);
         Assert.Contains("UnseenWindow.WatchEvery(_unseenReason)", unseen);
-        Assert.Contains("Activated += (_, _) => ReviewUnseen();", unseen);
+        Assert.Matches(@"Activated \+= \(_, _\) =>\s*\{\s*(//[^\n]*\n\s*)+_sessionLocked = false;\s*ReviewUnseen\(\);\s*\};", unseen);
         Assert.Contains("Deactivated += (_, _) => WatchCloak();", unseen);
         Assert.Contains("_cloakTimer.Tick += (_, _) => ReviewUnseen();", unseen);
         // O ReviewUnseen acerta o relógio no fim, com o motivo já atualizado, mude ele ou não.
@@ -162,6 +162,33 @@ public class UnseenWindowTests
         Assert.DoesNotContain("ShouldShow", restore);
         Assert.Contains("if (_webPanelBrowsers.ContainsValue(page) && !(_sidebarOpen && ReferenceEquals(page, CurrentWebPanelBrowser))) return;", restore);
         Assert.Contains("ShowPageWindow(page, ArrivalPixels(page));", restore);
+    }
+
+    // Uma disposição com a janela que não se vê (uma aba de fundo que nasce ou acorda com o Éteris minimizado) não
+    // desfaz o e8: a página que o e8 escondeu não é mostrada outra vez, e o que entretanto ficou à vista (uma aba quente
+    // que voltou a ser a ativa) esconde-se no fim. Sem isto a página voltava a desenhar a 60 fotogramas por segundo,
+    // minimizada, até a janela mudar de estado. Uma página com Picture-in-Picture fica de fora enquanto a janela não
+    // voltar (sem a esconder e mostrar a cada disposição).
+    [Fact]
+    public void Layout_WhileTheWindowIsUnseen_KeepsThePagesHidden()
+    {
+        var pages = Source("MainWindow.PageVisibility.cs");
+        Assert.Contains("if (element is ChromiumWebBrowser cef && cef.IsBrowserInitialized && !_unseenPages.Contains(cef)) SetPageVisible(cef, true);", pages);
+        Assert.Matches(@"else if \(arriving\.Count > 0\) _ = WaitPresentedAsync\(arriving\);\s*(//[^\n]*\n\s*)+KeepUnseenHidden\(\);\s*\}", Method(pages, "private void ShowPages("));
+        var unseen = Source("MainWindow.Unseen.cs");
+        Assert.Matches(@"private void KeepUnseenHidden\(\)\s*\{\s*if \(_unseenReason != UnseenWindow\.Reason\.None\) HideUnseenPages\(\);\s*\}", unseen);
+        // Esconder outra vez é seguro: a que já está na lista (voltou fria entretanto) é minimizada na mesma, sem contar
+        // duas vezes nem repetir a pergunta do Picture-in-Picture.
+        Assert.Matches(@"SetPageVisible\(browser, false\);\s*if \(_unseenPages\.Contains\(browser\)\) continue;\s*_unseenPages\.Add\(browser\);", unseen);
+        Assert.Contains("|| _unseenKept.Contains(browser)) continue;", unseen);
+        Assert.Contains("if (result.Success && result.Result is \"1\" && _unseenPages.Remove(browser))", unseen);
+        Assert.Contains("_unseenKept.Add(browser);", unseen);
+        Assert.Matches(@"if \(reason == UnseenWindow\.Reason\.None\)\s*\{\s*_unseenKept\.Clear\(\);\s*RestoreUnseenPages\(\);", unseen);
+        // Com isto, um motivo que ficasse preso escondia todas as páginas que entrassem. O único que se guarda é a sessão
+        // bloqueada (o minimizar e a área de trabalho leem-se na hora), e ativar a janela desfaz-o: só se ativa uma
+        // janela numa sessão desbloqueada, mesmo que o aviso do desbloqueio se perca.
+        Assert.Equal(2, Regex.Matches(unseen, @"_sessionLocked = ").Count);
+        Assert.Contains("_sessionLocked = e.Reason == SessionSwitchReason.SessionLock;", unseen);
     }
 
     // Uma página que ainda não apresentou o 1.º fotograma não se esconde: escondida, o rAF não resolve, o arranque não é
