@@ -567,6 +567,47 @@ public class GoogleSyncTests
         Assert.False(PortAnswers(port), "o recetor continua à escuta depois do prazo");
     }
 
+    // 0.2.15 (T4): cada passo do início de sessão chega ao estado tipado que a barra da janela mostra.
+    [Fact]
+    public void GoogleSync_ReportsEveryStep_ToTheTracker()
+    {
+        var code = File.ReadAllText(Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync", "GoogleSync.cs"));
+        foreach (var step in new[] { "Tracker.Begin(", "Tracker.ShowManualUrl(", "Tracker.SignedIn(", "Tracker.Finished(", "Tracker.Failed(" })
+            Assert.Contains(step, code);
+    }
+
+    // «Sair» esquece o estado do início de sessão e o e-mail da reentrada (R12 da T4).
+    [Fact]
+    public void SignOut_ResetsTheTracker()
+    {
+        var code = File.ReadAllText(Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync", "GoogleSync.cs"));
+        var start = code.IndexOf("public static async Task SignOutAsync()", StringComparison.Ordinal);
+        Assert.True(start >= 0, "SignOutAsync não encontrado");
+        var end = code.IndexOf("\n    }", start, StringComparison.Ordinal);
+        Assert.Contains("Tracker.Reset()", code[start..end]);
+        Assert.Contains("internal static void ResetSignIn()", code);
+    }
+
+    // «Cancelar» com o recetor à escuta fecha a porta do loopback e a tentativa acaba em cancelamento (R16 da T4).
+    [Fact]
+    public async Task Cancel_WhileWaiting_ClosesTheLoopbackPort()
+    {
+        var google = new FakeGoogle();
+        string? shown = null;
+        using var cts = new CancellationTokenSource();
+        var signIn = NewOAuth(google).SignInAsync(new SignInOptions(new NoBrowser(), url => shown = url), cts.Token);
+        Assert.NotNull(shown);
+        var port = new Uri(QueryOf(shown!)["redirect_uri"]).Port;
+        Assert.True(PortAnswers(port), "o recetor devia estar à escuta antes do «Cancelar»");
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => signIn.WaitAsync(TimeSpan.FromSeconds(10)));
+        await Assert.ThrowsAsync<System.Net.Sockets.SocketException>(async () =>
+        {
+            using var probe = new System.Net.Sockets.TcpClient();
+            await probe.ConnectAsync(IPAddress.Loopback, port);
+        });
+    }
+
     [Fact]
     public async Task Loopback_SilentConnection_DoesNotBlockTheRealAnswer()
     {

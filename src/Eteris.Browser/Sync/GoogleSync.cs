@@ -25,6 +25,31 @@ internal static class GoogleSync
     // A conta mudou (obtida ou apagada ao sair). Chamado de qualquer thread.
     public static event Action? AccountChanged;
 
+    // O estado tipado do início de sessão, para a barra da janela (0.2.15). Só memória: ler Progress não toca no disco
+    // nem cria nada (a barra pergunta-o a cada evento, também com tudo parado).
+    private static readonly SignInTracker Tracker = NewTracker();
+
+    // O estado do início de sessão mudou. Chamado de qualquer thread.
+    public static event Action? SignInChanged;
+
+    internal static SignInProgress Progress => Tracker.Current;
+
+    // O «some sozinha» ou o «Fechar» da barra: limpa o estado terminal com este AtMs (e só esse).
+    internal static void ClearSignIn(long atMs) => Tracker.Clear(atMs);
+
+    // «Tentar outra vez»: com o mesmo e-mail da reentrada, se havia.
+    internal static void RetrySignIn() => BeginSignIn(Tracker.LastHint);
+
+    // Esquece o estado do início de sessão e o e-mail da reentrada (sair da conta; retirar o acesso do Éteris).
+    internal static void ResetSignIn() => Tracker.Reset();
+
+    private static SignInTracker NewTracker()
+    {
+        var tracker = new SignInTracker(Now);
+        tracker.Changed += () => SignInChanged?.Invoke();
+        return tracker;
+    }
+
     public static string TokenPath => Path.Combine(AppPaths.Root, "sync", "google.tokens");
 
     public static string AccountPath => Path.Combine(AppPaths.Root, "sync", "google.account");
@@ -105,6 +130,7 @@ internal static class GoogleSync
             _manualUrl = null;
             _error = null;
         }
+        Tracker.Begin(loginHint);
         _ = Task.Run(async () =>
         {
             // O trabalho depois dos tokens (guardá-los, a conta, ligar a sincronização) não se cancela a meio: corre até
@@ -113,7 +139,11 @@ internal static class GoogleSync
             try
             {
                 var oauth = new GoogleOAuth(Http(), config, Now);
-                var options = new SignInOptions(new SystemBrowser(), url => { lock (Gate) _manualUrl = url; }, loginHint)
+                var options = new SignInOptions(new SystemBrowser(), url =>
+                {
+                    lock (Gate) _manualUrl = url;
+                    Tracker.ShowManualUrl(url);
+                }, loginHint)
                 {
                     // «Cancelar» antes de os tokens chegarem a ser usados: não se guarda nada.
                     Finish = (tokens, ct) => ct.IsCancellationRequested
@@ -136,11 +166,26 @@ internal static class GoogleSync
                     }
                 }
             }
-            catch (OAuthException e) { lock (Gate) _error = e.Message; }
-            catch (OperationCanceledException) { lock (Gate) _error = null; }
+            catch (OAuthException e)
+            {
+                lock (Gate) _error = e.Message;
+                Tracker.Failed(e);
+            }
+            catch (OperationCanceledException e)
+            {
+                lock (Gate) _error = null;
+                Tracker.Failed(e);
+            }
             catch (Exception e) when (e is HttpRequestException or IOException or System.Net.Sockets.SocketException)
             {
                 lock (Gate) _error = "Sem ligação à Google. Tente de novo.";
+                Tracker.Failed(e);
+            }
+            catch (Exception e)
+            {
+                // Inesperado: a barra não fica presa em «À espera…»; a exceção segue como antes.
+                Tracker.Failed(e);
+                throw;
             }
             finally
             {
@@ -162,8 +207,12 @@ internal static class GoogleSync
         var hadKey = SyncService.Agent()?.HasKey == true; // antes de ligar
         Session()?.Use(tokens);
         if (Accounts()?.AfterSignIn() is { } account) await account;
+        // Com a conta já pedida (a barra diz «Sessão iniciada como Nome») e antes de ligar a sincronização.
+        Tracker.SignedIn();
         var round = SyncService.StartAsync();
-        return await SignInFinish.WaitAsync(() => SyncService.Agent()?.Status, round, hadKey, SignInFinish.Poll, CancellationToken.None);
+        var kind = await SignInFinish.WaitAsync(() => SyncService.Agent()?.Status, round, hadKey, SignInFinish.Poll, CancellationToken.None);
+        Tracker.Finished(kind);
+        return kind;
     }
 
     // O utilizador cancelou quando os tokens já tinham chegado: este computador fica sem sessão. Só local — revogar na
@@ -173,6 +222,8 @@ internal static class GoogleSync
         SyncService.SignOut(forgetKey: false);
         Accounts()?.Forget();
         Session()?.SignOut();
+        // A barra não pode continuar a dizer «Sessão iniciada» (a entrada pode ter acabado sem exceção).
+        Tracker.Reset();
     }
 
     public static void CancelSignIn()
@@ -182,6 +233,7 @@ internal static class GoogleSync
 
     public static async Task SignOutAsync()
     {
+        Tracker.Reset();
         var session = Session();
         if (session is null) return;
         Accounts()?.Forget();

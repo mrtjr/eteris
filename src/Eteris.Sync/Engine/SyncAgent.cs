@@ -84,6 +84,9 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
 
     // O apagar não acabou e porquê (com «Tentar de novo»): só enquanto Deleting. null = a correr, ou ainda não tentou.
     public string? DeleteError { get; init; }
+
+    // Parada por a sessão ser de outra conta Google (a fase sozinha não o diz: Stopped tem outras causas).
+    public bool OtherAccount { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -253,6 +256,7 @@ public sealed class SyncAgent
                     WaitingRequests = _waiting,
                     Deleting = _saved?.DeletePending == true,
                     DeleteError = _saved?.DeletePending == true ? _deleteError : null,
+                    OtherAccount = _phase == SyncPhase.Stopped && _notice == OtherAccountText,
                 };
             }
         }

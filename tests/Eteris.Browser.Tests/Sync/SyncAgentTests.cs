@@ -934,6 +934,37 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(secret, store.Load()!.Secret);
     }
 
+    // 0.2.15 (T4): a barra da janela distingue a pausa por outra conta Google das outras paragens (a fase sozinha não
+    // chega, e o aviso de «conta desaparecida» também fala de «outra conta Google»).
+    [Fact]
+    public async Task OtherAccount_IsFlaggedInTheStatus()
+    {
+        // Outra paragem (a conta de sincronização desapareceu do transporte): Stopped, mas não «outra conta».
+        var (gone, trabalho) = await TwoAsync();
+        await gone.Agent.DeleteCloudDataAsync();
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.Contains("outra conta Google", trabalho.Agent.Status.Notice);
+        Assert.False(trabalho.Agent.Status.OtherAccount);
+        Assert.Equal(SyncPhase.Stopped, gone.Agent.Status.Phase);
+        Assert.False(gone.Agent.Status.OtherAccount);
+
+        // A pausa por outra conta Google (o transporte ficou vazio: a casa cria uma conta nova).
+        var account = "conta-a";
+        var casa = new SyncAgent(() => new FolderTransport(_folder), new MemoryProfile(), new MemoryStore(), "Casa", Now, Quick) { AccountKey = () => account };
+        await casa.StartAsync();
+        Assert.Equal(SyncPhase.On, casa.Status.Phase);
+        Assert.False(casa.Status.OtherAccount);
+        casa.SignOut(forgetKey: false);
+        account = "conta-b";
+        await casa.StartAsync();
+        Assert.Equal(SyncPhase.Stopped, casa.Status.Phase);
+        Assert.True(casa.Status.OtherAccount);
+        account = "conta-a";
+        await casa.StartAsync();
+        Assert.False(casa.Status.OtherAccount);
+    }
+
     // O registo de chaves no Drive não abre (alterado ou danificado): para sem apagar a chave; voltando ao normal, retoma.
     [Fact]
     public async Task KeysThatDoNotOpen_StopWithoutDeletingTheKey()
