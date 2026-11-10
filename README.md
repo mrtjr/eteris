@@ -12,6 +12,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 
 **Privacidade**
 - Escudo com as listas do uBlock Origin (motor adblock-rust, ~200 mil regras), scriptlets e regras cosméticas; avisos de cookies removidos.
+- Páginas isoladas (sandbox), como no Chrome, no Firefox e no Brave: cada página corre fechada, sem acesso aos seus ficheiros nem ao sistema; se o isolamento falhar num computador, o Éteris abre sem ele e avisa (`docs/sandbox.md`).
 - HTTPS primeiro, cookies de terceiros bloqueados, WebRTC sem fuga de IP, Global Privacy Control (GPC).
 - Vídeos com som automático bloqueados até um clique.
 - «Esconder elemento»: clique num anúncio ou caixa e desaparece nesse site para sempre.

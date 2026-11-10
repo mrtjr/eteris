@@ -1,5 +1,81 @@
 # Alterações
 
+## 0.2.14 — 2026-11-09
+
+A versão das **páginas isoladas**. Como no Chrome, no Firefox e no Brave, cada página passa a correr **fechada num
+sandbox**, sem acesso aos seus ficheiros nem ao sistema: uma falha explorável no código de uma página deixa de ficar
+com os acessos do utilizador. Se o isolamento falhar num computador, o Éteris abre sem ele e avisa. É também uma versão
+de **desempenho medido** contra a 0.2.13 e as três referências: menos memória (−11% a −16%), quase nada de processador
+com 20 abas paradas e uma janela minimizada que deixa de desenhar. E fecha arestas: o menu do Éteris já não deixa
+passar o `Alt` para a página e um link aberto logo a seguir ao arranque já não se perde.
+
+### Segurança: páginas isoladas (sandbox)
+- **O sandbox sai ligado.** Estava pronto desde a 0.2.12 e desligado até à 0.2.13. Os processos das páginas e do
+  armazenamento correm sem privilégios (Untrusted), a placa gráfica e o áudio com integridade baixa (Low) e o serviço
+  de rede num AppContainer, como no Chrome; nenhum processo do motor corre com `--no-sandbox`
+  (`docs/sandbox.md`; `docs/paridade.md`, secção 2).
+- **O Éteris abre sempre.** Se o .NET não arrancar com o sandbox, o Éteris volta a arrancar sem ele; dois arranques
+  falhados seguidos (uma queda antes da 1.ª página, ou três processos do motor a cair nos primeiros 30 s) desligam o
+  sandbox até à versão seguinte, com um aviso na nova aba. O `sandbox-fallback.json` do perfil guarda de onde veio cada
+  falha contada (hora, versão, tipo do processo e código de saída; nunca a linha de comandos nem caminhos).
+- **Atualizar não muda nada do que é seu:** de uma versão sem sandbox para uma com ele, os atalhos, o perfil e o
+  navegador predefinido ficam iguais, e a desinstalação não deixa restos (provado com um pacote de teste pelo
+  Velopack). A pasta de instalação recebe a permissão de que o serviço de rede precisa ao instalar e ao atualizar.
+- **Custo medido:** cerca de 40 ms a mais no arranque (703 → 735 ms até à 1.ª página, 20 rondas) e nenhuma memória a
+  mais. Para o desligar à mão num computador: `--eteris-no-sandbox` no atalho.
+- Por ver ao vivo: o proxy do sistema e a autenticação integrada com o serviço de rede no AppContainer (a máquina de
+  testes não tem domínio nem proxy; com proxy por argumentos do motor já passou).
+
+### Desempenho
+Medido na mesma máquina e na mesma noite contra a 0.2.13, o Chrome, o Brave e o Firefox (medianas; método, tabelas e
+limites em `docs/paridade.md`, «Medição da 0.2.14»; ferramentas em `build/perf/`).
+- **Menos memória:** 251 → 223 MB com 1 aba, 377 → 322 MB com 5 e 1239 → 1037 MB com 20. Com 20 abas fica abaixo do
+  Chrome (1279 MB) e 11% acima do Brave (931 MB); com poucas abas ainda fica 60 a 80 MB acima dos dois.
+- **Parado, quase nada de processador:** com 20 abas abertas e paradas, 1,72% → 0,13% de um núcleo (Chrome 0,61%,
+  Brave 0,21%, Firefox 1,56%).
+- A central de multimédia deixou de acordar todas as abas de 2 em 2 segundos (só as que estão à vista, as que saíram
+  há pouco e as que têm som; as outras de 30 em 30), o ponto «a tocar» só anima enquanto se vê e o modo foco deixa de
+  ler o rato com a janela inativa.
+- **Janela minimizada deixa de desenhar:** com uma página animada, 6,47% → 0,59% de um núcleo (9,31% → 1,25% com 20
+  abas), como nas três referências. Vale também noutra área de trabalho virtual e com a sessão bloqueada; nunca numa
+  página com som, multimédia, câmara, microfone ou ecrã em uso, ou Picture-in-Picture. Com a janela só tapada por
+  outra, a página continua a desenhar (o Chrome, o Firefox e o Brave param): fica em aberto.
+- **Com pouca memória no Windows, adormece uma aba de cada vez** — a usada há mais tempo; nunca as fixadas, as
+  trancadas, as que tocam som nem as que usam a câmara, o microfone ou o ecrã — e, ao acordar, a página volta ao mesmo
+  ponto. Opção nova em Definições › Abas, «Adormecer também quando falta memória» (ligada). Com o sinal simulado e 8
+  abas: 10 → 4 processos de página e 404 → 253 MB.
+- **Troca de abas como no Chrome e no Brave:** 44 a 49 ms até a aba nova estar completa no ecrã (Chrome e Brave: 50 a
+  56 ms), sem fotogramas errados em 36 trocas (numa passagem anterior apareceu 1 fotograma branco em 24: a vigiar).
+- A bolha do endereço de um link (ao passar o rato) passa para uma janela do tamanho do texto, em vez de ligar a
+  camada do tamanho da janela inteira.
+- Desenhar e rolar custam praticamente o mesmo que na 0.2.13 (animação 8,05% → 7,87%; rolagem 4,51% → 4,20%).
+- Os outros ajustes preparados nesta versão (cache dos shaders no disco, cache de Voltar/Avançar mais pequena, motor
+  a arrancar em paralelo, funcionalidades do motor, poupança de energia do Chromium) ficam **desligados**: os que se
+  mediram não mostraram ganho ou têm um custo (a poupança de energia corta para 30 fotogramas por segundo). Cada
+  ajuste liga-se ou desliga-se pela linha de comandos (`--eteris-ajustes=-e8`, por exemplo) e `--eteris-sem-ajustes`
+  desliga todos.
+
+### Correções
+- Com o menu do Éteris aberto, nenhuma tecla — nem `Alt`, `Ctrl` ou `Shift` sozinhos — chega à página, como no Chrome,
+  no Firefox e no Brave.
+- Abrir um link no Éteris logo depois de ele arrancar já não se perde: o canal por onde um segundo lançamento entrega
+  o link passa a existir assim que o Éteris começa a ouvir (havia um intervalo em que o link se perdia).
+
+### Sincronização
+- A aplicação Google do Éteris passou a «Em produção»: qualquer conta Google pode entrar e a sessão já não expira ao
+  fim de 7 dias. A página inicial, a política de privacidade e os termos estão em `https://mrtjr.github.io/eteris/`.
+
+### Para quem compila e publica
+- Os programas instalados já não levam o caminho da pasta de quem os compilou (no .NET, no Escudo e nas peças nativas
+  do sandbox), e o `build/publish.ps1` recusa publicar binários com ele.
+- `build/publish.ps1` publica com o sandbox por omissão (`-NoSandbox` só para emergências, como a publicação pelo CI)
+  e só com os testes do modo com sandbox aprovados para o próprio commit (`build/sandbox/build-all.ps1`, que compila
+  o CefSharp com o patch e a DLL cliente a partir do repositório); `-GoogleOAuthJson` leva o login Google.
+- `build/pack.ps1` só empacota uma publicação completa, da versão e do modo pedidos, feita a partir do commit que se
+  empacota e com o login Google (sem ele só com `-SemLogin`).
+- Testes: as janelas WPF correm sem paralelismo e as threads STA têm prazo; no CI, os jobs têm prazo e um teste preso
+  deixa um dump e os resultados.
+
 ## 0.2.13 — 2026-11-09
 
 A versão do **login completo**. Com **«Entrar com o Google»** (opcional e desligado por omissão), os favoritos, os

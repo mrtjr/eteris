@@ -4,7 +4,7 @@ Objetivo: diminuir a distância — ou empatar — com as três referências do 
 o Edge não é referência) antes de oferecer o navegador a outras pessoas. Cada lacuna tem uma forma de medir e um
 critério de «feito»; nada passa a «resolvido» sem número ou teste.
 
-Tabela atualizada em 2026-11-09, versão 0.2.13 (cada secção diz quando e em que versão foi medida; a 1.ª medição
+Tabela atualizada em 2026-11-09, versão 0.2.14 (cada secção diz quando e em que versão foi medida; a 1.ª medição
 foi a 0.2.2, em 2026-11-06).
 
 ## Critérios para começar a distribuir
@@ -15,6 +15,7 @@ O Éteris pode ser oferecido a outras pessoas quando os pontos marcados **[bloqu
 |---|---|---|---|---|---|---|
 | 1 | Custo de desenhar as páginas (processador, bateria) | 6,6–6,7% de 1 núcleo | 21,7–28,3% | 4,8–8,0% | **8–11%** desde a 0.2.3 (era 28–36% na 0.2.2) | ✅ resolvido (0.2.3) |
 | 1b | Abas escondidas continuam a ser desenhadas | param | param | param | **param** desde a 0.2.3 (era ~30% por aba animada na 0.2.2) | ✅ resolvido (0.2.3) |
+| 1d | Janela que não se vê continua a ser desenhada (página animada, % de 1 núcleo) | minimizada 0,36; tapada por outra 0,28 | 0,95; 0,33 | 0,80; 0,09 | **minimizada: pára** desde a 0.2.14 (0,59; 6,77 na 0.2.13), também noutra área de trabalho e com a sessão bloqueada; **tapada por outra janela: continua a desenhar** (8,96); ver secção 1c, «Medição da 0.2.14» | minimizada ✅ (0.2.14); tapada por outra: em aberto, média |
 | 2 | Isolamento das páginas (sandbox) | sim | sim | sim | **ligado por omissão na publicação da 0.2.14**: páginas Untrusted, GPU Low, armazenamento Untrusted e serviço de rede no AppContainer, como no Chrome; funcionalidades verificadas com teclado e rato, rede de segurança no arranque, CefSharp e DLL cliente reprodutíveis a partir do repositório (`build/sandbox/build-all.ps1`) e atualização de uma 0.2.11 sem sandbox provada pelo Velopack (atalhos, perfil e navegador predefinido iguais; desinstalação sem restos). Até à 0.2.13 a publicação corre com `--no-sandbox` (secção 2) | ✅ resolvido na 0.2.14 (por publicar) |
 | 3 | Atualizações de segurança do motor | automáticas, dias | automáticas, dias | automáticas, dias | Chromium 156 (igual ao Chrome hoje); Dependabot diário + atualização automática dos utilizadores | ✅ processo montado (falta a 1.ª atualização real) |
 | 4 | Interface por cima das páginas (avisos, paleta, pesquisa) | — | — | — | camada numa janela própria, por cima de qualquer motor | ✅ resolvido (0.2.3) |
@@ -178,6 +179,69 @@ Wikipédia (`pt.wikipedia.org/wiki/Lisboa`: documento completo, 16 imagens), ví
 privada (`--private` entregue à instância aberta: 2.ª janela com «Privada») e fecho limpo (árvore vazia em ~1,4 s).
 Na cópia com `-Sandbox`, os tokens dos filhos depois de fundir — com o `Cef.Initialize` já na thread do arranque —
 são os do ramo: renderers e armazenamento Untrusted (restritos), placa gráfica e áudio Low, nenhum `--no-sandbox`.
+
+### Medição da 0.2.14 (2026-11-09)
+
+Ferramentas de `build/perf/` (`README.md`: bateria padrão, rondas alternadas entre braços, medianas). Máquina: Ryzen 7
+7700X, 31,2 GB, Windows 11. Braços: **0.2.13** publicada, **0.2.14** publicada com sandbox e a mesma 0.2.14 com
+`--eteris-no-sandbox`; Chrome, Brave e Firefox com perfis novos temporários; páginas servidas localmente. Memória =
+memória privada sem o processo da placa gráfica; processador = % de um núcleo.
+
+| O que | 0.2.13 | 0.2.14 | Chrome | Brave | Firefox |
+|---|---|---|---|---|---|
+| Memória, 1 aba (MB) | 251 | **223** (−11%) | 164 | 150 | 482 |
+| Memória, 5 abas (MB) | 377 | **322** (−14%) | 239 | 239 | 662 |
+| Memória, 20 abas, aos 60 s (MB) | 1239 | **1037** (−16%) | 1279 | 931 | 2034 |
+| Processador parado com 20 abas, 5 min | 1,72 | **0,13** | 0,61 | 0,21 | 1,56 |
+| Processador, animação (sem a placa gráfica) | 8,05 | 7,87 | 5,93 | 7,75 | 4,75 |
+| Processador, rolagem (sem a placa gráfica) | 4,51 | 4,20 | 3,13 | 2,67 | 2,75 |
+| Arranque até à 1.ª pintura (ms, 20 rondas) | 703 | 735 | 510* | 472* | 1048* |
+| Processador, janela minimizada (animação) | 6,77 | 6,47 sem o ajuste e8, **0,59** com ele | 0,36 | 0,80 | 0,95 |
+| Processador, janela tapada por outra (animação) | 9,05 | 8,96 (o e8 não a resolve) | 0,28 | 0,09 | 0,33 |
+
+\\* arranque das referências: 4 rondas de outro passo da mesma noite (nele a 0.2.13 deu 773 e a 0.2.14 794).
+
+- **Memória.** A 0.2.14 sem sandbox dá 222,5 MB com 1 aba e 326,3 MB com 5: o sandbox não custa memória. Com 20 abas,
+  dos 60 s aos 5 min: 0.2.14 1037 → 1029, 0.2.13 1239 → 1260, Chrome 1279 → 1526 (35 → 45 processos de página: iframes
+  de anúncios, que o Éteris e o Brave bloqueiam), Brave 931 → 922, Firefox 2034 → 2000. Com poucas abas o Éteris ainda
+  fica 60 a 80 MB acima do Chrome e do Brave (custo fixo do processo principal, WPF e .NET).
+- **Arranque.** A diferença por pares é de +39 ms (0.2.14 com sandbox contra a 0.2.13) e a 0.2.14 sem sandbox fica
+  42 ms abaixo da 0.2.14 com ele: o custo é do sandbox, cerca de 40 ms.
+- **Janela que não se vê** (2 rondas, página animada, processador total com a placa gráfica). Minimizado, o Éteris
+  continuava a desenhar a 60 fotogramas por segundo; com o ajuste e8, ligado por omissão, pára (com 20 abas:
+  9,31 → 1,25). Tapado por outra janela continua a 60, com ou sem ele: **lacuna em aberto** (as três referências param).
+  **O regresso da janela (restaurar, voltar de outra área de trabalho, desbloquear) não foi medido**: o que falta está
+  em `build/perf/README.md`, «Ajustes ligados por omissão».
+- **Pouca memória** (ajuste e13, 1 ronda, 8 abas, 90 s, sinal de pouca memória **simulado**): sem ele, 10 processos de
+  página e ~395 MB do princípio ao fim; com ele, 10 → 4 e 404 → 253 MB, 6 abas adormecidas. Prova que o mecanismo
+  adormece e liberta memória, não quando o Windows dá o sinal a sério.
+- **Troca de abas** (gravação do ecrã a 60 fotogramas por segundo, 4 abas já carregadas, 12 trocas por caso; do envio
+  da tecla à aba completa no ecrã, mediana e intervalo):
+
+  | Caso | 0.2.14 | Chrome | Brave |
+  |---|---|---|---|
+  | Escura ↔ clara | **44,5 ms** (38–116) | 50,5 (42–66) | 54,5 (48–64) |
+  | Clara ↔ clara | **47,0 ms** (34–108) | 54,5 (46–64) | 53,5 (43–62) |
+  | Clara ↔ nova aba | **49,0 ms** (36–109) | 53,0 (47–63) | 55,5 (46–73) |
+  | Fotogramas errados em 36 trocas | 0 | 0 | 0 |
+
+  Empate técnico (menos de um fotograma de diferença). A 1.ª troca de cada série demorou 108–116 ms no Éteris (a aba
+  ainda não tinha sido mostrada desde que abriu); no Chrome e no Brave não se distingue das outras. Numa passagem
+  anterior apareceu 1 fotograma branco em 12 trocas de escura para clara: ocorrência rara (1 em 24), a vigiar.
+- **Ajustes que ficam desligados** (A/B com o mesmo binário): a cache dos shaders no disco, as atualizações só ao
+  sair, o motor a arrancar na sua thread, a 1.ª nova aba preparada em fundo e uma das funcionalidades do motor (e3,
+  e10, e11, e12, e14.4) não mexeram no arranque; a cache de Voltar/Avançar com 3 páginas (e7) não mudou a memória; o
+  e14.5 baixa o compositor do Windows mas sobe o total (13,18 → 16,64); a poupança de energia do Chromium (e16) corta
+  para 30 fotogramas por segundo (13,18 → 8,30) e só serviria como modo opcional.
+- **Em aberto.** Em quatro cenários curtos (janelas de 30 s que começam 8 s depois de abrir: repouso, roda do rato
+  sobre links, animação que não muda o ecrã, animação simples) a 0.2.14 ficou 1,4 a 2,9 pontos acima da 0.2.13; está
+  por decidir se é custo real, cauda do arranque ou o peso dos contadores de teste (a 0.2.14 correu com eles e a
+  0.2.13 sem). Na bateria padrão, com janelas de 60 s a começar aos 15 s, animação e rolagem deram paridade. Por
+  medir no Éteris: a 0.2.13 nos casos da troca de abas, abrir e fechar aba, e a troca para uma aba parada há mais de
+  8 s.
+- **Limites.** 20 abas: 1 ronda por braço; janela que não se vê e cenários curtos: 2 rondas — diferenças abaixo de
+  ~10% nesses passos não são conclusivas. O indexador de pesquisa do Windows gastou ~32% de um núcleo durante toda a
+  medição, igual em todos os braços.
 
 ## 2. Sandbox — resolvido na 0.2.14 (por publicar): ligado por omissão na publicação (2026-11-08)
 
