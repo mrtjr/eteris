@@ -768,6 +768,19 @@ internal static class SyncService
         };
     }
 
+    // A linha da frente em Definições › Sincronização, com sessão. Null: não há nada a dizer aqui (sem sincronização
+    // ligada, ou há um aviso próprio a mostrar em vez disto). Um computador à espera de aprovação não está «Ligada».
+    public static string? Headline(SyncStatus? status, long nowMs)
+    {
+        if (status is null || status.Phase is not (SyncPhase.On or SyncPhase.Starting) || status.NeedsSignIn || status.Deleting) return null;
+        // O erro e «atualize o Éteris» aparecem no sítio de sempre, fora de «Mais opções».
+        if (!string.IsNullOrEmpty(status.Error) || status.NeedsUpdate) return null;
+        if (status.Phase == SyncPhase.Starting) return "A ligar…";
+        if (status.Running) return "A sincronizar…";
+        if (status.LastSuccessMs > 0) return "Ligada · última sincronização " + Ago(status.LastSuccessMs, nowMs);
+        return "Ligada · a primeira sincronização está a caminho";
+    }
+
     // «none», «replaced», «waiting», «code», «joined», «timeUp», «stillWaiting», «refused», «failed».
     internal static string GuestKind(GuestPairingKind kind) => Camel(kind);
 
@@ -825,6 +838,8 @@ internal static class SyncService
             deleting = status.Deleting,
             deleteError = status.DeleteError,
             summary = Summary(status, nowMs),
+            // A linha de estado à frente nas Definições (null: esconde-se e fala o item próprio).
+            headline = Headline(status, nowMs),
             // Há segredos em jogo (aprovar um aparelho novo também lhos entrega e pede o Windows Hello, na barra).
             secrets = Agent()?.HasSecrets == true,
             // O nome em vigor deste computador (para as Definições; só vem do agente local, nunca de outro aparelho).
