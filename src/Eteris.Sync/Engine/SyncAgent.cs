@@ -563,7 +563,12 @@ public sealed class SyncAgent
                     HostAnswered = _guest.HostAnswered,
                     End = _guest.End,
                 };
-                return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, pairing, requests, _devices, _needsUpdate, _pendingDevices)
+                // Este computador: pagamentos e documentos pelo que está ligado agora (não pela última leitura da lista).
+                var here = Model.SyncGroups.AccountCollections.All(EnabledOf(_saved).Contains);
+                var devices = _devices.Any(d => d.IsThis && d.PaymentsAndDocuments != here)
+                    ? _devices.Select(d => d.IsThis ? d with { PaymentsAndDocuments = here } : d).ToList()
+                    : _devices;
+                return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, pairing, requests, devices, _needsUpdate, _pendingDevices)
                 {
                     Kit = KitInfoOf(_saved),
                     NeedsSignIn = _needsSignIn,
@@ -578,7 +583,7 @@ public sealed class SyncAgent
                     MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
                     JoinedNow = _justJoined && _phase == SyncPhase.On,
                     AccountSecrets = _saved is { Secret: not null, AccountSecrets: true },
-                    SecretsHere = Model.SyncGroups.AccountCollections.All(EnabledOf(_saved).Contains),
+                    SecretsHere = here,
                     SecretsOffer = OfferOf(_saved),
                     Entry = _entry,
                     InheritedSecrets = _inheritedNow,

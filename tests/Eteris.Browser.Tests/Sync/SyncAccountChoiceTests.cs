@@ -744,4 +744,17 @@ public sealed class SyncAccountChoiceTests : IDisposable
         Assert.Null(trabalho.Agent.AccountSecretsBy);
         Assert.Equal(0, trabalho.Agent.AccountSecretsSinceMs);
     }
+
+    // A marca deste computador na lista segue o que está ligado agora, sem esperar por outra leitura da lista.
+    [Fact]
+    public async Task DeviceList_ThisComputer_FollowsTheSwitchesAtOnce()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        Assert.False((await casa.Agent.RefreshDevicesAsync()).Single(d => d.IsThis).PaymentsAndDocuments);
+        casa.Agent.SetCollections(SyncGroups.AccountCollections, on: true);
+        Assert.True(casa.Agent.Status.Devices.Single(d => d.IsThis).PaymentsAndDocuments);
+        Assert.False(casa.Agent.Status.Devices.Single(d => d.Name == "Trabalho").PaymentsAndDocuments);
+        casa.Agent.SetCollections([Collections.Cards], on: false);
+        Assert.False(casa.Agent.Status.Devices.Single(d => d.IsThis).PaymentsAndDocuments);
+    }
 }
