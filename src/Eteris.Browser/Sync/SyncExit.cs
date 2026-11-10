@@ -98,10 +98,18 @@ internal static class SyncExit
     public static async Task<LostResult> LostDeviceAsync(SyncAgent agent, string device, IReadOnlyCollection<string>? shown,
         Func<CancellationToken, Task<RevokeOutcome>>? revoke, Action stopHere, CancellationToken cancellationToken)
     {
+        var kitBefore = agent.Status.Kit?.Id;
         try { await agent.RemoveDeviceAsync(device, shown, cancellationToken).ConfigureAwait(false); }
-        catch (SyncUserException e)
+        catch (Exception e)
         {
-            return new LostResult(false, false, agent.RotationPending ? e.Message + " " + LostHalfway : e.Message);
+            // Uma falha DEPOIS de a troca acabar (ao reler a conta ou a lista) não desfaz a remoção: segue para o passo 2.
+            if (!RemovalFinished(agent, kitBefore, e))
+            {
+                if (agent.RotationPending)
+                    return new LostResult(false, false, (e is SyncUserException ? e.Message : "Não foi possível concluir (" + e.Message + ").") + " " + LostHalfway);
+                if (e is SyncUserException) return new LostResult(false, false, e.Message);
+                throw;
+            }
         }
         if (agent.RotationPending) return new LostResult(true, false, LostHalfway);
         // Lido antes de parar a sincronização aqui (parar esquece-o).
@@ -122,6 +130,18 @@ internal static class SyncExit
             default:
                 return new LostResult(true, false, LostNotRevoked);
         }
+    }
+
+    // A remoção acabou apesar da falha: a troca de chave chegou ao fim (kit novo e nada pendente) e o que falhou veio
+    // depois. Uma SyncUserException só conta se for uma falha de rede registada pelo agente (Status.Error com a mesma
+    // mensagem): «a conta mudou de chave noutro aparelho» e «a sincronização mudou entretanto» também trazem um kit novo,
+    // mas sem esta remoção.
+    private static bool RemovalFinished(SyncAgent agent, string? kitBefore, Exception e)
+    {
+        if (agent.RotationPending) return false;
+        var status = agent.Status;
+        if (status.Kit?.Id is not { } kit || kit == kitBefore) return false;
+        return e is not SyncUserException || status.Error == e.Message;
     }
 
     // O conselho por tipo de segredo que a conta tinha (cadeia vazia sem nenhum).

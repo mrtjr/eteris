@@ -76,16 +76,38 @@ public sealed class SyncExitTests : IDisposable
 
     private const string Site = "https://contas.exemplo.pt";
 
-    // A troca de chave falha a meio (o registo de chaves antigo não se apaga), como em SyncAgentTests.
+    // A troca de chave falha a meio (o registo de chaves antigo não se apaga), como em SyncAgentTests. Com
+    // FailWith, a falha é essa exceção (uma que o agente não traduz). Com FailReadsAfterKeys, a troca acaba (o registo
+    // antigo sai) e a rede cai logo a seguir: as leituras e listagens seguintes falham.
     private sealed class FailingKeysTransport(ISyncTransport inner) : ISyncTransport
     {
         public bool FailDeletingKeys { get; set; }
+        public Func<Exception>? FailWith { get; set; }
+        public bool FailReadsAfterKeys { get; set; }
+        private bool _keysGone;
         public string Name => inner.Name;
-        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default) => inner.ListAsync(prefix, cancellationToken);
-        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default) => inner.ReadAsync(path, cancellationToken);
+        private void Down()
+        {
+            if (FailReadsAfterKeys && _keysGone) throw new IOException("rede em baixo de propósito");
+        }
+        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+        {
+            Down();
+            return inner.ListAsync(prefix, cancellationToken);
+        }
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
+        {
+            Down();
+            return inner.ReadAsync(path, cancellationToken);
+        }
         public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default) => inner.WriteAsync(path, data, cancellationToken);
-        public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
-            => FailDeletingKeys && path.EndsWith("/keys", StringComparison.Ordinal) ? throw new IOException("falha de propósito") : inner.DeleteAsync(path, cancellationToken);
+        public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+        {
+            var keys = path.EndsWith("/keys", StringComparison.Ordinal);
+            if (FailDeletingKeys && keys) throw FailWith?.Invoke() ?? new IOException("falha de propósito");
+            await inner.DeleteAsync(path, cancellationToken);
+            if (keys) _keysGone = true;
+        }
     }
 
     private readonly List<ReauthPurpose> _asked = [];
@@ -240,6 +262,64 @@ public sealed class SyncExitTests : IDisposable
         Assert.True(await trabalho.Agent.RunAsync());
         Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
         Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+    }
+
+    // Uma exceção que o agente não traduz, com a troca a meio: a mesma regra (nunca revogar, LostHalfway), sem lançar.
+    [Fact]
+    public async Task Lost_RotationLeftHalfway_ByAnUntranslatedError_NeverRevokes()
+    {
+        var flaky = new FailingKeysTransport(new FolderTransport(Folder));
+        var (casa, _, _) = await ThreeAsync(() => flaky);
+        flaky.FailDeletingKeys = true;
+        flaky.FailWith = () => new InvalidOperationException("estranho de propósito");
+        var calls = 0;
+        var result = await SyncExit.LostDeviceAsync(casa.Agent, IdOf(casa, "Perdido"), null, _ => { calls++; return Task.FromResult(RevokeOutcome.Revoked); },
+            StopHere, CancellationToken.None);
+        Assert.Equal(0, calls);
+        Assert.Equal(0, _stops);
+        Assert.False(result.Removed);
+        Assert.False(result.Revoked);
+        Assert.EndsWith(SyncExit.LostHalfway, result.Message);
+        Assert.True(casa.Agent.RotationPending);
+    }
+
+    // I1 da revisão: a troca de chave acabou e só a releitura a seguir falhou (rede em baixo). O aparelho JÁ saiu da
+    // conta: segue para o passo 2 (R9 cumprido) e, se a Google não responder, diz que foi removido e manda retirar o acesso.
+    [Fact]
+    public async Task Lost_NetworkFailsAfterTheKeyChange_StillRevokes()
+    {
+        var flaky = new FailingKeysTransport(new FolderTransport(Folder));
+        var (casa, _, _) = await ThreeAsync(() => flaky);
+        var kitBefore = casa.Agent.Status.Kit?.Id;
+        flaky.FailReadsAfterKeys = true;
+        var calls = 0;
+        var pendingAtRevoke = true;
+        var result = await SyncExit.LostDeviceAsync(casa.Agent, IdOf(casa, "Perdido"), null, _ =>
+        {
+            calls++;
+            pendingAtRevoke = casa.Agent.RotationPending;
+            return Task.FromResult(RevokeOutcome.Revoked);
+        }, StopHere, CancellationToken.None);
+        Assert.NotEqual(kitBefore, casa.Agent.Status.Kit?.Id);
+        Assert.Equal(1, calls);
+        Assert.False(pendingAtRevoke);
+        Assert.True(result.Removed);
+        Assert.True(result.Revoked);
+        Assert.Equal(1, _stops);
+        Assert.StartsWith(SyncExit.LostDone, result.Message);
+    }
+
+    [Fact]
+    public async Task Lost_NetworkFailsAfterTheKeyChange_AndAtGoogle_SaysRemovedButNotWithdrawn()
+    {
+        var flaky = new FailingKeysTransport(new FolderTransport(Folder));
+        var (casa, _, _) = await ThreeAsync(() => flaky);
+        flaky.FailReadsAfterKeys = true;
+        var result = await SyncExit.LostDeviceAsync(casa.Agent, IdOf(casa, "Perdido"), null, Answer(RevokeOutcome.Failed), StopHere, CancellationToken.None);
+        Assert.True(result.Removed);
+        Assert.False(result.Revoked);
+        Assert.Equal(0, _stops);
+        Assert.Equal(SyncExit.LostNotRevoked, result.Message);
     }
 
     [Fact]
