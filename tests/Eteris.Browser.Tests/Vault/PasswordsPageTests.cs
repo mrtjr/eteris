@@ -595,6 +595,19 @@ public sealed class PasswordsPageTests : IDisposable
         }
     }
 
+    // Revisão T13: um duplo clique não envia dois /sign-in; os botões desativam-se no clique, antes do pedido.
+    [Fact]
+    public void Templates_DisableTheSignInButtons_OnClick_BeforeAsking()
+    {
+        foreach (var template in new[] { PasswordsPage.Template, AutofillPage.Template })
+        {
+            var start = template.IndexOf("b.addEventListener('click'", template.IndexOf("button[data-sign-in]", StringComparison.Ordinal), StringComparison.Ordinal);
+            Assert.True(start >= 0);
+            var handler = template[start..template.IndexOf("ask('sign-in'", start, StringComparison.Ordinal)];
+            Assert.Contains("x.disabled = true", handler);
+        }
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
