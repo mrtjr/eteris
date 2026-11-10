@@ -686,6 +686,12 @@ public sealed class SyncExitTests : IDisposable
         var page = GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html");
         foreach (var text in new[] { SyncExit.SignOutHelp, SyncExit.SignOutKeeps, SyncExit.RevokeTitle, SyncExit.RevokeText })
             Assert.Contains(text, page);
+        // M3 da revisão: os textos dos botões e da pergunta, na página (HTML e o JS de paintLost).
+        Assert.Contains($"id=\"syncRevoke\">{SyncExit.RevokeButton}</button>", page);
+        Assert.Contains($"id=\"syncRevokeQuestion\" role=\"status\" hidden>{SyncExit.RevokeQuestion}</span>", page);
+        Assert.Contains($"id=\"syncRevokeConfirm\" hidden>{SyncExit.RevokeConfirm}</button>", page);
+        Assert.Contains($"id=\"syncLostConfirm\">{SyncExit.LostConfirm}</button>", page);
+        Assert.Contains($"d.google.folder ? '{SyncExit.LostConfirmFolder}' : '{SyncExit.LostConfirm}'", page);
         var body = page.IndexOf("id=\"syncBody\"", StringComparison.Ordinal);
         Assert.True(body > 0);
         var help = page.IndexOf("id=\"syncOutHelp\"", StringComparison.Ordinal);
