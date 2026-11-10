@@ -337,6 +337,20 @@ public class SyncSettingsSectionTests
         Assert.Contains("if (!isSignOut(e)) { askAccount(); askLook(); }", script, StringComparison.Ordinal);
     }
 
+    // R3/R5: um apagar do Drive (a correr ou parado com erro) fala no próprio item, que vive em «Mais opções»: a pintura
+    // abre o bloco uma vez quando o apagar começa (a nota com o porquê e «Tentar de novo» ficam à vista), sem o reabrir
+    // em cada sondagem se a pessoa o fechar.
+    [Fact]
+    public void Deleting_OpensMoreOptions_OncePerDelete()
+    {
+        var script = Script(Page());
+        var start = At(script, "const paintSync = d => {");
+        var paintSync = script[start..At(script, "const paint = d => {")];
+        Assert.Contains("if (s.deleting && !deleteOpened) { deleteOpened = true; openMoreFor($('syncDeleteItem')); }", paintSync, StringComparison.Ordinal);
+        Assert.Contains("if (!s.deleting) deleteOpened = false;", paintSync, StringComparison.Ordinal);
+        Assert.True(At(script, "let deleteOpened = false;") < start);
+    }
+
     // R11 (c): a pesquisa das Definições encontra o que está dentro de «Mais opções» (e abre-o).
     [Fact]
     public void Search_FindsWhatIsInsideMoreOptions()

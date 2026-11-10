@@ -1309,6 +1309,8 @@
       $('syncKitWarn').hidden = true;
       if (r.state) paint(r.state);
     };
+    // Um apagar do Drive fala no próprio item, dentro de «Mais opções»: abre-se uma vez quando o apagar começa.
+    let deleteOpened = false;
     const paintSync = d => {
       const s = d.sync || { phase: 'off' };
       const phase = s.phase;
@@ -1331,6 +1333,10 @@
       show('syncOfferItem', d.enabled && !!s.offer);
       note($('syncOfferNote'), msg0(d, 'offer'), true);
       show('syncDeleteItem', d.connected);
+      // A apagar (ou parado com erro): a nota com o porquê e «Tentar de novo» têm de se ver. Abre só na transição; se a
+      // pessoa fechar o bloco, a sondagem não o volta a abrir.
+      if (s.deleting && !deleteOpened) { deleteOpened = true; openMoreFor($('syncDeleteItem')); }
+      if (!s.deleting) deleteOpened = false;
       // «Retirar o acesso do Éteris à conta Google»: só com a conta Google (na pasta de teste não há Google).
       show('syncRevokeItem', d.connected && !d.google.folder);
       if ($('syncRevokeItem').hidden && revokeArmed) disarmRevoke(false);
