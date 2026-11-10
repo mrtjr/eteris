@@ -424,6 +424,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     {
                         System.Security.Cryptography.CryptographicOperations.ZeroMemory(secret);
                     }
+                    // Na conta substituída, a mesma porta do Windows que «Fui eu».
+                    if (!await Sync.SyncService.MayJoinWithKitAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                        return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                     Sync.SyncService.Act("join", a => a.JoinWithCodeAsync(words));
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                 });
@@ -461,8 +464,14 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 // O kit de recuperação vai no corpo de um POST (nunca no endereço).
                 var form = SyncForm.Parse(request);
                 if (form.GetValueOrDefault("code") is not { Length: > 0 } code) return Json(new { ok = false, message = "Escreva ou cole o kit de recuperação." });
-                Sync.SyncService.Act("join", agent => agent.JoinWithCodeAsync(code));
-                break;
+                return new VaultResourceHandler(async () =>
+                {
+                    // Na conta substituída, a mesma porta do Windows que «Fui eu».
+                    if (!await Sync.SyncService.MayJoinWithKitAsync(purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
+                        return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                    Sync.SyncService.Act("join", agent => agent.JoinWithCodeAsync(code));
+                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
+                });
             }
             case "/sync-device-name":
             {

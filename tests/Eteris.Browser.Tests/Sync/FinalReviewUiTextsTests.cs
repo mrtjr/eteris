@@ -175,6 +175,40 @@ public class FinalReviewUiTextsTests
         Assert.DoesNotMatch(@"if \(id == 0 \|\| !Put\(id, data\)\) return false;", set);
     }
 
+    // ---- I-08: entrar com o kit na conta substituída passa pela mesma porta do Windows que «Fui eu» -----------------
+
+    private static string RouteCase(string routes, string path)
+    {
+        var start = routes.IndexOf("case \"" + path + "\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, "não encontrei a rota " + path);
+        var end = routes.IndexOf("case \"", start + 6, StringComparison.Ordinal);
+        return end < 0 ? routes[start..] : routes[start..end];
+    }
+
+    [Theory]
+    [InlineData("/sync-kit-from-file")]
+    [InlineData("/sync-join")]
+    public void I08_KitRoutes_OnAReplacedAccount_AskWindowsFirst(string path)
+    {
+        var route = RouteCase(Source("Browser", "EterisSchemeHandlerFactory.cs"), path);
+        var gate = route.IndexOf("await Sync.SyncService.MayJoinWithKitAsync(purpose => ConfirmWithWindows(browserId, purpose))", StringComparison.Ordinal);
+        Assert.True(gate >= 0, path + ": sem a porta do Windows");
+        var join = route.IndexOf("JoinWithCodeAsync(", StringComparison.Ordinal);
+        Assert.True(join > gate, path + ": a entrada vem antes da porta");
+        // Recusada, nada entra e a página recebe o estado (com a mensagem «replaced»).
+        Assert.Contains("return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));", route[gate..join]);
+    }
+
+    [Fact]
+    public void I08_MayJoinWithKit_UsesTheReplacedGate_OnlyOnAReplacedAccount()
+    {
+        var service = Source("Sync", "SyncService.cs");
+        var body = Body(service, "public static async Task<bool> MayJoinWithKitAsync(", "\n    }\n");
+        Assert.Contains("!agent.Status.ChainReplaced) return true;", body);
+        Assert.Contains("SyncChoices.MayJoinReplacedAsync(agent, confirm)", body);
+        Assert.Contains("Say(\"replaced\", SyncChoices.NotConfirmed(\"este computador não entrou na conta\"));", body);
+    }
+
     [Fact]
     public void I02_SyncData_ReadsTheStatusGuarded()
     {

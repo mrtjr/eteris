@@ -672,6 +672,16 @@ internal static class SyncService
         return true;
     }
 
+    // Entrar com o kit (colado ou do ficheiro) quando a conta foi substituída manda para a conta que está agora no Drive o
+    // mesmo que «Fui eu»: com segredos ligados aqui, o Windows confirma primeiro (sempre). Fora desse estado, nada a pedir.
+    public static async Task<bool> MayJoinWithKitAsync(Func<Vault.ReauthPurpose, Task<bool>> confirm)
+    {
+        if (Agent() is not { } agent || !agent.Status.ChainReplaced) return true;
+        if (await SyncChoices.MayJoinReplacedAsync(agent, confirm).ConfigureAwait(false)) return true;
+        Say("replaced", SyncChoices.NotConfirmed("este computador não entrou na conta"));
+        return false;
+    }
+
     // «Pedir outra vez» (cartão) e a rota /sync-pair (Definições). Com a conta substituída não pede: o único caminho é
     // JoinAfterReplacedAsync, com a confirmação do Windows.
     public static void AskPairingAgain()
