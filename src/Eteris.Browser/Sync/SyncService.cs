@@ -408,7 +408,9 @@ internal static class SyncService
     {
         if (status is null) return "Sincronização desligada";
         if (status.Deleting) return status.DeleteError is null ? "A apagar os dados do Drive…" : "Por apagar do Drive: veja Definições › Sincronização";
-        if (status.Requests.Count > 0) return $"Pedido de «{status.Requests[0].Name}» · código {status.Requests[0].Code}";
+        // Um pedido pronto: responde-se na barra da janela, escrevendo o código que o computador novo mostra (este
+        // computador nunca o mostra).
+        if (status.Requests.Count > 0) return "Um computador novo pede para entrar";
         if (status.NeedsSignIn) return "Sincronização em pausa: entre outra vez";
         if (status.WaitingRequests > 0 && status.Phase == SyncPhase.On) return "Um computador novo pede para entrar";
         return status.Phase switch
@@ -439,7 +441,8 @@ internal static class SyncService
             notice = status.Notice,
             code = status.RecoveryCode,
             pairing = status.Pairing is { } p ? new { code = p.Code, confirmed = p.Confirmed, error = p.Error } : null,
-            requests = status.Requests.Select(r => new { id = r.Session, name = r.Name, code = r.Code }),
+            // Sem o código de verificação: a página não o mostra (a aprovação é na barra da janela, escrevendo-o).
+            requests = status.Requests.Select(r => new { id = r.Session, name = r.Name }),
             devices = status.Devices.Select(d => new
             {
                 id = d.Id, name = d.Name, me = d.IsThis,
@@ -449,7 +452,7 @@ internal static class SyncService
             deleting = status.Deleting,
             deleteError = status.DeleteError,
             summary = Summary(status, nowMs),
-            // Aprovar um aparelho novo entrega-lhe também segredos (o pedido diz isso e o «Aprovar» pede o Windows Hello).
+            // Há segredos em jogo (aprovar um aparelho novo também lhos entrega e pede o Windows Hello, na barra).
             secrets = Agent()?.HasSecrets == true,
             // O nome em vigor deste computador (para as Definições; só vem do agente local, nunca de outro aparelho).
             deviceName = Agent()?.DeviceName,

@@ -238,19 +238,22 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Contains("id=\"exportSecrets\"", html);
         Assert.Contains("Incluir palavras-passe, pagamentos e documentos", html);
         Assert.Contains("Com este código abre-se também o cofre de palavras-passe", html);
-        Assert.Contains("aprovar pede o Windows Hello", html);
+        // Aprovar um computador novo faz-se na barra da janela, escrevendo o código (0.2.15, T8): as Definições só
+        // dizem onde responder e já não têm caminho para aprovar.
+        Assert.Contains("Responda na barra que aparece no cimo da janela do Éteris", html);
+        Assert.DoesNotContain("sync-approve", html);
         // A caixa vem desmarcada.
         Assert.DoesNotContain("id=\"exportSecrets\" checked", html);
 
         // As rotas passam pelas decisões testadas aqui (e a confirmação vem do Windows, com a janela da aba).
         var routes = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
         Assert.Contains("SyncChoices.ChooseAsync(agent, group, on, purpose => ConfirmWithWindows(browserId, purpose))", routes);
-        Assert.Contains("SyncChoices.MayApproveAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))", routes);
+        // A rota que aprovava sem código saiu (D11): aprovar faz-se só na barra da janela, escrevendo o código.
+        Assert.DoesNotContain("\"/sync-approve\"", routes);
         // Revisão: um código novo e remover um aparelho (que mostra um código novo) também pedem o Windows com segredos.
         Assert.Equal(2, routes.Split("SyncChoices.MayRenewKeyAsync(agent, purpose => ConfirmWithWindows(browserId, purpose))").Length - 1);
         Assert.DoesNotContain("case \"/sync-new-code\":\n                Sync.SyncService.Act", routes.Replace("\r\n", "\n"));
         Assert.StartsWith("Esse computador vai receber", SyncChoices.ApproveWarning);
         Assert.Contains("SyncChoices.SecretsForExportAsync(true, purpose => ConfirmWithWindows(browserId, purpose)", routes);
-        Assert.DoesNotContain("case \"/sync-approve\" when InternalPages.Query(uri, \"id\") is { Length: > 0 } id:\n                Sync.SyncService.Act", routes);
     }
 }

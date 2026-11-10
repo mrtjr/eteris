@@ -334,7 +334,7 @@ public sealed class SyncAgentTests : IDisposable
     // ---- emparelhamento pedido pelo aparelho novo -------------------------------------------------------------------
 
     [Fact]
-    public async Task NewDevice_AsksForApproval_BothShowTheSameCode_AndJoinsAfterBothConfirm()
+    public async Task NewDevice_AsksForApproval_TheOldOneTypesTheCode_AndJoinsAfterBothConfirm()
     {
         var google = new FakeGoogle();
         var (casa, _) = (NewDevice("Casa", DriveFor(google)), 0);
@@ -355,15 +355,16 @@ public sealed class SyncAgentTests : IDisposable
         await Until(() => casa.Agent.Status.Requests.Count == 1 && portatil.Agent.Status.Pairing?.Code is not null, "o código nos dois");
         var request = casa.Agent.Status.Requests[0];
         Assert.Equal("Portátil", request.Name);
-        Assert.Equal(portatil.Agent.Status.Pairing!.Code, request.Code);
-        Assert.Matches(@"^\d{3} \d{3}$", request.Code);
+        // O computador antigo não mostra o código: pede-o (0.2.15, T8). Só o novo o mostra.
+        Assert.Matches(@"^\d{3} \d{3}$", portatil.Agent.Status.Pairing!.Code!);
 
         // Nenhum nome nem segredo em claro nos ficheiros do pedido.
         foreach (var (name, data) in google.Files.Where(f => f.Name.Contains("/pair/", StringComparison.Ordinal)))
             Assert.DoesNotContain("Portátil", System.Text.Encoding.UTF8.GetString(data), StringComparison.Ordinal);
 
         portatil.Agent.ConfirmPairing();
-        await casa.Agent.ApproveAsync(request.Session);
+        Assert.Equal(Eteris.Sync.Pairing.PairingAnswer.Approved,
+            await casa.Agent.ApproveWithCodeAsync(request.Session, portatil.Agent.Status.Pairing!.Code!));
         await Until(() => portatil.Agent.Status is { Phase: SyncPhase.On, Running: false }, "o portátil ligado");
         Assert.Contains("Casa", portatil.Agent.Status.Notice);
         Assert.Null(portatil.Agent.Status.RecoveryCode); // o código só aparece no aparelho que cria a conta

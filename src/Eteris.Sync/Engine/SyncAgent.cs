@@ -62,8 +62,9 @@ public enum SyncPhase
     Stopped,   // parou: a conta foi apagada ou este aparelho foi removido (diz porquê)
 }
 
-// Um pedido de um aparelho novo, já com o código de verificação, à espera de «Aprovar» neste.
-public sealed record HostRequest(string Session, string Name, string Code, long SeenMs);
+// Um pedido de um aparelho novo, pronto para a pessoa escrever aqui o código que ele mostra. O código de verificação
+// nunca sai do agente (este computador pede-o, não o mostra). «SeenMs»: a hora DESTE computador em que respondeu.
+public sealed record HostRequest(string Session, string Name, int AttemptsLeft, long SeenMs);
 
 // Este aparelho a entrar por aprovação noutro: o código a mostrar (quando há), e o resultado.
 public sealed record GuestPairing(string? Code, bool Confirmed, string? Error);
@@ -89,6 +90,10 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
 
     // Parada por a sessão ser de outra conta Google (a fase sozinha não o diz: Stopped tem outras causas).
     public bool OtherAccount { get; init; }
+
+    // Este computador respondeu a um pedido e espera pelo computador novo (ainda sem código): a hora da resposta mais
+    // recente dentro do prazo; 0 se não há nenhum.
+    public long AnsweringSinceMs { get; init; }
 }
 
 // O aparelho na conta de sincronização: decide se cria a conta, entra (código ou aprovação), sincroniza, emparelha,
@@ -275,8 +280,12 @@ public sealed class SyncAgent
                     using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
                     code = account.ToCode();
                 }
-                var requests = _hosts.Values.Where(h => h.Code is not null && _now() - h.Created < (long)PairingProtocol.Lifetime.TotalMilliseconds)
-                    .Select(h => new HostRequest(h.Session, DeviceNameText.Shown(h.Name), h.Code!, h.Created)).ToList();
+                var now = _now();
+                var live = _hosts.Values.Where(h => now - h.Created < (long)PairingProtocol.Lifetime.TotalMilliseconds).ToList();
+                // O mais antigo primeiro (e, com a mesma hora, pela sessão): a barra mostra um de cada vez, sempre o mesmo.
+                var requests = live.Where(h => h.Code is not null).OrderBy(h => h.Created).ThenBy(h => h.Session, StringComparer.Ordinal)
+                    .Select(h => new HostRequest(h.Session, DeviceNameText.Shown(h.Name), PairingCode.MaxWrong - h.Wrong, h.Created)).ToList();
+                var answering = live.Where(h => h.Code is null).Select(h => h.Created).DefaultIfEmpty(0).Max();
                 var pairing = _guest is null ? null : new GuestPairing(_guest.Code, _guest.Confirm.Task.IsCompleted, _guest.Error);
                 return new SyncStatus(_phase, _running, _saved?.LastSuccessMs ?? 0, _error, _notice, code, pairing, requests, _devices, _needsUpdate, _pendingDevices)
                 {
@@ -285,6 +294,7 @@ public sealed class SyncAgent
                     Deleting = _saved?.DeletePending == true,
                     DeleteError = _saved?.DeletePending == true ? _deleteError : null,
                     OtherAccount = _phase == SyncPhase.Stopped && _notice == OtherAccountText,
+                    AnsweringSinceMs = answering,
                 };
             }
         }
@@ -914,8 +924,9 @@ public sealed class SyncAgent
 
     // ---- aprovar um aparelho novo -----------------------------------------------------------------------------------
 
-    // Pedidos de aparelhos novos, por ação do utilizador (abriu o menu ou a secção Sincronização): responde a cada um e,
-    // quando o aparelho novo revela o código de verificação, o pedido aparece em Status.Requests. Responder a um pedido
+    // Pedidos de aparelhos novos, por ação do utilizador (abriu o menu ou a secção Sincronização, carregou em «Ver» na
+    // barra, ou voltou à janela): responde a cada um e, quando o aparelho novo revela o código de verificação, o pedido
+    // aparece em Status.Requests, à espera de que a pessoa escreva aqui esse código. Responder a um pedido
     // é acompanhá-lo (lê o Drive de 2 em 2 s até o aparelho novo responder, no máximo 10 minutos).
     public async Task CheckRequestsAsync(CancellationToken cancellationToken = default)
     {
@@ -974,20 +985,75 @@ public sealed class SyncAgent
         }
     }
 
-    // O utilizador confirmou NESTE aparelho que o aparelho novo mostra o mesmo código: entrega-lhe a conta, cifrada.
-    public async Task ApproveAsync(string session, CancellationToken cancellationToken = default)
+    // A pessoa escreveu NESTE aparelho o código que o aparelho novo mostra («number matching»): este aparelho nunca o
+    // mostra, compara-o em memória com o que calculou. Certo → a porta do Windows (gate, quando a conta sincroniza
+    // segredos; o anfitrião passa-a sempre) e só depois a entrega da conta, cifrada só para o aparelho novo. Três
+    // códigos errados recusam o pedido. «gate» é opcional só para os testes do agente.
+    public async Task<PairingAnswer> ApproveWithCodeAsync(string session, string typedCode, Func<Task<bool>>? gate = null,
+        CancellationToken cancellationToken = default)
     {
         HostFlow? flow;
-        string? secret;
+        string secret;
+        bool right, refuse = false;
         lock (_gate)
         {
             _hosts.TryGetValue(session, out flow);
-            secret = _saved?.Secret;
-            // Um 2.º clique enquanto o 1.º ainda está na rede não volta a entregar a conta.
-            if (flow is { Approving: true }) return;
-            if (flow is { Code: not null } && secret is not null) flow.Approving = true;
+            if (flow?.Code is not { } expected || _saved?.Secret is not { } saved
+                || _now() - flow.Created >= (long)PairingProtocol.Lifetime.TotalMilliseconds)
+                return PairingAnswer.Gone;
+            // Um 2.º Enter enquanto o 1.º ainda está na porta do Windows ou na rede não volta a entregar a conta.
+            if (flow.Approving) return PairingAnswer.Busy;
+            if (PairingCode.Normalize(typedCode) is null) return PairingAnswer.Incomplete;
+            secret = saved;
+            right = PairingCode.Matches(expected, typedCode);
+            if (right) flow.Approving = true;
+            else if (++flow.Wrong >= PairingCode.MaxWrong)
+            {
+                _hosts.Remove(session);
+                refuse = true;
+            }
         }
-        if (flow?.Code is null || secret is null) throw new SyncUserException("Este pedido já não está à espera. Peça outra vez no outro computador.");
+        if (!right && !refuse)
+        {
+            Notify();
+            return PairingAnswer.WrongCode;
+        }
+        if (refuse)
+        {
+            // Como «Não fui eu»: o outro lado fica a saber (x-host) e o pedido não volta a ser listado.
+            flow.Cancel.Cancel();
+            try { await flow.Host.RefuseAsync(cancellationToken).ConfigureAwait(false); }
+            catch (Exception e) when (IsTransient(e)) { }
+            flow.Host.Dispose();
+            Notify();
+            return PairingAnswer.Refused;
+        }
+        bool passed;
+        try { passed = gate is null || await gate().ConfigureAwait(false); }
+        catch
+        {
+            lock (_gate) flow.Approving = false;
+            throw;
+        }
+        lock (_gate)
+        {
+            if (!passed)
+            {
+                flow.Approving = false;
+                return PairingAnswer.NotConfirmed;
+            }
+            // Enquanto a porta do Windows esperava, o pedido pode ter saído («Sair», apagar, expirou): nada se entrega.
+            if (!_hosts.TryGetValue(session, out var still) || !ReferenceEquals(still, flow) || flow.Cancel.IsCancellationRequested)
+                return PairingAnswer.Gone;
+        }
+        await ApproveAsync(flow, secret, cancellationToken).ConfigureAwait(false);
+        return PairingAnswer.Approved;
+    }
+
+    // A entrega (passo 5). Privada: nenhuma rota nem interface entrega a conta sem o código escrito.
+    private async Task ApproveAsync(HostFlow flow, string secret, CancellationToken cancellationToken)
+    {
+        var session = flow.Session;
         using var account = AccountSecret.FromBytes(Kdf.FromBase64Url(secret));
         try { await flow.Host.ApproveAsync(account, DeviceName, cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (e is PairingException || IsTransient(e))
@@ -1459,8 +1525,11 @@ public sealed class SyncAgent
         public long Created { get; } = created;
         public CancellationTokenSource Cancel { get; } = new();
         public string? Name { get; set; }
+        // O código de verificação calculado aqui: só para comparar com o escrito, nunca para mostrar.
         public string? Code { get; set; }
         public bool Approving { get; set; }
+        // Códigos errados escritos neste pedido. Só memória: o Éteris reabriu, a sessão morreu (não há tentativas novas).
+        public int Wrong { get; set; }
     }
 }
 

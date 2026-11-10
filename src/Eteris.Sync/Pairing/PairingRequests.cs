@@ -4,17 +4,20 @@ using Eteris.Sync.Transport;
 namespace Eteris.Sync.Pairing;
 
 // Emparelhamento pedido pelo aparelho NOVO, como no Chrome, no Firefox e no Brave: o computador que entra mostra um
-// código e o pedido aparece no que já está ligado (no menu da conta e nas Definições), onde o utilizador confirma.
+// código e o pedido aparece numa barra da janela do que já está ligado, onde a pessoa ESCREVE esse código («number
+// matching», 0.2.15): o aparelho ligado nunca mostra o código, pede-o.
 //
 //   0 convidado → transporte  pedido: só a hora (nada do utilizador, nem o nome do aparelho)
 //   um aparelho ligado vê o pedido e responde como anfitrião na mesma sessão (PairingHost.AnswerAsync): passo 1
 //   1–5 o protocolo de sempre (Pairing.cs): compromisso, nonces, o nome do convidado cifrado, o código de verificação
-//       nos dois ecrãs, confirmação no anfitrião E no convidado, e só então o segredo, cifrado para o convidado
+//       calculado nos dois lados (mostrado só no convidado e escrito no anfitrião), confirmação no anfitrião E no
+//       convidado, e só então o segredo, cifrado para o convidado
 //
 // A sessão é do convidado (80 bits do gerador do sistema). Quem garante as chaves é o código de verificação, como com o
-// código curto. Um pedido que ninguém fez (escrito por quem controla o transporte) aparece no aparelho ligado, mas sem
-// um ecrã com o mesmo código ao lado o utilizador não o aprova — por isso o texto do pedido diz «só aprove se estiver
-// a ligar um computador agora e ele mostrar este código». Expira em 10 minutos; os ficheiros saem no fim.
+// código curto. Um pedido que ninguém fez (escrito por quem controla o transporte) aparece no aparelho ligado sem nada
+// para copiar: o código só existe no ecrã do convidado, e três códigos errados recusam o pedido. A hora do pedido só
+// se aceita até PairingProtocol.ClockSkew à frente do relógio de quem responde. Expira em 10 minutos; os ficheiros
+// saem no fim.
 public static class PairingRequests
 {
     // Aparelho novo: abre o pedido e devolve a sessão.
@@ -39,6 +42,7 @@ public static class PairingRequests
         }
         var pending = new List<string>();
         var lifetime = (long)PairingProtocol.Lifetime.TotalMilliseconds;
+        var skew = (long)PairingProtocol.ClockSkew.TotalMilliseconds;
         foreach (var (session, set) in steps)
         {
             if (!set.Contains(PairingProtocol.Request)) continue;
@@ -57,7 +61,8 @@ public static class PairingRequests
                 await CleanUpAsync(transport, session, cancellationToken).ConfigureAwait(false);
                 continue;
             }
-            if (age > lifetime || age < -lifetime) continue;
+            // Do futuro só até ClockSkew: quem escreve o pedido escolhe a hora.
+            if (age > lifetime || age < -skew) continue;
             if (set.Contains(PairingProtocol.HostKey) || set.Contains(PairingProtocol.Refused)) continue;
             pending.Add(session);
         }

@@ -314,18 +314,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                 Sync.SyncService.Act("device-name", agent => agent.RenameDeviceAsync(name));
                 break;
             }
-            case "/sync-approve" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
-                // Com segredos em jogo, o aparelho novo recebe-os: o Windows confirma primeiro (sempre).
-                return new VaultResourceHandler(async () =>
-                {
-                    if (Sync.SyncService.Agent() is { } agent)
-                    {
-                        if (await Sync.SyncChoices.MayApproveAsync(agent, purpose => ConfirmWithWindows(browserId, purpose)).ConfigureAwait(false))
-                            Sync.SyncService.Act("approve", a => a.ApproveAsync(id));
-                        else Sync.SyncService.Say("approve", Sync.SyncChoices.NotConfirmed("o pedido continua à espera"));
-                    }
-                    return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
-                });
+            // Aprovar um computador novo não tem rota: faz-se só na barra da janela, escrevendo o código que ele mostra
+            // (0.2.15, «number matching»). Recusar é sempre seguro e fica aqui.
             case "/sync-refuse" when InternalPages.Query(uri, "id") is { Length: > 0 } id:
                 Sync.SyncService.Act("approve", agent => agent.RefuseAsync(id));
                 break;

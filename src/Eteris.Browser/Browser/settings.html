@@ -902,9 +902,18 @@
     };
     const show = (id, on) => { $(id).hidden = !on; };
     // Pedidos e aparelhos: só se reconstroem quando a lista muda (as sondagens de 1,5 s não tiram o foco do teclado, não
-    // desarmam um «Remover» à espera da confirmação nem voltam a ativar um «Aprovar» já carregado).
+    // desarmam um «Remover» à espera da confirmação).
     let requestsKey = null, devicesKey = null;
-    const approving = new Set();            // pedidos com «Aprovar» ou «Recusar» já carregado
+    // Há pedidos de aparelhos novos prontos: diz onde responder (na barra da janela; aqui não se aprova).
+    const requestsNotice = () => {
+      const item = document.createElement('div'); item.className = 'item syncalert';
+      const label = document.createElement('div'); label.className = 'label';
+      const title = document.createElement('b'); title.textContent = 'Um computador novo quer entrar na sua conta.';
+      const text = document.createElement('span'); text.textContent = 'Responda na barra que aparece no cimo da janela do Éteris.';
+      label.append(title, text);
+      item.append(label);
+      return item;
+    };
     const armed = new Map();                // aparelho → hora em que «Remover» ficou à espera da confirmação
     const keyOfFocus = box => box.contains(document.activeElement) ? document.activeElement.dataset.key : null;
     const refocus = (box, key) => { if (key) box.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus(); };
@@ -976,43 +985,18 @@
         $('syncPairCode').textContent = code || '';
         $('syncPairConfirm').hidden = !code || !!p.confirmed;
       }
-      // Pedidos de aparelhos novos (este computador aprova).
+      // Pedidos de aparelhos novos: este computador nunca mostra o código; aprova-se na barra da janela, escrevendo o
+      // código que o computador novo mostra. Aqui só se diz onde responder.
       const box = $('syncRequests');
       const requests = d.enabled ? s.requests || [] : [];
-      for (const id of [...approving]) if (!requests.some(r => r.id === id)) approving.delete(id);
-      const rKey = JSON.stringify([s.secrets, requests.map(r => [r.id, r.name, r.code])]);
+      const rKey = JSON.stringify(requests.map(r => r.id));
       if (rKey !== requestsKey) {
         requestsKey = rKey;
         const focused = keyOfFocus(box);
-        box.replaceChildren(...requests.map(r => {
-          const item = document.createElement('div');
-          item.className = 'item syncalert';
-          const label = document.createElement('div'); label.className = 'label';
-          const title = document.createElement('b'); title.textContent = `«${r.name}» quer juntar-se à sincronização`;
-          const text = document.createElement('span');
-          text.textContent = 'Só aprove se estiver a ligar esse computador agora e ele mostrar este mesmo código. Aprovado, recebe a chave da conta (cifrada só para ele).'
-            + (s.secrets ? ' Esse computador vai receber também as suas palavras-passe, informações de contacto e viagens (e os pagamentos e documentos, se estiverem ligados): aprovar pede o Windows Hello.' : '');
-          const code = document.createElement('div'); code.className = 'code big'; code.textContent = r.code;
-          label.append(title, text, code);
-          const buttons = document.createElement('div'); buttons.className = 'stack';
-          const yes = document.createElement('button'); yes.className = 'action'; yes.textContent = 'Aprovar'; yes.dataset.key = r.id + ':yes';
-          yes.setAttribute('aria-label', `Aprovar «${r.name}», código ${r.code}`);
-          const no = document.createElement('button'); no.className = 'action'; no.textContent = 'Recusar'; no.dataset.key = r.id + ':no';
-          no.setAttribute('aria-label', `Recusar «${r.name}»`);
-          yes.disabled = no.disabled = approving.has(r.id);
-          const act = path => { if (approving.has(r.id)) return; approving.add(r.id); yes.disabled = no.disabled = true; askGoogle(path, `&id=${encodeURIComponent(r.id)}`); };
-          yes.addEventListener('click', () => act('sync-approve'));
-          no.addEventListener('click', () => act('sync-refuse'));
-          buttons.append(yes, no);
-          item.append(label, buttons);
-          return item;
-        }));
+        box.replaceChildren(...(requests.length ? [requestsNotice()] : []));
         refocus(box, focused);
       }
-      if (msg && msg.area === 'approve') {
-        note($('syncNotice'), msg.text, true);
-        approving.clear(); requestsKey = null; // a aprovação falhou: os botões voltam
-      }
+      if (msg && msg.area === 'approve') note($('syncNotice'), msg.text, true);
       // Aparelhos.
       const list = $('syncDevices');
       const devices = s.devices || [];

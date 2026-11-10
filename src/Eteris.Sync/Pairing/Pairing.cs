@@ -16,15 +16,16 @@ namespace Eteris.Sync.Pairing;
 //   2 convidado → transporte : chave pública do convidado + compromisso H(pkC ‖ pkA ‖ nC)
 //   3 anfitrião → transporte : nonce nA (só depois de ver o compromisso)
 //   4 convidado → transporte : nonce nC (abre o compromisso) + o nome do convidado CIFRADO com a chave da sessão
-//   ambos mostram o código de verificação SAS = 6 algarismos de H(sessão ‖ pkA ‖ pkC ‖ nA ‖ nC)
-//   o utilizador confirma NO ANFITRIÃO que os dois ecrãs mostram o mesmo código
+//   os dois calculam o código de verificação SAS = 6 algarismos de H(sessão ‖ pkA ‖ pkC ‖ nA ‖ nC); o código nunca
+//   viaja. Nos pedidos dos aparelhos novos (PairingRequests, 0.2.15) só o CONVIDADO o mostra: a pessoa escreve-o no
+//   anfitrião, que o compara com o seu sem o mostrar (SyncAgent.ApproveWithCodeAsync; 3 erros recusam o pedido)
 //   5 anfitrião → transporte : segredo de conta cifrado com ECDH(pkA, pkC) → HKDF → AES-256-GCM (transcrito como AAD)
 //   o utilizador confirma TAMBÉM NO CONVIDADO (ConfirmCode) antes de o segredo ser aberto e usado
 //
 // Porque é seguro (comparação numérica, como no Bluetooth): o QR só tem dados públicos — fotografá-lo não dá nada.
 // Quem também controlar o transporte e se meter no meio tem de escolher a sua chave e o seu nonce ANTES de ver o nonce
-// do anfitrião (o compromisso), por isso acerta no código de 6 algarismos com probabilidade 1 em 1 000 000, e o
-// utilizador vê códigos diferentes e recusa. Sem a confirmação no anfitrião, o passo 5 nunca é escrito.
+// do anfitrião (o compromisso), por isso acerta no código de 6 algarismos com probabilidade 1 em 1 000 000, e o código
+// que a pessoa escreve no anfitrião não bate. Sem o código certo no anfitrião, o passo 5 nunca é escrito.
 // A confirmação no CONVIDADO é obrigatória também: com o código curto (sem QR), a chave do anfitrião vem do transporte,
 // e quem o controla pode fazer de anfitrião só para o convidado (escrever logo o seu passo 5, com a SUA conta). O
 // convidado só abre o segredo depois de o utilizador dizer que o código no ecrã dele é igual ao do anfitrião verdadeiro.
@@ -35,6 +36,11 @@ public static class PairingProtocol
     public const int Version = 1;
     public const string QrPrefix = "eteris-par:";
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
+
+    // Quanto à frente do relógio de quem responde pode estar a hora de um pedido (0-request). A hora é escolhida por
+    // quem escreve o ficheiro: um pedido «do futuro» ficaria à espera mais do que os 10 minutos. O prazo de um pedido
+    // conta-se sempre pelo relógio de quem responde, desde que respondeu.
+    public static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(2);
 
     internal const string Request = "0-request";
     internal const string HostKey = "1-host";
@@ -220,8 +226,9 @@ public abstract class PairingSide : IDisposable
     public void Dispose() => Key.Dispose();
 }
 
-// Aparelho já ligado: mostra o QR, espera pelo convidado, mostra o código e só entrega o segredo depois de o
-// utilizador confirmar que os códigos são iguais.
+// Aparelho já ligado: responde ao pedido (ou mostra o QR), espera pelo convidado, calcula o código e só entrega o
+// segredo depois de o utilizador o confirmar (nos pedidos dos aparelhos novos: escrevendo aqui o código que o
+// convidado mostra).
 public sealed class PairingHost : PairingSide
 {
     private readonly long _deadline;
@@ -259,7 +266,7 @@ public sealed class PairingHost : PairingSide
         return host;
     }
 
-    // Espera pelo convidado e devolve o código de verificação para mostrar.
+    // Espera pelo convidado e devolve o código de verificação (para comparar com o que a pessoa escrever).
     public async Task<string> WaitForGuestAsync(CancellationToken cancellationToken = default)
     {
         var offer = await WaitAsync(PairingProtocol.GuestKey, _deadline, cancellationToken).ConfigureAwait(false);
@@ -298,7 +305,8 @@ public sealed class PairingHost : PairingSide
         return PairingProtocol.Sas(_transcript);
     }
 
-    // O utilizador confirmou que o código é igual nos dois ecrãs: entrega o segredo, cifrado só para o convidado.
+    // O utilizador confirmou o código (escreveu aqui o que o convidado mostra, e bateu): entrega o segredo, cifrado só
+    // para o convidado.
     public async Task ApproveAsync(AccountSecret secret, string hostName, CancellationToken cancellationToken = default)
     {
         if (_guestKey is null || _transcript is null) throw new InvalidOperationException("Ainda não há código de verificação.");
@@ -321,8 +329,8 @@ public sealed class PairingHost : PairingSide
     }
 }
 
-// Aparelho novo: lê o QR (ou o código curto), mostra o mesmo código de verificação e, DEPOIS de o utilizador confirmar
-// também aqui que é igual ao do anfitrião (ConfirmCode), recebe o segredo.
+// Aparelho novo: lê o QR (ou o código curto, ou segue o seu pedido), mostra o código de verificação (que a pessoa
+// escreve no anfitrião) e, DEPOIS de o utilizador confirmar também aqui (ConfirmCode), recebe o segredo.
 public sealed class PairingGuest : PairingSide
 {
     private readonly byte[] _guestNonce = RandomNumberGenerator.GetBytes(32);
