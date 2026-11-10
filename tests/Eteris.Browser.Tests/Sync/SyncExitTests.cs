@@ -760,7 +760,9 @@ public sealed class SyncExitTests : IDisposable
         Assert.True(body > 0);
         var help = page.IndexOf("id=\"syncOutHelp\"", StringComparison.Ordinal);
         var exitNote = page.IndexOf("id=\"syncExitNote\"", StringComparison.Ordinal);
-        Assert.InRange(help, 0, body);
+        // T14 (R10): os textos de «Sair» vivem com o botão «Sair deste computador», dentro de «Mais opções».
+        var more = page.IndexOf("<details class=\"syncmore\" id=\"syncMore\"", StringComparison.Ordinal);
+        Assert.InRange(help, more, page.IndexOf("</details>", more, StringComparison.Ordinal));
         Assert.InRange(exitNote, 0, body);
         Assert.Contains("id=\"googleButton\" aria-describedby=\"googleNote\"", page);
         var settingsPage = GoogleSyncTests.Src("Eteris.Browser", "Browser", "SettingsPage.cs");

@@ -505,8 +505,8 @@ public class GoogleAccountTests
         Assert.Contains("form.target = sinkFor(importReply).name;", page, StringComparison.Ordinal);
         Assert.Contains("if (seq < googlePainted) return;", page, StringComparison.Ordinal);
         Assert.Contains("if (!isSignOut(e)) { askAccount(); askLook(); }", page, StringComparison.Ordinal);
-        Assert.Contains("googleTitle.textContent = g.state === 'signedIn' ? (g.folder ? 'Pasta de teste' : 'Conta Google') : g.folder ? 'Pasta de teste' : 'Entrar com o Google';", page, StringComparison.Ordinal);
-        Assert.Contains("googleButton.setAttribute('aria-label', g.folder ? 'Desligar da pasta de teste' : 'Sair da conta Google');", page, StringComparison.Ordinal);
+        Assert.Contains("googleTitle.textContent = g.state === 'signedIn' ? (g.folder ? 'Pasta de teste' : 'Conta Google') : g.folder ? 'Pasta de teste' : '';", page, StringComparison.Ordinal);
+        Assert.Contains("syncSignOut.setAttribute('aria-label', g.folder ? 'Desligar da pasta de teste' : 'Sair da conta Google');", page, StringComparison.Ordinal);
         Assert.Contains("id=\"googleButton\" aria-describedby=\"googleNote\"", page, StringComparison.Ordinal);
     }
 

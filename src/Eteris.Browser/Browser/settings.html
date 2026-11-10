@@ -44,7 +44,7 @@
   }
   .find input::placeholder { color: var(--faint); }
   .find input:focus { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-  section.filtered-out, .item.filtered-out, .about.filtered-out { display: none !important; }
+  section.filtered-out, .item.filtered-out, .about.filtered-out, details.filtered-out { display: none !important; }
   .item.filtered-out + .item { border-top: 0; }
   nav a.dim { opacity: .35; }
   .item.hit .label b { text-decoration: underline; text-decoration-color: rgba(34, 211, 238, .55); text-decoration-thickness: 2px; text-underline-offset: 4px; }
@@ -125,7 +125,8 @@
   .syncnote { color: var(--muted); font-size: 12.8px; line-height: 1.45; margin-top: 6px; display: block; }
   .syncnote.bad { color: #ffb3c1; }
   .syncheld { margin: 6px 0 0; padding-left: 18px; color: #ffd8a8; font-size: 12.8px; line-height: 1.45; }
-  .syncheld[hidden], #importWeaker[hidden], #syncDeleteCancel[hidden], #syncDeleteRetry[hidden], #syncReauth[hidden] { display: none; }
+  .syncheld[hidden], #importWeaker[hidden], #syncDeleteCancel[hidden], #syncDeleteRetry[hidden], #syncReauth[hidden],
+  #googleButton[hidden], #syncSignOut[hidden], #googleTitle[hidden] { display: none; }
   #importWeaker { margin-top: 8px; }
   /* «O que passa entre PCs»: uma linha por grupo, com o interruptor deste computador (o checkbox continua focável). */
   .topic { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
@@ -160,6 +161,16 @@
   .lostwhich { font: inherit; font-size: 13px; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
   .label strong { color: var(--text); }
   #syncWhat, #syncStays, #syncWhen { display: block; margin-top: 4px; }
+  /* Sincronização: a linha de estado à frente (com sessão), a ligação para a página de privacidade e «Mais opções». */
+  .synchead { margin: -4px 0 12px 4px; font-size: 13.5px; color: var(--text); }
+  .synchead::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399; margin-right: 9px; vertical-align: 1px; }
+  a.synchow { display: block; width: fit-content; margin-top: 6px; white-space: normal; }
+  .syncmore { border-top: 1px solid var(--line); }
+  .syncmore > summary { cursor: pointer; padding: 14px 22px; font-size: 13.5px; color: var(--muted); list-style-position: inside; border-radius: 0 0 20px 20px; }
+  .syncmore > summary:hover { color: var(--text); background: rgba(255, 255, 255, .03); }
+  .syncmore > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .syncmore[open] > summary { color: var(--text); border-radius: 0; }
+  .syncmore > summary + .item { border-top: 1px solid var(--line); }
   iframe { display: none; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; } }
 
@@ -186,6 +197,8 @@
   html.light .saved { background: #fff; box-shadow: 0 12px 40px rgba(20, 24, 40, .18); }
   html.light .logo::after { background: #f3f4f9; box-shadow: inset 0 0 0 5px #1b1f2a; }
   html.light a.link { color: #0e7490; }
+  html.light .synchead::before { background: #059669; }
+  html.light .syncmore > summary:hover { background: rgba(20, 24, 40, .04); }
 </style>
 </head>
 <body>
@@ -461,17 +474,18 @@
 
     <section id="sincronizacao">
       <h2>Sincronização</h2>
+      <!-- Com sessão e a sincronização ligada, o estado numa linha, à frente (SyncService.Headline). -->
+      <p class="synchead" id="syncHeadline" role="status" hidden></p>
       <div class="card">
-        <div class="item">
-          <div class="label"><b id="googleTitle">Entrar com o Google</b><span>Os favoritos, os Espaços, as definições, as decisões do Escudo, as notas e — com uma segunda cifra própria — as palavras-passe e o preenchimento automático que escolher em «O que passa entre PCs» passam de um computador para o outro, sempre cifrados neste computador: a chave nunca sai dos seus aparelhos e a Google só vê ficheiros cifrados, os tamanhos e as horas (na pasta oculta da aplicação no seu Google Drive). O início de sessão abre no navegador do sistema; depois, o Éteris pede à Google só o nome e o e-mail da conta, para os mostrar aqui e no menu.</span>
+        <!-- O item da conta nunca se esconde: é nele que a página mede «a secção está à vista» (IntersectionObserver). -->
+        <div class="item" id="syncAccountItem">
+          <div class="label"><b id="googleTitle" hidden></b><span id="syncLead">Os seus favoritos, palavras-passe e definições em todos os seus computadores, cifrados ponta a ponta.</span>
+            <a class="link synchow" id="syncHow" href="eteris://privacy/#sincronizacao">Como protegemos os seus dados</a>
             <span class="syncnote" id="syncPrivateNote" hidden>Numa janela privada a sincronização não está disponível e a conta não aparece: abra as Definições numa janela normal.</span>
             <span class="syncnote" id="googleNote"></span>
             <div class="code" id="googleUrl" hidden></div>
-            <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o kit de recuperação ou outro computador)</small></label>
-            <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span>
-            <!-- «Sair» é só deste computador (nada é revogado na Google); as mensagens das saídas ficam fora de syncBody
-                 (escondido sem sessão) e de qualquer <details>: depois de retirar o acesso, a mensagem vê-se. -->
-            <small class="syncnote" id="syncOutHelp" hidden>Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar «Retirar o acesso». A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a chave».</small>
+            <!-- As mensagens das saídas ficam fora de syncBody (escondido sem sessão) e de «Mais opções»: depois de retirar
+                 o acesso, a mensagem vê-se. -->
             <p class="syncnote" id="syncExitNote" role="status" style="white-space:pre-line" hidden></p></div>
           <button class="action" id="googleButton" aria-describedby="googleNote">Entrar com o Google</button>
         </div>
@@ -479,7 +493,7 @@
           <div class="item" id="syncStateItem" hidden>
             <div class="label"><b>Estado</b><span id="syncState" role="status">—</span>
               <span class="syncnote" id="syncNotice" role="status" hidden></span></div>
-            <div class="stack"><button class="action" id="syncReauth" hidden>Entrar outra vez</button><button class="action" id="syncNow">Sincronizar agora</button></div>
+            <div class="stack"><button class="action" id="syncReauth" hidden>Entrar outra vez</button></div>
           </div>
           <div class="item" id="syncOffItem" hidden>
             <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
@@ -522,32 +536,6 @@
           </div>
           <div id="syncRequests"></div>
           <span class="syncnote" id="syncRequestsNote" role="status" hidden></span>
-          <div class="item" id="syncNameItem" hidden>
-            <div class="label"><b>Nome deste computador</b><span id="syncNameText"></span>
-              <form class="syncform left" id="syncNameForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off" hidden>
-                <input type="text" name="name" id="syncNameInput" maxlength="60" spellcheck="false" aria-label="Nome deste computador">
-                <button class="action" type="submit" id="syncNameSave">Guardar</button>
-                <button class="action" type="button" id="syncNameCancel">Cancelar</button>
-              </form>
-              <span class="syncnote" id="syncNameHint">É o nome que os seus outros computadores veem. Viaja cifrado.</span>
-              <span class="syncnote" id="syncNameNote" role="status" hidden></span></div>
-            <button class="action" id="syncNameChange">Mudar</button>
-          </div>
-          <div class="item" id="syncDevicesItem" hidden>
-            <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e o kit de recuperação passa a ser outro: o antigo deixa de valer.</span>
-              <ul class="devices" id="syncDevices"></ul>
-              <span class="syncnote" id="syncDevicesNote" role="status" hidden></span>
-              <!-- «Perdi um computador / foi roubado»: uma entrada única junto da lista; o painel diz os passos e pede uma
-                   confirmação (e o Windows, sempre). -->
-              <button class="action danger" type="button" id="syncLost" hidden>Perdi um computador / foi roubado</button>
-              <div id="syncLostPanel" hidden>
-                <select class="lostwhich" id="syncLostWhich" aria-label="Perdi um computador / foi roubado"></select>
-                <span class="syncnote" id="syncLostStep1">1. O aparelho sai da conta e a conta muda de chave: daqui em diante, esse computador não recebe nem consegue abrir nada novo. O que ele já tinha continua lá.</span>
-                <span class="syncnote" id="syncLostStep2">2. O acesso do Éteris à conta Google é retirado em todos os seus computadores: sem isto, o computador perdido ainda podia apagar ou estragar os ficheiros no Drive.</span>
-                <span class="syncnote" id="syncLostStep3">3. Depois, entra outra vez neste e nos seus outros computadores e guarda o kit novo: o antigo deixa de valer.</span>
-                <div class="kitactions"><button class="action" type="button" id="syncLostCancel">Cancelar</button><button class="action danger" type="button" id="syncLostConfirm">Confirmar: remover e retirar o acesso</button></div>
-              </div></div>
-          </div>
           <!-- O kit de recuperação: vê-se (com a confirmação do Windows), guarda-se, imprime-se ou copia-se quando se
                quiser. As palavras só existem aqui enquanto estão à vista. -->
           <div class="item" id="syncKitItem" hidden>
@@ -580,26 +568,65 @@
               <span class="syncnote" id="syncOfferNote" role="status" hidden></span></div>
             <div class="stack"><button class="action" id="syncOfferYes">Sim <small>(Windows Hello)</small></button><button class="action" id="syncOfferNo">Não</button></div>
           </div>
-          <div class="item" id="syncTopicItem">
-            <div class="label"><b id="syncTopicTitle">O que passa entre PCs</b><span id="syncTopicIntro"></span>
-              <ul class="topic" id="syncTopic" aria-labelledby="syncTopicTitle"></ul>
-              <span class="syncnote" id="syncTopicNote" role="status" hidden></span></div>
-          </div>
-          <div class="item">
-            <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris (ou 10 s depois de uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora»; com esta secção à vista ou ao abrir o menu (⋯), procura pedidos de outros computadores. Sem rede, volta a tentar sozinho.</span></div>
-          </div>
-          <div class="item" id="syncDeleteItem">
-            <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
-              <span class="syncnote" id="syncDeleteNote" role="status" hidden></span></div>
-            <div class="stack"><button class="action" id="syncDeleteRetry" hidden>Tentar de novo</button><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
-          </div>
-          <!-- «Retirar o acesso do Éteris à conta Google»: revoga na Google (todos os computadores). Destino das barras
-               (SyncService.RevokeAnchor). Não existe na pasta de teste. -->
-          <div class="item" id="syncRevokeItem" hidden>
-            <div class="label"><b>Retirar o acesso do Éteris à conta Google</b><span>Revoga a autorização na Google e desliga todos os seus computadores. Também em myaccount.google.com/permissions.</span>
-              <span class="syncnote" id="syncRevokeQuestion" role="status" hidden>Todos os seus computadores saem da conta e têm de entrar outra vez. Os dados no Drive e a chave deste computador ficam.</span></div>
-            <div class="stack"><button class="action danger" id="syncRevoke">Retirar o acesso…</button><button class="action" id="syncRevokeCancel" hidden>Cancelar</button><button class="action danger" id="syncRevokeConfirm" hidden>Sim, retirar o acesso</button></div>
-          </div>
+          <!-- «Mais opções»: o que não pede atenção, recolhido por omissão. O JS só o abre (openMoreFor), nunca o fecha nem
+               o reconstrói. O que pede uma ação ou avisa de um risco fica acima, à vista. -->
+          <details class="syncmore" id="syncMore">
+            <summary>Mais opções</summary>
+            <div class="item" id="syncNowItem" hidden><button class="action" id="syncNow">Sincronizar agora</button></div>
+            <div class="item" id="syncNameItem" hidden>
+              <div class="label"><b>Nome deste computador</b><span id="syncNameText"></span>
+                <form class="syncform left" id="syncNameForm" method="post" target="syncSink" enctype="application/x-www-form-urlencoded" autocomplete="off" hidden>
+                  <input type="text" name="name" id="syncNameInput" maxlength="60" spellcheck="false" aria-label="Nome deste computador">
+                  <button class="action" type="submit" id="syncNameSave">Guardar</button>
+                  <button class="action" type="button" id="syncNameCancel">Cancelar</button>
+                </form>
+                <span class="syncnote" id="syncNameHint">É o nome que os seus outros computadores veem. Viaja cifrado.</span>
+                <span class="syncnote" id="syncNameNote" role="status" hidden></span></div>
+              <button class="action" id="syncNameChange">Mudar</button>
+            </div>
+            <div class="item" id="syncDevicesItem" hidden>
+              <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir ler e escrever, e o kit de recuperação passa a ser outro: o antigo deixa de valer.</span>
+                <ul class="devices" id="syncDevices"></ul>
+                <span class="syncnote" id="syncDevicesNote" role="status" hidden></span>
+                <!-- «Perdi um computador / foi roubado»: uma entrada única junto da lista; o painel diz os passos e pede uma
+                     confirmação (e o Windows, sempre). -->
+                <button class="action danger" type="button" id="syncLost" hidden>Perdi um computador / foi roubado</button>
+                <div id="syncLostPanel" hidden>
+                  <select class="lostwhich" id="syncLostWhich" aria-label="Perdi um computador / foi roubado"></select>
+                  <span class="syncnote" id="syncLostStep1">1. O aparelho sai da conta e a conta muda de chave: daqui em diante, esse computador não recebe nem consegue abrir nada novo. O que ele já tinha continua lá.</span>
+                  <span class="syncnote" id="syncLostStep2">2. O acesso do Éteris à conta Google é retirado em todos os seus computadores: sem isto, o computador perdido ainda podia apagar ou estragar os ficheiros no Drive.</span>
+                  <span class="syncnote" id="syncLostStep3">3. Depois, entra outra vez neste e nos seus outros computadores e guarda o kit novo: o antigo deixa de valer.</span>
+                  <div class="kitactions"><button class="action" type="button" id="syncLostCancel">Cancelar</button><button class="action danger" type="button" id="syncLostConfirm">Confirmar: remover e retirar o acesso</button></div>
+                </div></div>
+            </div>
+            <div class="item" id="syncTopicItem">
+              <div class="label"><b id="syncTopicTitle">O que passa entre PCs</b><span id="syncTopicIntro"></span>
+                <ul class="topic" id="syncTopic" aria-labelledby="syncTopicTitle"></ul>
+                <span class="syncnote" id="syncTopicNote" role="status" hidden></span></div>
+            </div>
+            <div class="item">
+              <div class="label"><b>O que sincroniza</b><span id="syncWhat"></span><span id="syncStays"></span><span id="syncWhen">Quando: 30 s depois de abrir o Éteris (ou 10 s depois de uma alteração, se for antes), 10 s depois de uma alteração, de 10 em 10 minutos e em «Sincronizar agora»; com esta secção à vista ou ao abrir o menu (⋯), procura pedidos de outros computadores. Sem rede, volta a tentar sozinho.</span></div>
+            </div>
+            <!-- «Sair» é só deste computador (nada é revogado na Google). -->
+            <div class="item" id="syncSignOutItem" hidden>
+              <div class="label"><small class="syncnote" id="syncOutHelp" hidden>Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar «Retirar o acesso». A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a chave».</small>
+                <label class="check" id="syncForgetRow" hidden><input type="checkbox" id="syncForget"> Ao sair, apagar também a chave da sincronização deste computador <small>(para voltar a entrar será preciso o kit de recuperação ou outro computador)</small></label>
+                <span class="syncnote bad" id="syncForgetNote" role="alert" hidden></span></div>
+              <button class="action" id="syncSignOut" aria-describedby="googleNote" hidden>Sair deste computador</button>
+            </div>
+            <!-- «Retirar o acesso do Éteris à conta Google»: revoga na Google (todos os computadores). Destino das barras
+                 (SyncService.RevokeAnchor). Não existe na pasta de teste. -->
+            <div class="item" id="syncRevokeItem" hidden>
+              <div class="label"><b>Retirar o acesso do Éteris à conta Google</b><span>Revoga a autorização na Google e desliga todos os seus computadores. Também em myaccount.google.com/permissions.</span>
+                <span class="syncnote" id="syncRevokeQuestion" role="status" hidden>Todos os seus computadores saem da conta e têm de entrar outra vez. Os dados no Drive e a chave deste computador ficam.</span></div>
+              <div class="stack"><button class="action danger" id="syncRevoke">Retirar o acesso…</button><button class="action" id="syncRevokeCancel" hidden>Cancelar</button><button class="action danger" id="syncRevokeConfirm" hidden>Sim, retirar o acesso</button></div>
+            </div>
+            <div class="item" id="syncDeleteItem">
+              <div class="label"><b>Apagar os meus dados do Éteris no Google Drive</b><span>Apaga os ficheiros cifrados do Éteris da pasta oculta da aplicação (os de todos os aparelhos). Não sai da conta Google e não apaga nada deste computador; a sincronização fica desligada aqui e para nos outros.</span>
+                <span class="syncnote" id="syncDeleteNote" role="status" hidden></span></div>
+              <div class="stack"><button class="action" id="syncDeleteRetry" hidden>Tentar de novo</button><button class="action danger" id="syncDelete">Apagar…</button><button class="action" id="syncDeleteCancel" hidden>Cancelar</button><button class="action danger" id="syncDeleteConfirm" hidden>Sim, apagar do Drive</button></div>
+            </div>
+          </details>
         </div>
         <div class="item">
           <div class="label"><b>Exportar perfil cifrado</b><span>Favoritos, Espaços, definições, decisões do Escudo e notas num ficheiro .eteris em Transferências, para levar para outro computador sem conta (as abas abertas não vão). O código para o abrir aparece uma única vez: guarde-o.</span>
@@ -814,6 +841,10 @@
     });
   });
 
+  // «Mais opções» (Sincronização) nunca esconde um destino: abre-se quando o elemento pedido (âncora, ligação, pesquisa)
+  // está lá dentro. É o único sítio que o abre; nada o fecha (a sondagem não o fecha na cara da pessoa).
+  const openMoreFor = el => { const more = document.getElementById('syncMore'); if (!more || !el || !(el === more || more.contains(el))) return false; more.open = true; return true; };
+
   // ---------- Sincronização ----------
   (() => {
     const body = document.getElementById('syncBody');
@@ -924,6 +955,7 @@
     const googleTitle = $('googleTitle');
     const googleNote = $('googleNote');
     const googleUrl = $('googleUrl');
+    const syncSignOut = $('syncSignOut');
     let poll = 0, googleAsked = 0, googlePainted = 0, joining = false, joinSent = 0, lastState = null, quickUntil = 0, focusAfterPaint = null;
     // Pedidos do estado (estado, conta, entrar, sair, ações): só a resposta mais recente desenha. Uma resposta
     // atrasada (um «sync-status» ou «sync-account» pedido antes de «Sair») não volta a mostrar «Ligado».
@@ -963,11 +995,17 @@
       googleNote.textContent = g.text;
       googleUrl.hidden = !g.url; googleUrl.textContent = g.url || '';
       googleButton.disabled = g.state === 'unconfigured';
-      googleButton.textContent = g.state === 'signedIn' ? 'Sair' : g.state === 'waiting' ? 'Cancelar' : g.folder ? 'Ligar' : 'Entrar com o Google';
-      // Com sessão, a linha é a da conta e o botão diz de que se sai (o leitor de ecrã lê também a nota, com a conta).
-      googleTitle.textContent = g.state === 'signedIn' ? (g.folder ? 'Pasta de teste' : 'Conta Google') : g.folder ? 'Pasta de teste' : 'Entrar com o Google';
-      if (g.state === 'signedIn') googleButton.setAttribute('aria-label', g.folder ? 'Desligar da pasta de teste' : 'Sair da conta Google');
-      else googleButton.removeAttribute('aria-label');
+      // Sem sessão: a frase e «Entrar com o Google». Com sessão o botão esconde-se; «Sair deste computador» vive em
+      // «Mais opções» (o estado da conta continua guardado em googleButton.dataset.state).
+      $('syncLead').hidden = g.state === 'signedIn';
+      googleButton.hidden = g.state === 'signedIn';
+      googleButton.textContent = g.state === 'waiting' ? 'Cancelar' : g.folder ? 'Ligar' : 'Entrar com o Google';
+      // Com sessão, a linha é a da conta e o botão de sair diz de que se sai (o leitor de ecrã lê também a nota, com a conta).
+      googleTitle.textContent = g.state === 'signedIn' ? (g.folder ? 'Pasta de teste' : 'Conta Google') : g.folder ? 'Pasta de teste' : '';
+      googleTitle.hidden = !googleTitle.textContent;
+      syncSignOut.hidden = g.state !== 'signedIn';
+      syncSignOut.setAttribute('aria-label', g.folder ? 'Desligar da pasta de teste' : 'Sair da conta Google');
+      $('syncSignOutItem').hidden = g.state !== 'signedIn';
       googleButton.dataset.state = g.state;
       $('syncForgetRow').hidden = g.state !== 'signedIn';
       // «Sair» só deste computador: o que fica aqui e que a Google continua a listar o Éteris (só com a conta Google).
@@ -1020,12 +1058,30 @@
     const focusRevoke = () => {
       if (location.hash !== '#syncRevokeItem') return;
       const item = $('syncRevokeItem');
+      // O item vive em «Mais opções»: abre-se primeiro (fechado, o item não se via).
+      openMoreFor(item);
       if (item.hidden || item.closest('[hidden]') !== null) { $('sincronizacao').scrollIntoView(); return; }
       item.scrollIntoView({ block: 'center' });
       $('syncRevoke').focus();
     };
-    const toAnchor = hash => { if (location.hash === hash) focusRevoke(); else location.hash = hash; };
-    addEventListener('hashchange', focusRevoke);
+    // O destino de uma âncora, ao abrir a página e quando o endereço muda (uma aba das Definições já aberta):
+    // #syncRevokeItem (barras da T8 e da T7), #sincronizacao-mais (o próprio «Mais opções») ou qualquer elemento lá
+    // dentro, como #syncTopicItem (barra «Sincronizado.»). Fora de «Mais opções», o navegador já leva a vista.
+    const goToAnchor = () => {
+      if (location.hash === '#syncRevokeItem') { focusRevoke(); return; }
+      const more = $('syncMore');
+      if (location.hash === '#sincronizacao-mais') {
+        openMoreFor(more);
+        if (more.closest('[hidden]') !== null) { $('sincronizacao').scrollIntoView(); return; }
+        more.scrollIntoView({ block: 'center' });
+        more.querySelector('summary').focus();
+        return;
+      }
+      const target = (location.hash && document.getElementById(location.hash.slice(1))) || (data.focus && document.getElementById(data.focus));
+      if (openMoreFor(target) && target.closest('[hidden]') === null) target.scrollIntoView({ block: 'center' });
+    };
+    const toAnchor = hash => { if (location.hash === hash) goToAnchor(); else location.hash = hash; };
+    addEventListener('hashchange', goToAnchor);
     // «Retirar o acesso…»: a pergunta aparece por baixo, com «Cancelar» no lugar onde se carregou (molde de «Apagar…»),
     // não aceita um clique no primeiro meio segundo e desarma-se sozinha ao fim de 10 s.
     let revokeArmed = 0;
@@ -1259,7 +1315,13 @@
       // O computador novo (cartão e alerta): a página decide só pelo «guest» do estado (as regras são do Éteris).
       const guest = s.guest || 'none';
       body.hidden = !d.connected;
-      show('syncStateItem', d.enabled && (phase === 'on' || phase === 'starting'));
+      // A linha de estado à frente (null ou em falta: esconde-se e fala o item próprio do estado).
+      const headline = d.connected && d.enabled && s.headline ? s.headline : '';
+      if ($('syncHeadline').textContent !== headline) $('syncHeadline').textContent = headline;
+      $('syncHeadline').hidden = !headline;
+      // O estado normal está na linha da frente: este item só aparece quando tem alguma coisa a dizer.
+      show('syncStateItem', d.enabled && (phase === 'on' || phase === 'starting') && (!!s.error || !!s.update || !!s.notice || !!s.needsSignIn));
+      show('syncNowItem', d.enabled && (phase === 'on' || phase === 'starting'));
       show('syncOffItem', d.connected && (phase === 'off' || phase === 'stopped'));
       show('syncChooseItem', d.enabled && phase === 'choose');
       show('syncPairItem', d.enabled && ['waiting', 'code', 'timeUp', 'stillWaiting', 'refused', 'failed'].includes(guest));
@@ -1498,43 +1560,47 @@
       }
     };
     paint(initial);
-    // Aberta em #syncRevokeItem (as barras «Retirar o acesso do Éteris»): o foco vai para o botão.
-    focusRevoke();
+    // Aberta numa âncora (#syncRevokeItem, das barras «Retirar o acesso do Éteris»: o foco vai para o botão; ou um
+    // destino dentro de «Mais opções»).
+    goToAnchor();
     // O gesto que é o próprio «Sair» não pede a conta: o pedido sairia para a Google no instante em que se sai.
-    const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && googleButton.contains(e.target);
+    const isSignOut = e => googleButton.dataset.state === 'signedIn' && e.target instanceof Node && syncSignOut.contains(e.target);
     for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'])
       addEventListener(type, e => { touched = true; lastGesture = Date.now(); if (!isSignOut(e)) { askAccount(); askLook(); } }, { passive: true, capture: true });
-    new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); askLook(); }).observe(googleButton);
+    // «A secção está à vista» mede-se no item da conta, que nunca se esconde (o googleButton esconde-se com sessão).
+    new IntersectionObserver(entries => { seen = entries.some(e => e.isIntersecting); askAccount(); askLook(); }).observe($('syncAccountItem'));
     // «Sair» com «apagar a chave» e o kit de recuperação ainda por guardar: a conta ficava irrecuperável se este for o
     // único computador. Pede confirmação (2.º clique, meio segundo depois, nos 8 s seguintes).
     let signOutArmed = 0;
     const disarmSignOut = () => {
       signOutArmed = 0;
       note($('syncForgetNote'), '');
-      if (googleButton.dataset.state === 'signedIn') googleButton.textContent = 'Sair';
+      syncSignOut.textContent = 'Sair deste computador';
     };
     $('syncForget').addEventListener('change', disarmSignOut);
-    googleButton.addEventListener('click', () => {
-      const state = googleButton.dataset.state;
-      if (state === 'signedIn') {
-        const forget = $('syncForget').checked;
-        const kitPending = !!(lastState && lastState.sync && lastState.sync.kit && lastState.sync.kit.state !== 'saved');
-        if (forget && kitPending) {
-          if (!signOutArmed) {
-            signOutArmed = Date.now();
-            googleButton.textContent = 'Confirmar: sair e apagar a chave';
-            note($('syncForgetNote'), 'O kit de recuperação ainda não foi guardado. Se este for o único computador ligado, sair e apagar a chave torna os dados na nuvem irrecuperáveis. Guarde o kit primeiro, ou carregue outra vez para confirmar.', true);
-            setTimeout(() => { if (signOutArmed && Date.now() - signOutArmed >= 7900) disarmSignOut(); }, 8000);
-            return;
-          }
-          if (Date.now() - signOutArmed < ARM_GUARD) return;
+    syncSignOut.addEventListener('click', () => {
+      if (googleButton.dataset.state !== 'signedIn') return;
+      const forget = $('syncForget').checked;
+      const kitPending = !!(lastState && lastState.sync && lastState.sync.kit && lastState.sync.kit.state !== 'saved');
+      if (forget && kitPending) {
+        if (!signOutArmed) {
+          signOutArmed = Date.now();
+          syncSignOut.textContent = 'Confirmar: sair e apagar a chave';
+          note($('syncForgetNote'), 'O kit de recuperação ainda não foi guardado. Se este for o único computador ligado, sair e apagar a chave torna os dados na nuvem irrecuperáveis. Guarde o kit primeiro, ou carregue outra vez para confirmar.', true);
+          setTimeout(() => { if (signOutArmed && Date.now() - signOutArmed >= 7900) disarmSignOut(); }, 8000);
+          return;
         }
-        signOutArmed = 0;
-        note($('syncForgetNote'), '');
-        askGoogle('sync-google-out', forget ? '&forget=1' : '');
+        if (Date.now() - signOutArmed < ARM_GUARD) return;
       }
-      else askGoogle(state === 'waiting' ? 'sync-google-cancel' : 'sync-google');
+      signOutArmed = 0;
+      note($('syncForgetNote'), '');
+      syncSignOut.textContent = 'Sair deste computador';
+      // O botão some com a sessão: o foco vai para «Entrar com o Google», que volta a aparecer.
+      focusAfterPaint = 'googleButton';
+      askGoogle('sync-google-out', forget ? '&forget=1' : '');
     });
+    // «Entrar com o Google», «Cancelar» (à espera do início de sessão) ou «Ligar» (pasta de teste).
+    googleButton.addEventListener('click', () => askGoogle(googleButton.dataset.state === 'waiting' ? 'sync-google-cancel' : 'sync-google'));
     $('syncStart').addEventListener('click', () => askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : ''));
     // «Tentar de novo» (um apagar do Drive que não acabou): volta a tentar já; o foco fica na nota que diz o resultado.
     $('syncDeleteRetry').addEventListener('click', () => {
@@ -1854,6 +1920,14 @@
         if (show) any = true;
       }
       document.getElementById('nothing').classList.toggle('show', !any);
+      // «Mais opções» (Sincronização): abre-se quando a pesquisa encontra um item lá dentro; sem nenhum, o resumo
+      // esconde-se com o resto. Limpar a pesquisa não o fecha.
+      const syncMore = document.getElementById('syncMore');
+      if (syncMore) {
+        const found = words.length > 0 && [...syncMore.querySelectorAll('.item')].some(item => !item.hidden && !item.classList.contains('filtered-out'));
+        if (found) openMoreFor(syncMore);
+        syncMore.classList.toggle('filtered-out', words.length > 0 && !found);
+      }
       // A pesquisa muda as secções à vista: o realce volta a seguir a posição.
       byHand = true;
       if (words.length) window.scrollTo({ top: 0 });
