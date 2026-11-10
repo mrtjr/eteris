@@ -264,6 +264,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             case "/sync-look":
                 // Também só depois de um gesto, com a secção à vista: aparelhos da conta e pedidos de aparelhos novos.
                 // A página repete-o de 5 em 5 s enquanto a secção estiver à vista («devices=0»: só os pedidos).
+                // Com ela à vista, o pedido de um computador novo pode renovar-se (só memória).
+                Sync.SyncService.PairingScreenSeen();
                 Sync.SyncService.Look(devices: InternalPages.Query(uri, "devices") != "0");
                 break;
             case "/sync-start":

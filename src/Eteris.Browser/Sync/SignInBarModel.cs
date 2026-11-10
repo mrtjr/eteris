@@ -19,6 +19,9 @@ internal sealed record SignInBarInput(SignInProgress Progress, SyncStatus? Sync,
     // Ganchos do estado Synced (T10). Sem eles, «Sincronizado.» sem botões.
     public string? SyncedText { get; init; }          // substitui «Sincronizado.» (o aviso «Recebeu…» do computador novo)
     public SignInBarButton? SyncedLink { get; init; } // botão discreto («Também pagamentos e documentos…» no 1.º computador)
+    // O cartão do computador novo (ou o alerta «conta substituída») trata do estado (T7): a barra não diz «Falta
+    // confirmar no outro computador» nem «A sincronizar…».
+    public bool GuestPairing { get; init; }
 }
 
 internal static class SignInBarModel
@@ -81,7 +84,7 @@ internal static class SignInBarModel
             return new(SignInBarKind.OtherAccount, "Entrou com outra conta Google. A sincronização ficou em pausa para não misturar contas.", null,
                 [new("Abrir Definições", SignInBarAction.OpenSettings, Primary: true), Close], null);
         if (sync?.Phase is SyncPhase.Choose or SyncPhase.Pairing)
-            return Named(SignInBarKind.NeedsApproval, input.Name, "Falta confirmar no outro computador.",
+            return input.GuestPairing ? null : Named(SignInBarKind.NeedsApproval, input.Name, "Falta confirmar no outro computador.",
                 [new("Ver código", SignInBarAction.ShowCode, Primary: true), Close]);
         // A ronda falhou (ou a autorização acabou): o menu já o diz; a barra não inventa um texto que o plano não deu.
         if (sync is { Error: not null } or { NeedsSignIn: true }) return null;
@@ -90,7 +93,7 @@ internal static class SignInBarModel
                 input.SyncedLink is null ? [] : [input.SyncedLink],
                 input.SyncedLink is null ? SyncedHold : SyncedLinkHold);
         if (sync is null or { Phase: SyncPhase.Starting or SyncPhase.On })
-            return Named(SignInBarKind.Syncing, input.Name, "A sincronizar…", []);
+            return input.GuestPairing ? null : Named(SignInBarKind.Syncing, input.Name, "A sincronizar…", []);
         return null; // desligada, ou parada por outra razão
     }
 

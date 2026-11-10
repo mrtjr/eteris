@@ -33,7 +33,8 @@ public partial class MainWindow
     private void WireSignInBar()
     {
         if (IsPrivate) return;
-        RegisterBar(WindowBar.SignIn, SignInBarWants, ShowSignInBar);
+        // A vaga 3 é partilhada com o cartão do computador novo (T7, MainWindow.GuestPairing.cs): uma só candidata.
+        RegisterBar(Sync.WindowBar.SignIn, SignInSlotWants, ShowSignInSlot);
         // A sessão expirada (T11): o aviso é partilhado por todas as janelas normais (SyncService), chega por
         // SyncService.Changed e responder numa janela fecha-o em todas.
         RegisterBar(WindowBar.SessionExpired, () => SyncService.SignInPrompt,
@@ -69,6 +70,7 @@ public partial class MainWindow
         }
         SyncStatus? sync = null;
         string? name = null;
+        var guest = false;
         if (progress.Stage == SignInStage.Done)
         {
             try
@@ -77,13 +79,15 @@ public partial class MainWindow
                 // O nome; o e-mail só quando não há nome.
                 var account = GoogleSync.Account;
                 name = string.IsNullOrWhiteSpace(account?.Name) ? account?.Email : account.Name;
+                // O cartão do computador novo (ou o alerta) trata deste estado: a barra não diz «Falta confirmar…».
+                guest = GuestPairingModel.Handles(SyncService.GuestPairingState(), SyncService.GuestCardOpen);
             }
             catch (Exception)
             {
                 // Sem estado: a barra fica em «A sincronizar…», que desaparece quando a ronda acabar ou falhar.
             }
         }
-        _signInView = SignInBarModel.For(new SignInBarInput(progress, sync, name, IsPrivate));
+        _signInView = SignInBarModel.For(new SignInBarInput(progress, sync, name, IsPrivate) { GuestPairing = guest });
         _signInAtMs = progress.AtMs;
         return _signInView is not null;
     }
@@ -170,10 +174,18 @@ public partial class MainWindow
                 GoogleSync.RetrySignIn();
                 break;
             case SignInBarAction.OpenSettings:
-            case SignInBarAction.ShowCode:
-                // «Ver código»: provisório até ao cartão do convidado (T7); o código já aparece nas Definições.
                 OpenInternal(SettingsPage.Url + "#sincronizacao");
                 GoogleSync.ClearSignIn(_signInAtMs);
+                break;
+            case SignInBarAction.ShowCode:
+                // «Ver código» abre o cartão do computador novo (T7), sem limpar a entrada: recolhido outra vez, volta
+                // esta forma. Sem nada no cartão, as Definições, como antes.
+                if (SyncService.GuestPairingState().Kind is GuestPairingKind.None or GuestPairingKind.Replaced)
+                {
+                    OpenInternal(SettingsPage.Url + "#sincronizacao");
+                    GoogleSync.ClearSignIn(_signInAtMs);
+                }
+                else SyncService.SetGuestCard(true);
                 break;
             case SignInBarAction.Close:
                 GoogleSync.ClearSignIn(_signInAtMs);

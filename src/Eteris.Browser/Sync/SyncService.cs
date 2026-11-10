@@ -90,6 +90,8 @@ internal static class SyncService
             _agent = new SyncAgent(Transport, profile, store, DeviceName, Now)
             {
                 AccountKey = AccountKey,
+                // O pedido do computador novo só se renova com o ecrã dele à vista (cartão ou Definições, há menos de 15 s).
+                PairingScreenVisible = () => Now() - Interlocked.Read(ref _pairingSeen) < 15_000,
                 // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
                 Log = m => System.Diagnostics.Debug.WriteLine("[sincronização] " + m),
             };
@@ -275,6 +277,8 @@ internal static class SyncService
         // Uma ação nova: a mensagem da anterior (por exemplo, um apagar que falhou) sai da página.
         lock (Gate) _message = null;
         if (abandonDeletion) agent.AbandonCloudDeletion();
+        // O gesto de entrar ou de ligar pode criar um pedido novo (computador novo): o cartão volta a abrir-se.
+        SetGuestCard(true);
         bool ok;
         try
         {
@@ -408,6 +412,14 @@ internal static class SyncService
 
     private static volatile bool _replacedDismissed;
     private static volatile bool _guestCardOpen = true;
+    private static long _pairingSeen;
+
+    // O ecrã do pedido do computador novo está à vista (o cartão em «à espera», de 5 em 5 s; a secção Sincronização das
+    // Definições, em cada /sync-look). Só memória, sem rede: o agente lê-o para renovar o pedido (PairingScreenVisible).
+    public static void PairingScreenSeen()
+    {
+        Interlocked.Exchange(ref _pairingSeen, Now());
+    }
 
     // «Não fui eu» no alerta: a barra do alerta não volta até o Éteris fechar (o alerta continua nas Definições).
     internal static bool ReplacedAlertDismissed => _replacedDismissed;

@@ -35,6 +35,34 @@ public class SignInBarModelTests
         ("desligada", TestStatus.Of(SyncPhase.Off)),
     ];
 
+    // A vaga 3 é partilhada com o cartão do computador novo (T7): enquanto ele (ou o alerta) trata do estado, a barra
+    // não diz «Falta confirmar…» nem «A sincronizar…». O resto não muda com a marca.
+    [Fact]
+    public void Slot3_TheBarYieldsToTheCard()
+    {
+        SignInBarView? WithCard(SyncStatus? sync)
+            => SignInBarModel.For(new SignInBarInput(new SignInProgress(SignInStage.Done, null, null, At), sync, "Ana Teste", false) { GuestPairing = true });
+        Assert.Equal(SignInBarKind.NeedsApproval, Done(TestStatus.Of(SyncPhase.Pairing))!.Kind);
+        Assert.Null(WithCard(TestStatus.Of(SyncPhase.Pairing)));
+        Assert.Null(WithCard(TestStatus.Of(SyncPhase.Choose)));
+        Assert.Equal(SignInBarKind.Syncing, Done(TestStatus.Of(SyncPhase.On, running: true))!.Kind);
+        Assert.Null(WithCard(TestStatus.Of(SyncPhase.On, running: true)));
+        Assert.Null(WithCard(null));
+        foreach (var (name, sync) in DoneCases())
+        {
+            var plain = Done(sync);
+            if (plain?.Kind is SignInBarKind.NeedsApproval or SignInBarKind.Syncing) continue;
+            Assert.True(plain == WithCard(sync) || (plain is not null && WithCard(sync) is { } card && card.Kind == plain.Kind && card.Text == plain.Text), name);
+        }
+        foreach (var stage in new[] { SignInStage.Waiting, SignInStage.TimedOut, SignInStage.Refused, SignInStage.DriveDenied, SignInStage.NoNetwork })
+        {
+            var plain = For(stage);
+            var card = SignInBarModel.For(new SignInBarInput(new SignInProgress(stage, null, null, At), null, "Ana Teste", false) { GuestPairing = true });
+            Assert.Equal(plain?.Kind, card?.Kind);
+            Assert.Equal(plain?.Text, card?.Text);
+        }
+    }
+
     [Theory]
     [InlineData(nameof(SignInStage.Idle))]
     [InlineData(nameof(SignInStage.Waiting))]

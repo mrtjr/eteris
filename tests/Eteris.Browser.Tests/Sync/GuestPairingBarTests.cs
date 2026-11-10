@@ -89,7 +89,121 @@ public class GuestPairingBarTests
     }
 
     // Os estados que a barra desenha (a ligação «Não tenho o outro computador à mão» também é um botão não focável).
-    private static IEnumerable<GuestPairingView> Views => [Replaced];
+    private static IEnumerable<GuestPairingView> Views =>
+    [
+        Replaced, new(GuestPairingKind.Waiting), new(GuestPairingKind.Code, "123 456"), new(GuestPairingKind.Code, "123 456", Confirmed: true),
+        new(GuestPairingKind.Joined), new(GuestPairingKind.TimeUp), new(GuestPairingKind.StillWaiting),
+        new(GuestPairingKind.Refused, Error: "O outro aparelho recusou o pedido."), new(GuestPairingKind.Failed, Error: "Sem ligação ao Google Drive."),
+    ];
+
+    // O que a barra mostra num estado: título, código, corpo, linha pequena, botões à vista (pela ordem), ligação, ×.
+    private sealed record Drawn(string Title, string Code, string Body, string Line, string[] Buttons, bool Link, bool Close);
+
+    private static Drawn Draw(GuestPairingBar bar, GuestPairingView view)
+    {
+        bar.Show(view);
+        var buttons = new[] { bar.YesButton, bar.NoButton, bar.AskAgainButton, bar.ReplacedJoinButton, bar.ReplacedNotMeButton }
+            .Where(b => b.Visibility == Visibility.Visible).Select(b => (string)b.Content).ToArray();
+        return new(Shown(bar.TitleText), Shown(bar.CodeText), Shown(bar.BodyText), Shown(bar.LineText), buttons,
+            bar.NoOtherLink.Visibility == Visibility.Visible, bar.CloseButton.Visibility == Visibility.Visible);
+    }
+
+    [Fact]
+    public void Card_Texts_ToTheLetter_InEachState()
+    {
+        var drawn = Sta(() =>
+        {
+            var bar = new GuestPairingBar(() => 0);
+            return Views.Skip(1).Select(view => Draw(bar, view)).ToList();
+        }, nameof(Card_Texts_ToTheLetter_InEachState));
+        Assert.Equal((GuestPairingModel.WaitTitle, "", GuestPairingModel.WaitText, GuestPairingModel.MustBeOpen, true, true),
+            (drawn[0].Title, drawn[0].Code, drawn[0].Body, drawn[0].Line, drawn[0].Link, drawn[0].Close));
+        Assert.Empty(drawn[0].Buttons);
+        Assert.Equal((GuestPairingModel.TypeThisCode, "123 456", GuestPairingModel.Ask("123 456"), "", true, true),
+            (drawn[1].Title, drawn[1].Code, drawn[1].Body, drawn[1].Line, drawn[1].Link, drawn[1].Close));
+        Assert.Equal([GuestPairingModel.Yes, GuestPairingModel.No], drawn[1].Buttons);
+        Assert.Equal((GuestPairingModel.TypeThisCode, "123 456", GuestPairingModel.WaitingApproval, false, true),
+            (drawn[2].Title, drawn[2].Code, drawn[2].Body, drawn[2].Link, drawn[2].Close));
+        Assert.Empty(drawn[2].Buttons);
+        Assert.Equal(("", "", GuestPairingModel.Joined, false, true), (drawn[3].Title, drawn[3].Code, drawn[3].Body, drawn[3].Link, drawn[3].Close));
+        Assert.Empty(drawn[3].Buttons);
+        Assert.Equal((GuestPairingModel.TimeUp, "", "", "", true, true), (drawn[4].Title, drawn[4].Code, drawn[4].Body, drawn[4].Line, drawn[4].Link, drawn[4].Close));
+        Assert.Equal([GuestPairingModel.AskAgain], drawn[4].Buttons);
+        Assert.Equal((GuestPairingModel.StillWaiting, "", GuestPairingModel.MustBeOpen, true, true), (drawn[5].Title, drawn[5].Body + drawn[5].Code, drawn[5].Line, drawn[5].Link, drawn[5].Close));
+        Assert.Equal([GuestPairingModel.AskAgain], drawn[5].Buttons);
+        Assert.Equal(("", "O outro aparelho recusou o pedido.", true), (drawn[6].Title, drawn[6].Body, drawn[6].Link));
+        Assert.Equal([GuestPairingModel.AskAgain], drawn[6].Buttons);
+        Assert.Equal(("", "Sem ligação ao Google Drive.", true), (drawn[7].Title, drawn[7].Body, drawn[7].Link));
+        Assert.Equal([GuestPairingModel.AskAgain], drawn[7].Buttons);
+        // O código só aparece no estado Code.
+        Assert.Equal(2, drawn.Count(d => d.Code.Length > 0));
+        var labels = Sta(() =>
+        {
+            var bar = new GuestPairingBar();
+            return ((string)bar.NoOtherLink.Content, bar.CloseButton.ToolTip as string, System.Windows.Automation.AutomationProperties.GetName(bar.CloseButton));
+        }, nameof(Card_Texts_ToTheLetter_InEachState));
+        Assert.Equal((GuestPairingModel.NoOther, GuestPairingModel.Close, GuestPairingModel.Close), labels);
+    }
+
+    [Fact]
+    public void Card_Buttons_RaiseTheirEvents()
+    {
+        var events = Sta(() =>
+        {
+            var t = 0L;
+            var bar = new GuestPairingBar(() => t);
+            var seen = new List<string>();
+            bar.Confirmed += () => seen.Add("sim");
+            bar.Denied += () => seen.Add("não");
+            bar.AskAgain += () => seen.Add("outra vez");
+            bar.NoOtherComputer += () => seen.Add("sem o outro");
+            bar.CloseRequested += () => seen.Add("fechar");
+            bar.Show(new GuestPairingView(GuestPairingKind.Code, "123 456"));
+            t += GuestPairingModel.ConfirmDelayMs;
+            Press(bar.YesButton);
+            Press(bar.NoButton);
+            Press(bar.NoOtherLink);
+            Press(bar.CloseButton);
+            bar.Show(new GuestPairingView(GuestPairingKind.StillWaiting));
+            Press(bar.AskAgainButton);
+            return seen;
+        }, nameof(Card_Buttons_RaiseTheirEvents));
+        Assert.Equal(["sim", "não", "sem o outro", "fechar", "outra vez"], events);
+    }
+
+    [Fact]
+    public void GuestBar_SimIsIgnoredForTwoSeconds()
+    {
+        var counts = Sta(() =>
+        {
+            var t = 1_000L;
+            var bar = new GuestPairingBar(() => t);
+            var confirmed = 0;
+            bar.Confirmed += () => confirmed++;
+            var seen = new List<int>();
+            bar.Show(new GuestPairingView(GuestPairingKind.Code, "123 456"));
+            Press(bar.YesButton);
+            seen.Add(confirmed);
+            t += 1_999;
+            Press(bar.YesButton);
+            seen.Add(confirmed);
+            t += 1;
+            Press(bar.YesButton);
+            seen.Add(confirmed);
+            // O mesmo código outra vez (cada RefreshBars) não reinicia a espera; outro código reinicia.
+            bar.Show(new GuestPairingView(GuestPairingKind.Code, "123 456"));
+            Press(bar.YesButton);
+            seen.Add(confirmed);
+            bar.Show(new GuestPairingView(GuestPairingKind.Code, "654 321"));
+            Press(bar.YesButton);
+            seen.Add(confirmed);
+            t += 2_000;
+            Press(bar.YesButton);
+            seen.Add(confirmed);
+            return seen;
+        }, nameof(GuestBar_SimIsIgnoredForTwoSeconds));
+        Assert.Equal([0, 0, 1, 2, 2, 3], counts);
+    }
 
     [Fact]
     public void GuestBar_EnterDoesNotConfirm()
@@ -103,6 +217,10 @@ public class GuestPairingBarTests
                 bar.ReplacedJoin += () => count++;
                 bar.ReplacedNotMe += () => count++;
                 bar.CloseRequested += () => count++;
+                bar.Confirmed += () => count++;
+                bar.Denied += () => count++;
+                bar.AskAgain += () => count++;
+                bar.NoOtherComputer += () => count++;
                 return InWindow(bar, () =>
                 {
                     bar.Show(view);

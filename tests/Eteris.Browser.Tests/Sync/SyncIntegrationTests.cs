@@ -664,6 +664,88 @@ public class SyncIntegrationTests
         Assert.DoesNotContain("Agent()", state);
     }
 
+    // A página das Definições com os textos novos do computador novo; o texto antigo («o outro mostra o código») saiu.
+    [Fact]
+    public void SettingsPage_HasTheGuestTexts()
+    {
+        var html = SettingsPage.Render(new UserSettings());
+        Assert.Contains("Falta um passo no outro computador.", html, StringComparison.Ordinal);
+        Assert.Contains("no outro computador e ele aceitou?", html, StringComparison.Ordinal);
+        Assert.Contains("A conta de sincronização na nuvem foi apagada ou substituída noutro computador.", html, StringComparison.Ordinal);
+        Assert.Contains("Colar o kit", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("O outro computador mostra este código", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Confirme que o outro computador mostra exatamente este código", html, StringComparison.Ordinal);
+    }
+
+    // A vaga 3 é uma só candidata (a barra do início de sessão OU o cartão); «Ver código» abre o cartão.
+    [Fact]
+    public void Slot3_IsOneCandidate_AndShowCodeOpensTheCard()
+    {
+        var signIn = File.ReadAllText(BrowserSrc("MainWindow.SignInBar.cs"), Encoding.UTF8);
+        Assert.Contains("RegisterBar(Sync.WindowBar.SignIn, SignInSlotWants, ShowSignInSlot)", signIn);
+        Assert.Single(Regex.Matches(signIn, @"WindowBar\.SignIn\b"));
+        var actions = Body(signIn, "private void OnSignInBarAction(");
+        var showCode = actions[actions.IndexOf("case SignInBarAction.ShowCode:", StringComparison.Ordinal)..];
+        showCode = showCode[..showCode.IndexOf("break;", StringComparison.Ordinal)];
+        Assert.Contains("SetGuestCard(true)", showCode);
+        var wants = Body(signIn, "private bool SignInBarWants()");
+        Assert.Contains("GuestPairing =", wants);
+        Assert.Contains("GuestPairingModel.Handles(", wants);
+
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.GuestPairing.cs"), Encoding.UTF8);
+        var slot = Body(glue, "private bool SignInSlotWants()");
+        Assert.Contains("GuestCardWants()", slot);
+        Assert.Contains("SignInBarWants()", slot);
+        Assert.Contains("_signInView is not null", Body(glue, "private void ShowSignInSlot("));
+        // As ações do cartão: «Sim» e «Não» no agente; «Pedir outra vez» pelo serviço (com a guarda da conta substituída).
+        Assert.Contains("ConfirmPairing()", glue);
+        Assert.Contains("CancelPairing()", glue);
+        Assert.Contains("SyncService.AskPairingAgain()", glue);
+        Assert.Contains("SyncService.SetGuestCard(false)", glue);
+        Assert.DoesNotContain("SyncService.Look(", glue);
+    }
+
+    // O ecrã do pedido à vista (cartão em «à espera» ou a secção Sincronização aberta) deixa o pedido renovar-se: só
+    // memória, sem rede, e o agente lê-o com uma validade de 15 s.
+    [Fact]
+    public void PairingScreenSeen_IsMemoryOnly_AndFeedsTheAgent()
+    {
+        var service = File.ReadAllText(BrowserSrc("Sync", "SyncService.cs"), Encoding.UTF8);
+        var seen = Body(service, "public static void PairingScreenSeen()");
+        Assert.Contains("Interlocked.Exchange(ref _pairingSeen", seen);
+        foreach (var forbidden in new[] { "Agent()", "Look(", "RequestPairing(", "Changed" })
+            Assert.DoesNotContain(forbidden, seen);
+        var agent = Body(service, "public static SyncAgent? Agent()");
+        Assert.Contains("PairingScreenVisible = () => Now() - Interlocked.Read(ref _pairingSeen) < 15_000", agent);
+        var routes = File.ReadAllText(BrowserSrc("Browser", "EterisSchemeHandlerFactory.cs"), Encoding.UTF8);
+        var look = RouteCase(routes, "/sync-look");
+        Before(look, "Sync.SyncService.PairingScreenSeen();", "Sync.SyncService.Look(devices: InternalPages.Query(uri, \"devices\") != \"0\")");
+        var glue = File.ReadAllText(BrowserSrc("MainWindow.GuestPairing.cs"), Encoding.UTF8);
+        Assert.Contains("SyncService.PairingScreenSeen()", glue);
+        Assert.Contains("GuestPairingKind.Waiting", glue);
+    }
+
+    // Na página, «Sim» só conta 2 s depois de o código aparecer e nunca recebe o foco.
+    [Fact]
+    public void Page_SimIsGuarded_AndNeverFocused()
+    {
+        var page = File.ReadAllText(BrowserSrc("Browser", "settings.html"), Encoding.UTF8);
+        Assert.Contains("const CONFIRM_GUARD = 2000;", page);
+        var listener = page[page.IndexOf("$('syncPairConfirm').addEventListener", StringComparison.Ordinal)..];
+        listener = listener[..listener.IndexOf('\n')];
+        Before(listener, "CONFIRM_GUARD", "askGoogle('sync-pair-confirm')");
+        Assert.DoesNotContain("focusAfterPaint = 'syncPairConfirm'", page);
+        Assert.DoesNotContain("$('syncPairConfirm').focus()", page);
+        // A página decide só pelo «guest» do estado; G4 no estado; o kit por cima do campo; «Aprovar…» só sem nada.
+        Assert.Contains("const guest = s.guest || 'none';", page);
+        Assert.Contains("['waiting', 'code', 'timeUp', 'stillWaiting', 'refused', 'failed'].includes(guest)", page);
+        Assert.Contains("$('syncPair').hidden = guest !== 'none';", page);
+        Assert.Contains("id=\"syncKitHelp\"", page);
+        Assert.Contains("id=\"syncKitPaste\"", page);
+        Assert.Contains("guest === 'joined'", page);
+        Assert.DoesNotContain("(s.pairing && s.pairing.error)", page);
+    }
+
     // Na página, «Foi eu» nunca recebe o foco.
     [Fact]
     public void Page_ReplacedJoin_IsNeverFocused()
