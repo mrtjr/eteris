@@ -64,9 +64,10 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
    Num caminho com acentos (por exemplo uma cópia em `%USERPROFILE%\Desktop` com «ú» no nome do utilizador) o script
    trabalha pelo nome curto 8.3 da pasta (o cmd.exe,
    o C++/CLI, o CMake e o SourceLink só foram provados com caminhos ASCII); sem nomes curtos no disco pára e pede uma
-   cópia num caminho ASCII. Provado com `-SkipCefSharp -SkipClient` pelo caminho com acentos do worktree (testes e
-   marca); a compilação completa do CefSharp e da DLL por esse caminho ainda não foi corrida. O nome curto ainda é o
-   do utilizador, mas as opções de «Caminhos de quem compila» tiram-no dos binários.
+   cópia num caminho ASCII. Provado pelo caminho com acentos de um worktree: com `-SkipCefSharp -SkipClient` (testes e
+   marca) e, na 0.2.14, a compilação completa do CefSharp e da DLL cliente (2026-11-09; ver «Caminhos de quem
+   compila», em baixo). O nome curto ainda é o do utilizador, mas as opções de «Caminhos de quem compila» tiram-no dos
+   binários.
 3. **Publicar**: `.\build\publish.ps1 -Version X.Y.Z`. Limpa `publish\`, verifica o motor (manifesto), lê o N do
    `eteris-cefsharp.json` (um `-CefSharpN` diferente é recusado), recusa a falta do feed, da DLL cliente ou do
    bootstrap (com a indicação do `build-all.ps1` e do `-NoSandbox`) e recusa publicar sem a marca dos testes
@@ -159,12 +160,17 @@ O `rmdir` **sem** `/s` tira só a junção; com `/s` apagaria o repositório. Um
 `-CefDistrib C:\eb-cef`), que também resolve o limite de 260 caracteres. O `publish.ps1` corre depois pelo caminho
 normal: lê as mesmas peças.
 
-**Por provar** (o `build-all.ps1` completo ainda não correu com estas opções; só depois da 0.2.13):
-1. A DLL cliente compilada com o `/d1trimfile` sai sem as 34 cadeias, e o `verify-client.ps1` continua a passar.
-2. O `CefSharp.Core.Runtime.dll` sai com `CefSharp.Core.Runtime.pdb` (só o nome) na entrada CodeView.
-3. O `CefSharp.Core.dll` sai com `/_/` no PDB embutido, e o SourceLink continua a gerar o `sourcelink.json`.
-4. A verificação nova do `build-all.ps1` passa, e o `publish.ps1` com sandbox também, num repositório dentro do perfil.
-5. Contraprova: um feed antigo com `-SkipCefSharp` tem de parar na verificação do `build-all.ps1`.
+**Provado em 2026-11-09, para a 0.2.14** (commit `8046e32`, num repositório dentro do perfil e com acentos no caminho,
+pelo nome curto 8.3): o `build-all.ps1` completo correu com estas opções — CefSharp `156.0.150-eteris.6` e DLL cliente
+compilados, `verify-client.ps1` aprovado, a verificação nova sem o caminho do perfil na DLL cliente nem no
+`CefSharp.Core.dll`/`CefSharp.Core.Runtime.dll` do feed, e os 3751 testes aprovados no modo com sandbox — e o
+`publish.ps1` com sandbox acabou com «Sem o caminho do perfil em 14 binários nossos». A garantia é a procura
+(`build/profile-paths.ps1`): não se abriu cada binário para ler a entrada CodeView nem o PDB embutido.
+
+**Por provar:**
+1. Ver à mão que o `CefSharp.Core.Runtime.dll` sai com `CefSharp.Core.Runtime.pdb` (só o nome) na entrada CodeView e
+   o `CefSharp.Core.dll` com `/_/` no PDB embutido, com o SourceLink a gerar o `sourcelink.json`.
+2. Contraprova: um feed antigo com `-SkipCefSharp` tem de parar na verificação do `build-all.ps1`.
 
 ## Como o sandbox funciona hoje no CEF (Windows)
 

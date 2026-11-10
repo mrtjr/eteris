@@ -15,10 +15,21 @@ public static class WhatsNewPage
     // sandbox por omissão: uma versão de recuo sem ele tira-o (WhatsNewTests.Highlights_AnnounceTheSandboxOnlyWhen…).
     public const string SandboxTitle = "Páginas isoladas (sandbox)";
 
+    // Destaques do desempenho da 0.2.14, com os números da medição contra a 0.2.13 (docs/paridade.md, «Medição da
+    // 0.2.14»). Os dois últimos só aparecem enquanto o ajuste respetivo estiver ligado por omissão no PerfTuning (e8, a
+    // janela que não se vê; e13, o sono com pouca memória): desligar um deles por omissão obriga a tirar o destaque
+    // (WhatsNewTests.Highlights_AnnounceTheTweaksOnlyWhileTheyAreOnByDefault).
+    public const string LighterTitle = "Mais leve com muitas abas";
+    public const string UnseenTitle = "Janela minimizada não gasta";
+    public const string PressureTitle = "Abas que adormecem quando falta memória";
+
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
         // 0.2.14
         new("🔐", SandboxTitle, "Como no Chrome, no Firefox e no Brave: cada página corre fechada, sem acesso aos seus ficheiros nem ao sistema. Se o isolamento falhar neste PC, o Éteris abre sem ele e avisa."),
+        new("📉", LighterTitle, "Medido contra a 0.2.13: 11% a 16% menos memória e, com 20 abas abertas e paradas, o processador desce de 1,72% para 0,13% de um núcleo."),
+        new("⏸", UnseenTitle, "Com a janela minimizada, uma página animada deixa de desenhar, como no Chrome, no Firefox e no Brave: 6,47% → 0,59% de um núcleo. Nunca com som, multimédia ou câmara em uso."),
+        new("💤", PressureTitle, "Com a memória do Windows quase esgotada, adormece a aba usada há mais tempo e, ao acordar, a página volta ao mesmo ponto. Desliga-se em Definições › Abas."),
         // 0.2.13
         new("☁", "Conta Google e sincronização cifrada", "Opcional: favoritos, Espaços, definições, Escudo, notas e palavras-passe passam entre computadores, cifrados no PC antes de irem para a pasta oculta do seu Google Drive."),
         new("🔑", "Palavras-passe e preenchimento", "Guardar, preencher e gerar palavras-passe, importar do Chrome, do Brave ou do Firefox; moradas, cartões (nunca o CVV), documentos e viagens, com o Windows Hello."),

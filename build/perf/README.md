@@ -143,6 +143,10 @@ janela minimizada e a página que ainda não apresentou. Antes do pacote, com o 
 
 Se algum falhar e não houver tempo para o corrigir, o recuo é desligar o e8: `--eteris-ajustes=-e8` na linha de
 comandos (vale numa instalação), ou tirá-lo dos ligados por omissão (`OnByDefault` em `Infrastructure/PerfTuning.cs`).
+Tirá-lo dos ligados por omissão obriga a tirar, no mesmo commit, o destaque «Janela minimizada não gasta» das Novidades
+(`Browser/WhatsNewPage.cs`; o teste `WhatsNewTests.Highlights_AnnounceTheTweaksOnlyWhileTheyAreOnByDefault` falha
+enquanto lá estiver) e a linha «Janela minimizada deixa de desenhar» da entrada 0.2.14 do `CHANGELOG.md`; o mesmo vale
+para o e13 e o destaque «Abas que adormecem quando falta memória».
 
 ## Linhas de base
 

@@ -55,6 +55,33 @@ limites em `docs/paridade.md`, «Medição da 0.2.14»; ferramentas em `build/pe
   ajuste liga-se ou desliga-se pela linha de comandos (`--eteris-ajustes=-e8`, por exemplo) e `--eteris-sem-ajustes`
   desliga todos.
 
+### Privacidade
+- **O que muda:** com as páginas isoladas, um processo de página comprometido deixa de conseguir ler o cofre das
+  palavras-passe (`cofre.db`, `cofre.key`) e de chamar a proteção de dados do Windows (DPAPI) do utilizador; o cofre só
+  se abre no processo do Éteris (`docs/palavras-passe.md`). Num computador em que a rede de segurança desligou o
+  sandbox, ou com `--eteris-no-sandbox`, volta o limite da 0.2.13.
+- **O que não muda: no arranque continuam a sair 0 pedidos para a Google** com a sincronização desligada (a omissão).
+  O que o Éteris corta no motor para isso é o mesmo da 0.2.13 e continua fixado por testes, e a promessa «No arranque,
+  nada sai para a Google» continua em `eteris://privacy/`, com ✔ ou ✘. Com a sincronização ligada, tudo como na
+  0.2.13: só os pedidos dela, cifrados, a partir de 30 s depois de abrir.
+- **Nada de novo sai do computador.** Os ajustes de desempenho só olham para o estado do próprio Windows (a janela
+  minimizada, o aviso de pouca memória), e a rede de segurança do sandbox guarda o registo das falhas só no perfil
+  (`sandbox-fallback.json`), sem o enviar a ninguém.
+- **Duas linhas novas em `eteris://privacy/`:** «A cache da GPU vai-se com os seus dados» (nesta versão os shaders da
+  GPU continuam a não ficar no disco) e «As afinações de desempenho não mudam o que os sites medem» (nenhuma afinação
+  do motor está ligada; se uma delas mudasse a impressão digital, a linha dizia-o).
+- Com o sandbox, o identificador da aplicação Google (`google-oauth.json`) fica legível pelo serviço de rede isolado,
+  por estar na pasta da instalação. Não é um segredo (vai com o programa, como em qualquer aplicação de computador);
+  os tokens da sessão Google continuam protegidos no perfil, fora dessa pasta (`docs/sincronizacao.md`).
+- Os interruptores das medições de desempenho (`ETERIS_TEST_PURO`, `ETERIS_TEST_CONTADORES`,
+  `ETERIS_TEST_HOST_RULES`, `ETERIS_TEST_PRESSAO`, `ETERIS_TEST_ENERGIA` e `ETERIS_TEST_AJUSTES`; `build/perf/README.md`)
+  são ignorados por um Éteris instalado.
+
+### Novidades
+- `eteris://whatsnew/` abre com 4 destaques desta versão: as páginas isoladas, a memória e o processador com muitas
+  abas, a janela minimizada e o sono das abas com pouca memória. Os dois últimos só se anunciam enquanto o ajuste
+  respetivo estiver ligado por omissão.
+
 ### Correções
 - Com o menu do Éteris aberto, nenhuma tecla — nem `Alt`, `Ctrl` ou `Shift` sozinhos — chega à página, como no Chrome,
   no Firefox e no Brave.

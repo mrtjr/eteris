@@ -1,5 +1,6 @@
 using System.IO;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser.Tests;
 
@@ -27,7 +28,8 @@ public class WhatsNewTests
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
 
-    // 0.2.14: abre com o isolamento das páginas (1 destaque, por agora só o do sandbox). A seguir vêm os 3 da 0.2.13, a
+    // 0.2.14: abre com o isolamento das páginas, seguido dos 3 destaques do desempenho medido (memória e processador
+    // com muitas abas, a janela minimizada e o sono com pouca memória): 4 destaques. A seguir vêm os 3 da 0.2.13, a
     // abrir com a conta Google e a sincronização cifrada, as palavras-passe e o preenchimento, e o pedido à Google dos
     // formulários cortado; os 2 da 0.2.12, a abrir com o teclado do menu (Alt+F e Alt+E) e o menu legível; os 2 da
     // 0.2.11, a abrir com o arranque sem pedidos à Google e o Escudo nos pedidos sem aba; os 5 da 0.2.10, a abrir com o
@@ -35,35 +37,96 @@ public class WhatsNewTests
     // (codecs do Windows). O destaque antigo que mandava o H.264 para o motor de vídeo saiu, e os destaques das seis
     // versões são curtos.
     [Fact]
-    public void Highlights_LeadWithTheSandboxThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
+    public void Highlights_LeadWithTheSandboxAndPerformanceThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
     {
         Assert.Equal(WhatsNewPage.SandboxTitle, WhatsNewPage.Highlights[0].Title);
-        Assert.Equal("Conta Google e sincronização cifrada", WhatsNewPage.Highlights[1].Title);
-        Assert.Contains("Opcional", WhatsNewPage.Highlights[1].Detail);
-        Assert.Contains("cifrados no PC", WhatsNewPage.Highlights[1].Detail);
-        Assert.Contains("pasta oculta", WhatsNewPage.Highlights[1].Detail);
-        Assert.Contains("palavras-passe", WhatsNewPage.Highlights[1].Detail);
-        Assert.Equal("Palavras-passe e preenchimento", WhatsNewPage.Highlights[2].Title);
-        Assert.Contains("nunca o CVV", WhatsNewPage.Highlights[2].Detail);
-        Assert.Contains("Windows Hello", WhatsNewPage.Highlights[2].Detail);
-        Assert.Equal("Formulários sem pedidos à Google", WhatsNewPage.Highlights[3].Title);
-        Assert.Contains("verificação de fugas", WhatsNewPage.Highlights[3].Detail);
-        Assert.Contains("0 pedidos", WhatsNewPage.Highlights[3].Detail);
-        Assert.Equal("Menu do Éteris pelo teclado", WhatsNewPage.Highlights[4].Title);
-        Assert.Equal("Alt+F · Alt+E", WhatsNewPage.Highlights[4].Keys);
-        Assert.Contains("Esc", WhatsNewPage.Highlights[4].Detail);
-        Assert.Equal("Menu legível", WhatsNewPage.Highlights[5].Title);
-        Assert.Contains("quadrados", WhatsNewPage.Highlights[5].Detail);
-        Assert.Equal("No arranque, nada sai para a Google", WhatsNewPage.Highlights[6].Title);
-        Assert.Contains("eteris://privacy/", WhatsNewPage.Highlights[6].Detail);
-        Assert.Contains("service workers", WhatsNewPage.Highlights[7].Detail);
-        Assert.Equal("Arranque quase duas vezes mais rápido", WhatsNewPage.Highlights[8].Title);
-        Assert.Contains("0,6 s", WhatsNewPage.Highlights[8].Detail);
-        Assert.Equal("Menos memória", WhatsNewPage.Highlights[9].Title);
-        Assert.Contains(WhatsNewPage.Highlights.Skip(8).Take(5), h => h.Title == "Impressão digital como a do Chrome");
-        Assert.Equal("Vídeo no motor do Éteris", WhatsNewPage.Highlights[13].Title);
+        Assert.Equal(WhatsNewPage.LighterTitle, WhatsNewPage.Highlights[1].Title);
+        Assert.Equal(WhatsNewPage.UnseenTitle, WhatsNewPage.Highlights[2].Title);
+        Assert.Equal(WhatsNewPage.PressureTitle, WhatsNewPage.Highlights[3].Title);
+        Assert.Equal("Conta Google e sincronização cifrada", WhatsNewPage.Highlights[4].Title);
+        Assert.Contains("Opcional", WhatsNewPage.Highlights[4].Detail);
+        Assert.Contains("cifrados no PC", WhatsNewPage.Highlights[4].Detail);
+        Assert.Contains("pasta oculta", WhatsNewPage.Highlights[4].Detail);
+        Assert.Contains("palavras-passe", WhatsNewPage.Highlights[4].Detail);
+        Assert.Equal("Palavras-passe e preenchimento", WhatsNewPage.Highlights[5].Title);
+        Assert.Contains("nunca o CVV", WhatsNewPage.Highlights[5].Detail);
+        Assert.Contains("Windows Hello", WhatsNewPage.Highlights[5].Detail);
+        Assert.Equal("Formulários sem pedidos à Google", WhatsNewPage.Highlights[6].Title);
+        Assert.Contains("verificação de fugas", WhatsNewPage.Highlights[6].Detail);
+        Assert.Contains("0 pedidos", WhatsNewPage.Highlights[6].Detail);
+        Assert.Equal("Menu do Éteris pelo teclado", WhatsNewPage.Highlights[7].Title);
+        Assert.Equal("Alt+F · Alt+E", WhatsNewPage.Highlights[7].Keys);
+        Assert.Contains("Esc", WhatsNewPage.Highlights[7].Detail);
+        Assert.Equal("Menu legível", WhatsNewPage.Highlights[8].Title);
+        Assert.Contains("quadrados", WhatsNewPage.Highlights[8].Detail);
+        Assert.Equal("No arranque, nada sai para a Google", WhatsNewPage.Highlights[9].Title);
+        Assert.Contains("eteris://privacy/", WhatsNewPage.Highlights[9].Detail);
+        Assert.Contains("service workers", WhatsNewPage.Highlights[10].Detail);
+        Assert.Equal("Arranque quase duas vezes mais rápido", WhatsNewPage.Highlights[11].Title);
+        Assert.Contains("0,6 s", WhatsNewPage.Highlights[11].Detail);
+        Assert.Equal("Menos memória", WhatsNewPage.Highlights[12].Title);
+        Assert.Contains(WhatsNewPage.Highlights.Skip(11).Take(5), h => h.Title == "Impressão digital como a do Chrome");
+        Assert.Equal("Vídeo no motor do Éteris", WhatsNewPage.Highlights[16].Title);
         Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Title == "Vídeo em todos os sites");
-        Assert.All(WhatsNewPage.Highlights.Take(21), h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.All(WhatsNewPage.Highlights.Take(24), h => Assert.True(h.Detail.Length <= 180, h.Title));
+    }
+
+    // Os 3 destaques do desempenho da 0.2.14 dizem só o que a medição contra a 0.2.13 deu (docs/paridade.md, «Medição da
+    // 0.2.14»): memória −11% (1 aba) a −16% (20 abas); processador parado com 20 abas 1,72% → 0,13% de um núcleo; janela
+    // minimizada com uma página animada 6,47% → 0,59%; e o sono com pouca memória, com a opção em Definições › Abas. Não
+    // prometem nada do que ficou em aberto: a janela tapada por outra continua a desenhar e o arranque não ficou mais
+    // rápido (custa cerca de 40 ms a mais com o sandbox).
+    [Fact]
+    public void Highlights_AnnounceTheMeasuredPerformanceOf0214_AndNothingStillOpen()
+    {
+        var lighter = Assert.Single(WhatsNewPage.Highlights, h => h.Title == WhatsNewPage.LighterTitle);
+        Assert.Contains("0.2.13", lighter.Detail);
+        Assert.Contains("11% a 16% menos memória", lighter.Detail);
+        Assert.Contains("20 abas", lighter.Detail);
+        Assert.Contains("1,72% para 0,13%", lighter.Detail);
+
+        var unseen = Assert.Single(WhatsNewPage.Highlights, h => h.Title == WhatsNewPage.UnseenTitle);
+        Assert.Contains("minimizada", unseen.Detail);
+        Assert.Contains("6,47% → 0,59%", unseen.Detail);
+        Assert.Contains("Nunca com som", unseen.Detail);
+
+        var pressure = Assert.Single(WhatsNewPage.Highlights, h => h.Title == WhatsNewPage.PressureTitle);
+        Assert.Contains("usada há mais tempo", pressure.Detail);
+        Assert.Contains("Definições › Abas", pressure.Detail);
+
+        var texts = WhatsNewPage.Highlights.Take(4).Select(h => h.Title + " " + h.Detail).ToList();
+        Assert.All(texts, t =>
+        {
+            Assert.DoesNotContain("tapada", t, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("coberta", t, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("arranque", t, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Edge", t, StringComparison.Ordinal);
+        });
+        Assert.All(WhatsNewPage.Highlights.Take(4), h => Assert.True(h.Detail.Length <= 180, h.Title));
+    }
+
+    // O texto do destaque do sono com pouca memória diz onde está a opção: ela existe nas Definições com esse nome de
+    // secção («Abas») e o ajuste e13 por trás dela nasce ligado no settings.json (UserSettings.SleepOnLowMemory).
+    [Fact]
+    public void Highlights_ThePressureOptionExistsInSettingsAndIsOnByDefault()
+    {
+        var html = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.Contains("Adormecer também quando falta memória", html);
+        Assert.Contains("data-key=\"sleepPressure\"", html);
+        Assert.True(new Data.UserSettings().SleepOnLowMemory);
+    }
+
+    // As Novidades não podem anunciar um ajuste de desempenho que não está ligado: a janela minimizada (e8) e o sono com
+    // pouca memória (e13) só se anunciam enquanto o PerfTuning os ligar por omissão. Se uma prova ao vivo mandar desligar
+    // um deles antes do pacote (build/perf/README.md: o restauro do e8 ainda não foi medido), este teste obriga a tirar o
+    // destaque no mesmo commit, como o do sandbox segue a omissão do publish.ps1.
+    [Fact]
+    public void Highlights_AnnounceTheTweaksOnlyWhileTheyAreOnByDefault()
+    {
+        Assert.Equal(PerfTuning.Defaults.Contains(PerfTuning.HideWhenUnseen),
+                     WhatsNewPage.Highlights.Any(h => h.Title == WhatsNewPage.UnseenTitle));
+        Assert.Equal(PerfTuning.Defaults.Contains(PerfTuning.SleepUnderPressure),
+                     WhatsNewPage.Highlights.Any(h => h.Title == WhatsNewPage.PressureTitle));
     }
 
     // Desligado da 0.2.10 à 0.2.13, o sandbox sai ligado na publicação da 0.2.14 (docs/sandbox.md, «Como publicar com o
