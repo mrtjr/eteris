@@ -158,12 +158,15 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
 4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`. Só
    empacota uma `publish\` com o `eteris-build.json` dessa versão e com sandbox (uma publicação `-NoSandbox` só com
    `-NoSandbox` também aqui). **Recusa uma publicação sem login Google** (desde a 0.2.14): se a marca disser
-   `google_oauth` = false ou faltar o `publish\google-oauth.json`, pára antes de empacotar e diz para publicar de novo
-   com `publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho>` (passo 2) — uma release oficial sem ele deixaria o
+   `google_oauth` = false, pára antes de empacotar e diz para publicar de novo com
+   `publish.ps1 -Version X.Y.Z -GoogleOAuthJson <caminho>` (passo 2) — uma release oficial sem ele deixaria o
    «Entrar com o Google» «indisponível nesta compilação» para toda a gente. `-SemLogin` empacota assim mesmo, com um
    aviso (só para a publicação de emergência pelo CI ou um pacote de teste); numa publicação que leva o login, o
    `-SemLogin` é recusado, como o `-NoSandbox` numa publicação com sandbox. O `pack.ps1` só vê se o ficheiro existe,
-   nunca o lê.
+   nunca o lê. **A marca e o ficheiro têm de bater**: se a marca disser que a publicação leva o login e o
+   `publish\google-oauth.json` não estiver lá, ou se ele lá estiver sem a marca o dizer (a pasta foi mexida depois de
+   publicar), recusa sempre, com ou sem `-SemLogin`, e manda publicar de novo — um ficheiro posto à mão, que o
+   `publish.ps1` não verificou, sairia num pacote anunciado como «sem login».
 5. Testar o executável de `publish\` num perfil de teste (abre, navega, `eteris://whatsnew/` com a versão nova, um MP4
    H.264 toca no motor principal, sem processos `msedgewebview2` filhos; `chrome://sandbox` com os renderers
    Lockdown/Untrusted e a GPU Low, e `build/sandbox/sandbox-check.ps1 -ProcessId <pid>` sem filhos com `--no-sandbox`;

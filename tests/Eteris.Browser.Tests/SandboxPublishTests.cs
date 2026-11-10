@@ -159,6 +159,9 @@ public class SandboxPublishTests
         Assert.Contains("-SemLogin", message);
         Assert.Contains("Write-Warning \"Pacote SEM login Google (-SemLogin)", pack);
         Assert.Contains("throw \"publish\\ é uma publicação COM login Google e foi pedido -SemLogin\"", pack);
+        // A marca e o ficheiro têm de bater, e isso vê-se antes de olhar para o -SemLogin.
+        var mismatch = pack.IndexOf("if ($login -ne $loginFile) { throw \"publish\\ incoerente", StringComparison.Ordinal);
+        Assert.True(mismatch > 0 && mismatch < pack.IndexOf("$SemLogin) { throw", StringComparison.Ordinal), "a pasta incoerente recusa-se antes do -SemLogin");
         // Só se vê se o ficheiro existe: o conteúdo (o client_id) nunca é lido nem escrito pelo pack.ps1.
         Assert.DoesNotMatch(@"(Get-Content|ReadAll\w+|Copy-Item|Move-Item)[^\r\n]*google-oauth", pack);
         Assert.DoesNotContain("client_id", pack);
@@ -171,8 +174,13 @@ public class SandboxPublishTests
     // «login»: a marca diz google_oauth; «file»: há um publish\google-oauth.json (vazio, feito aqui).
     [Theory]
     [InlineData(false, false, "", "SEM login Google")]
-    [InlineData(true, false, "", "SEM login Google")]
-    [InlineData(false, true, "", "SEM login Google")]
+    // A marca e o ficheiro não dizem o mesmo (a pasta publish\ foi mexida à mão depois de publicar): recusa sempre, com
+    // ou sem -SemLogin. Com ele, um google-oauth.json posto à mão (que o publish.ps1 nunca verificou) saía num pacote
+    // anunciado como «sem login», e uma marca a dizer que o leva sem ele lá ia na instalação a mentir.
+    [InlineData(true, false, "", "publish\\ incoerente")]
+    [InlineData(false, true, "", "publish\\ incoerente")]
+    [InlineData(true, false, "-SemLogin", "publish\\ incoerente")]
+    [InlineData(false, true, "-SemLogin", "publish\\ incoerente")]
     [InlineData(true, true, "-SemLogin", "COM login Google e foi pedido -SemLogin")]
     // Com o login (ou sem ele e com -SemLogin) passa esta verificação e pára na seguinte: a pasta é COM sandbox.
     [InlineData(true, true, "-NoSandbox", "COM sandbox e foi pedido -NoSandbox")]
@@ -208,9 +216,10 @@ public class SandboxPublishTests
             Assert.True(shell.ExitCode != 0, "o pack.ps1 não recusou");
             Assert.True(Said(expected), $"o pack.ps1 não recusou com «{expected}»");
             // Uma só recusa: a do login não aparece quando a publicação o leva ou o -SemLogin a aceita, e só ela diz como
-            // publicar; o aviso do -SemLogin só aparece quando ele foi preciso.
+            // publicar; o aviso do -SemLogin só aparece quando ele foi preciso e a publicação é mesmo sem login.
             Assert.True(Said("-GoogleOAuthJson") == (expected == "SEM login Google"), "a recusa do login (e só ela) diz como publicar com ele");
-            Assert.True(Said("Pacote SEM login Google (-SemLogin)") == (switches.Contains("-SemLogin") && !login), "o aviso do -SemLogin");
+            Assert.True(Said("Pacote SEM login Google (-SemLogin)") == (switches.Contains("-SemLogin") && !login && !file), "o aviso do -SemLogin");
+            Assert.True(Said("publish\\ incoerente") == (login != file), "a recusa da pasta incoerente");
             Assert.False(Directory.Exists(Path.Combine(dir.FullName, "Releases")), "o pack.ps1 empacotou");
         }
         finally { dir.Delete(recursive: true); }
