@@ -211,13 +211,13 @@ public partial class MainWindow
         try
         {
             var manager = CookieContext.GetCookieManager(null);
-            foreach (var cookie in (await manager.VisitAllCookiesAsync()).Where(c => SiteScope.CookieBelongs(c.Domain, site)))
+            var (deleted, hosts) = await DeleteSiteCookiesAsync(manager, site);
+            cookies = deleted;
+            // Um subdomínio com cookies (accounts.exemplo.pt num iframe) também tem armazenamento.
+            foreach (var host in hosts)
             {
-                // Um subdomínio com cookies (accounts.exemplo.pt num iframe) também tem armazenamento.
-                var host = cookie.Domain.Trim().TrimStart('.');
                 seen.Add("https://" + host + "/");
                 seen.Add("http://" + host + "/");
-                if (await manager.DeleteCookiesAsync(SiteScope.CookieUrl(cookie.Domain, cookie.Path), cookie.Name) > 0) cookies++;
             }
         }
         catch (Exception) { }
@@ -240,6 +240,19 @@ public partial class MainWindow
             return (cookies, true);
         }
         catch (Exception) { return (cookies, false); }
+    }
+
+    // Os cookies do site e dos seus subdomínios (a mesma regra do Triturar), um a um por endereço e nome: devolve
+    // quantos o motor apagou e os anfitriões distintos que os tinham (cada um tem o seu armazenamento). Uma falha do
+    // motor sobe a quem chama, que a mostra — nunca estreita o âmbito em silêncio.
+    private static async Task<(int Deleted, IReadOnlyList<string> Hosts)> DeleteSiteCookiesAsync(ICookieManager manager, string site)
+    {
+        var all = await manager.VisitAllCookiesAsync();
+        var plan = SiteScope.CookieDeletions(all.Select(c => (c.Domain, c.Path, c.Name)), site);
+        var deleted = 0;
+        foreach (var (url, name, _) in plan)
+            if (await manager.DeleteCookiesAsync(url, name) > 0) deleted++;
+        return (deleted, plan.Select(p => p.Host).Distinct(StringComparer.Ordinal).ToList());
     }
 
     private async Task<ChromiumWebBrowser?> LiveBrowserAsync(TimeSpan limit)

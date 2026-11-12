@@ -31,6 +31,13 @@ public static class SiteScope
     public static string CookieUrl(string cookieDomain, string path)
         => "https://" + cookieDomain.Trim().TrimStart('.') + (path.StartsWith('/') ? path : "/" + path);
 
+    // Os cookies a apagar de um site (o domínio e os subdomínios, pela mesma regra do Triturar), pela ordem dada: o
+    // endereço para o CookieManager, o nome e o anfitrião (sem o ponto inicial, em minúsculas).
+    public static IReadOnlyList<(string Url, string Name, string Host)> CookieDeletions(IEnumerable<(string Domain, string Path, string Name)> cookies, string site)
+        => cookies.Where(c => CookieBelongs(c.Domain, site))
+            .Select(c => (CookieUrl(c.Domain, c.Path), c.Name, c.Domain.Trim().TrimStart('.').ToLowerInvariant()))
+            .ToList();
+
     // As origens (esquema://host[:porta]) do site vistas nos endereços dados — abas abertas, histórico — mais as duas
     // óbvias (com e sem www, em https e http): é por origem que o armazenamento se apaga. Um IP ou um nome sem ponto
     // (localhost) não tem «www.»: essa origem nem é válida para o motor.
@@ -138,5 +145,13 @@ public static class SiteScope
             ? cookieText + (cookies == 1 ? " apagado" : " apagados")
             : $"{cookieText} e {(history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico")} apagados";
         return storage ? text : text + " — o armazenamento ficou por apagar (o motor não estava pronto)";
+    }
+
+    // O aviso do cadeado › «Apagar cookies e dados deste site»: quantos cookies saíram e, se o armazenamento não
+    // pôde ser apagado, di-lo.
+    public static string SiteDataCleared(string site, int cookies, bool storage)
+    {
+        var cookieText = cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies";
+        return $"Dados de {site} apagados ({cookieText})" + (storage ? "" : " — o armazenamento ficou por apagar");
     }
 }

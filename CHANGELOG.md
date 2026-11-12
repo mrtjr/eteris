@@ -6,6 +6,8 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 
 ### Privacidade
 
+- «Apagar cookies e dados deste site», no cadeado, apaga agora os cookies do domínio e dos subdomínios (os de `.exemplo.pt` também) e o armazenamento das origens do site, com a mesma regra do «Triturar»; antes só apagava os da página aberta. O aviso diz quantos cookies saíram.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

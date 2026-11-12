@@ -171,4 +171,40 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.False(store.Contains("bob.github.io"));
         Assert.Equal(["alice.github.io"], store.All());
     }
+
+    [Fact]
+    public void CookieDeletions_TakeDomainAndSubdomainCookiesOfTheSite()
+    {
+        var plan = SiteScope.CookieDeletions(
+            [(".exemplo.pt", "/", "sid"), ("accounts.exemplo.pt", "/login", "a"), ("www.exemplo.pt", "/", "h"), (".outro.pt", "/", "x"), (".malexemplo.pt", "/", "y")],
+            "exemplo.pt");
+        Assert.Equal(
+            [("https://exemplo.pt/", "sid", "exemplo.pt"), ("https://accounts.exemplo.pt/login", "a", "accounts.exemplo.pt"), ("https://www.exemplo.pt/", "h", "www.exemplo.pt")],
+            plan);
+    }
+
+    [Fact]
+    public void SiteDataCleared_CountsTheCookies()
+    {
+        Assert.Equal("Dados de exemplo.pt apagados (3 cookies)", SiteScope.SiteDataCleared("exemplo.pt", 3, storage: true));
+        Assert.Equal("Dados de exemplo.pt apagados (1 cookie)", SiteScope.SiteDataCleared("exemplo.pt", 1, storage: true));
+        Assert.Equal("Dados de exemplo.pt apagados (nenhum cookie) — o armazenamento ficou por apagar", SiteScope.SiteDataCleared("exemplo.pt", 0, storage: false));
+    }
+
+    [Fact]
+    public void LockPanel_ClearsTheWholeSite_LikeShred()
+    {
+        var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
+        Assert.DoesNotContain("DeleteCookiesAsync(info.Origin + \"/\")", panel);
+        Assert.Contains("DeleteSiteCookiesAsync(", panel);
+        Assert.Contains("SiteScope.SiteDataCleared(", panel);
+        Assert.Contains("await DeleteSiteCookiesAsync(manager, site)", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
 }
