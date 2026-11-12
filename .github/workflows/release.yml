@@ -44,6 +44,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
       - name: O feed de updates do cliente tem de apontar para este repositório
         run: |
           $expected = '"' + $env:REPO_URL + '"'
@@ -86,6 +90,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
       - name: O feed de updates do cliente tem de apontar para este repositório
         run: |
           $expected = '"' + $env:REPO_URL + '"'

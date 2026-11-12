@@ -57,7 +57,6 @@ public class DevicesScriptTests
             const caps = JSON.stringify(list[0].getCapabilities());
             print([show(list), proto, json, keys, caps].join('\n'));
             """);
-        if (output is null) return;
         var lines = output.Split('\n');
         Assert.Equal(Hidden, lines[0]);
         Assert.Equal("true", lines[1]);
@@ -70,7 +69,6 @@ public class DevicesScriptTests
     public void MicrophonePermission_ShowsTheAudioDevicesOnly()
     {
         var output = Run("{ microphone: 'granted' }", "print(show(await navigator.mediaDevices.enumerateDevices()));");
-        if (output is null) return;
         Assert.Equal("audioinput|Predefinição - Microfone (GAMING HEADSET)|default|g1;audioinput|Microfone (GAMING HEADSET)|bbdf2bca|g1;"
                      + "videoinput|||;audiooutput|Predefinição - LG ULTRAWIDE|default|g3;audiooutput|Alto-falantes (GAMING HEADSET)|12bd191c|g1", output);
     }
@@ -79,7 +77,6 @@ public class DevicesScriptTests
     public void CameraPermission_ShowsTheCameraOnly()
     {
         var output = Run("{ camera: 'granted', microphone: 'denied' }", "print(show(await navigator.mediaDevices.enumerateDevices()));");
-        if (output is null) return;
         Assert.Equal("audioinput|||;videoinput|OBS Virtual Camera|6ff78693|g2;audiooutput|||", output);
     }
 
@@ -94,7 +91,6 @@ public class DevicesScriptTests
             const after = show(await navigator.mediaDevices.enumerateDevices());
             print(before + '\n' + after);
             """);
-        if (output is null) return;
         var lines = output.Split('\n');
         Assert.Equal(Hidden, lines[0]);
         Assert.Equal("audioinput|||;videoinput|OBS Virtual Camera|6ff78693|g2;audiooutput|||", lines[1]);
@@ -104,7 +100,6 @@ public class DevicesScriptTests
     public void PermissionQueryFailing_KeepsTheDevicesHidden()
     {
         var output = Run("{ camera: 'throw', microphone: 'throw' }", "print(show(await navigator.mediaDevices.enumerateDevices()));");
-        if (output is null) return;
         Assert.Equal(Hidden, output);
     }
 
@@ -116,38 +111,13 @@ public class DevicesScriptTests
             const p = MediaDevices.prototype;
             print([p.enumerateDevices.name, p.enumerateDevices.length, p.getUserMedia.name, p.getUserMedia.length].join(','));
             """);
-        if (output is null) return;
         Assert.Equal("enumerateDevices,0,getUserMedia,0", output);
     }
 
     [Fact]
     public void SessionScript_IncludesTheDevicesScript() => Assert.Contains(PrivacySignals.DevicesScript, PrivacySignals.SessionScript);
 
-    private static string? Run(string permissions, string body)
-    {
-        var script = Setup.Replace("PERMISSIONS", permissions) + "\n" + PrivacySignals.DevicesScript
-                     + "\n(async () => {\n" + body + "\n})().catch(e => { console.error(e); process.exit(1); });";
-        var file = Path.Combine(Path.GetTempPath(), $"eteris-devices-{Guid.NewGuid():N}.js");
-        File.WriteAllText(file, script);
-        try
-        {
-            Process? node;
-            try
-            {
-                node = Process.Start(new ProcessStartInfo("node", [file])
-                {
-                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-                    StandardOutputEncoding = System.Text.Encoding.UTF8,
-                });
-            }
-            catch (System.ComponentModel.Win32Exception) { return null; } // Node não instalado: não há como verificar aqui.
-            if (node is null) return null;
-            var output = node.StandardOutput.ReadToEnd();
-            var error = node.StandardError.ReadToEnd();
-            node.WaitForExit(30_000);
-            Assert.True(node.ExitCode == 0, error);
-            return output.Replace("\r\n", "\n");
-        }
-        finally { File.Delete(file); }
-    }
+    private static string Run(string permissions, string body)
+        => NodeRunner.Run(Setup.Replace("PERMISSIONS", permissions) + "\n" + PrivacySignals.DevicesScript
+                          + "\n(async () => {\n" + body + "\n})().catch(e => { console.error(e); process.exit(1); });");
 }

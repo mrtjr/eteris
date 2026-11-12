@@ -8,7 +8,8 @@ namespace Eteris.Browser.Tests.Vault;
 // C2 (docs/palavras-passe.md): o classificador de formulários do script do cofre, em funções puras sobre descritores
 // ({tag, type, name, id, autocomplete, label, placeholder, ariaLabel, visible}), corrido no Node como o
 // DevicesScriptTests. Os descritores seguem os atributos públicos dos formulários destes sites (não foram visitados) e
-// formulários típicos de bancos, lojas e serviços públicos de Portugal e do Brasil. Sem Node instalado, passa.
+// formulários típicos de bancos, lojas e serviços públicos de Portugal e do Brasil. Sem Node instalado, falha
+// (NodeRunner).
 public class CofreClassifierTests
 {
     // Um caso: o nome, os campos (por ordem no DOM) e o esperado — o tipo do formulário e o tipo de cada campo («-» =
@@ -286,7 +287,6 @@ public class CofreClassifierTests
             });
             print(JSON.stringify(out));
             """);
-        if (output is null) return;
         var results = JsonDocument.Parse(output).RootElement.EnumerateArray().ToList();
         var failures = new List<string>();
         for (var i = 0; i < Forms.Length; i++)
@@ -322,7 +322,6 @@ public class CofreClassifierTests
               k({ tag: 'select', type: 'select-one', name: 'email' }),
             ].join(' '));
             """);
-        if (output is null) return;
         Assert.Equal("postal-code postal-code password password tel email neighborhood - - street-address - -", output);
     }
 
@@ -338,7 +337,6 @@ public class CofreClassifierTests
               v({ visibility: 'collapse' }), v({ opacity: 0 }), v({ opacity: 0.05 }), v({ opacity: 0.5 }), v({ inViewport: false }),
               v({ hit: false }), v({ width: 1, height: 1 })].join(''));
             """);
-        if (output is null) return;
         Assert.Equal("100000000000", output);
     }
 
@@ -353,7 +351,6 @@ public class CofreClassifierTests
             print([v({ opacity: 0.95 }), v({ opacity: 0.85 }), v({ width: 9 }), v({ height: 9 }), v({ width: 10, height: 10 }),
               v({ textVisible: false }), v({ textVisible: true }), v({ frameVisible: false }), v({ frameVisible: true })].join(''));
             """);
-        if (output is null) return;
         Assert.Equal("100010101", output);
     }
 
@@ -366,7 +363,6 @@ public class CofreClassifierTests
             print([C.uncovered([true, true, true, true, true]), C.uncovered([true, true, true, false, false]),
               C.uncovered([true, true, false, false, false]), C.uncovered([false, false, false, false, false]), C.uncovered([])].join(','));
             """);
-        if (output is null) return;
         Assert.Equal("true,true,false,false,false", output);
     }
 
@@ -382,7 +378,6 @@ public class CofreClassifierTests
               g({ at: 50, key: 'Tab' }, 100, false), g({ at: 50, key: 'Enter' }, 100, false), g({ at: 50, pointer: true }, 1200, true),
               g({ at: 200, pointer: true }, 100, true)].join(''));
             """);
-        if (output is null) return;
         Assert.Equal("0101000", output);
     }
 
@@ -453,7 +448,6 @@ public class CofreClassifierTests
               r([{ addedNodes: [node('INPUT', false)], removedNodes: [] }]), r([{ addedNodes: [], removedNodes: [node('FORM', true)] }]),
               r([{ addedNodes: [node('SECTION', true)], removedNodes: [] }])].join(','));
             """);
-        if (output is null) return;
         Assert.Equal("0,1,0,0,1,1,1", output);
     }
 
@@ -462,7 +456,6 @@ public class CofreClassifierTests
     public void ScriptKinds_AreInTheMessageSchema()
     {
         var output = Run("print(JSON.stringify(C.KINDS));");
-        if (output is null) return;
         var kinds = JsonSerializer.Deserialize<string[]>(output)!;
         Assert.NotEmpty(kinds);
         Assert.All(kinds, k => Assert.Contains(k, VaultMessages.FieldKinds));
@@ -473,38 +466,16 @@ public class CofreClassifierTests
     public void Text_IsNormalized()
     {
         var output = Run("""print([C.norm('Nº de Contribuinte'), C.norm('cardNumber'), C.norm('user[email]'), C.norm('Código  Postal'), C.norm('n.º porta')].join('|'));""");
-        if (output is null) return;
         Assert.Equal("numero de contribuinte|card number|user email|codigo postal|numero porta", output);
     }
 
-    public static string? Run(string body)
+    public static string Run(string body)
     {
         var classifier = VaultScripts.Source.Replace(VaultScripts.BindingPlaceholder, "null", StringComparison.Ordinal)
             .Replace(VaultScripts.OfferPlaceholder, "false", StringComparison.Ordinal);
         var script = "const C = " + classifier.TrimEnd().TrimEnd(';') + ";\n"
                      + "const print = s => process.stdout.write(String(s));\n"
                      + "(async () => {\n" + body + "\n})().catch(e => { console.error(e); process.exit(1); });";
-        var file = Path.Combine(Path.GetTempPath(), $"eteris-cofre-{Guid.NewGuid():N}.js");
-        File.WriteAllText(file, script);
-        try
-        {
-            Process? node;
-            try
-            {
-                node = Process.Start(new ProcessStartInfo("node", [file])
-                {
-                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-                    StandardOutputEncoding = System.Text.Encoding.UTF8,
-                });
-            }
-            catch (System.ComponentModel.Win32Exception) { return null; } // Node não instalado: não há como verificar aqui.
-            if (node is null) return null;
-            var output = node.StandardOutput.ReadToEnd();
-            var error = node.StandardError.ReadToEnd();
-            node.WaitForExit(30_000);
-            Assert.True(node.ExitCode == 0, error);
-            return output.Replace("\r\n", "\n");
-        }
-        finally { File.Delete(file); }
+        return NodeRunner.Run(script);
     }
 }

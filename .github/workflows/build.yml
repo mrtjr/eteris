@@ -14,6 +14,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
       - name: Escudo (Rust) — testes, incluindo as listas reais
         run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet restore

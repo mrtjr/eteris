@@ -78,6 +78,22 @@ public class WorkflowTests
         Assert.Matches(@"- if: failure\(\)\n\s+uses: actions/upload-artifact@v\d+\n\s+with:\n\s+name: testes-.*\n\s+path: TestResults", upload);
     }
 
+    // Os testes dos scripts injetados correm no Node e falham sem ele (NodeRunner): cada job que corre a bateria
+    // instala-o, na versão da máquina de publicação, antes do dotnet test.
+    [Theory]
+    [InlineData("build.yml", "build")]
+    [InlineData("release.yml", "verify")]
+    [InlineData("release.yml", "publish-sem-codecs")]
+    public void TestJobs_InstallTheNodeTheTestsNeed(string workflow, string job)
+    {
+        var steps = Job(Workflow(workflow).Replace("\r\n", "\n"), job);
+        var node = steps.IndexOf("actions/setup-node@", StringComparison.Ordinal);
+        var test = steps.IndexOf("dotnet test", StringComparison.Ordinal);
+        Assert.True(node >= 0, $"{workflow} ({job}): sem actions/setup-node");
+        Assert.True(test > node, $"{workflow} ({job}): o setup-node tem de vir antes do dotnet test");
+        Assert.Matches(@"node-version: 22\.16\.0\n", steps[node..test]);
+    }
+
     // A publicação de emergência compila o Rust, publica, empacota e envia: prazo maior, mas com prazo.
     [Fact]
     public void Release_PublishSemCodecs_HasATimeout()

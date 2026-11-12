@@ -29,7 +29,6 @@ public class RepositoryHygieneTests
     {
         var root = RepoRoot();
         var files = TrackedFiles(root);
-        if (files is null) return; // sem git não há a lista do que está versionado (raro: o CI e quem publica têm git)
         var profile = Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         if (profile.Length == 0) return;
         var needle = ProfileNeedle(profile, ShortPath(profile));
@@ -103,7 +102,7 @@ public class RepositoryHygieneTests
         Assert.DoesNotMatch(needle, @"C:\Users\" + name + "2");
     }
 
-    private static List<string>? TrackedFiles(string root)
+    private static List<string> TrackedFiles(string root)
     {
         var start = new ProcessStartInfo("git")
         {
@@ -114,10 +113,10 @@ public class RepositoryHygieneTests
             StandardOutputEncoding = Encoding.UTF8,
         };
         foreach (var argument in new[] { "-C", root, "ls-files", "-z" }) start.ArgumentList.Add(argument);
-        Process? git;
-        try { git = Process.Start(start); }
-        catch (System.ComponentModel.Win32Exception) { return null; } // git não instalado
-        if (git is null) return null;
+        const string missing = "o git não está no PATH: sem ele não se sabe o que está versionado";
+        Process git;
+        try { git = Process.Start(start) ?? throw new Xunit.Sdk.XunitException(missing); }
+        catch (System.ComponentModel.Win32Exception) { throw new Xunit.Sdk.XunitException(missing); }
         using (git)
         {
             var error = git.StandardError.ReadToEndAsync();

@@ -51,6 +51,12 @@ public class SandboxPublishTests
         Assert.DoesNotContain("ErrorActionPreference", param);
     }
 
+    // O build-all.ps1 corre a bateria antes de publicar: os testes dos scripts injetados falham sem o Node, por isso o
+    // script exige-o à partida, como o git, o cmake e o dotnet.
+    [Fact]
+    public void BuildAll_RequiresTheToolsTheTestsNeed()
+        => Assert.Contains("foreach ($tool in 'git', 'cmake', 'dotnet', 'node')", Read("build", "sandbox", "build-all.ps1"));
+
     [Fact]
     public void Publish_IsWithSandboxByDefault_AndNoSandboxIsTheEmergencyExit()
     {
