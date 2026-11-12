@@ -265,13 +265,6 @@ public class WorkflowTests
         Assert.Contains("pull_request:", yml);
     }
 
-    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
-    {
-        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
-        return dir!.FullName;
-    }
-
     private static string Job(string yml, string name)
         => Regex.Match(yml, "^  " + Regex.Escape(name) + @":\n(.*?)(?=^  \S|\z)", RegexOptions.Multiline | RegexOptions.Singleline).Groups[1].Value;
 }
