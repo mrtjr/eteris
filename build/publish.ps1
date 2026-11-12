@@ -190,7 +190,7 @@ if ($oauth) {
 function Tool-Version([string]$Command, [string[]]$Arguments, [string]$LineStart = "") {
   $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
   try {
-    $lines = @(& $Command @Arguments 2>$null | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ -and $_ -match $LineStart })
+    $lines = @(& $Command @Arguments 2>$null | ForEach-Object { (([string]$_).Trim() -replace '\s+', ' ') } | Where-Object { $_ -and $_ -match $LineStart })
     if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) { $null } else { $lines[0] }
   } catch { $null } finally { $ErrorActionPreference = $old }
 }
