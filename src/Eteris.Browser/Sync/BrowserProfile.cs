@@ -74,7 +74,7 @@ internal sealed class BrowserProfile : ILocalProfileReader
             keys.AddRange(AppData.ReadHttpExceptions().Select(h => $"http|{h}|"));
             var hidden = new HiddenElementsStore(AppPaths.Database);
             keys.AddRange(hidden.Hosts().Keys.SelectMany(h => hidden.For(h).Select(selector => $"hide|{h}|{selector}")));
-            keys.AddRange(Shields.SiteRules.All().Select(r => $"rule|{r.Site}|{r.Domain}"));
+            keys.AddRange(Shields.SiteRules.ReadAll().Select(r => $"rule|{r.Site}|{r.Domain}"));
             return keys;
         }
         catch (Exception) { return null; }

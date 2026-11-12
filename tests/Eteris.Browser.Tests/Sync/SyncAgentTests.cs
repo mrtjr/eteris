@@ -1488,6 +1488,26 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
     }
 
+    // Auditoria, SYN-10: um Escudo que não se leu nesta ronda não apaga as regras por site nos outros computadores.
+    [Fact]
+    public async Task UnreadableShield_DoesNotDeleteTheSiteRulesOnTheOtherDevices()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Profile.Set(Collections.Shield, "rule|exemplo.test|rastreador.test", new JsonObject());
+        await Settle(casa, trabalho);
+        Assert.NotNull(trabalho.Profile.Get(Collections.Shield, "rule|exemplo.test|rastreador.test"));
+
+        trabalho.Profile.Unreadable.Add(Collections.Shield);
+        _now += 1000;
+        await Settle(trabalho, casa);
+        Assert.NotNull(casa.Profile.Get(Collections.Shield, "rule|exemplo.test|rastreador.test"));
+
+        trabalho.Profile.Unreadable.Clear();
+        await Settle(trabalho, casa);
+        Assert.NotNull(casa.Profile.Get(Collections.Shield, "rule|exemplo.test|rastreador.test"));
+        Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
+    }
+
     // Dois computadores criam a conta ao mesmo tempo (Drive vazio para os dois): o de identificador maior sai da sua,
     // volta a «escolher» e junta-se à outra sem perder nada.
     [Fact]

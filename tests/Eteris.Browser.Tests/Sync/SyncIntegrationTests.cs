@@ -413,6 +413,20 @@ public class SyncIntegrationTests
             Assert.DoesNotContain("DeviceName", File.ReadAllText(file, Encoding.UTF8));
     }
 
+    // Auditoria, SYN-10: uma carga das regras de bloqueio por site que falhou não é «sem regras»: o Escudo fica ilegível
+    // nessa ronda, e as regras não se apagam nos outros computadores.
+    [Fact]
+    public void SiteRules_AFailedLoad_IsNotAnEmptyList()
+    {
+        Assert.True(Eteris.Browser.Shields.SiteRules.Load(() => throw new IOException("a base não abre")).Failed);
+        Assert.True(Eteris.Browser.Shields.SiteRules.Load(() => null).Failed);                       // a base nem abriu
+        var (saved, failed) = Eteris.Browser.Shields.SiteRules.Load(() => [("exemplo.test", "rastreador.test")]);
+        Assert.False(failed);
+        Assert.Single(saved.All());
+        var profile = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "BrowserProfile.cs"));
+        Assert.Contains("Shields.SiteRules.ReadAll().Select(", profile, StringComparison.Ordinal);
+    }
+
     // ---- barra de aprovação (0.2.15, T8) ---------------------------------------------------------------------------
 
     private static string BrowserSrc(params string[] parts) => Path.Combine([GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", .. parts]);
