@@ -22,8 +22,8 @@ if inside:
     sys.exit("recusado: o patch de teste só se aplica a uma cópia fora deste repositório")
 
 s = open(target, encoding="utf-8-sig").read()
-old1 = 'try { manager = new UpdateManager(new GithubSource(RepoUrl, null, false)); }'
-new1 = ('try { manager = Environment.GetEnvironmentVariable("ETERIS_SBXTEST_FEED") is { Length: > 0 } sbxFeed'
+old1 = 'try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }'
+new1 = ('try { return Environment.GetEnvironmentVariable("ETERIS_SBXTEST_FEED") is { Length: > 0 } sbxFeed'
         ' ? new UpdateManager(new SimpleFileSource(new System.IO.DirectoryInfo(sbxFeed)))'
         ' : new UpdateManager(new GithubSource(RepoUrl, null, false)); }')
 old2 = '_manager.WaitExitThenApplyUpdates(Pending.TargetFullRelease, silent: true, restart: RestartRequested);'

@@ -1,36 +1,48 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Updates;
 
 namespace Eteris.Browser.Tests;
 
-// E10 do plano de desempenho da 0.2.14 (ajuste e10, à espera da decisão D-7): o Velopack deixa de procurar no arranque um
-// pacote para aplicar; o Éteris já aplica as atualizações ao sair (UpdateService.ApplyPendingOnExit).
+// INF-03 (auditoria 2): o Velopack nunca aplica um pacote descarregado no arranque (corria antes da instância única e
+// terminava o Éteris aberto); o Éteris aplica-o ao sair (UpdateService.ApplyPendingOnExit) ou, depois de ser a instância
+// principal, sozinho e sem link nos argumentos (UpdateService.ApplyPendingAtStartup). Regra fixa: o ajuste e10 saiu.
 public class UpdatesOnExitTests
 {
+    // Sem condição e antes do Run (é aí que o Velopack aplicaria o pacote); os ganchos rápidos do NetworkSandbox
+    // continuam todos; a aplicação no arranque fica depois da instância única e antes do motor.
     [Fact]
-    public void Tweak_IsOffByDefaultAndWaitsForTheOwner()
-    {
-        var tweak = Assert.Single(PerfTuning.Tweaks, t => t.Id == PerfTuning.UpdatesOnExitOnly);
-        Assert.False(tweak.OnByDefault);
-        Assert.True(tweak.BeforeFirstPaint);
-        Assert.Equal("D-7", tweak.Waits);
-    }
-
-    // Só com o ajuste, e antes do Run (é aí que o Velopack aplicaria o pacote); os ganchos rápidos do NetworkSandbox
-    // continuam todos.
-    [Fact]
-    public void Program_TurnsOffTheStartupApplyOnlyWithTheTweak()
+    public void Program_NeverLetsVelopackApplyOnStartup()
     {
         var code = Source("Program.cs");
-        Assert.Contains("if (PerfTuning.IsOn(PerfTuning.UpdatesOnExitOnly)) velopack = velopack.SetAutoApplyOnStartup(false);", code);
-        Assert.True(code.IndexOf("SetAutoApplyOnStartup(false)", StringComparison.Ordinal) < code.IndexOf("velopack.Run();", StringComparison.Ordinal));
-        foreach (var hook in new[] { "OnAfterInstallFastCallback", "OnAfterUpdateFastCallback", "OnBeforeUninstallFastCallback" })
-            Assert.Contains(hook, code);
-        // Um só Run do Velopack; o outro .Run() do Main é o da aplicação WPF (app.Run()).
+        Assert.Contains(".SetAutoApplyOnStartup(false)", code);
+        Assert.DoesNotContain("UpdatesOnExitOnly", code);
+        Assert.True(code.IndexOf(".SetAutoApplyOnStartup(false)", StringComparison.Ordinal) < code.IndexOf("velopack.Run();", StringComparison.Ordinal));
+        foreach (var hook in new[] { "OnAfterInstallFastCallback", "OnAfterUpdateFastCallback", "OnBeforeUninstallFastCallback" }) Assert.Contains(hook, code);
         Assert.Single(Regex.Matches(code, @"velopack\.Run\(\)"));
-        Assert.Equal(2, Regex.Matches(code, @"\.Run\(\)").Count);
-        Assert.Contains("app.Run();", code);
+        var apply = code.IndexOf("UpdateService.ApplyPendingAtStartup(args);", StringComparison.Ordinal);
+        Assert.True(apply > code.IndexOf("StartupTrace.Mark(\"instancia\");", StringComparison.Ordinal));
+        Assert.True(apply < code.IndexOf("CefConfigurator.StartFromMain(App.OnCefReady);", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true, false, false, true)] [InlineData(false, false, false, false)]
+    [InlineData(true, true, false, false)] [InlineData(true, false, true, false)]
+    public void ShouldApplyAtStartup_OnlyAloneAndWithoutALink(bool pending, bool other, bool link, bool expected)
+        => Assert.Equal(expected, UpdateService.ShouldApplyAtStartup(pending, other, link));
+
+    [Fact]
+    public void Tweak_E10_IsGone() => Assert.DoesNotContain(PerfTuning.Tweaks, t => t.Id == "e10");
+
+    [Fact]
+    public void TestPatch_FindsTheLineWhereTheManagerIsBorn()
+    {
+        var service = Source(Path.Combine("Updates", "UpdateService.cs"));
+        Assert.Single(Regex.Matches(service, Regex.Escape("try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }")));
+        Assert.DoesNotContain("manager = new UpdateManager(", service);
+        Assert.Contains("old1 = 'try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }'",
+            File.ReadAllText(Path.Combine(Root, "build", "sandbox", "provas", "patch-velopack-teste.py")));
     }
 
     // O que o ajuste pressupõe: as atualizações aplicam-se ao sair.

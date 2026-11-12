@@ -61,13 +61,66 @@ public static class UpdateService
     {
         try
         {
-            var manager = new UpdateManager(source, null, locator);
-            if (!manager.IsInstalled) return null;
-            return await manager.CheckForUpdatesAsync();
+            var checker = new UpdateManager(source, null, locator);
+            if (!checker.IsInstalled) return null;
+            return await checker.CheckForUpdatesAsync();
         }
         catch
         {
             return null;
+        }
+    }
+
+    // O único sítio onde nasce o UpdateManager do Éteris; nulo fora de uma instalação Velopack.
+    private static UpdateManager? NewManager()
+    {
+        try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }
+        catch (Exception) { return null; }
+    }
+
+    // Aplicar no arranque um pacote já descarregado (INF-03): só se houver um, se nenhum outro processo correr a partir
+    // desta instalação (outro perfil aberto, ou os filhos dele) e se o lançamento não trouxer um link nem uma janela
+    // privada (o Update.exe escreve no seu registo os argumentos com que reabre o Éteris).
+    public static bool ShouldApplyAtStartup(bool pending, bool otherProcessFromInstall, bool carriesUrlOrPrivate)
+        => pending && !otherProcessFromInstall && !carriesUrlOrPrivate;
+
+    // Chamado no Program.Main logo a seguir à instância única. Nunca lança: uma falha deixa o pacote para a saída.
+    public static void ApplyPendingAtStartup(string[] args)
+    {
+        try
+        {
+            if (NewManager() is not { IsInstalled: true } manager || manager.UpdatePendingRestart is not { } asset) return;
+            var carries = Infrastructure.StartupArgs.InitialUrl(args) is not null || Infrastructure.StartupArgs.IsPrivate(args);
+            if (!ShouldApplyAtStartup(true, OtherProcessFromInstall(), carries)) return;
+            manager.ApplyUpdatesAndRestart(asset, args);
+        }
+        catch
+        {
+            // fica para a saída
+        }
+    }
+
+    // Outro processo com o nome deste e o mesmo executável (um processo que não se deixa ler conta como outro).
+    private static bool OtherProcessFromInstall()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var path = Environment.ProcessPath;
+        var processes = System.Diagnostics.Process.GetProcessesByName(self.ProcessName);
+        try
+        {
+            foreach (var process in processes)
+            {
+                if (process.Id == self.Id) continue;
+                string? file;
+                try { file = process.MainModule?.FileName; }
+                catch { return true; }
+                if (path is null || file is null || string.Equals(file, path, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+        finally
+        {
+            foreach (var process in processes) process.Dispose();
         }
     }
 
@@ -76,9 +129,7 @@ public static class UpdateService
         if (State == UpdateState.Ready || Interlocked.Exchange(ref _checking, 1) == 1) return;
         try
         {
-            UpdateManager? manager = null;
-            try { manager = new UpdateManager(new GithubSource(RepoUrl, null, false)); }
-            catch (Exception) { /* fora de uma instalação Velopack */ }
+            var manager = NewManager();
             if (manager is null || !manager.IsInstalled)
             {
                 State = UpdateState.Development;

@@ -1,4 +1,5 @@
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Updates;
 using Velopack;
 
 namespace Eteris.Browser;
@@ -15,19 +16,18 @@ public static class Program
     {
         StartupTrace.Mark("main");
         // Rede de segurança em dois degraus (D-18): um arranque anterior desta versão falhou com ajustes de desempenho antes
-        // da 1.ª página: este corre sem nenhum (o sandbox só cai à 2.ª). Antes da 1.ª leitura de um ajuste, a do e10.
+        // da 1.ª página: este corre sem nenhum (o sandbox só cai à 2.ª). Antes da 1.ª leitura de um ajuste, a do e11.
         if (StartupGuard.SuspendTweaksAfterAFailedStart(args)) StartupTrace.Mark("sem.ajustes");
         // Depois de instalar e de atualizar: a ACL da pasta para o serviço de rede com sandbox (NetworkSandbox, D9); antes
         // de desinstalar: o perfil do AppContainer dele, que ficaria no utilizador.
+        // O Velopack nunca aplica no arranque (INF-03): fazia-o aqui, antes da instância única, e o Update.exe terminava o
+        // Éteris que estivesse aberto (um 2.º lançamento, um link noutra aplicação). O Éteris aplica ao sair
+        // (UpdateService.ApplyPendingOnExit) ou, já instância principal, com UpdateService.ApplyPendingAtStartup.
         var velopack = VelopackApp.Build()
             .OnAfterInstallFastCallback(_ => NetworkSandbox.OnInstalled())
             .OnAfterUpdateFastCallback(_ => NetworkSandbox.OnInstalled())
-            .OnBeforeUninstallFastCallback(_ => NetworkSandbox.OnUninstalling());
-        // Ajuste e10 (plano de desempenho da 0.2.14, à espera da decisão D-7; desligado por omissão): o Éteris já aplica as
-        // atualizações ao sair (UpdateService.ApplyPendingOnExit); sem isto o Velopack procura também, em cada arranque,
-        // um pacote descarregado para aplicar. Uma atualização descarregada antes de uma saída que falhou espera pela
-        // próxima saída limpa (o UpdateService volta a encontrá-la depois da 1.ª página).
-        if (PerfTuning.IsOn(PerfTuning.UpdatesOnExitOnly)) velopack = velopack.SetAutoApplyOnStartup(false);
+            .OnBeforeUninstallFastCallback(_ => NetworkSandbox.OnUninstalling())
+            .SetAutoApplyOnStartup(false);
         velopack.Run();
         StartupTrace.Mark("velopack");
 
@@ -49,6 +49,9 @@ public static class Program
             return;
         }
         StartupTrace.Mark("instancia");
+        // Uma atualização já descarregada aplica-se agora só se este for o único Éteris da instalação e não trouxer link nem
+        // pedido de janela privada; senão fica para a saída (INF-03).
+        UpdateService.ApplyPendingAtStartup(args);
         // O JIT do arranque passa a correr também noutros núcleos, guiado pelo arranque anterior (Infrastructure/StartupJit.cs);
         // um arranque privado não o grava.
         if (StartupJit.ShouldRecord(args)) StartupJit.Start(AppPaths.Root);

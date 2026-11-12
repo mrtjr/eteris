@@ -312,7 +312,7 @@ public class SandboxFallbackTests
         finally { Directory.Delete(dir, true); }
     }
 
-    // O 1.º degrau decide-se no início do Program.Main, antes da 1.ª leitura de um ajuste (o e10, antes do Velopack.Run),
+    // O 1.º degrau decide-se no início do Program.Main, antes da 1.ª leitura de um ajuste (o e11, depois da instância única),
     // e só lê o disco com ajustes antes da 1.ª página ligados e o sandbox possível (regra R-2: nada de novo na omissão).
     [Fact]
     public void TwoSteps_AreCheckedAtTheTopOfMain()

@@ -125,8 +125,8 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<Da
 
     public const string TweaksSuspendedReason = "rede de segurança: um arranque anterior desta versão falhou com eles";
 
-    // O 1.º degrau da rede de segurança (D-18), no início do Program.Main, antes da 1.ª leitura de um ajuste (o e10 lê-se
-    // logo a seguir, antes do Velopack.Run). Só lê o disco quando há ajustes antes da 1.ª página ligados e o sandbox é
+    // O 1.º degrau da rede de segurança (D-18), no início do Program.Main, antes da 1.ª leitura de um ajuste (o e11 lê-se
+    // logo a seguir à instância única). Só lê o disco quando há ajustes antes da 1.ª página ligados e o sandbox é
     // possível (na configuração de omissão, nenhum: nada de novo antes da 1.ª página, regra R-2 do sandbox). O perfil é o
     // do --user-data-dir dos argumentos, como o AppPaths.UseRoot faz a seguir.
     public static bool SuspendTweaksAfterAFailedStart(IReadOnlyList<string> args)
