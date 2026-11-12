@@ -23,6 +23,28 @@ public class SleepPolicyTests
     public void ActiveSleepingLoadingOrPlayingAudio_NeverSleeps(bool active, bool sleeping, bool loading, bool audible)
         => Assert.False(SleepPolicy.ShouldSleep(active, sleeping, loading, audible, Now.AddHours(-3), Now));
 
+    // DAD-03: câmara, microfone ou ecrã em uso, multimédia a tocar (mesmo sem som) e a página que pediu para ficar.
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public void CapturingPlayingOrHeld_NeverSleeps(bool capturing, bool playing, bool held)
+        => Assert.False(SleepPolicy.ShouldSleep(false, false, false, false, Now.AddHours(-3), Now,
+            isCapturing: capturing, isPlaying: playing, isHeld: held));
+
+    // DES-11: o tempo em que o computador esteve suspenso não conta para o prazo.
+    [Fact]
+    public void SuspendGap_IsNotCounted()
+    {
+        Assert.True(SleepPolicy.WasSuspended(Now.AddMinutes(-30), Now));
+        Assert.False(SleepPolicy.WasSuspended(Now.AddMinutes(-1), Now));
+        Assert.False(SleepPolicy.WasSuspended(null, Now));
+        // Usada 1 min antes de o PC suspender 30 min: no minuto a seguir ao regresso continua acordada.
+        var lastActive = SleepPolicy.Later(Now.AddMinutes(-31), floorUtc: Now);
+        Assert.False(SleepPolicy.ShouldSleep(false, false, false, false, lastActive, Now.AddMinutes(1)));
+        Assert.Equal(Now.AddMinutes(-5), SleepPolicy.Later(Now.AddMinutes(-5), floorUtc: null));
+    }
+
     [Fact]
     public void Restore_KeepsOrderActivatesChosenAndSleepsTheRest()
     {

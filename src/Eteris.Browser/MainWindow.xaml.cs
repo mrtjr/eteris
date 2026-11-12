@@ -51,6 +51,9 @@ public partial class MainWindow : Window
         Tabs.PropertyChanged += OnTabsPropertyChanged;
         // Fechar (ou tirar da faixa) a metade ativa do ecrã dividido deixa a outra metade no ecrã, não a vizinha na faixa.
         Tabs.PreferredSuccessor = tab => _split?.PartnerOf(tab);
+        // Mudar de Espaço não adormece o que a janela segura: câmara, microfone ou ecrã, multimédia a tocar, a página
+        // que pediu para ficar acordada (MainWindow.Sleep.cs).
+        Tabs.KeepsAwake = tab => IsCapturingTab(tab) || tab.Media == MediaState.Playing || IsHeld(tab, DateTime.UtcNow);
         StateChanged += (_, _) => OnWindowStateChanged();
         SourceInitialized += (_, _) =>
         {

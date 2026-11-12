@@ -382,7 +382,10 @@ vê), numa aba a passar para o motor de vídeo, numa aba fechada a sair, e numa 
 ar de leitor (pelo menos 200×150 CSS px, com `autoplay` ou ecrã inteiro permitidos: YouTube, Vimeo, Spotify ou
 SoundCloud embutidos), mesmo parado. Limite conhecido: o `<video>` e o som de um iframe de outro site não se deixam
 ver (o `IsAudible` só lê o documento principal), nem o Web Audio (`AudioContext`, jogos); uma página com um leitor de
-outro site sem esse aspeto, ou com som só por Web Audio, pode ficar quente até 8 s a descodificar e desenhar. Outro:
+outro site sem esse aspeto, ou com som só por Web Audio, pode ficar quente até 8 s a descodificar e desenhar. O sono
+das abas por tempo e por pressão tem o mesmo limite: o som de um iframe de outro site e o Web Audio não se veem, por
+isso não seguram a aba acordada (decisão D1 do plano 4 da auditoria: `SleepProbe.PlayerFrameKeepsAwake`), e só as
+caixas de texto de várias linhas e o editor com o foco contam como texto por enviar — os campos de uma linha não. Outro:
 se a página que entra fria não apresentar dentro do teto de 1 s do T1, por baixo dela pode ver-se uma página quente em
 vez da cor de fundo.
 
