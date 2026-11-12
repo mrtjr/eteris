@@ -56,6 +56,8 @@ public class ForgetLeftoversTests : IDisposable
     // Varredura do arranque: só o que ficou pendente, mesmo que o site já tenha aberto no motor de vídeo.
     [InlineData(false, true, false, true, false)]
     [InlineData(false, true, true, false, true)]
+    // Um site pendente abre-o sempre (o Triturar também tira o nome do ficheiro), mesmo fora da regra MayHoldData.
+    [InlineData(false, false, true, false, true)]
     public void VideoProfile_IsOpenedOnlyWhenSomethingMayBeThere(bool liveCore, bool startupSweep, bool pending, bool mayHoldData, bool expected)
         => Assert.Equal(expected, VideoEngine.ClearsSite(liveCore, startupSweep, pending, mayHoldData));
 
@@ -63,6 +65,9 @@ public class ForgetLeftoversTests : IDisposable
     public void LeftoversToast_SaysWhatWasForgottenAndWhatFailed()
     {
         Assert.Null(SiteScope.LeftoversDone([new("a.pt", 0, 0, true)]));
+        // Nada a apagar e só o armazenamento por fazer (sem página viva do motor principal neste arranque): sem aviso,
+        // senão aparecia em cada arranque sem nada que se saiba ter ficado.
+        Assert.Null(SiteScope.LeftoversDone([new("a.pt", 0, 0, false)]));
         Assert.Equal("a.pt foi esquecido (tinha ficado por apagar ao sair)", SiteScope.LeftoversDone([new("a.pt", 2, 0, true)]));
         Assert.Equal("2 sites esquecidos (tinham ficado por apagar ao sair): a.pt, b.pt",
             SiteScope.LeftoversDone([new("a.pt", 2, 0, true), new("b.pt", 0, 3, true), new("c.pt", 0, 0, true)]));
@@ -72,7 +77,7 @@ public class ForgetLeftoversTests : IDisposable
         Assert.Equal("Não foi possível esquecer tudo de a.pt (tinha ficado por apagar ao sair) — 1 cookie e 0 entradas do histórico apagados — não foi possível apagar todos os cookies",
             SiteScope.LeftoversDone([new("a.pt", 1, 0, true, CookiesFailed: true)]));
         Assert.Equal("Não foi possível esquecer tudo de a.pt e b.pt (tinham ficado por apagar ao sair); c.pt foi esquecido",
-            SiteScope.LeftoversDone([new("a.pt", 0, 0, false), new("b.pt", 4, 0, true, VideoEngineFailed: true), new("c.pt", 1, 0, true)]));
+            SiteScope.LeftoversDone([new("a.pt", 1, 0, false), new("b.pt", 4, 0, true, VideoEngineFailed: true), new("c.pt", 1, 0, true)]));
     }
 
     [Fact]
@@ -91,6 +96,11 @@ public class ForgetLeftoversTests : IDisposable
         Assert.True(mark > 0 && mark < clear && clear < done);
         var video = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
         Assert.Contains("NoteVideoForgetPending(e.Uri);", video);
+        // Desligar o «esquecer» (no cadeado ou com «Repor» nas Definições por site) tira o nome do ficheiro.
+        var data = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data", "AppData.cs"));
+        var set = data[data.IndexOf("public static void SetForgetOnClose(", StringComparison.Ordinal)..];
+        set = set[..set.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("VideoForgetPending.Remove(SiteScope.OfHost(host))", set);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

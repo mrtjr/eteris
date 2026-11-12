@@ -684,6 +684,8 @@ public static class AppData
             else LazyForget.Value?.Remove(host);
         }
         catch (Exception) { }
+        // Sem «esquecer» a varredura do arranque já não o visita: o nome não fica no ficheiro dos pendentes.
+        if (!on) VideoForgetPending.Remove(SiteScope.OfHost(host));
     }
 
     // A permissão guardada do site (null: nunca respondeu), para quem não tem janela: os pedidos sem aba

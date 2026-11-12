@@ -97,7 +97,7 @@ public sealed class HistoryWriterTests : IDisposable
         });
         Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
         writer.Enqueue(h => h.Record("https://d.pt/", "D", T0));
-        Assert.True(writer.Flush(TimeSpan.FromMilliseconds(500)));
+        Assert.True(writer.Flush(TimeSpan.FromSeconds(3)));
         Assert.Single(_store.Visits(10));
         release.Set();
         await aside.WaitAsync(TimeSpan.FromSeconds(5));

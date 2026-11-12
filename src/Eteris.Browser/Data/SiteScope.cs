@@ -162,7 +162,10 @@ public static class SiteScope
     // O resultado da varredura do arranque para um site (MainWindow.Forget.cs, ForgetLeftoversAsync).
     public sealed record Leftover(string Site, int Cookies, int History, bool Storage, bool CookiesFailed = false, bool VideoEngineFailed = false)
     {
-        public bool Failed => !Storage || CookiesFailed || VideoEngineFailed;
+        // O armazenamento por fazer só conta num site de que se apagou alguma coisa: sem página viva do motor principal
+        // (a aba ativa no motor de vídeo, abas a dormir) falhava em todos os sites, em cada arranque, sem nada que se
+        // saiba ter ficado.
+        public bool Failed => CookiesFailed || VideoEngineFailed || (!Storage && Cookies + History > 0);
     }
 
     // O aviso da varredura do arranque: os sites esquecidos e, primeiro, os que ficaram com alguma coisa por apagar (o

@@ -347,13 +347,14 @@ public partial class MainWindow
 
     // Retomar o vídeo onde estava no motor principal: um script de uso único, no primeiro «loadedmetadata» da página de
     // topo (Tabs/VideoEngine.cs, ResumeScript). Sai do registo depois da primeira navegação que chegou a ter documento
-    // (uma que acabou em transferência desviada para o leitor não conta: é o documento seguinte que precisa dele);
-    // ficando, cada página seguinte da aba saltava o primeiro vídeo para o mesmo segundo.
+    // (uma que acabou em transferência desviada para o leitor não conta: é o documento seguinte que precisa dele; uma
+    // página de erro conta, para o script não ficar à espera da página seguinte); ficando, cada página seguinte da aba
+    // saltava o primeiro vídeo para o mesmo segundo.
     private static async Task ResumeAtAsync(CoreWebView2 core, double seconds)
     {
         if (await VideoPageScript.AddEarlyAsync(core, VideoEngine.ResumeScript(seconds)) is not { } id) return;
         ulong? committed = null;
-        void Loading(object? sender, CoreWebView2ContentLoadingEventArgs e) => committed = e.IsErrorPage ? null : e.NavigationId;
+        void Loading(object? sender, CoreWebView2ContentLoadingEventArgs e) => committed = e.NavigationId;
         async void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             if (committed != e.NavigationId) return;

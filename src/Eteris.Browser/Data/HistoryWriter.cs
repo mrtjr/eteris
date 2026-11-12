@@ -71,9 +71,10 @@ public sealed class HistoryWriter : IDisposable
     }
 
     // Trabalho longo e raro (a compactação, VACUUM) ao lado da fila, uma de cada vez: não conta para o Flush, por isso
-    // quem lê ou apaga (omnibox, paleta, barra lateral, eteris://history) não espera por ele. Com o WAL, as leituras
-    // seguem durante o VACUUM; uma escrita (a da fila ou um apagar) espera pela vez dela no SQLite, como antes.
-    // Uma falha fica aqui, como nas escritas da fila.
+    // quem lê ou apaga (omnibox, paleta, barra lateral, eteris://history) não espera pela compactação em si. Com o WAL,
+    // as leituras seguem durante o VACUUM, mas uma escrita espera pela vez dela no SQLite: uma visita que entre na fila
+    // durante a compactação fica à espera no escritor, e quem despejar a fila nesse intervalo ainda espera por ela (até
+    // aos 2 s do FlushHistory). Uma falha fica aqui, como nas escritas da fila.
     private readonly Lock _aside = new();
 
     public Task RunAside(Action<HistoryStore> work) => Task.Run(() => RunAsideNow(work));

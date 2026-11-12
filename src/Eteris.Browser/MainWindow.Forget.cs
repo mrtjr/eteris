@@ -326,9 +326,9 @@ public partial class MainWindow
         if (IsPrivate || SiteScope.SiteOf(Tabs.Active?.Address) is not { } site) return;
         var on = SiteInfoForgetToggle.IsChecked == true;
         AppData.SetForgetOnClose(site, on);
-        // Um site que já abriu no motor de vídeo pode lá ter dados: fica pendente para a varredura do arranque.
-        if (!on) AppData.VideoForgetPending.Remove(site);
-        else if (VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site)))
+        // Um site que já abriu no motor de vídeo pode lá ter dados: fica pendente para a varredura do arranque (desligar
+        // tira-o, em AppData.SetForgetOnClose).
+        if (on && VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site)))
             AppData.VideoForgetPending.Add(site);
         ShowToast(on ? $"{site} será esquecido quando deixar de ter abas dele" : $"{site} deixa de ser esquecido ao fechar");
     }
