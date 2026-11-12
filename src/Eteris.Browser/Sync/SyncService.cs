@@ -339,7 +339,8 @@ internal static class SyncService
             // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê (e que pode
             // tentar de novo ou ligar sem acabar de apagar).
             ok = false;
-            Say("delete", e.Message);
+            // Com o estado por ler, o texto já está no aviso do agente (StateUnreadableText): não se repete aqui.
+            if (!agent.Status.StateUnreadable) Say("delete", e.Message);
         }
         catch (Exception e)
         {
@@ -1031,9 +1032,9 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
     // chave que a pessoa mandou apagar. Só lança (IOException) se nem isso foi possível.
     public void Delete()
     {
-        SecretFile.Delete(path);
-        // O ficheiro posto de lado pode ter a chave: sai com «apagar a chave» (melhor esforço).
-        try { File.Delete(path + AsideSuffix); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        // O ficheiro posto de lado pode ter a chave: sai com «apagar a chave», da mesma maneira (marcado para apagar e
+        // esvaziado se estiver preso). Só lança (IOException) quando nem isso foi possível, como o próprio estado.
+        try { SecretFile.Delete(path + AsideSuffix); }
+        finally { SecretFile.Delete(path); }
     }
 }

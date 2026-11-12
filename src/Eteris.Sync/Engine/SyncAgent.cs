@@ -2463,6 +2463,13 @@ public sealed class SyncAgent
             _accountBy = null;
             _accountSince = 0;
             _phase = SyncPhase.Off;
+            // O estado guardado continua por ler (sem «apagar a chave»): fica parado, com o aviso, para a página continuar a
+            // oferecer «Recomeçar sem o estado antigo» (SyncStatus.StateUnreadable) em vez de a esconder até reiniciar.
+            if (_unreadable && !forgetKey)
+            {
+                _phase = SyncPhase.Stopped;
+                _notice = StateUnreadableText;
+            }
             if (forgetKey)
             {
                 if (_saved is not null) _saved.Enabled = false; // uma ronda em curso com este objeto já não grava

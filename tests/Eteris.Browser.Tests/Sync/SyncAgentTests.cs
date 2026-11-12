@@ -1571,6 +1571,21 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(id, inner.Load()!.Engine!.Device.Id);
     }
 
+    // Revisão final: «Sair» sem apagar a chave com o estado ainda por ler não esconde a recuperação (a página deixa de a oferecer
+    // se o estado passar a «desligada» sem StateUnreadable).
+    [Fact]
+    public async Task SignOutWithoutForgettingTheKey_KeepsAnUnreadableStateVisible()
+    {
+        var inner = new MemoryStore();
+        var casa = NewDevice("Casa", store: inner);
+        await casa.Agent.StartAsync();
+        var agent = new SyncAgent(() => _cloud, new MemoryProfile(), new FailingStore(inner) { Fail = true }, "Casa", Now, Quick);
+        agent.SignOut(forgetKey: false);
+        Assert.True(agent.Status.StateUnreadable);
+        Assert.Equal(SyncPhase.Stopped, agent.Status.Phase);
+        Assert.Equal(SyncAgent.StateUnreadableText, agent.Status.Notice);
+    }
+
     private sealed class FailingStore(MemoryStore inner) : ISyncStore
     {
         public bool Fail { get; set; }

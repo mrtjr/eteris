@@ -201,7 +201,8 @@ public static class SiteRules
     });
 
     // O que a carga das regras guardadas deu: uma carga que falhou (a base não abre, ou lança) não é «sem regras», e a
-    // sincronização sabe-o (ReadAll): uma lista que não se leu não se envia como vazia.
+    // sincronização sabe-o (ReadAll): uma lista que não se leu não se envia como vazia. A carga é uma só por execução do
+    // Éteris: se falhar, o Escudo fica ilegível para a sincronização até o Éteris reiniciar (nada se apaga na conta).
     private static volatile bool _loadFailed;
 
     // As regras guardadas, lidas por «all». null ou uma exceção = não se leu (Failed): a lista fica vazia mas marcada.

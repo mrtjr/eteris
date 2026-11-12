@@ -248,13 +248,17 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
     // O corpo de um 403 diz se é o limite de pedidos. Sem motivo legível, conta como um 403 qualquer.
     private static async Task<bool> IsRateLimitAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
+        // Com ResponseHeadersRead (leituras de ficheiros) o prazo do cliente não cobre o corpo: este tem um curto.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
-            await response.Content.LoadIntoBufferAsync(64 * 1024, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            await response.Content.LoadIntoBufferAsync(64 * 1024, deadline.Token).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(deadline.Token).ConfigureAwait(false);
             return body.Contains("rateLimitExceeded", StringComparison.OrdinalIgnoreCase);
         }
-        catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException)
+        catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException
+                                   || (e is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             return false;
         }
