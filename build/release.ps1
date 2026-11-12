@@ -41,6 +41,15 @@ function Native-Out([string]$Command, [string[]]$Arguments) {
   ($out -join "`n").Trim()
 }
 function Short([string]$Commit) { if ($Commit.Length -gt 12) { $Commit.Substring(0, 12) } else { $Commit } }
+# SHA256 em hexadecimal maiúsculo, pelo .NET: no Windows PowerShell 5.1 o cmdlet de hash de ficheiros é uma função de
+# módulo que não carrega quando o powershell.exe é lançado a partir do PowerShell 7 (PSModulePath herdado), como no
+# runner do GitHub (ReleaseScriptTests.Release_HashesWithDotNet_NotWithAModuleFunction).
+function Sha256Hex([string]$Path) {
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $stream = [System.IO.File]::OpenRead($Path)
+  try { ([System.BitConverter]::ToString($sha.ComputeHash($stream))).Replace("-", "") }
+  finally { $stream.Dispose(); $sha.Dispose() }
+}
 function Clear-Signed { if (Test-Path -LiteralPath $signed) { Remove-Item -LiteralPath $signed -Recurse -Force } }
 # A ferramenta build/sign (a frase-passe pede-a ela, na consola); a saída vai para o ecrã, a função devolve só o código.
 function Run-Sign([string[]]$Arguments) {
@@ -97,7 +106,7 @@ function Assert-DraftIndex {
       @("Version", [string]$entry.Version, [string]$mine.Version),
       @("Version", [string]$entry.Version, $Version),
       @("Type", [string]$entry.Type, $expected[$name]),
-      @("SHA256", ([string]$entry.SHA256).ToUpperInvariant(), (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToUpperInvariant()),
+      @("SHA256", ([string]$entry.SHA256).ToUpperInvariant(), (Sha256Hex $file)),
       @("Size", [string]$entry.Size, [string](Get-Item -LiteralPath $file).Length)
     )
     foreach ($check in $checks) {

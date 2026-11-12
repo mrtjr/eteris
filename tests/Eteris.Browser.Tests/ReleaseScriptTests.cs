@@ -383,6 +383,17 @@ public class ReleaseScriptTests
         finally { dir.Delete(recursive: true); }
     }
 
+    // No Windows PowerShell 5.1 o Get-FileHash é uma função do módulo Microsoft.PowerShell.Utility. Lançado a partir do
+    // PowerShell 7 (o runner do GitHub, ou um terminal pwsh), o powershell.exe herda o PSModulePath do 7 e o módulo não
+    // carrega: «Get-FileHash is not recognized». O release.ps1 calcula o SHA256 com o .NET.
+    [Fact]
+    public void Release_HashesWithDotNet_NotWithAModuleFunction()
+    {
+        var script = File.ReadAllText(Path.Combine(Root(), "build", "release.ps1"));
+        Assert.DoesNotContain("Get-FileHash", script);
+        Assert.Contains("[System.Security.Cryptography.SHA256]::Create()", script);
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
