@@ -1212,6 +1212,56 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(SyncPhase.Stopped, portatil.Agent.Status.Phase);
     }
 
+    // Duas remoções com o «trabalho» desligado, a segunda interrompida antes de o registo de chaves da conta do meio
+    // sair: o «trabalho» entra na conta do meio, onde já há outra mensagem r/ para ele. Não é uma conta desaparecida:
+    // fica nela, e a ronda seguinte segue a mensagem até à conta atual — sem parar nem dizer «conta substituída».
+    [Fact]
+    public async Task TwoRemovals_TheSecondInterrupted_ADeviceThatWasOffEndsInTheLastAccount_WithoutStopping()
+    {
+        var flaky = new FlakyTransport(_cloud);
+        var casa = NewDevice("Casa", () => flaky);
+        await casa.Agent.StartAsync();
+        var code = casa.Agent.RevealKit()!.Words;
+        var trabalho = NewDevice("Trabalho");
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(code);
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(code);
+        var quarto = NewDevice("Quarto");
+        await quarto.Agent.StartAsync();
+        await quarto.Agent.JoinWithCodeAsync(code);
+        await Settle(casa, trabalho, portatil, quarto);
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        Assert.Single(trabalho.Store.Load()!.Engine!.PeerKeys);   // só fixou a «casa»: segue sozinho
+
+        trabalho.Profile.Bookmark("https://antes.example/", "Mudado antes de saber");
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        var middle = casa.Store.Load()!.Engine!.ChainId;
+        flaky.FailDeletingKeys = true;
+        await Assert.ThrowsAsync<SyncUserException>(() => casa.Agent.RemoveDeviceAsync(casa.Agent.Status.Devices.Single(d => d.Name == "Quarto").Id));
+        Assert.NotNull(casa.Store.Load()!.Rotation);
+        Assert.True(_cloud.Has(SyncPaths.Keys(middle)));           // o registo da conta do meio ficou
+
+        for (var round = 0; round < 2; round++)
+        {
+            Assert.True(await trabalho.Agent.RunAsync());
+            Assert.NotEqual(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+            Assert.False(trabalho.Agent.Status.ChainReplaced);
+            Assert.NotNull(trabalho.Store.Load()!.Baseline);
+        }
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+
+        flaky.FailDeletingKeys = false;
+        casa.Profile.Bookmark("https://depois.example/", "Depois");
+        await Settle(casa, trabalho);
+        Assert.Null(casa.Store.Load()!.Rotation);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Equal("Depois", trabalho.Profile.Title("https://depois.example/"));
+        Assert.Equal("Mudado antes de saber", casa.Profile.Title("https://antes.example/"));
+    }
+
     // Duas remoções seguidas enquanto um aparelho estava desligado: ele segue as duas contas novas até à atual.
     [Fact]
     public async Task TwoRemovalsWhileADeviceWasOff_ItFollowsBothChanges()

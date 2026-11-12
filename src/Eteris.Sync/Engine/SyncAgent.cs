@@ -1080,7 +1080,10 @@ public sealed class SyncAgent
     }
 
     // Entra na conta nova de uma mensagem r/ (inequívoca, ou confirmada pelo identificador do kit), guarda-a e faz uma
-    // ronda. Uma ChainGoneException da ronda (a conta nova, já guardada, desapareceu) sai para quem chama.
+    // ronda. Uma ChainGoneException dessa ronda não para o aparelho: a conta nova já ficou guardada, e ou já tem outra
+    // mensagem r/ para este aparelho (duas trocas seguidas, a segunda ainda por acabar, com o registo de chaves do meio
+    // presente) ou desapareceu entretanto. Conta como uma ronda por acabar: a seguinte retoma na conta guardada e trata
+    // disso pelo caminho normal (ChainGoneAsync, já com o estado novo, onde as chaves do removido não entraram).
     private async Task AdoptRekeyAsync(SavedSync saved, SyncState old, RekeyResult rekey, List<string> consumed, CancellationToken cancellationToken)
     {
         var transport = Transport();
@@ -1123,7 +1126,12 @@ public sealed class SyncAgent
         // Só agora, com a conta nova guardada, as mensagens saem do transporte (melhor esforço).
         try { await SyncEngine.ForgetRekeysAsync(transport, consumed, cancellationToken).ConfigureAwait(false); }
         catch (Exception e) when (IsTransient(e)) { }
-        await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
+        try { await CycleAsync(saved, cancellationToken).ConfigureAwait(false); }
+        catch (ChainGoneException)
+        {
+            lock (_gate)
+                if (IsCurrent(saved) && _phase == SyncPhase.Starting) _phase = SyncPhase.On;
+        }
     }
 
     // A pausa da troca de chave (Status.RekeyPending): o utilizador escreveu o identificador do kit novo, lido nas
@@ -1193,7 +1201,7 @@ public sealed class SyncAgent
         }
         catch (ChainGoneException)
         {
-            // A conta nova, já guardada, desapareceu durante a ronda.
+            // Só de antes de religar (a ronda de AdoptRekeyAsync já não a deixa sair): a conta desapareceu a meio da procura.
             Stop(saved!, GoneText, StopKeeps.Secret);
             throw new SyncUserException(GoneText);
         }
@@ -1201,7 +1209,12 @@ public sealed class SyncAgent
         {
             // Antes de religar: a pausa (ou a paragem que a substituiu) fica como está. Depois, com a conta nova ainda
             // por guardar: a pausa volta a ficar como estava. Já guardada: é uma ronda que falhou, e a seguinte repete.
-            if (armed && !HoldAgain(saved!)) Fail(e);
+            if (armed && !HoldAgain(saved!))
+            {
+                bool live;
+                lock (_gate) live = _engine is not null;
+                if (live) Fail(e);
+            }
             throw new SyncUserException(Message(e));
         }
         catch (Exception) when (armed && HoldAgain(saved!))

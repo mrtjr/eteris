@@ -384,12 +384,14 @@ public sealed class SyncEngine
         // antigo e, enquanto chegar ao transporte, pode voltar a escrevê-lo depois de quem trocou a chave o apagar —
         // quem ficou continuava aqui, a sincronizar com ele. Uma mensagem r/ válida dirigida a este aparelho conta como
         // a troca (quem chama segue as regras de sempre: ReceiveRekeyAsync, RekeyIsUnambiguous). Sai da listagem que a
-        // ronda já faz: só se lê mais alguma coisa quando há um ficheiro em r/<este>/. Antes de ler ou aplicar um lote
-        // que seja. Não fecha o caso em que o removido também apaga a mensagem: aí nada no transporte distingue a troca.
+        // ronda já faz, sem listar outra vez; só se lê um ficheiro de r/<este>/ quando tem o nome de um aparelho com
+        // chave fixada — um ficheiro de lixo com esse nome custa uma leitura por ronda enquanto lá estiver, e mais
+        // nada. Antes de ler ou aplicar um lote que seja. Não fecha o caso em que o removido também apaga a mensagem:
+        // aí nada no transporte distingue a troca.
         var rekeys = SyncPaths.Rekeys(ChainId, Device.Id);
         if (files.Any(f => f.StartsWith(rekeys, StringComparison.Ordinal)))
         {
-            using var rekey = await ReceiveRekeyAsync(_transport, State, ChainId, cancellationToken).ConfigureAwait(false);
+            using var rekey = await ReceiveRekeyAsync(_transport, State, ChainId, cancellationToken, files).ConfigureAwait(false);
             if (rekey is not null) throw new ChainGoneException("Outro aparelho trocou a chave da conta e deixou a conta nova a este.");
         }
         var batches = new Dictionary<string, SortedSet<long>>(StringComparer.Ordinal);
@@ -894,8 +896,9 @@ public sealed class SyncEngine
     // chave fixada e podia deixar uma «conta nova» dele); remetentes que se contradizem, ou contas novas diferentes,
     // dão Conflict (pergunta-se ao utilizador). Nada sai do transporte aqui: quem chama apaga as mensagens (Paths) só
     // depois de guardar a conta nova. Devolve null quando não há mensagem nenhuma (removido, ou dados apagados).
+    // «listed»: uma listagem da cadeia que quem chama já fez nesta ronda (evita listar outra vez).
     public static async Task<RekeyResult?> ReceiveRekeyAsync(ISyncTransport transport, SyncState state, string? chain = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IReadOnlyList<string>? listed = null)
     {
         if (state.DeviceKey is null) return null;
         chain ??= state.ChainId;
@@ -904,7 +907,9 @@ public sealed class SyncEngine
         var found = new List<(string Path, RekeyPayload Payload, AccountSecret Secret)>();
         try
         {
-            foreach (var path in await transport.ListAsync(folder, cancellationToken).ConfigureAwait(false))
+            var paths = listed?.Where(p => p.StartsWith(folder, StringComparison.Ordinal)).ToList()
+                        ?? await transport.ListAsync(folder, cancellationToken).ConfigureAwait(false);
+            foreach (var path in paths)
             {
                 var from = path[folder.Length..];
                 if (!state.PeerKeys.TryGetValue(from, out var pub)) continue;
