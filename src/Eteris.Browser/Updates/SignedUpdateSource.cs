@@ -12,7 +12,8 @@ namespace Eteris.Browser.Updates;
 // pacote, e daqui só passam os ativos dela cujo FileName consta do releases.<canal>.json assinado com o mesmo PackageId,
 // Version, Type e SHA256; os outros campos (SHA1, Size, notas) passam a ser os do índice assinado. Depois de cada
 // descarregamento, o SHA256 do ficheiro volta a ser conferido contra o índice assinado.
-// «fetch» traz um ficheiro da última release publicada pelo nome (o índice e o .sig). Sem nenhuma chave pública nada se
+// «fetch» traz um ficheiro da última release publicada pelo nome (o índice e o .sig), com o seu próprio prazo para o corpo
+// (UpdateService.FetchAssetAsync: o GetReleaseFeed do Velopack não traz cancelamento). Sem nenhuma chave pública nada se
 // pede à rede e nenhuma atualização é aceite: é o estado até o dono pôr as chaves dele em update-keys.txt.
 public sealed class SignedUpdateSource(IUpdateSource inner, Func<string, CancellationToken, Task<byte[]>> fetch,
     IReadOnlyList<string> publicKeys) : IUpdateSource

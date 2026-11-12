@@ -206,6 +206,49 @@ public sealed class UpdateSignatureTests : IDisposable
             source.DownloadReleaseEntry(new QuietLogger(), asset, Path.Combine(_dir, "p.nupkg"), _ => { }, default));
     }
 
+    // M2 (revisão final): com ResponseHeadersRead, o HttpClient.Timeout não vale para a leitura do corpo; um corpo que nunca
+    // acaba deixava a procura presa («A procurar atualizações…») até sair do Éteris. O prazo de cada ficheiro cobre também
+    // o corpo: aqui 200 ms (no Éteris, 30 s), e a procura acaba em falha muito antes da guarda de 10 s do teste.
+    [Fact]
+    public async Task SignedSource_WithABodyThatNeverEnds_FailsWithinTheDeadline()
+    {
+        using var http = new HttpClient(new StalledBodyHandler());
+        var source = new SignedUpdateSource(new FeedSource(Index(("0.1.1", A))),
+            (name, cancel) => UpdateService.FetchAssetAsync(http, "https://example.invalid/" + name, name, TimeSpan.FromMilliseconds(200), cancel),
+            [Pub(_key)]);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            source.GetReleaseFeed(new QuietLogger(), "EterisBrowser", "win").WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Null(await UpdateService.CheckAsync(source, Locator()).WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    // Responde logo com os cabeçalhos (200) e um corpo que nunca chega ao fim (nada vai à rede).
+    private sealed class StalledBodyHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StreamContent(new StalledStream()) });
+    }
+
+    private sealed class StalledStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     // A ferramenta build/sign (Task 4): a chave nasce cifrada (PKCS#8, PEM) e assina o que o Éteris verifica.
     [Fact]
     public void Signer_NewKey_SignsWhatTheBrowserVerifies()

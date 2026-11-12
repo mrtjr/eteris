@@ -96,18 +96,28 @@ public static class UpdateService
         return http;
     });
 
+    // Prazo de cada ficheiro, dos cabeçalhos ao fim do corpo (M2): com ResponseHeadersRead o HttpClient.Timeout só vale até
+    // aos cabeçalhos, e um corpo parado deixava a procura presa («A procurar atualizações…») até sair do Éteris.
+    private static readonly TimeSpan FetchTimeout = TimeSpan.FromSeconds(30);
+
     // Um ficheiro da última release publicada (o índice ou a assinatura), no máximo MaxAssetBytes.
-    private static async Task<byte[]> FetchLatestAsset(string name, CancellationToken cancel)
+    private static Task<byte[]> FetchLatestAsset(string name, CancellationToken cancel)
+        => FetchAssetAsync(s_http.Value, RepoUrl + "/releases/latest/download/" + Uri.EscapeDataString(name), name, FetchTimeout, cancel);
+
+    // O prazo junta-se ao cancelamento de quem pede; esgotado, lança OperationCanceledException (a procura falha).
+    internal static async Task<byte[]> FetchAssetAsync(HttpClient http, string url, string name, TimeSpan timeout, CancellationToken cancel)
     {
-        using var response = await s_http.Value.GetAsync(RepoUrl + "/releases/latest/download/" + Uri.EscapeDataString(name),
-            HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        deadline.CancelAfter(timeout);
+        var token = deadline.Token;
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > MaxAssetBytes) throw new HttpRequestException($"{name} grande demais");
-        await using var stream = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
         using var buffer = new MemoryStream();
         var chunk = new byte[81920];
         int read;
-        while ((read = await stream.ReadAsync(chunk, cancel).ConfigureAwait(false)) > 0)
+        while ((read = await stream.ReadAsync(chunk, token).ConfigureAwait(false)) > 0)
         {
             if (buffer.Length + read > MaxAssetBytes) throw new HttpRequestException($"{name} grande demais");
             buffer.Write(chunk, 0, read);
