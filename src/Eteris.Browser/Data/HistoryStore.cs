@@ -252,6 +252,21 @@ public sealed class HistoryStore
         return urls;
     }
 
+    // As origens da web de todo o histórico, sem repetidas («Apagar dados › Cookies e dados de sites» apaga o
+    // armazenamento de cada uma; recolhem-se antes de apagar o histórico).
+    public IReadOnlyList<string> Origins()
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("eteris_origin", SiteScope.OriginOf, isDeterministic: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT eteris_origin(url) FROM history";
+        using var reader = command.ExecuteReader();
+        var origins = new List<string>();
+        while (reader.Read())
+            if (!reader.IsDBNull(0)) origins.Add(reader.GetString(0));
+        return origins;
+    }
+
     private void DeleteHistory(string sql, params (string Name, object Value)[] parameters)
     {
         using var connection = Open();

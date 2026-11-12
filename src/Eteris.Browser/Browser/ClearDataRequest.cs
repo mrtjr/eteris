@@ -1,7 +1,8 @@
 namespace Eteris.Browser.Browser;
 
-// «Apagar dados de navegação»: o histórico respeita o período; cookies e cache são apagados por completo. Vault: a caixa
-// «Palavras-passe e preenchimento automático» (desmarcada por omissão): o cofre inteiro, com o Windows Hello.
+// «Apagar dados de navegação»: o histórico respeita o período; cookies, armazenamento dos sites e cache são apagados
+// por completo. Vault: a caixa «Palavras-passe e preenchimento automático» (desmarcada por omissão): o cofre inteiro,
+// com o Windows Hello.
 public sealed record ClearDataRequest(bool History, bool Cookies, bool Cache, DateTime Since, bool Vault = false)
 {
     public static ClearDataRequest? Parse(string what, string range, DateTime now)

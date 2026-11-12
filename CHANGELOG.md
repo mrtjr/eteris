@@ -9,6 +9,7 @@
 ### Privacidade
 
 - Esquecer uma permissão no cadeado, triturar um site ou responder sem «Lembrar» passa a valer também no motor: o site volta mesmo a perguntar. Antes, o motor guardava para sempre cada «Permitir» e cada «Bloquear», incluindo a recusa automática dos pedidos de notificações, que continuava depois de desligar essa opção. «Permitir» sem «Lembrar» vale até fechar o Éteris para notificações e várias transferências, e uma só vez para câmara, microfone, ecrã e localização. Fica de fora a área de transferência: o motor continua a lembrar a decisão dela, mesmo depois de a esquecer no cadeado.
+- **«Apagar dados de navegação › Cookies e dados de sites» apaga também o que os sites guardaram.** Até aqui saíam só os cookies: o armazenamento local, o IndexedDB, a Cache Storage e os service workers ficavam, e um site que guardasse a sessão aí continuava a reconhecê-lo. Agora apaga-se o armazenamento de cada site do histórico, dos cookies e das abas abertas. Cookies, dados de sites e cache saem por inteiro, seja qual for o período escolhido, e a página passa a dizê-lo. O que um site guardou sem estar em nenhum destes sítios só sai com «Apagar cookies e dados de sites ao fechar».
 - «Apagar dados de navegação» só responde depois de apagar: mostra «A apagar…» enquanto o motor trabalha e, se os cookies ou a cache não saírem, diz «Não foi possível apagar…» sem o ✓. Antes, a resposta «✓ … apagados» saía logo, e uma falha do motor ficava escondida.
 
 ### Conta e sincronização

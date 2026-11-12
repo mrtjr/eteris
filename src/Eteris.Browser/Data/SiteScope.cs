@@ -49,6 +49,32 @@ public static class SiteScope
         return origins.ToList();
     }
 
+    // A origem (esquema://host[:porta], em minúsculas, sem a porta por omissão) de um endereço da web; nula para o
+    // resto (eteris://, about:, ficheiros).
+    public static string? OriginOf(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.Host.Length == 0) return null;
+        var host = uri.Host.ToLowerInvariant();
+        return uri.IsDefaultPort ? $"{uri.Scheme}://{host}" : $"{uri.Scheme}://{host}:{uri.Port}";
+    }
+
+    // «Apagar dados › Cookies e dados de sites»: as origens cujo armazenamento se apaga — as do histórico, as das abas
+    // abertas e, de cada domínio de cookie, a origem https e a http. Sem repetidas, por ordem.
+    public static IReadOnlyList<string> KnownOrigins(IEnumerable<string> historyUrls, IEnumerable<string> cookieDomains, IEnumerable<string> openAddresses)
+    {
+        var origins = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var url in historyUrls.Concat(openAddresses))
+            if (OriginOf(url) is { } origin) origins.Add(origin);
+        foreach (var domain in cookieDomains)
+        {
+            var host = domain.Trim().TrimStart('.').ToLowerInvariant();
+            if (host.Length == 0) continue;
+            foreach (var scheme in new[] { "https", "http" })
+                if (OriginOf($"{scheme}://{host}/") is { } origin) origins.Add(origin);
+        }
+        return origins.ToList();
+    }
+
     // Fechou-se uma aba: ainda há alguma do site em qualquer janela (a dormir, noutros Espaços)? Só sem nenhuma é que
     // «Esquecer ao fechar» apaga.
     public static bool StillOpen(string site, IEnumerable<string> openAddresses) => openAddresses.Any(a => Belongs(a, site));

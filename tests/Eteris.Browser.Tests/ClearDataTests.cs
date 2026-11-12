@@ -1,5 +1,6 @@
 using System.IO;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 
 namespace Eteris.Browser.Tests;
 
@@ -65,6 +66,37 @@ public class ClearDataTests
         Assert.Contains("if (request.Vault)", code);
         Assert.Contains("Não foi confirmado com o Windows: nada foi apagado.", code);
         Assert.Contains("'A apagar…'", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html")));
+    }
+
+    [Fact]
+    public void Cookies_ClearStorageOfEveryKnownOrigin()
+    {
+        var origins = SiteScope.KnownOrigins(
+            ["https://a.pt/x", "https://a.pt:443/y", "http://b.pt:8080/z", "eteris://settings/"],
+            [".c.pt", "www.c.pt"],
+            ["https://d.pt/aberta", "eteris://newtab/"]);
+        Assert.Equal(["http://b.pt:8080", "http://c.pt", "http://www.c.pt", "https://a.pt", "https://c.pt", "https://d.pt", "https://www.c.pt"], origins);
+        Assert.Null(SiteScope.OriginOf("eteris://settings/"));
+        Assert.Equal("https://a.pt", SiteScope.OriginOf("https://A.pt/x?y"));
+    }
+
+    [Fact]
+    public void SettingsPage_SaysCookiesSiteDataAndCacheGoEntirely()
+    {
+        var settings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.Contains("Cookies e dados de sites <small>(termina sessões; apaga tudo, desde sempre, seja qual for o período)</small>", settings);
+        Assert.Contains("Imagens e ficheiros em cache <small>(apaga tudo, seja qual for o período)</small>", settings);
+    }
+
+    // Numa janela privada a limpeza é a do contexto dela: não se leem as origens do histórico do perfil.
+    [Fact]
+    public void PrivateWindow_DoesNotReadTheProfileHistory()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("request.Cookies && !privateContext ? AppData.TryRead(h => h.Origins()) : []", code);
+        Assert.Contains("ClearBrowsingDataAsync(request, browserId, privateContext)", code);
+        var window = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.ClearData.cs"));
+        Assert.Contains("IsPrivate ? Tabs.Tabs.Select(t => t.Address) : OpenAddresses()", window);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

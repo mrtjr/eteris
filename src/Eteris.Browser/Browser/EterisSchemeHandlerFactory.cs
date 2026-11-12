@@ -638,15 +638,18 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             var routes = Vault.VaultRoutes.Profile!;
             // Primeiro a confirmação: recusada, nada se apaga (nem o histórico, nem os cookies).
             return new VaultResourceHandler(async () => await routes.EraseVaultAsync(browserId).ConfigureAwait(false)
-                ? Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId).ConfigureAwait(false))
+                ? Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId, privateContext).ConfigureAwait(false))
                 : Vault.VaultReply.Text("Não foi confirmado com o Windows: nada foi apagado."));
         }
         // A resposta só sai depois de o motor apagar (ou falhar, e então diz o quê).
-        return new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId).ConfigureAwait(false)));
+        return new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId, privateContext).ConfigureAwait(false)));
     }
 
-    private static async Task<string> ClearBrowsingDataAsync(ClearDataRequest request, int browserId)
+    private static async Task<string> ClearBrowsingDataAsync(ClearDataRequest request, int browserId, bool privateContext)
     {
+        // As origens do histórico inteiro, seja qual for o período (cookies e armazenamento saem por inteiro), lidas antes
+        // de apagar o histórico. Numa janela privada a limpeza é a do contexto dela: o histórico do perfil não conta.
+        IReadOnlyList<string> historyOrigins = request.Cookies && !privateContext ? AppData.TryRead(h => h.Origins()) : [];
         if (request.History)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
@@ -655,7 +658,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
         // As caches da GPU (shaders, programas WebGL) só se apagam com o motor fechado: ao sair (ajuste e3).
         if (request.Cache) Infrastructure.ProfileCleanup.RemoveGpuCachesAtExit();
-        var outcome = request.Cookies || request.Cache ? await MainWindow.ClearEngineDataAsync(browserId, request).ConfigureAwait(false) : new ClearOutcome();
+        var outcome = request.Cookies || request.Cache ? await MainWindow.ClearEngineDataAsync(browserId, request, historyOrigins).ConfigureAwait(false) : new ClearOutcome();
         return request.Report(outcome);
     }
 
