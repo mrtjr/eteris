@@ -72,10 +72,15 @@ public class ForgetLeftoversTests : IDisposable
         Assert.Equal("2 sites esquecidos (tinham ficado por apagar ao sair): a.pt, b.pt",
             SiteScope.LeftoversDone([new("a.pt", 2, 0, true), new("b.pt", 0, 3, true), new("c.pt", 0, 0, true)]));
         // Nada apagado, mas o motor de vídeo não abriu: di-lo na mesma.
-        Assert.Equal("Não foi possível esquecer tudo de a.pt (tinha ficado por apagar ao sair) — 0 cookies e 0 entradas do histórico apagados — não foi possível apagar os dados do motor de vídeo",
+        // Um só site com falha: uma frase, sem contagens a zero.
+        Assert.Equal("Não foi possível apagar os dados do motor de vídeo de a.pt (tinha ficado por apagar ao sair)",
             SiteScope.LeftoversDone([new("a.pt", 0, 0, true, VideoEngineFailed: true)]));
-        Assert.Equal("Não foi possível esquecer tudo de a.pt (tinha ficado por apagar ao sair) — 1 cookie e 0 entradas do histórico apagados — não foi possível apagar todos os cookies",
+        Assert.Equal("Não foi possível apagar todos os cookies de a.pt (tinha ficado por apagar ao sair; 1 cookie apagado)",
             SiteScope.LeftoversDone([new("a.pt", 1, 0, true, CookiesFailed: true)]));
+        Assert.Equal("Não foi possível apagar o armazenamento de a.pt (tinha ficado por apagar ao sair; 2 entradas do histórico apagadas)",
+            SiteScope.LeftoversDone([new("a.pt", 0, 2, false)]));
+        Assert.Equal("Não foi possível apagar todos os cookies, o armazenamento e os dados do motor de vídeo de a.pt (tinha ficado por apagar ao sair; 3 cookies e 1 entrada do histórico apagados)",
+            SiteScope.LeftoversDone([new("a.pt", 3, 1, false, CookiesFailed: true, VideoEngineFailed: true)]));
         Assert.Equal("Não foi possível esquecer tudo de a.pt e b.pt (tinham ficado por apagar ao sair); c.pt foi esquecido",
             SiteScope.LeftoversDone([new("a.pt", 1, 0, false), new("b.pt", 4, 0, true, VideoEngineFailed: true), new("c.pt", 1, 0, true)]));
     }

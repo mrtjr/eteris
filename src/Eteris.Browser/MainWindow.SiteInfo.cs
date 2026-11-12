@@ -262,7 +262,7 @@ public partial class MainWindow
                 using var own = browser.GetDevToolsClient();
                 await DevToolsCalls.Run(() => own.Storage.ClearDataForOriginAsync(info.Origin, "all"));
                 ShowToast($"Dados de {info.Host} apagados");
-                ReloadActive();
+                if (ReferenceEquals(Tabs.Active, tab)) ReloadActive();
                 return;
             }
 
@@ -297,7 +297,9 @@ public partial class MainWindow
                 videoFailed = !video.Complete;
             }
             ShowToast(Data.SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed));
-            ReloadActive();
+            // A espera pelo motor de vídeo (até 15 s a frio) deixa mudar de aba: só se recarrega a aba limpa, e só se
+            // ainda for a ativa (não há recarregar por aba; a outra recarrega-se à mão).
+            if (ReferenceEquals(Tabs.Active, tab)) ReloadActive();
         }
         catch (Exception ex)
         {

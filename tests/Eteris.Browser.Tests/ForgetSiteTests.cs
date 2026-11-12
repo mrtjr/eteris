@@ -235,6 +235,21 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.Contains("SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed)", panel);
     }
 
+    // A limpeza pode esperar até 15 s pelo motor de vídeo a frio: se entretanto mudaste de aba, a que passou a ativa não
+    // é recarregada (a aba do site só se recarrega se ainda for a ativa; não há recarregar por aba).
+    [Fact]
+    public void LockPanel_ReloadsOnlyTheTabItCleared()
+    {
+        var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
+        var click = panel[panel.IndexOf("private async void SiteInfoClear_Click(", StringComparison.Ordinal)..];
+        click = click[..click.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("if (Tabs.Active is not { } tab || ActiveBrowser is not { } browser) return;", click);
+        var reloads = click.Split("ReloadActive();").Length - 1;
+        var guarded = click.Split("if (ReferenceEquals(Tabs.Active, tab)) ReloadActive();").Length - 1;
+        Assert.Equal(2, reloads);
+        Assert.Equal(reloads, guarded);
+    }
+
     [Fact]
     public void LockPanel_ClearsTheWholeSite_LikeShred()
     {

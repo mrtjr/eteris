@@ -180,14 +180,30 @@ public static class SiteScope
             return forgotten.Count == 1 ? $"{forgotten[0]} foi esquecido (tinha ficado por apagar ao sair)"
                 : $"{forgotten.Count} sites esquecidos (tinham ficado por apagar ao sair): {string.Join(", ", forgotten)}";
         }
-        if (failed.Count == 1 && forgotten.Count == 0)
-        {
-            var r = failed[0];
-            return $"Não foi possível esquecer tudo de {r.Site} (tinha ficado por apagar ao sair) — "
-                   + ShredDone(r.Cookies, r.History, r.Storage, false, r.CookiesFailed, r.VideoEngineFailed);
-        }
+        if (failed.Count == 1 && forgotten.Count == 0) return LeftoverFailed(failed[0]);
         var text = $"Não foi possível esquecer tudo de {Join(failed.Select(r => r.Site).ToList())} ({(failed.Count == 1 ? "tinha" : "tinham")} ficado por apagar ao sair)";
         return forgotten.Count == 0 ? text : text + $"; {Join(forgotten)} {(forgotten.Count == 1 ? "foi esquecido" : "foram esquecidos")}";
+    }
+
+    // Um só site com falha, numa frase: o que ficou por apagar e, se houve, o que saiu (sem contagens a zero). O
+    // armazenamento por fazer só conta quando se apagou alguma coisa (Leftover.Failed).
+    private static string LeftoverFailed(Leftover r)
+    {
+        var stayed = new List<string>();
+        if (r.CookiesFailed) stayed.Add("todos os cookies");
+        if (!r.Storage && r.Cookies + r.History > 0) stayed.Add("o armazenamento");
+        if (r.VideoEngineFailed) stayed.Add("os dados do motor de vídeo");
+        var gone = new List<string>();
+        if (r.Cookies > 0) gone.Add(r.Cookies == 1 ? "1 cookie" : $"{r.Cookies} cookies");
+        if (r.History > 0) gone.Add(r.History == 1 ? "1 entrada do histórico" : $"{r.History} entradas do histórico");
+        var agreed = gone.Count switch
+        {
+            0 => "",
+            2 => "; " + Join(gone) + " apagados",
+            _ when r.Cookies > 0 => "; " + gone[0] + (r.Cookies == 1 ? " apagado" : " apagados"),
+            _ => "; " + gone[0] + (r.History == 1 ? " apagada" : " apagadas"),
+        };
+        return $"Não foi possível apagar {Join(stayed)} de {r.Site} (tinha ficado por apagar ao sair{agreed})";
     }
 
     private static string Join(List<string> names) => names.Count == 1 ? names[0] : string.Join(", ", names[..^1]) + " e " + names[^1];
