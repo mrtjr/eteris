@@ -63,10 +63,48 @@ public class BlockedByClientTests
     public void ALateBlock_LetsTheRequestReachTheLocalHandler()
     {
         var handler = Handler();
+        handler.AwaitDecision(11, "https://t.example/x");
         Assert.True(handler.ContinueAfterBlock(11, ResourceType.Xhr, "https://t.example/x"));
         Assert.NotNull(handler.BlockedHandlerFor(Request(11, "https://t.example/x", ResourceType.Xhr)));
+        handler.AwaitDecision(12, "https://t.example/ad.html");
         Assert.False(handler.ContinueAfterBlock(12, ResourceType.SubFrame, "https://t.example/ad.html"));
         Assert.Null(handler.BlockedHandlerFor(Request(12, "https://t.example/ad.html", ResourceType.SubFrame)));
+        Assert.Equal(0, handler.PendingMarks);
+    }
+
+    // O identificador do pedido só é único dentro de um processo da página (o request_id do Blink): outro pedido com o
+    // mesmo número, noutro endereço, nunca leva a marca (nem falha por ela), e a marca continua à espera do seu.
+    [Fact]
+    public void AnotherRequestWithTheSameId_NeverTakesTheMark()
+    {
+        var handler = Handler();
+        handler.Settle(CefReturnValue.Cancel, Request(7, "https://t.example/x", ResourceType.Xhr));
+        Assert.Null(handler.BlockedHandlerFor(Request(7, "https://cdn.example/app.js", ResourceType.Script)));
+        handler.Forget(Request(7, "https://cdn.example/app.js", ResourceType.Script));
+        Assert.NotNull(handler.BlockedHandlerFor(Request(7, "https://t.example/x", ResourceType.Xhr)));
+    }
+
+    // A página desistiu do pedido durante a espera do CNAME ou da rede local: o CEF chama OnResourceLoadComplete antes de
+    // o callback chegar. A decisão tardia já não marca nada (nem fica na memória), e o callback cancela.
+    [Fact]
+    public void ALateBlock_AfterTheRequestEnded_LeavesNoMark()
+    {
+        var handler = Handler();
+        handler.AwaitDecision(21, "https://t.example/x");
+        handler.Forget(Request(21, "https://t.example/x", ResourceType.Xhr));
+        Assert.False(handler.ContinueAfterBlock(21, ResourceType.Xhr, "https://t.example/x"));
+        Assert.Equal(0, handler.PendingMarks);
+        Assert.Null(handler.BlockedHandlerFor(Request(21, "https://t.example/x", ResourceType.Xhr)));
+    }
+
+    // Uma decisão tardia que deixa passar só limpa a espera.
+    [Fact]
+    public void ALateAllow_ClearsTheWait()
+    {
+        var handler = Handler();
+        handler.AwaitDecision(31, "https://t.example/x");
+        Assert.True(handler.ContinueAfterAllow(31, "https://t.example/x"));
+        Assert.Equal(0, handler.PendingMarks);
     }
 
     // Um pedido marcado que nunca chega ao tratador (a página desistiu dele) não fica para sempre na memória.
