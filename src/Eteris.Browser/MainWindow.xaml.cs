@@ -91,7 +91,7 @@ public partial class MainWindow : Window
         WatchWorkspaces();
         WatchSidebar();
         WatchAltTap();
-        Closing += (_, _) => FlushNotes();
+        Closing += (_, _) => FlushNotes(closing: true);
         ContentRendered += (_, _) => SetUpOverlayLayer();
         ContentRendered += (_, _) => WireSignInBar();
         StartupTrace.Mark("janela.ctor");

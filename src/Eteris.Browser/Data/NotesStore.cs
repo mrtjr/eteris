@@ -1,7 +1,11 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
 
 namespace Eteris.Browser.Data;
+
+// Resultado de NotesStore.SaveOver: gravado como estava, juntado com o que outra janela gravou, ou por ler.
+public enum NotesSave { Saved, Merged, Unreadable }
 
 // Bloco de notas do Éteris: um único texto, guardado neste computador (notas.md no perfil) e, com a sincronização
 // ligada, nos outros aparelhos da conta (cifrado).
@@ -27,6 +31,39 @@ public sealed class NotesStore(string path)
         File.Move(temp, path, overwrite: true);
         Saved?.Invoke();
     }
+
+    // Grava o texto desta janela por cima do que ela leu (baseText). Se outra janela gravou entretanto, junta-se ao
+    // texto do disco só o que esta escreveu (Merge) — nada do que a outra gravou se perde. Notas que não se leram
+    // (ficheiro preso por outro programa, ou baseText nulo) não se gravam por cima.
+    public (NotesSave Result, string Text) SaveOver(string? baseText, string text, DateTime when)
+    {
+        var disk = TryLoad();
+        if (disk is null || baseText is null) return (NotesSave.Unreadable, text);
+        if (disk == baseText)
+        {
+            Save(text);
+            return (NotesSave.Saved, text);
+        }
+        var merged = Merge(baseText, disk, text, when);
+        if (merged != disk) Save(merged);
+        return (NotesSave.Merged, merged);
+    }
+
+    // O texto do disco (gravado por outra janela) mais as linhas que só esta janela escreveu (não estão nem no disco
+    // nem no texto que leu), no fim, com uma linha a dizer de onde vêm. Uma linha que a outra janela apagou não volta.
+    public static string Merge(string baseText, string disk, string mine, DateTime when)
+    {
+        if (mine == baseText || mine == disk) return disk;
+        var known = new HashSet<string>(Lines(disk), StringComparer.Ordinal);
+        known.UnionWith(Lines(baseText));
+        var added = Lines(mine).Where(line => line.Length > 0 && !known.Contains(line)).ToList();
+        if (added.Count == 0) return disk;
+        if (disk.Length == 0) return string.Join("\n", added) + "\n";
+        return disk.TrimEnd('\r', '\n') + "\n\n— Escrito noutra janela (" + when.ToString("HH:mm", CultureInfo.InvariantCulture) + ") —\n"
+               + string.Join("\n", added) + "\n";
+    }
+
+    private static IEnumerable<string> Lines(string text) => text.Split('\n').Select(line => line.TrimEnd('\r'));
 
     // Linha para «Inserir esta página»: título e endereço, numa linha nova no fim (ou onde estiver o cursor).
     public static string PageLine(string title, string url)
