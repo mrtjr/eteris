@@ -79,6 +79,13 @@ public partial class App : Application
         StartupTrace.Mark("escudo.contexto");
     }
 
+    // O Windows vai encerrar ou terminar a sessão: grava-se já a sessão completa, antes de o WPF fechar as janelas uma a uma.
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        base.OnSessionEnding(e);
+        Eteris.Browser.MainWindow.FreezeSessionForExit();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         _channel?.Dispose();

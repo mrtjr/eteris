@@ -3,26 +3,34 @@ using System.Windows.Threading;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
 
 public partial class MainWindow
 {
-    private readonly SessionStore _session = new(Path.Combine(AppPaths.Root, "session.json"));
-    private DispatcherTimer? _sessionTimer;
+    // Um só ficheiro e um só temporizador para o processo: todas as janelas normais gravam a sessão de todas.
+    private static SessionStore? s_sessionFile;
+    private static SessionStore SessionFile => s_sessionFile ??= new(Path.Combine(AppPaths.Root, "session.json"));
+    private static DispatcherTimer? s_sessionTimer;
+    // A saída («Atualizar para…», encerramento do Windows) já gravou a sessão completa: os fechos seguintes, janela a
+    // janela, não a reduzem.
+    private static bool s_sessionFrozen;
+    private static DispatcherTimer? s_unfreezeTimer;
 
     // Restaura as abas da última sessão; um endereço passado ao abrir junta-se no fim e fica ativo.
     private static bool s_sessionOwnerTaken;
     private bool _ownsSession;
 
-    // Só a primeira janela normal restaura e grava a sessão; janelas privadas nunca.
+    // Só a primeira janela normal (a dona) restaura a sessão e corre o plano de arranque; todas as janelas normais a
+    // gravam; janelas privadas nunca.
     private void StartTabs(string? initialUrl)
     {
         _ownsSession = !IsPrivate && !s_sessionOwnerTaken;
         if (_ownsSession) s_sessionOwnerTaken = true;
 
         PendingSplit? restoredSplit = null;
-        if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous)
+        if (_ownsSession && Data.Settings.Current.Startup == "restore" && SessionFile.Load() is { } previous)
         {
             Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas);
             // Os outros Espaços ficam na reserva, a dormir, com a sua aba ativa e o seu ecrã dividido.
@@ -51,22 +59,31 @@ public partial class MainWindow
         }
 
         if (!IsPrivate) Loaded += (_, _) => ShowProfileNotices();
-        if (!_ownsSession) return;
-        WatchSessionChanges();
+        if (!IsPrivate) WatchSessionChanges();
     }
 
     private void WatchSessionChanges()
     {
         Tabs.Tabs.CollectionChanged += (_, _) => ScheduleSessionSave();
         Tabs.PropertyChanged += (_, _) => ScheduleSessionSave();
-        Closing += (_, _) => SaveSession();
-        // A dona fecha com outras janelas abertas: a sessão (gravação, posição, abas adiadas) passa à seguinte,
-        // senão as adiadas deixavam de voltar e o que se fizesse nas outras janelas não ficava guardado.
-        Closed += (_, _) => HandSessionOver(this);
+        // A última janela normal a fechar grava já, com ela; com outras abertas, a que fecha sai da sessão um segundo
+        // depois (fica em «Reabrir janela fechada») — nunca se grava uma sessão sem janelas.
+        Closing += (_, _) => { if (!HasOtherNormalWindows()) SaveSessionNow(); };
+        Closed += (_, _) =>
+        {
+            // A dona fecha com outras janelas abertas: o papel de dona (posição, abas adiadas) passa à seguinte,
+            // senão as adiadas deixavam de voltar.
+            if (_ownsSession) HandSessionOver(this);
+            if (HasOtherNormalWindows()) ArmSessionTimer();
+        };
     }
+
+    private bool HasOtherNormalWindows() => NormalWindows().Any(w => !ReferenceEquals(w, this));
 
     private static void HandSessionOver(MainWindow leaving)
     {
+        // Na saída todas as janelas estão a fechar: a herdeira não reescreveria o window.json da dona.
+        if (s_sessionFrozen) return;
         s_sessionOwnerTaken = false;
         var heir = System.Windows.Application.Current?.Windows.OfType<MainWindow>()
             .FirstOrDefault(w => !ReferenceEquals(w, leaving) && !w.IsPrivate && w.IsLoaded);
@@ -77,7 +94,6 @@ public partial class MainWindow
     {
         if (_ownsSession || IsPrivate || s_sessionOwnerTaken) return;
         _ownsSession = s_sessionOwnerTaken = true;
-        WatchSessionChanges();
         Closing += (_, _) => SavePlacement();
         WatchSnoozed();
         ScheduleSessionSave();
@@ -86,26 +102,58 @@ public partial class MainWindow
     // Chamado também quando o endereço de uma aba muda (OnTabPropertyChanged).
     private void ScheduleSessionSave()
     {
-        if (!_ownsSession) return;
-        _sessionTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
-        {
-            _sessionTimer!.Stop();
-            SaveSession();
-        }, Dispatcher);
-        _sessionTimer.Stop();
-        _sessionTimer.Start();
+        if (IsPrivate) return;
+        ArmSessionTimer();
     }
 
-    // Um session.json só de leitura ou preso por outro programa não fecha o Éteris: a sessão fica por gravar (volta
-    // a tentar-se na mudança de aba seguinte) e avisa-se uma vez.
-    private void SaveSession()
+    private static void ArmSessionTimer()
+    {
+        if (s_sessionFrozen || System.Windows.Application.Current?.Dispatcher is not { } dispatcher) return;
+        s_sessionTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
+        {
+            s_sessionTimer!.Stop();
+            SaveSessionNow();
+        }, dispatcher);
+        s_sessionTimer.Stop();
+        s_sessionTimer.Start();
+    }
+
+    // Grava as abas de todas as janelas normais abertas, a dona primeiro. Um session.json só de leitura ou preso por
+    // outro programa não fecha o Éteris: a sessão fica por gravar (volta a tentar-se na mudança de aba seguinte) e
+    // avisa-se uma vez.
+    private static void SaveSessionNow()
+    {
+        if (s_sessionFrozen) return;
+        var windows = SessionExit.Order(NormalWindows().Where(w => w.IsLoaded).ToList(), w => w._ownsSession);
+        if (windows.Count == 0) return;
+        if (!SessionFile.TrySaveWindows(windows.Select(w => w.SessionSnapshot()).ToList())) WarnSessionNotSaved();
+    }
+
+    private Data.SessionWindow SessionSnapshot()
     {
         var active = Tabs.Active is { } tab ? Tabs.Tabs.IndexOf(tab) : 0;
         var (groupIds, groups) = Tabs.GroupSnapshot();
         var (spaces, spaceIndex) = Tabs.WorkspaceSnapshot();
-        if (!_session.TrySave(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title), Tabs.Tabs.Select(t => t.IsPinned),
-                groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot(), spaces, spaceIndex))
-            WarnSessionNotSaved();
+        return new Data.SessionWindow(SessionStore.Compose(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title),
+            Tabs.Tabs.Select(t => t.IsPinned), groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot(), spaces, spaceIndex), PlacementSnapshot());
+    }
+
+    // «Atualizar para…» e o encerramento do Windows: grava-se já a sessão completa e os fechos seguintes, janela a
+    // janela, já não a reescrevem. Se o Éteris ainda estiver vivo passado SessionExit.UnfreezeAfter, o encerramento
+    // foi cancelado e a gravação volta.
+    internal static void FreezeSessionForExit()
+    {
+        SaveSessionNow();
+        s_sessionFrozen = true;
+        if (System.Windows.Application.Current?.Dispatcher is not { } dispatcher) return;
+        s_unfreezeTimer ??= new DispatcherTimer(SessionExit.UnfreezeAfter, DispatcherPriority.Background, (_, _) =>
+        {
+            s_unfreezeTimer!.Stop();
+            s_sessionFrozen = false;
+            ArmSessionTimer();
+        }, dispatcher);
+        s_unfreezeTimer.Stop();
+        s_unfreezeTimer.Start();
     }
 
     private static bool s_sessionWarned;
