@@ -118,11 +118,36 @@ public class GoogleSyncTests
         Assert.Equal(a.Fingerprint(), c.Fingerprint());
         Assert.Equal("PIN do cadeado: 4321", c.Notes);
 
-        var all = string.Join("\n", google.Files.Select(f => f.Name + "\n" + Encoding.Latin1.GetString(f.Data)));
+        var all = DriveText(google);
         foreach (var leak in new[] { "consulta", "Resultado", "4321", "cadeado", "light", "Portátil", "Telemóvel", "android" })
             Assert.DoesNotContain(leak, all, StringComparison.Ordinal);
         Assert.All(google.Requests, r => Assert.Matches("^(GET|POST|PATCH|PUT|DELETE) https://(www\\.googleapis\\.com/(upload/)?drive/v3/files|oauth2\\.googleapis\\.com/token)", r));
     }
+
+    // O nome de uma pasta aleatória (32 hexadecimais) não conta como fuga: no CI da v0.2.16 a pasta
+    // caa5d0751d432197715227a4c11ca287 tinha «4321» por acaso e o teste acima falhou. O texto em claro num nome curto
+    // ou no conteúdo continua a contar.
+    [Fact]
+    public void DriveText_IgnoresRandomFolderIds_ButNotPlaintext()
+    {
+        var google = new FakeGoogle();
+        google.Put("eteris/caa5d0751d432197715227a4c11ca287/k", [1]);
+        Assert.DoesNotContain("4321", DriveText(google), StringComparison.Ordinal);
+
+        google.Put("eteris/4321/k", [1]);
+        Assert.Contains("4321", DriveText(google), StringComparison.Ordinal);
+
+        var only = new FakeGoogle();
+        only.Put("eteris/caa5d0751d432197715227a4c11ca287/n", Encoding.UTF8.GetBytes("PIN do cadeado: 4321"));
+        Assert.Contains("4321", DriveText(only), StringComparison.Ordinal);
+    }
+
+    // O que o Drive vê: o nome e os bytes de cada ficheiro. Nos nomes, os identificadores aleatórios (16 ou mais
+    // hexadecimais seguidos) passam a «<id>»: um texto em claro nunca é só hexadecimal, e um identificador podia conter
+    // por acaso os algarismos procurados.
+    private static string DriveText(FakeGoogle google)
+        => string.Join("\n", google.Files.Select(f =>
+            Regex.Replace(f.Name, "[0-9a-fA-F]{16,}", "<id>") + "\n" + Encoding.Latin1.GetString(f.Data)));
 
     [Fact]
     public async Task Pairing_WorksThroughTheFakeDrive()
