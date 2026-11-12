@@ -14,6 +14,9 @@ public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selec
 {
     // O campo onde se clicou, como o script do cofre o viu (null: fora de um campo de uma página http(s)).
     public VaultFieldInfo? Vault { get; init; }
+
+    // O endereço do documento onde o menu abriu (null conta como página web): decide, com PageLinks, o que se pode abrir.
+    public string? PageUrl { get; init; }
 }
 
 // IsPassword: um campo de palavra-passe; CanGenerate: «Oferecer para guardar palavras-passe» ligado e fora da janela
@@ -34,16 +37,17 @@ public static class PageMenu
 
         if (ctx.LinkUrl is { Length: > 0 })
         {
-            items.Add(new(PageCommand.OpenLinkNewTab, "", "Abrir link numa nova aba"));
+            var canOpen = PageLinks.CanOpenLink(ctx.LinkUrl, ctx.PageUrl);
+            if (canOpen) items.Add(new(PageCommand.OpenLinkNewTab, "", "Abrir link numa nova aba"));
             if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.PreviewLink, "", "Espreitar o link", "Alt+clique"));
             if (IsWebLink(ctx.LinkUrl)) items.Add(new(PageCommand.OpenLinkSideBySide, "", "Abrir link ao lado (ecrã dividido)"));
-            if (!ctx.IsPrivate) items.Add(new(PageCommand.OpenLinkPrivate, "", "Abrir link numa janela privada"));
+            if (canOpen && !ctx.IsPrivate) items.Add(new(PageCommand.OpenLinkPrivate, "", "Abrir link numa janela privada"));
             items.Add(new(PageCommand.CopyLink, "", "Copiar endereço do link"));
             items.Add(null);
         }
         if (ctx.ImageUrl is { Length: > 0 })
         {
-            items.Add(new(PageCommand.OpenImageNewTab, "", "Abrir imagem numa nova aba"));
+            if (PageLinks.CanOpenImage(ctx.ImageUrl)) items.Add(new(PageCommand.OpenImageNewTab, "", "Abrir imagem numa nova aba"));
             items.Add(new(PageCommand.SaveImage, "", "Guardar imagem"));
             items.Add(new(PageCommand.CopyImageUrl, "", "Copiar endereço da imagem"));
             items.Add(null);

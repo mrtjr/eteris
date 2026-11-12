@@ -458,9 +458,9 @@ public partial class MainWindow
             case PageCommand.Forward: browser.Forward(); break;
             case PageCommand.Reload: ReloadWebPanel(browser, ignoreCache: false); break;
             case PageCommand.Inspect: browser.GetBrowserHost()?.ShowDevTools(); break;
-            case PageCommand.OpenLinkNewTab: Tabs.NewTab(context.LinkUrl!, activate: false); break;
+            case PageCommand.OpenLinkNewTab when PageLinks.CanOpenLink(context.LinkUrl, context.PageUrl): Tabs.NewTab(context.LinkUrl!, activate: false); break;
             case PageCommand.CopyLink: CopyText(UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
-            case PageCommand.OpenImageNewTab: Tabs.NewTab(context.ImageUrl!, activate: false); break;
+            case PageCommand.OpenImageNewTab when PageLinks.CanOpenImage(context.ImageUrl): Tabs.NewTab(context.ImageUrl!, activate: false); break;
             case PageCommand.CopyImageUrl: CopyText(context.ImageUrl!, "Endereço da imagem copiado"); break;
             case PageCommand.Undo: frame?.Undo(); break;
             case PageCommand.Cut: frame?.Cut(); break;

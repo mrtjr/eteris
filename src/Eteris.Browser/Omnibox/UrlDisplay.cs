@@ -8,6 +8,9 @@ public static class UrlDisplay
 {
     public static DisplayUrl Split(string url)
     {
+        // Um data: ou javascript: é conteúdo, não endereço: mostra só o tipo, nunca o que lá vem (pode imitar um site).
+        if (url.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)) return new DisplayUrl(string.Empty, "javascript:…");
+        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return new DisplayUrl(string.Empty, "data:" + DataType(url) + "…");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             return new DisplayUrl(url, string.Empty);
@@ -20,6 +23,15 @@ public static class UrlDisplay
         var rest = restStart < 0 ? string.Empty : url[restStart..];
         if (rest == "/") rest = string.Empty;
         return new DisplayUrl(host, DecodeForDisplay(rest));
+    }
+
+    // O texto até ao primeiro «;» ou «,», se for um tipo MIME curto e simples; senão, nada.
+    private static string DataType(string url)
+    {
+        var rest = url["data:".Length..];
+        var end = rest.IndexOfAny([';', ',']);
+        var type = (end < 0 ? rest : rest[..end]).ToLowerInvariant();
+        return type.Length <= 40 && type.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c is '/' or '+' or '.' or '-') ? type : string.Empty;
     }
 
     public static bool IsSecure(string url)

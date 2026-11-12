@@ -30,6 +30,7 @@ public static class PopupPolicy
         UserActivation? activation = null, bool isPopupWindow = false, DateTime? nowUtc = null)
     {
         if (!userGesture) return false;
+        if (!Browser.PageLinks.CanOpenPopup(targetUrl, openerUrl)) return false;
         if (openerUrl is not null && Uri.TryCreate(openerUrl, UriKind.Absolute, out var opener) && !isProtected(opener.Host))
             return true;
         if (blocker.ShouldBlock(targetUrl, openerUrl, "document")) return false;

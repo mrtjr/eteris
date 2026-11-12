@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Browser;
 
 namespace Eteris.Browser.Tests;
@@ -107,5 +108,39 @@ public class PageMenuTests
             Assert.NotNull(items[^1]);
             for (var i = 1; i < items.Count; i++) Assert.False(items[i] is null && items[i - 1] is null);
         }
+    }
+
+    [Theory]
+    [InlineData("data:text/html,x")]
+    [InlineData("eteris://settings/")]
+    [InlineData("file:///c:/x")]
+    [InlineData("javascript:void(0)")]
+    public void Link_NonWebLinkOnWebPage_OnlyOffersCopy(string link)
+    {
+        var commands = PageMenu.Build(new PageContext(link, null, "", false, false, false, IsPrivate: false) { PageUrl = "https://a.pt/" }, "DuckDuckGo")
+            .Where(i => i is not null).Select(i => i!.Command).ToList();
+        Assert.DoesNotContain(PageCommand.OpenLinkNewTab, commands);
+        Assert.DoesNotContain(PageCommand.OpenLinkPrivate, commands);
+        Assert.Contains(PageCommand.CopyLink, commands);
+    }
+
+    [Fact]
+    public void Link_InternalToInternalAndLocalToLocal_StillOpen()
+    {
+        var internalPage = PageMenu.Build(new PageContext("eteris://settings/", null, "", false, false, false, IsPrivate: false) { PageUrl = "eteris://autofill/" }, "DuckDuckGo");
+        Assert.Contains(internalPage, i => i?.Command == PageCommand.OpenLinkNewTab);
+        var local = PageMenu.Build(new PageContext("file:///C:/b.html", null, "", false, false, false, IsPrivate: false) { PageUrl = "file:///C:/a.html" }, "DuckDuckGo");
+        Assert.Contains(local, i => i?.Command == PageCommand.OpenLinkNewTab);
+    }
+
+    [Fact]
+    public void Image_NonWebSvgData_IsNotOpened()
+    {
+        var commands = PageMenu.Build(new PageContext(null, "data:image/svg+xml,<svg onload=alert(1)>", "", false, false, false, IsPrivate: false), "DuckDuckGo")
+            .Where(i => i is not null).Select(i => i!.Command).ToList();
+        Assert.DoesNotContain(PageCommand.OpenImageNewTab, commands);
+        Assert.Contains(PageCommand.CopyImageUrl, commands);
+        var handler = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "PageMenuHandler.cs"));
+        Assert.Contains("PageUrl = SafeFrame.Url(frame)", handler);
     }
 }

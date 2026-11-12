@@ -34,4 +34,17 @@ public class UrlDisplayTests
     [InlineData("eteris://newtab", true)]
     public void IsSecure_ReflectsScheme(string url, bool secure)
         => Assert.Equal(secure, UrlDisplay.IsSecure(url));
+
+    [Theory]
+    [InlineData("data:text/html,https://accounts.google.com/signin", "data:text/html…")]
+    [InlineData("data:,x", "data:…")]
+    [InlineData("javascript:alert(1)", "javascript:…")]
+    [InlineData("data:text/html;base64,PGgxPng8L2gxPg==", "data:text/html…")]
+    [InlineData("DATA:text/html,x", "data:text/html…")]
+    public void Split_DataUrl_HidesContent(string url, string rest)
+        => Assert.Equal(new DisplayUrl(string.Empty, rest), UrlDisplay.Split(url));
+
+    [Fact]
+    public void Split_DataUrl_WithAnAbsurdType_ShowsNoType()
+        => Assert.Equal(new DisplayUrl(string.Empty, "data:…"), UrlDisplay.Split("data:" + new string('a', 60) + ",x"));
 }

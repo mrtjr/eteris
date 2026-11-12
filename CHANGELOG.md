@@ -7,6 +7,7 @@
 - Desligar “Pedir o Windows Hello” ou importar um perfil já não passa sem confirmação quando o valor vem escrito como “False”.
 - O preenchimento de palavras-passe já não entra em páginas que o próprio site isolou (sandbox), onde pode correr conteúdo de terceiros.
 - A lista de palavras-passe ignora o clique numa linha que apareceu debaixo do cursor parado e o Enter no primeiro meio segundo.
+- “Abrir link numa nova aba”, os pop-ups e os links arrastados para a faixa de abas só abrem endereços da web; um endereço data: na barra mostra só o tipo, nunca o conteúdo.
 
 ## 0.2.16 — 2026-11-12
 
