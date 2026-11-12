@@ -288,6 +288,35 @@ public class VideoEngineTests
         Assert.Contains("if (!video.Complete) videoFailed = true;", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
     }
 
+    // PRO-04, EGR-03, EGR-14: as abas do motor de vídeo levam o GPC, a língua do motor principal, a política do WebRTC e as
+    // notificações recusadas, e os relatórios de falha ficam no computador.
+    [Fact]
+    public void BrowserArguments_CarryTheWebRtcPolicy()
+        => Assert.Contains("--webrtc-ip-handling-policy=disable_non_proxied_udp", VideoEngine.BrowserArguments(blockAutoplay: false));
+
+    [Theory]
+    [InlineData("en-US,en", "en-US")]
+    [InlineData("pt-PT", "pt-PT")]
+    [InlineData("", "pt-PT")]
+    public void Language_IsTheOneTheMainEngineStartedWith(string started, string expected) => Assert.Equal(expected, VideoEngine.Language(started));
+
+    [Fact]
+    public void VideoTabs_CarryGpcTheSiteLanguageAndLocalCrashReports()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var handler = code.IndexOf("core.WebResourceRequested += (_, e) =>", StringComparison.Ordinal);
+        var gpc = code.IndexOf("foreach (var (name, value) in PrivacySignals.Headers) e.Request.Headers.SetHeader(name, value);", StringComparison.Ordinal);
+        Assert.True(handler > 0 && gpc > handler && gpc < code.IndexOf("var context = e.ResourceContext;", StringComparison.Ordinal));
+        var script = code.IndexOf("await VideoPageScript.AddEarlyAsync(core, PrivacySignals.SessionScript);", StringComparison.Ordinal);
+        Assert.True(script > 0 && script < code.IndexOf("core.Navigate(VideoUrl(url));", StringComparison.Ordinal));
+        Assert.Contains("language: VideoEngine.Language(EngineHardening.StartedWithLanguage)", code);
+        Assert.DoesNotContain("language: \"pt-PT\"", code);
+        Assert.Contains("IsCustomCrashReportingEnabled = true", code);
+        Assert.Contains("CoreWebView2PermissionKind.Notifications", code);
+        Assert.Contains("CoreWebView2PermissionState.Deny", code);
+        Assert.Contains("tab?.UsesVideoEngine == true", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Shield.cs")));
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

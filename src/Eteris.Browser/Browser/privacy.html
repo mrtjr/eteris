@@ -138,6 +138,8 @@
   <h2>Promessas</h2>
   <div class="score" id="score"></div>
   <div class="card" id="list" role="list"></div>
+  <!-- O que as abas do motor de vídeo (WebView2) têm e não têm: uma explicação, não uma promessa medida. -->
+  <section id="motor-de-video" class="sync" aria-labelledby="v-title"><h2 id="v-title"></h2><div class="card"><p id="v-note"></p></div></section>
   <footer><span id="when"></span><button id="again">Verificar de novo</button></footer>
 </main>
 <script type="application/json" id="data">{{DATA}}</script>
@@ -148,6 +150,9 @@
   document.getElementById('s-goes').textContent = data.sync.goes;
   document.getElementById('s-sees').textContent = data.sync.sees;
   document.getElementById('s-key').textContent = data.sync.key;
+  // Nas abas do motor de vídeo: o que têm e o que não têm.
+  document.getElementById('v-title').textContent = data.video.title;
+  document.getElementById('v-note').textContent = data.video.note;
   // Verificações feitas aqui mesmo, pelo JavaScript da página (o mesmo que um site veria).
   const live = {
     gpc: () => navigator.globalPrivacyControl === true

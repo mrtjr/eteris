@@ -14,7 +14,7 @@ namespace Eteris.Browser;
 
 // Abas no motor de vídeo (WebView2, o motor do Edge que vem com o Windows): para os sites que só têm vídeo em
 // H.264/AAC, formatos patenteados que o motor principal não traz. A aba continua a ser uma aba do Éteris — mesma
-// barra, mesmo bloqueador, mesma sessão —; só o motor por baixo muda. Ver Tabs/VideoEngine.cs. Com o motor com codecs
+// barra, mesmo bloqueador, mesmo pedido de privacidade —; só o motor por baixo muda (e o perfil: é outro, com a sua pasta). Ver Tabs/VideoEngine.cs. Com o motor com codecs
 // da plataforma (Tabs/PlatformCodecs.cs) o motor principal toca-os e isto fica só para quando ele responde «não».
 //
 // Usa o controlo WebView2 (janela nativa) e não o WebView2CompositionControl: este último precisa da projeção do
@@ -40,7 +40,8 @@ public partial class MainWindow
         => s_videoEnvironment ??= CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
             userDataFolder: AppPaths.VideoEngine,
-            options: new CoreWebView2EnvironmentOptions(VideoEngine.BrowserArguments(Settings.Current.BlockAutoplay), language: "pt-PT"));
+            options: new CoreWebView2EnvironmentOptions(VideoEngine.BrowserArguments(Settings.Current.BlockAutoplay),
+                language: VideoEngine.Language(EngineHardening.StartedWithLanguage)) { IsCustomCrashReportingEnabled = true });
 
     private WebView2? ActiveVideo
         => Tabs.Active is { } tab && _videoViews.TryGetValue(tab, out var view) ? view : null;
@@ -132,6 +133,9 @@ public partial class MainWindow
         if (tab.IsMuted || TestSwitches.Mute) core.IsMuted = true;
         if (resumeAt > 1) await ResumeAtAsync(core, resumeAt);
         await EnsureVideoCosmeticsAsync(core, url, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        // O GPC visível ao JavaScript e a lista de dispositivos sem nomes, antes dos scripts da página (o cabeçalho
+        // Sec-GPC vai em WireVideoView).
+        await VideoPageScript.AddEarlyAsync(core, PrivacySignals.SessionScript);
         core.Navigate(VideoUrl(url));
     }
 
@@ -190,6 +194,8 @@ public partial class MainWindow
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) =>
         {
+            // O pedido de privacidade (GPC) sai em todos os pedidos, também nos que o bloqueador deixa passar.
+            foreach (var (name, value) in PrivacySignals.Headers) e.Request.Headers.SetHeader(name, value);
             var context = e.ResourceContext;
             if (context == CoreWebView2WebResourceContext.Document && players.Count > 0
                 && players.TryGetValue(VideoEngine.WithoutFragment(e.Request.Uri), out var playerMime))
@@ -214,6 +220,12 @@ public partial class MainWindow
             e.Response = environment.CreateWebResourceResponse(null, 403, "Blocked", "");
             ShieldStats.CountBlocked(persist: !IsPrivate);
             if (Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) tab.RecordBlocked(request.Host);
+        };
+
+        // Notificações: recusadas, como no motor principal (o WebView2 perguntaria com uma caixa do Edge).
+        core.PermissionRequested += (_, e) =>
+        {
+            if (e.PermissionKind == CoreWebView2PermissionKind.Notifications) e.State = CoreWebView2PermissionState.Deny;
         };
 
         core.NavigationStarting += (_, e) =>

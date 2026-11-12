@@ -266,6 +266,12 @@ public static class PrivacyPage
     // enviado. Não é uma promessa (nada nele se mede) e não faz pedidos.
     public static object SyncBlock => new { title = SyncBlockTitle, goes = SyncGoes, sees = SyncSees, key = SyncKey };
 
+    // O bloco «Nas abas do motor de vídeo» de eteris://privacy/#motor-de-video: o que essas abas (WebView2) têm e não têm.
+    // Como o da sincronização, não é uma promessa (não entra na contagem) e é sempre igual.
+    public const string VideoEngineBlockTitle = "Nas abas do motor de vídeo";
+
+    public static object VideoEngineBlock => new { title = VideoEngineBlockTitle, note = Tabs.VideoEngine.PrivacyNote };
+
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
     public static State Current()
@@ -331,6 +337,7 @@ public static class PrivacyPage
             promises = promises.Select(p => new { id = p.Id, title = p.Title, detail = p.Detail, kept = p.Kept, live = p.Live, fix = p.Fix }),
             report = ReportJson(events, today ?? DateOnly.FromDateTime(DateTime.Today)),
             sync = SyncBlock,
+            video = VideoEngineBlock,
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

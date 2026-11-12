@@ -4,6 +4,7 @@ using CefSharp;
 using Eteris.Browser.Data;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser;
 
@@ -90,11 +91,16 @@ public partial class MainWindow
         ShieldObservatoryLine.Visibility = host is null ? Visibility.Collapsed : Visibility.Visible;
         ShieldObservatoryButton.Visibility = ShieldObservatoryLine.Visibility;
         ShieldCheckHeaders.Text = "✓  Pedido de privacidade (GPC) enviado";
-        ShieldCheckCookies.Text = PrivacyPreferences.ThirdPartyCookiesBlocked
+        // Numa aba do motor de vídeo (WebView2) o que vale é o dele, não o do motor principal: as linhas dizem-no.
+        var inVideo = tab?.UsesVideoEngine == true;
+        ShieldCheckCookies.Text = inVideo ? VideoEngine.ShieldCookiesLine
+            : PrivacyPreferences.ThirdPartyCookiesBlocked
             ? "✓  Cookies de terceiros bloqueados" : "✗  Cookies de terceiros permitidos";
-        ShieldCheckWebRtc.Text = PrivacyPreferences.WebRtcIpProtected
+        ShieldCheckWebRtc.Text = inVideo ? VideoEngine.ShieldWebRtcLine
+            : PrivacyPreferences.WebRtcIpProtected
             ? "✓  WebRTC não expõe o seu IP local" : "✗  WebRTC sem proteção de IP";
-        ShieldCheckDns.Text = PrivacyPreferences.SecureDnsProvider is { } dns
+        ShieldCheckDns.Text = inVideo ? VideoEngine.ShieldDnsLine
+            : PrivacyPreferences.SecureDnsProvider is { } dns
             ? $"✓  DNS cifrado ({dns})" : "·  DNS do sistema (pode ativar DNS cifrado nas definições)";
         ShieldCheckLan.Text = LocalNetworkShieldLine(tab);
         ShieldCheckBounce.Text = DebounceText.ShieldLine(tab?.TrackingSkips ?? [], Data.Settings.Current.SkipTrackingRedirects);

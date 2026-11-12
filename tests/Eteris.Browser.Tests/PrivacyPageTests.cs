@@ -3,6 +3,7 @@ using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Shields;
+using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser.Tests;
 
@@ -222,6 +223,21 @@ public class PrivacyPageTests
         // O conteúdo não depende do estado: SyncBlock é uma propriedade estática, sem State.
         Assert.NotNull(typeof(PrivacyPage).GetProperty(nameof(PrivacyPage.SyncBlock))?.GetGetMethod());
         Assert.Contains("href=\"eteris://privacy/#sincronizacao\"", Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html"));
+    }
+
+    // Um bloco de explicação, como o da sincronização: não é uma promessa medida nem entra na contagem.
+    [Fact]
+    public void VideoEngineBlock_SaysWhatDoesNotApply_AndIsNotAPromise()
+    {
+        Assert.Equal("Nas abas do motor de vídeo", PrivacyPage.VideoEngineBlockTitle);
+        foreach (var s in new[] { "WebView2", "Microsoft", "GPC", "DNS cifrado", "cookies de terceiros", "rede local" }) Assert.Contains(s, VideoEngine.PrivacyNote);
+        Assert.DoesNotContain("Edge", VideoEngine.PrivacyNote);
+        Assert.Contains("\"video\":{\"title\":", PrivacyPage.Render(Good()));
+        Assert.DoesNotContain(PrivacyPage.Promises(Good()), p => p.Id.Contains("video", StringComparison.Ordinal));
+        var page = PrivacyTemplate();
+        Assert.True(page.IndexOf("<section id=\"motor-de-video\"", StringComparison.Ordinal) > page.IndexOf("id=\"list\"", StringComparison.Ordinal));
+        Assert.Matches(@"\.textContent = data\.video\.title;", page);
+        Assert.Matches(@"\.textContent = data\.video\.note;", page);
     }
 
     // R15: o bloco é uma explicação, não uma promessa medida, e não dá à página nenhum poder de rede novo.

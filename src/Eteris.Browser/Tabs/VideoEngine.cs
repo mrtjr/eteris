@@ -306,11 +306,28 @@ public static class VideoEngine
     // do Office nos PDFs, sem tráfego de fundo, sem pings de auditoria de links e sem o «component updater» (no
     // diagnóstico descarregou componentes sem ação do utilizador). Com «bloquear reprodução automática», a mesma
     // política do motor principal. Fixos por pasta de dados: aplicam-se ao arrancar, como no motor principal.
+    // A política de IP do WebRTC é a do motor principal (Shields/EngineHardening.cs); o nome do interruptor foi lido no
+    // libcef 156 e ainda não se confirmou que o WebView2 instalado o aceita (docs/paridade.md §7).
     public const string BaseArguments =
-        "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update";
+        "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update"
+        + $" --{Shields.EngineHardening.WebRtcPolicySwitch}={Shields.EngineHardening.WebRtcPolicy}";
 
     public static string BrowserArguments(bool blockAutoplay)
         => blockAutoplay ? BaseArguments + " --autoplay-policy=document-user-activation-required" : BaseArguments;
+
+    // A língua do WebView2 é a do motor principal (a 1.ª da lista Accept-Language com que ele arrancou); sem ela, pt-PT.
+    public static string Language(string started)
+        => started.Split(',')[0].Trim() is { Length: > 0 } first ? first : "pt-PT";
+
+    // O que estas abas têm e não têm em relação ao motor principal (eteris://privacy/ e o Escudo dizem-no). Não é uma
+    // promessa medida: «o que o próprio WebView2 pede à Microsoft» está por medir.
+    public const string PrivacyNote =
+        "As abas no motor de vídeo (WebView2, da Microsoft) têm as listas do Escudo, o pedido de privacidade (GPC), a prevenção de rastreio estrita do WebView2 e as notificações recusadas. "
+        + "Não têm o DNS cifrado, o filtro de cookies de terceiros do Éteris, o referrer reduzido nem o bloqueio da rede local, e o que o próprio WebView2 pede à Microsoft ainda não foi medido.";
+
+    public const string ShieldCookiesLine = "·  Cookies de terceiros: prevenção de rastreio do motor de vídeo (não o filtro do Éteris)";
+    public const string ShieldWebRtcLine = "·  WebRTC: política pedida ao motor de vídeo";
+    public const string ShieldDnsLine = "·  DNS do sistema: o DNS cifrado não chega ao motor de vídeo";
 
     // Só os endereços web passam para o motor de vídeo; as páginas internas (eteris://) ficam no motor principal.
     public static bool CanHost(string? url)
