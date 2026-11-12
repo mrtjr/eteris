@@ -87,6 +87,18 @@ public sealed partial class VaultService : IDisposable
     {
         var origin = Origins.Normalize(item.Origin) ?? throw new ArgumentException("Origem inválida para uma palavra-passe.", nameof(item));
         var username = item.Username ?? string.Empty;
+        // Nunca dois itens confirmados com a mesma origem e o mesmo utilizador (VAU-02): um item que existe e passa a ter
+        // o utilizador de outro junta-se a esse (a palavra-passe anterior vai para o histórico, a nota fica). As geradas
+        // por confirmar continuam a poder coincidir com uma conta, por desenho (ConfirmGenerated).
+        if (!string.IsNullOrEmpty(item.Id) && !item.Generated && Store.Get(VaultCollection.Logins, item.Id) is not null
+            && LoginIds(origin, username).FirstOrDefault(other => other != item.Id && GetLogin(other)?.Generated == false) is { } same
+            && GetLogin(same) is { } kept)
+        {
+            var merged = SaveLogin(kept with { Password = item.Password, Note = item.Note ?? kept.Note });
+            Store.Delete(VaultCollection.Logins, item.Id, Now);
+            Raise();
+            return merged;
+        }
         var id = !string.IsNullOrEmpty(item.Id) && Store.Get(VaultCollection.Logins, item.Id) is not null ? item.Id
             : FindLogin(origin, username) ?? (string.IsNullOrEmpty(item.Id) ? VaultIds.New() : item.Id);
         var old = GetLogin(id);
