@@ -23,6 +23,9 @@ public static class Program
         // O Velopack nunca aplica no arranque (INF-03): fazia-o aqui, antes da instância única, e o Update.exe terminava o
         // Éteris que estivesse aberto (um 2.º lançamento, um link noutra aplicação). O Éteris aplica ao sair
         // (UpdateService.ApplyPendingOnExit) ou, já instância principal, com UpdateService.ApplyPendingAtStartup.
+        // Reaberto pelo Update.exe depois de aplicar: o Run apaga a VELOPACK_RESTART, por isso lê-se antes (I1, a guarda do
+        // Velopack contra um ciclo de reinícios, com o mesmo teste que ele usa).
+        var restartedByUpdater = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("VELOPACK_RESTART"));
         var velopack = VelopackApp.Build()
             .OnAfterInstallFastCallback(_ => NetworkSandbox.OnInstalled())
             .OnAfterUpdateFastCallback(_ => NetworkSandbox.OnInstalled())
@@ -50,8 +53,9 @@ public static class Program
         }
         StartupTrace.Mark("instancia");
         // Uma atualização já descarregada aplica-se agora só se este for o único Éteris da instalação e não trouxer link nem
-        // pedido de janela privada; senão fica para a saída (INF-03).
-        UpdateService.ApplyPendingAtStartup(args);
+        // pedido de janela privada, nem foi reaberto pelo Update.exe nem é a nova tentativa do sandbox; senão fica para a
+        // saída (INF-03).
+        UpdateService.ApplyPendingAtStartup(args, restartedByUpdater);
         // O JIT do arranque passa a correr também noutros núcleos, guiado pelo arranque anterior (Infrastructure/StartupJit.cs);
         // um arranque privado não o grava.
         if (StartupJit.ShouldRecord(args)) StartupJit.Start(AppPaths.Root);

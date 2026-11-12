@@ -117,18 +117,26 @@ public static class UpdateService
 
     // Aplicar no arranque um pacote já descarregado (INF-03): só se houver um, se nenhum outro processo correr a partir
     // desta instalação (outro perfil aberto, ou os filhos dele) e se o lançamento não trouxer um link nem uma janela
-    // privada (o Update.exe escreve no seu registo os argumentos com que reabre o Éteris).
-    public static bool ShouldApplyAtStartup(bool pending, bool otherProcessFromInstall, bool carriesUrlOrPrivate)
-        => pending && !otherProcessFromInstall && !carriesUrlOrPrivate;
+    // privada (o Update.exe escreve no seu registo os argumentos com que reabre o Éteris). Nunca quando o Éteris foi
+    // reaberto pelo Update.exe (VELOPACK_RESTART, a guarda que o VelopackApp.Run tinha contra um ciclo de reinícios) nem na
+    // nova tentativa do sandbox (SandboxFallback.RetrySwitch: a versão nova arrancaria sem sandbox sem razão).
+    public static bool ShouldApplyAtStartup(bool pending, bool otherProcessFromInstall, bool carriesUrlOrPrivate,
+        bool restartedByUpdater, bool sandboxRetry)
+        => pending && !otherProcessFromInstall && !carriesUrlOrPrivate && !restartedByUpdater && !sandboxRetry;
 
-    // Chamado no Program.Main logo a seguir à instância única. Nunca lança: uma falha deixa o pacote para a saída.
-    public static void ApplyPendingAtStartup(string[] args)
+    // Lançamento da DLL cliente do bootstrap depois de o .NET falhar com o sandbox (como no CefConfigurator).
+    public static bool IsSandboxRetry(IEnumerable<string> args)
+        => args.Any(a => a.Equals(Infrastructure.SandboxFallback.RetrySwitch, StringComparison.OrdinalIgnoreCase));
+
+    // Chamado no Program.Main logo a seguir à instância única, com o VELOPACK_RESTART lido antes do VelopackApp.Run (que o
+    // apaga). Nunca lança: uma falha deixa o pacote para a saída.
+    public static void ApplyPendingAtStartup(string[] args, bool restartedByUpdater)
     {
         try
         {
             if (NewManager() is not { IsInstalled: true } manager || manager.UpdatePendingRestart is not { } asset) return;
             var carries = Infrastructure.StartupArgs.InitialUrl(args) is not null || Infrastructure.StartupArgs.IsPrivate(args);
-            if (!ShouldApplyAtStartup(true, OtherProcessFromInstall(), carries)) return;
+            if (!ShouldApplyAtStartup(true, OtherProcessFromInstall(), carries, restartedByUpdater, IsSandboxRetry(args))) return;
             manager.ApplyUpdatesAndRestart(asset, args);
         }
         catch
