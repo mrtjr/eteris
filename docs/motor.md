@@ -152,6 +152,9 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    do `manifest.json`, que não há `bootstrap.exe`/`bootstrapc.exe` com esse nome (o bootstrap vai como
    `Eteris.Browser.exe`) e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em `Shields\lists`,
    `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).
+   **Prova da marca da Web (desde a 0.2.17, antes do pacote):** com a publicação a correr, transferir um ficheiro na
+   janela normal e na privada e correr `Get-Content <ficheiro> -Stream Zone.Identifier`; esperado `ZoneId=3`. Sem a
+   marca, o SmartScreen e o Office deixam de avisar ao abrir o que veio da Internet: não empacotar.
 3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --token … --outputDir Releases` — o pacote delta tem
    de partir do pacote `full` **publicado**: a pasta `Releases` não pode ter um `full` local da mesma versão que não
    seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).

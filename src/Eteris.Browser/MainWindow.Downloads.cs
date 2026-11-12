@@ -15,6 +15,8 @@ public partial class MainWindow
 {
     private DownloadsViewModel Downloads { get; } = new();
     private DownloadHandler? _downloadHandler;
+    // Quando o painel abriu sem o utilizador o pedir (null: abriu pelo botão); ver DownloadRisk.AcceptsClick.
+    private DateTime? _downloadsOpenedUtc;
 
     private DownloadHandler DownloadHandler => _downloadHandler ??= CreateDownloadHandler();
 
@@ -25,6 +27,8 @@ public partial class MainWindow
         return new DownloadHandler(Downloads, Dispatcher, (source, url) =>
         {
             DownloadsHost.Visibility = Visibility.Visible;
+            // O painel abriu sozinho (ou ganhou uma linha nova): durante 1 s um clique não abre nada.
+            _downloadsOpenedUtc = DateTime.UtcNow;
             DownloadsPopup.SetCurrentValue(Popup.PlacementTargetProperty, DownloadsButton);
             DownloadsPopup.IsOpen = true;
 
@@ -117,6 +121,7 @@ public partial class MainWindow
         CloseBrowserMenu();
         DownloadsPopup.SetCurrentValue(Popup.PlacementTargetProperty, DownloadsHost.IsVisible ? DownloadsButton : MenuButton);
         DownloadsPopup.IsOpen = !DownloadsPopup.IsOpen;
+        _downloadsOpenedUtc = null;
     }
 
     private void Downloads_Click(object sender, RoutedEventArgs e) => ToggleDownloads();
@@ -126,8 +131,13 @@ public partial class MainWindow
 
     private void DownloadRow_Click(object sender, MouseButtonEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is DownloadEntry { IsComplete: true } entry && File.Exists(entry.FullPath))
-            Process.Start(new ProcessStartInfo(entry.FullPath) { UseShellExecute = true });
+        if ((sender as FrameworkElement)?.DataContext is not DownloadEntry { IsComplete: true } entry || !File.Exists(entry.FullPath)) return;
+        if (!DownloadRisk.AcceptsClick(DateTime.UtcNow, _downloadsOpenedUtc, entry.CompletedAtUtc)) return;
+        // Programas e scripts: o nome inteiro e a origem à vista antes de correrem (o botão por defeito é «Não»).
+        if (DownloadRisk.Executes(entry.FileName)
+            && MessageBox.Show(this, DownloadRisk.Question(entry.FileName, entry.Source), "Abrir este ficheiro?",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        Process.Start(new ProcessStartInfo(entry.FullPath) { UseShellExecute = true });
     }
 
     private void ShowDownloadInFolder_Click(object sender, RoutedEventArgs e)
