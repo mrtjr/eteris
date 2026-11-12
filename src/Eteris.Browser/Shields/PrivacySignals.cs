@@ -94,6 +94,17 @@ public static class PrivacySignals
     // do cliente de alta entropia já não vão aqui: são reduzidas no motor (ReducedClientHints), também nos workers.
     public static readonly string SessionScript = Compose(GpcScript, DevicesScript)!;
 
+    // O resultado do último registo do SessionScript (ScriptletInjector): nulo enquanto nenhuma aba tentou, depois verdadeiro
+    // se o registo foi aceite e falso se falhou. A promessa «gpc-js» da página de privacidade segue-o. Um bool? não pode ser
+    // volatile, por isso guarda-se num inteiro (-1 sem tentativa, 0 falhou, 1 registado).
+    private static volatile int s_sessionScriptRegistered = -1;
+
+    public static bool? SessionScriptRegistered
+    {
+        get => s_sessionScriptRegistered switch { 1 => true, 0 => false, _ => null };
+        internal set => s_sessionScriptRegistered = value switch { true => 1, false => 0, null => -1 };
+    }
+
     // Páginas onde o sinal vale: os sites e as páginas internas (eteris://privacy/ verifica-o ao vivo).
     public static bool AppliesTo(string url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "eteris";

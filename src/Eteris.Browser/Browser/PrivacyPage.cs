@@ -107,7 +107,7 @@ public static class PrivacyPage
                 gpcHeader ? "Cada pedido leva o cabeçalho «Sec-GPC: 1» (Global Privacy Control). O antigo «DNT: 1» já não vai: o Chrome e o Brave não o enviam e só servia para o distinguir." : "Os pedidos saem sem o cabeçalho Sec-GPC.",
                 gpcHeader),
             new("gpc-js", "O pedido é visível ao JavaScript dos sites",
-                s.GpcScript ? "navigator.globalPrivacyControl vale true em todas as páginas — é aí que os avisos de cookies e o Consent Mode o leem."
+                s.GpcScript ? "navigator.globalPrivacyControl vale true nas páginas; na 1.ª página de uma aba nova chega depois dos primeiros scripts dela (o cabeçalho Sec-GPC vai sempre) — é aí que os avisos de cookies e o Consent Mode o leem."
                     : "O script do GPC não está registado.",
                 s.GpcScript, Live: "gpc"),
             new("ad-apis", "Sem as APIs de anúncios do Chromium",
@@ -273,7 +273,7 @@ public static class PrivacyPage
         var (visible, hidden) = Infrastructure.CaptureShield.Count();
         var settings = Data.Settings.Current;
         var bounces = MainWindow.Bounces;
-        return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.ScriptFor("https://example.com/") is not null,
+        return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.SessionScriptRegistered != false,
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,

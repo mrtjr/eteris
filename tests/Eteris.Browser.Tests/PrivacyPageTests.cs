@@ -256,6 +256,19 @@ public class PrivacyPageTests
     }
 
     [Fact]
+    public void GpcJs_FollowsTheLastRegistration_NotAConstant()
+    {
+        Assert.False(Find(Good() with { GpcScript = false }, "gpc-js").Kept);
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "PrivacyPage.cs"));
+        Assert.Contains("PrivacySignals.SessionScriptRegistered != false", page);
+        Assert.DoesNotContain("PrivacySignals.ScriptFor(\"https://example.com/\") is not null", page);
+        var injector = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Shields", "ScriptletInjector.cs"));
+        Assert.Contains("AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript, runImmediately: true)", injector);
+        Assert.Contains("PrivacySignals.SessionScriptRegistered = true;", injector);
+        Assert.Contains("PrivacySignals.SessionScriptRegistered = false;", injector);
+    }
+
+    [Fact]
     public void LiveChecks_AreDeclaredForGpcAndAdApis()
     {
         Assert.Equal("gpc", Find(Good(), "gpc-js").Live);

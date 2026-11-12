@@ -333,6 +333,21 @@ Correções R0 no `main` (sem motor novo), medidas no Release do `main` com um p
 | **Soma indicativa** | **101,0** | **93,7** | 91,5–97,4 | 66,3–73,8 | 68,2 | |
 | Veredicto CYT | «unique» | «unique» | «unique» | «randomized» | «unique» | |
 
+**GPC e lista de dispositivos no 1.º documento de cada aba — por medir (registado em 2026-11-12, commit
+«Auditoria 6 (PRO-03)», o que traz o `runImmediately`).** O `SessionScript` (`navigator.globalPrivacyControl` e
+`enumerateDevices` sem nomes) passou a registar-se com `runImmediately: true`, para correr também nos contextos que já
+existem quando o registo chega. **Não foi medido ao vivo** (a medição precisa do Éteris real, com o CEF, e não foi
+possível no ambiente desta tarefa); não se afirma nenhum resultado. O texto da linha «O pedido é visível ao JavaScript
+dos sites», em `eteris://privacy/`, é por isso o prudente («na 1.ª página de uma aba nova chega depois dos primeiros
+scripts dela; o cabeçalho `Sec-GPC` vai sempre») e fica assim até a medição estar feita. Como medir: uma página local
+cujo **primeiro** `<script>` põe no título `navigator.globalPrivacyControl` e os rótulos de
+`await navigator.mediaDevices.enumerateDevices()`; abri-la (1) por clique do meio num link (aba nova), (2) por reposição
+de sessão («Continuar onde parei») e (3), como controlo, navegando na mesma aba; abrir também `eteris://privacy/` pelo
+menu (aba nova) e ler a linha acima. Registar em cada caso `true` ou `undefined` e rótulos vazios ou não. Se os três
+casos derem `true` e rótulos vazios, o texto passa a «vale true em todas as páginas»; se a aba nova ainda der
+`undefined`, mantém-se o texto prudente e o remédio completo (aba em `about:blank` ou GPC no motor, `docs/motor.md`
+FP1) pede medição própria.
+
 A sonda própria continua com o mesmo identificador em todos os sites (`c3e25442` em example.com, wikipedia.org e
 coveryourtracks.eff.org; era `0648fb12`): o critério de «empate» com o Brave (identificador diferente por site e por
 sessão) só chega com o ruído em canvas/WebGL/áudio (F1 por scripts, F2 no motor). Limites que ficam: um iframe de
