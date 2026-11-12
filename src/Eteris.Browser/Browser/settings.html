@@ -1357,8 +1357,9 @@
       $('syncRevoke').disabled = !!d.busy; $('syncRevokeConfirm').disabled = !!d.busy;
       if (d.busy) $('syncStartOverConfirm').disabled = true; // volta a ativar-se com a palavra certa (ao escrever)
       // As mensagens das saídas (fora de syncBody: depois de retirar o acesso, a mensagem tem de se ver). Nunca marcadas
-      // como erro: a página não sabe se a mensagem é de sucesso.
-      note($('syncExitNote'), msg0(d, 'revoke') || msg0(d, 'lost') || msg0(d, 'startover'));
+      // como erro: a página não sabe se a mensagem é de sucesso. Também a de «Sair» (área «signout»: a chave que não se
+      // conseguiu apagar do disco), que aparece já sem sessão.
+      note($('syncExitNote'), msg0(d, 'revoke') || msg0(d, 'lost') || msg0(d, 'startover') || msg0(d, 'signout'));
       // Desligada ou parada: porquê, e o botão para (voltar a) ligar.
       $('syncOffTitle').textContent = phase === 'stopped' ? 'A sincronização parou neste computador' : 'A sincronização está desligada neste computador';
       // Um apagar do Drive que não acabou (e já não está a correr): diz o que fazer, e «Ligar» passa a «Ligar sem acabar

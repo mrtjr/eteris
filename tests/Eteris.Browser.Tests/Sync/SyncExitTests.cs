@@ -732,6 +732,31 @@ public sealed class SyncExitTests : IDisposable
     }
 
     [Fact]
+    public void EveryMessageArea_HasAReaderInThePage()
+    {
+        // RR-1 da re-revisão: uma área em que o SyncService (ou a rota das Definições) deixa uma mensagem e que a página
+        // não lê perde-se sem aviso. Era o caso de «signout»: a chave que não se conseguiu apagar ao «Sair».
+        var page = GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html");
+        var sources = new[]
+        {
+            GoogleSyncTests.Src("Eteris.Browser", "Sync", "SyncService.cs"),
+            GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"),
+        };
+        var areas = sources
+            .SelectMany(s => System.Text.RegularExpressions.Regex.Matches(s, @"\b(?:Say|Act)\(""([a-z-]+)""").Select(m => m.Groups[1].Value))
+            .Distinct()
+            .ToList();
+        Assert.Contains("signout", areas);
+        Assert.Contains("delete", areas);
+        Assert.Contains("startover", areas);
+        var missing = areas.Where(a => !page.Contains($"msg0(d, '{a}')") && !page.Contains($"msg.area === '{a}'")).ToList();
+        Assert.True(missing.Count == 0, "áreas sem leitor na página: " + string.Join(", ", missing));
+        // «Sair» deixa a secção sem sessão: a mensagem vai para a nota das saídas, que está fora de syncBody (à vista).
+        var exitNote = page[page.IndexOf("note($('syncExitNote')", StringComparison.Ordinal)..];
+        Assert.Contains("msg0(d, 'signout')", exitNote[..exitNote.IndexOf('\n')]);
+    }
+
+    [Fact]
     public void RevokeAnchor_WithTheItemHidden_GoesToTheSection()
     {
         // M1 da revisão: na pasta de teste (ou sem ligação) o item está escondido; «Não fui eu» e o botão do aviso
