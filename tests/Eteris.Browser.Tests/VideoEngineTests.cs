@@ -328,6 +328,90 @@ public class VideoEngineTests
         Assert.True(enable > 0 && add > enable);
     }
 
+    // Retomar o vídeo (revisão final do plano 6): com o Page.enable o script corre de facto, por isso não pode ficar
+    // registado — cada documento e cada iframe seguintes da aba saltavam o primeiro vídeo para o mesmo segundo. Corre
+    // só na página de topo, só no primeiro vídeo, e sai do registo depois da primeira navegação com documento.
+    [Fact]
+    public void ResumeScript_SeeksTheFirstMediaOfTheTopPageOnly()
+    {
+        var output = RunResume("""
+            const top = run(true);
+            const frame = run(false);
+            print([top.join(','), frame.join(',')].join('\n'));
+            """);
+        if (output is null) return;
+        var lines = output.Split('\n');
+        Assert.Equal("42.5,0", lines[0]); // o 1.º vídeo salta para 42,5 s; o 2.º fica no início
+        Assert.Equal("0,0", lines[1]); // num iframe o script não faz nada
+    }
+
+    [Fact]
+    public void ResumeScript_IsInvariantAndUnregisteredAfterTheFirstDocument()
+    {
+        Assert.Contains("const at = 42.5;", VideoEngine.ResumeScript(42.5));
+        Assert.Contains("window !== top", VideoEngine.ResumeScript(10));
+        Assert.Equal("7", Eteris.Browser.Browser.VideoPageScript.ScriptId("""{"identifier":"7"}"""));
+        Assert.Null(Eteris.Browser.Browser.VideoPageScript.ScriptId("{}"));
+        Assert.Null(Eteris.Browser.Browser.VideoPageScript.ScriptId("não é json"));
+        var channel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "VideoPageScript.cs"));
+        Assert.Contains("\"Page.removeScriptToEvaluateOnNewDocument\"", channel);
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var resume = code[code.IndexOf("private static async Task ResumeAtAsync(", StringComparison.Ordinal)..];
+        resume = resume[..resume.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("VideoEngine.ResumeScript(seconds)", resume);
+        Assert.Contains("VideoPageScript.RemoveEarlyAsync(core, id)", resume);
+        Assert.Contains("committed != e.NavigationId", resume);
+    }
+
+    // A cosmética do Escudo regista-se uma vez por site e por aba: o arranque da aba e as navegações partilham o conjunto
+    // (antes o 1.º site ficava registado duas vezes, e agora os scripts correm de facto).
+    [Fact]
+    public void VideoCosmetics_ShareOneSetPerTab()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        Assert.DoesNotContain("EnsureVideoCosmeticsAsync(core, url, new HashSet<string>(StringComparer.OrdinalIgnoreCase))", code);
+        Assert.Contains("await EnsureVideoCosmeticsAsync(core, url, cosmeticHosts);", code);
+    }
+
+    private static string? RunResume(string body)
+    {
+        var setup = """
+            class HTMLMediaElement { constructor(duration) { this.duration = duration; this.currentTime = 0; } }
+            const print = s => process.stdout.write(String(s));
+            const run = isTop => {
+              const listeners = [];
+              const self = {};
+              const win = { addEventListener: (type, fn) => listeners.push([type, fn]) };
+              win.top = isTop ? win : self;
+              const media = [new HTMLMediaElement(120), new HTMLMediaElement(120)];
+              new Function('window', 'top', 'addEventListener', 'HTMLMediaElement', SCRIPT)(win, win.top, win.addEventListener, HTMLMediaElement);
+              for (const m of media) for (const [type, fn] of listeners) if (type === 'loadedmetadata') fn({ target: m });
+              return media.map(m => m.currentTime);
+            };
+            """.Replace("SCRIPT", System.Text.Json.JsonSerializer.Serialize(VideoEngine.ResumeScript(42.5)));
+        var file = Path.Combine(Path.GetTempPath(), $"eteris-resume-{Guid.NewGuid():N}.js");
+        File.WriteAllText(file, setup + "\n" + body);
+        try
+        {
+            System.Diagnostics.Process? node;
+            try
+            {
+                node = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("node", [file])
+                {
+                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+                });
+            }
+            catch (System.ComponentModel.Win32Exception) { return null; } // Node não instalado: não há como verificar aqui.
+            if (node is null) return null;
+            var output = node.StandardOutput.ReadToEnd();
+            var error = node.StandardError.ReadToEnd();
+            node.WaitForExit(30_000);
+            Assert.True(node.ExitCode == 0, error);
+            return output.Replace("\r\n", "\n");
+        }
+        finally { File.Delete(file); }
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

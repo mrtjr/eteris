@@ -18,15 +18,40 @@ public static class VideoPageScript
     // DevTools do WebView2). Uma falha (o motor a fechar) não sai daqui: a página segue sem o script.
     // Medido (docs/paridade.md §7, WebView2 158.0.4370.16): sem o Page.enable antes, o registo devolve um identificador mas
     // o script nunca corre nas páginas; com ele corre antes dos da própria página.
-    public static async Task AddEarlyAsync(CoreWebView2 core, string source)
+    // Devolve o identificador do registo (para RemoveEarlyAsync), ou nulo se falhou.
+    public static async Task<string?> AddEarlyAsync(CoreWebView2 core, string source)
     {
         try
         {
             await core.CallDevToolsProtocolMethodAsync("Page.enable", "{}");
-            await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument",
-                JsonSerializer.Serialize(new { source }));
+            return ScriptId(await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument",
+                JsonSerializer.Serialize(new { source })));
+        }
+        catch (Exception) { return null; }
+    }
+
+    // Tira um script registado por AddEarlyAsync: os documentos seguintes já não o correm (o atual fica como está).
+    public static async Task RemoveEarlyAsync(CoreWebView2 core, string identifier)
+    {
+        try
+        {
+            await core.CallDevToolsProtocolMethodAsync("Page.removeScriptToEvaluateOnNewDocument",
+                JsonSerializer.Serialize(new { identifier }));
         }
         catch (Exception) { }
+    }
+
+    // O identificador na resposta do Page.addScriptToEvaluateOnNewDocument ({"identifier":"1"}), ou nulo.
+    public static string? ScriptId(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("identifier", out var id) && id.ValueKind == JsonValueKind.String
+                ? id.GetString() : null;
+        }
+        catch (JsonException) { return null; }
     }
 
     // Apaga o armazenamento de uma origem no perfil do motor de vídeo (Storage.clearDataForOrigin, pelo DevTools do

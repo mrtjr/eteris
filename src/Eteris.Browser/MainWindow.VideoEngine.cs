@@ -129,10 +129,12 @@ public partial class MainWindow
         if (!_videoViews.TryGetValue(tab, out var still) || !ReferenceEquals(still, view)) return;
         var core = view.CoreWebView2;
         ConfigureVideoPrivacy(core);
-        WireVideoView(tab, view, core, environment);
+        // Os sites cuja cosmética já está registada nesta aba: o mesmo conjunto aqui e nas navegações (WireVideoView).
+        var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        WireVideoView(tab, view, core, environment, cosmeticHosts);
         if (tab.IsMuted || TestSwitches.Mute) core.IsMuted = true;
         if (resumeAt > 1) await ResumeAtAsync(core, resumeAt);
-        await EnsureVideoCosmeticsAsync(core, url, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        await EnsureVideoCosmeticsAsync(core, url, cosmeticHosts);
         // O GPC visível ao JavaScript e a lista de dispositivos sem nomes, antes dos scripts da página (o cabeçalho
         // Sec-GPC vai em WireVideoView).
         await VideoPageScript.AddEarlyAsync(core, PrivacySignals.SessionScript);
@@ -159,7 +161,7 @@ public partial class MainWindow
 
     private const int ShieldCacheLimit = 4096;
 
-    private void WireVideoView(BrowserTab tab, WebView2 view, CoreWebView2 core, CoreWebView2Environment environment)
+    private void WireVideoView(BrowserTab tab, WebView2 view, CoreWebView2 core, CoreWebView2Environment environment, HashSet<string> cosmeticHosts)
     {
         string? mainNavigation = null;
         // O endereço da página, guardado na navegação: ler core.Source (COM) a cada pedido custava tempo na thread da
@@ -167,7 +169,6 @@ public partial class MainWindow
         var pageUrl = core.Source;
         var pageHost = WebHost(pageUrl);
         var decisions = new Dictionary<(string Page, string Request), bool>();
-        var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // O documento atual já deu um título? Um ficheiro de vídeo aberto diretamente não dá (nem o DocumentTitleChanged
         // dispara): sem isto ficava o título da página anterior, na aba e no histórico.
         var titled = false;
@@ -335,14 +336,24 @@ public partial class MainWindow
         await VideoPageScript.AddEarlyAsync(core, script);
     }
 
-    // Retomar o vídeo onde estava no motor principal: um script de uso único, no primeiro «loadedmetadata».
-    private static Task ResumeAtAsync(CoreWebView2 core, double seconds)
+    // Retomar o vídeo onde estava no motor principal: um script de uso único, no primeiro «loadedmetadata» da página de
+    // topo (Tabs/VideoEngine.cs, ResumeScript). Sai do registo depois da primeira navegação que chegou a ter documento
+    // (uma que acabou em transferência desviada para o leitor não conta: é o documento seguinte que precisa dele);
+    // ficando, cada página seguinte da aba saltava o primeiro vídeo para o mesmo segundo.
+    private static async Task ResumeAtAsync(CoreWebView2 core, double seconds)
     {
-        var at = seconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
-        var script = "(() => { const at = " + at + "; let done = false;"
-            + " addEventListener('loadedmetadata', e => { const v = e.target;"
-            + " if (done || !(v instanceof HTMLMediaElement) || !(v.duration > at)) return; done = true; v.currentTime = at; }, true); })();";
-        return VideoPageScript.AddEarlyAsync(core, script);
+        if (await VideoPageScript.AddEarlyAsync(core, VideoEngine.ResumeScript(seconds)) is not { } id) return;
+        ulong? committed = null;
+        void Loading(object? sender, CoreWebView2ContentLoadingEventArgs e) => committed = e.IsErrorPage ? null : e.NavigationId;
+        async void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (committed != e.NavigationId) return;
+            core.ContentLoading -= Loading;
+            core.NavigationCompleted -= Completed;
+            await VideoPageScript.RemoveEarlyAsync(core, id);
+        }
+        core.ContentLoading += Loading;
+        core.NavigationCompleted += Completed;
     }
 
     // O motor principal avisou que o vídeo desta página não toca nele (Tabs/VideoEngine.cs, VideoReport).

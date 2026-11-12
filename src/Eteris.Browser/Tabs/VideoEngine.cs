@@ -431,6 +431,17 @@ public static class VideoEngine
     // A posição do vídeo da página do motor principal só vale para essa mesma página. Um ficheiro de média que chega
     // como transferência (o desvio do DownloadHandler) ou uma navegação para um site de vídeo trocam de motor com a
     // página ANTERIOR ainda à vista: o #t= dela ia parar ao ficheiro novo (medido: um .aac abria em #t=2).
+    // Retomar o vídeo no motor de vídeo onde estava no motor principal: no primeiro «loadedmetadata» da página de topo
+    // (a posição vem do documento de topo, PositionScript), uma só vez. O registo sai depois do primeiro documento
+    // (MainWindow.VideoEngine.cs, ResumeAtAsync); a guarda do topo impede que os iframes desse documento saltem.
+    public static string ResumeScript(double seconds)
+    {
+        var at = seconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        return "(() => { if (window !== top) return; const at = " + at + "; let done = false;"
+            + " addEventListener('loadedmetadata', e => { const v = e.target;"
+            + " if (done || !(v instanceof HTMLMediaElement) || !(v.duration > at)) return; done = true; v.currentTime = at; }, true); })();";
+    }
+
     public static bool ResumesFrom(string? shownAddress, string target)
         => shownAddress is not null && string.Equals(WithoutFragment(shownAddress), WithoutFragment(target), StringComparison.Ordinal);
 
