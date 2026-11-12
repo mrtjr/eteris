@@ -307,7 +307,7 @@ public static class VideoEngine
     // diagnóstico descarregou componentes sem ação do utilizador). Com «bloquear reprodução automática», a mesma
     // política do motor principal. Fixos por pasta de dados: aplicam-se ao arrancar, como no motor principal.
     // A política de IP do WebRTC é a do motor principal (Shields/EngineHardening.cs); o nome do interruptor foi lido no
-    // libcef 156 e ainda não se confirmou que o WebView2 instalado o aceita (docs/paridade.md §7).
+    // libcef 156; medido que o WebView2 158.0.4370.16 o aceita (sem candidatos ICE nem pedido ao STUN, docs/paridade.md §7).
     public const string BaseArguments =
         "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update"
         + $" --{Shields.EngineHardening.WebRtcPolicySwitch}={Shields.EngineHardening.WebRtcPolicy}";

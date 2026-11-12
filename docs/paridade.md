@@ -416,6 +416,30 @@ e as ações do utilizador, por um cliente próprio que só fala com `oauth2.goo
 `BrowserSyncFolder_HttpOnlyThroughTheGoogleClient`). Prova ao vivo com a pasta de teste: a 1.ª escrita chega 31,6 s
 depois de abrir; a medição com o Drive real e o proxy fica para a fase «Prova».
 
+**Motor de vídeo (WebView2, da Microsoft) — medido a 2026-11-12, runtime 158.0.4370.16, commit `9bc2d6b` (Task 12 do plano 6).**
+Método: uma sonda descartável, fora do repositório (um programa .NET com o mesmo pacote `Microsoft.Web.WebView2` 1.0.4314.35 e
+um perfil temporário, apagado no fim), que liga o código do Éteris por `<Compile Include>` — `VideoEngine.BrowserArguments`,
+`VideoEngine.Language`, `PrivacySignals`, `VideoPageScript.AddEarlyAsync` — e repete a linha do `Sec-GPC` de `WireVideoView`.
+- *Tráfego parado.* Com `--proxy-server=http://127.0.0.1:<porta>` acrescentado aos argumentos do motor de vídeo (o proxy regista
+  a 1.ª linha de cada ligação e responde 502; nada é encaminhado) e uma aba em `about:blank` parada 60 s: **0 pedidos**. O proxy
+  funcionava (controlo: uma navegação a `http://eteris-controlo.invalid/` chegou-lhe como `GET`). Fica por medir: 60 s a tocar
+  vídeo, um site com DRM (servidor de licenças) e o 1.º arranque de um perfil novo com a aba já numa página.
+- *Política do WebRTC.* Uma página em `127.0.0.1` cria um `RTCPeerConnection` com um STUN local (UDP em `127.0.0.1`, que responde
+  ao pedido com o endereço de origem). Com `--webrtc-ip-handling-policy=disable_non_proxied_udp`: **0 candidatos** e 0 pacotes
+  STUN recebidos. Sem o interruptor (controlo): um candidato `host` (mDNS) e um `srflx`, e 1 pacote STUN. O WebView2 instalado
+  aceita o interruptor; só se testou esta versão do runtime, e com um STUN externo (o da Google) não se
+  testou (seria tráfego para fora).
+- *GPC e língua.* O servidor local recebeu `Sec-GPC: 1` em todos os pedidos (documento, `favicon.ico` e `fetch`) e
+  `Accept-Language: en-US,en;q=0.9` com a língua `en-US`; a página mostrou `navigator.globalPrivacyControl === true`,
+  `navigator.language === "en-US"`. **Mas só depois de acertar `VideoPageScript.AddEarlyAsync`**: sem `Page.enable` antes de
+  `Page.addScriptToEvaluateOnNewDocument`, o DevTools devolvia o identificador do script e a página via
+  `navigator.globalPrivacyControl === undefined` (o mesmo marcador registado por `AddScriptToExecuteOnDocumentCreatedAsync`
+  corria), tanto num controlador escondido como no controlo WPF numa janela visível. Com o `Page.enable` o script corre. Isto
+  vale também para a cosmética do Escudo e a retoma do vídeo, que usam o mesmo canal.
+- *DNS cifrado.* **Por medir:** testar `dns_over_https` em `video-engine\EBWebView\Local State` pede uma captura da porta 53
+  (permissões de administrador), que não se fez; a frase da `PrivacyNote` («Não têm o DNS cifrado») fica como está.
+- Decisão do dono, por tomar: juntar a linha «Motor de vídeo» à §4 de `docs/site/privacidade.html` (não se tocou na política).
+
 ## 8. Pedidos sem aba: a fuga do Escudo — medido (2026-11-08)
 
 O estudo das extensões (`C:\cef\notas\viabilidade\viab-extensoes.md`, secção 3) viu um `fetch` a

@@ -317,6 +317,17 @@ public class VideoEngineTests
         Assert.Contains("tab?.UsesVideoEngine == true", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Shield.cs")));
     }
 
+    // Medido (docs/paridade.md §7, 2026-11-12, WebView2 158.0.4370.16): sem o Page.enable, o Page.addScriptToEvaluateOnNewDocument
+    // devolve um identificador mas o script nunca corre; com ele, corre antes dos scripts da página.
+    [Fact]
+    public void EarlyScripts_EnableThePageDomainFirst()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "VideoPageScript.cs"));
+        var enable = code.IndexOf("CallDevToolsProtocolMethodAsync(\"Page.enable\", \"{}\")", StringComparison.Ordinal);
+        var add = code.IndexOf("CallDevToolsProtocolMethodAsync(\"Page.addScriptToEvaluateOnNewDocument\"", StringComparison.Ordinal);
+        Assert.True(enable > 0 && add > enable);
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

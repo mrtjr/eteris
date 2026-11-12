@@ -16,10 +16,13 @@ public static class VideoPageScript
 {
     // Um script que corre antes dos da página em cada documento novo (Page.addScriptToEvaluateOnNewDocument, pelo
     // DevTools do WebView2). Uma falha (o motor a fechar) não sai daqui: a página segue sem o script.
+    // Medido (docs/paridade.md §7, WebView2 158.0.4370.16): sem o Page.enable antes, o registo devolve um identificador mas
+    // o script nunca corre nas páginas; com ele corre antes dos da própria página.
     public static async Task AddEarlyAsync(CoreWebView2 core, string source)
     {
         try
         {
+            await core.CallDevToolsProtocolMethodAsync("Page.enable", "{}");
             await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument",
                 JsonSerializer.Serialize(new { source }));
         }
