@@ -1,5 +1,6 @@
 using System.IO;
 using Eteris.Browser.Data;
+using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser.Tests;
 
@@ -177,5 +178,77 @@ public sealed class SessionStoreTests : IDisposable
         Assert.Equal(230, session.ActiveIndex);
         Assert.Equal(reserved, session.Spaces![1].Tabs!.Urls);
         Assert.Equal(179, session.Spaces[1].Tabs!.ActiveIndex);
+    }
+
+    // DAD-02: o session.json passa a levar todas as janelas normais (campo opcional Windows).
+    private static SessionWindow Window(string[] urls, int active = 0, SessionTabMeta?[]? metas = null, WindowPlacement? placement = null)
+        => new(SessionStore.Compose(urls, active, metas: metas), placement);
+
+    [Fact]
+    public void SaveWindows_TwoWindows_RoundTripsBoth()
+    {
+        var store = new SessionStore(_path);
+        var second = new WindowPlacement(40, 60, 1200, 800, false);
+        Assert.True(store.TrySaveWindows([
+            Window(["https://a.pt/", "https://b.pt/", "https://c.pt/"], 1),
+            Window(["https://d.pt/", "https://e.pt/"], 1, [null, new SessionTabMeta(Note: "códigos", Locked: true)], second)]));
+        var session = store.Load()!;
+        Assert.Equal(["https://a.pt/", "https://b.pt/", "https://c.pt/"], session.Urls);
+        Assert.Equal(1, session.ActiveIndex);
+        var other = Assert.Single(session.Windows!);
+        Assert.Equal(["https://d.pt/", "https://e.pt/"], other.Tabs.Urls);
+        Assert.True(other.Tabs.Metas![1].Locked);
+        Assert.Equal("códigos", other.Tabs.Metas[1].Note);
+        Assert.Equal(second, other.Placement);
+        Assert.Null(other.Tabs.Windows);
+        Assert.Single(System.Text.Json.JsonSerializer.Deserialize(File.ReadAllText(_path), StartupJsonContext.Default.Session)!.Windows!);
+    }
+
+    [Fact]
+    public void Load_OldFormat_IsOneWindow()
+    {
+        File.WriteAllText(_path, """{"Urls":["https://a.pt/"],"ActiveIndex":0,"Titles":["A"]}""");
+        var session = new SessionStore(_path).Load()!;
+        Assert.Equal(["https://a.pt/"], session.Urls);
+        Assert.Null(session.Windows);
+    }
+
+    [Fact]
+    public void SaveWindows_OneWindow_WritesTheOldFormat()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/"], 0);
+        var old = File.ReadAllText(_path);
+        Assert.True(store.TrySaveWindows([Window(["https://a.pt/"])]));
+        Assert.Equal(old, File.ReadAllText(_path));
+        Assert.DoesNotContain("\"Windows\"", old);
+    }
+
+    [Fact]
+    public void Load_DropsWindowsWithNothingToRestore_AndPromotesTheNext()
+    {
+        var store = new SessionStore(_path);
+        store.TrySaveWindows([Window(["eteris://newtab/"]), Window(["https://d.pt/"]), Window(["javascript:x"])]);
+        var session = store.Load()!;
+        Assert.Equal(["https://d.pt/"], session.Urls);
+        Assert.Null(session.Windows);
+    }
+
+    [Fact]
+    public void SaveWindows_Empty_WritesNothing()
+    {
+        Assert.True(new SessionStore(_path).TrySaveWindows([]));
+        Assert.False(File.Exists(_path));
+    }
+
+    [Fact]
+    public void Load_WindowsWithNullEntries_AreSkipped()
+    {
+        File.WriteAllText(_path, """{"Urls":["https://a.pt/"],"ActiveIndex":0,"Windows":[null,{"Tabs":null},{"Tabs":{"Urls":null,"ActiveIndex":0}},{"Tabs":{"Urls":["https://d.pt/"],"ActiveIndex":5}}]}""");
+        var session = new SessionStore(_path).Load()!;
+        var other = Assert.Single(session.Windows!);
+        Assert.Equal(["https://d.pt/"], other.Tabs.Urls);
+        Assert.Equal(0, other.Tabs.ActiveIndex);
+        Assert.Null(other.Placement);
     }
 }
