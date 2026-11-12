@@ -68,6 +68,20 @@ public class ClearDataTests
         Assert.Contains("'A apagar…'", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html")));
     }
 
+    // Uma exceção a meio (contexto privado já libertado, Dispatcher abortado, a confirmação do Windows) não pode dar o
+    // texto genérico do VaultResourceHandler, que a página mostraria com ✓.
+    [Fact]
+    public async Task Reply_SaysNotCleared_WhenTheClearingThrows()
+    {
+        Assert.Equal("Não foi possível apagar os dados de navegação.", await ClearDataRequest.ReplyAsync(() => throw new ObjectDisposedException("contexto")));
+        Assert.Equal("Cookies apagados", await ClearDataRequest.ReplyAsync(() => Task.FromResult("Cookies apagados")));
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        var start = code.IndexOf("private IResourceHandler ClearData(", StringComparison.Ordinal);
+        var end = code.IndexOf("private static async Task<string> ClearBrowsingDataAsync(", StringComparison.Ordinal);
+        var route = code[start..end];
+        Assert.Equal(2, route.Split("new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearDataRequest.ReplyAsync(").Length - 1);
+    }
+
     [Fact]
     public void Cookies_ClearStorageOfEveryKnownOrigin()
     {
@@ -84,7 +98,9 @@ public class ClearDataTests
     public void SettingsPage_SaysCookiesSiteDataAndCacheGoEntirely()
     {
         var settings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
-        Assert.Contains("Cookies e dados de sites <small>(termina sessões; apaga tudo, desde sempre, seja qual for o período)</small>", settings);
+        Assert.Contains("Cookies e dados de sites <small>(termina sessões; apaga todos os cookies e o que guardaram os sites do histórico e das abas abertas, seja qual for o período)</small>", settings);
+        // Não promete «tudo»: o armazenamento de um site que já não está no histórico, nos cookies nem numa aba fica.
+        Assert.DoesNotContain("apaga tudo, desde sempre", settings);
         Assert.Contains("Imagens e ficheiros em cache <small>(apaga tudo, seja qual for o período)</small>", settings);
     }
 

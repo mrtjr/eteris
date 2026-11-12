@@ -637,12 +637,13 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
             var routes = Vault.VaultRoutes.Profile!;
             // Primeiro a confirmação: recusada, nada se apaga (nem o histórico, nem os cookies).
-            return new VaultResourceHandler(async () => await routes.EraseVaultAsync(browserId).ConfigureAwait(false)
-                ? Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId, privateContext).ConfigureAwait(false))
-                : Vault.VaultReply.Text("Não foi confirmado com o Windows: nada foi apagado."));
+            return new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearDataRequest.ReplyAsync(async () =>
+                await routes.EraseVaultAsync(browserId).ConfigureAwait(false)
+                    ? await ClearBrowsingDataAsync(request, browserId, privateContext).ConfigureAwait(false)
+                    : "Não foi confirmado com o Windows: nada foi apagado.").ConfigureAwait(false)));
         }
         // A resposta só sai depois de o motor apagar (ou falhar, e então diz o quê).
-        return new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId, privateContext).ConfigureAwait(false)));
+        return new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearDataRequest.ReplyAsync(() => ClearBrowsingDataAsync(request, browserId, privateContext)).ConfigureAwait(false)));
     }
 
     private static async Task<string> ClearBrowsingDataAsync(ClearDataRequest request, int browserId, bool privateContext)

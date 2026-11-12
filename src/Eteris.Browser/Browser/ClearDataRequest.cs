@@ -46,6 +46,13 @@ public sealed record ClearDataRequest(bool History, bool Cookies, bool Cache, Da
         return cleared.Count == 0 ? text : text + " Apagado: " + Join(cleared) + ".";
     }
 
+    // A resposta da rota: uma exceção a meio da limpeza responde «Não foi…» (sem ✓), nunca o texto genérico do handler.
+    public static async Task<string> ReplyAsync(Func<Task<string>> clear)
+    {
+        try { return await clear().ConfigureAwait(false); }
+        catch (Exception) { return "Não foi possível apagar os dados de navegação."; }
+    }
+
     private static string Join(List<string> names)
         => names.Count == 1 ? names[0] : string.Join(", ", names[..^1]) + " e " + names[^1];
 }

@@ -392,7 +392,7 @@
         <div class="item clearpanel" id="clearPanel" hidden>
           <div class="label">
             <label class="check"><input type="checkbox" value="history" checked> Histórico de navegação</label>
-            <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões; apaga tudo, desde sempre, seja qual for o período)</small></label>
+            <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões; apaga todos os cookies e o que guardaram os sites do histórico e das abas abertas, seja qual for o período)</small></label>
             <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache <small>(apaga tudo, seja qual for o período)</small></label>
             <label class="check"><input type="checkbox" value="vault"> Palavras-passe e preenchimento automático <small>(tudo, desde sempre; pede o Windows Hello; com a sincronização ligada, apaga também nos outros computadores)</small></label>
             <div class="seg" id="clearRange" style="margin-top:12px">
@@ -741,7 +741,7 @@
     const what = [...clearPanel.querySelectorAll('input:checked')].map(i => i.value).join(',');
     if (!what) return;
     document.getElementById('clearResult').textContent = 'A apagar…';
-    clearProbe.src =`eteris://${location.host}/clear?what=${what}&range=${clearRange}&t=${data.token}&n=${Date.now()}`;
+    clearProbe.src = `eteris://${location.host}/clear?what=${what}&range=${clearRange}&t=${data.token}&n=${Date.now()}`;
   });
   // Definições por site: cada site com o que tem guardado e um botão para repor tudo.
   const sitesCard = document.getElementById('sitesCard');
