@@ -83,6 +83,22 @@ public class WorkflowTests
     public void Release_PublishSemCodecs_HasATimeout()
         => Assert.Contains("timeout-minutes: 60", Job(Workflow("release.yml").Replace("\r\n", "\n"), "publish-sem-codecs"));
 
+    // Os testes que arrancam o Éteris (tests/Eteris.Browser.E2E.Tests, fora da solução) têm o seu fluxo: compila o
+    // executável em Release, corre-os com prazo, e os resultados guardam-se mesmo quando passam.
+    [Fact]
+    public void E2E_BuildsTheAppAndRunsTheLiveTests()
+    {
+        var yml = Workflow("e2e.yml").Replace("\r\n", "\n");
+        Assert.Contains("permissions:\n  contents: read", yml);
+        var e2e = Job(yml, "e2e");
+        Assert.Contains("timeout-minutes: 30", e2e);
+        Assert.Contains("dotnet build src/Eteris.Browser -c Release", e2e);
+        Assert.Contains("dotnet test tests/Eteris.Browser.E2E.Tests -c Release", e2e);
+        var upload = e2e.IndexOf("path: TestResults", StringComparison.Ordinal);
+        Assert.True(upload > 0, "o job não guarda TestResults");
+        Assert.Contains("- if: always()", e2e[..upload]);
+    }
+
     private static string Job(string yml, string name)
         => Regex.Match(yml, "^  " + Regex.Escape(name) + @":\n(.*?)(?=^  \S|\z)", RegexOptions.Multiline | RegexOptions.Singleline).Groups[1].Value;
 }

@@ -8,6 +8,7 @@ updates:
     directories:
       - "/src/Eteris.Browser"
       - "/tests/Eteris.Browser.Tests"
+      - "/tests/Eteris.Browser.E2E.Tests"
     schedule:
       interval: daily
     open-pull-requests-limit: 5
