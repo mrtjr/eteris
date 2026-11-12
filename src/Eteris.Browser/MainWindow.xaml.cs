@@ -9,6 +9,7 @@ using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Omnibox;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 
@@ -222,7 +223,9 @@ public partial class MainWindow : Window
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
         {
             if (browser.Address is not string address) return;
-            // Na página de erro a omnibox continua a mostrar o endereço que falhou.
+            // Na página de erro a omnibox continua a mostrar o endereço que falhou, mas sem cadeado nem «Ligação segura»
+            // no cartão: o que está à vista é a página do Éteris (BrowserTab.ShowsErrorPage).
+            tab.ShowsErrorPage = ErrorPage.IsErrorPage(address);
             // Sem alvo válido fica o próprio eteris://error/…: a barra não mostra texto escolhido pela página.
             address = ErrorPage.ReloadTarget(address) ?? address;
             var hostChanged = !SameHost(tab.Address, address);
@@ -242,6 +245,9 @@ public partial class MainWindow : Window
             // «Esquecer ao fechar»: ir para outro site também é sair do anterior.
             if (hostChanged) NoteSiteLeft(tab.Address, address);
             tab.Address = address;
+            // O motor confirmou: o que foi pedido deixa de estar pendente.
+            tab.PendingAddress = null;
+            tab.PendingLoadStarted = false;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             // Nunca a partir da página de erro ou do aviso do «HTTPS primeiro»: o endereço que lá aparece é o que falhou
@@ -309,6 +315,13 @@ public partial class MainWindow : Window
             // A meio da troca para o motor de vídeo, o estado da aba já é o dele.
             if (_videoViews.ContainsKey(tab)) return;
             tab.IsLoading = e.IsLoading;
+            // A carga do endereço pedido acabou sem commit (204, transferência, Esc, erro): a barra volta ao da página.
+            if (AddressBar.ClearsPending(e.IsLoading, tab.PendingLoadStarted))
+            {
+                tab.PendingAddress = null;
+                tab.PendingLoadStarted = false;
+                if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
+            }
             if (!e.IsLoading) NudgeMediaPoll(tab);
             tab.Crossing.MainHistoryChanged(e.CanGoBack);
             tab.CanGoBack = e.CanGoBack;

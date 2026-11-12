@@ -11,6 +11,7 @@
 - Recarregar uma página de erro só volta a abrir endereços http, https ou de ficheiro, e o botão “Continuar sem segurança” passa a ter uma assinatura própria em vez do token das páginas internas.
 - Uma página já não consegue abrir o cartão “Espreitar” quando se prime Alt, nem mudar as preferências do leitor sem o leitor aberto.
 - O painel de transferências mostra sempre a extensão do ficheiro, ignora cliques no primeiro segundo e pede confirmação antes de abrir programas e scripts.
+- O cadeado da barra de endereço só aparece depois de a página chegar: um endereço escrito e ainda não carregado, uma página de erro ou texto por enviar já não mostram “Ligação segura”.
 
 ### Privacidade
 

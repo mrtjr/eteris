@@ -23,7 +23,8 @@ public partial class MainWindow
     {
         if (!_omniboxEdited)
         {
-            var text = Tabs.Active?.Address is { } a && !NewTabPage.IsNewTab(a) ? a : string.Empty;
+            var shown = Tabs.Active is { } current ? AddressBar.Text(current.Address, current.PendingAddress) : string.Empty;
+            var text = NewTabPage.IsNewTab(shown) ? string.Empty : shown;
             if (!Omnibox.IsKeyboardFocusWithin) SetOmniboxText(text);
             else if (Omnibox.Text != text)
             {
@@ -59,15 +60,22 @@ public partial class MainWindow
             DisplayRest.Text = display.Rest;
         }
 
-        var site = SiteInfo.Describe(Tabs.Active?.Address ?? Omnibox.Text);
-        SiteIcon.Text = focused || empty ? "" : site.Kind switch
+        // O cadeado só segue o endereço confirmado pelo motor: pedido por carregar, texto por enviar e página de erro não o têm.
+        var active = Tabs.Active;
+        var showsError = active?.ShowsErrorPage == true;
+        var kind = AddressBar.Icon(active?.Address, active?.PendingAddress, showsError, _omniboxEdited, focused, empty);
+        SiteIcon.Text = kind switch
         {
+            null => "",
             ConnectionKind.Secure => "",
             ConnectionKind.Insecure => "",
             ConnectionKind.Internal => "",
             _ => "",
         };
-        SiteInfoButton.ToolTip = focused || empty ? null : $"{site.Title} — ver detalhes do site";
+        var site = SiteInfo.Describe(active?.Address ?? Omnibox.Text, failed: showsError);
+        SiteInfoButton.ToolTip = focused || empty ? null
+            : active?.PendingAddress is not null || _omniboxEdited ? "Ainda não carregou — ver detalhes do site"
+            : $"{site.Title} — ver detalhes do site";
         SiteInfoButton.IsHitTestVisible = !focused && !empty;
     }
 
@@ -102,12 +110,16 @@ public partial class MainWindow
             return;
         }
         if (ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
-        tab.Address = url;
+        // Só o motor confirma o endereço (AddressChanged): até lá a aba continua na página anterior.
+        tab.PendingAddress = url;
+        tab.PendingLoadStarted = false;
         SetOmniboxText(url);
         Keyboard.Focus(browser);
         UpdateOmniboxChrome();
         await ScriptsReadyFor(tab, browser, url);
-        if (!browser.IsDisposed) browser.Load(url);
+        if (browser.IsDisposed) return;
+        tab.PendingLoadStarted = true;
+        browser.Load(url);
     }
 
     private void FocusOmnibox()

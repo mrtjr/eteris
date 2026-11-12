@@ -26,6 +26,14 @@ public partial class MainWindow
         Downloads.PropertyChanged += OnDownloadsChanged;
         return new DownloadHandler(Downloads, Dispatcher, (source, url) =>
         {
+            // O pedido que deu numa transferência não chega a ter página: a barra volta ao endereço confirmado.
+            var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, source)).Key;
+            if (tab is not null)
+            {
+                tab.PendingAddress = null;
+                tab.PendingLoadStarted = false;
+                if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
+            }
             DownloadsHost.Visibility = Visibility.Visible;
             // O painel abriu sozinho (ou ganhou uma linha nova): durante 1 s um clique não abre nada.
             _downloadsOpenedUtc = DateTime.UtcNow;
@@ -33,7 +41,6 @@ public partial class MainWindow
             DownloadsPopup.IsOpen = true;
 
             // Aba aberta diretamente num link de transferência: não fica uma página branca (como no Chrome).
-            var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, source)).Key;
             if (tab is not null && !tab.CanGoBack && string.Equals(tab.Address, url, StringComparison.OrdinalIgnoreCase))
             {
                 tab.Address = NewTabUrl;

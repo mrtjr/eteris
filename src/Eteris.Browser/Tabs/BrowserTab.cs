@@ -96,6 +96,17 @@ public partial class BrowserTab : ObservableObject
     // Não é observável nem guardado; apaga-se ao mudar de página.
     public bool ReaderOpen { get; set; }
 
+    // O endereço pedido (escrito na barra, ou um link aberto por ela) e ainda não confirmado pelo motor: Address só muda
+    // quando a página chega (MOT-10, NAV-14). Não são observáveis nem guardados na sessão.
+    public string? PendingAddress { get; set; }
+
+    // A carga do endereço pendente já começou (browser.Load chamado): só a partir daí o fim de uma carga o desfaz
+    // (AddressBar.ClearsPending), não o fim da carga da página anterior.
+    public bool PendingLoadStarted { get; set; }
+
+    // O que o motor mostra é a página de erro do Éteris (eteris://error/…), não o site: o cartão do cadeado diz-o.
+    public bool ShowsErrorPage { get; set; }
+
     // A aba usa o motor de vídeo (WebView2) em vez do motor principal — ver Tabs/VideoEngine.cs.
     [ObservableProperty]
     private bool _usesVideoEngine;

@@ -252,6 +252,7 @@ public partial class MainWindow
             tab.IsReaderable = false;
             tab.ReaderOpen = false;
             tab.Address = address;
+            tab.PendingAddress = null;
         };
         core.DocumentTitleChanged += (_, _) =>
         {
@@ -270,6 +271,9 @@ public partial class MainWindow
         {
             FinishVideoSwitch(tab);
             tab.IsLoading = false;
+            // A navegação pedida acabou (com ou sem commit): a barra mostra só o endereço confirmado.
+            tab.PendingAddress = null;
+            if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
             UpdateVideoHistory(tab, core);
             var url = core.Source;
             // Sem título do documento (ficheiro de vídeo aberto diretamente): o nome do ficheiro, como no Chrome.
@@ -383,6 +387,7 @@ public partial class MainWindow
     {
         if (!Tabs.Tabs.Contains(tab) || _videoViews.ContainsKey(tab) || !VideoEngine.CanHost(url)) return;
         tab.Address = url;
+        tab.PendingAddress = null;
         tab.UsesVideoEngine = true;
         tab.VideoOffer = null;
         if (tab.IsSleeping || !_browsers.ContainsKey(tab)) tab.Crossing.EnterVideo(null);
@@ -414,6 +419,7 @@ public partial class MainWindow
         if (!_videoSwitching.Contains(tab) || !Tabs.Tabs.Contains(tab)) return;
         if (resumeAt > 1 && VideoEngine.IsDirectMedia(url)) url = VideoEngine.WithTimeFragment(url, resumeAt);
         tab.Address = url;
+        tab.PendingAddress = null;
         CreateVideoView(tab, resumeAt);
         // Recurso: se o motor de vídeo não pintar em 5 s, a troca acaba na mesma (fica o branco do fundo).
         _ = Dispatcher.InvokeAsync(async () =>
@@ -458,6 +464,7 @@ public partial class MainWindow
         ReleaseVideoView(tab);
         tab.UsesVideoEngine = false;
         tab.Address = url;
+        tab.PendingAddress = null;
         if (!tab.IsSleeping && !_browsers.ContainsKey(tab)) CreateBrowser(tab);
         LayoutBrowsers();
     }
@@ -566,7 +573,8 @@ public partial class MainWindow
             return true;
         }
         url = VideoUrl(url);
-        tab.Address = url;
+        // Só o motor confirma o endereço (SourceChanged); NavigationCompleted desfaz o pedido se nada chegou.
+        tab.PendingAddress = url;
         if (view.CoreWebView2 is { } core) core.Navigate(url);
         Keyboard.Focus(view);
         return true;
