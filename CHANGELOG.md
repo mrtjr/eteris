@@ -27,6 +27,7 @@
 - Com mais de uma janela aberta, atualizar, encerrar o Windows ou uma queda já não deixam só as abas de uma: a sessão guarda todas as janelas normais, com os seus Espaços, notas e trancas, e todas voltam no arranque seguinte.
 - Notas com duas janelas abertas: o que se escreve numa aparece na outra e escrever numa janela que mostrava o texto antigo já não apaga o que a outra gravou.
 - As abas já não adormecem com uma gravação ou chamada em curso, com um vídeo em Picture-in-Picture nem com texto por enviar numa caixa de texto; o tempo em que o computador esteve suspenso deixou de contar para o prazo, e com pouca memória só adormecem abas deixadas há pelo menos 2 minutos.
+- O comando da paleta «Adormecer abas em segundo plano» também deixa acordadas as abas com uma gravação ou chamada, com multimédia a tocar, com Picture-in-Picture ou com texto por enviar: antes adormecia-as todas, cortava a chamada e o texto perdia-se. A multi-seleção (Ctrl/Shift+clique e «Adormecer») continua a adormecer as abas escolhidas.
 
 ## 0.2.15 — 2026-11-12
 
