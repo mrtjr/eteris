@@ -115,22 +115,24 @@ feed assinado aparece «Atualizar para …»; com um byte trocado no `releases.w
 Definições › Sobre dizem «Não foi possível procurar atualizações» e a pasta `packages` da instalação de teste não ganha
 nenhum pacote.
 
-## Estado até o dono pôr as chaves
+## Estado
 
-O `update-keys.txt` sai do repositório só com comentários: a geração das chaves é um passo manual do dono (em baixo).
-Até lá:
+- As duas chaves (uso e reserva) foram geradas pelo dono a 2026-11-12 e as linhas públicas estão em `update-keys.txt`
+  (commit «Chaves públicas das atualizações (uso e reserva)»).
+- A 0.2.16 saiu a 2026-11-12 já assinada com a chave de uso: o `releases.win.json.sig` da release verifica com as chaves
+  do commit da etiqueta, e um índice com um bit trocado é recusado.
+- As instalações 0.2.15 e anteriores não verificam assinaturas e atualizam para a 0.2.16 como sempre. Da 0.2.16 em
+  diante, **todas as releases têm de sair assinadas** (`build\release.ps1 -Key …`): uma release publicada sem `.sig`
+  válido deixa estas instalações sem atualizações até sair outra assinada.
 
-- o Éteris compilado deste repositório arranca normalmente, mas **recusa todas as atualizações** (cada procura falha
-  fechada, sem pedir nada à rede, e Definições › Sobre diz «Não foi possível procurar atualizações»);
-- o `build/pack.ps1` recusa empacotar (também na emergência pelo CI);
-- o `build/release.ps1` recusa publicar (a verificação não tem chaves).
-
-As instalações que já existem (0.2.15 e anteriores) não verificam assinaturas e atualizam para a primeira versão com a
-verificação como sempre; é dessa versão em diante que a assinatura passa a ser obrigatória.
+Num repositório sem nenhuma linha de chave em `update-keys.txt` (uma cópia de teste, por exemplo), o Éteris compilado
+arranca mas recusa todas as atualizações sem pedir nada à rede, o `build/pack.ps1` recusa empacotar e o
+`build/release.ps1` recusa publicar.
 
 ## Passos manuais do dono
 
-Nada disto entra no repositório além das linhas públicas.
+Nada disto entra no repositório além das linhas públicas. Os passos 1 a 3 estão feitos (2026-11-12, ver «Estado»); o 4
+está por fazer.
 
 1. Gerar duas chaves **fora da pasta do repositório**, com frases-passe diferentes:
    `dotnet run --project build/sign -c Release -- new-key <suporte>\eteris-atualizacoes-1.pem` e `…-2.pem`. A 1.ª é a de

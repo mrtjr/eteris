@@ -180,8 +180,9 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
 6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
    (compilar e testes, sem pack nem upload).
 7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z
-   --token … --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo
-   (`$env:GH_TOKEN = (gh auth token)`), nunca em ficheiros.
+   --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo, nunca em
+   ficheiros nem na linha de comandos: `$env:VPK_TOKEN = (gh auth token)` antes e `Remove-Item Env:VPK_TOKEN` depois (o
+   `vpk` lê o `VPK_TOKEN` em vez do `--token`; o `GH_TOKEN` não lhe chega). Assim saiu a 0.2.16.
 8. `.\build\release.ps1 -Version X.Y.Z -Key <chave.pem>` (docs/atualizacoes.md): recusa enquanto o CI do commit da
    etiqueta não estiver verde (o fluxo `build` incluído), confere o `releases.win.json` do rascunho (o que o
    `vpk upload github` gerou, só com os pacotes desta versão) com os pacotes de `Releases\` desta máquina, assina os bytes
