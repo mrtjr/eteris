@@ -7,6 +7,7 @@ namespace Eteris.Browser.Tests;
 
 // UIX-02: com a lista lateral ligada em dois sentidos, o filtro tirava a aba ativa da lista e o WPF devolvia
 // `Active = null` (ou, com o item corrente sincronizado, trocava de aba). A lista só lê a aba ativa.
+[Collection(WpfCollection.Name)]
 public class SideTabSelectionTests
 {
     [Fact]

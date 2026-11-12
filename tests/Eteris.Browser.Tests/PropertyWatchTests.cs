@@ -8,6 +8,7 @@ namespace Eteris.Browser.Tests;
 
 // MOT-14, UIX-04: DependencyPropertyDescriptor.AddValueChanged guarda o alvo e o tratador numa tabela estática do WPF e
 // nada os solta. Cada página e cada janela que o usavam ficavam na memória até o Éteris sair (as privadas incluídas).
+[Collection(WpfCollection.Name)]
 public class PropertyWatchTests
 {
     [Fact]
