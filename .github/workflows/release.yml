@@ -57,9 +57,10 @@ jobs:
       - run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
-      # Um teste preso deixa um dump (5 min); o TRX guarda a duração de cada teste; se falhar, os resultados ficam no job.
+      # Um teste preso deixa um dump (5 min); o TRX guarda a duração de cada teste; os resultados ficam sempre no job
+      # (numa execução verde, a duração de cada teste).
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
-      - if: failure()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
@@ -103,7 +104,13 @@ jobs:
       - run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
-      - run: dotnet test -c Release --no-build
+      # Os mesmos testes, com as mesmas opções, do job verify.
+      - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults
       # Sem o motor próprio nem o CefSharp com o patch do sandbox (build/sandbox/build-all.ps1): publica sem sandbox.
       - name: O instalador tem de levar o motor do escudo
         run: |

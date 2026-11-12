@@ -61,21 +61,41 @@ public class WorkflowTests
 
     // CI instável (v0.2.11): um teste preso só se via como «Assert.True() Failure» e, sem prazo no job, um bloqueio
     // comia as 6 h por omissão. Os jobs que correm os testes têm prazo, o dotnet test deixa um dump se algum teste ficar
-    // preso, grava o TRX (com a duração de cada teste) e, quando falha, envia os resultados.
+    // preso, grava o TRX (com a duração de cada teste) e envia sempre os resultados — também numa execução verde, para
+    // se ver a duração de cada teste e procurar os que estão perto do prazo (TFI-06).
     [Theory]
-    [InlineData("build.yml", "build")]
-    [InlineData("release.yml", "verify")]
-    public void TestJobs_HaveTimeouts_AndKeepTheResultsWhenTheyFail(string workflow, string job)
+    [InlineData("build.yml", "build", 30)]
+    [InlineData("release.yml", "verify", 30)]
+    [InlineData("release.yml", "publish-sem-codecs", 60)]
+    public void TestJobs_HaveTimeouts_AndAlwaysKeepTheResults(string workflow, string job, int minutes)
     {
         var steps = Job(Workflow(workflow).Replace("\r\n", "\n"), job);
-        Assert.Contains("timeout-minutes: 30", steps);
+        Assert.Contains($"timeout-minutes: {minutes}", steps);
         var test = Regex.Match(steps, @"^\s+- run: dotnet test .*$", RegexOptions.Multiline).Value;
         Assert.Contains("--blame-hang-timeout 5m", test);
         Assert.Contains("--blame-hang-dump-type mini", test);
         Assert.Contains("--logger \"trx;LogFileName=testes.trx\"", test);
         Assert.Contains("--results-directory TestResults", test);
         var upload = steps[steps.IndexOf(test, StringComparison.Ordinal)..];
-        Assert.Matches(@"- if: failure\(\)\n\s+uses: actions/upload-artifact@v\d+\n\s+with:\n\s+name: testes-.*\n\s+path: TestResults", upload);
+        Assert.Matches(@"- if: always\(\)\n\s+uses: actions/upload-artifact@\S+(?: #[^\n]*)?\n\s+with:\n\s+name: testes-.*\n\s+path: TestResults", upload);
+    }
+
+    // A bateria de repetição (manual e semanal): 20 corridas com dois processadores, para as intermitências que só
+    // aparecem numa máquina apertada; sem repetir até passar — uma corrida vermelha deixa o job vermelho.
+    [Fact]
+    public void Stress_RunsTheSuiteTwentyTimes_WithTwoProcessors()
+    {
+        var yml = Workflow("stress.yml").Replace("\r\n", "\n");
+        Assert.Contains("workflow_dispatch:", yml);
+        Assert.Contains("schedule:", yml);
+        Assert.Contains("permissions:\n  contents: read", yml);
+        Assert.Contains("timeout-minutes: 120", yml);
+        Assert.Contains("DOTNET_PROCESSOR_COUNT: 2", yml);
+        Assert.Contains("$i -le 20", yml);
+        Assert.Contains("--blame-hang-timeout 5m", yml);
+        var upload = yml.IndexOf("path: TestResults", StringComparison.Ordinal);
+        Assert.True(upload > 0, "o stress.yml não guarda TestResults");
+        Assert.Contains("- if: always()", yml[..upload]);
     }
 
     // Os testes dos scripts injetados correm no Node e falham sem ele (NodeRunner): cada job que corre a bateria
