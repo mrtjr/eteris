@@ -262,10 +262,17 @@ public partial class MainWindow
         // de erro (com «Tentar novamente») em vez de um painel em branco.
         browser.LoadError += (_, e) => RecoverMainFrame(browser, e, isPrivate: false, panelHistory);
         browser.MenuHandler = new PageMenuHandler(IsPrivate, (context, _, _) => Dispatcher.InvokeAsync(() => ShowWebPanelMenu(browser, context)));
-        // Depois de cada commit, os scripts do site atual (os links do mesmo site já os encontram).
+        // Lida uma vez aqui, na thread da janela (o FrameLoadStart chega noutra).
+        var permissionStore = SitePermissions;
+        // Depois de cada commit, os scripts do site atual (os links do mesmo site já os encontram) e, como nas abas, o
+        // que o motor guardou e a loja do Éteris não tem volta ao valor por omissão (MOT-03).
         browser.FrameLoadStart += (_, e) =>
         {
-            if (e.Frame.IsMain && e.Browser is { } cef && e.Url is { } committed) _ = Task.Run(() => injector.EnsureHost(cef, committed));
+            if (e.Frame.IsMain && e.Browser is { } cef && e.Url is { } committed)
+            {
+                _ = Task.Run(() => injector.EnsureHost(cef, committed));
+                ResetUnstoredEnginePermissions(cef, committed, permissionStore);
+            }
         };
         browser.FrameLoadEnd += (_, e) =>
         {

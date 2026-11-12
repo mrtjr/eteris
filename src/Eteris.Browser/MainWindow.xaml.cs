@@ -314,11 +314,7 @@ public partial class MainWindow : Window
             if (!e.Frame.IsMain) return;
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
-            // Decisões que o Chromium guardou e o Éteris não tem (restos de versões anteriores, ou «Repor» nas
-            // Definições, que não tem o motor à mão): voltam ao valor por omissão no commit de cada página (MOT-03).
-            if (e.Browser.GetHost()?.RequestContext is { } engineContext)
-                Permissions.EnginePermissions.Reset(engineContext, e.Url,
-                    Permissions.EnginePermissions.Types.Keys.Where(k => permissionStore.Get(Permissions.PermissionRules.Site(e.Url), k) is null).ToList());
+            ResetUnstoredEnginePermissions(e.Browser, e.Url, permissionStore);
             KitTabNavigated(e.Browser.Identifier);
             StartupTrace.MarkOnce("aba.1.commit");
             // Página nova sem pedido de rede (servida pelo service worker, ou reposta da cache de Voltar/Avançar): a

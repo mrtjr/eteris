@@ -59,6 +59,15 @@ public partial class MainWindow
             });
         });
 
+    // Decisões que o Chromium guardou e o Éteris não tem (restos de versões anteriores, ou «Repor» nas Definições, que
+    // não tem o motor à mão) voltam ao valor por omissão no commit de cada página, nas abas e nos painéis (MOT-03).
+    private static void ResetUnstoredEnginePermissions(CefSharp.IBrowser browser, string url, SitePermissionStore store)
+    {
+        if (browser.GetHost()?.RequestContext is not { } context) return;
+        var site = PermissionRules.Site(url);
+        EnginePermissions.Reset(context, url, EnginePermissions.Unstored(k => store.Get(site, k)));
+    }
+
     private void ShowNextPermission()
     {
         if (_currentPermission is not null) return;

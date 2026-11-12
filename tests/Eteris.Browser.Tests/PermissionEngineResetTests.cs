@@ -85,7 +85,27 @@ public class PermissionEngineResetTests
         Assert.DoesNotContain("if (kind == SitePermission.LocalNetwork)", Source("MainWindow.SiteInfo.cs"));
         Assert.Contains("EnginePermissions.ResetAll(CookieContext, origin)", Source("MainWindow.Forget.cs"));
         Assert.Contains("PermissionGrants.ForgetWhere(", Source("MainWindow.Forget.cs"));
-        Assert.Contains("EnginePermissions.Reset(", Source("MainWindow.xaml.cs"));
         Assert.DoesNotContain("EngineLocalNetwork", Source("Permissions", "SitePermissionHandler.cs"));
     }
+
+    // O commit de cada página repõe o que a loja não guarda — nas abas e nos painéis web, que usam o mesmo contexto e o
+    // mesmo PermissionHandler (sem isto, uma recusa antiga num site que só vive na barra lateral ficava no motor).
+    [Fact]
+    public void EveryCommit_ResetsWhatTheStoreDoesNotKeep_InTabsAndPanels()
+    {
+        Assert.Contains("ResetUnstoredEnginePermissions(", Source("MainWindow.xaml.cs"));
+        Assert.Contains("ResetUnstoredEnginePermissions(", Source("MainWindow.WebPanels.cs"));
+        Assert.Contains("EnginePermissions.Unstored(", Source("MainWindow.Permissions.cs"));
+    }
+
+    // Corre em cada navegação, num evento do CEF: uma falha a ler a loja (base ocupada, loja privada já fechada) não pode
+    // sair dali; vale como «não repor nada».
+    [Fact]
+    public void Unstored_ALoadFailure_ResetsNothing()
+        => Assert.Empty(EnginePermissions.Unstored(_ => throw new InvalidOperationException("loja fechada")));
+
+    [Fact]
+    public void Unstored_IsWhatTheStoreDoesNotKeep()
+        => Assert.Equal(EnginePermissions.Types.Keys.Where(k => k != SitePermission.Location),
+                        EnginePermissions.Unstored(k => k == SitePermission.Location ? true : null));
 }

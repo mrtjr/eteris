@@ -24,7 +24,8 @@ public static partial class SiteTint
     public static Color? Parse(string css)
     {
         var text = css.Trim();
-        if (text.Length == 0) return null;
+        // Nenhuma cor válida passa de umas dezenas de carateres; o texto vem da página e não tem limite.
+        if (text.Length is 0 or > 64) return null;
 
         var rgb = RgbPattern().Match(text);
         if (rgb.Success)
@@ -95,7 +96,7 @@ public static partial class SiteTint
     private static byte Channel(string value) => (byte)Math.Clamp(int.Parse(value, CultureInfo.InvariantCulture), 0, 255);
 
     // [0-9] e não \d: \d aceita algarismos de outras escritas (árabes, devanágari), que o int.Parse depois recusa.
-    [GeneratedRegex(@"^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*(?:,\s*([0-9]*\.?[0-9]+)\s*)?\)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*(?:,\s*([0-9]{0,3}(?:\.[0-9]{1,8})?)\s*)?\)$", RegexOptions.IgnoreCase)]
     private static partial Regex RgbPattern();
 
     [GeneratedRegex(@"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")]

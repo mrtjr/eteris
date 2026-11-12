@@ -100,6 +100,15 @@ public static class EnginePermissions
 
     public static void ResetAll(IRequestContext context, string origin) => Reset(context, origin, Types.Keys.ToList());
 
+    // O que se repõe no commit de uma página: os tipos que a loja do Éteris não guarda para o site. Corre em cada
+    // navegação, num evento do CEF: se a loja não se ler (base ocupada, loja da janela privada já fechada), não se repõe
+    // nada — uma exceção ali saltava o resto do tratador ou fazia cair o processo.
+    public static List<SitePermission> Unstored(Func<SitePermission, bool?> stored)
+    {
+        try { return Types.Keys.Where(k => stored(k) is null).ToList(); }
+        catch (Exception) { return []; }
+    }
+
     // O que se repõe logo a seguir a uma resposta: o que a loja do Éteris não guarda. Uma notificação permitida fica para
     // o commit seguinte da página: repô-la já devolvia a página a «default» 2 s depois (prova ao vivo), cortando o uso
     // que acabou de ser permitido.

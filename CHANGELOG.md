@@ -8,7 +8,7 @@
 
 ### Privacidade
 
-- Esquecer uma permissão no cadeado, triturar um site ou responder sem «Lembrar» passa a valer também no motor: o site volta mesmo a perguntar. Antes, o motor guardava para sempre cada «Permitir» e cada «Bloquear», incluindo a recusa automática dos pedidos de notificações, que continuava depois de desligar essa opção. «Permitir» sem «Lembrar» vale até fechar o Éteris para notificações, área de transferência e várias transferências, e uma só vez para câmara, microfone, ecrã e localização. Fica de fora a área de transferência: o motor continua a lembrar a decisão dela.
+- Esquecer uma permissão no cadeado, triturar um site ou responder sem «Lembrar» passa a valer também no motor: o site volta mesmo a perguntar. Antes, o motor guardava para sempre cada «Permitir» e cada «Bloquear», incluindo a recusa automática dos pedidos de notificações, que continuava depois de desligar essa opção. «Permitir» sem «Lembrar» vale até fechar o Éteris para notificações e várias transferências, e uma só vez para câmara, microfone, ecrã e localização. Fica de fora a área de transferência: o motor continua a lembrar a decisão dela, mesmo depois de a esquecer no cadeado.
 
 ### Correções
 

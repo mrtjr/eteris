@@ -20,6 +20,17 @@ public class SiteTintTests
     [InlineData("red ; x")]
     public void Parse_OnlyAcceptsPlainColours(string css) => Assert.Null(SiteTint.Parse(css));
 
+    // O conteúdo do theme-color não tem limite de tamanho e o Parse corre na thread da janela: um «rgba(» com dezenas de
+    // milhares de dígitos sem fecho não pode congelar o Éteris (a expressão do alfa retrocedia em tempo quadrático).
+    [Fact]
+    public void Parse_HugeInput_ReturnsAtOnce()
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Null(SiteTint.Parse("rgba(1,2,3," + new string('1', 30_000)));
+        Assert.Null(SiteTint.Parse("#" + new string('a', 30_000)));
+        Assert.True(clock.ElapsedMilliseconds < 250, $"demorou {clock.ElapsedMilliseconds} ms");
+    }
+
     [Fact]
     public void Parse_EightDigitHex_IsCssOrder_AlphaLast()
     {
