@@ -64,6 +64,31 @@ public sealed class SessionStore(string path)
         File.Move(temporary, path, overwrite: true);
     }
 
+    // Como Save, mas nunca lança: um ficheiro só de leitura, preso por outro programa ou um .tmp que não se deixa
+    // escrever dão false (a sessão fica por gravar e quem chama avisa) em vez de fechar o Éteris.
+    public bool TrySave(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles = null, IEnumerable<bool>? pinned = null,
+        IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null, SessionSplit? split = null,
+        IEnumerable<SessionTabMeta?>? metas = null, IReadOnlyList<SessionSpace>? spaces = null, int spaceIndex = 0)
+    {
+        try
+        {
+            Save(urls, activeIndex, titles, pinned, groupIds, groups, split, metas, spaces, spaceIndex);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DeleteTemporary();
+            return false;
+        }
+    }
+
+    // O .tmp de uma escrita que falhou não fica no perfil (se nem isso se deixar apagar, fica para a próxima escrita).
+    private void DeleteTemporary()
+    {
+        try { File.Delete(path + ".tmp"); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
     // Só o que se pode repor (http, https, eteris://), todas as abas, com os campos por aba alinhados.
     private static Session Build(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles, IEnumerable<bool>? pinned,
         IEnumerable<int>? groupIds, IReadOnlyList<SessionGroup>? groups, SessionSplit? split, IEnumerable<SessionTabMeta?>? metas)
@@ -120,16 +145,20 @@ public sealed class SessionStore(string path)
         => session.Urls.All(u => u.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
 
     // Uma sessão lida do disco, só com o que se pode repor e com os campos por aba alinhados.
+    // Entradas null (ficheiro editado à mão ou estragado) não lançam: endereço null não se repõe, título null fica
+    // vazio e um grupo null fica sem nome (os índices dos grupos mantêm-se).
     private static Session Filter(Session session)
     {
         var indices = Enumerable.Range(0, session.Urls.Count).Where(i => IsRestorable(session.Urls[i])).ToList();
         var urls = indices.Select(i => session.Urls[i]).ToList();
-        var titles = indices.Select(i => session.Titles is { } t && i < t.Count ? t[i] : string.Empty).ToList();
+        var titles = indices.Select(i => session.Titles is { } t && i < t.Count ? t[i] ?? string.Empty : string.Empty).ToList();
         var pinned = indices.Select(i => session.Pinned is { } p && i < p.Count && p[i]).ToList();
         var groupCount = session.Groups?.Count ?? 0;
         var groupIds = indices.Select(i => session.GroupIds is { } g && i < g.Count && g[i] < groupCount ? g[i] : -1).ToList();
         var metas = indices.Select(i => session.Metas is { } m && i < m.Count ? m[i] ?? SessionTabMeta.Empty : SessionTabMeta.Empty).ToList();
-        return new Session(urls, Math.Clamp(session.ActiveIndex, 0, Math.Max(0, urls.Count - 1)), titles, pinned, groupIds, session.Groups ?? [],
+        var groups = session.Groups?.Select(g => g is { Name: not null } ? g : new SessionGroup(g?.Name ?? "", g?.ColorIndex ?? 0, g?.Collapsed ?? false))
+            .ToList() ?? [];
+        return new Session(urls, Math.Clamp(session.ActiveIndex, 0, Math.Max(0, urls.Count - 1)), titles, pinned, groupIds, groups,
             Remap(session.Split, indices), metas);
     }
 
@@ -143,8 +172,9 @@ public sealed class SessionStore(string path)
         return remapped.IsValid(keptIndices.Count) ? remapped : null;
     }
 
-    private static bool IsRestorable(string url)
-        => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-           || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-           || url.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase);
+    private static bool IsRestorable(string? url)
+        => url is not null
+           && (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+               || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+               || url.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
 }

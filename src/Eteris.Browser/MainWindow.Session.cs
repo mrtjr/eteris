@@ -50,6 +50,7 @@ public partial class MainWindow
             Loaded += (_, _) => FocusOmnibox();
         }
 
+        if (!IsPrivate) Loaded += (_, _) => ShowProfileNotices();
         if (!_ownsSession) return;
         WatchSessionChanges();
     }
@@ -95,16 +96,24 @@ public partial class MainWindow
         _sessionTimer.Start();
     }
 
+    // Um session.json só de leitura ou preso por outro programa não fecha o Éteris: a sessão fica por gravar (volta
+    // a tentar-se na mudança de aba seguinte) e avisa-se uma vez.
     private void SaveSession()
     {
-        try
-        {
-            var active = Tabs.Active is { } tab ? Tabs.Tabs.IndexOf(tab) : 0;
-            var (groupIds, groups) = Tabs.GroupSnapshot();
-            var (spaces, spaceIndex) = Tabs.WorkspaceSnapshot();
-            _session.Save(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title), Tabs.Tabs.Select(t => t.IsPinned),
-                groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot(), spaces, spaceIndex);
-        }
-        catch (IOException) { }
+        var active = Tabs.Active is { } tab ? Tabs.Tabs.IndexOf(tab) : 0;
+        var (groupIds, groups) = Tabs.GroupSnapshot();
+        var (spaces, spaceIndex) = Tabs.WorkspaceSnapshot();
+        if (!_session.TrySave(Tabs.Tabs.Select(t => t.Address), active, Tabs.Tabs.Select(t => t.Title), Tabs.Tabs.Select(t => t.IsPinned),
+                groupIds, groups, SplitSnapshot(), Tabs.MetaSnapshot(), spaces, spaceIndex))
+            WarnSessionNotSaved();
+    }
+
+    private static bool s_sessionWarned;
+
+    private static void WarnSessionNotSaved()
+    {
+        if (s_sessionWarned) return;
+        s_sessionWarned = true;
+        NotifyProfile("Não foi possível guardar a sessão — as abas abertas podem não voltar no próximo arranque");
     }
 }

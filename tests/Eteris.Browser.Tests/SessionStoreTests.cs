@@ -7,7 +7,50 @@ public sealed class SessionStoreTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "eteris-session-" + Guid.NewGuid() + ".json");
 
-    public void Dispose() => File.Delete(_path);
+    public void Dispose()
+    {
+        File.Delete(_path);
+        File.Delete(_path + ".tmp");
+    }
+
+    // ARQ-02: um session.json só de leitura ou preso por outro programa não pode fechar o Éteris.
+    [Fact]
+    public void TrySave_WhenTheFileIsReadOnly_ReturnsFalseAndKeepsTheFile()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/"], 0);
+        var before = File.ReadAllText(_path);
+        File.SetAttributes(_path, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.False(store.TrySave(["https://b.pt/"], 0));
+            Assert.Equal(before, File.ReadAllText(_path));
+            Assert.False(File.Exists(_path + ".tmp"));
+        }
+        finally { File.SetAttributes(_path, FileAttributes.Normal); }
+    }
+
+    [Fact]
+    public void TrySave_WhenTheTemporaryPathIsADirectory_ReturnsFalse()
+    {
+        Directory.CreateDirectory(_path + ".tmp");
+        try { Assert.False(new SessionStore(_path).TrySave(["https://a.pt/"], 0)); }
+        finally { Directory.Delete(_path + ".tmp"); }
+    }
+
+    // DAD-13: entradas null no JSON (ficheiro editado à mão ou estragado) não fazem a leitura lançar.
+    [Fact]
+    public void Load_WithNullEntries_DoesNotThrow()
+    {
+        File.WriteAllText(_path, """{"Urls":["https://a.pt/",null],"ActiveIndex":0,"Titles":[null,null],"GroupIds":[0,0],"Groups":[null]}""");
+        var session = new SessionStore(_path).Load()!;
+        Assert.Equal(["https://a.pt/"], session.Urls);
+        Assert.Equal([""], session.Titles);
+        Assert.Equal("", Assert.Single(session.Groups!).Name);
+        var vm = new Eteris.Browser.Tabs.TabsViewModel();
+        vm.Restore(session.Urls, session.ActiveIndex, session.Titles, session.Pinned, session.GroupIds, session.Groups, session.Metas);
+        Assert.Single(vm.Tabs);
+    }
 
     [Fact]
     public void SaveThenLoad_RoundTripsTabsAndActive()
