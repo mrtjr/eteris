@@ -191,9 +191,9 @@ public class SandboxPublishTests
     [InlineData(false, false, "-NoSandbox -SemLogin", "COM sandbox e foi pedido -NoSandbox")]
     public async Task Pack_RunOnAFakePublish_RefusesBeforePacking(bool login, bool file, string switches, string expected)
     {
-        var said = await RunPackAsync("{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": " + (login ? "true" : "false") + " }",
-                                      file, switches, head: null);
-        Assert.True(said(expected), $"o pack.ps1 não recusou com «{expected}»");
+        var (said, output) = await RunPackAsync("{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": " + (login ? "true" : "false") + " }",
+                                                file, switches, head: null);
+        Assert.True(said(expected), $"o pack.ps1 não recusou com «{expected}»; saída: " + output);
         // Uma só recusa: a do login não aparece quando a publicação o leva ou o -SemLogin a aceita, e só ela diz como
         // publicar; o aviso do -SemLogin só aparece quando ele foi preciso e a publicação é mesmo sem login.
         Assert.True(said("-GoogleOAuthJson") == (expected == "SEM login Google"), "a recusa do login (e só ela) diz como publicar com ele");
@@ -206,26 +206,58 @@ public class SandboxPublishTests
     // -SemLogin (que a deixava passar pelas outras verificações). A marca das outras recusas não tem commit, como a de uma
     // publicação feita sem git, e não tem com que comparar. «head»: o que um git.cmd falso responde ao rev-parse HEAD
     // (nulo: não há git no PATH, e sem saber o HEAD também não empacota).
+    // Texto procurado só em ASCII: a saída do PowerShell 5.1 sai na página de códigos da consola (850 na máquina do
+    // dono, 437 no runner do GitHub), e um «ã» procurado numa consola 437 nunca é encontrado.
+    private const string NoHeadRefusal = "consigo ler o HEAD (git rev-parse HEAD)";
+    private const string OtherCommitRefusal = "do commit aaaaaaaaaaaa e o HEAD";
+
     [Theory]
-    [InlineData(true, "", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "é do commit aaaaaaaaaaaa e o HEAD é bbbbbbbbbbbb")]
-    [InlineData(false, "-SemLogin", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "é do commit aaaaaaaaaaaa e o HEAD é bbbbbbbbbbbb")]
-    [InlineData(true, "", null, "não consigo ler o HEAD")]
+    [InlineData(true, "", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", OtherCommitRefusal)]
+    [InlineData(false, "-SemLogin", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", OtherCommitRefusal)]
+    [InlineData(true, "", null, NoHeadRefusal)]
     public async Task Pack_RunOnAPublishOfAnotherCommit_RefusesBeforePacking(bool login, string switches, string? head, string expected)
     {
         var mark = "{ \"version\": \"9.9.9\", \"sandbox\": true, \"commit\": \"" + new string('a', 40) + "\", \"google_oauth\": "
                    + (login ? "true" : "false") + " }";
-        var said = await RunPackAsync(mark, file: login, switches, head);
-        Assert.True(said(expected), $"o pack.ps1 não recusou com «{expected}»");
+        var (said, output) = await RunPackAsync(mark, file: login, switches, head);
+        Assert.True(said(expected), $"o pack.ps1 não recusou com «{expected}»; saída: " + output);
+        if (head is not null) Assert.True(said(head[..12] + ": publique de novo"), "a recusa diz o HEAD");
         Assert.True(said("publique de novo"), "a recusa manda publicar de novo");
         Assert.False(said("-GoogleOAuthJson") || said("publish\\ incoerente") || said("foi pedido"), "as outras verificações passaram");
         Assert.True(said("Pacote SEM login Google (-SemLogin)") == switches.Contains("-SemLogin"), "o aviso do -SemLogin");
     }
 
+    // A recusa sem git lê-se em qualquer página de códigos da consola: a do runner (437), a da máquina do dono (850) e
+    // a UTF-8 (65001). O «:<cp>» é o que o chcp escreve depois de mudar, e prova que a mudança pegou.
+    [Theory]
+    [InlineData(437)]
+    [InlineData(850)]
+    [InlineData(65001)]
+    public async Task Pack_Refusals_AreReadableInAnyCodePage(int codePage)
+    {
+        var mark = "{ \"version\": \"9.9.9\", \"sandbox\": true, \"commit\": \"" + new string('a', 40) + "\", \"google_oauth\": true }";
+        var (said, output) = await RunPackAsync(mark, file: true, "", head: null, codePage);
+        Assert.True(said(":" + codePage), "o chcp não mudou a página de códigos; saída: " + output);
+        Assert.True(said(NoHeadRefusal), "o pack.ps1 não recusou por não ler o HEAD; saída: " + output);
+        Assert.True(said("publique de novo"), "a recusa manda publicar de novo");
+    }
+
+    [Fact]
+    public void Masked_HidesTheTempFolderAndTheProfile()
+    {
+        var name = "Usu\u00e1rio";
+        var temp = @"C:\Users\" + name + @"\AppData\Local\Temp\eteris-pack-abc";
+        var text = "At" + temp + @"\build\pack.ps1:41 e C:\Users\" + name + @"\x";
+        Assert.Equal(@"At<tmp>\build\pack.ps1:41 e C:\Users\<utilizador>\x", Masked(text, temp));
+    }
+
     // Corre o pack.ps1 verdadeiro numa cópia com uma pasta publish\ falsa: só a marca «mark» e, com «file», um
     // publish\google-oauth.json (vazio, feito aqui). O PATH do processo fica só com o sistema (e, com «head», uma pasta
     // onde só há um git.cmd falso que responde «head»): o vpk nunca corre daqui. Confirma que recusou sem empacotar e
-    // devolve uma função que diz se o pack.ps1 escreveu um texto.
-    private static async Task<Func<string, bool>> RunPackAsync(string mark, bool file, string switches, string? head)
+    // devolve uma função que diz se o pack.ps1 escreveu um texto, e a saída para as mensagens de falha. Com «codePage»,
+    // corre por um cmd.exe que muda primeiro a página de códigos da consola (chcp) e escreve a nova.
+    private static async Task<(Func<string, bool> Said, string Output)> RunPackAsync(string mark, bool file, string switches, string? head,
+                                                                                     int? codePage = null)
     {
         var dir = Directory.CreateTempSubdirectory("eteris-pack-");
         try
@@ -240,6 +272,14 @@ public class SandboxPublishTests
             {
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             };
+            if (codePage is int cp)
+            {
+                // O PATH do filho só tem a pasta do sistema: o powershell.exe vai pelo caminho inteiro.
+                var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+                start.FileName = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+                start.Arguments = $"/d /s /c \"chcp {cp} >nul & chcp & \"{powershell}\" -NoProfile -NonInteractive -ExecutionPolicy Bypass "
+                                  + $"-File \"{script}\" -Version 9.9.9 {switches}\"";
+            }
             start.Environment["PATH"] = Environment.SystemDirectory;
             if (head is not null)
             {
@@ -247,21 +287,37 @@ public class SandboxPublishTests
                 File.WriteAllText(Path.Combine(tools, "git.cmd"), "@echo off\r\necho " + head + "\r\n");
                 start.Environment["PATH"] += ";" + tools;
             }
-            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Version", "9.9.9" })
-                start.ArgumentList.Add(argument);
-            foreach (var argument in switches.Split(' ', StringSplitOptions.RemoveEmptyEntries)) start.ArgumentList.Add(argument);
+            if (codePage is null)
+            {
+                foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Version", "9.9.9" })
+                    start.ArgumentList.Add(argument);
+                foreach (var argument in switches.Split(' ', StringSplitOptions.RemoveEmptyEntries)) start.ArgumentList.Add(argument);
+            }
             using var shell = Process.Start(start)!;
             var error = shell.StandardError.ReadToEndAsync();
             var output = await shell.StandardOutput.ReadToEndAsync();
             Assert.True(shell.WaitForExit(60_000), "powershell.exe não acabou em 60 s");
-            // Sem a saída nas mensagens: traz o caminho da pasta temporária, com o perfil (o registo do CI é público).
-            // E sem espaços nem quebras: o PowerShell parte as linhas do erro pela largura da consola.
+            // A saída vai nas mensagens com a pasta temporária e o perfil trocados por marcas (o registo do CI é
+            // público). Sem espaços nem quebras: o PowerShell parte as linhas do erro pela largura da consola.
             var all = Regex.Replace(output + await error, @"\s+", "");
-            Assert.True(shell.ExitCode != 0, "o pack.ps1 não recusou");
+            var masked = Masked(all, dir.FullName);
+            Assert.True(shell.ExitCode != 0, "o pack.ps1 não recusou; saída: " + masked);
             Assert.False(Directory.Exists(Path.Combine(dir.FullName, "Releases")), "o pack.ps1 empacotou");
-            return text => all.Contains(Regex.Replace(text, @"\s+", ""), StringComparison.Ordinal);
+            return (text =>
+            {
+                Assert.True(text.All(char.IsAscii), $"o texto procurado «{text}» tem carateres fora do ASCII: a saída do PowerShell 5.1 depende da página de códigos da consola");
+                return all.Contains(Regex.Replace(text, @"\s+", ""), StringComparison.Ordinal);
+            }, masked);
         }
         finally { dir.Delete(recursive: true); }
+    }
+
+    // Troca na saída a pasta temporária (sem espaços, como a saída) por <tmp> e qualquer pasta de perfil por
+    // C:\Users\<utilizador>.
+    internal static string Masked(string output, string tempDir)
+    {
+        var text = Regex.Replace(output, Regex.Escape(Regex.Replace(tempDir, @"\s+", "")), "<tmp>", RegexOptions.IgnoreCase);
+        return Regex.Replace(text, @"(?i)[a-z]:\\users\\[^\\]+", @"C:\Users\<utilizador>");
     }
 
     [Fact]
