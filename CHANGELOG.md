@@ -17,6 +17,7 @@
 - **Trocar a chave com mais de dois computadores pede o identificador do kit.** Um aparelho removido que ainda chegasse ao Drive conseguia deixar aos outros uma conta sua; agora, quando há mais de um remetente possível, o computador que ficou espera que escreva os 4 caracteres do kit novo antes de continuar.
 - Um aparelho removido que voltasse a pôr no Drive o registo de chaves antigo conseguia manter outro computador a sincronizar com ele, sem aviso. Agora a mensagem da troca de chave vale mesmo com esse registo presente. Se o aparelho removido também apagar essa mensagem antes de o outro computador a ler, isto não chega: use «Perdi um computador / foi roubado», que lhe retira o acesso na Google.
 - Um cofre cuja base de dados desapareceu (com a chave no sítio) deixa de ser lido como vazio: a sincronização já não apaga as palavras-passe na conta por causa disso.
+- O cartão «Gestor de palavras-passe» das Definições deixa de dizer que nada vai para a Google: com a sincronização ligada, a cópia cifrada do cofre vai para o seu Google Drive (como a página pública e a política já dizem desde a 0.2.15).
 
 ### Correções
 
