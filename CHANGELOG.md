@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.2.17 — por publicar
+
+A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apaga, apaga-o em todo o sítio onde os dados estão, e os textos de privacidade dizem só o que o código faz.
+
+### Privacidade
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

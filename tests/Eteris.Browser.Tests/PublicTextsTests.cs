@@ -55,16 +55,18 @@ public class PublicTextsTests
         yield return ("CHANGELOG 0.2.15", Flat(ChangelogEntry()));
     }
 
-    // R12: a 0.2.16 é a última versão publicada, com a data da publicação, logo seguida da 0.2.15; a história fica como
+    // R12: a 0.2.17 está por publicar (sem data) e vem por cima da 0.2.16, a última publicada, e da 0.2.15; a história fica como
     // estava.
     [Fact]
-    public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
+    public void Changelog_LeadsWithTheCurrentVersion_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
-        Assert.Equal("## 0.2.16 — 2026-11-12", headings[0]);
-        Assert.Equal("## 0.2.15 — 2026-11-12", headings[1]);
-        Assert.Equal("## 0.2.14 — 2026-11-09", headings[2]);
+        Assert.Equal("## 0.2.17 — por publicar", headings[0]);
+        Assert.Equal("## 0.2.16 — 2026-11-12", headings[1]);
+        Assert.Equal("## 0.2.15 — 2026-11-12", headings[2]);
+        Assert.Equal("## 0.2.14 — 2026-11-09", headings[3]);
+        Assert.Single(headings, l => l.StartsWith("## 0.2.17", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.16", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.15", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.14", StringComparison.Ordinal));
@@ -251,6 +253,8 @@ public class PublicTextsTests
         foreach (var h in WhatsNewPage.Highlights)
             Assert.DoesNotMatch(@"\bEdge\b", h.Title + " " + h.Detail);
         Assert.DoesNotMatch(@"\bEdge\b", ChangelogEntry());
+        var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
+        Assert.DoesNotMatch(@"\bEdge\b", log[..log.IndexOf("\n## 0.2.16", StringComparison.Ordinal)]);
     }
 
     private static readonly Regex Address = new(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", RegexOptions.Compiled);
