@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Web;
 
@@ -87,21 +89,32 @@ public static class ErrorPage
         => IsErrorPage(address) && Uri.TryCreate(address, UriKind.Absolute, out var uri)
            && HttpUtility.ParseQueryString(uri.Query)["https"] == "1";
 
-    // «Continuar sem segurança» e «Sempre para este site»: eteris://error/continue com o token desta sessão.
+    // Chave só desta sessão: assina cada «Continuar» (a página de erro não leva o token das outras rotas internas).
+    private static readonly byte[] ContinueKey = RandomNumberGenerator.GetBytes(32);
+
+    private static string Sign(string httpUrl, bool always)
+        => Convert.ToHexString(HMACSHA256.HashData(ContinueKey, Encoding.UTF8.GetBytes((always ? "1" : "0") + "\n" + httpUrl)));
+
+    // «Continuar sem segurança» e «Sempre para este site»: eteris://error/continue com a assinatura do endereço e da
+    // escolha (s) — uma ligação adulterada, ou copiada para outro endereço, deixa de valer.
     public static string ContinueUrl(string httpUrl, bool always)
-        => $"{Prefix}continue?url={Uri.EscapeDataString(httpUrl)}{(always ? "&always=1" : string.Empty)}&t={InternalPages.Token}";
+        => $"{Prefix}continue?url={Uri.EscapeDataString(httpUrl)}{(always ? "&always=1" : string.Empty)}&s={Sign(httpUrl, always)}";
 
     public sealed record InsecureChoice(string Url, string Host, bool Always);
 
-    // Lê o pedido de eteris://error/continue: só com o token e só para um http:// (nunca outro esquema).
+    // Lê o pedido de eteris://error/continue: só com a assinatura certa e só para um http:// (nunca outro esquema).
     public static InsecureChoice? ParseContinue(string requestUrl)
     {
         if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri) || uri.AbsolutePath != "/continue"
-            || !requestUrl.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) || !InternalPages.IsAuthorized(requestUrl))
+            || !requestUrl.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
             return null;
         var query = HttpUtility.ParseQueryString(uri.Query);
-        if (!Uri.TryCreate(query["url"], UriKind.Absolute, out var target) || target.Scheme != Uri.UriSchemeHttp) return null;
-        return new InsecureChoice(target.AbsoluteUri, target.Host, query["always"] == "1");
+        var always = query["always"] == "1";
+        if (query["url"] is not { } url || query["s"] is not { } signature) return null;
+        var expected = Encoding.UTF8.GetBytes(Sign(url, always));
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(signature), expected)) return null;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var target) || target.Scheme != Uri.UriSchemeHttp) return null;
+        return new InsecureChoice(target.AbsoluteUri, target.Host, always);
     }
 
     // Depois de aceitar: a página segue para o http:// e substitui o aviso no histórico (o «Voltar» não o repete).
@@ -116,6 +129,16 @@ public static class ErrorPage
     public static string? FailedUrl(string address)
         => IsErrorPage(address) && Uri.TryCreate(address, UriKind.Absolute, out var uri)
             ? HttpUtility.ParseQueryString(uri.Query)["url"]
+            : null;
+
+    // O que um recarregamento pode voltar a abrir a partir de uma página de erro: o parâmetro «url» é texto de quem
+    // escreveu o endereço (ou de uma página que mandou abrir eteris://error/…), por isso só um endereço http, https
+    // ou de ficheiro volta a ser carregado — nunca javascript:, data:, eteris:// ou outro esquema. Null quando não há
+    // alvo válido: quem chama fica com a própria página de erro (browser.Reload) ou com o endereço que já tinha.
+    public static string? ReloadTarget(string address)
+        => FailedUrl(address) is { } failed && Uri.TryCreate(failed, UriKind.Absolute, out var uri)
+           && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeFile)
+            ? failed
             : null;
 
     public static int Code(string address)

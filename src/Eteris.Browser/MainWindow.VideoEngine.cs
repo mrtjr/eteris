@@ -431,7 +431,7 @@ public partial class MainWindow
             if (await Task.WhenAny(read, Task.Delay(300)) != read) return null;
             var entries = await read;
             // Na página de erro (ou no aviso do «HTTPS primeiro») conta o endereço que falhou, como na omnibox.
-            var urls = entries.Select(entry => ErrorPage.IsErrorPage(entry.Url) ? ErrorPage.FailedUrl(entry.Url) ?? entry.Url : entry.Url).ToList();
+            var urls = entries.Select(entry => ErrorPage.ReloadTarget(entry.Url) ?? entry.Url).ToList();
             return EngineCrossing.BackTarget(urls, entries.FindIndex(entry => entry.IsCurrent), switchingTo);
         }
         catch (Exception) { return null; }

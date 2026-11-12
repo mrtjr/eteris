@@ -15,9 +15,10 @@ public partial class MainWindow
         if (Shields.LocalNetwork.SiteOf(tab.Address) is { } site) _localNetworkAsked.Remove(site);
         await ScriptsReadyFor(tab, browser, tab.Address);
         if (browser.IsDisposed) return;
-        if (ErrorPage.IsErrorPage(browser.Address ?? string.Empty))
+        // Só um endereço http, https ou de ficheiro volta a abrir; sem alvo válido recarrega-se a própria página de erro.
+        if (ErrorPage.ReloadTarget(browser.Address ?? string.Empty) is { } target)
         {
-            browser.Load(tab.Address);
+            browser.Load(target);
             return;
         }
         browser.Reload(ignoreCache);

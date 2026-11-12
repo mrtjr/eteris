@@ -223,7 +223,8 @@ public partial class MainWindow : Window
         {
             if (browser.Address is not string address) return;
             // Na página de erro a omnibox continua a mostrar o endereço que falhou.
-            if (ErrorPage.IsErrorPage(address)) address = ErrorPage.FailedUrl(address) ?? address;
+            // Sem alvo válido fica o próprio eteris://error/…: a barra não mostra texto escolhido pela página.
+            address = ErrorPage.ReloadTarget(address) ?? address;
             var hostChanged = !SameHost(tab.Address, address);
             if (hostChanged)
             {

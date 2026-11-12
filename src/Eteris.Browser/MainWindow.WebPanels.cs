@@ -360,14 +360,14 @@ public partial class MainWindow
     // Numa página de erro, recarregar volta a tentar o endereço que falhou (como nas abas).
     private static void ReloadWebPanel(ChromiumWebBrowser browser, bool ignoreCache)
     {
-        if (ErrorPage.FailedUrl(browser.Address ?? string.Empty) is { Length: > 0 } failed) browser.Load(failed);
+        if (ErrorPage.ReloadTarget(browser.Address ?? string.Empty) is { Length: > 0 } failed) browser.Load(failed);
         else browser.Reload(ignoreCache);
     }
 
     // O endereço do site à vista no painel (o que falhou, quando está na página de erro).
     private static string WebPanelAddress(ChromiumWebBrowser? browser, string url)
         => browser?.Address is not { Length: > 0 } address ? url
-            : ErrorPage.IsErrorPage(address) ? ErrorPage.FailedUrl(address) is { Length: > 0 } failed ? failed : url
+            : ErrorPage.IsErrorPage(address) ? ErrorPage.ReloadTarget(address) is { Length: > 0 } failed ? failed : url
             : address;
 
     private void OnWebPanelFullscreen(ChromiumWebBrowser browser)
