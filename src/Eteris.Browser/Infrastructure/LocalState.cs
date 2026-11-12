@@ -1,11 +1,13 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Eteris.Browser.Infrastructure;
 
 // «Local State» do Chromium (preferências globais, lidas no arranque). O DNS cifrado vive aqui e não nas
-// preferências do perfil, por isso é escrito antes de o CEF arrancar. Um ficheiro ilegível nunca é reescrito.
+// preferências do perfil, por isso é escrito antes de o CEF arrancar. Um ficheiro ilegível nunca é reescrito; um ficheiro
+// igual ao pedido também não (INF-12), e o que muda grava-se por um ficheiro temporário e troca (INF-08).
 public static class LocalState
 {
     public static bool ApplySecureDns(string path, string mode, string templates) => Apply(path, mode, templates, energySaver: null);
@@ -20,17 +22,58 @@ public static class LocalState
         {
             JsonNode root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) ?? new JsonObject() : new JsonObject();
             if (root is not JsonObject obj) return false;
+            // As chaves geridas já têm o valor pedido: não se reescreve (um arranque normal não toca no disco). Compara-se só
+            // elas, e não o JSON inteiro: o Chromium grava o ficheiro com outra formatação e outro escape (INF-12).
+            if (File.Exists(path) && AlreadyAsAsked(obj, mode, templates, energySaver)) return true;
             obj["dns_over_https"] = new JsonObject { ["mode"] = mode, ["templates"] = templates };
             if (energySaver is { } state) SetPath(obj, EnergySaver.PrefPath, state);
             else RemovePath(obj, EnergySaver.PrefPath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, obj.ToJsonString());
+            Write(path, obj.ToJsonString());
             return true;
         }
         catch (JsonException) { return false; }
         catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
         catch (InvalidOperationException) { return false; }
     }
+
+    // Ficheiro temporário, descarga para o disco e troca: um corte a meio nunca deixa o «Local State» truncado (o Chromium
+    // guarda aí a chave dos cookies, os cookies perdiam-se), e um ficheiro aberto por outro processo ou só de leitura deixa
+    // o original como está. Em falha apaga o temporário.
+    private static void Write(string path, string json)
+    {
+        var temp = path + ".tmp";
+        try
+        {
+            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(new UTF8Encoding(false).GetBytes(json));
+                stream.Flush(true);
+            }
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(temp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            throw;
+        }
+    }
+
+    private static bool AlreadyAsAsked(JsonObject obj, string mode, string templates, int? energySaver)
+    {
+        if (obj["dns_over_https"] is not JsonObject dns || Text(dns["mode"]) != mode || Text(dns["templates"]) != templates) return false;
+        JsonNode? node = obj;
+        foreach (var key in EnergySaver.PrefPath)
+        {
+            node = (node as JsonObject)?[key];
+            if (node is null) break;
+        }
+        if (energySaver is null) return node is null;
+        return node is JsonValue value && value.TryGetValue<int>(out var current) && current == energySaver;
+    }
+
+    private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     // As preferências com pontos no nome guardam-se em objetos encaixados («a.b.c» → {"a":{"b":{"c":…}}}).
     private static void SetPath(JsonObject obj, IReadOnlyList<string> path, int value)
