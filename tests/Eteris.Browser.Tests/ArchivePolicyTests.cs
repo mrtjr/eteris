@@ -61,6 +61,26 @@ public sealed class ArchivePolicyTests : IDisposable
     }
 
     [Fact]
+    public void ArchivedStore_DeleteSite_RemovesOnlyTheSite()
+    {
+        var store = new ArchivedTabsStore(_db);
+        store.Add("https://www.exemplo.pt/a", "Do site", null, Now, Now);
+        store.Add("https://malexemplo.pt/", "Outro", null, Now, Now);
+        store.DeleteSite("exemplo.pt");
+        Assert.Equal(["Outro"], store.All().Select(t => t.Title));
+    }
+
+    [Fact]
+    public void ArchivedStore_Prune_RunsWithoutNewAdds()
+    {
+        var store = new ArchivedTabsStore(_db);
+        store.Add("https://velha.pt/", "Velha", null, Now.AddDays(-91), Now.AddDays(-91));
+        store.Add("https://nova.pt/", "Nova", null, Now.AddDays(-89), Now.AddDays(-89));
+        new ArchivedTabsStore(_db).Prune(Now);
+        Assert.Equal(["Nova"], store.All().Select(t => t.Title));
+    }
+
+    [Fact]
     public void Store_NewestFirst_KeepsName_AndForgetsAfterThreeMonths()
     {
         var store = new ArchivedTabsStore(_db);

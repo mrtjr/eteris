@@ -105,8 +105,8 @@ public partial class MainWindow
             yield return new("", $"Reabrir «{entry.Title}»", entry.Address, null, () => Tabs.ReopenClosed(entry));
         }
         foreach (var command in SessionCommands()) yield return command;
-        yield return new("", "Esquecer os últimos 15 minutos", "Apaga o histórico desse período e as abas fechadas recentes", null, () => Forget(15));
-        yield return new("", "Esquecer a última hora", "Apaga o histórico da última hora e as abas fechadas recentes", null, () => Forget(60));
+        yield return new("", "Esquecer os últimos 15 minutos", "Apaga o histórico e as «Feitas» desse período e as abas e janelas fechadas recentes, em todas as janelas", null, () => Forget(15));
+        yield return new("", "Esquecer a última hora", "Apaga o histórico e as «Feitas» da última hora e as abas e janelas fechadas recentes, em todas as janelas", null, () => Forget(60));
         if (Tabs.Tabs.Any(t => t.Media == Eteris.Browser.Tabs.MediaState.Playing))
             yield return new("\uE769", "Pausar tudo o que está a tocar", "Vídeos e áudio de todas as abas", null, PauseAllMedia);
         if (Tabs.Tabs.Any(t => !ReferenceEquals(t, Tabs.Active) && !t.IsMuted && t.Media != Eteris.Browser.Tabs.MediaState.None))
@@ -412,9 +412,15 @@ public partial class MainWindow
     {
         AppData.ForgetSince(DateTime.UtcNow.AddMinutes(-minutes));
         ForgetBounceVisits(DateTime.UtcNow.AddMinutes(-minutes));
-        Tabs.ForgetClosed();
-        // A pilha de anulação também: a paleta mostrava «Anular: Feito «título»» e o Ctrl+Z repunha a aba esquecida.
-        _undo.Clear();
+        // Em todas as janelas do mesmo contexto (a privada só a própria): as abas fechadas e a pilha de anulação também,
+        // senão a paleta mostrava «Anular: Feito «título»» e o Ctrl+Z repunha a aba esquecida.
+        foreach (var window in IsPrivate ? [this] : NormalWindows())
+        {
+            window.Tabs.ForgetClosed();
+            window._undo.Clear();
+        }
+        // A janela fechada não guarda a hora em que fechou: saem todas.
+        if (!IsPrivate) s_closedWindows.Clear();
         ShowToast(minutes < 60 ? $"Os últimos {minutes} minutos foram esquecidos" : "A última hora foi esquecida");
     }
 

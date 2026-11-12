@@ -104,6 +104,8 @@ public static class SiteScope
         if (!isPrivate)
             parts.Add(history == 0 ? "nenhuma entrada do histórico" : history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico");
         parts.Add("o armazenamento do site (local, bases de dados, cache e trabalhadores)");
+        // As listas do Radar (Feitas, Arquivo, Adiadas) são do perfil: só a janela normal as tem.
+        if (!isPrivate) parts.Add("as abas feitas, arquivadas e adiadas deste site");
         parts.Add(isPrivate ? "as permissões dadas nesta janela" : "as permissões dadas");
         // Um endereço IP (ou localhost) não tem subdomínios.
         var bare = System.Net.IPAddress.TryParse(site.Trim('[', ']'), out _) || !site.Contains('.');

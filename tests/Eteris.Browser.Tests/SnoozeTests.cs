@@ -74,6 +74,17 @@ public sealed class SnoozeTests : IDisposable
     }
 
     [Fact]
+    public void SnoozedStore_DeleteSite_RemovesOnlyTheSite()
+    {
+        var store = new SnoozedTabsStore(_db);
+        var due = new DateTime(2026, 11, 5, 9, 0, 0, DateTimeKind.Utc);
+        store.Add("https://www.exemplo.pt/a", "Do site", null, null, due);
+        store.Add("https://malexemplo.pt/", "Outro", null, null, due);
+        store.DeleteSite("exemplo.pt");
+        Assert.Equal(["Outro"], store.All().Select(t => t.Title));
+    }
+
+    [Fact]
     public void Store_KeepsNameAndNote_OrdersByDue_AndForgets()
     {
         var store = new SnoozedTabsStore(_db);

@@ -263,6 +263,9 @@ public static class AppData
     public static void ForgetSince(DateTime sinceUtc)
     {
         TryWrite(h => h.DeleteSince(sinceUtc));
+        // As «Feitas» do período também: «Apagar histórico» e «Esquecer» mostravam-nas ainda no Radar.
+        try { LazyDone.Value?.DeleteSince(sinceUtc); }
+        catch (Exception) { }
         if (sinceUtc == DateTime.MinValue) QueueWrite(h => h.Compact());
     }
 
@@ -354,7 +357,17 @@ public static class AppData
 
     private static readonly Lazy<DoneTabsStore?> LazyDone = StartupTrace.Lazy<DoneTabsStore?>("LazyDone", () =>
     {
-        try { return new DoneTabsStore(AppPaths.Database); }
+        try
+        {
+            var store = new DoneTabsStore(AppPaths.Database);
+            // A poda de 30 dias faz-se ao abrir (e não só ao acrescentar), fora da thread da janela.
+            _ = Task.Run(() =>
+            {
+                try { store.Prune(DateTime.UtcNow); }
+                catch (Exception) { }
+            });
+            return store;
+        }
         catch (Exception) { return null; }
     });
 
@@ -431,9 +444,31 @@ public static class AppData
 
     private static readonly Lazy<ArchivedTabsStore?> LazyArchived = StartupTrace.Lazy<ArchivedTabsStore?>("LazyArchived", () =>
     {
-        try { return new ArchivedTabsStore(AppPaths.Database); }
+        try
+        {
+            var store = new ArchivedTabsStore(AppPaths.Database);
+            // A poda de 90 dias faz-se ao abrir (e não só ao arquivar), fora da thread da janela.
+            _ = Task.Run(() =>
+            {
+                try { store.Prune(DateTime.UtcNow); }
+                catch (Exception) { }
+            });
+            return store;
+        }
         catch (Exception) { return null; }
     });
+
+    // «Triturar» um site: some também das listas Feitas, Arquivo e Adiadas (cada uma no seu try: uma que falhe não
+    // deixa as outras com o site).
+    public static void ForgetSiteTabs(string site)
+    {
+        try { LazyDone.Value?.DeleteSite(site); }
+        catch (Exception) { }
+        try { LazyArchived.Value?.DeleteSite(site); }
+        catch (Exception) { }
+        try { LazySnoozed.Value?.DeleteSite(site); }
+        catch (Exception) { }
+    }
 
     public static bool ArchiveTab(string url, string title, string? name, DateTime lastActiveUtc, DateTime nowUtc)
     {

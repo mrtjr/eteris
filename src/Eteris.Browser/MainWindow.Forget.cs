@@ -188,6 +188,7 @@ public partial class MainWindow
             catch (Exception) { }
             AppData.ForgetSitePermissions(site);
             Bounces.Forget(site);
+            AppData.ForgetSiteTabs(site);
         }
         else
         {

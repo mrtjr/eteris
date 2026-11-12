@@ -16,6 +16,10 @@ public sealed record ClosedWindow(IReadOnlyList<string> Addresses, IReadOnlyList
     public int SpacesWithTabs => Spaces is null ? 1
         : Spaces.Where((s, i) => i == SpaceIndex ? Addresses.Count > 0 : s.Tabs is { Urls.Count: > 0 }).Count();
 
+    // Todos os endereços guardados: os da faixa e os das abas dos outros Espaços (para «Triturar» um site os encontrar).
+    public IEnumerable<string> AllAddresses
+        => Addresses.Concat(Spaces?.SelectMany(s => s.Tabs?.Urls ?? []) ?? []);
+
     public string ReopenLabel => TabCount == 1 ? "Reabrir janela fechada (1 aba)" : $"Reabrir janela fechada ({TabCount} abas)";
 }
 
@@ -45,6 +49,18 @@ public sealed class ClosedWindows
             _windows.Add(window);
             if (_windows.Count > Max) _windows.RemoveAt(0);
         }
+    }
+
+    // «Esquecer»: nenhuma janela fechada fica para reabrir (não guardam a hora, saem todas).
+    public void Clear()
+    {
+        lock (_lock) _windows.Clear();
+    }
+
+    // «Triturar» um site: tira as janelas fechadas que o tenham. Devolve quantas saíram.
+    public int RemoveWhere(Func<ClosedWindow, bool> match)
+    {
+        lock (_lock) return _windows.RemoveAll(w => match(w));
     }
 
     public ClosedWindow? Pop()

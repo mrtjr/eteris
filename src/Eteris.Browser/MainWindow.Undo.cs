@@ -47,6 +47,8 @@ public partial class MainWindow
             window.Tabs.ForgetClosed(c => Data.SiteScope.Belongs(c.Address, site));
             window._undo.RemoveWhere(e => e.Addresses.Any(a => Data.SiteScope.Belongs(a, site)));
         }
+        // As janelas fechadas (só as normais as guardam) também deixam de poder reabrir o site.
+        if (!IsPrivate) s_closedWindows.RemoveWhere(w => w.AllAddresses.Any(a => Data.SiteScope.Belongs(a, site)));
     }
 
     private void UndoLast()

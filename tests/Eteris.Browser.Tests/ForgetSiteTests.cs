@@ -123,6 +123,26 @@ public sealed class ForgetSiteTests : IDisposable
     }
 
     [Fact]
+    public void ShredSummary_SaysTheDoneArchivedAndSnoozedTabsGo()
+    {
+        Assert.Contains("as abas feitas, arquivadas e adiadas deste site", SiteScope.ShredSummary("exemplo.pt", 1, 1));
+        Assert.DoesNotContain("arquivadas", SiteScope.ShredSummary("exemplo.pt", 1, 1, isPrivate: true));
+    }
+
+    [Fact]
+    public void Forget_ClearsEveryWindowAndTheClosedOnes()
+    {
+        var palette = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Palette.cs"));
+        var body = palette[palette.IndexOf("private void Forget(int minutes)", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("ShowToast(", StringComparison.Ordinal)];
+        Assert.Contains("NormalWindows()", body);
+        Assert.Contains("s_closedWindows.Clear();", body);
+        Assert.Contains("AppData.ForgetSince(", body);
+        Assert.Contains("s_closedWindows.RemoveWhere(", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Undo.cs")));
+        Assert.Contains("AppData.ForgetSiteTabs(site);", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
+    }
+
+    [Fact]
     public void ShredSummary_SaysWhatGoes()
     {
         var text = SiteScope.ShredSummary("exemplo.pt", 12, 1);

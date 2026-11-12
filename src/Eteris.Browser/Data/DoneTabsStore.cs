@@ -25,10 +25,31 @@ public sealed class DoneTabsStore
     {
         Execute("INSERT INTO done_tabs(url, title, done_at) VALUES ($u, $t, $d)",
             ("$u", url), ("$t", title), ("$d", Unix(nowUtc)));
-        Execute("DELETE FROM done_tabs WHERE done_at < $d", ("$d", Unix(nowUtc - Keep)));
+        Prune(nowUtc);
     }
 
+    // O que passou o mês sai; também se chama ao abrir o armazém, para não esperar por uma nova «Feita».
+    public void Prune(DateTime nowUtc) => Execute("DELETE FROM done_tabs WHERE done_at < $d", ("$d", Unix(nowUtc - Keep)));
+
     public void Delete(long id) => Execute("DELETE FROM done_tabs WHERE id = $i", ("$i", id));
+
+    // «Esquecer» / «Apagar histórico»: as Feitas do período (DateTime.MinValue = todas).
+    public void DeleteSince(DateTime sinceUtc)
+    {
+        if (sinceUtc == DateTime.MinValue) Execute("DELETE FROM done_tabs");
+        else Execute("DELETE FROM done_tabs WHERE done_at >= $d", ("$d", Unix(sinceUtc)));
+    }
+
+    // «Triturar»: as Feitas do site e dos seus subdomínios.
+    public void DeleteSite(string site)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM done_tabs WHERE eteris_site(url) = $s";
+        command.Parameters.AddWithValue("$s", site);
+        command.ExecuteNonQuery();
+    }
 
     // Feitas desde um instante (normalmente o início do dia local), a mais recente primeiro.
     public IReadOnlyList<DoneTab> Since(DateTime sinceUtc)

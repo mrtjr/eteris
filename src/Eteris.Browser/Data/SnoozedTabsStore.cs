@@ -25,6 +25,17 @@ public sealed class SnoozedTabsStore
 
     public void Delete(long id) => Execute("DELETE FROM snoozed_tabs WHERE id = $i", ("$i", id));
 
+    // «Triturar»: as adiadas do site e dos seus subdomínios.
+    public void DeleteSite(string site)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM snoozed_tabs WHERE eteris_site(url) = $s";
+        command.Parameters.AddWithValue("$s", site);
+        command.ExecuteNonQuery();
+    }
+
     // Todas, da que volta primeiro para a que volta por último.
     public IReadOnlyList<SnoozedTab> All()
     {

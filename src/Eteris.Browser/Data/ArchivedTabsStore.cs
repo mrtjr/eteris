@@ -26,10 +26,24 @@ public sealed class ArchivedTabsStore
     {
         Execute("INSERT INTO archived_tabs(url, title, name, last_active_at, archived_at) VALUES ($u, $t, $n, $l, $a)",
             ("$u", url), ("$t", title), ("$n", (object?)name ?? DBNull.Value), ("$l", Unix(lastActiveUtc)), ("$a", Unix(nowUtc)));
-        Execute("DELETE FROM archived_tabs WHERE archived_at < $a", ("$a", Unix(nowUtc - Keep)));
+        Prune(nowUtc);
     }
 
+    // O que passou os três meses sai; também se chama ao abrir o armazém, para não esperar por um novo arquivo.
+    public void Prune(DateTime nowUtc) => Execute("DELETE FROM archived_tabs WHERE archived_at < $a", ("$a", Unix(nowUtc - Keep)));
+
     public void Delete(long id) => Execute("DELETE FROM archived_tabs WHERE id = $i", ("$i", id));
+
+    // «Triturar»: as arquivadas do site e dos seus subdomínios.
+    public void DeleteSite(string site)
+    {
+        using var connection = Open();
+        connection.CreateFunction<string, string?>("eteris_site", SiteScope.SiteOf, isDeterministic: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM archived_tabs WHERE eteris_site(url) = $s";
+        command.Parameters.AddWithValue("$s", site);
+        command.ExecuteNonQuery();
+    }
 
     // A arquivada mais recentemente primeiro.
     public IReadOnlyList<ArchivedTab> All()
