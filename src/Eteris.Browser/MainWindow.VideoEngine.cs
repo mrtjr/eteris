@@ -628,9 +628,23 @@ public partial class MainWindow
         var kinds = VideoEngine.DataKinds(request.History, request.Cookies, request.Cache);
         if (kinds == 0) return true;
         var done = await Application.Current.Dispatcher.InvokeAsync(() => WithVideoProfileAsync(core => core.Profile.ClearBrowsingDataAsync(kinds))).Task.Unwrap();
-        // Os dados dos sites saíram todos do perfil do motor de vídeo: nenhum fica pendente para a varredura do arranque.
-        if (done && request.Cookies) AppData.VideoForgetPending.Clear();
+        // Os dados dos sites saíram todos do perfil do motor de vídeo: nenhum fica pendente para a varredura do arranque,
+        // salvo os sites com «esquecer» que ainda têm uma aba aberta nesse motor (no fio da interface: lê as janelas).
+        if (done && request.Cookies)
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                AppData.VideoForgetPending.Clear();
+                MarkOpenVideoForgetSites();
+            });
         return done;
+    }
+
+    // Os sites com «esquecer» das abas do motor de vídeo abertas nas janelas normais voltam a ficar pendentes, depois de
+    // uma limpeza que lhes tirou a marca (fio da interface).
+    private static void MarkOpenVideoForgetSites()
+    {
+        foreach (var site in VideoEngine.ForgetSitesOf(NormalWindows().SelectMany(w => w._videoViews.Keys).Select(t => t.Address), AppData.IsForgetOnClose))
+            AppData.VideoForgetPending.Add(site);
     }
 
     // Uma aba viva do motor de vídeo de uma janela normal (o perfil «eteris»), ou nulo. Uma vista a fechar ou caída

@@ -297,6 +297,12 @@ public static class VideoEngine
     public static bool ClearsSite(bool liveCore, bool startupSweep, bool pending, bool mayHoldData)
         => liveCore || pending || (!startupSweep && mayHoldData);
 
+    // Os sites com «esquecer» das abas do motor de vídeo ainda abertas (os endereços delas), sem repetidos: voltam a ficar
+    // pendentes depois de uma limpeza que tirou a marca (AppData.VideoForgetPending). Uma aba aberta pode pôr cookies sem
+    // nova navegação, e só a navegação marca o site.
+    public static IReadOnlyList<string> ForgetSitesOf(IEnumerable<string?> addresses, Func<string, bool> forgetOnClose)
+        => addresses.Select(Data.SiteScope.SiteOf).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Where(forgetOnClose).ToList();
+
     // As caixas de «Apagar dados» no WebView2: cookies e dados de sites → tudo o que é do site (cookies e todo o
     // armazenamento); cache → a cache do disco; histórico → o histórico próprio do WebView2 e o das transferências
     // (inteiros, seja qual for o período: não se veem em lado nenhum). 0: nada a apagar.

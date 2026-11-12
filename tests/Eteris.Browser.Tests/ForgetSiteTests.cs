@@ -224,8 +224,14 @@ public sealed class ForgetSiteTests : IDisposable
         var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
         Assert.Contains("var (deleted, hosts, cookiesFailed) = await DeleteSiteCookiesAsync(", panel);
         Assert.Contains("catch (Exception) { storage = false; }", panel[panel.IndexOf("foreach (var origin in origins)", StringComparison.Ordinal)..]);
-        Assert.Contains("VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: false,", panel);
-        Assert.Contains("await ClearVideoSiteAsync(site, origins)", panel);
+        // Um site pendente (video-por-esquecer.txt) abre sempre o motor de vídeo, como no Triturar; uma limpeza completa
+        // tira-o do ficheiro, e as abas desse motor ainda abertas de sites com «esquecer» voltam a marcá-los.
+        Assert.Contains("VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: Data.AppData.VideoForgetPending.Contains(site),", panel);
+        var clear = panel.IndexOf("var video = await ClearVideoSiteAsync(site, origins);", StringComparison.Ordinal);
+        var done = panel.IndexOf("if (video.Complete)", StringComparison.Ordinal);
+        var removed = panel.IndexOf("Data.AppData.VideoForgetPending.Remove(site);", StringComparison.Ordinal);
+        var marked = panel.IndexOf("MarkOpenVideoForgetSites();", StringComparison.Ordinal);
+        Assert.True(clear > 0 && done > clear && removed > done && marked > removed);
         Assert.Contains("SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed)", panel);
     }
 

@@ -281,12 +281,18 @@ public partial class MainWindow
             }
             catch (Exception) { storage = false; }
             // O perfil do motor de vídeo, com a regra do Triturar (MainWindow.Forget.cs): numa janela normal, com uma aba
-            // viva desse motor ou para um site que lá abriu.
+            // viva desse motor, para um site que lá abriu ou para um site pendente (video-por-esquecer.txt). Uma limpeza
+            // completa tira-o do ficheiro; as abas desse motor ainda abertas de sites com «esquecer» voltam a marcá-los.
             var videoFailed = false;
-            if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: false,
+            if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: Data.AppData.VideoForgetPending.Contains(site),
                     VideoEngine.MayHoldData(site, Data.AppData.IsVideoSite(site) || Data.AppData.IsVideoSite(site, platformCodecs: true), Data.AppData.IsVideoOptOut(site))))
             {
                 var video = await ClearVideoSiteAsync(site, origins);
+                if (video.Complete)
+                {
+                    Data.AppData.VideoForgetPending.Remove(site);
+                    MarkOpenVideoForgetSites();
+                }
                 deleted += video.Cookies;
                 videoFailed = !video.Complete;
             }

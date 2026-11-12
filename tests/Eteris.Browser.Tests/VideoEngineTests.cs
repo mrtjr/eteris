@@ -253,6 +253,34 @@ public class VideoEngineTests
         Assert.False(VideoEngine.MayHoldData("exemplo.pt", remembered: false, optedOut: false));
     }
 
+    // Depois de uma limpeza que tira a marca de pendente (Apagar dados, o cadeado), as abas do motor de vídeo ainda
+    // abertas de um site com «esquecer» voltam a marcá-lo: os cookies que ponham depois, sem nova navegação, ficavam fora
+    // da varredura do arranque se o Éteris fosse morto.
+    [Fact]
+    public void ForgetSitesOf_TheOpenVideoTabsOfForgetSites()
+    {
+        var forget = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "twitch.tv", "exemplo.pt" };
+        Assert.Equal(["twitch.tv"], VideoEngine.ForgetSitesOf(
+            ["https://www.twitch.tv/canal", "https://clips.twitch.tv/x", "https://outro.pt/", "about:blank", null, ""], forget.Contains));
+        Assert.Empty(VideoEngine.ForgetSitesOf([], forget.Contains));
+    }
+
+    [Fact]
+    public void ClearingTheVideoProfile_KeepsTheOpenForgetSitesPending()
+    {
+        string Src(params string[] parts) => File.ReadAllText(Path.Combine([RepoRoot(), "src", "Eteris.Browser", .. parts]));
+        var video = Src("MainWindow.VideoEngine.cs");
+        var clear = video[video.IndexOf("internal static async Task<bool> ClearVideoEngineAsync(", StringComparison.Ordinal)..];
+        clear = clear[..clear.IndexOf("    }", StringComparison.Ordinal)];
+        var cleared = clear.IndexOf("AppData.VideoForgetPending.Clear();", StringComparison.Ordinal);
+        var marked = clear.IndexOf("MarkOpenVideoForgetSites();", StringComparison.Ordinal);
+        Assert.True(cleared > 0 && marked > cleared);
+        // Lê as janelas e as abas: no fio da interface.
+        Assert.Contains("Dispatcher.InvokeAsync(() =>", clear[..cleared]);
+        // Só as janelas normais (a privada usa o InPrivate do WebView2).
+        Assert.Contains("VideoEngine.ForgetSitesOf(NormalWindows().SelectMany(w => w._videoViews.Keys).Select(t => t.Address), AppData.IsForgetOnClose)", video);
+    }
+
     [Fact]
     public void EveryCleanup_ReachesTheVideoEngineProfile()
     {
