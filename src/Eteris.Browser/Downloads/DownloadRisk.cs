@@ -27,8 +27,9 @@ public static class DownloadRisk
         => !(openedByItselfUtc is { } opened && nowUtc - opened < ClickGuard)
            && !(completedUtc is { } done && nowUtc - done < ClickGuard);
 
+    // O nome mostra-se sem os caracteres que invertem a leitura, como na linha da transferência (DownloadFormat.SplitName).
     public static string Question(string fileName, string? source)
-        => $"«{fileName}» é um programa ou um script: ao abrir, corre neste computador com os seus acessos."
+        => $"«{DownloadFormat.StripInvisible(fileName)}» é um programa ou um script: ao abrir, corre neste computador com os seus acessos."
            + $"\n\nOrigem: {(string.IsNullOrWhiteSpace(source) ? "desconhecida" : source)}"
            + "\n\nAbrir mesmo assim?";
 }

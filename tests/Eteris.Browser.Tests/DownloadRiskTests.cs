@@ -40,6 +40,14 @@ public sealed class DownloadRiskTests
     }
 
     [Fact]
+    public void Question_DropsTheCharactersThatReverseReading()
+    {
+        var text = DownloadRisk.Question("Fatura\u202Efdp.exe", "exemplo.pt");
+        Assert.DoesNotContain('\u202E', text);
+        Assert.Contains("«Faturafdp.exe»", text);
+    }
+
+    [Fact]
     public void Row_IsWiredToTheRules()
     {
         string Source(string file) => File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", file));

@@ -10,8 +10,9 @@ public partial class DownloadEntry(int id, string fullPath, string fileName, str
     public string FileName { get; } = fileName;
     // Anfitrião de onde vem (o endereço original da transferência); null quando não se sabe.
     public string? Source { get; } = source;
-    public string NameHead { get; } = DownloadFormat.SplitName(fileName).Head;
-    public string NameTail { get; } = DownloadFormat.SplitName(fileName).Tail;
+    private readonly (string Head, string Tail) _name = DownloadFormat.SplitName(fileName);
+    public string NameHead => _name.Head;
+    public string NameTail => _name.Tail;
     // Quando a transferência acabou: o painel ignora cliques no segundo seguinte (DownloadRisk.AcceptsClick).
     public DateTime? CompletedAtUtc { get; private set; }
 

@@ -19,7 +19,7 @@ public sealed class DownloadsTests : IDisposable
         Assert.Equal("WWWWWW.zip", wide.Tail);
         Assert.Equal(74, wide.Head.Length);
         // U+202E inverte a leitura: um ficheiro «Fatura» + U+202E + «fdp.exe» lia-se «Faturaexe.pdf». Os caracteres de formato e de controlo saem.
-        Assert.Equal(("Fat", "urafdp.exe"), DownloadFormat.SplitName("Fatura‮fdp.exe"));
+        Assert.Equal(("Fat", "urafdp.exe"), DownloadFormat.SplitName("Fatura\u202Efdp.exe"));
     }
 
     [Fact]
