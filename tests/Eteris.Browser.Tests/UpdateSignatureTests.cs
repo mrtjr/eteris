@@ -195,6 +195,22 @@ public sealed class UpdateSignatureTests : IDisposable
             source.DownloadReleaseEntry(new QuietLogger(), asset, Path.Combine(_dir, "p.nupkg"), _ => { }, default));
     }
 
+    // A ferramenta build/sign (Task 4): a chave nasce cifrada (PKCS#8, PEM) e assina o que o Éteris verifica.
+    [Fact]
+    public void Signer_NewKey_SignsWhatTheBrowserVerifies()
+    {
+        var pem = Eteris.Sign.Signer.NewKeyPem("frase de teste");
+        Assert.StartsWith("-----BEGIN ENCRYPTED PRIVATE KEY-----", pem);
+        var data = "indice"u8.ToArray();
+        var sig = Eteris.Sign.Signer.Sign(pem, "frase de teste", data);
+        Assert.Equal(64, Convert.FromBase64String(sig).Length);
+        Assert.True(UpdateSignature.Verify(data, sig, [Eteris.Sign.Signer.PublicKey(pem, "frase de teste")]));
+    }
+
+    [Fact]
+    public void Signer_WithTheWrongPassword_Throws()
+        => Assert.ThrowsAny<CryptographicException>(() => Eteris.Sign.Signer.Sign(Eteris.Sign.Signer.NewKeyPem("a"), "b", [1]));
+
     [Fact]
     public void UpdateService_NeverUsesAnUnsignedSource()
     {

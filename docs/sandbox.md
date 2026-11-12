@@ -104,7 +104,8 @@ não vêm do NuGet — o CefSharp com o patch v2 e a DLL cliente do bootstrap �
 
 **Assinatura:** o Éteris não é assinado, e o bootstrap aceita o exe, o `chrome_elf.dll` e a DLL cliente os três sem
 assinatura. Se um dia passar a ser assinado, têm de ser os três com o mesmo certificado (senão o arranque pára), assinados
-depois do `brand-bootstrap.ps1` e antes do `vpk pack` (ver «Falta», item 1).
+depois do `brand-bootstrap.ps1` e antes do `vpk pack` (ver «Falta», item 1). As atualizações, essas, já são assinadas
+pelo autor desde a 0.2.16 (o `releases.win.json` de cada release, com uma chave fora do GitHub): ver `docs/atualizacoes.md`.
 
 ### Caminhos de quem compila (arrumação 0.2.14, fase S4)
 

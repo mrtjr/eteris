@@ -9,6 +9,14 @@ $buildInfo = Join-Path $root "publish\eteris-build.json"
 if (-not (Test-Path -LiteralPath $buildInfo)) { throw "publish\ sem eteris-build.json: não é uma publicação completa do build\publish.ps1 (publique de novo)" }
 $build = Get-Content -LiteralPath $buildInfo -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($build.version -ne $Version) { throw "publish\ é da versão $($build.version), pedida a $Version" }
+# Atualizações assinadas (INF-02, CAD-01; docs/atualizacoes.md): o Éteris só aceita um releases.win.json assinado com uma
+# das chaves públicas de update-keys.txt; sem nenhuma, o Éteris empacotado recusaria todas as atualizações para sempre.
+$updateKeys = Join-Path $root "src\Eteris.Browser\Updates\update-keys.txt"
+$keyLines = @()
+if (Test-Path -LiteralPath $updateKeys -PathType Leaf) {
+  $keyLines = @(Get-Content -LiteralPath $updateKeys -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith("#") })
+}
+if ($keyLines.Count -eq 0) { throw "sem chave pública das atualizações em src\Eteris.Browser\Updates\update-keys.txt: o Éteris publicado recusaria todas as atualizações (docs/atualizacoes.md)" }
 # Login Google (docs/sincronizacao.md): uma release oficial leva o identificador da aplicação Google, que o publish.ps1
 # -GoogleOAuthJson põe em publish\ (a marca diz google_oauth e o ficheiro está lá); sem ele o «Entrar com o Google» fica
 # «indisponível nesta compilação» para toda a gente. -SemLogin empacota assim mesmo (a publicação de emergência pelo CI,
