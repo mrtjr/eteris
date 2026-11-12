@@ -8,6 +8,9 @@ namespace Eteris.Browser.Updates;
 
 public enum UpdateState { Development, Checking, UpToDate, Ready, Failed }
 
+// O resultado de «procurar e instalar uma versão corrigida» depois de dois arranques falhados (UpdateService.RescueAsync).
+public enum RescueResult { NoUpdate, Failed, Cancelled }
+
 public static class UpdateService
 {
     private static UpdateState _state = UpdateState.Checking;
@@ -220,6 +223,24 @@ public static class UpdateService
         {
             Interlocked.Exchange(ref _checking, 0);
         }
+    }
+
+    // Depois de dois arranques falhados (StartupRescue, INF-04): procura já uma versão corrigida, descarrega-a e instala-a.
+    // O Update.exe aplica e reabre o Éteris com os mesmos argumentos (o processo acaba aqui); só volta se não houver versão
+    // nova, se falhar ou se a pessoa cancelar. Nunca lança.
+    public static async Task<RescueResult> RescueAsync(string[] args, Action<int> progress, CancellationToken cancel)
+    {
+        try
+        {
+            if (NewManager() is not { IsInstalled: true } manager) return RescueResult.NoUpdate;
+            var update = await manager.CheckForUpdatesAsync().WaitAsync(TimeSpan.FromSeconds(30), cancel).ConfigureAwait(false);
+            if (update is null) return RescueResult.NoUpdate;
+            await manager.DownloadUpdatesAsync(update, progress, cancel).ConfigureAwait(false);
+            manager.ApplyUpdatesAndRestart(update.TargetFullRelease, args);
+            return RescueResult.Failed;   // não volta quando aplica
+        }
+        catch (OperationCanceledException) { return RescueResult.Cancelled; }
+        catch (Exception) { return RescueResult.Failed; }
     }
 
     private static int _scheduled;

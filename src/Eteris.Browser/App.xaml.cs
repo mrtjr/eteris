@@ -91,6 +91,7 @@ public partial class App : Application
         // Fecho normal: este arranque não caiu (rede de segurança do sandbox, Infrastructure/StartupGuard.cs).
         StartupGuard.Current.Healthy();
         StartupGuard.Current.Flush();
+        StartupRescue.Healthy(now: true);
         Data.AppData.FlushShieldStats();
         Data.AppData.CloseHistory();
         if (Data.Settings.Current.ClearOnExit)

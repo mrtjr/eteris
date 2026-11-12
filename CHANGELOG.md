@@ -24,6 +24,7 @@
 
 - O Éteris volta a procurar atualizações de 6 em 6 horas e depois de uma falha; uma sessão aberta durante dias já não fica sem saber de uma versão nova.
 - Abrir o Éteris (ou um link) enquanto ele ainda está a fechar já não se perde: o novo lançamento espera e abre.
+- Se o Éteris não conseguir abrir duas vezes seguidas, à terceira oferece procurar e instalar uma versão corrigida antes de arrancar o motor.
 - Com dois utilizadores do Windows a usar o Éteris ao mesmo tempo, a lista de atalhos e os links voltam a funcionar para os dois.
 - Um «Local State» só de leitura já não impede o Éteris de abrir, e o ficheiro deixa de ser reescrito em todos os arranques.
 

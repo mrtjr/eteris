@@ -823,6 +823,16 @@ O proxy em `127.0.0.1` funciona a partir do AppContainer.
 www.google.com:443`, apesar do `disable-background-networking` e do `disable-component-update`. Fica para o `main`
 (candidato: `NetworkTimeServiceQuerying` no `disable-features` e procurar a origem do `www.google.com`).
 
+**Arranques falhados que não são do sandbox (INF-04, 0.2.17).** A rede de segurança acima só existe com o sandbox
+possível; sem ele (publicação de emergência, um PC onde o sandbox não arranca) um Éteris que cai ao arrancar caía de novo
+em todos os arranques, sem forma de ir buscar a versão que o corrige. Numa **instalação** (e só nela), o `Program.Main`
+conta cada arranque no ficheiro `startup-rescue.json` (`{"Pending":N}`, na pasta do perfil), depois da instância única e
+antes do motor; a 1.ª página (ou um fecho normal) apaga-o. À 3.ª tentativa seguida (`StartupRescue.FailedStartsToRescue` =
+2 falhadas antes) o Éteris pergunta se se procura já uma versão corrigida; com «Sim» descarrega-a e instala-a (a lista
+assinada de sempre, `UpdateService.RescueAsync`) e reabre, com «Não» arranca normalmente. Custa uma leitura e uma escrita
+de um ficheiro pequeno antes da 1.ª página, só numa instalação: é a exceção à regra R-2 que o dono tem de aceitar (feita
+à mão, sem o `JsonSerializer`, e medida em «Medição do marcador» abaixo).
+
 ## Passo A — resultado (2026-11-07): feito
 
 Toda a execução de JavaScript nas páginas passou para `Browser/PageScript.cs` (DevTools `Runtime.evaluate`, uma

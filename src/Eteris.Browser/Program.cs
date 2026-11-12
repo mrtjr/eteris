@@ -74,6 +74,10 @@ public static class Program
         // pedido de janela privada, nem foi reaberto pelo Update.exe nem é a nova tentativa do sandbox; senão fica para a
         // saída (INF-03).
         UpdateService.ApplyPendingAtStartup(args, restartedByUpdater);
+        // Dois arranques seguidos que não chegaram à 1.ª página nem a um fecho normal (e não são os do sandbox, que tem a sua
+        // rede de segurança): oferece procurar e instalar uma versão corrigida antes de arrancar o motor (INF-04). Só numa
+        // instalação; custa uma leitura e uma escrita de um ficheiro pequeno antes da 1.ª página (exceção à regra R-2).
+        StartupRescue.Start(AppPaths.Root, args, TestSwitches.IsInstalled);
         // O JIT do arranque passa a correr também noutros núcleos, guiado pelo arranque anterior (Infrastructure/StartupJit.cs);
         // um arranque privado não o grava.
         if (StartupJit.ShouldRecord(args)) StartupJit.Start(AppPaths.Root);
