@@ -88,6 +88,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+      # O setup-dotnet lê o global.json da árvore da tag, e as tags até à v0.2.16 não o têm: pára aqui com o que fazer.
+      - name: A tag tem de ter global.json
+        run: |
+          if (-not (Test-Path global.json)) { throw "A tag $env:RELEASE_TAG nao tem global.json (as tags ate a v0.2.16 nao o tem): publicar a partir de uma tag que o tenha" }
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json

@@ -61,6 +61,25 @@ public class WorkflowTests
         Assert.Matches(@"sem_codecs:\n(\s+\w+:.*\n)*?\s+required: true\n(\s+\w+:.*\n)*?\s+type: boolean", yml);
     }
 
+    // A publicação de emergência corre os passos de hoje sobre a árvore da etiqueta, e o setup-dotnet lê o global.json
+    // dela. As etiquetas até à v0.2.16 não o têm: o job pára logo depois do checkout, com uma mensagem que diz o que
+    // fazer (publicar de uma etiqueta que o tenha), em vez de falhar no setup-dotnet sem explicação.
+    [Fact]
+    public void Release_PublishSemCodecs_StopsEarlyWhenTheTagHasNoGlobalJson()
+    {
+        var publish = Job(Workflow("release.yml").Replace("\r\n", "\n"), "publish-sem-codecs");
+        var checkout = publish.IndexOf("actions/checkout@", StringComparison.Ordinal);
+        var guard = publish.IndexOf("Test-Path global.json", StringComparison.Ordinal);
+        var setup = publish.IndexOf("actions/setup-dotnet@", StringComparison.Ordinal);
+        Assert.True(checkout > 0 && setup > 0, "publish-sem-codecs sem checkout ou setup-dotnet");
+        Assert.True(guard > checkout && guard < setup, "publish-sem-codecs: falta conferir o global.json da etiqueta entre o checkout e o setup-dotnet");
+        var message = Regex.Match(publish[guard..setup], @"throw ""([^""]*)""");
+        Assert.True(message.Success, "a guarda do global.json não lança uma mensagem");
+        Assert.Contains("global.json", message.Groups[1].Value);
+        // Só ASCII: a página de códigos do runner troca os acentos (TFI-01).
+        Assert.True(message.Groups[1].Value.All(c => c < 128), "mensagem da guarda fora do ASCII: " + message.Groups[1].Value);
+    }
+
     // CI instável (v0.2.11): um teste preso só se via como «Assert.True() Failure» e, sem prazo no job, um bloqueio
     // comia as 6 h por omissão. Os jobs que correm os testes têm prazo, o dotnet test deixa um dump se algum teste ficar
     // preso, grava o TRX (com a duração de cada teste) e envia sempre os resultados — também numa execução verde, para
