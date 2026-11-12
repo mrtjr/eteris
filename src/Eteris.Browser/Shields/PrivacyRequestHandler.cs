@@ -143,6 +143,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 return CefReturnValue.Continue;
             }
             var resourceType = request.ResourceType;
+            var id = request.Identifier;
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var host = uri.IdnHost.ToLowerInvariant();
             var url = request.Url;
@@ -179,7 +180,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 catch (Exception) { }
                 try
                 {
-                    using (callback) callback.Continue(target is null);
+                    using (callback) callback.Continue(target is null || ContinueAfterBlock(id, resourceType, url));
                 }
                 catch (Exception) { }
             }, TaskScheduler.Default);
@@ -309,6 +310,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             var started = Infrastructure.PerfCounters.IsOn ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             var decided = Decide(browser, frame, request, callback);
             if (started != 0) Infrastructure.PerfCounters.AddRequest(started, decided == CefReturnValue.Cancel);
+            if (decided == CefReturnValue.Cancel) return Settle(decided, request);
             if (decided != CefReturnValue.Continue || ShieldEngine.Loaded.IsCompleted) return decided;
             try
             {
@@ -316,6 +318,61 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             }
             catch (Exception) { return decided; }
         }
+
+        // ---- bloquear como uma extensão (net::ERR_BLOCKED_BY_CLIENT) ------------------------------------------------
+        // Um sub-recurso bloqueado não é cancelado (net::ERR_ABORTED, que deixava o código de alguns sites à espera:
+        // docs/escudos-paginas-incompletas.md): segue para GetResourceHandler, que lhe dá uma resposta local que falha
+        // com ERR_BLOCKED_BY_CLIENT, sem nada sair para a rede. Os frames (a página de erro apareceria no lugar do anúncio)
+        // e os websockets (o CEF não os entrega a um tratador local) continuam cancelados.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, byte> _blockedByClient = new();
+
+        internal static bool FailsAsBlockedByClient(ResourceType type, string url)
+            => type is not (ResourceType.MainFrame or ResourceType.SubFrame)
+               && !url.StartsWith("ws:", StringComparison.OrdinalIgnoreCase) && !url.StartsWith("wss:", StringComparison.OrdinalIgnoreCase);
+
+        // A decisão final de OnBeforeResourceLoad: um Cancel de um sub-recurso passa a Continue, marcado para o tratador
+        // local. Sem conseguir ler o pedido, fica cancelado (nunca segue para a rede por engano).
+        internal CefReturnValue Settle(CefReturnValue decided, IRequest request)
+        {
+            if (decided != CefReturnValue.Cancel) return decided;
+            try
+            {
+                if (!FailsAsBlockedByClient(request.ResourceType, request.Url)) return CefReturnValue.Cancel;
+                _blockedByClient[request.Identifier] = 0;
+                return CefReturnValue.Continue;
+            }
+            catch (Exception) { return CefReturnValue.Cancel; }
+        }
+
+        // Um bloqueio decidido mais tarde (CNAME, rede local, pelo IRequestCallback): true = o callback deixa o pedido
+        // seguir para o tratador local; false = cancela-o (um frame, um websocket).
+        internal bool ContinueAfterBlock(ulong id, ResourceType type, string url)
+        {
+            if (!FailsAsBlockedByClient(type, url)) return false;
+            _blockedByClient[id] = 0;
+            return true;
+        }
+
+        // O tratador local de um pedido marcado (uma só vez); null para todos os outros, que seguem como sempre.
+        internal IResourceHandler? BlockedHandlerFor(IRequest request)
+        {
+            try { return _blockedByClient.TryRemove(request.Identifier, out _) ? new BlockedByClientHandler() : null; }
+            catch (Exception) { return null; }
+        }
+
+        // O pedido acabou (ou a página desistiu dele antes do tratador): a marca, se ficou, sai.
+        internal void Forget(IRequest request)
+        {
+            try { _blockedByClient.TryRemove(request.Identifier, out _); }
+            catch (Exception) { }
+        }
+
+        protected override IResourceHandler? GetResourceHandler(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request)
+            => BlockedHandlerFor(request);
+
+        protected override void OnResourceLoadComplete(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
+            IResponse response, UrlRequestStatus status, long receivedContentLength)
+            => Forget(request);
 
         // Sem callback (testes), a consulta de CNAME nunca fica à espera: o pedido segue.
         internal CefReturnValue Decide(IBrowser? browser, IFrame? frame, IRequest request, IRequestCallback? callback = null)
@@ -434,6 +491,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 {
                     var url = request.Url;
                     var type = request.ResourceType;
+                    var id = request.Identifier;
                     var lookup = LocalNetwork.Addresses.LookupAsync(top);
                     Task.WhenAny(lookup, Task.Delay(LocalNetwork.MaxWait)).ContinueWith(_ =>
                     {
@@ -446,7 +504,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                         catch (Exception) { }
                         try
                         {
-                            using (callback) callback.Continue(local);
+                            using (callback) callback.Continue(local || ContinueAfterBlock(id, type, url));
                         }
                         catch (Exception) { }
                     }, TaskScheduler.Default);
