@@ -44,7 +44,7 @@ public partial class App : Application
         StartupTrace.Mark("janela.show");
         // Depois da 1.ª página (Infrastructure/FirstPaint.cs): nenhuma das duas é precisa para ela.
         FirstPaint.App.SignalAfter(FirstPaint.Fallback);
-        FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
+        FirstPaint.App.Then(UpdateService.StartSchedule);
         FirstPaint.App.Then(CompositionWarmup.Stop);
         // Sincronização: nada aqui sai para a rede. Só com ela ligada, a primeira ronda fica para 30 s depois.
         FirstPaint.App.Then(Sync.SyncService.AfterFirstPaint);

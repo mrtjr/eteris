@@ -14,6 +14,10 @@
 
 - eteris://privacy/ passa a conferir o isolamento das páginas (com o motivo quando está desligado e a forma de o voltar a ligar), o motor completo do Escudo e o HTTPS primeiro.
 
+### Correções
+
+- O Éteris volta a procurar atualizações de 6 em 6 horas e depois de uma falha; uma sessão aberta durante dias já não fica sem saber de uma versão nova.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

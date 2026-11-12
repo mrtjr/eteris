@@ -179,38 +179,60 @@ public static class UpdateService
         }
     }
 
+    // O estado depois de uma procura (EGR-02): uma versão já pronta continua pronta mesmo que a procura seguinte falhe ou
+    // não encontre nada (não se perde a versão por a rede ter falhado); «found»: há uma versão descarregada, nova ou a
+    // substituir a que estava pronta.
+    public static UpdateState StateAfterCheck(UpdateState before, bool found, bool failed)
+        => found || before == UpdateState.Ready ? UpdateState.Ready : failed ? UpdateState.Failed : UpdateState.UpToDate;
+
+    // Uma procura (a do arranque, as repetições da UpdateSchedule e o «Procurar» das Definições). Com uma versão já pronta
+    // não passa por «A procurar» (a pílula e as Definições continuam a dizer que está pronta) e uma versão mais nova do que
+    // a pronta é descarregada e substitui-a.
     public static async Task CheckAndDownloadAsync()
     {
-        if (State == UpdateState.Ready || Interlocked.Exchange(ref _checking, 1) == 1) return;
+        if (Interlocked.Exchange(ref _checking, 1) == 1) return;
+        var before = State;
         try
         {
             var manager = NewManager();
             if (manager is null || !manager.IsInstalled)
             {
-                State = UpdateState.Development;
+                if (before != UpdateState.Ready) State = UpdateState.Development;
                 return;
             }
-            State = UpdateState.Checking;
+            if (before != UpdateState.Ready) State = UpdateState.Checking;
             var update = await manager.CheckForUpdatesAsync();
-            if (update is null)
+            var found = update is not null && (Pending is null || update.TargetFullRelease.Version.CompareTo(Pending.TargetFullRelease.Version) > 0);
+            if (found)
             {
-                State = UpdateState.UpToDate;
-                return;
+                await manager.DownloadUpdatesAsync(update!);
+                _manager = manager;
+                Pending = update;
             }
-            await manager.DownloadUpdatesAsync(update);
-            _manager = manager;
-            Pending = update;
-            State = UpdateState.Ready;
+            State = StateAfterCheck(before, found, failed: false);
         }
         catch
         {
-            // sem rede ou download interrompido: tenta no próximo arranque
-            State = UpdateState.Failed;
+            // sem rede ou download interrompido: repete-se (UpdateSchedule); uma versão já pronta fica como está
+            State = StateAfterCheck(before, found: false, failed: true);
         }
         finally
         {
             Interlocked.Exchange(ref _checking, 0);
         }
+    }
+
+    private static int _scheduled;
+
+    // As procuras depois da do arranque: de 6 em 6 horas, mais cedo depois de uma falha e quando a rede volta ou o
+    // computador retoma (UpdateSchedule). Chamado uma só vez, depois da 1.ª página (App.xaml.cs).
+    public static void StartSchedule()
+    {
+        if (Interlocked.Exchange(ref _scheduled, 1) == 1) return;
+        var scheduler = new UpdateScheduler(CheckAndDownloadAsync, () => State, Task.Delay, Random.Shared.NextDouble, () => DateTime.UtcNow);
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (_, e) => { if (e.IsAvailable) scheduler.Wake(); };
+        Microsoft.Win32.SystemEvents.PowerModeChanged += (_, e) => { if (e.Mode == Microsoft.Win32.PowerModes.Resume) scheduler.Wake(); };
+        _ = Task.Run(() => scheduler.RunAsync(CancellationToken.None));
     }
 
     // O Velopack não aplica pacotes descarregados sozinho: Update.exe espera que o processo saia e troca a pasta current\.
