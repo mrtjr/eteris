@@ -6,7 +6,8 @@
 )
 # Publica a release vX.Y.Z que o «vpk upload github» deixou em RASCUNHO (CAD-02, ARQ-01; docs/motor.md, «Como publicar»;
 # docs/atualizacoes.md). Só publica depois de conferir, por esta ordem:
-#   1. a etiqueta existe e aponta para o HEAD, e a publish\ desta máquina (se a houver) é desse commit;
+#   1. a etiqueta existe aqui e em origin, aponta nos dois para o HEAD, e a publish\ desta máquina (se a houver) é
+#      desse commit;
 #   2. todos os fluxos do GitHub Actions desse commit acabaram, nenhum falhou e o «build» passou;
 #   3. a release existe e ainda é um rascunho;
 #   4. descarrega do rascunho o releases.win.json (o que os clientes vão ler). O «vpk upload github» não sobe o
@@ -112,6 +113,19 @@ try {
   if (-not $head) { throw "não consigo ler o HEAD (git rev-parse HEAD): corra o release.ps1 no repositório, com o git no PATH" }
   if (-not $commit) { throw "etiqueta em falta: $tag não existe neste repositório (git tag $tag e git push origin $tag)" }
   if ($commit -ne $head) { throw "$tag aponta para $(Short $commit) e o HEAD é $(Short $head): publique a partir do commit da etiqueta" }
+  # A etiqueta em origin (M3): é a que o GitHub e o CI veem. Numa etiqueta anotada vale a linha ^{} (o commit); numa
+  # leve, a única linha.
+  $remote = Native-Out "git" @("-C", $root, "ls-remote", "origin", "refs/tags/$tag", "refs/tags/$tag^{}")
+  if ($null -eq $remote) { throw "não consegui ler a etiqueta $tag em origin (git ls-remote origin): confirme a ligação ao GitHub" }
+  $direct = $null; $peeled = $null
+  foreach ($line in ($remote -split "`n")) {
+    $parts = @($line.Trim() -split "\s+")
+    if ($parts.Count -lt 2) { continue }
+    if ($parts[1] -ceq "refs/tags/$tag^{}") { $peeled = $parts[0] } elseif ($parts[1] -ceq "refs/tags/$tag") { $direct = $parts[0] }
+  }
+  $remoteCommit = if ($peeled) { $peeled } else { $direct }
+  if (-not $remoteCommit) { throw "etiqueta em falta no remoto: $tag não está em origin (git push origin $tag)" }
+  if ($remoteCommit -ne $commit) { throw "$tag em origin aponta para $(Short $remoteCommit) e a etiqueta local para $(Short $commit): o GitHub vê outro commit; não publico" }
   $buildInfo = Join-Path $root "publish\eteris-build.json"
   if (Test-Path -LiteralPath $buildInfo) {
     $build = Get-Content -LiteralPath $buildInfo -Raw -Encoding UTF8 | ConvertFrom-Json

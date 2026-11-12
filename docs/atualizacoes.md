@@ -69,7 +69,8 @@ dotnet run --project build/sign -c Release -- verify <update-keys.txt> <ficheiro
 
 1. `build\publish.ps1` e `build\pack.ps1` como sempre (`docs/motor.md`, «Como publicar»).
 2. `vpk upload github …` **sem** `--publish`: a release fica em rascunho.
-3. `build\release.ps1 -Version X.Y.Z -Key <chave.pem>`: recusa enquanto o CI do commit da etiqueta não estiver verde;
+3. `build\release.ps1 -Version X.Y.Z -Key <chave.pem>`: recusa se a etiqueta não apontar para o HEAD aqui **e** em
+   `origin` (`git ls-remote`, a linha `^{}` numa etiqueta anotada) e enquanto o CI do commit da etiqueta não estiver verde;
    descarrega o `releases.win.json` do rascunho e confere cada entrada com os ficheiros de `Releases\` desta máquina em
    todos os campos em que o Éteris confia — `FileName`, `PackageId`, `Version` (a do `-Version`), `Type`, `SHA256` e
    `Size` — e que as entradas são exatamente os `Full` e `Delta` de `Releases\assets.win.json`, nem a mais nem a menos

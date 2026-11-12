@@ -25,6 +25,9 @@ public class ReleaseScriptTests
     {
         public string Head { get; init; } = A;
         public string TagCommit { get; init; } = A;
+        // A resposta de «git ls-remote origin refs/tags/v9.9.9 refs/tags/v9.9.9^{}»: por omissão, uma etiqueta anotada
+        // (o objeto da etiqueta e, na linha ^{}, o commit A).
+        public string RemoteTags { get; init; } = Annotated(A);
         public string? PublishCommit { get; init; }
         public string RunsJson { get; init; } = Ok;
         public string ReleaseJson { get; init; } = Draft;
@@ -113,6 +116,25 @@ public class ReleaseScriptTests
     [Fact]
     public async Task Release_WhenTheTagIsNotHead_Refuses()
         => AssertRefused(await RunReleaseAsync(new Scenario { Head = A, TagCommit = B }), "e o HEAD");
+
+    private static string Annotated(string commit) => new string('c', 40) + "\trefs/tags/v9.9.9\n" + commit + "\trefs/tags/v9.9.9^{}\n";
+
+    // M3 (revisão final): a etiqueta que conta é a de origin (a que o GitHub e o CI veem), não só a local.
+    [Theory]
+    [InlineData("", "em falta no remoto")]
+    [InlineData("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/tags/v9.9.9\n", "em origin aponta para")]
+    [InlineData("cccccccccccccccccccccccccccccccccccccccc\trefs/tags/v9.9.9\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/tags/v9.9.9^{}\n", "em origin aponta para")]
+    public async Task Release_WhenTheTagInOriginIsMissingOrElsewhere_Refuses(string remote, string expected)
+        => AssertRefused(await RunReleaseAsync(new Scenario { RemoteTags = remote }), expected);
+
+    // Uma etiqueta leve em origin (sem linha ^{}) vale pelo commit para que aponta.
+    [Fact]
+    public async Task Release_WithALightweightTagInOrigin_Publishes()
+    {
+        var run = await RunReleaseAsync(new Scenario { RemoteTags = A + "\trefs/tags/v9.9.9\n" });
+        Assert.True(run.ExitCode == 0, "o release.ps1 não publicou; saída: " + run.Output);
+        Assert.True(run.Line(l => l.Contains("ls-remote origin refs/tags/v9.9.9", StringComparison.Ordinal)) >= 0, "conferiu a etiqueta em origin");
+    }
 
     [Fact]
     public async Task Release_WhenThePublishIsFromAnotherCommit_Refuses()
@@ -244,6 +266,7 @@ public class ReleaseScriptTests
             var tools = Directory.CreateDirectory(Path.Combine(root, "tools")).FullName;
             var log = Path.Combine(tools, "calls.log");
             File.WriteAllText(Path.Combine(tools, "runs.json"), s.RunsJson);
+            File.WriteAllText(Path.Combine(tools, "remote.txt"), s.RemoteTags);
             File.WriteAllText(Path.Combine(tools, "release.json"), s.ReleaseJson);
             // O rascunho: o índice gerado pelo vpk upload e, se o cenário o disser, um .sig válido para ele.
             var draftIndex = DraftIndex(s.Change);
@@ -255,6 +278,7 @@ public class ReleaseScriptTests
                 echo git %* >> "%~dp0calls.log"
                 if "%~3"=="rev-parse" (echo {s.Head}& exit /b 0)
                 if "%~3"=="rev-list" (echo {s.TagCommit}& exit /b 0)
+                if "%~3"=="ls-remote" (type "%~dp0remote.txt"& exit /b 0)
                 exit /b 0
 
                 """.Replace("\n", "\r\n"));
