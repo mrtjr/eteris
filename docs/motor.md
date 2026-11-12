@@ -152,7 +152,8 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    do `manifest.json`, que não há `bootstrap.exe`/`bootstrapc.exe` com esse nome (o bootstrap vai como
    `Eteris.Browser.exe`) e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em `Shields\lists`,
    `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).
-3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --token … --outputDir Releases` — o pacote delta tem
+3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --outputDir Releases` (o repositório é público: não
+   precisa de token) — o pacote delta tem
    de partir do pacote `full` **publicado**: a pasta `Releases` não pode ter um `full` local da mesma versão que não
    seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).
 4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`. Só
@@ -180,8 +181,9 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
 6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
    (compilar e testes, sem pack nem upload).
 7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z
-   --token … --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo
-   (`$env:GH_TOKEN = (gh auth token)`), nunca em ficheiros.
+   --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo, nunca em
+   ficheiros nem na linha de comandos: `$env:VPK_TOKEN = (gh auth token)` antes e `Remove-Item Env:VPK_TOKEN` depois (o
+   `vpk` lê o `VPK_TOKEN` em vez do `--token`; o `GH_TOKEN` não lhe chega). Assim saiu a 0.2.16.
 8. `.\build\release.ps1 -Version X.Y.Z -Key <chave.pem>` (docs/atualizacoes.md): recusa enquanto o CI do commit da
    etiqueta não estiver verde (o fluxo `build` incluído), confere o `releases.win.json` do rascunho (o que o
    `vpk upload github` gerou, só com os pacotes desta versão) com os pacotes de `Releases\` desta máquina, assina os bytes
