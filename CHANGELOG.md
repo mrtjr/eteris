@@ -6,6 +6,7 @@
 
 - «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
 - Uma conversão escrita com algarismos de outro alfabeto (ou uma conta colada com milhares de parênteses) na barra de endereço já não fecha o Éteris.
+- Escrever no filtro das abas verticais já não muda de aba nem deixa a janela sem aba ativa: só o Enter salta para o primeiro resultado.
 
 ## 0.2.16 — 2026-11-12
 

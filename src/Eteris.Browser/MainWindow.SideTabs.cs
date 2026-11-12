@@ -202,7 +202,8 @@ public partial class MainWindow
     private void SetUpSideFilter()
     {
         _sideView = new System.Windows.Data.ListCollectionView(Tabs.Tabs);
-        SideTabList.ItemsSource = _sideView;
+        // A lista só lê a aba ativa (a ligação e a vista ficam em SideTabSelection): UIX-02.
+        Eteris.Browser.Tabs.SideTabSelection.Attach(SideTabList, _sideView);
     }
 
     private void SideFilter_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -211,6 +212,7 @@ public partial class MainWindow
         var query = SideFilter.Text.Trim();
         SideFilterHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         _sideView.Filter = query.Length == 0 ? null : item => item is Eteris.Browser.Tabs.BrowserTab tab && Eteris.Browser.Tabs.TabFilter.Matches(tab.DisplayTitle + " " + tab.Title + " " + tab.Note, tab.Address, query);
+        Eteris.Browser.Tabs.SideTabSelection.Refresh(SideTabList);
     }
 
     private void SideFilter_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
