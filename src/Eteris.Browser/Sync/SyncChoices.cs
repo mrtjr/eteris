@@ -116,9 +116,12 @@ internal static class SyncChoices
     {
         if (!agent.Enabled || !agent.HasKey) return NotOnHere;
         if (!await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false)) return NotConfirmed($"«{AccountLine}» continua desligado");
-        try { agent.SetAccountSecrets(true); }
+        try
+        {
+            agent.SetAccountSecrets(true);
+            agent.SetCollections(SyncGroups.AccountCollections, true);
+        }
         catch (SyncUserException e) { return e.Message; }
-        agent.SetCollections(SyncGroups.AccountCollections, true);
         return null;
     }
 
@@ -138,13 +141,15 @@ internal static class SyncChoices
         if (groupId == AccountRow)
         {
             if (on) return await ChooseAccountAsync(agent, confirm).ConfigureAwait(false);
-            agent.SetCollections(SyncGroups.AccountCollections, false);
+            try { agent.SetCollections(SyncGroups.AccountCollections, false); }
+            catch (SyncUserException e) { return e.Message; }
             return null;
         }
         if (SyncGroups.Find(groupId) is not { } group) return "Esta linha não existe.";
         if (on && group.AskToEnable && !await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false))
             return NotConfirmed($"«{Texts[group.Id].Title}» continua desligado");
-        agent.SetCollections(group.Collections, on);
+        try { agent.SetCollections(group.Collections, on); }
+        catch (SyncUserException e) { return e.Message; }
         return null;
     }
 

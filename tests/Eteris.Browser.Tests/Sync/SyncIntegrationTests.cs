@@ -140,9 +140,13 @@ public class SyncIntegrationTests
             foreach (var text in new[] { "segredo", "nota", "secret" })
                 Assert.DoesNotContain(text, Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
             Assert.Equal("segredo-da-conta", store.Load()!.Secret);
-            Assert.Null(new DpapiSyncStore(path, new Dpapi("google-tokens")).Load()); // outra «entropia» não abre
+            // Outra «entropia» não abre: não se lê, e não é «não existe» (o agente não o substitui por um vazio).
+            Assert.Throws<Eteris.Sync.Engine.SyncStateUnreadableException>(() => new DpapiSyncStore(path, new Dpapi("google-tokens")).Load());
+            // O ficheiro posto de lado pode ter a chave: sai com «apagar a chave».
+            File.WriteAllBytes(path + DpapiSyncStore.AsideSuffix, [1]);
             store.Delete();
             Assert.Null(store.Load());
+            Assert.False(File.Exists(path + DpapiSyncStore.AsideSuffix));
         }
         finally
         {

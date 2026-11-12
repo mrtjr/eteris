@@ -358,10 +358,32 @@ internal static class SyncService
     {
         if (Agent() is not { } agent) return;
         Hook();
-        agent.BeginCloudDeletion();
+        try { agent.BeginCloudDeletion(); }
+        catch (SyncUserException e)
+        {
+            // Com o estado por ler, nada se apaga: a mensagem diz porquê (e a página oferece pôr o ficheiro de lado).
+            Say("delete", e.Message);
+            return;
+        }
         lock (Gate) Schedule.Stop();
         Arm();
         Act("delete", a => a.FinishCloudDeletionAsync());
+    }
+
+    // «Recomeçar sem o estado antigo»: com o estado da sincronização por ler (StateUnreadable), põe o ficheiro de lado
+    // (sync.state.ilegivel, que sai com «apagar a chave») e este computador fica como um computador novo, desligado.
+    // false = não havia nada a pôr de lado, ou não foi possível (a mensagem fica na área «signout»).
+    internal static bool SetAsideState()
+    {
+        if (Agent() is not { Status.StateUnreadable: true } agent) return false;
+        try { File.Move(StatePath, StatePath + DpapiSyncStore.AsideSuffix, overwrite: true); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Say("signout", "Não foi possível pôr o ficheiro de lado. Feche os outros programas que o estejam a usar e tente outra vez.");
+            return false;
+        }
+        agent.ReloadState();
+        return true;
     }
 
     // «Tentar de novo» depois de um apagar do Drive que não acabou (já decidido: sem outra confirmação).
@@ -912,6 +934,8 @@ internal static class SyncService
             chainReplaced = status.ChainReplaced,
             // A pausa da troca de chave: a página mostra a caixa do identificador do kit novo em vez de «Ligar outra vez».
             rekeyPending = status.RekeyPending,
+            // O estado guardado não se leu: a página oferece «Recomeçar sem o estado antigo».
+            stateUnreadable = status.StateUnreadable,
             mayAutoPair = status.MayAutoPair,
             // O que o computador novo mostra (o cartão e o alerta): a página decide só por isto.
             guest = GuestKind(GuestPairingModel.From(status).Kind),
@@ -954,9 +978,13 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or System.Security.Cryptography.CryptographicException)
         {
-            return null;
+            // Existe e não se leu: não é «não existe» (SyncStateUnreadableException): o agente não o substitui por um vazio.
+            throw new SyncStateUnreadableException("O estado da sincronização não se leu.", e);
         }
     }
+
+    // O sufixo do ficheiro que «Recomeçar sem o estado antigo» põe de lado (SyncService.SetAsideState).
+    internal const string AsideSuffix = ".ilegivel";
 
     public void Save(SavedSync saved)
     {
@@ -977,5 +1005,11 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
     // «Sair» com «apagar a chave»: o ficheiro e o temporário saem. Se o Windows não deixar apagar agora (preso por outro
     // processo, sem permissão), fica marcado para apagar e esvaziado no que der: a abertura seguinte não retoma com a
     // chave que a pessoa mandou apagar. Só lança (IOException) se nem isso foi possível.
-    public void Delete() => SecretFile.Delete(path);
+    public void Delete()
+    {
+        SecretFile.Delete(path);
+        // O ficheiro posto de lado pode ter a chave: sai com «apagar a chave» (melhor esforço).
+        try { File.Delete(path + AsideSuffix); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
 }

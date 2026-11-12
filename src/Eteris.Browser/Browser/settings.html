@@ -501,6 +501,7 @@
           <div class="item" id="syncOffItem" hidden>
             <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
             <button class="action" id="syncStart">Ligar a sincronização</button>
+            <button class="action" id="syncStateReset" hidden>Recomeçar sem o estado antigo</button>
           </div>
           <div class="item syncalert" id="syncRekeyItem" hidden>
             <div class="label"><b>A conta mudou de chave noutro computador</b><span id="syncRekeyText"></span>
@@ -1394,6 +1395,7 @@
         : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';
       $('syncStart').textContent = deleteStuck ? 'Ligar sem acabar de apagar' : phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';
       $('syncStart').dataset.anyway = deleteStuck ? '1' : '';
+      show('syncStateReset', !!s.stateUnreadable);
       // A apagar do Drive: «Ligar» espera que acabe (com o apagar interrompido, «Ligar» acaba-o primeiro). «Apagar…» fica
       // ativo (tem o foco depois de confirmar; carregar outra vez só volta a tentar acabar).
       $('syncStart').disabled = !!s.deleting && !!s.running;
@@ -1647,6 +1649,7 @@
     // «Entrar com o Google», «Cancelar» (à espera do início de sessão) ou «Ligar» (pasta de teste).
     googleButton.addEventListener('click', () => askGoogle(googleButton.dataset.state === 'waiting' ? 'sync-google-cancel' : 'sync-google'));
     $('syncStart').addEventListener('click', () => askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : ''));
+    $('syncStateReset').addEventListener('click', () => askGoogle('sync-state-reset'));
     // «Tentar de novo» (um apagar do Drive que não acabou): volta a tentar já; o foco fica na nota que diz o resultado.
     $('syncDeleteRetry').addEventListener('click', () => {
       note($('syncDeleteNote'), 'A apagar os dados do Éteris do Google Drive…');

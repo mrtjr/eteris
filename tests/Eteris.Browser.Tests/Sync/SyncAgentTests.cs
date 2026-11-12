@@ -1508,6 +1508,45 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
     }
 
+    // Auditoria, SYN-09: um estado que não se leu não é «não existe»: nada o substitui por um vazio.
+    [Fact]
+    public async Task UnreadableState_IsNotOverwrittenByStart()
+    {
+        var inner = new MemoryStore();
+        var casa = NewDevice("Casa", store: inner);
+        await casa.Agent.StartAsync();
+        Assert.True(await casa.Agent.RunAsync());
+        var id = inner.Load()!.Engine!.Device.Id;
+        var saves = inner.Saves;
+
+        var failing = new FailingStore(inner) { Fail = true };
+        var agent = new SyncAgent(() => _cloud, new MemoryProfile(), failing, "Casa", Now, Quick);
+        Assert.True(agent.Status.StateUnreadable);
+        Assert.Equal(SyncAgent.StateUnreadableText, agent.Status.Notice);
+        await Assert.ThrowsAsync<SyncUserException>(() => agent.StartAsync());
+        Assert.Throws<SyncUserException>(() => agent.SetCollections([Collections.Bookmarks], on: false));
+        Assert.Throws<SyncUserException>(() => agent.BeginCloudDeletion());
+        await Assert.ThrowsAsync<SyncUserException>(() => agent.RenameDeviceAsync("Outro nome"));
+        Assert.Equal(saves, inner.Saves);
+
+        failing.Fail = false;
+        await agent.StartAsync();
+        Assert.Equal(SyncPhase.On, agent.Status.Phase);
+        Assert.False(agent.Status.StateUnreadable);
+        Assert.Equal(id, inner.Load()!.Engine!.Device.Id);
+    }
+
+    private sealed class FailingStore(MemoryStore inner) : ISyncStore
+    {
+        public bool Fail { get; set; }
+
+        public SavedSync? Load() => Fail ? throw new SyncStateUnreadableException("não se leu") : inner.Load();
+
+        public void Save(SavedSync saved) => inner.Save(saved);
+
+        public void Delete() => inner.Delete();
+    }
+
     // Dois computadores criam a conta ao mesmo tempo (Drive vazio para os dois): o de identificador maior sai da sua,
     // volta a «escolher» e junta-se à outra sem perder nada.
     [Fact]
