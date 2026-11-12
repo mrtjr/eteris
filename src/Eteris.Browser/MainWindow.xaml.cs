@@ -322,6 +322,7 @@ public partial class MainWindow : Window
             if (!e.Frame.IsMain) return;
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
+            Dispatcher.InvokeAsync(() => tab.IsCapturing = false);
             // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01).
             if (SandboxFallback.IsWebContent(e.Url)) StartupGuard.Current.WebContentCommitted();
             ResetUnstoredEnginePermissions(e.Browser, e.Url, permissionStore);

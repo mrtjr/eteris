@@ -11,6 +11,10 @@
 - Recarregar uma página de erro só volta a abrir endereços http, https ou de ficheiro, e o botão “Continuar sem segurança” passa a ter uma assinatura própria em vez do token das páginas internas.
 - Uma página já não consegue abrir o cartão “Espreitar” quando se prime Alt, nem mudar as preferências do leitor sem o leitor aberto.
 
+### Privacidade
+
+- A câmara e o microfone lembrados para um site já não valem quando ele está embutido noutro; a partilha de ecrã pergunta sempre; a aba mostra um sinal enquanto há captura.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

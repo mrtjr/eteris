@@ -151,6 +151,12 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isMuted;
 
+    // A página tem a câmara, o microfone ou o ecrã autorizados e em uso (até ao documento seguinte): a aba mostra um sinal
+    // (MainWindow.Permissions.cs, MOT-04).
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
+    [ObservableProperty]
+    private bool _isCapturing;
+
     public string? AudioGlyph => AudioIndicator.Glyph(IsAudible, IsMuted);
 
     partial void OnIsAudibleChanged(bool value) => OnPropertyChanged(nameof(AudioGlyph));
@@ -275,6 +281,7 @@ public partial class BrowserTab : ObservableObject
             if (IsSleeping) parts.Add("A dormir (memória libertada)");
             if (IsMuted) parts.Add("Som silenciado");
             else if (IsAudible) parts.Add("A tocar som");
+            if (IsCapturing) parts.Add("A usar a câmara, o microfone ou o ecrã");
             if (BlockedCount > 0) parts.Add(BlockedCount == 1 ? "1 rastreador bloqueado" : $"{BlockedCount} rastreadores bloqueados");
             return string.Join(" · ", parts);
         }

@@ -229,6 +229,9 @@
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5"
                                            Foreground="{DynamicResource TextMutedBrush}" />
                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock x:Name="TabCapture" Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                               Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" Margin="4,0,2,0"
+                                               Visibility="Collapsed" ToolTip="Esta aba está a usar a câmara, o microfone ou o ecrã" />
                                     <Button x:Name="TabAudio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" ToolTip="Silenciar / reativar o som desta aba"
                                             Visibility="Collapsed" />
@@ -304,6 +307,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsMuted}" Value="True">
                                 <Setter TargetName="TabAudio" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsCapturing}" Value="True">
+                                <Setter TargetName="TabCapture" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsPinned}" Value="True">
                                 <Setter TargetName="TabRoot" Property="Width" Value="44" />
@@ -538,6 +544,9 @@
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextMutedBrush}" />
                                 <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal">
+                                    <TextBlock x:Name="SideCapture" Text="&#xE714;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                               Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" Margin="4,0,2,0"
+                                               Visibility="Collapsed" ToolTip="Esta aba está a usar a câmara, o microfone ou o ecrã" />
                                     <Button x:Name="Audio" Content="{Binding AudioGlyph}" Style="{StaticResource TabCloseButton}"
                                             FontSize="11" Click="TabAudio_Click" Visibility="Collapsed" />
                                     <TextBlock x:Name="SideLock" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="11"
@@ -606,6 +615,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsMuted}" Value="True">
                                 <Setter TargetName="Audio" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsCapturing}" Value="True">
+                                <Setter TargetName="SideCapture" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding IsSleeping}" Value="True">
                                 <Setter TargetName="Title" Property="Opacity" Value="0.5" />

@@ -47,7 +47,7 @@ public partial class MainWindow
             {
                 // Os pedidos travados já falharam: a página volta a carregar para os repetir com autorização.
                 if (allowed && HasEngine(tab) && _browsers.TryGetValue(tab, out var browser)) browser.Reload();
-            }, LocalNetworkText.CardDetail(label)));
+            }, Drop: () => { }, EmbeddedIn: null, CanRemember: false, Detail: LocalNetworkText.CardDetail(label)));
             ShowNextPermission();
         }
         if (active) UpdateShieldButton();
