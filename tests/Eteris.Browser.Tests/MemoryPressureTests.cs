@@ -89,7 +89,7 @@ public class MemoryPressureTests
 
     [Fact]
     public void Picks_TheLeastRecentlyUsed()
-        => Assert.Equal("antiga", MemoryPressure.Pick([Tab("recente", 2), Tab("antiga", 50), Tab("meia", 10)]));
+        => Assert.Equal("antiga", MemoryPressure.Pick([Tab("recente", 2), Tab("antiga", 50), Tab("meia", 10)], Now));
 
     [Fact]
     public void Exemptions_AreNeverPicked()
@@ -102,12 +102,23 @@ public class MemoryPressureTests
             Tab("trancada", 90, locked: true), Tab("fixada", 90, pinned: true), Tab("chamada", 90, capturing: true),
             Tab("pip", 90, playing: true),
         };
-        Assert.Null(MemoryPressure.Pick(exempt));
-        Assert.Equal("livre", MemoryPressure.Pick([.. exempt, Tab("livre", 1)]));
+        Assert.Null(MemoryPressure.Pick(exempt, Now));
+        Assert.Equal("livre", MemoryPressure.Pick([.. exempt, Tab("livre", 3)], Now));
     }
 
     [Fact]
-    public void NothingToPick_WhenNoTabs() => Assert.Null(MemoryPressure.Pick(Array.Empty<MemoryPressure.Candidate<string>>()));
+    public void NothingToPick_WhenNoTabs() => Assert.Null(MemoryPressure.Pick(Array.Empty<MemoryPressure.Candidate<string>>(), Now));
+
+    // DAD-03: com a pressão mantida, duas abas usadas à vez já não se adormecem uma à outra; e a página que pediu para
+    // ficar acordada (texto por enviar, Picture-in-Picture) também fica.
+    [Fact]
+    public void Pick_SkipsTabsUsedLessThanTheMinimumAgo_AndHeldOnes()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(2), MemoryPressure.MinIdle);
+        Assert.Null(MemoryPressure.Pick([Tab("a", 1), Tab("b", 0)], Now));
+        Assert.Equal("c", MemoryPressure.Pick([Tab("a", 1), Tab("c", 2)], Now));
+        Assert.Null(MemoryPressure.Pick([Tab("presa", 90) with { Held = true }], Now));
+    }
 
     // Uma aba por intervalo, como o Firefox: um falso positivo da pressão custa no máximo uma aba.
     [Fact]
@@ -212,9 +223,9 @@ public class MemoryPressureTests
     {
         var sleep = Source("MainWindow.Sleep.cs");
         Assert.Single(Regex.Matches(sleep, @"tab\.IsSleeping = true;"));
-        Assert.Contains("if (!PerfTuning.IsOn(PerfTuning.SleepUnderPressure) || !_browsers.TryGetValue(tab, out var browser)", sleep);
+        Assert.Contains("PageScript.EvaluateAsync(browser, SleepProbe.Script", sleep);
         Assert.Contains("RestoreSleptScroll(tab, browser, url);", Source("MainWindow.xaml.cs"));
-        Assert.Contains("PutToSleep(tab);", Source("MainWindow.Selection.cs"));
+        Assert.Contains("PutToSleep(tab, byUser: true);", Source("MainWindow.Selection.cs"));
         Assert.DoesNotContain("tab.IsSleeping = true;", Source("MainWindow.Selection.cs"));
     }
 

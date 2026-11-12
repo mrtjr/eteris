@@ -37,6 +37,7 @@ public partial class MainWindow
         var settings = Settings.Current;
         _sidebarWidth = settings.SidebarWidth;
         LoadWebPanels();
+        WatchNotes();
         BuildSidebarRail();
         // Aberta como ficou da última vez (nunca na janela privada: começa fechada, como o resto do que é lembrado).
         if (settings.Sidebar && !IsPrivate && SidebarPanels.Resolve(settings.SidebarPanel, SidebarAvailable) is { } panel)

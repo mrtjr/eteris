@@ -84,7 +84,9 @@ public partial class MainWindow
     // espera do temporizador —, menos o que fica na sessão para reabrir («Continuar onde parei»).
     private void ForgetWhenClosing(object? sender, CancelEventArgs e)
     {
-        if (e.Cancel || _forgetOnCloseDone || Updates.UpdateService.RestartRequested) return;
+        // Na saída com a sessão congelada («Atualizar para…», encerramento do Windows) todas as janelas voltam: nada
+        // sai; o que ficou por apagar trata-o a varredura do arranque seguinte.
+        if (e.Cancel || _forgetOnCloseDone || Updates.UpdateService.RestartRequested || s_sessionFrozen) return;
         var mine = AddressesOf(this).ToList();
         var others = NormalWindows().Where(w => !ReferenceEquals(w, this) && !w._forgetOnCloseDone).ToList();
         if (others.Count > 0)
@@ -123,7 +125,8 @@ public partial class MainWindow
 
     private async Task ForgetLeftoversAsync()
     {
-        var open = OpenAddresses().ToList();
+        // As janelas da sessão que ainda não voltaram (depois da 1.ª página) também contam como abertas.
+        var open = OpenAddresses().Concat(AddressesToRestore()).ToList();
         var forgotten = new List<string>();
         foreach (var site in AppData.ForgetOnCloseSites().Where(s => !SiteScope.StillOpen(s, open)).ToList())
         {

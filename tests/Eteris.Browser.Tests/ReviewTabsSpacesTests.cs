@@ -144,6 +144,7 @@ public sealed class ReviewTabsSpacesTests : IDisposable
         napping.IsLocked = true;
 
         vm.NewWorkspace("Trabalho");
+        var fresh = vm.Active!;
 
         Assert.True(plain.IsSleeping);
         Assert.False(locked.IsSleeping);
@@ -152,9 +153,39 @@ public sealed class ReviewTabsSpacesTests : IDisposable
         Assert.Equal([locked, music], vm.AwakeOutOfView());
 
         vm.SwitchWorkspace(vm.Workspaces[0]);
-        Assert.Empty(vm.AwakeOutOfView());
+        // Só a aba que estava em uso no «Trabalho» fica acordada lá (decisão D3).
+        Assert.Equal([fresh], vm.AwakeOutOfView());
         Assert.False(locked.IsSleeping);
         Assert.False(music.IsSleeping);
+    }
+
+    // DAD-03: ao mudar de Espaço, ficam acordadas as abas que a janela segura (captura, multimédia a tocar, a página
+    // que pediu para ficar).
+    [Fact]
+    public void SwitchingWorkspace_KeepsAwakeTheTabsTheWindowHolds()
+    {
+        var vm = WithTabs("https://plain.pt/", "https://chamada.pt/");
+        var call = vm.Tabs[1];
+        vm.KeepsAwake = tab => ReferenceEquals(tab, call);
+        vm.Active = vm.Tabs[0];
+        vm.NewWorkspace("Trabalho");
+        Assert.False(call.IsSleeping);
+        Assert.Contains(call, vm.AwakeOutOfView());
+    }
+
+    // DES-01, decisão D3 (a): a aba em uso do Espaço que sai fica acordada e passa a seguir o sono por tempo, que
+    // pergunta à página antes de adormecer (um texto por enviar não se perde ao mudar de Espaço). As outras de fundo
+    // adormecem como antes.
+    [Fact]
+    public void SwitchingWorkspace_KeepsTheActiveTabAwake()
+    {
+        var vm = WithTabs("https://fundo.pt/", "https://escrever.pt/");
+        var (background, writing) = (vm.Tabs[0], vm.Tabs[1]);
+        vm.Active = writing;
+        vm.NewWorkspace("Trabalho");
+        Assert.False(writing.IsSleeping);
+        Assert.True(background.IsSleeping);
+        Assert.Equal([writing], vm.AwakeOutOfView());
     }
 
     // ---------- O tempo posto de lado não conta para o arquivo ----------

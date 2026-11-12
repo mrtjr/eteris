@@ -29,11 +29,13 @@ public partial class MainWindow
         UpdatePill.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // Fecha as janelas pela ordem normal (a sessão é guardada) e deixa o Update.exe reabrir a versão nova.
+    // Grava a sessão de todas as janelas, fecha-as pela ordem normal e deixa o Update.exe reabrir a versão nova.
     private void UpdatePill_Click(object sender, RoutedEventArgs e)
     {
         UpdateService.RestartRequested = true;
-        // Application.Shutdown não dispara Closing (onde a sessão é guardada): fecha-se cada janela.
+        // A sessão de todas as janelas grava-se antes de fechar a 1.ª, e os fechos seguintes já não a reduzem.
+        FreezeSessionForExit();
+        // Application.Shutdown não dispara Closing (onde se guardam a posição, as notas…): fecha-se cada janela.
         foreach (var window in Application.Current.Windows.Cast<Window>().ToList()) window.Close();
     }
 }
