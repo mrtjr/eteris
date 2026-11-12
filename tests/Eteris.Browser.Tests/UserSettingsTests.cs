@@ -154,7 +154,9 @@ public sealed class UserSettingsTests : IDisposable
     {
         var settings = Page("settings.html");
         Assert.Equal(UserSettings.Engines.Order(), EngineButtons(settings).Order());
-        Assert.Contains("Com o Google, as pesquisas vão para a Google", settings);
+        Assert.Contains("Com o Google, as pesquisas vão para a Google, que as guarda e as pode juntar à sua conta Google se tiver sessão iniciada nela neste navegador.", settings);
+        // As sugestões enquanto escreve só existem com o DuckDuckGo e o Brave (SearchSuggest.EndpointFor).
+        Assert.Contains("Só com o DuckDuckGo e o Brave.", settings);
 
         var welcome = Page("welcome.html");
         Assert.Equal(["brave", "duckduckgo", "startpage"], EngineButtons(welcome).Order());

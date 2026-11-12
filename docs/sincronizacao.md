@@ -589,12 +589,14 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
   com a linha da conta cabe numa janela normal) e, numa janela baixa, a barra de deslocamento tem as cores do tema.
   **Desde a 0.2.17, com sessão, há um «Sair» à direita do cartão** (ao lado, não dentro: o clique nele não abre as
   Definições). Não aparece no convite «Entrar», nas janelas privadas nem na pasta de teste, e fica desativado enquanto
-  corre outra saída da conta. Sai em dois passos: o 1.º toque troca o texto por «Confirmar» (o menu fica aberto; um 2.º
-  toque antes de meio segundo não conta) e o 2.º sai deste computador como nas Definições, mas **nunca apaga a chave**
-  (`forgetKey: false`; para isso, as Definições), fecha o menu e avisa «Saiu da conta Google neste computador. A chave
-  da sincronização e os dados ficaram aqui.». Nome acessível e dica: «Sair deste computador». Pelo teclado, o cartão e
-  o «Sair» são uma linha: → vai ao «Sair», ← volta ao cartão, ↓ segue para «Nova aba»; a inicial chega ao cartão e não
-  ao «Sair».
+  corre outra saída da conta (a dica e o leitor de ecrã dizem porquê). Sai em dois passos: o 1.º toque troca o texto
+  por «Confirmar» (o menu fica aberto; um 2.º toque antes de meio segundo não conta, nem uma tecla mantida premida — a
+  repetição do Windows, pelo WPF ou vinda da página) e o 2.º sai deste computador como nas Definições, mas **nunca
+  apaga a chave** (`forgetKey: false`; para isso, as Definições), fecha o menu e avisa «Saiu da conta Google neste
+  computador. A chave da sincronização e os dados ficaram aqui.» (sem a 2.ª frase quando ainda não havia chave). Se
+  gravar o estado falhar, os tokens saem na mesma e o aviso di-lo. Nome acessível e dica: «Sair deste computador».
+  Pelo teclado, o cartão e o «Sair» são uma linha: → vai ao «Sair», ← volta ao cartão, ↓ segue para «Nova aba»; o Tab
+  e o leitor de ecrã vão do cartão para o «Sair»; a inicial chega ao cartão e não ao «Sair».
 - **Nas Definições** (0.2.15, mais curtas): sem sessão, o título, a frase «Os seus favoritos, palavras-passe e
   definições em todos os seus computadores, cifrados ponta a ponta.», o botão «Entrar com o Google» e a ligação «Como
   protegemos os seus dados» (para `eteris://privacy/#sincronizacao`, o bloco «Se ligar a sincronização», sempre à vista,

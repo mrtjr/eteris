@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
@@ -515,19 +516,28 @@ public partial class MainWindow
 
     internal const long BrowserMenuSignOutGuardMs = 500;
 
-    internal static MenuSignOutStep BrowserMenuSignOutStep(long? armedAtMs, long nowMs)
-        => armedAtMs is not { } armed ? MenuSignOutStep.Arm : nowMs - armed < BrowserMenuSignOutGuardMs ? MenuSignOutStep.Ignore : MenuSignOutStep.Run;
+    // Uma tecla mantida premida (a repetição automática do Windows) nunca conta: nem arma, nem confirma.
+    internal static MenuSignOutStep BrowserMenuSignOutStep(long? armedAtMs, long nowMs, bool repeat = false)
+        => repeat ? MenuSignOutStep.Ignore
+            : armedAtMs is not { } armed ? MenuSignOutStep.Arm
+            : nowMs - armed < BrowserMenuSignOutGuardMs ? MenuSignOutStep.Ignore : MenuSignOutStep.Run;
 
     private Button? BuildBrowserMenuSignOut(Popup popup, MenuAccountRow kind, Style style)
     {
         var state = BrowserMenuSignOut(kind, SyncService.FolderMode, SyncService.ExitBusy is not null);
         if (state == MenuSignOut.Hidden) return null;
         var button = BrowserMenuSignOutButton(style);
-        button.IsEnabled = state == MenuSignOut.Enabled;
+        ApplyBrowserMenuSignOutState(button, state);
         long? armedAt = null;
+        // O Enter num botão do WPF clica a cada KeyDown, também nas repetições: o clique a seguir sabe se foi uma.
+        var repeat = false;
+        button.PreviewKeyDown += (_, e) => repeat = e.IsRepeat;
+        button.PreviewMouseLeftButtonDown += (_, _) => repeat = false;
         button.Click += (_, _) =>
         {
-            switch (BrowserMenuSignOutStep(armedAt, Environment.TickCount64))
+            var step = BrowserMenuSignOutStep(armedAt, Environment.TickCount64, repeat);
+            repeat = false;
+            switch (step)
             {
                 case MenuSignOutStep.Arm:
                     armedAt = Environment.TickCount64;
@@ -537,14 +547,32 @@ public partial class MainWindow
                     // Outra saída pode ter começado nas Definições com o menu aberto: aí não sai, diz porquê.
                     if (SyncService.ExitBusy is not null)
                     {
-                        RunBrowserMenuAction(popup, () => ShowToast("Há uma saída da conta a decorrer nas Definições: espere que acabe."));
+                        RunBrowserMenuAction(popup, () => ShowToast(SyncExit.SignOutBusy));
                         break;
                     }
-                    RunBrowserMenuAction(popup, () => { SyncService.SignOutHere(forgetKey: false); ShowToast(SyncExit.SignOutDone); });
+                    RunBrowserMenuAction(popup, () =>
+                    {
+                        var hasKey = SyncService.HasKey;
+                        try
+                        {
+                            SyncService.SignOutHere(forgetKey: false);
+                            ShowToast(SyncExit.SignOutDoneText(hasKey));
+                        }
+                        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ShowToast(SyncExit.SignOutNotSaved); }
+                    });
                     break;
             }
         };
         return button;
+    }
+
+    // Ativo ou desativado; desativado (outra saída da conta a decorrer), a dica e a ajuda dizem porquê.
+    internal static void ApplyBrowserMenuSignOutState(Button button, MenuSignOut state)
+    {
+        button.IsEnabled = state == MenuSignOut.Enabled;
+        var why = state == MenuSignOut.Disabled ? SyncExit.SignOutBusy : null;
+        button.ToolTip = why ?? "Sair deste computador";
+        AutomationProperties.SetHelpText(button, why ?? SyncExit.SignOutHelp);
     }
 
     // «Sair» (o cartão é estreito); o nome acessível e a dica dizem o alcance, e a ajuda é a das Definições. Um botão,
@@ -573,13 +601,16 @@ public partial class MainWindow
         UIElementAutomationPeer.FromElement(button)?.RaisePropertyChangedEvent(AutomationElementIdentifiers.NameProperty, old, Name);
     }
 
-    // O cartão e o «Sair» lado a lado, no painel marcado como um grupo para as setas.
-    internal static DockPanel BrowserMenuAccountCard(Button account, Button signOut)
+    // O cartão e o «Sair» lado a lado, no painel marcado como um grupo para as setas. O cartão é o 1.º filho: o Tab e o
+    // leitor de ecrã seguem a ordem dos filhos, e assim seguem a do ecrã (cartão, depois «Sair»).
+    internal static Grid BrowserMenuAccountCard(Button account, Button signOut)
     {
-        var card = new DockPanel { Tag = BrowserMenuAccountGroup };
-        DockPanel.SetDock(signOut, Dock.Right);
-        card.Children.Add(signOut);
+        var card = new Grid { Tag = BrowserMenuAccountGroup };
+        card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        card.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         card.Children.Add(account);
+        Grid.SetColumn(signOut, 1);
+        card.Children.Add(signOut);
         return card;
     }
 
