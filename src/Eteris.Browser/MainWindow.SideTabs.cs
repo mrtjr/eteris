@@ -40,11 +40,22 @@ public partial class MainWindow
     // aparecer e ao esconder-se em vez de saltar. A página, em janela própria, acompanha cada quadro.
     public static readonly DependencyProperty TitleRowHeightProperty = DependencyProperty.Register(
         nameof(TitleRowHeight), typeof(double), typeof(MainWindow),
-        new PropertyMetadata(ChromeLayout.TitleBarHeight, (d, e) => ((MainWindow)d).TitleRow.Height = new GridLength((double)e.NewValue)));
+        new PropertyMetadata(ChromeLayout.TitleBarHeight, (d, e) =>
+        {
+            var window = (MainWindow)d;
+            window.TitleRow.Height = new GridLength((double)e.NewValue);
+            // A barra de carregamento acompanha as alturas pelo próprio callback (sem vigilância no descritor: MOT-14).
+            window.PlaceAurora();
+        }));
 
     public static readonly DependencyProperty ToolbarRowHeightProperty = DependencyProperty.Register(
         nameof(ToolbarRowHeight), typeof(double), typeof(MainWindow),
-        new PropertyMetadata(ChromeLayout.ToolbarBarHeight, (d, e) => ((MainWindow)d).ToolbarRow.Height = new GridLength((double)e.NewValue)));
+        new PropertyMetadata(ChromeLayout.ToolbarBarHeight, (d, e) =>
+        {
+            var window = (MainWindow)d;
+            window.ToolbarRow.Height = new GridLength((double)e.NewValue);
+            window.PlaceAurora();
+        }));
 
     public double TitleRowHeight
     {

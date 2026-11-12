@@ -226,7 +226,7 @@ public partial class MainWindow : Window
                 observatory: tab.Observatory),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
-        DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
+        browser.AddressChanged += () =>
         {
             if (browser.Address is not string address) return;
             // Na página de erro a omnibox continua a mostrar o endereço que falhou.
@@ -257,7 +257,7 @@ public partial class MainWindow : Window
             // Depois do commit (o DevTools volta a entregar mensagens): os scripts do site atual ficam registados, e os
             // links dentro do mesmo site já os encontram.
             else if (browser.GetBrowser() is { } cef) _ = Task.Run(() => injector.EnsureHost(cef, address));
-        });
+        };
         browser.ConsoleMessage += (_, e) =>
         {
             // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.

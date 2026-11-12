@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using Eteris.Browser.Infrastructure;
 
 namespace Eteris.Browser;
 
@@ -80,8 +81,6 @@ public partial class MainWindow
 
         foreach (UIElement child in root.Children) WatchOverlayChild(child);
         PlaceAurora();
-        foreach (var property in new[] { TitleRowHeightProperty, ToolbarRowHeightProperty })
-            DependencyPropertyDescriptor.FromProperty(property, typeof(MainWindow)).AddValueChanged(this, (_, _) => PlaceAurora());
         LocationChanged += (_, _) => SyncOverlayBounds();
         SizeChanged += (_, _) => SyncOverlayBounds();
         RootBorder.SizeChanged += (_, _) => SyncOverlayBounds();
@@ -91,6 +90,8 @@ public partial class MainWindow
         // em UpdateOverlayVisibility e não chama Show() numa janela fechada.
         Closed += (_, _) =>
         {
+            // Sem libertar as vigilâncias, a janela fechada ficava presa na tabela estática do WPF (MOT-14).
+            ReleaseOverlayWatches();
             var closing = _overlay;
             _overlay = null;
             closing?.Close();
@@ -123,10 +124,31 @@ public partial class MainWindow
         UpdateOverlayVisibility();
     }
 
+    // As vigilâncias de Visibility e Opacity de cada elemento da camada: uma só por elemento, libertadas quando ele sai
+    // ou a janela fecha.
+    private readonly Dictionary<UIElement, PropertyWatch[]> _overlayWatches = [];
+
     private void WatchOverlayChild(UIElement child)
     {
-        foreach (var property in new[] { VisibilityProperty, OpacityProperty })
-            DependencyPropertyDescriptor.FromProperty(property, child.GetType()).AddValueChanged(child, (_, _) => UpdateOverlayVisibility());
+        if (_overlayWatches.ContainsKey(child)) return;
+        _overlayWatches[child] =
+        [
+            PropertyWatch.Start(child, VisibilityProperty, UpdateOverlayVisibility),
+            PropertyWatch.Start(child, OpacityProperty, UpdateOverlayVisibility),
+        ];
+    }
+
+    private void ReleaseOverlayWatches(UIElement element)
+    {
+        if (!_overlayWatches.Remove(element, out var watches)) return;
+        foreach (var watch in watches) watch.Dispose();
+    }
+
+    private void ReleaseOverlayWatches()
+    {
+        foreach (var watches in _overlayWatches.Values)
+            foreach (var watch in watches) watch.Dispose();
+        _overlayWatches.Clear();
     }
 
     // Camadas criadas em código depois do arranque (ex.: a folha de atalhos).
@@ -142,6 +164,7 @@ public partial class MainWindow
     private void RemoveFromOverlay(UIElement element)
     {
         OverlayRoot.Children.Remove(element);
+        ReleaseOverlayWatches(element);
         UpdateOverlayVisibility();
     }
 
