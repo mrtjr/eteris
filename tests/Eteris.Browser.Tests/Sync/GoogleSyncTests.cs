@@ -34,6 +34,16 @@ public class GoogleSyncTests
         return (new GoogleDriveTransport(http, session.AccessTokenAsync, NoWait), http);
     }
 
+    // Auditoria, SYN-04: um pedido à Google que esgota o prazo de 60 s (uma TaskCanceledException com TimeoutException por
+    // dentro e a ficha de «Cancelar» por cancelar) não é «Cancelar»: a barra diz «Sem ligação à Google».
+    [Fact]
+    public void SignIn_AnHttpTimeout_IsNotACancel()
+    {
+        var sync = File.ReadAllText(Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync", "GoogleSync.cs")).Replace("\r\n", "\n");
+        Assert.Contains("catch (OperationCanceledException e) when (cancel.IsCancellationRequested)", sync, StringComparison.Ordinal);
+        Assert.Contains("or System.Net.Sockets.SocketException or OperationCanceledException)", sync, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(false)]   // a resposta diz o tamanho: recusa pelos cabeçalhos
     [InlineData(true)]    // sem Content-Length: corta a leitura no limite

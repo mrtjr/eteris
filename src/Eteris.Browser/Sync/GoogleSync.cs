@@ -183,15 +183,17 @@ internal static class GoogleSync
                 lock (Gate) _error = e.Message;
                 Tracker.Failed(e);
             }
-            catch (OperationCanceledException e)
+            catch (OperationCanceledException e) when (cancel.IsCancellationRequested)
             {
                 lock (Gate) _error = null;
                 Tracker.Failed(e);
             }
-            catch (Exception e) when (e is HttpRequestException or IOException or System.Net.Sockets.SocketException)
+            catch (Exception e) when (e is HttpRequestException or IOException or System.Net.Sockets.SocketException or OperationCanceledException)
             {
+                // Um cancelamento que não foi «Cancelar» é o prazo de um pedido (60 s): a barra diz o mesmo que a mensagem, mesmo
+                // quando o prazo chega sem a TimeoutException por dentro.
                 lock (Gate) _error = "Sem ligação à Google. Tente de novo.";
-                Tracker.Failed(e);
+                Tracker.Failed(e is OperationCanceledException ? new HttpRequestException("Prazo esgotado.", e) : e);
             }
             catch (Exception e)
             {
