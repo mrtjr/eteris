@@ -1137,6 +1137,9 @@ public sealed class SyncAgent
         await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         SetRunning(true);
         SavedSync? saved = null;
+        // A memória já foi mexida para religar (o identificador estava certo). Antes disso a pausa está intacta — ou
+        // deu lugar a outra paragem («Não tenho o identificador», «Sair») — e uma falha não tem nada a repor.
+        var armed = false;
         try
         {
             SyncState old;
@@ -1184,27 +1187,45 @@ public sealed class SyncAgent
                 _notice = null;
                 _error = null;
                 _rekeyWrong = 0;
+                armed = true;
             }
             await AdoptRekeyAsync(saved, old, rekey, consumed, cancellationToken).ConfigureAwait(false);
         }
         catch (ChainGoneException)
         {
+            // A conta nova, já guardada, desapareceu durante a ronda.
             Stop(saved!, GoneText, StopKeeps.Secret);
             throw new SyncUserException(GoneText);
         }
         catch (Exception e) when (IsTransient(e))
         {
-            // A conta nova ainda não ficou guardada: a pausa volta a ficar como estava. Já guardada: é uma ronda que
-            // falhou, e a seguinte repete.
-            if (_engine is null) Stop(saved!, RekeyHeldText, StopKeeps.Everything);
-            else Fail(e);
+            // Antes de religar: a pausa (ou a paragem que a substituiu) fica como está. Depois, com a conta nova ainda
+            // por guardar: a pausa volta a ficar como estava. Já guardada: é uma ronda que falhou, e a seguinte repete.
+            if (armed && !HoldAgain(saved!)) Fail(e);
             throw new SyncUserException(Message(e));
+        }
+        catch (Exception) when (armed && HoldAgain(saved!))
+        {
+            // Uma falha que não é passageira (um cancelamento, um registo de chaves que não abre) depois de religar e
+            // antes de a conta nova ficar guardada: a pausa volta, em vez de a memória ficar «a ligar» sem conta.
+            throw;
         }
         finally
         {
             EndRun();
         }
         Notify();
+    }
+
+    // A confirmação religou a memória e falhou antes de a conta nova ficar guardada: repõe a pausa da troca de chave e
+    // devolve true. Devolve false sem mexer em nada quando a conta nova já ficou guardada (há motor) ou quando o estado
+    // já não é o desta confirmação («Sair» ou um «apagar» entretanto: o que eles deixaram fica).
+    private bool HoldAgain(SavedSync saved)
+    {
+        lock (_gate)
+            if (_engine is not null || !IsCurrent(saved)) return false;
+        Stop(saved, RekeyHeldText, StopKeeps.Everything);
+        return true;
     }
 
     // Desiste da pausa da troca de chave: passa a valer o alerta «conta substituída» (Status.ChainReplaced) e este

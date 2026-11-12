@@ -559,8 +559,113 @@ public sealed class SyncAgentTests : IDisposable
         Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
         // A conta que o segundo salto encontra é a do removido, não a do identificador.
         await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+        Assert.True(trabalho.Agent.Status.RekeyPending);          // um identificador errado não tira a pausa
         Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
         Assert.Empty(_cloud.Paths(SyncPaths.Batches(hijack.ChainId) + idB + "/"));
+    }
+
+    // Um transporte que deixa o teste meter-se antes de cada listagem e de cada leitura (lançar, ou agir a meio).
+    private sealed class HookedTransport(ISyncTransport inner) : ISyncTransport
+    {
+        public Action<string>? OnList { get; set; }
+        public Action<string>? OnRead { get; set; }
+
+        public string Name => inner.Name;
+
+        public Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+        {
+            OnList?.Invoke(prefix);
+            return inner.ListAsync(prefix, cancellationToken);
+        }
+
+        public Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
+        {
+            OnRead?.Invoke(path);
+            return inner.ReadAsync(path, cancellationToken);
+        }
+
+        public Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default) => inner.WriteAsync(path, data, cancellationToken);
+
+        public Task DeleteAsync(string path, CancellationToken cancellationToken = default) => inner.DeleteAsync(path, cancellationToken);
+    }
+
+    // O «trabalho» em pausa depois de a «casa» remover o «portátil», reaberto com um transporte em que o teste se mete.
+    private async Task<(Device Casa, Device Trabalho, HookedTransport Hooked)> HeldWithHooksAsync()
+    {
+        var (casa, trabalho, _) = await ThreeAsync();
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        var hooked = new HookedTransport(_cloud);
+        var reopened = NewDevice("Trabalho", () => hooked, trabalho.Store, trabalho.Profile);
+        Assert.True(reopened.Agent.Status.RekeyPending);
+        return (casa, reopened, hooked);
+    }
+
+    // Revisão (I1): «Não tenho o identificador» enquanto a confirmação lia o transporte, e a leitura falha a seguir. A
+    // falha não repõe a pausa por cima da desistência: fica o alerta «conta substituída», não um «escreva o
+    // identificador» sem caixa.
+    [Fact]
+    public async Task Rekey_AbandonedWhileConfirming_AFailedReadDoesNotBringThePauseBack()
+    {
+        var (casa, trabalho, hooked) = await HeldWithHooksAsync();
+        hooked.OnList = prefix =>
+        {
+            if (!prefix.Contains("/r/", StringComparison.Ordinal)) return;
+            trabalho.Agent.AbandonRekey();
+            throw new IOException("pasta inacessível");
+        };
+        await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+
+        var status = trabalho.Agent.Status;
+        Assert.Equal(SyncPhase.Stopped, status.Phase);
+        Assert.False(status.RekeyPending);
+        Assert.True(status.ChainReplaced);
+        Assert.NotEqual(SyncAgent.RekeyHeldText, status.Notice);
+        Assert.NotEqual(SyncAgent.RekeyHeldText, trabalho.Store.Load()!.Stopped);
+    }
+
+    // Uma leitura que falha antes de o identificador ser conferido deixa a pausa como estava (nada a repor).
+    [Fact]
+    public async Task Rekey_AFailedReadWhileConfirming_KeepsThePause()
+    {
+        var (casa, trabalho, hooked) = await HeldWithHooksAsync();
+        var saves = trabalho.Store.Saves;
+        hooked.OnList = prefix =>
+        {
+            if (prefix.Contains("/r/", StringComparison.Ordinal)) throw new IOException("pasta inacessível");
+        };
+        await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        Assert.Equal(saves, trabalho.Store.Saves);
+        hooked.OnList = null;
+        await trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+    }
+
+    // Revisão (M2): com o identificador certo, a entrada na conta nova é cancelada (não é uma falha passageira). A
+    // pausa volta a ficar como estava, em vez de a memória ficar «a ligar» sem conta nenhuma.
+    [Fact]
+    public async Task Rekey_CancelledAfterTheRightIdentifier_GoesBackToThePause()
+    {
+        var (casa, trabalho, hooked) = await HeldWithHooksAsync();
+        var keys = SyncPaths.Keys(casa.Store.Load()!.Engine!.ChainId);
+        var reads = 0;
+        hooked.OnRead = path =>
+        {
+            // A primeira leitura do registo de chaves da conta nova é a de quem procura a mensagem; a segunda, a de quem entra.
+            if (path == keys && ++reads > 1) throw new OperationCanceledException(new CancellationToken(canceled: true));
+        };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        Assert.NotEqual(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+        hooked.OnRead = null;
+        await trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
     }
 
     [Fact]
