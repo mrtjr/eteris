@@ -386,8 +386,9 @@ public class CofreClassifierTests
         Assert.Equal("0101000", output);
     }
 
-    // O que a página consegue fingir com eventos sintéticos não conta: o envio, o rolar e o escrever só valem com
-    // isTrusted (o Enter, o clique no botão e o clique num campo já o pediam).
+    // O que a página consegue fingir com eventos sintéticos não conta: o envio, o rolar, o escrever, o menu de contexto
+    // e o Tab só valem com isTrusted. Cada tratador tem de começar por sair quando o evento não é confiável — não basta
+    // a palavra isTrusted algures no corpo (com a verificação invertida, «if (e.isTrusted) return;», passava).
     [Theory]
     [InlineData("onSubmit")]
     [InlineData("onInput")]
@@ -395,14 +396,42 @@ public class CofreClassifierTests
     [InlineData("onEnter")]
     [InlineData("onButton")]
     [InlineData("onPointerDown")]
+    [InlineData("onContext")]
+    [InlineData("onKeyGesture")]
     public void Handlers_IgnoreSyntheticEvents(string handler)
     {
-        var source = VaultScripts.Source;
+        var source = VaultScripts.Source.Replace("\r\n", "\n", StringComparison.Ordinal);
         var start = source.IndexOf("const " + handler + " = ", StringComparison.Ordinal);
         if (start < 0) start = source.IndexOf("function " + handler + "(", StringComparison.Ordinal);
         Assert.True(start >= 0, handler);
-        var end = source.IndexOf("\n  }", start, StringComparison.Ordinal);
-        Assert.Contains("isTrusted", source[start..end]);
+        var lineEnd = source.IndexOf('\n', start);
+        var nextEnd = source.IndexOf('\n', lineEnd + 1);
+        var first = source[(lineEnd + 1)..nextEnd].Trim();
+        Assert.True(ReturnsFirstOnSynthetic(first), handler + ": " + first);
+    }
+
+    // A guarda tem de recusar a verificação invertida e a enfraquecida por um «e».
+    [Theory]
+    [InlineData("if (!e.isTrusted) return;", true)]
+    [InlineData("if (filling || !e.isTrusted) return;", true)]
+    [InlineData("if (e.key !== 'Enter' || !e.isTrusted) return;", true)]
+    [InlineData("if (!e || !e.isTrusted || !focused || scrollQueued) return;", true)]
+    [InlineData("if (e.isTrusted) return;", false)]
+    [InlineData("if (!e.isTrusted && filling) return;", false)]
+    [InlineData("const field = deepTarget(e);", false)]
+    public void Guard_RejectsInvertedOrWeakenedChecks(string statement, bool expected)
+        => Assert.Equal(expected, ReturnsFirstOnSynthetic(statement));
+
+    // Verdadeiro só se a instrução for «if (…) return;», sem «&&», com «!e.isTrusted» como um dos operandos do «ou».
+    // Limite: é uma guarda de texto; a execução dos ouvintes no motor real fica para a 2.ª fatia dos testes ao vivo
+    // (TCO-01).
+    internal static bool ReturnsFirstOnSynthetic(string firstStatement)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(firstStatement, @"^if \((.+)\) return;$");
+        if (!match.Success) return false;
+        var condition = match.Groups[1].Value;
+        if (condition.Contains("&&", StringComparison.Ordinal)) return false;
+        return condition.Split(" || ").Any(operand => operand == "!e.isTrusted");
     }
 
     // O MutationObserver só reage a nós com campos e espera 250 ms sem mudanças.
