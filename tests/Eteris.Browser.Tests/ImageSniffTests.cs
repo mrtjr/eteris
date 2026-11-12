@@ -54,6 +54,39 @@ public class ImageSniffTests
     }
 
     [Fact]
+    public void TruncatedAndLyingHeaders_NeverThrow()
+    {
+        byte[][] samples = [Png(32, 32), Gif(32, 32), Jpeg(32, 32), Ico(32, Png(32, 32)), Ico(32, Dib(32, 32))];
+        foreach (var sample in samples)
+            for (var length = 0; length <= sample.Length; length++)
+            {
+                var prefix = sample.AsSpan(0, length).ToArray();
+                var ex = Record.Exception(() =>
+                {
+                    ImageSniff.Kind(prefix);
+                    ImageSniff.Size(prefix);
+                    ImageSniff.Accepts(prefix, ImageSniff.MaxPreviewSide);
+                });
+                Assert.Null(ex);
+            }
+
+        // Deslocamento perto de uint.MaxValue (a soma com o tamanho não pode dar a volta).
+        byte[] farOffset = [0, 0, 1, 0, 1, 0, 32, 32, 0, 0, 1, 0, 32, 0, 0x10, 0, 0, 0, 0xF8, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4];
+        Assert.False(ImageSniff.Accepts(farOffset, ImageSniff.MaxIconSide));
+        byte[] hugeSizeAndOffset = [0, 0, 1, 0, 1, 0, 32, 32, 0, 0, 1, 0, 32, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1];
+        Assert.False(ImageSniff.Accepts(hugeSizeAndOffset, ImageSniff.MaxIconSide));
+        // 64 entradas declaradas, bytes só para uma.
+        byte[] manyEntries = [0, 0, 1, 0, 64, 0, 16, 16, 0, 0, 1, 0, 32, 0, 0, 0, 0, 0, 22, 0, 0, 0];
+        Assert.False(ImageSniff.Accepts(manyEntries, ImageSniff.MaxIconSide));
+        // JPEG cujo segmento diz ter mais bytes do que há, ou menos do que os dois do próprio comprimento.
+        Assert.False(ImageSniff.Accepts([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xFF, 0, 0, 0xFF, 0xC0, 0, 11, 8, 0, 32, 0, 32], ImageSniff.MaxPreviewSide));
+        Assert.False(ImageSniff.Accepts([0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0xFF, 0xC0, 0, 11, 8, 0, 32, 0, 32], ImageSniff.MaxPreviewSide));
+        Assert.False(ImageSniff.Accepts([0xFF, 0xD8, 0xFF, 0xE0, 0, 1, 0xFF, 0xC0, 0, 11, 8, 0, 32, 0, 32], ImageSniff.MaxPreviewSide));
+        // Quadro que diz ter 11 bytes mas os bytes acabam antes das dimensões.
+        Assert.False(ImageSniff.Accepts([0xFF, 0xD8, 0xFF, 0xC0, 0, 11, 8, 0, 32], ImageSniff.MaxPreviewSide));
+    }
+
+    [Fact]
     public void SiteImages_AreSniffedBeforeTheDecoder()
     {
         foreach (var file in new[] { "MainWindow.Favicons.cs", "MainWindow.Glance.cs" })

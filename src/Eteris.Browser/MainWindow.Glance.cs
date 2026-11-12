@@ -304,6 +304,8 @@ public partial class MainWindow
         try
         {
             if (bytes is null || bytes.Length == 0) return;
+            // Cartão já fechado, ou outro aberto entretanto: nem se gasta a descodificação (o estado só se lê na thread da janela).
+            if (!await Dispatcher.InvokeAsync(() => serial == _glanceSerial && GlanceOpen)) return;
             var image = await Task.Run(() => DecodeGlanceImage(bytes));
             if (image is null) return;
             await Dispatcher.InvokeAsync(() => ShowGlanceImage(image, serial));
