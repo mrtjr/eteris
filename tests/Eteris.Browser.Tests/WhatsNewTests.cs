@@ -28,16 +28,52 @@ public class WhatsNewTests
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
 
-    // 0.2.15 («Um login e pronto», T15): quatro destaques à frente, curtos — entrar com um clique, o computador novo
-    // aprovado com um número, o kit de 24 palavras e «Sair deste computador».
+    // 0.2.16: três destaques à frente, curtos, que só prometem o que o CHANGELOG da 0.2.16 diz — todas as janelas voltam
+    // (só as normais), as abas com trabalho em curso não adormecem (também pelo comando da paleta) e «Apagar dados» apaga
+    // o armazenamento dos sites e diz o que falhou. O 4.º: as atualizações conferidas (lista assinada pelo autor, chave
+    // fora do GitHub, cada pacote conferido depois de descarregado), a valer a partir desta versão — a 0.2.15 que a
+    // descarrega ainda não confere.
+    [Fact]
+    public void Highlights_LeadWithWindowsSleepClearDataAndSignedUpdatesIn0216()
+    {
+        string[] titles = ["Todas as janelas voltam", "Abas que não perdem trabalho", "Limpar dados apaga mesmo", "Atualizações conferidas"];
+        var news = WhatsNewPage.Highlights.Take(titles.Length).ToList();
+        Assert.Equal(titles, news.Select(h => h.Title));
+        Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.Contains("janelas normais", news[0].Detail);
+        Assert.Contains("encerrar o Windows", news[0].Detail);
+        Assert.Contains("Picture-in-Picture", news[1].Detail);
+        Assert.Contains("texto por enviar", news[1].Detail);
+        Assert.Contains("«Adormecer abas em segundo plano»", news[1].Detail);
+        Assert.Contains("«Cookies e dados de sites»", news[2].Detail);
+        Assert.Contains("o que não saiu", news[2].Detail);
+        Assert.StartsWith("A partir desta versão", news[3].Detail, StringComparison.Ordinal);
+        Assert.Contains("assinada pelo autor", news[3].Detail);
+        Assert.Contains("fora do GitHub", news[3].Detail);
+        Assert.Contains("cada pacote", news[3].Detail);
+        Assert.All(news.Take(3), h =>
+        {
+            foreach (var s in new[] { "atualizaç", "assinad" })
+                Assert.DoesNotContain(s, h.Title + " " + h.Detail, StringComparison.OrdinalIgnoreCase);
+        });
+        Assert.All(news, h =>
+        {
+            foreach (var s in new[] { "sandbox", "isolad", "sempre", "Edge" })
+                Assert.DoesNotContain(s, h.Title + " " + h.Detail, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    // 0.2.15 («Um login e pronto», T15): quatro destaques a seguir aos da 0.2.16, curtos — entrar com um clique, o
+    // computador novo aprovado com um número, o kit de 24 palavras e «Sair deste computador».
     [Fact]
     public void Highlights_LeadWithOneSignInIn0215()
     {
         string[] titles = ["Um login e pronto", "Computador novo, aprovado com um número", "Kit de recuperação em 24 palavras", "Sair só deste computador"];
-        Assert.Equal(titles, WhatsNewPage.Highlights.Take(titles.Length).Select(h => h.Title));
-        Assert.All(WhatsNewPage.Highlights.Take(titles.Length), h => Assert.True(h.Detail.Length <= 180, h.Title));
-        Assert.Contains("Entre com o Google", WhatsNewPage.Highlights[0].Detail);
-        Assert.Contains("cifrada", WhatsNewPage.Highlights[0].Detail);
+        var news = WhatsNewPage.Highlights.Skip(4).Take(titles.Length).ToList();
+        Assert.Equal(titles, news.Select(h => h.Title));
+        Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.Contains("Entre com o Google", news[0].Detail);
+        Assert.Contains("cifrada", news[0].Detail);
     }
 
     // Os destaques da 0.2.15 só prometem o que o código faz: o kit tem RecoveryCode.WordCount palavras e volta a ver-se
@@ -46,7 +82,7 @@ public class WhatsNewTests
     [Fact]
     public void Highlights_0215_PromiseOnlyWhatShips()
     {
-        var news = WhatsNewPage.Highlights.Take(4).ToList();
+        var news = WhatsNewPage.Highlights.Skip(4).Take(4).ToList();
         var kit = Assert.Single(news, h => h.Title.StartsWith("Kit de recuperação", StringComparison.Ordinal));
         Assert.Contains("Windows Hello", kit.Detail);
         Assert.Equal(24, Eteris.Sync.Crypto.RecoveryCode.WordCount);
@@ -71,11 +107,12 @@ public class WhatsNewTests
     // versões são curtos.
     // 0.2.15 («Um login e pronto»): os 4 destaques novos vêm à frente e os da 0.2.14 começam a seguir (os índices
     // contam-se a partir do destaque do sandbox, para uma versão nova não obrigar a renumerar).
+    // 0.2.16: os 4 destaques novos vêm à frente dos 4 da 0.2.15, e o do sandbox passa ao índice 8.
     [Fact]
     public void Highlights_LeadWithOneSignInThenTheSandboxAndPerformanceThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
     {
         var at = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
-        Assert.Equal(4, at);
+        Assert.Equal(8, at);
         var rest = WhatsNewPage.Highlights.Skip(at).ToList();
         Assert.Equal(WhatsNewPage.SandboxTitle, rest[0].Title);
         Assert.Equal(WhatsNewPage.LighterTitle, rest[1].Title);

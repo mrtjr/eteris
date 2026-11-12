@@ -1,6 +1,12 @@
 # Alterações
 
-## 0.2.16 — por publicar
+## 0.2.16 — 2026-11-12
+
+A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as
+janelas voltam depois de atualizar, de encerrar o Windows ou de uma queda, e as abas já não adormecem com uma chamada,
+uma gravação, Picture-in-Picture ou texto por enviar. «Apagar dados de navegação» e esquecer uma permissão apagam o que
+prometem, e a sincronização e o cofre aguentam melhor um aparelho removido e uma base de dados que desapareceu. A
+partir desta versão, as atualizações são conferidas com uma lista assinada pelo autor antes de se instalarem.
 
 ### Segurança
 
