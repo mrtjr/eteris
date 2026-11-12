@@ -145,6 +145,11 @@ repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-pas
   Documentos na sincronização (ou a escolha da conta) e ver o kit de recuperação — sempre, nunca com a janela de
   graça**; aprovar um computador novo e gerar um kit novo — só com segredos em jogo, também nunca com a janela de graça
   (0.2.15; ver «Reautenticação» no fim).
+- **Limite assumido:** os interruptores `pwAskHello` e `payAskHello` vivem em claro no `settings.json` do perfil, e a
+  reautenticação ao desligá-los é uma porta da interface (`Vault/WindowsReauth.cs:10`), não uma cifra: um programa do
+  mesmo utilizador altera o ficheiro sem passar por ela. Só valem «true» e «false» exatos (`UserSettings.TryParseSwitch`):
+  «False», «FALSE» e « false » são recusados nas rotas `/set` e na importação de perfil, em vez de desligarem o interruptor
+  sem pedir o Windows.
 - **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; a versão
   instalada ignora-a, como as outras `ETERIS_TEST_*` (`TestSwitches.ReauthFor`).
 

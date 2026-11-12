@@ -251,6 +251,16 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.True(SettingsPage.CanSetFromPage("pwAskHello", "true"));
     }
 
+    // Auditoria (VAU-07): outra grafia de «false» não é «false»: a definição fica ligada, com ou sem o Windows Hello.
+    [Theory] [InlineData("False")] [InlineData("FALSE")] [InlineData("false%20")]
+    public async Task PasswordHelloSwitch_TurningOff_IsRefusedWhateverTheSpelling(string v)
+    {
+        _f.Host.Current = _f.Host.Current with { PasswordAskHello = true };
+        _f.Reauth.Outcome = ReauthOutcome.Canceled;
+        Assert.Equal("recusado", (await _f.Get("passwords", "/set", "k=pwAskHello&v=" + v)).Body);
+        Assert.True(_f.Host.Current.PasswordAskHello);
+    }
+
     // A aba saiu da frente enquanto o Windows perguntava: o pedido é cancelado e nada se mostra.
     [Fact]
     public async Task Reveal_CanceledWhenTabLeavesTheFront()

@@ -295,6 +295,20 @@ public class SyncIntegrationTests
             ProfileTransfer.Summary(held));
     }
 
+    // Auditoria (INT-04): a importação julga o valor já convertido pelo With, não o texto do ficheiro.
+    [Fact]
+    public void ProfileImport_WeakerSettings_AreJudgedByTheConvertedValue()
+    {
+        var current = new UserSettings() with { HttpsFirst = true, SearchSuggestions = false };
+        Assert.Null(current.With("httpsFirst", "False"));
+        Assert.Null(current.With("suggest", "True"));
+        Assert.NotNull(ProfileTransfer.WeakensSetting(current, "httpsFirst", "false"));
+        Assert.NotNull(ProfileTransfer.WeakensSetting(current, "suggest", "true"));
+        var source = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "ProfileTransfer.cs"));
+        Assert.Contains("current.With(key, value)", source);
+        Assert.DoesNotContain("value == \"false\" && now == \"true\"", source);
+    }
+
     [Fact]
     public void ProfileImport_WhatLowersProtection_WaitsForConfirmation()
     {

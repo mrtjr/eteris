@@ -93,61 +93,69 @@ public sealed record UserSettings
 
     // Desligar «Pedir o Windows Hello ao preencher pagamentos» ou «… palavras-passe» também pede o Windows Hello
     // (ReauthPurpose.ChangePaymentSetting / ChangePasswordSetting): só se mudam nas páginas do cofre.
-    public static bool NeedsReauth(string key, string value) => key is "payAskHello" or "pwAskHello" && value == "false";
+    public static bool NeedsReauth(string key, string value) => key is "payAskHello" or "pwAskHello" && TryParseSwitch(value, out var on) && !on;
     // (A opção experimental «SyncPreview» da 0.2.10–0.2.12 saiu: a secção Sincronização e a conta aparecem sempre que
     // há o identificador da aplicação Google. Um settings.json antigo com ela continua a abrir; o valor é ignorado e a
     // sessão Google e o resto ficam como estavam.)
+
+    // Um interruptor só muda com «true» ou «false» exatos (minúsculas, sem espaços): a conversão do .NET aceitava «False»,
+    // «FALSE» e « false », e o que a página escreve chega aqui como texto.
+    public static bool TryParseSwitch(string value, out bool on)
+    {
+        on = string.Equals(value, "true", StringComparison.Ordinal);
+        return on || string.Equals(value, "false", StringComparison.Ordinal);
+    }
 
     public UserSettings? With(string key, string value) => key switch
     {
         "engine" when Engines.Contains(value) => this with { SearchEngine = value },
         "startup" when value is "restore" or "newtab" => this with { Startup = value },
         "sleep" when int.TryParse(value, out var minutes) && minutes >= 0 && minutes <= 24 * 60 => this with { SleepMinutes = minutes },
-        "sleepPressure" when bool.TryParse(value, out var on) => this with { SleepOnLowMemory = on },
+        "sleepPressure" when TryParseSwitch(value, out var on) => this with { SleepOnLowMemory = on },
         "archive" when int.TryParse(value, out var days) && days >= 0 && days <= 365 => this with { ArchiveDays = days, ArchiveConfirmed = true },
 
-        "httpsFirst" when bool.TryParse(value, out var on) => this with { HttpsFirst = on },
-        "cookies" when bool.TryParse(value, out var on) => this with { BlockThirdPartyCookies = on },
-        "mica" when bool.TryParse(value, out var on) => this with { Mica = on },
+        "httpsFirst" when TryParseSwitch(value, out var on) => this with { HttpsFirst = on },
+        "cookies" when TryParseSwitch(value, out var on) => this with { BlockThirdPartyCookies = on },
+        "mica" when TryParseSwitch(value, out var on) => this with { Mica = on },
         "ntTheme" when NewTabThemes.Contains(value) => this with { NewTabTheme = value },
         "ntWallpaper" when value is "coast" or "mountains" or "none" => this with { NewTabWallpaper = value },
         "ntWallpaperMotion" when value is "photo" or "live" or "live-always" => this with { NewTabWallpaperMotion = value },
-        "ntClock" when bool.TryParse(value, out var on) => this with { NewTabClock = on },
-        "ntTiles" when bool.TryParse(value, out var on) => this with { NewTabTiles = on },
-        "ntWeek" when bool.TryParse(value, out var on) => this with { NewTabWeek = on },
-        "ntTips" when bool.TryParse(value, out var on) => this with { NewTabTips = on },
-        "notifications" when bool.TryParse(value, out var on) => this with { BlockNotificationPrompts = on },
-        "cleanUrls" when bool.TryParse(value, out var on) => this with { CleanUrls = on },
-        "debounce" when bool.TryParse(value, out var on) => this with { SkipTrackingRedirects = on },
-        "bounceForget" when bool.TryParse(value, out var on) => this with { ForgetBounceTrackers = on },
-        "cname" when bool.TryParse(value, out var on) => this with { UncloakCname = on },
-        "hideFromCapture" when bool.TryParse(value, out var on) => this with { HideFromCapture = on },
+        "ntClock" when TryParseSwitch(value, out var on) => this with { NewTabClock = on },
+        "ntTiles" when TryParseSwitch(value, out var on) => this with { NewTabTiles = on },
+        "ntWeek" when TryParseSwitch(value, out var on) => this with { NewTabWeek = on },
+        "ntTips" when TryParseSwitch(value, out var on) => this with { NewTabTips = on },
+        "notifications" when TryParseSwitch(value, out var on) => this with { BlockNotificationPrompts = on },
+        "cleanUrls" when TryParseSwitch(value, out var on) => this with { CleanUrls = on },
+        "debounce" when TryParseSwitch(value, out var on) => this with { SkipTrackingRedirects = on },
+        "bounceForget" when TryParseSwitch(value, out var on) => this with { ForgetBounceTrackers = on },
+        "cname" when TryParseSwitch(value, out var on) => this with { UncloakCname = on },
+        "hideFromCapture" when TryParseSwitch(value, out var on) => this with { HideFromCapture = on },
         "siteLanguage" when Shields.RequestIdentity.LanguageChoices.Contains(value) => this with { SiteLanguage = value, SiteLanguageChosen = true },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },
-        "clearOnExit" when bool.TryParse(value, out var on) => this with { ClearOnExit = on },
+        "clearOnExit" when TryParseSwitch(value, out var on) => this with { ClearOnExit = on },
         "dns" when value == "off" || Shields.SecureDns.Providers.ContainsKey(value) => this with { SecureDns = value },
-        "suggest" when bool.TryParse(value, out var on) => this with { SearchSuggestions = on },
-        "autoplay" when bool.TryParse(value, out var on) => this with { BlockAutoplay = on },
-        "verticalTabs" when bool.TryParse(value, out var on) => this with { VerticalTabs = on },
+        "suggest" when TryParseSwitch(value, out var on) => this with { SearchSuggestions = on },
+        "autoplay" when TryParseSwitch(value, out var on) => this with { BlockAutoplay = on },
+        "verticalTabs" when TryParseSwitch(value, out var on) => this with { VerticalTabs = on },
         "density" when value is "normal" or "compact" => this with { Density = value },
         "accent" when global::Eteris.Browser.Theme.Accent.IsValidChoice(value) => this with { Accent = value },
-        "sidebarCollapsed" when bool.TryParse(value, out var on) => this with { SidebarCollapsed = on },
-        "sidebar" when bool.TryParse(value, out var on) => this with { Sidebar = on },
+        "sidebarCollapsed" when TryParseSwitch(value, out var on) => this with { SidebarCollapsed = on },
+        "sidebar" when TryParseSwitch(value, out var on) => this with { Sidebar = on },
         "sidebarPanel" when global::Eteris.Browser.Sidebar.SidebarPanels.IsKnownKey(value) => this with { SidebarPanel = value },
         "sidebarWidth" when int.TryParse(value, out var px) && px >= global::Eteris.Browser.Sidebar.SidebarPanels.MinWidth
                              && px <= global::Eteris.Browser.Sidebar.SidebarPanels.MaxWidth => this with { SidebarWidth = px },
         "sidebarSide" when value is "left" or "right" => this with { SidebarSide = value },
         "readerTheme" when value is "dark" or "sepia" or "light" => this with { ReaderTheme = value },
         "readerSize" when int.TryParse(value, out var px) && px >= 15 && px <= 28 => this with { ReaderSize = px },
-        "readerSerif" when bool.TryParse(value, out var on) => this with { ReaderSerif = on },
-        "pwOffer" when bool.TryParse(value, out var on) => this with { PasswordOffer = on },
-        "pwSuggest" when bool.TryParse(value, out var on) => this with { PasswordSuggestions = on },
-        "pwAskHello" when bool.TryParse(value, out var on) => this with { PasswordAskHello = on },
-        "payAskHello" when bool.TryParse(value, out var on) => this with { PaymentsAskHello = on },
-        "afPayments" when bool.TryParse(value, out var on) => this with { AutofillPayments = on },
-        "afContacts" when bool.TryParse(value, out var on) => this with { AutofillContacts = on },
-        "afDocuments" when bool.TryParse(value, out var on) => this with { AutofillDocuments = on },
-        "afTravel" when bool.TryParse(value, out var on) => this with { AutofillTravel = on },
+        "readerSerif" when TryParseSwitch(value, out var on) => this with { ReaderSerif = on },
+        "pwOffer" when TryParseSwitch(value, out var on) => this with { PasswordOffer = on },
+        "pwSuggest" when TryParseSwitch(value, out var on) => this with { PasswordSuggestions = on },
+        "pwAskHello" when TryParseSwitch(value, out var on) => this with { PasswordAskHello = on },
+        "payAskHello" when TryParseSwitch(value, out var on) => this with { PaymentsAskHello = on },
+        "afPayments" when TryParseSwitch(value, out var on) => this with { AutofillPayments = on },
+        "afContacts" when TryParseSwitch(value, out var on) => this with { AutofillContacts = on },
+        "afDocuments" when TryParseSwitch(value, out var on) => this with { AutofillDocuments = on },
+        "afTravel" when TryParseSwitch(value, out var on) => this with { AutofillTravel = on },
         _ => null,
     };
 }

@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.2.17 — por publicar
+
+### Segurança
+
+- Desligar “Pedir o Windows Hello” ou importar um perfil já não passa sem confirmação quando o valor vem escrito como “False”.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

@@ -183,6 +183,7 @@ public class VaultMenuTests
         Assert.False(UserSettings.NeedsReauth("pwAskHello", "true"));
         Assert.False(UserSettings.NeedsReauth("engine", "brave"));
         Assert.False(SettingsPage.CanSetFromPage("payAskHello", "false"));
+        Assert.Null(new UserSettings().With("payAskHello", "False"));
         Assert.True(SettingsPage.CanSetFromPage("payAskHello", "true"));
         Assert.True(SettingsPage.CanSetFromPage("pwOffer", "false"));
         // Nas Definições, desligar o das palavras-passe passa pela confirmação do Windows (e a página volta a ligar o

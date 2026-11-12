@@ -229,6 +229,15 @@ public sealed class AutofillPageTests : IDisposable
         Assert.Equal("recusado", (await _f.Get("autofill", "/set", "k=pwOffer&v=false")).Body);
     }
 
+    // Auditoria (VAU-07): outra grafia de «false» não desliga o «Pedir o Windows Hello» dos pagamentos.
+    [Theory] [InlineData("False")] [InlineData("FALSE")] [InlineData("false%20")]
+    public async Task PaymentsHelloSwitch_TurningOff_IsRefusedWhateverTheSpelling(string v)
+    {
+        _f.Reauth.Outcome = ReauthOutcome.Canceled;
+        Assert.Equal("recusado", (await _f.Get("autofill", "/set", "k=payAskHello&v=" + v)).Body);
+        Assert.True(_f.Host.Current.PaymentsAskHello);
+    }
+
     // Formulários de morada por país: Portugal (código postal, distrito, sem bairro) e Brasil (CEP, bairro, estado).
     [Fact]
     public void AddressForms_PortugalAndBrazil()

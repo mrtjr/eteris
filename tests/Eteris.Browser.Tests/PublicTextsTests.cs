@@ -56,12 +56,13 @@ public class PublicTextsTests
     }
 
     // R12: a 0.2.16 é a última versão publicada, com a data da publicação, logo seguida da 0.2.15; a história fica como
-    // estava.
+    // estava. À frente da 0.2.16 pode haver, só, a secção «## 0.2.17 — por publicar» (o trabalho em curso).
     [Fact]
     public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
+        if (headings[0] == "## 0.2.17 — por publicar") headings.RemoveAt(0);
         Assert.Equal("## 0.2.16 — 2026-11-12", headings[0]);
         Assert.Equal("## 0.2.15 — 2026-11-12", headings[1]);
         Assert.Equal("## 0.2.14 — 2026-11-09", headings[2]);
