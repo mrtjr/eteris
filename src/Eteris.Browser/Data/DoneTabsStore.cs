@@ -63,6 +63,7 @@ public sealed class DoneTabsStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        SqliteSetup.SecureDelete(connection);
         return connection;
     }
 }

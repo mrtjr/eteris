@@ -62,6 +62,7 @@ public sealed class ArchivedTabsStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        SqliteSetup.SecureDelete(connection);
         return connection;
     }
 }

@@ -409,7 +409,7 @@ public partial class MainWindow
 
     private void Forget(int minutes)
     {
-        AppData.TryWrite(h => h.DeleteSince(DateTime.UtcNow.AddMinutes(-minutes)));
+        AppData.ForgetSince(DateTime.UtcNow.AddMinutes(-minutes));
         ForgetBounceVisits(DateTime.UtcNow.AddMinutes(-minutes));
         Tabs.ForgetClosed();
         // A pilha de anulação também: a paleta mostrava «Anular: Feito «título»» e o Ctrl+Z repunha a aba esquecida.

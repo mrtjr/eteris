@@ -654,7 +654,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (request.History)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
-            AppData.TryWrite(h => h.DeleteSince(since));
+            AppData.ForgetSince(since);
             MainWindow.ForgetBounceVisits(since);
         }
         // As caches da GPU (shaders, programas WebGL) só se apagam com o motor fechado: ao sair (ajuste e3).
@@ -722,7 +722,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             case "/clear" when HistoryPage.IsAuthorized(url)
                                && HistoryPage.RangeStart(HistoryPage.Query(uri, "range") ?? "", DateTime.Now) is { } start:
                 var from = start == DateTime.MinValue ? start : start.ToUniversalTime();
-                AppData.TryWrite(h => h.DeleteSince(from));
+                AppData.ForgetSince(from);
                 MainWindow.ForgetBounceVisits(from);
                 break;
             case "/" or "/clear":

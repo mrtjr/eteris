@@ -95,7 +95,13 @@ public static class AppData
 
     public static void CloseHistory()
     {
-        if (LazyWriter.IsValueCreated) LazyWriter.Value.Dispose();
+        if (!LazyWriter.IsValueCreated) return;
+        LazyWriter.Value.Dispose();
+        // O escritor já esvaziou a fila e a tarefa dele parou: a compactação única (para o que versões anteriores
+        // apagaram sem secure_delete) corre agora, ao sair, e nunca no arranque. Se a base estiver ocupada, repete na
+        // saída seguinte.
+        try { History.CompactOnce(); }
+        catch (Exception) { }
     }
 
     private static readonly Lazy<HiddenElementsStore?> LazyHidden = StartupTrace.Lazy<HiddenElementsStore?>("LazyHidden", () =>
@@ -250,6 +256,14 @@ public static class AppData
         FlushHistory();
         try { write(History); }
         catch (Exception) { }
+    }
+
+    // «Esquecer» o histórico desde sinceUtc (DateTime.MinValue = desde sempre). Desde sempre, compacta-se o ficheiro
+    // depois (VACUUM), na fila do escritor: fora da thread da janela e da de rede.
+    public static void ForgetSince(DateTime sinceUtc)
+    {
+        TryWrite(h => h.DeleteSince(sinceUtc));
+        if (sinceUtc == DateTime.MinValue) QueueWrite(h => h.Compact());
     }
 
     public static IReadOnlyList<T> TryRead<T>(Func<HistoryStore, IReadOnlyList<T>> read)
