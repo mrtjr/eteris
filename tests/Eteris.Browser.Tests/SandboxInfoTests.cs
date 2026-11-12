@@ -72,7 +72,7 @@ public class SandboxInfoTests
         var update = references.Single(p => p.Attribute("Update") is not null);
         Assert.Equal("156.0.150-eteris.$(EterisCefSharpN)", update.Attribute("Version")!.Value);
         Assert.Equal("'$(EterisCefSharpFeed)' != ''", update.Parent!.Attribute("Condition")!.Value);
-        var define = project.Descendants("DefineConstants").Single();
+        var define = project.Descendants("DefineConstants").Single(d => d.Value.Contains("ETERIS_CEFSHARP_SANDBOX"));   // há outra, a do ETERIS_TEST_HOOKS
         Assert.Equal("'$(EterisCefSharpFeed)' != ''", define.Attribute("Condition")!.Value);
         Assert.Contains("ETERIS_CEFSHARP_SANDBOX", define.Value);
     }

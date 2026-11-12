@@ -28,7 +28,8 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
   dois perfis de teste na mesma pasta). Ignorada pela versão instalada. Ver `docs/sincronizacao.md`.
 - `ETERIS_TEST_REAUTH=aceitar|recusar`: a confirmação com o Windows do cofre de palavras-passe (Windows Hello ou
   palavra-passe do Windows) responde sozinha, sem janela, para as provas ao vivo não precisarem do PIN de ninguém.
-  Ignorada pela versão instalada. Ver `docs/palavras-passe.md`.
+  Ignorada pela versão instalada; só numa compilação com a via de teste (a publicação não a traz) e só num perfil de
+  teste (`--user-data-dir`). Ver `docs/palavras-passe.md`.
 
 ## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
 

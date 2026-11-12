@@ -146,8 +146,10 @@ repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-pas
   Documentos na sincronização (ou a escolha da conta) e ver o kit de recuperação — sempre, nunca com a janela de
   graça**; aprovar um computador novo e gerar um kit novo — só com segredos em jogo, também nunca com a janela de graça
   (0.2.15; ver «Reautenticação» no fim).
-- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; a versão
-  instalada ignora-a, como as outras `ETERIS_TEST_*` (`TestSwitches.ReauthFor`).
+- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; só numa
+  compilação com a via de teste (a publicação não a traz: `build/publish.ps1` desliga a constante `ETERIS_TEST_HOOKS` e
+  confere o binário) e só num perfil de teste (`--user-data-dir`); a versão instalada ignora-a, como as outras
+  `ETERIS_TEST_*` (`TestSwitches.ReauthFor`, `ReauthForProfile`).
 
 Testes: `Vault/WindowsReauthTests` (graça de 5 min por janela sem renovação; bloqueio, suspensão e fecho; «sempre»
 sem graça; recusa; cancelamento quando a aba sai da frente; conta sem proteção; pedidos simultâneos; política D-5;

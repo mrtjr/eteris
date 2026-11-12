@@ -44,4 +44,15 @@ public class StartupTraceTests
         Assert.Equal(1, lazy.Value);
         Assert.Equal(1, lazy.Value);
     }
+
+    // INF-11: instalado e com o perfil normal, a variável do rastro não vale (escrevia ficheiros no %TEMP% de quem a tivesse
+    // esquecida no ambiente); com um perfil de teste, ou fora de uma instalação, vale.
+    [Fact]
+    public void ResolveFor_IsNullWhenInstalledWithTheDefaultProfile()
+    {
+        Assert.Null(StartupTrace.ResolveFor("1", 42, installed: true, customProfile: false));
+        Assert.NotNull(StartupTrace.ResolveFor("1", 42, installed: true, customProfile: true));
+        Assert.NotNull(StartupTrace.ResolveFor("1", 42, installed: false, customProfile: false));
+        Assert.Null(StartupTrace.ResolveFor("0", 42, installed: false, customProfile: true));
+    }
 }

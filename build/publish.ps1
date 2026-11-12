@@ -103,7 +103,7 @@ if ($NoSandbox) {
   "Sandbox: CefSharp 156.0.150-eteris.$CefSharpN ($CefSharpFeed), DLL cliente $SandboxClientDll"
   $sandboxArgs = @("-p:EterisSandbox=true", "-p:EterisCefSharpFeed=$CefSharpFeed", "-p:EterisCefSharpN=$CefSharpN", "-p:EterisSandboxClientDll=$SandboxClientDll")
 }
-dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o $publishDir -p:Version=$Version @sandboxArgs
+dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o $publishDir -p:Version=$Version -p:EterisTestHooks=false @sandboxArgs
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish saiu com $LASTEXITCODE" }
 
 # A forma publicada tem de ser a pedida (docs/sandbox.md, opção B): com sandbox, Eteris.Browser.exe = bootstrap da CEF,
@@ -132,6 +132,15 @@ if ($NoSandbox) {
   if ((Sha256 (Join-Path $publishDir "Eteris.Browser.dll")) -ne $testsInfo.client_sha256) { throw "Sandbox: a DLL cliente publicada não é a testada" }
   "Publicado COM sandbox: $publishDir (bootstrap $($exe.ProductName) $($exe.ProductVersion), DLL cliente CEF $($client.ProductVersion))"
 }
+
+# A via de teste da confirmação do Windows (ETERIS_TEST_REAUTH) não vai no binário publicado (VAU-08): só existe numa
+# compilação com a constante ETERIS_TEST_HOOKS, que o dotnet publish de cima desliga. Confere-se o .NET publicado (o
+# Eteris.App.dll com sandbox, o Eteris.Browser.dll sem ele) à procura do nome da variável em UTF-16LE, onde o compilador
+# guarda os textos; procurado nos bytes, sem alinhamento (um texto pode começar num byte ímpar).
+$dotnetDll = Join-Path $publishDir $(if ($NoSandbox) { "Eteris.Browser.dll" } else { "Eteris.App.dll" })
+$latin1 = [Text.Encoding]::GetEncoding(28591)
+$hookName = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('ETERIS_TEST_REAUTH'))
+if ($latin1.GetString([IO.File]::ReadAllBytes($dotnetDll)).Contains($hookName)) { throw "O binário publicado traz a via de teste da reautenticação (ETERIS_TEST_REAUTH): o dotnet publish tem de levar -p:EterisTestHooks=false" }
 
 # Nenhum binário nosso publicado leva o caminho do perfil de quem compila (o nome do utilizador do Windows), nos dois
 # modos: Eteris.Browser.dll (o .NET sem sandbox, a DLL cliente nativa com ele), Eteris.App.dll, eteris_shields.dll, o

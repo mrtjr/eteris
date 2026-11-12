@@ -3,17 +3,33 @@ namespace Eteris.Browser.Infrastructure;
 // Interruptores SÓ para testes automáticos ao vivo (lidos do ambiente do processo que lança o Éteris).
 public static class TestSwitches
 {
+    // Todas as variáveis ETERIS_* do código têm aqui, ou no sítio que a lê, a regra de onde valem (TestSwitchesTests obriga
+    // cada nova a declará-la). As de teste só valem num perfil de teste (--user-data-dir): o perfil normal nunca as ouve
+    // (VAU-08, INF-11), por muito que uma esteja esquecida no ambiente de quem lança o Éteris.
+
     // ETERIS_TEST_MUTE=1: nenhum som sai dos dois motores durante as medições (mute-audio no Chromium, IsMuted no WebView2).
-    public static bool Mute => IsOn(Environment.GetEnvironmentVariable("ETERIS_TEST_MUTE"));
+    // Só com um perfil de teste.
+    public static bool Mute => MuteFor(Environment.GetEnvironmentVariable("ETERIS_TEST_MUTE"), AppPaths.IsCustomProfile);
+
+    public static bool MuteFor(string? value, bool customProfile) => customProfile && IsOn(value);
 
     // ETERIS_TEST_DEVTOOLS_PORT=<porta>: DevTools do motor em 127.0.0.1 para os testes ao vivo lerem chrome://sandbox
-    // e o estado das páginas por CDP (nunca ligado sem esta variável).
-    public static int? DevToolsPort => Port(Environment.GetEnvironmentVariable("ETERIS_TEST_DEVTOOLS_PORT"));
+    // e o estado das páginas por CDP (nunca ligado sem esta variável, nem com o perfil normal: uma porta de depuração sem
+    // autenticação abria o Éteris de quem a tivesse esquecida no ambiente).
+    public static int? DevToolsPort => DevToolsPortFor(Environment.GetEnvironmentVariable("ETERIS_TEST_DEVTOOLS_PORT"), AppPaths.IsCustomProfile);
+
+    public static int? DevToolsPortFor(string? value, bool customProfile) => customProfile ? Port(value) : null;
 
     // ETERIS_TEST_REAUTH=aceitar|recusar: a confirmação com o Windows (Windows Hello / palavra-passe do Windows) do cofre
     // responde sozinha, sem janela (Vault/WindowsReauth.cs), para as provas ao vivo não precisarem do PIN de ninguém.
-    // Como a pasta de teste da sincronização, a versão instalada ignora-a (há um Update.exe do Velopack na pasta de cima).
+    // Como a pasta de teste da sincronização, a versão instalada ignora-a (há um Update.exe do Velopack na pasta de cima) e
+    // só vale num perfil de teste (ReauthForProfile). E nem sequer existe na publicação: a constante ETERIS_TEST_HOOKS fica
+    // desligada em build/publish.ps1 (-p:EterisTestHooks=false), que confere o binário (VAU-08).
+#if ETERIS_TEST_HOOKS
     public static Vault.TestReauthMode? Reauth => ReauthFor(Environment.GetEnvironmentVariable("ETERIS_TEST_REAUTH"), IsInstalled);
+#else
+    public static Vault.TestReauthMode? Reauth => null;
+#endif
 
     public static Vault.TestReauthMode? ReauthFor(string? value, bool installed) => installed ? null : value?.Trim().ToLowerInvariant() switch
     {

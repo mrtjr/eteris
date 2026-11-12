@@ -17,6 +17,7 @@
 ### Privacidade
 
 - eteris://privacy/ passa a conferir o isolamento das páginas (com o motivo quando está desligado e a forma de o voltar a ligar), o motor completo do Escudo e o HTTPS primeiro.
+- As variáveis de teste da porta de depuração, do silêncio e do rastro do arranque deixam de valer no perfil normal, e a via de teste da confirmação do Windows deixa de ir no binário publicado.
 
 ### Correções
 
