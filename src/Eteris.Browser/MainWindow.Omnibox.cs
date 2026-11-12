@@ -55,9 +55,18 @@ public partial class MainWindow
         Omnibox.Foreground = showDisplay ? Brushes.Transparent : (Brush)FindResource("TextBrush");
         if (showDisplay)
         {
-            var display = UrlDisplay.Split(Omnibox.Text);
-            DisplayHost.Text = display.Host;
-            DisplayRest.Text = display.Rest;
+            // O domínio registável nunca sai da vista: se o nome não cabe, cortam-se os subdomínios pela esquerda; o caminho
+            // é cortado no fim pelo TextTrimming. Com a barra ainda sem largura (0) não se ajusta nada.
+            var parts = UrlDisplay.Parts(Omnibox.Text);
+            if (OmniboxDisplay.ActualWidth > 0)
+            {
+                // Reserva a reticência com que o TextTrimming fecha o caminho cortado, para ela não comer o fim do domínio.
+                var reserve = 1 + (parts.Rest.Length > 0 ? MeasureOmniboxText("…") : 0);
+                parts = UrlDisplay.Fit(parts, OmniboxDisplay.ActualWidth - reserve, MeasureOmniboxText);
+            }
+            DisplaySub.Text = parts.Subdomains;
+            DisplayHost.Text = parts.Domain;
+            DisplayRest.Text = parts.Rest;
         }
 
         // O cadeado só segue o endereço confirmado pelo motor: pedido por carregar, texto por enviar e página de erro não o têm.
@@ -77,6 +86,18 @@ public partial class MainWindow
             : active?.PendingAddress is not null || _omniboxEdited ? "Ainda não carregou — ver detalhes do site"
             : $"{site.Title} — ver detalhes do site";
         SiteInfoButton.IsHitTestVisible = !focused && !empty;
+    }
+
+    // A largura do texto na fonte e no tamanho da barra (o mesmo tipo de letra para subdomínios, domínio e caminho).
+    private double MeasureOmniboxText(string text)
+        => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection,
+                new Typeface(OmniboxDisplay.FontFamily, OmniboxDisplay.FontStyle, OmniboxDisplay.FontWeight, OmniboxDisplay.FontStretch),
+                OmniboxDisplay.FontSize, Brushes.Black, VisualTreeHelper.GetDpi(this).PixelsPerDip).WidthIncludingTrailingWhitespace;
+
+    // A janela mudou de largura: o que cabe na barra muda com ela.
+    private void OmniboxDisplay_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged) UpdateOmniboxChrome();
     }
 
     private void Go(string input, bool newTab = false)

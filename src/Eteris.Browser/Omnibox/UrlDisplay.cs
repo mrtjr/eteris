@@ -4,8 +4,52 @@ namespace Eteris.Browser.Omnibox;
 
 public readonly record struct DisplayUrl(string Host, string Rest);
 
+// O endereço em três partes para a barra: o que vem antes do domínio registável (esbatido), o domínio registável
+// (destacado, com a porta) e o resto (caminho, pesquisa, fragmento; esbatido).
+public readonly record struct DisplayParts(string Subdomains, string Domain, string Rest);
+
 public static class UrlDisplay
 {
+    private const string Ellipsis = "…";
+
+    // Num endereço http(s) separa o domínio registável (Public Suffix List) dos subdomínios: «accounts.google.com.» fica
+    // esbatido e «conta-verificar.example» destacado. IP, «localhost» e o próprio registável não têm subdomínios.
+    public static DisplayParts Parts(string url)
+    {
+        var display = Split(url);
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return new DisplayParts(string.Empty, display.Host, display.Rest);
+
+        var colon = display.Host.LastIndexOf(':');
+        var port = colon > display.Host.LastIndexOf(']') ? display.Host[colon..] : string.Empty;
+        var host = port.Length == 0 ? display.Host : display.Host[..colon];
+        var registrable = Shields.PublicSuffix.RegistrableDomain(host);
+        if (registrable.Length > 0 && host.EndsWith("." + registrable, StringComparison.OrdinalIgnoreCase))
+            return new DisplayParts(host[..(host.Length - registrable.Length)], host[^registrable.Length..] + port, display.Rest);
+        return new DisplayParts(string.Empty, display.Host, display.Rest);
+    }
+
+    // Cabe em «available» (na unidade de «measure») sem esconder o domínio: se subdomínios e domínio não cabem, tira
+    // etiquetas à esquerda dos subdomínios («…com.»); se nem o domínio cabe, corta-o pela esquerda (fica o fim, o
+    // sufixo) e o caminho sai. O caminho nunca entra na conta: quem o corta, no fim, é o TextTrimming da barra.
+    public static DisplayParts Fit(DisplayParts parts, double available, Func<string, double> measure)
+    {
+        if (measure(parts.Subdomains + parts.Domain) <= available) return parts;
+
+        var rest = parts.Subdomains;
+        while (rest.Length > 0)
+        {
+            var dot = rest.IndexOf('.');
+            rest = dot < 0 ? string.Empty : rest[(dot + 1)..];
+            if (measure(Ellipsis + rest + parts.Domain) <= available) return new DisplayParts(Ellipsis + rest, parts.Domain, parts.Rest);
+        }
+
+        var tail = parts.Domain;
+        while (tail.Length > 1 && measure(Ellipsis + tail) > available) tail = tail[1..];
+        return new DisplayParts(Ellipsis, tail, string.Empty);
+    }
+
     public static DisplayUrl Split(string url)
     {
         // Um data: ou javascript: é conteúdo, não endereço: mostra só o tipo, nunca o que lá vem (pode imitar um site).

@@ -1104,8 +1104,9 @@
                                          PreviewMouseLeftButtonDown="Omnibox_PreviewMouseLeftButtonDown"
                                          LostKeyboardFocus="Omnibox_LostKeyboardFocus" />
                                 <TextBlock x:Name="OmniboxDisplay" IsHitTestVisible="False" VerticalAlignment="Center"
-                                           FontSize="14" Margin="2,0,0,1" TextTrimming="CharacterEllipsis">
-                                    <Run x:Name="DisplayHost" Foreground="{DynamicResource TextBrush}" /><Run x:Name="DisplayRest" Foreground="{DynamicResource TextFaintBrush}" />
+                                           FontSize="14" Margin="2,0,0,1" TextTrimming="CharacterEllipsis"
+                                           SizeChanged="OmniboxDisplay_SizeChanged">
+                                    <Run x:Name="DisplaySub" Foreground="{DynamicResource TextFaintBrush}" /><Run x:Name="DisplayHost" Foreground="{DynamicResource TextBrush}" /><Run x:Name="DisplayRest" Foreground="{DynamicResource TextFaintBrush}" />
                                 </TextBlock>
                                 <TextBlock x:Name="OmniboxPlaceholder" IsHitTestVisible="False" VerticalAlignment="Center"
                                            FontSize="14" Margin="2,0,0,1" Foreground="{DynamicResource TextFaintBrush}"
