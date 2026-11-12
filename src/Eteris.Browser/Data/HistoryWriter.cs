@@ -79,7 +79,7 @@ public sealed class HistoryWriter : IDisposable
 
     public Task RunAside(Action<HistoryStore> work) => Task.Run(() => RunAsideNow(work));
 
-    // O mesmo, já, na thread que chama (a compactação única ao sair espera pela que esteja a correr).
+    // O mesmo, já, na thread que chama, à espera da que esteja a correr.
     public void RunAsideNow(Action<HistoryStore> work)
     {
         lock (_aside)
@@ -87,6 +87,20 @@ public sealed class HistoryWriter : IDisposable
             try { work(_store()); }
             catch (Exception) { }
         }
+    }
+
+    // O mesmo, mas espera no máximo timeout pela que esteja a correr; passado ele, desiste sem correr e devolve false
+    // (a compactação única ao sair não segura o fecho do Éteris atrás de um VACUUM grande de «Apagar tudo»).
+    public bool RunAsideNow(Action<HistoryStore> work, TimeSpan timeout)
+    {
+        if (!_aside.TryEnter(timeout)) return false;
+        try
+        {
+            try { work(_store()); }
+            catch (Exception) { }
+            return true;
+        }
+        finally { _aside.Exit(); }
     }
 
     // Espera (no máximo timeout) que tudo o que já foi pedido esteja escrito, incluindo os títulos à espera.

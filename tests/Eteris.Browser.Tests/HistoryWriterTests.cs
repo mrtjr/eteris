@@ -122,6 +122,34 @@ public sealed class HistoryWriterTests : IDisposable
         Assert.False(overlapped);
     }
 
+    // Ao sair, a compactação única não espera sem fim pela de um «Apagar tudo» que ainda esteja a correr: passado o
+    // limite desiste (não corre) e repete na saída seguinte.
+    [Fact]
+    public async Task AsideWorkWithLimit_GivesUp_WhileAnotherIsRunning()
+    {
+        using var writer = new HistoryWriter(() => _store, TimeSpan.FromSeconds(1));
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var aside = writer.RunAside(_ =>
+        {
+            started.Set();
+            release.Wait(TimeSpan.FromSeconds(10));
+        });
+        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        var ran = false;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var done = writer.RunAsideNow(_ => ran = true, TimeSpan.FromMilliseconds(100));
+        clock.Stop();
+        release.Set();
+        await aside.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(done);
+        Assert.False(ran);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), clock.Elapsed.ToString());
+        // Livre, corre.
+        Assert.True(writer.RunAsideNow(_ => ran = true, TimeSpan.FromMilliseconds(100)));
+        Assert.True(ran);
+    }
+
     [Fact]
     public void AFailingWrite_DoesNotStopTheQueue()
     {

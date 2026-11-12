@@ -130,8 +130,9 @@ public static class AppData
         LazyWriter.Value.Dispose();
         // O escritor já esvaziou a fila e a tarefa dele parou: a compactação única (para o que versões anteriores
         // apagaram sem secure_delete) corre agora, ao sair, e nunca no arranque. Se a base estiver ocupada, repete na
-        // saída seguinte. Espera pela compactação de um «Apagar tudo» que ainda esteja a correr (nunca correm as duas).
-        LazyWriter.Value.RunAsideNow(h => h.CompactOnce());
+        // saída seguinte. Espera no máximo 3 s pela compactação de um «Apagar tudo» que ainda esteja a correr (nunca
+        // correm as duas): passado esse tempo, a única fica para a saída seguinte e o fecho segue.
+        LazyWriter.Value.RunAsideNow(h => h.CompactOnce(), TimeSpan.FromSeconds(3));
     }
 
     private static readonly RetryLazy<HiddenElementsStore> LazyHidden = Db("LazyHidden", () => new HiddenElementsStore(AppPaths.Database));

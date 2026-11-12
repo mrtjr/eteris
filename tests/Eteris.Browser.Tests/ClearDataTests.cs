@@ -157,7 +157,8 @@ public class ClearDataTests
         var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data", "AppData.cs"));
         Assert.DoesNotContain("QueueWrite(h => h.Compact())", code);
         Assert.Contains("LazyWriter.Value.RunAside(h => h.Compact())", code);
-        Assert.Contains("LazyWriter.Value.RunAsideNow(h => h.CompactOnce())", code);
+        // Ao sair, espera no máximo uns segundos pela compactação de um «Apagar tudo» (HistoryWriterTests).
+        Assert.Contains("LazyWriter.Value.RunAsideNow(h => h.CompactOnce(), TimeSpan.FromSeconds(3))", code);
     }
 
     // Ao sair, a compactação única (pode demorar com um histórico grande) vem depois das limpezas de privacidade: o

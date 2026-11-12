@@ -107,7 +107,7 @@ public partial class App : Application
         try { Vault.SecureClipboard.ClearPendingOnExit(); }
         catch (Exception) { }
         // O histórico fecha depois das limpezas de privacidade: a compactação única (AppData.CloseHistory) pode demorar
-        // com um histórico grande e não as pode atrasar.
+        // com um histórico grande e não as pode atrasar; pela de um «Apagar tudo» ainda a correr, espera no máximo 3 s.
         Data.AppData.CloseHistory();
         try
         {
