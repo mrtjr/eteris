@@ -11,6 +11,7 @@
 - Importar palavras-passe e escolher as do ficheiro já não apaga a nota do item guardado.
 - Importar um CSV de palavras-passe gravado noutra codificação (por exemplo, pelo Excel) é recusado com uma explicação, em vez de guardar palavras-passe com os acentos trocados.
 - Um corte de energia a meio de uma gravação já não repõe as definições nem a sessão em silêncio: fica uma cópia anterior (`.bak`), o ficheiro danificado é guardado (`.corrupt`) e o Éteris avisa.
+- Se a base de dados do perfil estiver danificada, o Éteris guarda-a à parte, começa uma nova e avisa, em vez de mostrar favoritos e histórico vazios sem explicação; se estiver só ocupada, volta a tentar.
 
 ## 0.2.16 — 2026-11-12
 

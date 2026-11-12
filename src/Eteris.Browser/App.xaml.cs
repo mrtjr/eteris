@@ -16,6 +16,8 @@ public partial class App : Application
         // Com o ajuste e11 já arrancou a partir do Main (Program.cs).
         if (!CefConfigurator.StartedFromMain) CefConfigurator.InitializeInBackground(CefConfigurator.Prepare(), OnCefReady);
         // As tabelas que a 1.ª aba consulta abrem-se em paralelo (Data/AppData.cs, PrewarmAsync).
+        // Uma base danificada que se ponha de lado avisa na janela (o aviso espera por ela, se ainda não existir).
+        Data.ProfileDatabase.SetAside += path => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.NotifyDatabaseSetAside(System.IO.Path.GetFileName(path)));
         _ = Data.AppData.PrewarmAsync();
         // Ajuste e12 (desligado por omissão; regra R-2): a 1.ª nova aba do perfil prepara-se já, em fundo
         // (Browser/NewTabPrecompute.cs). Nunca num arranque privado.

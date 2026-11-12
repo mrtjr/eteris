@@ -109,18 +109,21 @@ public static partial class StartupTrace
         Flush();
     }
 
-    // Um Lazy cuja criação fica medida (as tabelas da base de dados abrem-se assim, à 1.ª utilização).
-    public static Lazy<T> Lazy<T>(string name, Func<T> make)
+    // Uma criação medida (as tabelas da base de dados abrem-se assim, à 1.ª utilização); sem registo, a própria função.
+    public static Func<T> Timed<T>(string name, Func<T> make)
     {
-        if (FilePath is null) return new Lazy<T>(make);
-        return new Lazy<T>(() =>
+        if (FilePath is null) return make;
+        return () =>
         {
             var clock = Stopwatch.StartNew();
             var value = make();
             Mark("bd." + name, string.Create(CultureInfo.InvariantCulture, $"ms={clock.Elapsed.TotalMilliseconds:F1}"));
             return value;
-        });
+        };
     }
+
+    // Um Lazy cuja criação fica medida.
+    public static Lazy<T> Lazy<T>(string name, Func<T> make) => new(Timed(name, make));
 
     // Fotografia da memória do processo.
     public static void Snapshot(string label)
