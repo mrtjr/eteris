@@ -251,6 +251,19 @@ public class SandboxPublishTests
         Assert.Equal(@"At<tmp>\build\pack.ps1:41 e C:\Users\<utilizador>\x", Masked(text, temp));
     }
 
+    // Authenticode (decisão D3 de docs/atualizacoes.md): quando houver certificado, o pack.ps1 passa -SignParams ao vpk
+    // pack como --signParams; sem ele, os argumentos do vpk pack são os de sempre.
+    [Fact]
+    public void Pack_PassesSignParamsToVpkOnlyWhenGiven()
+    {
+        var pack = File.ReadAllText(Path.Combine(Root(), "build", "pack.ps1"));
+        Assert.Contains("[string]$SignParams = \"\"", pack);
+        const string only = "if ($SignParams) { $vpkArgs += @(\"--signParams\", $SignParams) }";
+        Assert.Contains(only, pack);
+        Assert.True(pack.IndexOf(only, StringComparison.Ordinal) < pack.IndexOf("vpk pack", StringComparison.Ordinal), "o --signParams junta-se antes do vpk pack");
+        Assert.Contains("vpk pack @vpkArgs", pack);
+    }
+
     // INF-02, CAD-01: sem nenhuma chave pública em update-keys.txt o Éteris empacotado recusaria todas as atualizações
     // (falha fechada do SignedUpdateSource): o pack.ps1 não o empacota.
     [Fact]

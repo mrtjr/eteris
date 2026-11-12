@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory = $true)][string]$Version, [switch]$NoSandbox, [switch]$SemLogin)
+﻿param([Parameter(Mandatory = $true)][string]$Version, [switch]$NoSandbox, [switch]$SemLogin, [string]$SignParams = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 # Só uma publicação completa do build/publish.ps1 (com a marca do fim, publish\eteris-build.json), da versão pedida, com
@@ -52,5 +52,11 @@ if ($build.commit) {
 # "Eteris" com E acentuado, escrito por código para não depender da codificação com que o ficheiro é lido
 $title = "$([char]0xC9)teris"
 # packId diferente da pasta de dados (%LocalAppData%\Eteris): o Velopack apaga a pasta de instalação ao desinstalar
-vpk pack --packId EterisBrowser --packVersion $Version --packDir "$root\publish" --mainExe Eteris.Browser.exe --packTitle $title --icon "$root\src\Eteris.Browser\Assets\eteris.ico" --outputDir "$root\Releases"
+$vpkArgs = @("--packId", "EterisBrowser", "--packVersion", $Version, "--packDir", "$root\publish", "--mainExe", "Eteris.Browser.exe",
+  "--packTitle", $title, "--icon", "$root\src\Eteris.Browser\Assets\eteris.ico", "--outputDir", "$root\Releases")
+# Authenticode (decisão D3 de docs/atualizacoes.md), só quando houver certificado: os parâmetros do signtool, que o vpk
+# passa a cada binário. Com o sandbox, os três do arranque (Eteris.Browser.exe, chrome_elf.dll, Eteris.Browser.dll) têm de
+# levar o mesmo certificado (docs/sandbox.md, «Assinatura»).
+if ($SignParams) { $vpkArgs += @("--signParams", $SignParams) }
+vpk pack @vpkArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -105,3 +105,73 @@ A prova do lado do cliente usa uma cópia de teste com `build/sandbox/provas/pat
 feed assinado aparece «Atualizar para …»; com um byte trocado no `releases.win.json` do feed, ou sem o `.sig`, as
 Definições › Sobre dizem «Não foi possível procurar atualizações» e a pasta `packages` da instalação de teste não ganha
 nenhum pacote.
+
+## Estado até o dono pôr as chaves
+
+O `update-keys.txt` sai do repositório só com comentários: a geração das chaves é um passo manual do dono (em baixo).
+Até lá:
+
+- o Éteris compilado deste repositório arranca normalmente, mas **recusa todas as atualizações** (cada procura falha
+  fechada, sem pedir nada à rede, e Definições › Sobre diz «Não foi possível procurar atualizações»);
+- o `build/pack.ps1` recusa empacotar (também na emergência pelo CI);
+- o `build/release.ps1` recusa publicar (a verificação não tem chaves).
+
+As instalações que já existem (0.2.15 e anteriores) não verificam assinaturas e atualizam para a primeira versão com a
+verificação como sempre; é dessa versão em diante que a assinatura passa a ser obrigatória.
+
+## Passos manuais do dono
+
+Nada disto entra no repositório além das linhas públicas.
+
+1. Gerar duas chaves **fora da pasta do repositório**, com frases-passe diferentes:
+   `dotnet run --project build/sign -c Release -- new-key <suporte>\eteris-atualizacoes-1.pem` e `…-2.pem`. A 1.ª é a de
+   uso; a 2.ª é a de reserva e vai logo para um sítio físico diferente (sem ela, perder a 1.ª deixa todas as instalações
+   sem atualizações para sempre).
+2. Colar as duas linhas públicas em `src/Eteris.Browser/Updates/update-keys.txt` (a de uso primeiro), correr
+   `dotnet test --filter "FullyQualifiedName~UpdateSignatureTests.EmbeddedKeys_AreP256PublicKeys"` e fazer commit
+   («Chaves públicas das atualizações (uso e reserva)»).
+3. Publicar a primeira versão com a verificação já assinada (`build\release.ps1 -Key …`): é o índice dela que os
+   clientes novos leem na procura seguinte.
+4. Na conta do GitHub: segundo fator com chave física; regra do ramo `main` (sem force-push nem apagar; verificação
+   `build` obrigatória nos pedidos, Dependabot incluído); regra das etiquetas `v*` (sem mover nem apagar); releases
+   imutáveis; para o `vpk upload` e o `release.ps1`, um token de acesso fino só com «Contents: read and write» neste
+   repositório, em vez do `gh auth token`.
+
+## Decisões por tomar (dono)
+
+Cada uma tem uma recomendação; nenhuma está tomada, e o resto do código não depende delas.
+
+- **D1 — Onde vive a chave privada de uso.** (a) Ficheiro PEM cifrado num suporte amovível, ligado só para assinar:
+  custo zero, protege de um token roubado e da conta comprometida; não protege se a máquina estiver comprometida no
+  momento de assinar. (b) Dispositivo físico (cartão ou chave PIV): a chave nunca sai do dispositivo; custa o
+  dispositivo e exige uma variante do `Signer` sobre a CNG, ainda por fazer. (c) Ficheiro na máquina de publicação: é o
+  caso que a revisão do CAD-01 diz que não protege. **Recomendação: (a).** Decisão do dono: *por tomar*.
+- **D2 — Emergência pelo CI.** O CI nunca tem a chave: o trabalho `publish-sem-codecs` deixa um rascunho e o dono assina
+  e publica com `build\release.ps1 -Key … -IndiceDaRelease` a partir de qualquer máquina com a chave (assina o índice
+  que o CI pôs no rascunho: nesse caminho a assinatura só prova que foi o dono a publicar, não o que o CI compilou).
+  Alternativa: a chave num segredo do GitHub, que volta a pôr a raiz de confiança na conta. **Recomendação: o CI sem a
+  chave, como está implementado.** Decisão do dono: *por tomar*.
+- **D3 — Authenticode (custa dinheiro; valores indicativos, a confirmar).** (a) Não assinar: é o estado atual; o
+  SmartScreen avisa e o `Setup.exe` que os novos utilizadores descarregam não tem prova de autoria (as atualizações
+  ficam cobertas pela assinatura do índice). (b) Programa de assinatura para código aberto (SignPath Foundation): sem
+  custo, sujeito a aprovação e às regras do programa. (c) Azure Trusted Signing: mensalidade baixa, exige identidade
+  validada e disponibilidade no país do dono. (d) Certificado OV ou EV em dispositivo físico: centenas de euros por ano.
+  **Recomendação:** pedir (b); se não for aceite, (c); até lá fica (a). Em qualquer delas, com o sandbox os três binários
+  do arranque (`Eteris.Browser.exe`, `chrome_elf.dll`, `Eteris.Browser.dll`) têm de levar o mesmo certificado,
+  assinados depois do `brand-bootstrap.ps1` e antes do `vpk pack` (docs/sandbox.md, «Assinatura»). Parte já pronta: o
+  `build\pack.ps1 -SignParams "<parâmetros do signtool>"`, que passa `--signParams` ao `vpk pack` só quando é dado.
+  Decisão do dono: *por tomar*.
+- **D4 — Publicação faseada (ARQ-01).** Publicar primeiro como pré-lançamento (os clientes ignoram-no: a fonte usa
+  `GithubSource(RepoUrl, null, false)` e o índice de `releases/latest`) e promover ao fim de 24 h quando a versão mexe
+  no cofre, na sincronização ou no sandbox. Implica um `-PreLancamento` no `release.ps1` e um segundo comando para
+  promover. **Recomendação: sim, para essas versões.** Decisão do dono: *por tomar* (nada implementado).
+- **D5 — D-7 do plano de desempenho (ajuste e10).** Fechada pelo código desta versão: o Velopack nunca aplica no
+  arranque; o Éteris aplica ao sair, ou no arranque depois da instância única quando não há outro Éteris da instalação
+  a correr nem link nos argumentos. O ajuste e10 saiu. Só falta o dono confirmar.
+- **D6 — Sandbox desligado «até à versão seguinte» (INF-01).** As quedas depois de haver conteúdo web já não contam, e a
+  sessão volta com as abas a dormir depois de um arranque falhado. Fica por fazer o botão «Voltar a ligar» (plano 2,
+  Task 14). Uma nova tentativa automática ao fim de 24 h repetiria dois arranques falhados por dia num computador onde
+  o sandbox não funciona mesmo. **Recomendação: ficar pelo botão.** Decisão do dono: *por tomar*.
+- **D7 — Frase pública (PRO-09).** docs/site/index.html diz «cada promessa pode ser conferida» e, em inglês, «checks
+  every promise». Trocar por «as promessas listadas em eteris://privacy/» é uma mudança de texto público.
+  **Recomendação: trocar.** Decisão do dono: *por tomar*.
