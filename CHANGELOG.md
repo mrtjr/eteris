@@ -5,6 +5,7 @@
 ### Conta e sincronização
 
 - **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
+- Notas: uma alteração vinda de outro computador que chega enquanto está a escrever já não é esmagada pela sua edição seguinte; as duas fundem-se.
 
 ### Pesquisa
 

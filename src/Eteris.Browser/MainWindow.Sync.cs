@@ -73,7 +73,8 @@ public partial class MainWindow
     }
 
     // As notas vindas de outro aparelho. Não se aplicam enquanto o utilizador está a escrever nelas (a gravação ainda
-    // não saiu): ficam para a ronda seguinte, depois de a alteração dele seguir.
+    // não saiu): ficam por aplicar; se o utilizador mudar as notas antes da ronda seguinte, as duas edições fundem-se a partir
+    // do texto da última ronda (ProfileSync).
     internal static bool ApplySyncedNotes(string text)
     {
         if (NormalWindows().Any(w => w._notesSave is { IsEnabled: true })) return false;

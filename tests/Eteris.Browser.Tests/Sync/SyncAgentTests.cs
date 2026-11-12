@@ -312,6 +312,27 @@ public sealed class SyncAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task Notes_RemoteEditNotYetApplied_IsMergedWithTheNextLocalEdit()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Profile.SetNotes("linha 1\nlinha 2\nlinha 3");
+        await Settle(casa, trabalho);
+        casa.Profile.SetNotes("linha 1 (casa)\nlinha 2\nlinha 3");
+        Assert.True(await casa.Agent.RunAsync());
+        _now += 1000;
+        // O trabalho está a escrever nas notas: a ronda traz a versão da casa e não a aplica.
+        trabalho.Profile.Refuse = c => c.Collection == Collections.Notes;
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal("linha 1\nlinha 2\nlinha 3", trabalho.Profile.Notes);
+        trabalho.Profile.Refuse = _ => false;
+        trabalho.Profile.SetNotes("linha 1\nlinha 2\nlinha 3 (trabalho)");
+        _now += 1000;
+        await Settle(trabalho, casa);
+        Assert.Equal("linha 1 (casa)\nlinha 2\nlinha 3 (trabalho)", casa.Profile.Notes);
+        Assert.Equal(casa.Profile.Notes, trabalho.Profile.Notes);
+    }
+
+    [Fact]
     public async Task RefusedChange_StaysLocal_AndDoesNotResurrectForTheOthers()
     {
         var (casa, trabalho) = await TwoAsync();

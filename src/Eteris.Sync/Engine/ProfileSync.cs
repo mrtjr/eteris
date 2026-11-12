@@ -257,6 +257,9 @@ public static class ProfileSync
         var sent = 0;
         if (baseline is not null)
         {
+            // O texto das notas na última ronda: se uma versão de outro aparelho ficou por aplicar, a edição de agora funde-se
+            // com ela a partir deste texto (SyncEngine.SetNotes).
+            var notesBase = NotesBase(baseline);
             // Para apagar um item secreto é preciso saber que registo da conta lhe corresponde (pela chave local).
             AccountView? current = null;
             foreach (var id in before.Keys.Concat(baseline.Keys).Distinct(StringComparer.Ordinal).ToList())
@@ -267,7 +270,7 @@ public static class ProfileSync
                 if (Canonical(now) == baseline.GetValueOrDefault(id)) continue;
                 if (now is not null)
                 {
-                    if (Stage(engine, now, secrets)) sent++;
+                    if (Stage(engine, now, secrets, notesBase)) sent++;
                     else
                     {
                         failed.Add(id);
@@ -285,7 +288,7 @@ public static class ProfileSync
                             continue;
                         }
                     }
-                    StageRemoval(engine, id, current);
+                    StageRemoval(engine, id, current, notesBase);
                     sent++;
                 }
             }
@@ -304,7 +307,7 @@ public static class ProfileSync
                 if (unreadable.Contains(item.Collection) || !IsFresh(item.Collection, baseline, options)) continue;
                 if (!account.Items.TryGetValue(id, out var remote))
                 {
-                    if (Stage(engine, item, secrets)) sent++;
+                    if (Stage(engine, item, secrets, null)) sent++;
                     else
                     {
                         failed.Add(id);
@@ -378,12 +381,12 @@ public static class ProfileSync
     }
 
     // Prepara o envio de um item local. false = um item secreto que não se leu ou não se pôde selar (fica de fora).
-    private static bool Stage(SyncEngine engine, LocalItem item, ISecretSource? secrets)
+    private static bool Stage(SyncEngine engine, LocalItem item, ISecretSource? secrets, string? notesBase)
     {
         if (item.Collection == Collections.Notes)
         {
             var text = item.Data["text"]?.GetValue<string>() ?? string.Empty;
-            if (text != engine.Notes) engine.SetNotes(text);
+            if (text != engine.Notes) engine.SetNotes(text, notesBase);
             return true;
         }
         if (Collections.IsSecret(item.Collection))
@@ -409,12 +412,20 @@ public static class ProfileSync
         return true;
     }
 
-    private static void StageRemoval(SyncEngine engine, string id, AccountView? account)
+    // O texto das notas na base da última ronda (a forma canónica é {"text":"…"}): sem entrada, vazio; JSON ilegível, null.
+    private static string? NotesBase(IReadOnlyDictionary<string, string> baseline)
+    {
+        if (!baseline.TryGetValue(Id(Collections.Notes, Collections.NotesKey), out var canonical)) return string.Empty;
+        try { return JsonNode.Parse(canonical)?["text"]?.GetValue<string>() ?? string.Empty; }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException or FormatException) { return null; }
+    }
+
+    private static void StageRemoval(SyncEngine engine, string id, AccountView? account, string? notesBase)
     {
         var (collection, key) = Split(id);
         if (collection == Collections.Notes)
         {
-            if (engine.Notes.Length > 0) engine.SetNotes(string.Empty);
+            if (engine.Notes.Length > 0) engine.SetNotes(string.Empty, notesBase);
             return;
         }
         if (Collections.IsSecret(collection))

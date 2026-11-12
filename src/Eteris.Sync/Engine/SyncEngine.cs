@@ -246,6 +246,17 @@ public sealed class SyncEngine
         return version;
     }
 
+    // As notas mudadas aqui, sabendo o texto da última ronda (baseText, o que este computador já tinha lido da conta). Se
+    // entretanto chegou uma versão de outro aparelho que ficou por aplicar (o utilizador estava a escrever), o texto novo
+    // é descendente do texto antigo e não dessa versão: gravá-lo como descendente dela apagava a edição do outro nos dois.
+    // Funde-se a três (base, versão da conta, texto novo) e a fusão é que segue.
+    public Hlc SetNotes(string text, string? baseText)
+    {
+        var current = Get(Collections.Notes, Collections.NotesKey);
+        if (baseText is null || current is null || baseText == Notes) return SetNotes(text);
+        return SetNotes(NotesMerge.Merge(baseText, Notes, text, Label(current.Version.Node), Label(Device.Id)).Text);
+    }
+
     private Hlc Stage(string collection, string key, JsonObject? data, bool deleted)
     {
         if (collection == Collections.Notes) throw new ArgumentException("As notas mudam-se com SetNotes.", nameof(collection));
