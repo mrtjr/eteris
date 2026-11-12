@@ -2,6 +2,10 @@
 
 ## 0.2.16 — por publicar
 
+### Segurança
+
+- A cor do tema que um site declara deixa de passar pelo conversor de cores do Windows: um valor forjado podia levar o Éteris a abrir um endereço fora do motor.
+
 ### Correções
 
 - O gerador de palavras-passe já não desiste num computador ocupado: os 100 ms do padrão do site contam só as tentativas, não a preparação, e a primeira tentativa faz-se sempre (antes podia aparecer «Este campo não aceita uma palavra-passe gerada» num campo que a aceita).

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Media;
 using Eteris.Browser.Theme;
 
@@ -5,6 +6,35 @@ namespace Eteris.Browser.Tests;
 
 public class SiteTintTests
 {
+    // MOT-02: o texto do theme-color vem da página e nunca pode chegar ao ColorConverter do WPF, que com
+    // «ContextColor <endereço>» abre o endereço no processo principal. Os valores são um urn: e um ficheiro que não
+    // existe, para que nem a fase vermelha faça um pedido de rede.
+    [Theory]
+    [InlineData("ContextColor urn:eteris:teste 1")]
+    [InlineData("contextcolor file:///C:/nao-existe.icc 1")]
+    [InlineData("sc#1 1 0 0")]
+    [InlineData("sc#1,1,0,0")]
+    [InlineData("#ff66")]
+    [InlineData("rgba(1,2,3,1.2.3)")]
+    [InlineData("rgb(\u0661,\u0662,\u0663)")]
+    [InlineData("red ; x")]
+    public void Parse_OnlyAcceptsPlainColours(string css) => Assert.Null(SiteTint.Parse(css));
+
+    [Fact]
+    public void Parse_EightDigitHex_IsCssOrder_AlphaLast()
+    {
+        Assert.Equal(Color.FromRgb(0x11, 0x22, 0x33), SiteTint.Parse("#112233ff"));
+        Assert.Null(SiteTint.Parse("#11223300"));
+    }
+
+    [Fact]
+    public void Parse_NeverHandsPageTextToTheWpfConverter()
+    {
+        var source = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Theme", "SiteTint.cs"));
+        Assert.DoesNotContain("ColorConverter", source);
+        Assert.DoesNotContain("catch (FormatException)", source);
+    }
+
     [Theory]
     [InlineData("#ff6600", 0xFF, 0x66, 0x00)]
     [InlineData("#F60", 0xFF, 0x66, 0x00)]

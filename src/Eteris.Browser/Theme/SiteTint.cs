@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
 
@@ -17,6 +18,9 @@ public static partial class SiteTint
     public const double WorkspaceBlend = 0.16;
     public const double LightWorkspaceBlend = 0.07;
 
+    // A cor do tema que a página declara (theme-color). O texto vem da página: só três formas fechadas, convertidas
+    // aqui, e null para tudo o resto, sem nunca lançar. Nunca passa pelo conversor de cores do WPF, que também aceita
+    // «ContextColor <endereço> …» e abre esse endereço no processo principal (MOT-02).
     public static Color? Parse(string css)
     {
         var text = css.Trim();
@@ -25,19 +29,28 @@ public static partial class SiteTint
         var rgb = RgbPattern().Match(text);
         if (rgb.Success)
         {
-            var alpha = rgb.Groups[4].Success ? double.Parse(rgb.Groups[4].Value, CultureInfo.InvariantCulture) : 1;
+            var alpha = 1.0;
+            if (rgb.Groups[4].Success
+                && !double.TryParse(rgb.Groups[4].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out alpha))
+                return null;
             if (alpha < 0.5) return null;
             return Color.FromRgb(Channel(rgb.Groups[1].Value), Channel(rgb.Groups[2].Value), Channel(rgb.Groups[3].Value));
         }
 
-        if (text.StartsWith('#') && text.Length == 4)
-            text = $"#{text[1]}{text[1]}{text[2]}{text[2]}{text[3]}{text[3]}";
-        try
+        if (HexPattern().IsMatch(text))
         {
-            if (ColorConverter.ConvertFromString(text) is Color color && color.A >= 128)
-                return Color.FromRgb(color.R, color.G, color.B);
+            var hex = text[1..];
+            if (hex.Length == 3) hex = $"{hex[0]}{hex[0]}{hex[1]}{hex[1]}{hex[2]}{hex[2]}";
+            // #rrggbbaa: o alfa é o último par, como no CSS.
+            if (hex.Length == 8 && Convert.ToByte(hex[6..8], 16) < 128) return null;
+            return Color.FromRgb(Convert.ToByte(hex[0..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16));
         }
-        catch (FormatException) { }
+
+        // Nomes: a tabela fechada de System.Windows.Media.Colors («transparent» tem alfa 0 e dá null).
+        if (NamePattern().IsMatch(text)
+            && typeof(Colors).GetProperty(text, BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase)?.GetValue(null) is Color named
+            && named.A >= 128)
+            return Color.FromRgb(named.R, named.G, named.B);
         return null;
     }
 
@@ -81,6 +94,13 @@ public static partial class SiteTint
 
     private static byte Channel(string value) => (byte)Math.Clamp(int.Parse(value, CultureInfo.InvariantCulture), 0, 255);
 
-    [GeneratedRegex(@"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)$", RegexOptions.IgnoreCase)]
+    // [0-9] e não \d: \d aceita algarismos de outras escritas (árabes, devanágari), que o int.Parse depois recusa.
+    [GeneratedRegex(@"^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*(?:,\s*([0-9]*\.?[0-9]+)\s*)?\)$", RegexOptions.IgnoreCase)]
     private static partial Regex RgbPattern();
+
+    [GeneratedRegex(@"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")]
+    private static partial Regex HexPattern();
+
+    [GeneratedRegex(@"^[a-zA-Z]{3,24}$")]
+    private static partial Regex NamePattern();
 }
