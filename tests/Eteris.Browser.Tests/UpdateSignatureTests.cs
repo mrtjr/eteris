@@ -112,6 +112,17 @@ public sealed class UpdateSignatureTests : IDisposable
             Assert.Equal(256, e.KeySize);
         });
 
+    // O recurso tem de estar mesmo no Éteris com o nome que o UpdateSignature lê: senão o pack.ps1 (que lê o ficheiro do
+    // disco) aceitava as chaves do dono e todas as instalações recusavam as atualizações na mesma.
+    [Fact]
+    public void EmbeddedKeys_AreTheLinesOfTheFileInTheRepository()
+    {
+        using var stream = typeof(UpdateSignature).Assembly.GetManifestResourceStream("Eteris.Browser.Updates.update-keys.txt");
+        Assert.NotNull(stream);
+        var onDisk = UpdateSignature.ParseKeys(File.ReadAllText(Path.Combine(Root, "src", "Eteris.Browser", "Updates", "update-keys.txt")));
+        Assert.Equal(onDisk, UpdateSignature.EmbeddedKeys);
+    }
+
     [Fact]
     public async Task SignedSource_ValidIndex_ReturnsTheUpdate()
         => Assert.Equal("0.1.1", await CheckSigned(Index(("0.1.1", A)), Index(("0.1.1", A))));
