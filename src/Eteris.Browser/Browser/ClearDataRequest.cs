@@ -25,4 +25,32 @@ public sealed record ClearDataRequest(bool History, bool Cookies, bool Cache, Da
             return char.ToUpperInvariant(text[0]) + text[1..] + " apagados" + (Vault ? " · palavras-passe e preenchimento automático também" : string.Empty);
         }
     }
+
+    // A resposta depois de o motor apagar: sem falhas, o resumo; com falhas, começa por «Não foi» (a página não mostra
+    // o ✓) e diz o que ficou por apagar e o que saiu.
+    public string Report(ClearOutcome outcome)
+    {
+        if (!outcome.Failed) return Summary;
+        var failed = new List<string>();
+        if (outcome.CookiesFailed) failed.Add("os cookies");
+        if (outcome.CacheFailed) failed.Add("a cache");
+        if (outcome.StorageFailed > 0) failed.Add(outcome.StorageFailed == 1 ? "os dados de 1 site" : $"os dados de {outcome.StorageFailed} sites");
+        if (outcome.VideoEngineFailed) failed.Add("os dados do motor de vídeo");
+        var cleared = new List<string>();
+        if (History) cleared.Add("histórico");
+        if (Cookies && !outcome.CookiesFailed) cleared.Add("cookies");
+        if (Cache && !outcome.CacheFailed) cleared.Add("cache");
+        if (Vault) cleared.Add("palavras-passe e preenchimento automático");
+        var text = "Não foi possível apagar " + Join(failed) + ".";
+        return cleared.Count == 0 ? text : text + " Apagado: " + Join(cleared) + ".";
+    }
+
+    private static string Join(List<string> names)
+        => names.Count == 1 ? names[0] : string.Join(", ", names[..^1]) + " e " + names[^1];
+}
+
+// O que o motor não conseguiu apagar num «Apagar dados»: StorageFailed conta as origens (sites) cujo armazenamento ficou.
+public sealed record ClearOutcome(bool CookiesFailed = false, bool CacheFailed = false, int StorageFailed = 0, bool VideoEngineFailed = false)
+{
+    public bool Failed => CookiesFailed || CacheFailed || StorageFailed > 0 || VideoEngineFailed;
 }

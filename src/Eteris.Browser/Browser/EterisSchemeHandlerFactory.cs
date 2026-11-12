@@ -629,21 +629,23 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (!InternalPages.IsAuthorized(url)
             || ClearDataRequest.Parse(InternalPages.Query(uri, "what") ?? "", InternalPages.Query(uri, "range") ?? "", DateTime.Now) is not { } request)
             return Text("recusado");
+        // O IBrowser só vale durante esta chamada: a limpeza procura a janela pelo identificador.
+        var browserId = browser.Identifier;
         if (request.Vault)
         {
             if (privateContext) return Text("recusado");
             Vault.VaultRoutes.UseProfileHost(() => new WindowsVaultHost());
             var routes = Vault.VaultRoutes.Profile!;
-            var browserId = browser.Identifier;
             // Primeiro a confirmação: recusada, nada se apaga (nem o histórico, nem os cookies).
             return new VaultResourceHandler(async () => await routes.EraseVaultAsync(browserId).ConfigureAwait(false)
-                ? Vault.VaultReply.Text(ClearBrowsingData(request, browser))
+                ? Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId).ConfigureAwait(false))
                 : Vault.VaultReply.Text("Não foi confirmado com o Windows: nada foi apagado."));
         }
-        return Text(ClearBrowsingData(request, browser));
+        // A resposta só sai depois de o motor apagar (ou falhar, e então diz o quê).
+        return new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearBrowsingDataAsync(request, browserId).ConfigureAwait(false)));
     }
 
-    private static string ClearBrowsingData(ClearDataRequest request, IBrowser browser)
+    private static async Task<string> ClearBrowsingDataAsync(ClearDataRequest request, int browserId)
     {
         if (request.History)
         {
@@ -653,20 +655,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
         // As caches da GPU (shaders, programas WebGL) só se apagam com o motor fechado: ao sair (ajuste e3).
         if (request.Cache) Infrastructure.ProfileCleanup.RemoveGpuCachesAtExit();
-        if (request.Cookies || request.Cache)
-        {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    using var client = browser.GetDevToolsClient();
-                    if (request.Cookies) await DevToolsCalls.Run(() => client.Network.ClearBrowserCookiesAsync());
-                    if (request.Cache) await DevToolsCalls.Run(() => client.Network.ClearBrowserCacheAsync());
-                }
-                catch (Exception) { }
-            });
-        }
-        return request.Summary;
+        var outcome = request.Cookies || request.Cache ? await MainWindow.ClearEngineDataAsync(browserId, request).ConfigureAwait(false) : new ClearOutcome();
+        return request.Report(outcome);
     }
 
     private static IResourceHandler BookmarksRoute(Uri uri, string url, int browserId)

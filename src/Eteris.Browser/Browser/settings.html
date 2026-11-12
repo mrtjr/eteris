@@ -740,7 +740,8 @@
   document.getElementById('clearGo').addEventListener('click', () => {
     const what = [...clearPanel.querySelectorAll('input:checked')].map(i => i.value).join(',');
     if (!what) return;
-    clearProbe.src = `eteris://${location.host}/clear?what=${what}&range=${clearRange}&t=${data.token}&n=${Date.now()}`;
+    document.getElementById('clearResult').textContent = 'A apagar…';
+    clearProbe.src =`eteris://${location.host}/clear?what=${what}&range=${clearRange}&t=${data.token}&n=${Date.now()}`;
   });
   // Definições por site: cada site com o que tem guardado e um botão para repor tudo.
   const sitesCard = document.getElementById('sitesCard');
