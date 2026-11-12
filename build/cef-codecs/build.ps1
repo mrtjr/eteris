@@ -53,6 +53,8 @@ $ErrorActionPreference = 'Stop'
 $CefVersion       = '156.0.15'
 $CefBranch        = '8078'
 $CefCommit        = 'cf671c072925b27823a61181152f4f288e8e4306'
+# O FFmpeg do Chromium que o libcef.dll leva: o do codigo-fonte oferecido (licenses/FFmpeg-SOURCE.txt).
+$FfmpegCommit     = '9db86ce5b5b454dfc96c435f9f0723012980c37f'
 $ChromiumVersion  = '156.0.8078.80'
 $CefSharpVersion  = '156.0.150'
 $WindowsSdk       = '10.0.28000.0'
@@ -301,6 +303,21 @@ function Invoke-Check {
     Fail ("os patches colidem com patches da CEF: " + (($clash | ForEach-Object { "$_ ($($cefFiles[$_]))" }) -join ', '))
   }
   Write-Ok "sem colisoes com os $($cefFiles.Count) ficheiros alterados pelos patches da CEF"
+
+  # O FFmpeg e o do codigo-fonte oferecido, e a arvore so tem alteracoes dos nossos patches (CAD-08): o motor publicado
+  # tem de se poder reproduzir a partir dos commits e dos patches versionados. Ficheiros nao seguidos nao contam (gerados).
+  $ffmpegHead = (Get-CmdOutput (Git "-C `"$FfmpegSrc`" rev-parse HEAD"))
+  if ($ffmpegHead -ne $FfmpegCommit) { Fail "o FFmpeg esta no commit $ffmpegHead, esperado $FfmpegCommit (licenses/FFmpeg-SOURCE.txt)" }
+  $touched = @()
+  foreach ($repo in @(@{ Dir = $Src; Prefix = '' }, @{ Dir = $FfmpegSrc; Prefix = 'third_party/ffmpeg/' })) {
+    foreach ($line in @((Get-CmdOutput (Git "-C `"$($repo.Dir)`" status --porcelain --untracked-files=no")) -split "`n")) {
+      if ($line.Trim().Length -lt 4) { continue }
+      $touched += ($repo.Prefix + ($line.Substring(3).Trim() -replace '\\', '/'))
+    }
+  }
+  $strange = @($touched | Where-Object { ($ours -notcontains $_) -and (-not $cefFiles.ContainsKey($_)) })
+  if ($strange.Count -gt 0) { Fail ("a arvore do motor tem alteracoes fora dos patches: " + ($strange -join ', ')) }
+  Write-Ok "arvore do motor so com as alteracoes dos patches ($($touched.Count) ficheiros)"
 
   Test-FfmpegNoPatentedDecoders
   Write-Ok 'FFmpeg Chromium/win/x64 sem descodificadores H.264/HEVC/AAC'

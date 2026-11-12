@@ -146,7 +146,12 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
    para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
    falhar, e no fim leva `eteris-build.json` (versão, modo, commit, o CefSharp com o SHA256 das montagens e
-   `google_oauth`, se levou o login Google, nunca o `client_id`).
+   `google_oauth`, se levou o login Google, nunca o `client_id`; e, desde a 0.2.17, `runtime_manifest_sha256`, as
+   versões das ferramentas em `tools` (`dotnet_sdk`, `rustc`, `vpk`) e `files`, a lista de tudo o que ficou em `publish\`
+   com o SHA256 de cada ficheiro). Recusa um ficheiro na pasta do motor que não conste do manifesto («fora do manifesto»).
+   O `pack.ps1` recusa uma publicação com `dirty`, sem `files` ou com um ficheiro trocado, em falta ou a mais
+   (CAD-08), e o `release.ps1` sobe a marca para a release como `eteris-build.json`. O `build\cef-codecs\build.ps1 -Steps
+   Check` também recusa um FFmpeg que não seja o do código-fonte oferecido e alterações na árvore do motor fora dos patches.
    Nos dois modos recusa também binários publicados com o caminho do perfil de quem compila (`docs/sandbox.md`,
    «Como publicar com o sandbox», passo 3).
    `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.13). Confirmar que `publish\libcef.dll` tem o SHA256
