@@ -109,17 +109,20 @@ public partial class MainWindow
     }
 
 
+    // «Adormecer abas em segundo plano» (paleta): apanha todas as abas de fundo de uma vez, sem o utilizador as ver uma a
+    // uma, por isso poupa o mesmo que o sono por tempo — as que gravam (a isenção dura até a página navegar), as que
+    // tocam (também sem som) e as que têm texto por enviar ou Picture-in-Picture.
     private void SleepAllBackgroundTabs()
     {
         foreach (var tab in Tabs.Tabs.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible && !t.IsLocked).ToList())
-            PutToSleep(tab, byUser: true);
+            PutToSleep(tab);
     }
 
     // Adormece a aba: larga o motor. Antes pergunta à página (até meio segundo de espera) a rolagem — guardada com o
-    // ajuste e13 — e se tem texto por enviar ou Picture-in-Picture (SleepProbe): o sono por tempo e por pressão
-    // deixa-a acordada (e não volta a perguntar durante SleepProbe.HoldFor); um pedido explícito (byUser: a paleta,
-    // a multi-seleção) adormece na mesma. Depois da resposta volta a confirmar que a aba continua fora de vista,
-    // acordada e sem som. Sem motor inicializado, larga já.
+    // ajuste e13 — e se tem texto por enviar ou Picture-in-Picture (SleepProbe): o sono por tempo, por pressão e o
+    // comando da paleta deixam-na acordada (e não voltam a perguntar durante SleepProbe.HoldFor); a multi-seleção
+    // (byUser: o utilizador escolheu essas abas) adormece na mesma. Depois da resposta volta a confirmar que a aba
+    // continua fora de vista, acordada e sem som. Sem motor inicializado, larga já.
     private void PutToSleep(BrowserTab tab, bool byUser = false)
     {
         if (!_browsers.TryGetValue(tab, out var browser) || !browser.IsBrowserInitialized)

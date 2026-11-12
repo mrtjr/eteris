@@ -25,6 +25,14 @@ public static class WhatsNewPage
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.16 (textos conferidos com o CHANGELOG da 0.2.16: a sessão com todas as janelas normais, o sono que poupa as
+        // abas com trabalho em curso, também pelo comando da paleta, e «Apagar dados de navegação» que apaga o armazenamento
+        // dos sites e diz o que falhou; as atualizações conferidas com uma lista assinada valem a partir desta versão — a
+        // 0.2.15 que descarrega a 0.2.16 ainda não confere)
+        new("⧉", "Todas as janelas voltam", "Com mais de uma janela aberta, atualizar, encerrar o Windows ou uma queda já não deixam só as abas de uma: todas as janelas normais voltam, com os seus Espaços."),
+        new("🎙", "Abas que não perdem trabalho", "Uma aba com uma chamada ou gravação, Picture-in-Picture ou texto por enviar já não adormece, nem pelo comando «Adormecer abas em segundo plano» da paleta."),
+        new("🧹", "Limpar dados apaga mesmo", "«Cookies e dados de sites» apaga também o que os sites guardaram (armazenamento local, IndexedDB, service workers), e «Apagar dados» diz o que não saiu."),
+        new("🔏", "Atualizações conferidas", "A partir desta versão, o Éteris só instala atualizações de uma lista assinada pelo autor, com uma chave fora do GitHub, e confere cada pacote descarregado."),
         // 0.2.15 («Um login e pronto»; textos conferidos com o código: pontos de entrada da T13, aprovação escrevendo o
         // código da T7/T8, kit de RecoveryCode.WordCount palavras da T5/T6, saídas da T12)
         new("☁", "Um login e pronto", "Entre com o Google pelo menu ⋯, pelas boas-vindas ou pelas Definições: escolhe a conta no seu navegador e a sincronização cifrada começa sozinha."),

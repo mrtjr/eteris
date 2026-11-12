@@ -1,3 +1,5 @@
+using System.IO;
+using System.Net.Http;
 using Velopack;
 using Velopack.Locators;
 using Velopack.Sources;
@@ -61,13 +63,119 @@ public static class UpdateService
     {
         try
         {
-            var manager = new UpdateManager(source, null, locator);
-            if (!manager.IsInstalled) return null;
-            return await manager.CheckForUpdatesAsync();
+            var checker = new UpdateManager(source, null, locator);
+            if (!checker.IsInstalled) return null;
+            return await checker.CheckForUpdatesAsync();
         }
         catch
         {
             return null;
+        }
+    }
+
+    // O único sítio onde nasce o UpdateManager do Éteris; nulo fora de uma instalação Velopack.
+    private static UpdateManager? NewManager()
+    {
+        try { return new UpdateManager(CreateSource()); }
+        catch (Exception) { return null; }
+    }
+
+    // A fonte das atualizações: as releases do GitHub, filtradas pelo índice assinado da última release (INF-02, CAD-01;
+    // docs/atualizacoes.md). Sem chaves em update-keys.txt, nenhuma atualização é aceite.
+    public static IUpdateSource CreateSource()
+        => new SignedUpdateSource(new GithubSource(RepoUrl, null, false), FetchLatestAsset, UpdateSignature.EmbeddedKeys);
+
+    // Tamanho máximo do índice e da assinatura: o índice de uma release (o completo e o delta) tem poucos KB.
+    private const int MaxAssetBytes = 1024 * 1024;
+
+    // Criado só na 1.ª procura (nada de rede nem de objetos novos no arranque).
+    private static readonly Lazy<HttpClient> s_http = new(() =>
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Eteris/1.0");
+        return http;
+    });
+
+    // Prazo de cada ficheiro, dos cabeçalhos ao fim do corpo (M2): com ResponseHeadersRead o HttpClient.Timeout só vale até
+    // aos cabeçalhos, e um corpo parado deixava a procura presa («A procurar atualizações…») até sair do Éteris.
+    private static readonly TimeSpan FetchTimeout = TimeSpan.FromSeconds(30);
+
+    // Um ficheiro da última release publicada (o índice ou a assinatura), no máximo MaxAssetBytes.
+    private static Task<byte[]> FetchLatestAsset(string name, CancellationToken cancel)
+        => FetchAssetAsync(s_http.Value, RepoUrl + "/releases/latest/download/" + Uri.EscapeDataString(name), name, FetchTimeout, cancel);
+
+    // O prazo junta-se ao cancelamento de quem pede; esgotado, lança OperationCanceledException (a procura falha).
+    internal static async Task<byte[]> FetchAssetAsync(HttpClient http, string url, string name, TimeSpan timeout, CancellationToken cancel)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        deadline.CancelAfter(timeout);
+        var token = deadline.Token;
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > MaxAssetBytes) throw new HttpRequestException($"{name} grande demais");
+        await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, token).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxAssetBytes) throw new HttpRequestException($"{name} grande demais");
+            buffer.Write(chunk, 0, read);
+        }
+        return buffer.ToArray();
+    }
+
+    // Aplicar no arranque um pacote já descarregado (INF-03): só se houver um, se nenhum outro processo correr a partir
+    // desta instalação (outro perfil aberto, ou os filhos dele) e se o lançamento não trouxer um link nem uma janela
+    // privada (o Update.exe escreve no seu registo os argumentos com que reabre o Éteris). Nunca quando o Éteris foi
+    // reaberto pelo Update.exe (VELOPACK_RESTART, a guarda que o VelopackApp.Run tinha contra um ciclo de reinícios) nem na
+    // nova tentativa do sandbox (SandboxFallback.RetrySwitch: a versão nova arrancaria sem sandbox sem razão).
+    public static bool ShouldApplyAtStartup(bool pending, bool otherProcessFromInstall, bool carriesUrlOrPrivate,
+        bool restartedByUpdater, bool sandboxRetry)
+        => pending && !otherProcessFromInstall && !carriesUrlOrPrivate && !restartedByUpdater && !sandboxRetry;
+
+    // Lançamento da DLL cliente do bootstrap depois de o .NET falhar com o sandbox (como no CefConfigurator).
+    public static bool IsSandboxRetry(IEnumerable<string> args)
+        => args.Any(a => a.Equals(Infrastructure.SandboxFallback.RetrySwitch, StringComparison.OrdinalIgnoreCase));
+
+    // Chamado no Program.Main logo a seguir à instância única, com o VELOPACK_RESTART lido antes do VelopackApp.Run (que o
+    // apaga). Nunca lança: uma falha deixa o pacote para a saída.
+    public static void ApplyPendingAtStartup(string[] args, bool restartedByUpdater)
+    {
+        try
+        {
+            if (NewManager() is not { IsInstalled: true } manager || manager.UpdatePendingRestart is not { } asset) return;
+            var carries = Infrastructure.StartupArgs.InitialUrl(args) is not null || Infrastructure.StartupArgs.IsPrivate(args);
+            if (!ShouldApplyAtStartup(true, OtherProcessFromInstall(), carries, restartedByUpdater, IsSandboxRetry(args))) return;
+            manager.ApplyUpdatesAndRestart(asset, args);
+        }
+        catch
+        {
+            // fica para a saída
+        }
+    }
+
+    // Outro processo com o nome deste e o mesmo executável (um processo que não se deixa ler conta como outro).
+    private static bool OtherProcessFromInstall()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var path = Environment.ProcessPath;
+        var processes = System.Diagnostics.Process.GetProcessesByName(self.ProcessName);
+        try
+        {
+            foreach (var process in processes)
+            {
+                if (process.Id == self.Id) continue;
+                string? file;
+                try { file = process.MainModule?.FileName; }
+                catch { return true; }
+                if (path is null || file is null || string.Equals(file, path, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+        finally
+        {
+            foreach (var process in processes) process.Dispose();
         }
     }
 
@@ -76,9 +184,7 @@ public static class UpdateService
         if (State == UpdateState.Ready || Interlocked.Exchange(ref _checking, 1) == 1) return;
         try
         {
-            UpdateManager? manager = null;
-            try { manager = new UpdateManager(new GithubSource(RepoUrl, null, false)); }
-            catch (Exception) { /* fora de uma instalação Velopack */ }
+            var manager = NewManager();
             if (manager is null || !manager.IsInstalled)
             {
                 State = UpdateState.Development;

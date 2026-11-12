@@ -177,7 +177,51 @@ public class SandboxFallbackTests
     [InlineData(0xC0000005u, true)]  // acesso inválido
     [InlineData(0xC0000135u, true)]  // DLL em falta
     [InlineData(0xC0000409u, true)]  // pilha corrompida / fail-fast
+    [InlineData(0xE0000008u, false)] // falta de memória de um processo (Chromium), como o 7012
     public void ChildExitCodes(uint code, bool counts) => Assert.Equal(counts, SandboxFallback.IsChildFailure(code));
+
+    [Theory]
+    [InlineData("https://a.pt/", true)] [InlineData("http://a.pt/", true)] [InlineData("file:///C:/x.html", true)]
+    [InlineData("data:text/html,x", true)] [InlineData("eteris://newtab/", false)] [InlineData("about:blank", false)]
+    [InlineData("", false)] [InlineData(null, false)]
+    public void WebContent_IsAnythingButEterisAndAbout(string? url, bool expected)
+        => Assert.Equal(expected, SandboxFallback.IsWebContent(url));
+
+    // INF-01: depois de uma página web confirmada, é o conteúdo que pode fazer cair processos; não conta.
+    [Fact]
+    public void Guard_ChildExitsAfterWebContentCommitted_DoNotCount()
+    {
+        var dir = TempDir();
+        try
+        {
+            var file = Path.Combine(dir, SandboxFallback.FileName);
+            var guard = new StartupGuard(file, () => TimeSpan.FromSeconds(5));
+            guard.Begin(V, true, false, false);
+            guard.WebContentCommitted();
+            guard.ChildFailed(0xC0000005); guard.ChildFailed(0x80000003); guard.ChildFailed(0xC0000409);
+            guard.RenderProcessTerminated(4);
+            Assert.Equal(0, guard.ChildFailures);
+            guard.Healthy(); guard.Flush();
+            Assert.Equal(0, StartupGuard.Read(file).Failures);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void PreviousStartFailed_IsACrashOrACountedFailure_WhileTheSandboxIsStillOn()
+    {
+        Assert.False(SandboxFallback.PreviousStartFailed(new()));
+        Assert.True(SandboxFallback.PreviousStartFailed(new() { Starting = true, WithSandbox = true }));
+        Assert.False(SandboxFallback.PreviousStartFailed(new() { Starting = true, WithSandbox = false }));
+        Assert.True(SandboxFallback.PreviousStartFailed(new() { Failures = 1 }));
+        Assert.False(SandboxFallback.PreviousStartFailed(new() { Failures = 2, DisabledFor = V }));
+    }
+
+    [Theory]
+    [InlineData("MainWindow.xaml.cs")] [InlineData("MainWindow.WebPanels.cs")] [InlineData("MainWindow.Glance.cs")]
+    public void EveryBrowser_ReportsCommittedWebContent(string file)
+        => Assert.Matches(@"IsWebContent\(e\.Url\)\) (Infrastructure\.)?StartupGuard\.Current\.WebContentCommitted\(\);",
+            File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", file)));
 
     [Theory]
     [InlineData(0, false)] // TS_ABNORMAL_TERMINATION
@@ -268,7 +312,7 @@ public class SandboxFallbackTests
         finally { Directory.Delete(dir, true); }
     }
 
-    // O 1.º degrau decide-se no início do Program.Main, antes da 1.ª leitura de um ajuste (o e10, antes do Velopack.Run),
+    // O 1.º degrau decide-se no início do Program.Main, antes da 1.ª leitura de um ajuste (o e11, depois da instância única),
     // e só lê o disco com ajustes antes da 1.ª página ligados e o sandbox possível (regra R-2: nada de novo na omissão).
     [Fact]
     public void TwoSteps_AreCheckedAtTheTopOfMain()

@@ -42,7 +42,6 @@ public static class PerfTuning
     public const string ReleaseGlance = "e6";
     public const string SmallBackForwardCache = "e7";
     public const string HideWhenUnseen = "e8";
-    public const string UpdatesOnExitOnly = "e10";
     public const string EngineThreadStartup = "e11";
     public const string ReadyNewTab = "e12";
     public const string SleepUnderPressure = "e13";
@@ -81,8 +80,6 @@ public static class PerfTuning
         // com ou sem o ajuste: fica de fora (Tabs/UnseenWindow.cs).
         new(HideWhenUnseen, "a página à vista deixa de desenhar com a janela minimizada, noutra área de trabalho ou com a sessão bloqueada (nunca com som, multimédia, captura ou Picture-in-Picture)",
             OnByDefault: true),
-        new(UpdatesOnExitOnly, "as atualizações aplicam-se só ao sair do Éteris, nunca no arranque", OnByDefault: false,
-            BeforeFirstPaint: true, Waits: "D-7"),
         new(EngineThreadStartup, "o motor prepara-se (pastas, limpeza do perfil, Local State, definições) e arranca na sua thread logo a seguir à instância única, em paralelo com a interface",
             OnByDefault: false, BeforeFirstPaint: true, Waits: "E9"),
         new(ReadyNewTab, "a 1.ª nova aba prepara-se em fundo durante o arranque; as definições e a sessão leem-se sem reflexão",
@@ -130,8 +127,8 @@ public static class PerfTuning
     // Gancho da rede de segurança do sandbox (D-18, ligado na fusão com o versao-0.2.14): a 1.ª queda antes da 1.ª página
     // com ajustes antes da 1.ª página ligados desliga-os nos arranques seguintes desta versão; só a 2.ª desliga o sandbox
     // (Infrastructure/SandboxFallback.cs). Daí em diante IsOn é falso para todos. Chamado no início do Program.Main
-    // (StartupGuard.SuspendTweaksAfterAFailedStart), antes da 1.ª leitura de um ajuste: o e10 lê-se logo a seguir, antes
-    // do Velopack.Run, o e11 depois da instância única, o e12 no App.OnStartup e na leitura do settings.json, e o e3 e o
+    // (StartupGuard.SuspendTweaksAfterAFailedStart), antes da 1.ª leitura de um ajuste: o e11 lê-se logo a seguir, depois
+    // da instância única (o e10, que se lia antes do Velopack.Run, saiu: INF-03), o e12 no App.OnStartup e na leitura do settings.json, e o e3 e o
     // e16 no Prepare, antes do Begin do StartupGuard. O marcador guarda se o arranque tinha ajustes antes da 1.ª página
     // (AnyBeforeFirstPaint, SandboxFallbackState.WithTweaks): sem nenhum, a queda não é deles e conta só para o sandbox
     // (os e1, e4, e5, e8 e e13, ligados por omissão, correm depois; o e8 só deixa a vigia marcada no construtor da janela

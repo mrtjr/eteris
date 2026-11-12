@@ -53,15 +53,16 @@ public partial class TabsViewModel : ObservableObject
     }
 
     // Abas da sessão anterior, pela ordem original; só a ativa carrega, as outras ficam a dormir até serem abertas.
+    // Sem «wakeActive» (depois de um arranque falhado, INF-01) ficam todas a dormir e nenhuma fica ativa.
     public void Restore(IReadOnlyList<string> addresses, int activeIndex, IReadOnlyList<string>? titles = null,
         IReadOnlyList<bool>? pinned = null, IReadOnlyList<int>? groupIds = null, IReadOnlyList<Data.SessionGroup>? groups = null,
-        IReadOnlyList<Data.SessionTabMeta>? metas = null)
+        IReadOnlyList<Data.SessionTabMeta>? metas = null, bool wakeActive = true)
     {
-        var tabs = BuildTabs(addresses, activeIndex, titles, pinned, groupIds, groups, metas, out var groupsCreated);
+        var tabs = BuildTabs(addresses, activeIndex, titles, pinned, groupIds, groups, metas, out var groupsCreated, wakeActive);
         _groupsCreated = groupsCreated;
         foreach (var tab in tabs) Tabs.Add(tab);
         RefreshGroups();
-        if (Tabs.Count > 0) Active = Tabs[Math.Clamp(activeIndex, 0, Tabs.Count - 1)];
+        if (wakeActive && Tabs.Count > 0) Active = Tabs[Math.Clamp(activeIndex, 0, Tabs.Count - 1)];
     }
 
     // Constrói as abas de uma sessão gravada (a faixa, ou a reserva de um Espaço): todas a dormir menos a ativa,

@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser.Tests;
@@ -196,4 +197,35 @@ public class TabsViewModelTests
         vm.SelectByNumber(number);
         Assert.Same(vm.Tabs[expectedIndex], vm.Active);
     }
+
+    // Depois de um arranque falhado (rede de segurança do sandbox, INF-01), a sessão volta sem acordar a aba ativa: uma
+    // página que faça cair processos do motor não volta a correr sozinha no arranque seguinte.
+    [Fact]
+    public void Restore_WithoutWakingTheActive_LeavesEveryTabAsleepAndNoneActive()
+    {
+        var vm = new TabsViewModel();
+        vm.Restore(["https://a.pt/", "https://b.pt/"], 1, wakeActive: false);
+        Assert.Equal(2, vm.Tabs.Count);
+        Assert.All(vm.Tabs, t => Assert.True(t.IsSleeping));
+        Assert.Null(vm.Active);
+    }
+
+    [Fact]
+    public void Session_AfterAFailedStart_RestoresEveryTabAsleep()
+    {
+        var code = Source("MainWindow.Session.cs");
+        Assert.Contains("wakeActive: !afterFailedStart", code);
+        Assert.Contains("hasRestoredTabs: Tabs.Tabs.Count > 0 && !afterFailedStart", code);
+    }
+
+    private static readonly string Root = FindRoot();
+
+    private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
+
+    private static string Source(string relative) => File.ReadAllText(Path.Combine(Root, "src", "Eteris.Browser", relative));
 }

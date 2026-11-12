@@ -26,6 +26,8 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<Da
     private SandboxFallbackState? _toWrite;
     private Outcome _outcome;
     private int _childFailures;
+    // Já houve conteúdo web confirmado neste arranque (WebContentCommitted): as quedas dos filhos deixam de contar.
+    private bool _webContent;
     private string? _version;
     // De onde veio cada falha de filho deste arranque (SandboxFallback.ChildOrigin); vai para o estado se contarem.
     private readonly List<string> _childOrigins = [];
@@ -45,10 +47,16 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<Da
         return Current = new StartupGuard(Path.Combine(root, SandboxFallback.FileName), () => DateTime.UtcNow - started);
     }
 
+    // O arranque anterior falhou com o sandbox ainda ligado (SandboxFallback.PreviousStartFailed): a sessão volta com as
+    // abas todas a dormir (MainWindow.StartTabs). Lido depois do Begin.
+    public bool PreviousStartFailed { get; private set; }
+
     public SandboxStart Begin(string version, bool available, bool manualOff, bool retried, bool tweaks = false)
     {
         if (!available) return new SandboxStart(new SandboxFallbackState(), false, SandboxNotice.None);
-        var start = SandboxFallback.Begin(Read(path), version, available, manualOff, retried, tweaks, _utcNow);
+        var previous = Read(path);
+        PreviousStartFailed = SandboxFallback.PreviousStartFailed(previous);
+        var start = SandboxFallback.Begin(previous, version, available, manualOff, retried, tweaks, _utcNow);
         lock (_gate)
         {
             _begun = start.State;
@@ -91,14 +99,22 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<Da
         CountChildFailure(SandboxFallback.LaunchOrigin(terminationStatus, when));
     }
 
+    // Uma moldura principal (aba, painel web ou Espreitar) confirmou conteúdo web (SandboxFallback.IsWebContent): daí em
+    // diante as quedas dos filhos já não contam, porque a página as pode provocar (INF-01). O corte não pode ser o
+    // Healthy: é a página que decide quando ele acontece (MainWindow.PageVisibility).
+    public void WebContentCommitted()
+    {
+        lock (_gate) _webContent = true;
+    }
+
     private void CountChildFailure(string origin)
     {
         lock (_gate)
         {
-            if (_begun is not { WithSandbox: true } begun || _outcome == Outcome.Failed) return;
+            if (_webContent || _begun is not { WithSandbox: true } begun || _outcome == Outcome.Failed) return;
             _childOrigins.Add(origin);
             if (++_childFailures < SandboxFallback.ChildFailuresToCount) return;
-            // Falhado, mesmo que a 1.ª página já tenha aparecido (a contagem de antes deste arranque é a de _begun).
+            // Falhado, mesmo que a 1.ª página interna já tenha aparecido (a contagem de antes deste arranque é a de _begun).
             _outcome = Outcome.Failed;
             _toWrite = SandboxFallback.Failed(begun, _version, SandboxFallback.ChildrenOrigin + " " + string.Join(' ', _childOrigins), _utcNow);
         }
@@ -109,8 +125,8 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<Da
 
     public const string TweaksSuspendedReason = "rede de segurança: um arranque anterior desta versão falhou com eles";
 
-    // O 1.º degrau da rede de segurança (D-18), no início do Program.Main, antes da 1.ª leitura de um ajuste (o e10 lê-se
-    // logo a seguir, antes do Velopack.Run). Só lê o disco quando há ajustes antes da 1.ª página ligados e o sandbox é
+    // O 1.º degrau da rede de segurança (D-18), no início do Program.Main, antes da 1.ª leitura de um ajuste (o e11 lê-se
+    // logo a seguir à instância única). Só lê o disco quando há ajustes antes da 1.ª página ligados e o sandbox é
     // possível (na configuração de omissão, nenhum: nada de novo antes da 1.ª página, regra R-2 do sandbox). O perfil é o
     // do --user-data-dir dos argumentos, como o AppPaths.UseRoot faz a seguir.
     public static bool SuspendTweaksAfterAFailedStart(IReadOnlyList<string> args)

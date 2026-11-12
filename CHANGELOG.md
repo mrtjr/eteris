@@ -1,10 +1,18 @@
 # Alterações
 
-## 0.2.16 — por publicar
+## 0.2.16 — 2026-11-12
+
+A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as
+janelas voltam depois de atualizar, de encerrar o Windows ou de uma queda, e as abas já não adormecem com uma chamada,
+uma gravação, Picture-in-Picture ou texto por enviar. «Apagar dados de navegação» e esquecer uma permissão apagam o que
+prometem, e a sincronização e o cofre aguentam melhor um aparelho removido e uma base de dados que desapareceu. A
+partir desta versão, as atualizações são conferidas com uma lista assinada pelo autor antes de se instalarem.
 
 ### Segurança
 
 - A cor do tema que um site declara deixa de passar pelo conversor de cores do Windows: um valor forjado podia levar o Éteris a abrir um endereço fora do motor.
+- Uma página que faz cair processos do motor já não consegue desligar o isolamento das páginas: as quedas só contam até haver conteúdo web, e depois de um arranque falhado a sessão volta com as abas a dormir.
+- As atualizações passam a ser conferidas: o Éteris só descarrega e instala pacotes que constem de uma lista de versões assinada pelo autor, com uma chave que não está no GitHub, e volta a conferir cada pacote depois de o descarregar.
 
 ### Privacidade
 
@@ -23,10 +31,12 @@
 ### Correções
 
 - O gerador de palavras-passe já não desiste num computador ocupado: os 100 ms do padrão do site contam só as tentativas, não a preparação, e a primeira tentativa faz-se sempre (antes podia aparecer «Este campo não aceita uma palavra-passe gerada» num campo que a aceita).
+- Abrir o Éteris outra vez, ou um link noutra aplicação, com uma atualização já descarregada deixou de fechar a janela que estava aberta: a atualização aplica-se ao sair, ou no arranque seguinte quando não há outro Éteris a correr.
 - Um `session.json` só de leitura ou preso por outro programa já não fecha o Éteris: a sessão fica por gravar e aparece um aviso.
 - Com mais de uma janela aberta, atualizar, encerrar o Windows ou uma queda já não deixam só as abas de uma: a sessão guarda todas as janelas normais, com os seus Espaços, notas e trancas, e todas voltam no arranque seguinte.
 - Notas com duas janelas abertas: o que se escreve numa aparece na outra e escrever numa janela que mostrava o texto antigo já não apaga o que a outra gravou.
 - As abas já não adormecem com uma gravação ou chamada em curso, com um vídeo em Picture-in-Picture nem com texto por enviar numa caixa de texto; o tempo em que o computador esteve suspenso deixou de contar para o prazo, e com pouca memória só adormecem abas deixadas há pelo menos 2 minutos.
+- O comando da paleta «Adormecer abas em segundo plano» também deixa acordadas as abas com uma gravação ou chamada, com multimédia a tocar, com Picture-in-Picture ou com texto por enviar: antes adormecia-as todas, cortava a chamada e o texto perdia-se. A multi-seleção (Ctrl/Shift+clique e «Adormecer») continua a adormecer as abas escolhidas.
 
 ## 0.2.15 — 2026-11-12
 

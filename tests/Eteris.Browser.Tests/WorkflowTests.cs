@@ -46,6 +46,8 @@ public class WorkflowTests
         var publish = Job(yml, "publish-sem-codecs");
         Assert.Contains("if: github.event_name == 'workflow_dispatch' && inputs.sem_codecs == true", publish);
         Assert.Contains("UpdateService.cs", publish);
+        // A emergência também sobe em rascunho: quem publica é o build/release.ps1, com a chave que o CI não tem (CAD-02).
+        Assert.DoesNotContain("--publish", publish);
         Assert.Contains("vpk upload", publish);
         // O CI não tem o motor próprio nem o CefSharp com o patch do sandbox: a publicação de emergência é sem sandbox
         // (desde a 0.2.14 o publish.ps1 publica com sandbox por omissão e pararia sem eles).

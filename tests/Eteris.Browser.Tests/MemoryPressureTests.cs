@@ -229,6 +229,24 @@ public class MemoryPressureTests
         Assert.DoesNotContain("tab.IsSleeping = true;", Source("MainWindow.Selection.cs"));
     }
 
+    // O comando da paleta «Adormecer abas em segundo plano» apanha todas as abas de fundo de uma vez: poupa, como o sono
+    // por tempo, as que gravam (microfone, câmara, ecrã), as que tocam e as que têm texto por enviar ou Picture-in-Picture
+    // (prova ao vivo de 2026-11-12: cortava a chamada e apagava o texto sem aviso). A multi-seleção, em que o
+    // utilizador escolhe as abas uma a uma, continua a adormecê-las na mesma.
+    [Fact]
+    public void PaletteSleep_SparesWorkInProgress_SelectionSleepsAnyway()
+    {
+        var sleep = Source("MainWindow.Sleep.cs");
+        var start = sleep.IndexOf("private void SleepAllBackgroundTabs()", StringComparison.Ordinal);
+        Assert.True(start >= 0, "SleepAllBackgroundTabs não encontrado");
+        var end = sleep.IndexOf("\n    }", start, StringComparison.Ordinal);
+        var body = sleep[start..end];
+        Assert.Contains("PutToSleep(tab);", body);
+        Assert.DoesNotContain("byUser", body);
+        Assert.Contains("PutToSleep(tab, byUser: true);", Source("MainWindow.Selection.cs"));
+        Assert.Contains("ficam acordadas as que gravam, tocam ou têm texto por enviar", Source("MainWindow.Palette.cs"));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

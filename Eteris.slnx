@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/build/">
+    <Project Path="build/sign/Eteris.Sign.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Eteris.Browser/Eteris.Browser.csproj" />
     <Project Path="src/Eteris.Sync/Eteris.Sync.csproj" />

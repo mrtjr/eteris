@@ -158,9 +158,26 @@ public static class SandboxFallback
     // inválido, DLL em falta, pilha…), o ponto de paragem dos CHECK do Chromium (0x80000003) e os códigos com que o
     // sandbox mata um filho que não consegue fechar (sandbox/win/src/sandbox_types.h: SBOX_FATAL_INTEGRITY 7006 a
     // SBOX_FATAL_MITIGATION 7011 e SBOX_FATAL_WARMUP 7013). Não contam: saídas normais (0) e as do Chromium ao fechar
-    // ou matar um filho de propósito (1–5), nem o limite de memória do processo (SBOX_FATAL_MEMORY_EXCEEDED, 7012).
+    // ou matar um filho de propósito (1–5), nem o limite de memória do processo (SBOX_FATAL_MEMORY_EXCEEDED, 7012), nem a
+    // falta de memória de um processo (0xE0000008, o código com que o Chromium termina um processo sem memória): como o
+    // 7012, uma página consegue provocá-la (INF-01).
     public static bool IsChildFailure(uint exitCode)
-        => exitCode >= 0xC0000000u || exitCode == 0x80000003u || exitCode is >= 7006 and <= 7011 or 7013;
+        => exitCode != 0xE0000008u && (exitCode >= 0xC0000000u || exitCode == 0x80000003u || exitCode is >= 7006 and <= 7011 or 7013);
+
+    // Conteúdo web: tudo o que não é uma página interna (eteris://) nem about: (INF-01). Depois de uma destas confirmada
+    // numa moldura principal, as quedas dos filhos deixam de contar: é o conteúdo que as pode provocar.
+    public static bool IsWebContent(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        var colon = url.IndexOf(':');
+        var scheme = (colon < 0 ? url : url[..colon]).ToLowerInvariant();
+        return scheme is not ("eteris" or "about");
+    }
+
+    // O arranque anterior falhou (caiu, ou contou como falhado) e o sandbox ainda não foi desligado por isso: o arranque
+    // a seguir repõe a sessão com todas as abas a dormir (INF-01), para uma página não voltar a correr sozinha.
+    public static bool PreviousStartFailed(SandboxFallbackState previous)
+        => previous.DisabledFor is null && (previous.Failures > 0 || (previous.Starting && previous.WithSandbox));
 
     // Estados de terminação de uma página (CefTerminationStatus da CEF; o enum do CefSharp 156 só vai até 3): o motor
     // não conseguiu lançar o processo (TS_LAUNCH_FAILED = 4) ou matou-o por falha de integridade do código

@@ -17,6 +17,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- A ferramenta de assinatura das atualizações (build/sign): o mesmo código que assina é testado contra o que o Éteris
+       verifica. -->
+  <ItemGroup>
+    <Compile Include="..\..\build\sign\Signer.cs" Link="Sign\Signer.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Eteris.Browser\Eteris.Browser.csproj" />
     <ProjectReference Include="..\..\src\Eteris.Sync\Eteris.Sync.csproj" />
