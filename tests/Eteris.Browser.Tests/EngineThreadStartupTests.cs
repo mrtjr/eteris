@@ -38,7 +38,7 @@ public class EngineThreadStartupTests
     // try (uma falha volta a ser lançada no WaitReady).
     [Fact]
     public void EngineThread_PreparesBeforeInitializing()
-        => Assert.Matches(@"try\s*\{\s*var settings = prepare\(\);\s*Cef\.Initialize\(settings,", Source(Path.Combine("Infrastructure", "CefConfigurator.cs")));
+        => Assert.Matches(@"try\s*\{\s*var settings = prepare\(\);\s*(?://[^\n]*\s*)*if \(!Cef\.Initialize\(settings,", Source(Path.Combine("Infrastructure", "CefConfigurator.cs")));
 
     // Sem o ajuste, o caminho de sempre: o Prepare no fio da interface, o mesmo resultado entregue à thread.
     [Fact]

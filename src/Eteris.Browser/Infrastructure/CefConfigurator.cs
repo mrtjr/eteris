@@ -182,7 +182,9 @@ public static class CefConfigurator
             try
             {
                 var settings = prepare();
-                Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null);
+                // Um Cef.Initialize que devolve falso (perfil bloqueado, ficheiros do motor em falta) lança com o código de saída,
+                // para o arranque dizer a causa em vez de seguir sem motor.
+                if (!Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null)) throw new EngineStartException((int)Cef.GetExitCode());
                 StartupTrace.Mark("cef.initialize");
                 ready();
             }
@@ -194,6 +196,19 @@ public static class CefConfigurator
         // STA, como o fio da interface onde o Cef.Initialize corria: as esperas numa thread STA recebem as mensagens COM.
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
+    }
+
+    // O texto que o App.OnStartup mostra quando o arranque falha: a causa, nunca a mensagem da exceção (pode trazer
+    // caminhos e endereços), e onde ficaram os detalhes.
+    public static string StartFailureText(Exception ex)
+    {
+        var cause = ex switch
+        {
+            EngineStartException engine => $"O motor do Éteris não arrancou (código {engine.ExitCode}).",
+            UnauthorizedAccessException or System.IO.IOException => "O Éteris não consegue escrever na pasta do perfil.",
+            _ => $"O Éteris não conseguiu arrancar ({ex.GetType().Name}).",
+        };
+        return $"{cause} Os detalhes ficaram em {CrashLog.FileName}, na pasta do perfil.";
     }
 
     // Espera pelo fim do Cef.Initialize (já acabou, ou nunca foi para outra thread: não espera).

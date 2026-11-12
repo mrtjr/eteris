@@ -10,6 +10,36 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Os tratadores globais de exceções, antes de haver janela (Infrastructure/CrashLog.cs): um erro inesperado fica
+        // registado em falhas.log (só o tipo e a pilha) e, com a janela aberta, o Éteris recupera e avisa.
+        CrashLog.Install(this, System.IO.Path.Combine(AppPaths.Root, CrashLog.FileName), message =>
+            (Windows.OfType<MainWindow>().FirstOrDefault(w => w.IsActive) ?? Windows.OfType<MainWindow>().FirstOrDefault())?.ShowCrashToast(message));
+        try
+        {
+            StartUp(e);
+        }
+        catch (Exception ex)
+        {
+            // Sem Shutdown: o OnExit chamaria o Cef.Shutdown de um motor que não arrancou e, na falha, daria o arranque por
+            // bom (StartupGuard e StartupRescue, mais abaixo), e nem a rede de segurança do sandbox nem a recuperação do
+            // arranque (StartupRescue) a contavam. Assim a falha conta como se o processo tivesse caído e, à segunda, o
+            // Éteris oferece a versão corrigida.
+            if (ex is EngineStartException { IsNormalExit: true })
+            {
+                // O Chromium passou o pedido a outro processo do mesmo perfil e saiu de propósito: não é uma falha.
+                StartupGuard.Current.Healthy();
+                StartupGuard.Current.Flush();
+                StartupRescue.Healthy(now: true);
+                Environment.Exit(0);
+            }
+            CrashLog.WriteStartup(System.IO.Path.Combine(AppPaths.Root, CrashLog.FileName), ex);
+            MessageBox.Show(CefConfigurator.StartFailureText(ex), "Éteris");
+            Environment.Exit(1);
+        }
+    }
+
+    private void StartUp(StartupEventArgs e)
+    {
         StartupTrace.Mark("onstartup");
         // O motor arranca numa thread própria enquanto o resto do arranque e o XAML da janela correm aqui; a janela espera
         // por ele só antes da 1.ª aba (Infrastructure/CefConfigurator.cs).

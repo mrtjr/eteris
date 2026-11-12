@@ -617,7 +617,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
     private static SettingsPage.About AboutInfo() => new(
         Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,
         Shields.FilterLists.ForApp().Summary(), Updates.UpdateService.Status,
-        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready));
+        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready),
+        Infrastructure.CrashLog.Count(System.IO.Path.Combine(Infrastructure.AppPaths.Root, Infrastructure.CrashLog.FileName)));
 
     private static IResourceHandler Html(string html)
         => ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme), Encoding.UTF8, false, "text/html");

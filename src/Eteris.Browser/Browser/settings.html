@@ -679,6 +679,9 @@
         <div class="item">
           <div class="label"><b>Escudo</b><span id="shield"></span></div>
         </div>
+        <div class="item" id="crashItem" hidden>
+          <div class="label"><b>Registo de falhas</b><span id="crashLog"></span></div>
+        </div>
         <div class="item">
           <div class="label"><b>Motor</b><span id="engineInfo"></span></div>
           <a class="link" href="eteris://credits/">Créditos e licenças →</a>
@@ -697,6 +700,7 @@
   document.getElementById('version').textContent = 'Versão ' + data.version;
   document.getElementById('updateStatus').textContent = data.updateStatus || '';
   document.getElementById('shield').textContent = data.shield || '';
+  if (data.crashLog) { document.getElementById('crashLog').textContent = data.crashLog; document.getElementById('crashItem').hidden = false; }
   document.getElementById('engineInfo').textContent = data.chromium ? `Chromium ${data.chromium} · CefSharp ${data.cefsharp}` : '';
   const check = document.getElementById('checkUpdate');
   const status = document.getElementById('updateStatus');
