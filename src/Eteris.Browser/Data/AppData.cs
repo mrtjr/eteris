@@ -89,6 +89,10 @@ public static class AppData
                     {
                         if (ProfileDatabase.MoveAside(AppPaths.Database, DateTime.Now) is null) throw;
                         _asides++;
+                        // A base nova está vazia: sem isto a sincronização lia os favoritos e as escolhas do Escudo como
+                        // apagados e enviava as remoções para a conta (Sync/ProfileRejoin.cs).
+                        Sync.ProfileRejoin.Add(Eteris.Sync.Model.Collections.Bookmarks);
+                        Sync.ProfileRejoin.Add(Eteris.Sync.Model.Collections.Shield);
                         foreach (var reset in Resets) reset();
                     }
                 }

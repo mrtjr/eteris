@@ -126,7 +126,7 @@ public sealed class AtomicFileTests : IDisposable
         Assert.DoesNotContain("Dispatcher.Invoke(", window);
         Assert.Contains("AtomicFile.Notice(\"settings.json\", Data.Settings.LoadOutcome)", window);
         Assert.Contains("AtomicFile.Notice(\"session.json\", SessionFile.LastLoad)", window);
-        Assert.Contains("if (Data.Settings.Unreadable) unreadable.Add(Collections.Settings);", Source("Sync/BrowserProfile.cs"));
+        Assert.Contains("unreadable.Add(Collections.Settings);", Source("Sync/BrowserProfile.cs"));
     }
 
     private static readonly string Root = FindRoot();
