@@ -51,15 +51,7 @@ public partial class MainWindow
             _privateContext?.Dispose();
             // A última janela privada leva consigo as autorizações de http:// dadas na sessão privada.
             if (!PrivateWindows().Any(w => !ReferenceEquals(w, this)))
-            {
-                Shields.ShieldEngine.Https.ForgetPrivate();
-                Shields.LocalNetworkGrants.ForgetPrivate();
-                Permissions.PermissionGrants.ForgetPrivate();
-                Shields.SiteRules.ForgetPrivate();
-                Data.AppData.ForgetPrivateShield();
-                Shields.Cname.PrivateCache.Clear();
-                Shields.PartitionedCookieJar.Private.Clear();
-            }
+                Eteris.Browser.Tabs.PrivateSession.End();
         };
     }
 
@@ -114,13 +106,7 @@ public partial class MainWindow
             window._endingPrivateSession = true;
             window.Close();
         }
-        Shields.ShieldEngine.Https.ForgetPrivate();
-        Shields.LocalNetworkGrants.ForgetPrivate();
-        Permissions.PermissionGrants.ForgetPrivate();
-        Shields.SiteRules.ForgetPrivate();
-        Data.AppData.ForgetPrivateShield();
-        Shields.Cname.PrivateCache.Clear();
-        Shields.PartitionedCookieJar.Private.Clear();
+        Eteris.Browser.Tabs.PrivateSession.End();
         // O aviso do fim aparece numa janela normal que fique.
         var survivor = Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault(w => !w.IsPrivate);
         survivor?.ShowToast(Eteris.Browser.Tabs.PrivateSession.Done(windows.Count));

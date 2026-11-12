@@ -143,8 +143,8 @@ public sealed class ReviewLocalNetworkCookiesTests : IDisposable
     {
         var handler = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Shields", "PrivacyRequestHandler.cs"));
         Assert.Contains("=> Data.Settings.Current.BlockThirdPartyCookies ? _cookies : null;", handler);
-        var ending = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "MainWindow.Private.cs"));
-        Assert.Equal(2, ending.Split("Shields.PartitionedCookieJar.Private.Clear();").Length - 1);
+        var ending = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Tabs", "PrivateSession.cs"));
+        Assert.Equal(1, ending.Split("Shields.PartitionedCookieJar.Private.Clear();").Length - 1);
     }
 
     // --- Rede local ---------------------------------------------------------------------------------------------

@@ -12,6 +12,17 @@ public partial class MainWindow
     // Um só ficheiro e um só temporizador para o processo: todas as janelas normais gravam a sessão de todas.
     private static SessionStore? s_sessionFile;
     private static SessionStore SessionFile => s_sessionFile ??= new(Path.Combine(AppPaths.Root, "session.json"));
+    // A descarga para o disco custa milissegundos (docs/motor.md F5): o temporizador grava fora do fio da janela e só a
+    // última versão interessa; o fecho da última janela e a saída gravam já (WriteNow) e esperam. Uma falha avisa-se no
+    // fio da janela com InvokeAsync, nunca Invoke: o WriteNow espera pela escrita em curso a partir desse fio.
+    private static readonly LatestWriter<IReadOnlyList<Data.SessionWindow>> s_sessionWriter = NewSessionWriter();
+
+    private static LatestWriter<IReadOnlyList<Data.SessionWindow>> NewSessionWriter()
+    {
+        var writer = new LatestWriter<IReadOnlyList<Data.SessionWindow>>(windows => SessionFile.TrySaveWindows(windows));
+        writer.Failed += () => System.Windows.Application.Current?.Dispatcher.InvokeAsync(WarnSessionNotSaved);
+        return writer;
+    }
     private static DispatcherTimer? s_sessionTimer;
     // A saída («Atualizar para…», encerramento do Windows) já gravou a sessão completa: os fechos seguintes, janela a
     // janela, não a reduzem.
@@ -75,6 +86,12 @@ public partial class MainWindow
             Loaded += (_, _) => FocusOmnibox();
         }
 
+        // Um ficheiro do perfil que estava danificado avisa-se uma vez, quando a janela carrega (NotifyProfile).
+        if (_ownsSession)
+        {
+            if (AtomicFile.Notice("settings.json", Data.Settings.LoadOutcome) is { } settingsNotice) NotifyProfile(settingsNotice);
+            if (AtomicFile.Notice("session.json", SessionFile.LastLoad) is { } sessionNotice) NotifyProfile(sessionNotice);
+        }
         if (!IsPrivate) Loaded += (_, _) => ShowProfileNotices();
         if (!IsPrivate) WatchSessionChanges();
     }
@@ -101,7 +118,7 @@ public partial class MainWindow
         Tabs.PropertyChanged += (_, _) => ScheduleSessionSave();
         // A última janela normal a fechar grava já, com ela; com outras abertas, a que fecha sai da sessão um segundo
         // depois (fica em «Reabrir janela fechada») — nunca se grava uma sessão sem janelas.
-        Closing += (_, _) => { if (!HasOtherNormalWindows()) SaveSessionNow(); };
+        Closing += (_, _) => { if (!HasOtherNormalWindows()) SaveSessionNow(now: true); };
         Closed += (_, _) =>
         {
             // A dona fecha com outras janelas abertas: o papel de dona (posição, abas adiadas) passa à seguinte,
@@ -155,7 +172,7 @@ public partial class MainWindow
     // Grava as abas de todas as janelas normais abertas, a dona primeiro. Um session.json só de leitura ou preso por
     // outro programa não fecha o Éteris: a sessão fica por gravar (volta a tentar-se na mudança de aba seguinte) e
     // avisa-se uma vez.
-    private static void SaveSessionNow()
+    private static void SaveSessionNow(bool now = false)
     {
         if (s_sessionFrozen) return;
         if (s_windowsToRestore is not null)
@@ -165,7 +182,9 @@ public partial class MainWindow
         }
         var windows = SessionExit.Order(NormalWindows().Where(w => w.IsLoaded).ToList(), w => w._ownsSession);
         if (windows.Count == 0) return;
-        if (!SessionFile.TrySaveWindows(windows.Select(w => w.SessionSnapshot()).ToList())) WarnSessionNotSaved();
+        var snapshot = windows.Select(w => w.SessionSnapshot()).ToList();
+        if (now) s_sessionWriter.WriteNow(snapshot);
+        else s_sessionWriter.Post(snapshot);
     }
 
     private Data.SessionWindow SessionSnapshot()
@@ -182,7 +201,7 @@ public partial class MainWindow
     // foi cancelado e a gravação volta.
     internal static void FreezeSessionForExit()
     {
-        SaveSessionNow();
+        SaveSessionNow(now: true);
         s_sessionFrozen = true;
         if (System.Windows.Application.Current?.Dispatcher is not { } dispatcher) return;
         s_unfreezeTimer ??= new DispatcherTimer(SessionExit.UnfreezeAfter, DispatcherPriority.Background, (_, _) =>

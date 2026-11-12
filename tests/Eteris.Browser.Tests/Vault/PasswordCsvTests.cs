@@ -218,4 +218,54 @@ public sealed class PasswordCsvTests : IDisposable
         Assert.Null(PasswordCsv.CloudFolder(@"C:\Users\teste\Documents\senhas.csv", env.GetValueOrDefault));
         Assert.Null(PasswordCsv.CloudFolder(@"C:\Users\teste\OneDriveX\senhas.csv", env.GetValueOrDefault));
     }
+
+    private const string Accented = "url,username,password\nhttps://a.exemplo.test,ana,Coração2024\n";
+
+    [Fact]
+    public void NotUtf8_IsRefusedWhole()
+    {
+        var read = PasswordCsv.Read(Encoding.Latin1.GetBytes(Accented));
+        Assert.Equal(CsvFileError.NotUtf8, read.FileError);
+        Assert.Empty(read.Logins);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Utf16WithBom_IsRead(bool bigEndian)
+    {
+        var encoding = new UnicodeEncoding(bigEndian, byteOrderMark: true);
+        var read = PasswordCsv.Read([.. encoding.GetPreamble(), .. encoding.GetBytes(Accented)]);
+        Assert.Null(read.FileError);
+        Assert.Equal("Coração2024", Assert.Single(read.Logins).Password);
+    }
+
+    // VAU-11: «Ficar com as do ficheiro» trocava o item por um novo, sem a nota, a última utilização nem o formulário.
+    [Fact]
+    public void Import_UseFile_KeepsTheStoredNote()
+    {
+        using var vault = new VaultService(_root, new Dpapi(VaultKey.Purpose), () => _now);
+        var id = vault.SaveLogin(new LoginItem("", "https://banco.exemplo.test", "ana", "Antiga-1!", "códigos de recuperação", _now, _now, _now, "https://banco.exemplo.test", false, null));
+        var read = PasswordCsv.Read(Encoding.UTF8.GetBytes("url,username,password\nhttps://banco.exemplo.test/,ana,Nova-2!\n"));
+        var summary = PasswordCsv.Apply(PasswordCsv.Plan(read, vault), vault, _ => ConflictChoice.UseFile);
+        Assert.Equal(1, summary.Replaced);
+        var login = vault.GetLogin(id)!;
+        Assert.Equal("Nova-2!", login.Password);
+        Assert.Equal("códigos de recuperação", login.Note);
+        Assert.Equal(_now, login.Used);
+        Assert.Equal("https://banco.exemplo.test", login.FormAction);
+        Assert.Equal("Antiga-1!", vault.PreviousPassword(id));
+    }
+
+    [Theory]
+    [InlineData("minha", null, "minha")]
+    [InlineData(null, "do ficheiro", "do ficheiro")]
+    [InlineData("igual", "igual", "igual")]
+    [InlineData("minha", "do ficheiro", "do ficheiro\n\nminha")]
+    public void JoinNotes_NeverDropsTheStoredNote(string? stored, string? incoming, string expected)
+        => Assert.Equal(expected, PasswordCsv.JoinNotes(stored, incoming));
+
+    [Fact]
+    public void JoinNotes_TooLongTogether_KeepsTheStoredOne()
+        => Assert.Equal("minha", PasswordCsv.JoinNotes("minha", new string('x', PasswordCsv.MaxNote)));
 }

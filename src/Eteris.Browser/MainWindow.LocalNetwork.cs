@@ -46,7 +46,7 @@ public partial class MainWindow
             _permissionQueue.Enqueue(new PendingPermission(site, [SitePermission.LocalNetwork], allowed =>
             {
                 // Os pedidos travados já falharam: a página volta a carregar para os repetir com autorização.
-                if (allowed && HasEngine(tab) && _browsers.TryGetValue(tab, out var browser)) browser.Reload();
+                if (allowed && HasEngine(tab) && _browsers.TryGetValue(tab, out var browser) && IsReady(browser)) browser.Reload();
             }, LocalNetworkText.CardDetail(label)));
             ShowNextPermission();
         }

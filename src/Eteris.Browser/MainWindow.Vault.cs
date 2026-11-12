@@ -945,8 +945,9 @@ public partial class MainWindow
     {
         try
         {
-            if (offer.ExistingId is not { } id || VaultService.Profile.GetLogin(id) is not { } login) return;
-            VaultService.Profile.SaveLogin(login with { Username = offer.Username, Generated = false });
+            // ConfirmGenerated junta-se ao item que o utilizador já tinha neste site (VAU-02), em vez de criar um segundo.
+            if (offer.ExistingId is not { } id) return;
+            VaultService.Profile.ConfirmGenerated(id, offer.Username);
         }
         catch (Exception) { return; }
         ShowToast($"Palavra-passe gerada guardada para {Origins.DisplayHost(offer.Origin) ?? offer.Origin}");

@@ -20,15 +20,20 @@ public static class LocalState
         {
             JsonNode root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) ?? new JsonObject() : new JsonObject();
             if (root is not JsonObject obj) return false;
+            var before = obj.ToJsonString();
             obj["dns_over_https"] = new JsonObject { ["mode"] = mode, ["templates"] = templates };
             if (energySaver is { } state) SetPath(obj, EnergySaver.PrefPath, state);
             else RemovePath(obj, EnergySaver.PrefPath);
+            var after = obj.ToJsonString();
+            // Sem alterações não se reescreve: o motor lê este ficheiro em cada arranque.
+            if (File.Exists(path) && before == after) return true;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, obj.ToJsonString());
+            AtomicFile.WriteText(path, after, backup: false);
             return true;
         }
         catch (JsonException) { return false; }
         catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
         catch (InvalidOperationException) { return false; }
     }
 

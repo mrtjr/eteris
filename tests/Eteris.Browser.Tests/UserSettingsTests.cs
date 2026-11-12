@@ -1,5 +1,6 @@
 using System.IO;
 using Eteris.Browser.Data;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Omnibox;
 using Eteris.Browser.Tabs;
 
@@ -9,7 +10,13 @@ public sealed class UserSettingsTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "eteris-settings-" + Guid.NewGuid() + ".json");
 
-    public void Dispose() => File.Delete(_path);
+    public void Dispose()
+    {
+        File.Delete(_path);
+        File.Delete(_path + ".tmp");
+        File.Delete(_path + ".bak");
+        File.Delete(_path + ".corrupt");
+    }
 
     [Fact]
     public void Defaults_ArePrivacyFirst()
@@ -186,6 +193,31 @@ public sealed class UserSettingsTests : IDisposable
     [Fact]
     public void Sleep_UsesCustomThreshold()
         => Assert.True(SleepPolicy.ShouldSleep(false, false, false, false, DateTime.UtcNow.AddMinutes(-6), DateTime.UtcNow, TimeSpan.FromMinutes(5)));
+    // DAD-07: um settings.json estragado repunha as predefinições (incluindo as de privacidade) em silêncio.
+    [Fact]
+    public void Load_Corrupt_UsesBakAndKeepsCorruptCopy()
+    {
+        var store = new SettingsStore(_path);
+        store.Save(new UserSettings { SearchEngine = "brave" });
+        store.Save(new UserSettings { SearchEngine = "startpage" });
+        File.WriteAllText(_path, "{ not json");
+        Assert.Equal("brave", store.Load().SearchEngine);
+        Assert.Equal(AtomicRead.FromBackup, store.LastLoad);
+        Assert.Equal("{ not json", File.ReadAllText(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void Save_AfterAnUnreadableLoad_SetsTheOldFileAside()
+    {
+        File.WriteAllText(_path, "{ not json");
+        var store = new SettingsStore(_path);
+        Assert.Equal(new UserSettings(), store.Load());
+        Assert.Equal(AtomicRead.Unreadable, store.LastLoad);
+        store.Save(new UserSettings { SearchEngine = "brave" });
+        Assert.Equal("{ not json", File.ReadAllText(_path + ".corrupt"));
+        Assert.Equal("brave", new SettingsStore(_path).Load().SearchEngine);
+    }
+
 }
 
 public class SettingsPageTests

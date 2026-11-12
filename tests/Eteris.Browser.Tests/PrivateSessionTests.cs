@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
@@ -43,4 +44,36 @@ public class PrivateSessionTests
         var sandbox = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
         Assert.Contains(WhatsNewPage.Highlights.Skip(sandbox + 16).Take(8), h => h.Detail.Contains("HTTPS", StringComparison.Ordinal));
     }
+
+    // ARQ-06: o fim da sessão privada esquecia sete coisas em dois sítios da janela (a última janela privada a fechar e
+    // «Terminar sessão privada»); uma loja nova de estado privado tinha de se lembrar nos dois. Agora é um só.
+    [Fact]
+    public void End_IsTheOnlyPlaceThatForgetsThePrivateSession()
+    {
+        string[] forgets =
+        [
+            "Shields.ShieldEngine.Https.ForgetPrivate();", "Shields.LocalNetworkGrants.ForgetPrivate();", "Permissions.PermissionGrants.ForgetPrivate();",
+            "Shields.SiteRules.ForgetPrivate();", "Data.AppData.ForgetPrivateShield();", "Shields.Cname.PrivateCache.Clear();",
+            "Shields.PartitionedCookieJar.Private.Clear();",
+        ];
+        var session = Source("Tabs/PrivateSession.cs");
+        var window = Source("MainWindow.Private.cs");
+        Assert.All(forgets, line =>
+        {
+            Assert.Equal(1, session.Split(line).Length - 1);
+            Assert.DoesNotContain(line, window);
+        });
+        Assert.Equal(2, window.Split("PrivateSession.End();").Length - 1);
+    }
+
+    private static readonly string Root = FindRoot();
+
+    private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
+
+    private static string Source(string relative) => File.ReadAllText(Path.Combine(Root, "src", "Eteris.Browser", relative));
 }

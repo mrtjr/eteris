@@ -11,6 +11,8 @@ public sealed class NotesTests : IDisposable
     {
         File.Delete(_path);
         File.Delete(_path + ".tmp");
+        File.Delete(_path + ".bak");
+        File.Delete(_path + ".corrupt");
     }
 
     // NAV-01, DAD-08: duas janelas com as Notas abertas — cada uma grava por cima do texto que leu.
@@ -106,5 +108,27 @@ public sealed class NotesTests : IDisposable
         var (result, newCaret) = NotesStore.Insert(text, caret, "- L");
         Assert.Equal(expected, result);
         Assert.Equal(expectedCaret, newCaret);
+    }
+
+    // DAD-07: notas.md cheio de zeros depois de um corte de energia.
+    [Fact]
+    public void TryLoad_ZeroFilledFile_FallsBackToBak()
+    {
+        var store = new NotesStore(_path);
+        store.Save("um");
+        store.Save("dois");
+        File.WriteAllBytes(_path, new byte[4]);
+        Assert.Equal("um", store.TryLoad());
+        Assert.True(File.Exists(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void TryLoad_MissingFile_IsEmpty_AndALockedOneIsNull()
+    {
+        var store = new NotesStore(_path);
+        Assert.Equal("", store.TryLoad());
+        store.Save("um");
+        store.Save("dois");
+        using (new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.None)) Assert.Null(store.TryLoad());
     }
 }

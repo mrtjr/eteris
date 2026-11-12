@@ -8,7 +8,11 @@ public sealed class LocalStateTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "eteris-ls-" + Guid.NewGuid() + ".json");
 
-    public void Dispose() => File.Delete(_path);
+    public void Dispose()
+    {
+        File.Delete(_path);
+        File.Delete(_path + ".tmp");
+    }
 
     [Fact]
     public void ApplySecureDns_MergesWithoutLosingOtherKeys()
@@ -34,5 +38,25 @@ public sealed class LocalStateTests : IDisposable
         File.WriteAllText(_path, "{ not json");
         Assert.False(LocalState.ApplySecureDns(_path, "secure", "x"));
         Assert.Equal("{ not json", File.ReadAllText(_path));
+    }
+
+    // DAD-07: o «Local State» só se reescreve quando muda (é lido por todos os arranques do motor).
+    [Fact]
+    public void Apply_Unchanged_DoesNotRewrite()
+    {
+        Assert.True(LocalState.ApplySecureDns(_path, "secure", "https://dns.quad9.net/dns-query"));
+        var stamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(_path, stamp);
+        Assert.True(LocalState.ApplySecureDns(_path, "secure", "https://dns.quad9.net/dns-query"));
+        Assert.Equal(stamp, File.GetLastWriteTimeUtc(_path));
+    }
+
+    [Fact]
+    public void Apply_ReadOnlyFile_ReturnsFalse()
+    {
+        LocalState.ApplySecureDns(_path, "off", "");
+        File.SetAttributes(_path, FileAttributes.ReadOnly);
+        try { Assert.False(LocalState.ApplySecureDns(_path, "secure", "x")); }
+        finally { File.SetAttributes(_path, FileAttributes.Normal); }
     }
 }

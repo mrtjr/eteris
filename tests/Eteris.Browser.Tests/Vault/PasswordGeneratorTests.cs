@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.RegularExpressions;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Vault;
@@ -210,4 +211,62 @@ public class PasswordGeneratorTests
         Assert.Equal("Antiga-0!", f.Vault.PreviousPassword(old));
         Assert.Null(f.Vault.GetLogin(id));
     }
+
+    // VAU-02: a gerada por confirmar leva o utilizador do formulário só ao confirmar; se esse utilizador já tinha um item,
+    // gravar a gerada «confirmada» criava um segundo item com o mesmo site e utilizador.
+    [Fact]
+    public void SaveLogin_NeverLeavesTwoItemsWithTheSameOriginAndUser()
+    {
+        using var f = new VaultFixture();
+        var old = f.Vault.SaveLogin(new LoginItem("", "https://loja.exemplo.test", "ana@exemplo.test", "Antiga-0!", "nota da conta", default, default, null, null, false, null));
+        var generated = f.Vault.SaveGenerated("https://loja.exemplo.test", "Gerada-9");
+        var kept = f.Vault.SaveLogin(f.Vault.GetLogin(generated)! with { Username = "ana@exemplo.test", Generated = false });
+        Assert.Equal(old, kept);
+        Assert.Single(f.Vault.Logins(), l => l.Username == "ana@exemplo.test");
+        Assert.Null(f.Vault.GetLogin(generated));
+        Assert.Equal("Gerada-9", f.Vault.GetLogin(old)!.Password);
+        Assert.Equal("nota da conta", f.Vault.GetLogin(old)!.Note);
+        Assert.Equal("Antiga-0!", f.Vault.PreviousPassword(old));
+    }
+
+    // O cofre de quem teve o VAU-02 nas versões anteriores já tem dois itens confirmados para o mesmo site e utilizador:
+    // gravar um deles juntava-se ao outro e o outro ao primeiro, sem fim (pilha esgotada, o Éteris fecha).
+    [Fact]
+    public void SaveLogin_WithTwoConfirmedDuplicatesAlreadyInTheVault_MergesThemWithoutLooping()
+    {
+        using var f = new VaultFixture();
+        var a = f.Vault.SaveLogin(new LoginItem("", "https://loja.exemplo.test", "ana@exemplo.test", "Antiga-0!", "nota", default, default, null, null, false, null));
+        var b = f.Vault.SaveGenerated("https://loja.exemplo.test", "Gerada-9", "ana@exemplo.test");
+        // O estado que o defeito antigo deixava: a gerada ficou «confirmada» ao lado da conta.
+        var store = (VaultStore)typeof(VaultService).GetProperty("Store", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(f.Vault)!;
+        var entry = store.Get(VaultCollection.Logins, b)!;
+        var meta = (System.Text.Json.Nodes.JsonObject)entry.Meta.DeepClone();
+        meta["generated"] = false;
+        Assert.True(store.UpdateMeta(VaultCollection.Logins, b, meta, f.Now));
+        Assert.Equal(2, f.Vault.Logins().Count(l => l.Username == "ana@exemplo.test"));
+
+        var kept = f.Vault.SaveLogin(f.Vault.GetLogin(a)! with { Note = "nota nova" });
+
+        Assert.Single(f.Vault.Logins(), l => l.Username == "ana@exemplo.test");
+        Assert.NotNull(f.Vault.GetLogin(kept));
+    }
+
+    [Fact]
+    public void Window_ConfirmsThroughConfirmGenerated()
+    {
+        var window = Source("MainWindow.Vault.cs");
+        Assert.Contains("VaultService.Profile.ConfirmGenerated(id, offer.Username)", window);
+        Assert.DoesNotContain("SaveLogin(login with { Username = offer.Username, Generated = false })", window);
+    }
+
+    private static readonly string Root = FindRoot();
+
+    private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
+
+    private static string Source(string relative) => File.ReadAllText(Path.Combine(Root, "src", "Eteris.Browser", relative));
 }
