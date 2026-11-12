@@ -192,6 +192,7 @@ public partial class MainWindow
             catch (Exception) { }
         }
         Shields.LocalNetworkGrants.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site), IsPrivate);
+        Permissions.PermissionGrants.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site), IsPrivate);
         ForgetSiteInUndo(site);
         var (cookies, storage) = await ClearSiteStorageAsync(site, seen);
         return new ShredResult(cookies, history, storage);
@@ -219,7 +220,7 @@ public partial class MainWindow
         catch (Exception) { }
 
         var origins = SiteScope.Origins(site, seen);
-        foreach (var origin in origins) Permissions.EngineLocalNetwork.Reset(CookieContext, origin);
+        foreach (var origin in origins) Permissions.EnginePermissions.ResetAll(CookieContext, origin);
 
         // O armazenamento apaga-se por origem, pelo DevTools de uma página viva deste contexto. Logo depois de fechar as
         // abas do site, a aba que fica pode ainda não ter motor: espera-se por ele.

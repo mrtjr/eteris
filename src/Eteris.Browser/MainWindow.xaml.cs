@@ -307,9 +307,16 @@ public partial class MainWindow : Window
             tab.CanGoForward = tab.Crossing.CanGoForward(inVideo: false, e.CanGoForward);
         });
         browser.LoadError += (_, e) => RecoverMainFrame(browser, e, IsPrivate, mainHistory);
+        // Lida uma vez aqui, na thread da janela (o FrameLoadStart chega noutra).
+        var permissionStore = SitePermissions;
         browser.FrameLoadStart += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            // Decisões que o Chromium guardou e o Éteris não tem (restos de versões anteriores, ou «Repor» nas
+            // Definições, que não tem o motor à mão): voltam ao valor por omissão no commit de cada página (MOT-03).
+            if (e.Browser.GetHost()?.RequestContext is { } engineContext)
+                Permissions.EnginePermissions.Reset(engineContext, e.Url,
+                    Permissions.EnginePermissions.Types.Keys.Where(k => permissionStore.Get(Permissions.PermissionRules.Site(e.Url), k) is null).ToList());
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
             KitTabNavigated(e.Browser.Identifier);

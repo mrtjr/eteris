@@ -14,11 +14,13 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
         Resolve(requestingOrigin, kinds, allowed =>
         {
             using (callback) callback.Continue(allowed ? PermissionRequestResult.Accept : PermissionRequestResult.Deny);
-            // Aceitar ou recusar o pedido grava ALLOW/BLOCK nas definições do próprio Chromium, para sempre. Para a rede
-            // local só vale o que o Éteris guardou («Permitir sempre»): «Só desta vez» e «Bloquear» não ficam no motor.
-            if (kinds.Contains(SitePermission.LocalNetwork) && context is not null
-                && store.Get(PermissionRules.Site(requestingOrigin), SitePermission.LocalNetwork) != true)
-                EngineLocalNetwork.Reset(context, requestingOrigin);
+            // Aceitar ou recusar o pedido grava ALLOW/BLOCK nas definições do próprio Chromium, para sempre. O motor só
+            // fica com a decisão que também está na loja do Éteris («Lembrar», «Permitir sempre»): o resto volta ao
+            // valor por omissão (perguntar, o que cai no cartão do Éteris). Vale também para a recusa automática das
+            // notificações, que responde por aqui. Uma notificação permitida fica para o commit seguinte (AfterAnswer).
+            if (context is not null)
+                EnginePermissions.Reset(context, requestingOrigin,
+                    EnginePermissions.AfterAnswer(kinds, allowed, k => store.Get(PermissionRules.Site(requestingOrigin), k)));
         });
         return true;
     }
@@ -72,21 +74,43 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
     }
 }
 
-// As decisões do Chromium sobre a rede local (Local Network Access) de uma origem voltam ao valor por omissão (perguntar,
-// o que cai no cartão do Éteris): depois de «Só desta vez»/«Bloquear», ao triturar ou esquecer o site e quando o
-// cadeado esquece «Rede local».
-public static class EngineLocalNetwork
+// As decisões que o Chromium guardou para uma origem voltam ao valor por omissão (perguntar, o que cai no cartão do
+// Éteris): depois de cada resposta que o Éteris não guardou, ao esquecer no cadeado, ao triturar ou esquecer o site e no
+// commit de cada página (restos de versões anteriores: o motor não deixa enumerar as decisões guardadas). MOT-03.
+public static class EnginePermissions
 {
-    // O enum do CefSharp 156 não tem estes tipos e os números dele já não batem com os da CEF: o CefSharp passa o
-    // número tal e qual à CEF, por isso usam-se os de cef_types_content_settings.h da CEF 156 (LOCAL_NETWORK_ACCESS,
-    // LOCAL_NETWORK e LOOPBACK_NETWORK). Só para o motor 156: noutro, os números podem ter mudado e nada se toca.
-    private static readonly CefSharp.Enums.ContentSettingTypes[] Types =
-        [(CefSharp.Enums.ContentSettingTypes)134, (CefSharp.Enums.ContentSettingTypes)142, (CefSharp.Enums.ContentSettingTypes)143];
-
+    // Os números são os de cef_types_content_settings.h da CEF 156 (GEOLOCATION 4, NOTIFICATIONS 5, MEDIASTREAM_MIC 8,
+    // MEDIASTREAM_CAMERA 9, AUTOMATIC_DOWNLOADS 12, LOCAL_NETWORK_ACCESS 134, LOCAL_NETWORK 142, LOOPBACK_NETWORK 143):
+    // o enum do CefSharp 156 não tem alguns destes tipos e os números dele já não batem com os da CEF, e o CefSharp passa
+    // o número tal e qual à CEF. Só para o motor 156: noutro, os números podem ter mudado e nada se toca. A partilha do
+    // ecrã não tem definição guardada. A área de transferência (CLIPBOARD_READ_WRITE 52, CLIPBOARD_SANITIZED_WRITE 53)
+    // fica de fora: na CEF 156 ler ou escrever esses tipos por esta API faz cair o motor (verificação interna do
+    // Chromium, provado ao vivo); a decisão dela continua guardada no motor até haver outra via.
     public const string EngineMajor = "156.";
 
-    public static void Reset(IRequestContext context, string origin)
+    public static IReadOnlyDictionary<SitePermission, int[]> Types { get; } = new Dictionary<SitePermission, int[]>
     {
+        [SitePermission.Camera] = [9],
+        [SitePermission.Microphone] = [8],
+        [SitePermission.Location] = [4],
+        [SitePermission.Notifications] = [5],
+        [SitePermission.MultipleDownloads] = [12],
+        [SitePermission.LocalNetwork] = [134, 142, 143],
+    };
+
+    public static void ResetAll(IRequestContext context, string origin) => Reset(context, origin, Types.Keys.ToList());
+
+    // O que se repõe logo a seguir a uma resposta: o que a loja do Éteris não guarda. Uma notificação permitida fica para
+    // o commit seguinte da página: repô-la já devolvia a página a «default» 2 s depois (prova ao vivo), cortando o uso
+    // que acabou de ser permitido.
+    public static List<SitePermission> AfterAnswer(IEnumerable<SitePermission> kinds, bool allowed, Func<SitePermission, bool?> stored)
+        => kinds.Where(k => stored(k) is null && !(allowed && k == SitePermission.Notifications)).ToList();
+
+    public static void Reset(IRequestContext context, string origin, IEnumerable<SitePermission> kinds)
+    {
+        var types = kinds.Where(Types.ContainsKey).SelectMany(k => Types[k]).Distinct()
+            .Select(n => (CefSharp.Enums.ContentSettingTypes)n).ToList();
+        if (types.Count == 0) return;
         if (!Cef.ChromiumVersion.StartsWith(EngineMajor, StringComparison.Ordinal)) return;
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return;
         var url = uri.GetLeftPart(UriPartial.Authority) + "/";
@@ -95,7 +119,7 @@ public static class EngineLocalNetwork
             // As definições de conteúdo mexem-se na thread de interface do CEF (como o próprio pedido).
             _ = Cef.UIThreadTaskFactory.StartNew(() =>
             {
-                foreach (var type in Types)
+                foreach (var type in types)
                 {
                     try
                     {

@@ -45,6 +45,13 @@ public partial class MainWindow
                 respond(true);
                 return;
             }
+            // «Permitir» sem «Lembrar» desta sessão (notificações, área de transferência, várias transferências): o
+            // motor já não guarda a decisão (MOT-03), por isso o Éteris lembra-a até fechar, sem novo cartão.
+            if (kinds.Count > 0 && kinds.All(k => PermissionGrants.IsAllowed(site, k, IsPrivate)))
+            {
+                respond(true);
+                return;
+            }
             Dispatcher.InvokeAsync(() =>
             {
                 _permissionQueue.Enqueue(new PendingPermission(site, kinds, respond));
@@ -105,6 +112,10 @@ public partial class MainWindow
         }
         else if (PermissionRemember.IsChecked == true)
             foreach (var kind in current.Kinds) SitePermissions.Set(current.Site, kind, allowed);
+        else if (allowed)
+            // Sem «Lembrar»: vale até fechar o Éteris para os tipos de PermissionGrants.Applies; os outros voltam a
+            // perguntar no pedido seguinte. «Bloquear» sem «Lembrar» não fica em lado nenhum.
+            foreach (var kind in current.Kinds) PermissionGrants.Allow(current.Site, kind, IsPrivate);
         current.Respond(allowed);
         ShowNextPermission();
     }

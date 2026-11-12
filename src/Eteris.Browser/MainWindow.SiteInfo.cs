@@ -240,8 +240,9 @@ public partial class MainWindow
         if (sender is not Button { Tag: SitePermission kind } || Tabs.Active is not { } tab) return;
         var origin = SiteInfo.Describe(tab.Address).Origin;
         SitePermissions.Forget(PermissionRules.Site(origin), kind);
-        // «Rede local» esquecida: também a decisão que o próprio Chromium tenha guardado.
-        if (kind == SitePermission.LocalNetwork) EngineLocalNetwork.Reset(CookieContext, origin);
+        // Também a autorização desta sessão e a decisão que o próprio Chromium tenha guardado (MOT-03).
+        PermissionGrants.Forget(PermissionRules.Site(origin), kind);
+        EnginePermissions.Reset(CookieContext, origin, [kind]);
         FillSiteInfo();
         ShowToast($"{Permissions.PermissionText.Name(kind)}: o site voltará a perguntar");
     }

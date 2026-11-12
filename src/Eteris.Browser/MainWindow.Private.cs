@@ -54,6 +54,7 @@ public partial class MainWindow
             {
                 Shields.ShieldEngine.Https.ForgetPrivate();
                 Shields.LocalNetworkGrants.ForgetPrivate();
+                Permissions.PermissionGrants.ForgetPrivate();
                 Shields.SiteRules.ForgetPrivate();
                 Data.AppData.ForgetPrivateShield();
                 Shields.Cname.PrivateCache.Clear();
@@ -115,6 +116,7 @@ public partial class MainWindow
         }
         Shields.ShieldEngine.Https.ForgetPrivate();
         Shields.LocalNetworkGrants.ForgetPrivate();
+        Permissions.PermissionGrants.ForgetPrivate();
         Shields.SiteRules.ForgetPrivate();
         Data.AppData.ForgetPrivateShield();
         Shields.Cname.PrivateCache.Clear();

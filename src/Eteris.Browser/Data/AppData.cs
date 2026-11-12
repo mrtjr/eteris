@@ -519,6 +519,7 @@ public static class AppData
             SetHttpException(host, false);
             Shields.ShieldEngine.Https.Forget(host);
             Shields.LocalNetworkGrants.Forget(host);
+            Permissions.PermissionGrants.Forget(host);
         }
         SetForgetOnClose(site, false);
         Shields.SiteRules.Forget(site);
