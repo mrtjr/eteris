@@ -19,6 +19,7 @@
 ### Privacidade
 
 - A câmara e o microfone lembrados para um site já não valem quando ele está embutido noutro; a partilha de ecrã pergunta sempre; a aba mostra um sinal enquanto há captura.
+- O cartão de permissão ignora cliques no primeiro meio segundo, começa com “Lembrar” desligado para a câmara, o microfone, o ecrã e a localização, e só aparece na aba que pediu.
 
 ## 0.2.16 — 2026-11-12
 

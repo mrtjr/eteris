@@ -336,6 +336,8 @@ public partial class MainWindow : Window
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
             Dispatcher.InvokeAsync(() => tab.IsCapturing = false);
+            // Página nova: o cartão de permissão da anterior já não é desta página.
+            Dispatcher.InvokeAsync(() => DropPermissions(p => ReferenceEquals(p.Tab, tab)));
             // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01).
             if (SandboxFallback.IsWebContent(e.Url)) StartupGuard.Current.WebContentCommitted();
             ResetUnstoredEnginePermissions(e.Browser, e.Url, permissionStore);
@@ -492,6 +494,8 @@ public partial class MainWindow : Window
         UpdateVideoEngineBadge();
         ApplyTint();
         RevealActiveTab();
+        // O cartão de permissão de uma aba só aparece com ela à vista.
+        ShowNextPermission();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)

@@ -152,7 +152,7 @@ public sealed class PermissionsTests : IDisposable
         Assert.Contains("onCapture?.Invoke(chromiumWebBrowser);", handler);
         Assert.Contains("Source: chromiumWebBrowser", handler);
         Assert.Contains("PromptId: promptId", handler);
-        Assert.Contains("SitePermissionHandler(SitePermissionStore store, Action<PermissionAsk> ask, Action<CefSharp.IWebBrowser>? onCapture = null)", handler);
+        Assert.Contains("SitePermissionHandler(SitePermissionStore store, Action<PermissionAsk> ask, Action<CefSharp.IWebBrowser>? onCapture = null,", handler);
     }
 
     [Fact] public void TheCard_NamesTheTopPage_HidesRemember_AndOnlyStoresWhatCanBeRemembered()

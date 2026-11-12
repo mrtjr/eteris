@@ -497,6 +497,7 @@ public partial class MainWindow
 
     private void ReleaseVideoView(BrowserTab tab)
     {
+        DropPermissions(p => ReferenceEquals(p.Tab, tab));
         _videoSwitching.Remove(tab);
         if (!_videoViews.Remove(tab, out var view)) return;
         BrowserHost.Children.Remove(view);

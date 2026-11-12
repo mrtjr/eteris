@@ -11,15 +11,18 @@ public partial class MainWindow
 {
     // EmbeddedIn: o site da página de topo quando o pedido vem de uma moldura de outro site (MOT-04). CanRemember: o cartão
     // só oferece «Lembrar» (e só grava) para o que se pode lembrar (PermissionRules.CanRemember). Drop larga o pedido
-    // sem o responder em nome do utilizador.
+    // sem o responder em nome do utilizador. Tab é a aba que pediu: o cartão só aparece com ela à vista e sai com ela
+    // (null nos sites fixados e no Espreitar, que se mostram sempre); PromptId é o pedido que o Chromium pode retirar.
     private sealed record PendingPermission(string Site, IReadOnlyCollection<SitePermission> Kinds, Action<bool> Respond, Action Drop,
-        string? EmbeddedIn, bool CanRemember, string? Detail = null)
+        string? EmbeddedIn, bool CanRemember, string? Detail = null, BrowserTab? Tab = null, ulong? PromptId = null)
     {
         public bool IsLocalNetwork => Kinds.Count > 0 && Kinds.All(k => k == SitePermission.LocalNetwork);
     }
 
-    private readonly Queue<PendingPermission> _permissionQueue = new();
+    // Os pedidos à espera, por ordem de chegada (o que está no cartão já saiu daqui), e quando o cartão atual apareceu.
+    private readonly List<PendingPermission> _pendingPermissions = [];
     private PendingPermission? _currentPermission;
+    private DateTime _permissionShownUtc;
     private SitePermissionStore? _sitePermissions;
     private SitePermissionHandler? _permissionHandler;
 
@@ -39,7 +42,9 @@ public partial class MainWindow
         onCapture: source => Dispatcher.InvokeAsync(() =>
         {
             if (TabOf(source) is { } tab) tab.IsCapturing = true;
-        }));
+        }),
+        // O Chromium retirou o pedido (a página navegou, o separador fechou): o cartão sai, sem responder ao motor.
+        onDismissed: promptId => Dispatcher.InvokeAsync(() => DropPermissions(p => p.PromptId == promptId, answer: false)));
 
     // A aba de um motor (a que pede, quando quem chama não a conhece).
     private BrowserTab? TabOf(object? source) => _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, source)).Key;
@@ -73,7 +78,8 @@ public partial class MainWindow
         }
         Dispatcher.InvokeAsync(() =>
         {
-            _permissionQueue.Enqueue(new PendingPermission(site, kinds, ask.Respond, ask.Drop, ask.EmbeddedIn, canRemember));
+            _pendingPermissions.Add(new PendingPermission(site, kinds, ask.Respond, ask.Drop, ask.EmbeddedIn, canRemember,
+                Tab: tab ?? TabOf(ask.Source), PromptId: ask.PromptId));
             ShowNextPermission();
         });
     }
@@ -87,16 +93,27 @@ public partial class MainWindow
         EnginePermissions.Reset(context, url, EnginePermissions.Unstored(k => store.Get(site, k)));
     }
 
+    // O cartão atual é de uma aba que já não está à vista: volta ao início da fila (e a aba, ao voltar, mostra-o de novo).
+    // Depois mostra o primeiro pedido à espera cuja aba está à vista.
     private void ShowNextPermission()
     {
+        if (_currentPermission is { Tab: { } shownTab } held && !IsTabOnScreen(shownTab))
+        {
+            _pendingPermissions.Insert(0, held);
+            _currentPermission = null;
+        }
         if (_currentPermission is not null) return;
-        if (!_permissionQueue.TryDequeue(out var next))
+        var index = PermissionCard.Next(_pendingPermissions.Select(p => p.Tab is null || IsTabOnScreen(p.Tab)).ToList());
+        if (index < 0)
         {
             PermissionBar.Visibility = Visibility.Collapsed;
             return;
         }
 
+        var next = _pendingPermissions[index];
+        _pendingPermissions.RemoveAt(index);
         _currentPermission = next;
+        _permissionShownUtc = DateTime.UtcNow;
         PermissionText.Inlines.Clear();
         PermissionText.Inlines.Add(new Bold(new Run(next.Site)));
         PermissionText.Inlines.Add(new Run((next.EmbeddedIn is null ? string.Empty : " (dentro de " + next.EmbeddedIn + ")")
@@ -119,7 +136,8 @@ public partial class MainWindow
             SitePermission.Clipboard => "",
             _ => "",
         };
-        PermissionRemember.IsChecked = true;
+        // Câmara, microfone, ecrã e localização: «Lembrar» desligado; o utilizador marca-o se quiser.
+        PermissionRemember.IsChecked = PermissionCard.RemembersByDefault(next.Kinds);
         // Na janela privada a decisão fica só em memória, até a janela fechar.
         PermissionRememberLabel.Text = IsPrivate ? "Lembrar nesta janela" : "Lembrar neste site";
         PermissionBar.Visibility = Visibility.Visible;
@@ -149,9 +167,47 @@ public partial class MainWindow
         ShowNextPermission();
     }
 
-    private void PermissionAllow_Click(object sender, RoutedEventArgs e) => AnswerPermission(true);
+    // Tira da fila (e do cartão) os pedidos que «which» escolhe: a aba fechou, adormeceu ou navegou, ou o Chromium retirou
+    // o pedido. Com «answer», o motor é avisado de que o pedido caiu (Drop); sem ele, já não há a quem avisar.
+    private void DropPermissions(Func<PendingPermission, bool> which, bool answer = true)
+    {
+        var dropped = new List<PendingPermission>();
+        _pendingPermissions.RemoveAll(p =>
+        {
+            if (!which(p)) return false;
+            dropped.Add(p);
+            return true;
+        });
+        if (_currentPermission is { } current && which(current))
+        {
+            dropped.Add(current);
+            _currentPermission = null;
+        }
+        if (dropped.Count == 0) return;
+        if (answer)
+            foreach (var p in dropped) p.Drop();
+        ShowNextPermission();
+    }
 
-    private void PermissionOnce_Click(object sender, RoutedEventArgs e) => AnswerPermission(true, once: true);
+    // O instante a partir do qual o cartão aceita cliques: o mais recente entre a ativação da janela principal e a do
+    // Éteris (o cartão vive na janela da camada: voltar de outra aplicação e clicar nele não ativa a principal).
+    private DateTime LastActivationUtc => _appActivatedUtc > _lastActivatedUtc ? _appActivatedUtc : _lastActivatedUtc;
 
-    private void PermissionDeny_Click(object sender, RoutedEventArgs e) => AnswerPermission(false);
+    private void PermissionAllow_Click(object sender, RoutedEventArgs e)
+    {
+        if (!PermissionCard.AcceptsClick(_permissionShownUtc, LastActivationUtc, DateTime.UtcNow)) return;
+        AnswerPermission(true);
+    }
+
+    private void PermissionOnce_Click(object sender, RoutedEventArgs e)
+    {
+        if (!PermissionCard.AcceptsClick(_permissionShownUtc, LastActivationUtc, DateTime.UtcNow)) return;
+        AnswerPermission(true, once: true);
+    }
+
+    private void PermissionDeny_Click(object sender, RoutedEventArgs e)
+    {
+        if (!PermissionCard.AcceptsClick(_permissionShownUtc, LastActivationUtc, DateTime.UtcNow)) return;
+        AnswerPermission(false);
+    }
 }

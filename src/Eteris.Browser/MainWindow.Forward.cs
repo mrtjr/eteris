@@ -7,6 +7,8 @@ namespace Eteris.Browser;
 public partial class MainWindow
 {
     private DateTime _lastActivatedUtc = DateTime.UtcNow;
+    // Quando o Éteris, vindo de outra aplicação, voltou a ter o foco (qualquer das suas janelas; MOT-05).
+    private DateTime _appActivatedUtc = DateTime.UtcNow;
 
     internal static void OpenForwarded(string[] args)
     {
@@ -30,7 +32,18 @@ public partial class MainWindow
         target.BringToFront();
     }
 
-    private void TrackActivation() => Activated += (_, _) => _lastActivatedUtc = DateTime.UtcNow;
+    private void TrackActivation()
+    {
+        Activated += (_, _) => _lastActivatedUtc = DateTime.UtcNow;
+        // O cartão de permissão vive na janela da camada (MainWindow.Overlay.cs): quem volta de outra aplicação e clica
+        // logo nele ativa a camada, não a janela principal. O guarda do cartão recomeça com a ativação do Éteris.
+        EventHandler onAppActivated = (_, _) => _appActivatedUtc = DateTime.UtcNow;
+        Application.Current.Activated += onAppActivated;
+        Closed += (_, _) =>
+        {
+            if (Application.Current is { } app) app.Activated -= onAppActivated;
+        };
+    }
 
     private void BringToFront()
     {

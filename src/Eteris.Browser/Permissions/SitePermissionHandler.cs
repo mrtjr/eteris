@@ -29,9 +29,14 @@ public sealed record PermissionAsk(string Site, IReadOnlyCollection<SitePermissi
 }
 
 // Pedidos de permissão: decisões lembradas por site; o resto é perguntado na barra do Éteris.
-public sealed class SitePermissionHandler(SitePermissionStore store, Action<PermissionAsk> ask, Action<CefSharp.IWebBrowser>? onCapture = null)
-    : CefSharp.Handler.PermissionHandler
+public sealed class SitePermissionHandler(SitePermissionStore store, Action<PermissionAsk> ask, Action<CefSharp.IWebBrowser>? onCapture = null,
+    Action<ulong>? onDismissed = null) : CefSharp.Handler.PermissionHandler
 {
+    // O Chromium retirou o pedido (a página navegou, a aba fechou) ou acabou de o responder: o cartão do Éteris sai, se ainda
+    // lá estiver. A resposta do próprio Éteris também passa por aqui, mas nessa altura o pedido já saiu da fila.
+    protected override void OnDismissPermissionPrompt(IWebBrowser chromiumWebBrowser, IBrowser browser, ulong promptId,
+        PermissionRequestResult result) => onDismissed?.Invoke(promptId);
+
     protected override bool OnShowPermissionPrompt(IWebBrowser chromiumWebBrowser, IBrowser browser, ulong promptId,
         string requestingOrigin, PermissionRequestType permissionRequestTypes, IPermissionPromptCallback callback)
     {
