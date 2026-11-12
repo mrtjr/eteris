@@ -160,11 +160,20 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 - **Aparelhos**: lista nas Definições › Sincronização › Mais opções (nome, «este computador», quando sincronizou, «·
   recebe pagamentos e documentos») com **«Remover»** (duas vezes, para confirmar). Remover faz **nova cadeia**: segredo
   e chaves novos, tudo recifrado, a cadeia antiga apagada, e um kit de recuperação novo (o antigo deixa de valer, em
-  todos os computadores). Os aparelhos que ficam recebem a conta nova sozinhos: cada aparelho tem uma
+  todos os computadores). Os aparelhos que ficam recebem a conta nova: cada aparelho tem uma
   chave estática P-256 (no estado local, DPAPI) cuja parte pública vai no seu estado cifrado; os outros fixam-na na
   primeira vez que a veem; a conta nova vai em `eteris/<cadeia antiga>/r/<aparelho>/<de>`, cifrada com ECDH entre as
-  chaves estáticas de quem remove e de quem fica. O removido não tem mensagem para si e não consegue forjar uma (não tem
-  as chaves privadas dos outros): para — «a sincronização parou… este computador foi removido noutro aparelho».
+  chaves estáticas de quem remove e de quem fica. Um aparelho que fica **segue sozinho só quando quem escreveu a
+  mensagem é a única chave fixada nele** (a conta de dois computadores; `SyncEngine.RekeyIsUnambiguous`). Senão fica
+  **em pausa, sem perder nada** (o estado e a base ficam guardados; não escreve nada em conta nenhuma), até se escrever
+  nele o **identificador do kit novo**: os 4 caracteres de «O seu kit atual termina em…», lidos nas Definições do
+  computador onde se fez a troca (`SyncAgent.ConfirmRekeyAsync`). O identificador deriva do segredo novo, que não está
+  no Drive. O removido não tem mensagem para si: para — «a sincronização parou… este computador foi removido noutro
+  aparelho». Consegue escrever uma mensagem sua para os outros (tem a chave deles fixada, e eles a dele) e apagar a
+  verdadeira enquanto tiver acesso ao Drive, mas não conhece o identificador: a conta que deixar tem outro. Três
+  identificadores errados param o aparelho, que se junta outra vez (kit novo ou aprovação); «Não tenho o identificador:
+  juntar outra vez» faz o mesmo sem tentar. O aviso de quem fica usa o nome que este aparelho já conhecia do
+  remetente, não o que vem na mensagem.
   Pormenores que a revisão do login completo acrescentou:
   - **Antes de trocar a chave, uma ronda completa** (o que os outros enviaram e este ainda não leu entra no estado que
     passa para a conta nova); e quem recebe a conta nova volta a pôr nela o que escreveu na antiga, com a hora original
@@ -753,7 +762,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 | **Quem escreve um pedido falso de aparelho novo** (controla o transporte, ou entrou no Éteris com a conta Google da pessoa) | fazer aparecer «Um computador quer entrar na sua conta…» no computador ligado; depois de 3 pedidos maus em 24 h a barra cala-se e o aviso fica nas Definições | receber a conta: o computador ligado não mostra nenhum código para copiar, e o código só existe no ecrã do computador novo; três códigos errados recusam |
 | **Quem dita um código à pessoa** (por telefone, por mensagem) | levá-la a escrever no computador ligado o código do computador dele | — limite do *number matching*: escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito. Remédio: «Perdi um computador» (remove e troca a chave) |
 | **Quem apaga ou substitui a conta no Drive** | fazer um computador que já esteve na conta encontrar outra cadeia | que esse computador peça aprovação sozinho: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão (`SyncStatus.ChainReplaced`, `SavedSync.HadAccount`); «Fui eu» pede o Windows com segredos ligados neste computador |
-| **Um aparelho removido** (tem o kit antigo) | ler o que já tinha (o que já estava nesse computador continua lá); enquanto o acesso do Éteris à conta Google não for retirado, apagar ou estragar os ficheiros no Drive (remover troca a chave, não retira esse acesso — remédio: «Perdi um computador / foi roubado», que o retira) | abrir a conta nova ou escrever nela algo que os outros aceitem; forjar a mensagem com a conta nova para os outros (precisava das chaves privadas deles) |
+| **Um aparelho removido** (tem o kit antigo) | ler o que já tinha (o que já estava nesse computador continua lá); enquanto o acesso do Éteris à conta Google não for retirado, apagar ou estragar os ficheiros no Drive (remover troca a chave, não retira esse acesso — remédio: «Perdi um computador / foi roubado», que o retira); deixar aos outros uma mensagem com uma conta dele: quem a recebe fica em pausa e pede o identificador do kit novo, que ele não conhece (1 em 1 048 576 por tentativa, 3 tentativas) — salvo um aparelho desligado desde antes de o outro entrar, que só fixou a chave do removido e segue sozinho a mensagem dele | abrir a conta nova ou escrever nela algo que os outros aceitem |
 | **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000 por pedido, com no máximo 3 pedidos acompanhados de cada vez (`PairingRequests.MaxAnswered`), e a barra deixa de abrir sozinha ao 3.º pedido que acabe mal em 24 h (`PairingFatigue`); com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador escrever no anfitrião o código que o convidado verdadeiro mostra; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador; o que já estava nesse computador) | — remédio: «Perdi um computador / foi roubado» noutro computador (remove, troca a chave e retira o acesso na Google) e mudar as palavras-passe importantes |
 | **Quem tem um ficheiro `.eteris`** | nada sem o código | — |
@@ -908,13 +917,16 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   nenhum nome em claro nos ficheiros do pedido, ficheiros apagados no fim), recusa, junção sem perder nada (o que só
   existia aqui sobe, a conta vale, notas juntas), alterações nos dois sentidos, **conflitos**, **lápides**, alteração a
   meio de uma ronda, alteração recusada que não ressuscita, campos desconhecidos preservados, **remover um aparelho**
-  (os outros continuam sozinhos, o removido para), **apagar os dados** (pasta vazia, os outros param sem recriar), «Sair»
+  (os outros continuam — sozinhos com dois aparelhos, com o identificador do kit com mais —, o removido para), **apagar os dados** (pasta vazia, os outros param sem recriar), «Sair»
   com e sem a chave, **nenhum pedido ao montar o agente e ler o estado**, sem rede (falha calada, recupera), e o
   agendador (30 s depois da janela, 10 s depois de uma alteração, 10 min, espera crescente).
 - `SyncEngineTests.RemovedDevice_IsLeftOut_TheOthersGetTheNewChain` — a conta nova entregue aos que ficam; o removido
   não tem mensagem e uma forjada por ele não abre.
 - Revisão do login completo: `SyncEngineTests` (`Rotation_DoesNotLoseWhatAStayingDeviceSentButTheRotatorNeverRead`,
-  `RemovedDevice_CannotHijackTheOthers_WithAnAccountOfItsOwn`, `Rotation_GivesTheNewAccountOnlyToDevicesPinnedBefore`,
+  `RemovedDevice_CannotHijackTheOthers_WithAnAccountOfItsOwn`, `RekeyIsUnambiguous_OnlyWhenTheSenderIsTheOnlyPinnedPeer`
+  (auditoria, SYN-01; com `SyncAgentTests.RemovedDevice_DeletesTheRealMessage_OthersDoNotFollow`,
+  `RemovedDevice_DeletesTheKeysOfTheNewAccount_OthersDoNotFollow` e
+  `Rekey_ThreeWrongIdentifiers_StopForGood_AndRejoiningByKitWorks`), `Rotation_GivesTheNewAccountOnlyToDevicesPinnedBefore`,
   `Rotation_InTwoSteps_OldAccountIntactUntilTheSecond_WhichCanBeRepeated`), `SyncAgentTests` (o que outro aparelho
   enviou e quem remove não leu fica; troca interrompida acaba na ronda seguinte; duas remoções seguidas; aparelho que
   aparece à pressa não recebe a chave; «Sair» a meio de uma ronda; outra conta Google; registo de chaves que não abre;

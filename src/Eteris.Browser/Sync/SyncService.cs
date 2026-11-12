@@ -827,6 +827,8 @@ internal static class SyncService
         if (status.Requests.Count > 0) return "Um computador novo pede para entrar";
         if (status.NeedsSignIn) return "Sincronização em pausa: entre outra vez";
         if (status.WaitingRequests > 0 && status.Phase == SyncPhase.On) return "Um computador novo pede para entrar";
+        // A conta mudou de chave noutro computador e este espera pelo identificador do kit novo (SyncAgent.ConfirmRekeyAsync).
+        if (status.RekeyPending) return "Sincronização em pausa: confirme a troca de chave";
         return status.Phase switch
         {
             SyncPhase.Stopped => "Sincronização parada",
@@ -896,6 +898,8 @@ internal static class SyncService
             pairingQuiet = status.PairingQuiet,
             // A conta na nuvem foi apagada ou substituída (alerta), e se este computador pode pedir a aprovação sozinho.
             chainReplaced = status.ChainReplaced,
+            // A pausa da troca de chave: a página mostra a caixa do identificador do kit novo em vez de «Ligar outra vez».
+            rekeyPending = status.RekeyPending,
             mayAutoPair = status.MayAutoPair,
             // O que o computador novo mostra (o cartão e o alerta): a página decide só por isto.
             guest = GuestKind(GuestPairingModel.From(status).Kind),

@@ -10,6 +10,10 @@
 
 - Esquecer uma permissão no cadeado, triturar um site ou responder sem «Lembrar» passa a valer também no motor: o site volta mesmo a perguntar. Antes, o motor guardava para sempre cada «Permitir» e cada «Bloquear», incluindo a recusa automática dos pedidos de notificações, que continuava depois de desligar essa opção. «Permitir» sem «Lembrar» vale até fechar o Éteris para notificações e várias transferências, e uma só vez para câmara, microfone, ecrã e localização. Fica de fora a área de transferência: o motor continua a lembrar a decisão dela, mesmo depois de a esquecer no cadeado.
 
+### Conta e sincronização
+
+- **Trocar a chave com mais de dois computadores pede o identificador do kit.** Um aparelho removido que ainda chegasse ao Drive conseguia deixar aos outros uma conta sua; agora, quando há mais de um remetente possível, o computador que ficou espera que escreva os 4 caracteres do kit novo antes de continuar.
+
 ### Correções
 
 - O gerador de palavras-passe já não desiste num computador ocupado: os 100 ms do padrão do site contam só as tentativas, não a preparação, e a primeira tentativa faz-se sempre (antes podia aparecer «Este campo não aceita uma palavra-passe gerada» num campo que a aceita).
@@ -281,7 +285,7 @@ exportar. E fica cortado um pedido que o motor fazia à Google sempre que se ent
 - **Mais seguro ao remover um aparelho:** antes de trocar a chave faz uma ronda completa e os outros computadores
   voltam a pôr na conta nova o que tinham mudado, por isso nada do que já tinham enviado se perde; a troca resiste a
   uma falha de rede a meio (acaba na ronda seguinte); o aparelho removido não consegue desviar os outros para uma conta
-  dele, e só recebem a chave nova os aparelhos que estavam na lista. «Gerar um código de recuperação novo» nas
+  dele (não era verdade em todos os casos: corrigido na versão seguinte à 0.2.15), e só recebem a chave nova os aparelhos que estavam na lista. «Gerar um código de recuperação novo» nas
   Definições.
 - **Parar nunca apaga a chave:** dados apagados noutro aparelho, um registo de chaves danificado ou entrar com outra
   conta Google param (ou põem em pausa) a sincronização sem apagar a chave deste computador; de volta à conta certa,

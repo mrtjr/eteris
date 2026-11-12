@@ -501,6 +501,15 @@
             <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
             <button class="action" id="syncStart">Ligar a sincronização</button>
           </div>
+          <div class="item syncalert" id="syncRekeyItem" hidden>
+            <div class="label"><b>A conta mudou de chave noutro computador</b><span id="syncRekeyText"></span>
+              <form class="syncform left" id="syncRekeyForm" autocomplete="off">
+                <input type="text" name="id" id="syncRekeyId" maxlength="4" spellcheck="false" autocomplete="off" aria-label="Identificador do kit novo">
+                <button class="action" type="submit" id="syncRekeyButton">Confirmar a troca de chave</button>
+              </form>
+              <span class="syncnote" id="syncRekeyNote" role="status" hidden></span></div>
+            <button class="action" type="button" id="syncRekeyAbandon">Não tenho o identificador: juntar outra vez</button>
+          </div>
           <div class="item syncalert" id="syncReplacedItem" hidden>
             <div class="label"><b>A conta de sincronização na nuvem foi apagada ou substituída noutro computador.</b><span>Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.</span>
               <span class="syncnote">Se juntar este computador, as palavras-passe e os outros dados dele passam a ser enviados para a conta que está agora na nuvem.</span>
@@ -560,7 +569,7 @@
                 <div class="kitactions"><button class="action" id="syncKitElsewhere">Guardar noutro sítio</button><button class="action" id="syncKitAnyway">Guardar mesmo assim</button></div></div>
               <button class="action" id="syncKitSaved" hidden>Já guardei o kit</button>
               <span class="syncnote" id="syncKitNote" role="status" hidden></span>
-              <span class="syncnote">Perdeu o kit, ou alguém o pode ter visto? Gere um novo: a conta muda de chave, o kit antigo deixa de valer e os outros computadores continuam ligados sozinhos.</span>
+              <span class="syncnote">Perdeu o kit, ou alguém o pode ter visto? Gere um novo: a conta muda de chave, o kit antigo deixa de valer e os outros computadores continuam ligados (com mais de dois na conta, cada um pede o identificador do kit novo).</span>
               <a href="#syncKitItem" class="syncnote" id="syncKitDecline" hidden>Não quero guardar o kit</a></div>
             <div class="stack"><button class="action" id="syncKitShow">Ver o kit</button><button class="action" id="syncKitNew">Gerar um kit novo…</button></div>
           </div>
@@ -587,7 +596,7 @@
               <button class="action" id="syncNameChange">Mudar</button>
             </div>
             <div class="item" id="syncDevicesItem" hidden>
-              <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam sozinhos com a chave nova, o removido deixa de conseguir abrir o que vier a seguir, e o kit de recuperação passa a ser outro: o antigo deixa de valer. Enquanto não retirar o acesso do Éteris à conta Google, o removido ainda pode apagar ou estragar os ficheiros no Drive — se o perdeu, use «Perdi um computador / foi roubado».</span>
+              <div class="label"><b>Aparelhos ligados</b><span>Remover um aparelho troca a chave da conta: os outros continuam com a chave nova (com mais de dois computadores na conta, cada um pede o identificador do kit novo antes de continuar), o removido deixa de conseguir abrir o que vier a seguir, e o kit de recuperação passa a ser outro: o antigo deixa de valer. Enquanto não retirar o acesso do Éteris à conta Google, o removido ainda pode apagar ou estragar os ficheiros no Drive — se o perdeu, use «Perdi um computador / foi roubado».</span>
                 <ul class="devices" id="syncDevices"></ul>
                 <span class="syncnote" id="syncDevicesNote" role="status" hidden></span>
                 <!-- «Perdi um computador / foi roubado»: uma entrada única junto da lista; o painel diz os passos e pede uma
@@ -1337,7 +1346,11 @@
       // O estado normal está na linha da frente: este item só aparece quando tem alguma coisa a dizer.
       show('syncStateItem', d.enabled && (phase === 'on' || phase === 'starting') && (!!s.error || !!s.update || !!s.notice || !!s.needsSignIn));
       show('syncNowItem', d.enabled && (phase === 'on' || phase === 'starting'));
-      show('syncOffItem', d.connected && (phase === 'off' || phase === 'stopped'));
+      show('syncOffItem', d.connected && (phase === 'off' || phase === 'stopped') && !s.rekeyPending);
+      // A pausa da troca de chave: em vez de «Ligar outra vez», a caixa do identificador do kit novo.
+      show('syncRekeyItem', d.connected && !!s.rekeyPending);
+      $('syncRekeyText').textContent = s.notice || '';
+      note($('syncRekeyNote'), msg0(d, 'rekey'), true);
       show('syncChooseItem', d.enabled && phase === 'choose');
       show('syncPairItem', d.enabled && ['waiting', 'code', 'timeUp', 'stillWaiting', 'refused', 'failed'].includes(guest));
       show('syncNameItem', d.enabled);
@@ -1639,6 +1652,18 @@
       askGoogle('sync-delete-retry');
     });
     $('syncNow').addEventListener('click', () => askGoogle('sync-now'));
+    // A pausa da troca de chave: o identificador do kit novo vai no corpo de um POST e sai da caixa logo a seguir.
+    $('syncRekeyForm').addEventListener('submit', e => {
+      e.preventDefault();
+      quickUntil = Date.now() + 15000;
+      const seq = ++googleAsked;
+      post('sync-rekey-confirm', { id: $('syncRekeyId').value }, d => {
+        if (d && d.google) { if (seq >= googlePainted) { googlePainted = seq; paint(d); } }
+        else note($('syncRekeyNote'), (d && d.message) || 'Pedido recusado.', true);
+      });
+      $('syncRekeyId').value = '';
+    });
+    $('syncRekeyAbandon').addEventListener('click', () => askGoogle('sync-rekey-abandon'));
     $('syncReauth').addEventListener('click', () => askGoogle('sync-google'));
     // «Gerar um kit novo…» (dois cliques): a conta muda de chave e o kit fica por guardar (não se mostra sozinho).
     $('syncKitNew').addEventListener('click', () => {

@@ -167,11 +167,40 @@ public class SyncSettingsSectionTests
         {
             "syncNotice", "syncReauth", "syncState", "syncOffItem", "syncChooseItem", "syncPairItem", "syncReplacedItem",
             "syncRequests", "syncRequestsNote", "syncKitItem", "syncOfferItem", "syncExitNote", "syncPrivateNote", "googleNote",
-            "googleUrl", "syncHow", "syncAccountItem",
+            "googleUrl", "syncHow", "syncAccountItem", "syncRekeyItem",
         })
             Assert.False(InsideMore(page, id), id);
         // O aviso de pedidos em série (T8) é desenhado pelo JS dentro de syncRequests (que está fora): não é HTML estático.
         Assert.Contains("revoke.id = 'syncQuietRevoke'", page, StringComparison.Ordinal);
+    }
+
+    // ---- a pausa da troca de chave (auditoria, SYN-01) ----------------------------------------------------------------
+
+    [Fact]
+    public void StatusData_AndSummary_SayARekeyIsPending()
+    {
+        var held = TestStatus.Of(SyncPhase.Stopped) with { RekeyPending = true };
+        Assert.Contains("rekeyPending = True", SyncService.StatusData(held, Now).ToString()!, StringComparison.Ordinal);
+        Assert.Equal("Sincronização em pausa: confirme a troca de chave", SyncService.Summary(held, Now));
+    }
+
+    [Fact]
+    public void RekeyPanel_IsOnThePage_AndTheIdentifierGoesInThePostBody()
+    {
+        var page = Page();
+        foreach (var id in new[] { "syncRekeyItem", "syncRekeyForm", "syncRekeyId", "syncRekeyButton", "syncRekeyAbandon", "syncRekeyNote" })
+            Assert.Contains($"id=\"{id}\"", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"syncRekeyId\" maxlength=\"4\"", page, StringComparison.Ordinal);
+        Assert.False(InsideMore(page, "syncRekeyItem"));           // pede uma ação: fica fora de «Mais opções»
+        Assert.Contains("&& !s.rekeyPending", page, StringComparison.Ordinal);   // o item «parou… Ligar outra vez» não aparece ao mesmo tempo
+        var factory = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        var route = GoogleSyncTests.CaseBlock(factory, "case \"/sync-rekey-confirm\":");
+        Assert.Contains("SyncForm.Parse(request)", route, StringComparison.Ordinal);
+        Assert.Contains("ConfirmRekeyAsync(", route, StringComparison.Ordinal);
+        Assert.DoesNotContain("InternalPages.Query(uri, \"id\")", route, StringComparison.Ordinal);
+        var doc = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "docs", "sincronizacao.md"));
+        Assert.DoesNotContain("não consegue forjar uma", doc, StringComparison.Ordinal);
+        Assert.Contains("identificador do kit", doc, StringComparison.Ordinal);
     }
 
     [Fact]

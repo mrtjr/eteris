@@ -473,6 +473,18 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
                     return Vault.VaultReply.Json(SettingsPage.SyncData(isPrivate: false));
                 });
             }
+            case "/sync-rekey-confirm":
+            {
+                // A pausa da troca de chave: o identificador do kit novo vai no corpo de um POST (nunca no endereço).
+                var form = SyncForm.Parse(request);
+                if (form.GetValueOrDefault("id") is not { Length: > 0 } id) return Json(new { ok = false, message = "Escreva os 4 caracteres do identificador do kit." });
+                Sync.SyncService.Act("rekey", agent => agent.ConfirmRekeyAsync(id));
+                break;
+            }
+            case "/sync-rekey-abandon":
+                // Sem o identificador: a pausa passa a «conta substituída», e o computador junta-se outra vez.
+                Sync.SyncService.Agent()?.AbandonRekey();
+                break;
             case "/sync-device-name":
             {
                 // O nome novo vai no corpo de um POST (nunca no endereço).
