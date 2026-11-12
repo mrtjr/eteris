@@ -219,6 +219,27 @@ public sealed class PasswordCsvTests : IDisposable
         Assert.Null(PasswordCsv.CloudFolder(@"C:\Users\teste\OneDriveX\senhas.csv", env.GetValueOrDefault));
     }
 
+    private const string Accented = "url,username,password\nhttps://a.exemplo.test,ana,Coração2024\n";
+
+    [Fact]
+    public void NotUtf8_IsRefusedWhole()
+    {
+        var read = PasswordCsv.Read(Encoding.Latin1.GetBytes(Accented));
+        Assert.Equal(CsvFileError.NotUtf8, read.FileError);
+        Assert.Empty(read.Logins);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Utf16WithBom_IsRead(bool bigEndian)
+    {
+        var encoding = new UnicodeEncoding(bigEndian, byteOrderMark: true);
+        var read = PasswordCsv.Read([.. encoding.GetPreamble(), .. encoding.GetBytes(Accented)]);
+        Assert.Null(read.FileError);
+        Assert.Equal("Coração2024", Assert.Single(read.Logins).Password);
+    }
+
     // VAU-11: «Ficar com as do ficheiro» trocava o item por um novo, sem a nota, a última utilização nem o formulário.
     [Fact]
     public void Import_UseFile_KeepsTheStoredNote()

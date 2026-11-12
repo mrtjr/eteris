@@ -20,7 +20,7 @@ public sealed record CsvRejected(int Line, CsvRowError Error, string? Url, strin
     public override string ToString() => $"CsvRejected linha {Line} {Error}";
 }
 
-public enum CsvFileError { TooLarge, TooManyRows, NotPasswords }
+public enum CsvFileError { TooLarge, TooManyRows, NotPasswords, NotUtf8 }
 
 public sealed record CsvReadResult(IReadOnlyList<CsvLogin> Logins, IReadOnlyList<CsvRejected> Rejected, CsvFileError? FileError);
 
@@ -86,7 +86,19 @@ public static class PasswordCsv
     public static CsvReadResult Read(byte[] bytes)
     {
         if (bytes.Length > MaxFileBytes) return new([], [], CsvFileError.TooLarge);
-        var text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false).GetString(bytes);
+        // UTF-8 (com ou sem BOM) ou UTF-16 com BOM; o resto recusa-se inteiro, em vez de guardar palavras-passe com os
+        // acentos trocados (o Excel grava em Windows-1252). Não se adivinha a codificação.
+        string text;
+        try
+        {
+            text = bytes is [0xFF, 0xFE, ..] or [0xFE, 0xFF, ..]
+                ? new UnicodeEncoding(bigEndian: bytes[0] == 0xFE, byteOrderMark: false, throwOnInvalidBytes: true).GetString(bytes, 2, bytes.Length - 2)
+                : new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return new([], [], CsvFileError.NotUtf8);
+        }
         if (text.Length > 0 && text[0] == '﻿') text = text[1..];
         var records = Parse(text).Where(r => !(r.Fields.Count == 1 && r.Fields[0].Length == 0 && !r.Broken)).ToList();
         if (records.Count == 0 || records[0].Broken) return new([], [], CsvFileError.NotPasswords);
