@@ -135,6 +135,59 @@ public class WorkflowTests
         Assert.Contains("- if: always()", e2e[..upload]);
     }
 
+    // CAD-09: uma etiqueta («@v4») pode passar a apontar para outro código sem aviso; cada ação fica fixada por SHA, com
+    // a versão em comentário (o Dependabot sobe-as, um pedido de cada vez). Permissões mínimas no nível de cima, os
+    // checkouts sem a credencial guardada no .git, e nenhum segredo numa linha de comando (fica nos registos do job e
+    // na linha de comandos do processo; passa pelo ambiente). O release.yml fica de fora até o PR que o muda estar no
+    // main (ver o registo da auditoria).
+    [Theory]
+    [InlineData("build.yml")]
+    [InlineData("pages.yml")]
+    [InlineData("stress.yml")]
+    [InlineData("e2e.yml")]
+    public void Workflows_PinActionsAndKeepPermissionsMinimal(string name)
+    {
+        var yml = Workflow(name).Replace("\r\n", "\n");
+        var lines = yml.Split('\n');
+        var problems = new List<string>();
+        var pinned = new Regex(@"uses: [\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d+(\.\d+)*$");
+        var runIndent = -1;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var indent = line.Length - line.TrimStart().Length;
+            if (runIndent >= 0 && (line.Trim().Length == 0 || indent > runIndent))
+            {
+                if (line.Contains("secrets.", StringComparison.Ordinal)) problems.Add($"{i + 1}: segredo na linha de comando");
+                continue;
+            }
+            runIndent = -1;
+            if (line.Contains("uses:", StringComparison.Ordinal) && !pinned.IsMatch(line))
+                problems.Add($"{i + 1}: ação sem SHA de 40 hexadecimais e versão em comentário");
+            if (line.Contains("actions/checkout@", StringComparison.Ordinal)
+                && !lines.Skip(i + 1).Take(4).Any(l => l.Trim() == "persist-credentials: false"))
+                problems.Add($"{i + 1}: checkout sem persist-credentials: false");
+            var run = Regex.Match(line, @"^(\s*)(?:- )?run:\s*(.*)$");
+            if (run.Success)
+            {
+                if (run.Groups[2].Value.Contains("secrets.", StringComparison.Ordinal)) problems.Add($"{i + 1}: segredo na linha de comando");
+                if (run.Groups[2].Value.StartsWith('|') || run.Groups[2].Value.StartsWith('>'))
+                    runIndent = line.IndexOf("run:", StringComparison.Ordinal);
+            }
+        }
+        Assert.Matches(new Regex("^permissions:\n  contents: read$", RegexOptions.Multiline), yml);
+        Assert.True(problems.Count == 0, name + ":\n" + string.Join("\n", problems));
+    }
+
+    // O build.yml corria duas vezes por pedido (push no ramo e pull_request): passa a correr no push do main e nos pedidos.
+    [Fact]
+    public void Build_RunsOncePerChange()
+    {
+        var yml = Workflow("build.yml").Replace("\r\n", "\n");
+        Assert.Contains("push:\n    branches: [main]", yml);
+        Assert.Contains("pull_request:", yml);
+    }
+
     private static string Job(string yml, string name)
         => Regex.Match(yml, "^  " + Regex.Escape(name) + @":\n(.*?)(?=^  \S|\z)", RegexOptions.Multiline | RegexOptions.Singleline).Groups[1].Value;
 }
