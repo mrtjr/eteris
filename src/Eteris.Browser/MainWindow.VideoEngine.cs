@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Permissions;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 using Microsoft.Web.WebView2.Core;
@@ -267,7 +268,13 @@ public partial class MainWindow
         // A navegação chegou a ter documento (e não é uma página de erro): um ficheiro de média aberto diretamente acaba
         // «abortado» mas conta como visita (Data/HistoryVisit.cs).
         ulong? committedNavigation = null;
-        core.ContentLoading += (_, e) => committedNavigation = e.IsErrorPage ? null : e.NavigationId;
+        core.ContentLoading += (_, e) =>
+        {
+            committedNavigation = e.IsErrorPage ? null : e.NavigationId;
+            // Documento novo: o cartão de permissão da página anterior já não é desta (como no FrameLoadStart do motor
+            // principal); o pedido dela é recusado.
+            DropPermissions(p => ReferenceEquals(p.Tab, tab));
+        };
         core.NavigationCompleted += (_, e) =>
         {
             FinishVideoSwitch(tab);
@@ -296,6 +303,42 @@ public partial class MainWindow
         {
             if (e.ProcessFailedKind is CoreWebView2ProcessFailedKind.BrowserProcessExited or CoreWebView2ProcessFailedKind.RenderProcessExited)
                 Dispatcher.InvokeAsync(() => OnPageCrashed(tab));
+        };
+        // Permissões (MOT-06): os tipos que o motor principal também pede (VideoEngine.PermissionOf) decidem-se pela loja
+        // do Éteris e pelo cartão, preso a esta aba — o WebView2 não guarda nada no perfil dele, por isso a decisão fica
+        // no cadeado. Os outros ficam com a interface do próprio WebView2. Uma moldura de outro site só usa uma recusa
+        // lembrada; o resto pergunta, sem «Lembrar» (PermissionRules, MOT-04).
+        core.PermissionRequested += (_, e) =>
+        {
+            e.SavesInProfile = false;
+            if (VideoEngine.PermissionOf(e.PermissionKind) is not { } kind) return;
+            var site = PermissionRules.Site(e.Uri);
+            var embeddedIn = PermissionRules.EmbeddedIn(core.Source, e.Uri);
+            switch (PermissionRules.Decide(SitePermissions, site, [kind], embedded: embeddedIn is not null))
+            {
+                case PermissionDecision.Allow:
+                    e.State = CoreWebView2PermissionState.Allow;
+                    e.Handled = true;
+                    return;
+                case PermissionDecision.Deny:
+                    e.State = CoreWebView2PermissionState.Deny;
+                    e.Handled = true;
+                    return;
+            }
+            var deferral = e.GetDeferral();
+            // Só a primeira resposta conta, e nunca rebenta (a aba pode já ter fechado: o WebView2 saiu).
+            var (respond, drop) = PermissionAsk.Guard(allowed =>
+            {
+                e.State = allowed ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
+                e.Handled = true;
+                deferral.Complete();
+            }, () =>
+            {
+                e.State = CoreWebView2PermissionState.Deny;
+                e.Handled = true;
+                deferral.Complete();
+            });
+            AskPermission(new PermissionAsk(site, [kind], respond, drop, EmbeddedIn: embeddedIn), tab);
         };
         // Janelas novas abrem como abas do Éteris, com a mesma regra dos pop-ups do motor principal.
         core.NewWindowRequested += (_, e) =>

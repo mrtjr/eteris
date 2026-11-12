@@ -1,3 +1,5 @@
+using Eteris.Browser.Permissions;
+using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 using Microsoft.Web.WebView2.Core;
 
@@ -6,18 +8,73 @@ namespace Eteris.Browser.Tests;
 public class VideoEngineTests
 {
     [Theory]
-    [InlineData("\u0001eteris-media format", true)]
-    [InlineData("\u0001eteris-media patented-only", true)]
-    [InlineData("\u0001eteris-media drm weak top", true)]
-    [InlineData("\u0001eteris-media frame-player weak top", true)]
-    [InlineData("\u0001eteris-media outra", false)]
-    [InlineData("\u0001eteris-media format forte top", false)]
-    [InlineData("\u0001eteris-media format strong top extra", false)]
-    [InlineData("\u0001eteris-media format strong top no", true)]
-    [InlineData("\u0001eteris-media format strong top no extra", false)]
-    [InlineData("eteris-media format", false)]
-    [InlineData(null, false)]
-    public void IsReport_OnlyKnownReasons(string? message, bool expected) => Assert.Equal(expected, VideoEngine.IsReport(message));
+    [InlineData("format", true)]
+    [InlineData("patented-only", true)]
+    [InlineData("drm weak top", true)]
+    [InlineData("frame-player weak top", true)]
+    [InlineData("outra", false)]
+    [InlineData("format forte top", false)]
+    [InlineData("format strong top extra", false)]
+    [InlineData("format strong top no", true)]
+    [InlineData("format strong top no extra", false)]
+    public void IsReport_OnlyKnownReasons(string body, bool expected)
+        => Assert.Equal(expected, VideoEngine.IsReport(VideoEngine.ReportPrefix + body));
+
+    // MOT-06: qualquer página escreve na consola; só o aviso com o segredo do processo (o do script precoce) conta. O
+    // formato antigo, sem segredo, deixou de valer.
+    [Fact]
+    public void Parse_WithoutTheSecret_IsNull()
+    {
+        Assert.Null(VideoEngine.Parse("\u0001eteris-media format strong top no"));
+        Assert.Null(VideoEngine.Parse("\u0001eteris-media 00000000000000000000000000000000 format strong top no"));
+        Assert.NotNull(VideoEngine.Parse(VideoEngine.ReportPrefix + "format strong top no"));
+        Assert.False(VideoEngine.IsReport("eteris-media format"));
+        Assert.False(VideoEngine.IsReport(null));
+        Assert.Contains(PopupPolicy.ActivationNonce, VideoEngine.WatchScript);
+        Assert.DoesNotContain(PopupPolicy.ActivationNonce, VideoEngine.LateWatchScript);
+        Assert.Contains("'use strict';", VideoEngine.WatchScript);
+    }
+
+    // O script tardio corre depois da página: não leva o segredo, e o aviso dele só oferece o botão.
+    [Fact]
+    public void LateReports_NeverSwitchAlone()
+    {
+        var late = VideoEngine.Parse(VideoEngine.LateReportPrefix + "format strong top")!;
+        Assert.True(late.Late);
+        Assert.Equal(VideoEngine.Decision.Offer, VideoEngine.Decide(late, optedOut: false));
+    }
+
+    // Com codecs no motor principal, a troca é sempre pelo botão (decisão do dono, MOT-06).
+    [Fact]
+    public void Decide_WithCodecs_NeverSwitchesAlone()
+    {
+        foreach (var reason in new[] { "format", "patented-only" })
+            Assert.Equal(VideoEngine.Decision.Offer,
+                VideoEngine.Decide(new VideoEngine.VideoReport(reason, true, false, EngineSaidNo: true), false, mainHasCodecs: true));
+    }
+
+    [Fact]
+    public void EdgeEngine_KeepsTheWebRtcIpPolicy()
+    {
+        var arguments = VideoEngine.BrowserArguments(blockAutoplay: false);
+        Assert.Contains("--webrtc-ip-handling-policy=disable_non_proxied_udp", arguments);
+        Assert.Contains("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", arguments);
+    }
+
+    // No motor de vídeo, os pedidos de permissão passam pela loja e pelo cartão do Éteris; o resto fica com o WebView2.
+    [Theory]
+    [InlineData(CoreWebView2PermissionKind.Camera, SitePermission.Camera)]
+    [InlineData(CoreWebView2PermissionKind.Microphone, SitePermission.Microphone)]
+    [InlineData(CoreWebView2PermissionKind.Geolocation, SitePermission.Location)]
+    [InlineData(CoreWebView2PermissionKind.Notifications, SitePermission.Notifications)]
+    [InlineData(CoreWebView2PermissionKind.ClipboardRead, SitePermission.Clipboard)]
+    [InlineData(CoreWebView2PermissionKind.MultipleAutomaticDownloads, SitePermission.MultipleDownloads)]
+    public void VideoEngine_PermissionsUseTheEterisStore(CoreWebView2PermissionKind kind, SitePermission expected)
+        => Assert.Equal(expected, VideoEngine.PermissionOf(kind));
+
+    [Fact]
+    public void VideoEngine_OtherPermissionsStayWithTheEngine()
+        => Assert.Null(VideoEngine.PermissionOf(CoreWebView2PermissionKind.UnknownPermission));
 
     [Theory]
     [InlineData("format strong top", "format", true, false)]
@@ -40,7 +97,7 @@ public class VideoEngineTests
     [InlineData("patented-only", true, false, false, VideoEngine.Decision.None)]
     [InlineData("frame-player", false, false, false, VideoEngine.Decision.None)]   // o leitor do Vimeo toca no motor principal
     [InlineData("drm", true, false, false, VideoEngine.Decision.Offer)]            // DRM: continua a ser uma pergunta
-    [InlineData("format", true, false, true, VideoEngine.Decision.Switch)]         // sem GPU: o motor disse «não»
+    [InlineData("format", true, false, true, VideoEngine.Decision.Offer)]          // sem GPU: o motor disse «não» — só o botão (MOT-06)
     [InlineData("format", false, false, true, VideoEngine.Decision.Offer)]
     [InlineData("frame-player", false, false, true, VideoEngine.Decision.Offer)]
     [InlineData("format", true, true, true, VideoEngine.Decision.Offer)]           // o utilizador mandou o site voltar

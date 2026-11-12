@@ -1,4 +1,5 @@
 using System.IO;
+using Eteris.Browser.Permissions;
 using Microsoft.Web.WebView2.Core;
 
 namespace Eteris.Browser.Tabs;
@@ -10,7 +11,13 @@ namespace Eteris.Browser.Tabs;
 // vídeo passa a ser só o recurso: quando o próprio motor responde «não» (sem descodificação por hardware, Windows N).
 public static class VideoEngine
 {
-    public const string ReportPrefix = "\u0001eteris-media ";
+    // O aviso do script precoce leva o segredo do processo (o mesmo dos cliques, PopupPolicy.ActivationNonce): qualquer
+    // página escreve na consola, mas só o nosso script — que corre antes dela, em modo estrito, e guarda o segredo numa
+    // constante fechada — o conhece (MOT-06). O script tardio corre depois da página, por isso nunca leva o segredo: o
+    // aviso dele tem outro prefixo e só oferece o botão (Decide).
+    public static string ReportPrefix { get; } = "\u0001eteris-media " + Shields.PopupPolicy.ActivationNonce + " ";
+
+    public const string LateReportPrefix = "\u0001eteris-media-late ";
 
     // Corre no início de cada documento do motor principal (também nos iframes do mesmo processo). Avisa uma vez por
     // documento, com «razão força origem» (ver VideoReport). Os sinais foram medidos site a site (docs/motor.md, V1):
@@ -35,8 +42,16 @@ public static class VideoEngine
     // o motor com codecs, só esses avisos contam (Decide).
     // «strong» = vídeo relevante (visível, ≥ 200×110 ou ≥ 30 000 px², não é um fundo mudo em ciclo sem controlos) ou
     // som pedido com play(); o resto é «weak». O console.debug é guardado logo no arranque (o g1 substitui-o).
-    public const string WatchScript = """
+    public static string WatchScript { get; } = WatchScriptFor("eteris-media " + Shields.PopupPolicy.ActivationNonce);
+
+    // O canal (o começo do aviso, sem o \u0001 e sem o espaço final) entra no modelo: com o segredo no script precoce,
+    // sem ele no tardio.
+    internal static string WatchScriptFor(string channel) => WatchTemplate.Replace("__CHANNEL__", channel, StringComparison.Ordinal);
+
+    private const string WatchTemplate = """
         (() => {
+          'use strict';
+          const prefix = '\u0001__CHANNEL__ ';
           const mark = Symbol.for('eteris.media');
           if (window[mark]) return;
           try { Object.defineProperty(window, mark, { value: true }); } catch (e) { return; }
@@ -63,7 +78,7 @@ public static class VideoEngine
             if (drmRejected && !rejected && reason !== 'frame-player') reason = 'drm';
             reported = true;
             const said = rejected || lacksVideo() || lacksAudio() ? ' no' : '';
-            try { debug('\u0001eteris-media ' + reason + ' ' + strength + ' ' + (inFrame ? 'frame' : 'top') + said); } catch (e) {}
+            try { debug(prefix + reason + ' ' + strength + ' ' + (inFrame ? 'frame' : 'top') + said); } catch (e) {}
           };
           const visible = el => {
             const b = el.getBoundingClientRect();
@@ -218,30 +233,49 @@ public static class VideoEngine
 
     // O mesmo script corrido no fim do carregamento, para o 1.º documento de cada aba (nasce sem os scripts precoces:
     // docs/motor.md, F2). Não houve wrappers a tempo de ouvir as perguntas da página; valem o estado (erros, <source>
-    // falhados) e, só como sinal fraco, um vídeo parado. Se o script precoce correu, não faz nada.
-    public const string LateWatchScript = "(() => { const __eterisLate = true;\n" + WatchScript + "\n})();";
+    // falhados) e, só como sinal fraco, um vídeo parado. Se o script precoce correu, não faz nada. Corre depois da
+    // página: nunca leva o segredo (o aviso dele usa LateReportPrefix e só oferece o botão).
+    public static string LateWatchScript { get; } = "(() => { const __eterisLate = true;\n" + WatchScriptFor("eteris-media-late") + "\n})();";
 
     // Motivo do aviso: format (o formato falhou), patented-only (só pediu H.264/AAC e ficou parado), drm (conteúdo
     // protegido), frame-player (leitor conhecido de outro site num iframe). EngineSaidNo: o motor deste documento
-    // respondeu «não» ao H.264/AAC.
-    public sealed record VideoReport(string Reason, bool Strong, bool FromFrame, bool EngineSaidNo = false);
+    // respondeu «não» ao H.264/AAC. Late: veio do script tardio (sem segredo: qualquer página o pode imitar).
+    public sealed record VideoReport(string Reason, bool Strong, bool FromFrame, bool EngineSaidNo = false, bool Late = false);
 
     private static readonly string[] Reasons = ["format", "patented-only", "drm", "frame-player"];
 
     public static bool IsReport(string? message) => Parse(message) is not null;
 
-    // «razão [força] [origem] [no]». O formato antigo (só a razão) conta como forte, no topo.
+    // «prefixo razão [força] [origem] [no]», com o prefixo do script precoce (com o segredo) ou o do tardio (Late). O
+    // formato antigo sem segredo deixou de valer; sem força e origem, conta como forte, no topo.
     public static VideoReport? Parse(string? message)
     {
-        if (message is null || !message.StartsWith(ReportPrefix, StringComparison.Ordinal)) return null;
-        var parts = message[ReportPrefix.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (message is null) return null;
+        bool late;
+        if (message.StartsWith(ReportPrefix, StringComparison.Ordinal)) late = false;
+        else if (message.StartsWith(LateReportPrefix, StringComparison.Ordinal)) late = true;
+        else return null;
+        var parts = message[(late ? LateReportPrefix : ReportPrefix).Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length is 0 or > 4 || !Reasons.Contains(parts[0])) return null;
         var strength = parts.Length > 1 ? parts[1] : "strong";
         var origin = parts.Length > 2 ? parts[2] : "top";
         if (strength is not ("strong" or "weak") || origin is not ("top" or "frame")) return null;
         if (parts.Length > 3 && parts[3] != "no") return null;
-        return new VideoReport(parts[0], strength == "strong", origin == "frame", parts.Length > 3);
+        return new VideoReport(parts[0], strength == "strong", origin == "frame", parts.Length > 3, late);
     }
+
+    // Os pedidos de permissão do motor de vídeo que passam pela loja e pelo cartão do Éteris (os mesmos tipos do motor
+    // principal). Os outros (null) ficam com a interface do próprio WebView2.
+    public static SitePermission? PermissionOf(CoreWebView2PermissionKind kind) => kind switch
+    {
+        CoreWebView2PermissionKind.Camera => SitePermission.Camera,
+        CoreWebView2PermissionKind.Microphone => SitePermission.Microphone,
+        CoreWebView2PermissionKind.Geolocation => SitePermission.Location,
+        CoreWebView2PermissionKind.Notifications => SitePermission.Notifications,
+        CoreWebView2PermissionKind.ClipboardRead => SitePermission.Clipboard,
+        CoreWebView2PermissionKind.MultipleAutomaticDownloads => SitePermission.MultipleDownloads,
+        _ => null,
+    };
 
     public enum Decision { None, Offer, Switch }
 
@@ -250,7 +284,9 @@ public static class VideoEngine
     // voltar ao motor principal nunca troca sozinho — fica só o botão.
     // mainHasCodecs (Tabs/PlatformCodecs.cs): o motor principal toca H.264/AAC — um erro de vídeo, um leitor parado ou um
     // leitor noutro iframe já não querem dizer «formato patenteado», a não ser que o motor tenha respondido «não»
-    // (EngineSaidNo); nesse caso vale tudo como no motor sem codecs. O DRM continua a ser só uma pergunta.
+    // (EngineSaidNo); nesse caso vale como no motor sem codecs, mas a troca nunca é automática: fica o botão (MOT-06 —
+    // qualquer página provocava a troca com um vídeo H.264 que falha). O DRM continua a ser só uma pergunta.
+    // Um aviso do script tardio (Late) não leva o segredo e só oferece.
     public static Decision Decide(VideoReport report, bool optedOut, string? site = null, bool mainHasCodecs = false)
     {
         if (report.Reason is "drm") return Decision.Offer;
@@ -258,6 +294,7 @@ public static class VideoEngine
         if (report.Reason is "frame-player") return Decision.Offer;
         if (!report.Strong || report.FromFrame || optedOut) return Decision.Offer;
         if (site is not null && OfferOnlySites.Contains(site)) return Decision.Offer;
+        if (report.Late || mainHasCodecs) return Decision.Offer;
         return Decision.Switch;
     }
 
@@ -284,8 +321,12 @@ public static class VideoEngine
     // do Office nos PDFs, sem tráfego de fundo, sem pings de auditoria de links e sem o «component updater» (no
     // diagnóstico descarregou componentes sem ação do utilizador). Com «bloquear reprodução automática», a mesma
     // política do motor principal. Fixos por pasta de dados: aplicam-se ao arrancar, como no motor principal.
+    // WebRTC: a mesma política de IP do motor principal (Shields/EngineHardening.cs), com os dois nomes do interruptor —
+    // o Edge instalado pode ser anterior à mudança de nome; o Chromium ignora o que não conhece.
     public const string BaseArguments =
-        "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update";
+        "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update"
+        + " --" + Shields.EngineHardening.WebRtcPolicySwitch + "=" + Shields.EngineHardening.WebRtcPolicy
+        + " --force-" + Shields.EngineHardening.WebRtcPolicySwitch + "=" + Shields.EngineHardening.WebRtcPolicy;
 
     public static string BrowserArguments(bool blockAutoplay)
         => blockAutoplay ? BaseArguments + " --autoplay-policy=document-user-activation-required" : BaseArguments;
