@@ -85,7 +85,7 @@ public static class UpdateService
     public static IUpdateSource CreateSource()
         => new SignedUpdateSource(new GithubSource(RepoUrl, null, false), FetchLatestAsset, UpdateSignature.EmbeddedKeys);
 
-    // Tamanho máximo do índice e da assinatura: um índice com todas as versões tem poucos KB.
+    // Tamanho máximo do índice e da assinatura: o índice de uma release (o completo e o delta) tem poucos KB.
     private const int MaxAssetBytes = 1024 * 1024;
 
     // Criado só na 1.ª procura (nada de rede nem de objetos novos no arranque).

@@ -7,9 +7,12 @@ o SHA do `releases.win.json`, que vinha da mesma release.
 
 ## O que é assinado
 
-Os bytes do `releases.win.json` da release, tal como o `vpk pack` o deixou em `Releases\` na máquina de quem publica.
-Esse índice lista todas as versões (pacotes completos e deltas), cada uma com o seu SHA256. A assinatura vai ao lado,
-no ficheiro `releases.win.json.sig`, também como ficheiro da release.
+Os bytes do `releases.win.json` da release, tal como o `vpk upload github` o pôs no rascunho. Não é o
+`Releases\releases.win.json` que o `vpk pack` deixa na máquina de quem publica (esse lista todas as versões da pasta): o
+`vpk upload github` gera outro, só com os pacotes desta versão (o completo e o delta, os `Full` e `Delta` de
+`Releases\assets.win.json`), cada um com o seu SHA256, e noutra ordem. Antes de o assinar, o `build/release.ps1` confere
+cada entrada com os pacotes desta máquina (ver «Ordem de publicação»). A assinatura vai ao lado, no ficheiro
+`releases.win.json.sig`, também como ficheiro da release.
 
 O cliente (`src/Eteris.Browser/Updates/SignedUpdateSource.cs`):
 
@@ -66,9 +69,12 @@ dotnet run --project build/sign -c Release -- verify <update-keys.txt> <ficheiro
 
 1. `build\publish.ps1` e `build\pack.ps1` como sempre (`docs/motor.md`, «Como publicar»).
 2. `vpk upload github …` **sem** `--publish`: a release fica em rascunho.
-3. `build\release.ps1 -Version X.Y.Z -Key <chave.pem>`: recusa enquanto o CI do commit da etiqueta não estiver verde,
-   assina o `Releases\releases.win.json` desta máquina, sobe o `.sig`, confere que o índice do rascunho é o mesmo que se
-   assinou e só então publica.
+3. `build\release.ps1 -Version X.Y.Z -Key <chave.pem>`: recusa enquanto o CI do commit da etiqueta não estiver verde;
+   descarrega o `releases.win.json` do rascunho e confere cada entrada com os ficheiros de `Releases\` desta máquina em
+   todos os campos em que o Éteris confia — `FileName`, `PackageId`, `Version` (a do `-Version`), `Type`, `SHA256` e
+   `Size` — e que as entradas são exatamente os `Full` e `Delta` de `Releases\assets.win.json`, nem a mais nem a menos
+   (um token roubado podia ter trocado o índice do rascunho); só então assina os bytes desse índice tal como vieram
+   (nunca reescritos em PowerShell), sobe o `.sig`, volta a descarregar o índice e o `.sig`, verifica-os e publica.
 
 A primeira versão com a verificação (a 0.2.16) tem de sair já assinada: é o índice dela que os clientes novos leem na
 procura seguinte. Se a última release publicada não tiver um `.sig` válido, todos os clientes desde a 0.2.16 ficam sem

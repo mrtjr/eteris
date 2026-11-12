@@ -9,18 +9,26 @@
 #   1. a etiqueta existe e aponta para o HEAD, e a publish\ desta máquina (se a houver) é desse commit;
 #   2. todos os fluxos do GitHub Actions desse commit acabaram, nenhum falhou e o «build» passou;
 #   3. a release existe e ainda é um rascunho;
-#   4. com -Key: assina o Releases\releases.win.json que o pack.ps1 deixou NESTA máquina e sobe o .sig (nunca o índice
-#      que está no GitHub, que um token roubado podia ter trocado); com -Key -IndiceDaRelease (emergência pelo CI, cujo
-#      pacote nasceu no CI): assina o índice que está no rascunho;
-#   5. descarrega do rascunho o releases.win.json e o .sig (os que os clientes vão ler) e verifica-os com as chaves de
-#      src\Eteris.Browser\Updates\update-keys.txt: se o índice do rascunho não for o que se assinou, falha aqui.
+#   4. descarrega do rascunho o releases.win.json (o que os clientes vão ler). O «vpk upload github» não sobe o
+#      Releases\releases.win.json desta máquina, que lista todas as versões da pasta: gera outro, só com os pacotes desta
+#      versão (os Full e Delta do Releases\assets.win.json), noutra ordem;
+#   5. com -Key: confere cada entrada desse índice com os pacotes desta máquina, em todos os campos em que o Éteris
+#      confia (FileName, PackageId, Version, Type, SHA256 e Size), e exige exatamente os Full e Delta do assets.win.json
+#      (nem a mais, nem a menos): um token roubado podia ter trocado o índice do rascunho. Só então assina os bytes dele
+#      tal como vieram (nunca reescritos aqui: BOM, ConvertTo-Json e escapes do PowerShell 5.1 mudavam-nos), sobe o .sig
+#      e descarrega de novo o índice e o .sig. Com -Key -IndiceDaRelease (emergência pelo CI, cujo pacote nasceu no CI,
+#      sem pacotes nesta máquina): assina o índice do rascunho sem essa conferência;
+#   6. verifica o índice e o .sig descarregados com as chaves de src\Eteris.Browser\Updates\update-keys.txt: se o índice
+#      do rascunho não for o que se assinou, falha aqui.
 # Só então «gh release edit --draft=false». A frase-passe da chave pede-a a ferramenta build/sign, na consola.
 # As mensagens de recusa têm sempre um troço só em ASCII (o que os testes procuram: a consola do CI não é a do dono).
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $tag = "v$Version"
 $signed = Join-Path $root "Releases\assinatura"
+$signedIndex = Join-Path $signed "releases.win.json"
 $localIndex = Join-Path $root "Releases\releases.win.json"
+$localAssets = Join-Path $root "Releases\assets.win.json"
 $sign = Join-Path $root "build\sign"
 
 # O git e o gh correm com o stderr fora das exceções do PowerShell 5.1 (como o Git-Out do publish.ps1); nulo se falharem.
@@ -36,6 +44,64 @@ function Clear-Signed { if (Test-Path -LiteralPath $signed) { Remove-Item -Liter
 function Run-Sign([string[]]$Arguments) {
   & dotnet run --project $sign -c Release -- @Arguments | Out-Host
   $LASTEXITCODE
+}
+# O índice e o .sig que estão agora no rascunho, para Releases\assinatura (os anteriores apagam-se antes). Uma saída
+# diferente de 0 por falta do .sig não é erro aqui: a falta diz-se no passo 6.
+function Get-DraftIndex {
+  New-Item -ItemType Directory -Force -Path $signed | Out-Null
+  foreach ($file in @($signedIndex, "$signedIndex.sig")) { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force } }
+  & gh release download $tag --repo $Repo --pattern releases.win.json --pattern releases.win.json.sig --dir $signed --clobber
+  if (-not (Test-Path -LiteralPath $signedIndex -PathType Leaf)) { throw "o rascunho $tag não tem o releases.win.json (vpk upload github)" }
+}
+# C1: confere o índice do rascunho com os pacotes desta máquina antes de o assinar. O conjunto de entradas tem de ser
+# exatamente o dos Full e Delta do Releases\assets.win.json (os nomes primeiro: nada do índice do rascunho chega a um
+# caminho antes de se saber que é um pacote desta versão); depois, em cada entrada, os campos em que o Éteris confia
+# (SignedUpdateSource): PackageId e Version iguais aos do Releases\releases.win.json local (Version também igual a
+# -Version), Type o do assets.win.json, SHA256 e Size os do ficheiro em Releases\.
+function Assert-DraftIndex {
+  if (-not (Test-Path -LiteralPath $localAssets -PathType Leaf) -or -not (Test-Path -LiteralPath $localIndex -PathType Leaf)) {
+    throw "falta o Releases\assets.win.json ou o Releases\releases.win.json local: corra o pack.ps1 nesta máquina, ou passe -IndiceDaRelease na emergência pelo CI"
+  }
+  $expected = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::Ordinal)
+  foreach ($asset in @((Get-Content -LiteralPath $localAssets -Raw -Encoding UTF8 | ConvertFrom-Json) | ForEach-Object { $_ })) {
+    if ($null -eq $asset) { continue }
+    $type = switch -CaseSensitive ("$($asset.Type)") { "Full" { "Full" } "1" { "Full" } "Delta" { "Delta" } "2" { "Delta" } default { $null } }
+    if ($type) { $expected[[string]$asset.RelativeFileName] = $type }
+  }
+  if ($expected.Count -eq 0) { throw "o Releases\assets.win.json local não tem nenhum pacote Full nem Delta: corra o pack.ps1 nesta máquina" }
+  $local = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
+  foreach ($entry in @((Get-Content -LiteralPath $localIndex -Raw -Encoding UTF8 | ConvertFrom-Json).Assets)) {
+    if ($null -ne $entry -and -not $local.ContainsKey([string]$entry.FileName)) { $local[[string]$entry.FileName] = $entry }
+  }
+  $draft = Get-Content -LiteralPath $signedIndex -Raw -Encoding UTF8 | ConvertFrom-Json
+  $entries = @(@($draft.Assets) | Where-Object { $null -ne $_ })
+  $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  foreach ($entry in $entries) {
+    $name = [string]$entry.FileName
+    if (-not $expected.ContainsKey($name)) { throw "o releases.win.json do rascunho $tag tem uma entrada a mais ($name), que não é um pacote desta versão em Releases\assets.win.json: não assino" }
+    if (-not $seen.Add($name)) { throw "o releases.win.json do rascunho $tag tem uma entrada repetida ($name): não assino" }
+  }
+  foreach ($name in $expected.Keys) {
+    if (-not $seen.Contains($name)) { throw "o releases.win.json do rascunho $tag tem uma entrada em falta ($name, de Releases\assets.win.json): não assino" }
+  }
+  foreach ($entry in $entries) {
+    $name = [string]$entry.FileName
+    $file = Join-Path $root "Releases\$name"
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "falta o Releases\$name local: corra o pack.ps1 nesta máquina" }
+    if (-not $local.ContainsKey($name)) { throw "o Releases\releases.win.json local não tem ${name}: corra o pack.ps1 nesta máquina" }
+    $mine = $local[$name]
+    $checks = @(
+      @("PackageId", [string]$entry.PackageId, [string]$mine.PackageId),
+      @("Version", [string]$entry.Version, [string]$mine.Version),
+      @("Version", [string]$entry.Version, $Version),
+      @("Type", [string]$entry.Type, $expected[$name]),
+      @("SHA256", ([string]$entry.SHA256).ToUpperInvariant(), (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToUpperInvariant()),
+      @("Size", [string]$entry.Size, [string](Get-Item -LiteralPath $file).Length)
+    )
+    foreach ($check in $checks) {
+      if ($check[1] -cne $check[2]) { throw "o releases.win.json do rascunho $tag não bate com o Releases\$name desta máquina (campo $($check[0]): $($check[1]) no rascunho, $($check[2]) aqui): não assino" }
+    }
+  }
 }
 
 Clear-Signed
@@ -70,25 +136,21 @@ try {
   $release = $releaseJson | ConvertFrom-Json
   if ($release.isDraft -ne $true) { throw "$tag não é um rascunho: já foi publicada (ou subiu com --publish); nada a fazer aqui" }
 
-  # 4. Assinar o índice desta máquina (o caso normal).
-  if ($Key -and -not $IndiceDaRelease) {
-    if (-not (Test-Path -LiteralPath $localIndex -PathType Leaf)) { throw "falta o Releases\releases.win.json local: corra o pack.ps1 nesta máquina, ou passe -IndiceDaRelease na emergência pelo CI" }
-    if ((Run-Sign @("sign", $Key, $localIndex)) -ne 0) { throw "a assinatura do Releases\releases.win.json falhou (frase-passe ou chave)" }
-    & gh release upload $tag "$localIndex.sig" --repo $Repo --clobber
-    if ($LASTEXITCODE -ne 0) { throw "não consegui subir o releases.win.json.sig para $tag (gh release upload)" }
-  }
+  # 4. O que os clientes vão ler: o índice que está no rascunho (o do «vpk upload github», não o desta máquina).
+  Get-DraftIndex
 
-  # 5. O que os clientes vão ler: o índice e a assinatura que estão no rascunho. Uma saída diferente de 0 por falta do
-  # .sig não é erro aqui: a falta diz-se a seguir.
-  New-Item -ItemType Directory -Force -Path $signed | Out-Null
-  & gh release download $tag --repo $Repo --pattern releases.win.json --pattern releases.win.json.sig --dir $signed --clobber
-  $signedIndex = Join-Path $signed "releases.win.json"
-  if (-not (Test-Path -LiteralPath $signedIndex -PathType Leaf)) { throw "o rascunho $tag não tem o releases.win.json (vpk upload github)" }
-  if ($Key -and $IndiceDaRelease) {
-    Write-Warning "a assinar o índice que está no rascunho (emergência pelo CI): a assinatura prova que foi o dono a publicar, não o que o CI compilou"
+  # 5. Com -Key: conferir esse índice com os pacotes desta máquina e assinar os bytes dele, tal como vieram; depois de
+  # subir o .sig, descarregar de novo os dois (o passo 6 verifica o que lá ficou).
+  if ($Key) {
+    if ($IndiceDaRelease) {
+      Write-Warning "a assinar o índice que está no rascunho (emergência pelo CI): a assinatura prova que foi o dono a publicar, não o que o CI compilou"
+    } else {
+      Assert-DraftIndex
+    }
     if ((Run-Sign @("sign", $Key, $signedIndex)) -ne 0) { throw "a assinatura do releases.win.json do rascunho falhou (frase-passe ou chave)" }
     & gh release upload $tag "$signedIndex.sig" --repo $Repo --clobber
     if ($LASTEXITCODE -ne 0) { throw "não consegui subir o releases.win.json.sig para $tag (gh release upload)" }
+    Get-DraftIndex
   }
   if (-not (Test-Path -LiteralPath "$signedIndex.sig" -PathType Leaf)) { throw "falta a assinatura releases.win.json.sig em $tag (passe -Key)" }
 

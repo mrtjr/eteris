@@ -183,8 +183,9 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    --token … --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo
    (`$env:GH_TOKEN = (gh auth token)`), nunca em ficheiros.
 8. `.\build\release.ps1 -Version X.Y.Z -Key <chave.pem>` (docs/atualizacoes.md): recusa enquanto o CI do commit da
-   etiqueta não estiver verde (o fluxo `build` incluído), assina o `Releases\releases.win.json` desta máquina, sobe o
-   `.sig`, confere que o índice do rascunho é o mesmo que se assinou e só então publica. Depois, as notas da release
+   etiqueta não estiver verde (o fluxo `build` incluído), confere o `releases.win.json` do rascunho (o que o
+   `vpk upload github` gerou, só com os pacotes desta versão) com os pacotes de `Releases\` desta máquina, assina os bytes
+   dele tal como vieram, sobe o `.sig`, volta a descarregar e verificar os dois e só então publica. Depois, as notas da release
    (`gh release edit`), com a nota do motor próprio e da oferta do código-fonte do FFmpeg
    (`licenses/FFmpeg-SOURCE.txt`).
 
