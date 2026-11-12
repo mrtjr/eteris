@@ -412,8 +412,9 @@ internal static class SyncService
         // de «Sair» segue (os tokens da Google saem) e a mensagem fica para a página (área «signout»).
         try { Agent()?.SignOut(forgetKey); }
         catch (SyncUserException e) { Say("signout", e.Message); }
-        // O registo local sai com a chave (não fica nada deste computador depois de «apagar a chave»).
-        if (forgetKey) SyncLog.Delete();
+        // O registo local sai em qualquer «Sair deste computador» (com ou sem «apagar a chave»): é um diagnóstico da sincronização
+        // que acabou aqui, e a Google e o resto do Éteris ligam-se pelo SignOut.
+        SyncLog.Delete();
         lock (Gate) Schedule.Stop();
         Arm();
     }

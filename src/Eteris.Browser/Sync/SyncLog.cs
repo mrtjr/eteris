@@ -6,7 +6,7 @@ namespace Eteris.Browser.Sync;
 // O registo local da sincronização (<perfil>\sync\sync.log, ao lado do sync.state): uma linha por falha que a sincronização
 // não consegue mostrar de outra forma (a hora, um texto fixo e o tipo da exceção). Nunca leva dados, nomes de ficheiros nem
 // caminhos do perfil (Clean) e nunca a mensagem de uma exceção; fica pequeno (acima de 64 KiB guarda só os últimos 32 KiB) e
-// sai com «Sair» e «apagar a chave». Nunca lança: um registo que não se escreve não pode ser mais um motivo de falha.
+// sai em qualquer «Sair deste computador» (com ou sem «apagar a chave»: SyncService.SignOut). Nunca lança: um registo que não se escreve não pode ser mais um motivo de falha.
 internal static class SyncLog
 {
     private const int MaxBytes = 64 * 1024;

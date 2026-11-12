@@ -257,13 +257,18 @@ public static class PrivacyPage
         "Favoritos, Espaços, definições, decisões do Escudo, notas, palavras-passe, contactos e viagens; pagamentos e documentos de identificação só se os ligar. "
         + "O histórico, as abas abertas, cookies, cache e permissões dos sites não vão.";
 
+    // O que a sincronização guarda neste computador além da conta: um registo curto das falhas (SyncLog). Sem marcação.
+    public const string SyncLocal =
+        "Neste computador a sincronização guarda também um registo curto das falhas (sync\\sync.log): só a hora, um texto fixo e o tipo da falha, nunca dados, nomes de ficheiros nem caminhos. "
+        + "Apaga-se ao «Sair deste computador».";
+
     // PROPOSTA (título do bloco; o dono aprova).
     public const string SyncBlockTitle = "Se ligar a sincronização";
 
     // O bloco «Se ligar a sincronização» de eteris://privacy/#sincronizacao: sempre igual (com ou sem sessão, com a
     // sincronização ligada ou desligada, também numa janela privada), para quem ainda não entrou poder ler o que vai ser
     // enviado. Não é uma promessa (nada nele se mede) e não faz pedidos.
-    public static object SyncBlock => new { title = SyncBlockTitle, goes = SyncGoes, sees = SyncSees, key = SyncKey };
+    public static object SyncBlock => new { title = SyncBlockTitle, goes = SyncGoes, sees = SyncSees, key = SyncKey, local = SyncLocal };
 
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 

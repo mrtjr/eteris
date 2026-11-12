@@ -435,8 +435,11 @@ public class SyncIntegrationTests
     [Fact]
     public void AgentLog_CarriesOnlyFixedTextAndTheExceptionType()
     {
-        var agent = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Sync", "Engine", "SyncAgent.cs"));
-        var calls = agent.Split('\n').Where(l => l.Contains("Log?.Invoke(", StringComparison.Ordinal)).ToList();
+        // Todas as chamadas que levam texto ao registo (também as partidas em várias linhas), no agente e no serviço.
+        var root = GoogleSyncTests.FindRoot();
+        var calls = new List<string>();
+        foreach (var file in new[] { Path.Combine(root, "src", "Eteris.Sync", "Engine", "SyncAgent.cs"), Path.Combine(root, "src", "Eteris.Browser", "Sync", "SyncService.cs") })
+            calls.AddRange(Regex.Matches(File.ReadAllText(file), @"(Log\?\.Invoke|SyncLog\.Write)\([^;]*;", RegexOptions.Singleline).Select(m => m.Value));
         Assert.NotEmpty(calls);
         foreach (var call in calls)
         {
@@ -444,6 +447,21 @@ public class SyncIntegrationTests
             Assert.DoesNotContain("{path}", call, StringComparison.Ordinal);
             Assert.DoesNotContain("{file", call, StringComparison.Ordinal);
         }
+    }
+
+    // Decisão do dono sobre o sync.log: sai em qualquer «Sair deste computador», não só com «apagar a chave» (o comentário e os
+    // textos dizem-no), e a página de privacidade di-lo.
+    [Fact]
+    public void SyncLog_LeavesOnEverySignOut_AndThePrivacyPageSaysSo()
+    {
+        var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs")).Replace("\r\n", "\n");
+        var start = service.IndexOf("public static void SignOut(bool forgetKey)", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var body = service[start..service.IndexOf("\n    }\n", start, StringComparison.Ordinal)];
+        Assert.Contains("SyncLog.Delete();", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (forgetKey) SyncLog.Delete", body, StringComparison.Ordinal);
+        Assert.Contains("sync.log", Eteris.Browser.Browser.PrivacyPage.SyncLocal, StringComparison.Ordinal);
+        Assert.Contains("Sair deste computador", Eteris.Browser.Browser.PrivacyPage.SyncLocal, StringComparison.Ordinal);
     }
 
     // Auditoria, SYN-10: uma carga das regras de bloqueio por site que falhou não é «sem regras»: o Escudo fica ilegível
