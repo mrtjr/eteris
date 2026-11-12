@@ -30,8 +30,11 @@ public static class AtomicFile
                 stream.Write(bytes, 0, bytes.Length);
                 stream.Flush(flushToDisk);
             }
-            if (backup && File.Exists(path)) File.Replace(temporary, path, path + ".bak", ignoreMetadataErrors: true);
-            else File.Move(temporary, path, overwrite: true);
+            // A versão anterior fica em .bak por cópia e a troca é um Move por cima: o File.Replace do Windows deixava o
+            // ficheiro «em falta» por instantes (e um .bak só de leitura travava todas as gravações). Uma cópia que falhe não
+            // impede a gravação: fica o .bak anterior.
+            if (backup && File.Exists(path)) KeepBackup(path);
+            File.Move(temporary, path, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -39,6 +42,17 @@ public static class AtomicFile
             catch (Exception d) when (d is IOException or UnauthorizedAccessException) { }
             throw;
         }
+    }
+
+    private static void KeepBackup(string path)
+    {
+        var backup = path + ".bak";
+        try
+        {
+            if (File.Exists(backup)) File.SetAttributes(backup, FileAttributes.Normal);
+            File.Copy(path, backup, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     // O ficheiro em falta dá Missing e null (nunca se olha para o .bak). Lido e convertido: Ok. Lido mas danificado

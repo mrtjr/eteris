@@ -92,6 +92,53 @@ public sealed class AtomicFileTests : IDisposable
         Assert.Equal(AtomicRead.Ok, again);
     }
 
+    // Revisão: o File.Replace deixava o ficheiro «em falta» por instantes (milhares de leituras em centenas de milhares): um
+    // leitor concorrente (a sincronização lê as notas noutra thread) via notas vazias. O .bak faz-se por cópia e a troca é
+    // um File.Move por cima, que nunca o deixa em falta.
+    [Fact]
+    public async Task Write_NeverLeavesTheFileMissingForAConcurrentReader()
+    {
+        AtomicFile.WriteText(_path, "um", backup: true);
+        var stop = false;
+        var missing = 0;
+        var reader = Task.Run(() =>
+        {
+            while (!Volatile.Read(ref stop))
+            {
+                AtomicFile.ReadText(_path, text => text, out var outcome);
+                if (outcome == AtomicRead.Missing) Interlocked.Increment(ref missing);
+            }
+        });
+        // Um leitor com o ficheiro aberto pode fazer a troca falhar nesse instante (como sempre): a gravação repete-se.
+        for (var i = 0; i < 400; i++)
+        {
+            for (var attempt = 0; attempt < 50; attempt++)
+            {
+                try { AtomicFile.WriteText(_path, "v" + i, backup: true); break; }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Thread.Yield(); }
+            }
+        }
+        Volatile.Write(ref stop, true);
+        await reader;
+        Assert.Equal(0, missing);
+    }
+
+    // Um .bak só de leitura (um antivírus, um utilizador) não pode bloquear todas as gravações.
+    [Fact]
+    public void Write_WithAReadOnlyBak_StillWrites()
+    {
+        AtomicFile.WriteText(_path, "um", backup: true);
+        AtomicFile.WriteText(_path, "dois", backup: true);
+        File.SetAttributes(_path + ".bak", FileAttributes.ReadOnly);
+        try
+        {
+            AtomicFile.WriteText(_path, "tres", backup: true);
+            Assert.Equal("tres", File.ReadAllText(_path));
+            Assert.Equal("dois", File.ReadAllText(_path + ".bak"));
+        }
+        finally { File.SetAttributes(_path + ".bak", FileAttributes.Normal); }
+    }
+
     [Fact]
     public void Write_OnAReadOnlyFile_Throws()
     {
