@@ -8,7 +8,11 @@ public sealed class LocalStateTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "eteris-ls-" + Guid.NewGuid() + ".json");
 
-    public void Dispose() => File.Delete(_path);
+    public void Dispose()
+    {
+        File.Delete(_path);
+        File.Delete(_path + ".tmp");
+    }
 
     [Fact]
     public void ApplySecureDns_MergesWithoutLosingOtherKeys()
@@ -89,12 +93,10 @@ public sealed class LocalStateTests : IDisposable
     }
 
     [Fact]
-    public void Apply_WritesToATemporaryFileFlushesAndMoves()
+    public void Apply_WritesThroughTheAtomicFile()
     {
         var code = Sync.GoogleSyncTests.Src("Eteris.Browser", "Infrastructure", "LocalState.cs");
-        Assert.Contains("path + \".tmp\"", code);
-        Assert.Contains("Flush(true)", code);
-        Assert.Contains("File.Move(temp, path, overwrite: true)", code);
+        Assert.Contains("AtomicFile.WriteText(path", code);
         Assert.DoesNotContain("File.WriteAllText(path", code);
     }
 }

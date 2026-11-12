@@ -17,6 +17,19 @@ public static class PrivateSession
         return $"Terminar a sessão privada? Fecha {what}{count} e apaga os cookies, a cache, o armazenamento e as permissões {(windows == 1 ? "dela" : "delas")}.";
     }
 
+    // O que a sessão privada deixou em memória fora do contexto do motor: uma loja nova de estado privado entra aqui e em
+    // mais lado nenhum (a última janela privada a fechar e «Terminar sessão privada» chamam isto).
+    public static void End()
+    {
+        Shields.ShieldEngine.Https.ForgetPrivate();
+        Shields.LocalNetworkGrants.ForgetPrivate();
+        Permissions.PermissionGrants.ForgetPrivate();
+        Shields.SiteRules.ForgetPrivate();
+        Data.AppData.ForgetPrivateShield();
+        Shields.Cname.PrivateCache.Clear();
+        Shields.PartitionedCookieJar.Private.Clear();
+    }
+
     public static string Done(int windows)
         => windows == 1 ? "Sessão privada terminada — a janela privada foi fechada e nada ficou"
                         : $"Sessão privada terminada — {windows} janelas privadas fechadas e nada ficou";

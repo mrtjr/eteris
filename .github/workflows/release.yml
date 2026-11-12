@@ -41,12 +41,14 @@ jobs:
       # (com o «v») não é uma versão NuGet válida — o restauro do projeto de testes falhava sem mensagem.
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           global-json-file: global.json
       # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.16.0
       - name: O feed de updates do cliente tem de apontar para este repositório
@@ -62,7 +64,7 @@ jobs:
       # (numa execução verde, a duração de cada teste).
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
       - if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
           path: TestResults
@@ -115,18 +117,19 @@ jobs:
           if ($env:SEM_CODECS -ne "true") { throw "Publicacao pelo CI so com sem_codecs = true (as releases normais sao locais: docs/motor.md)" }
           if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag invalida: $env:RELEASE_TAG (esperado vX.Y.Z)" }
           Write-Host "::warning::Publicacao de emergencia SEM codecs ($env:RELEASE_TAG): runtime da CEF do NuGet."
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag }}
+          persist-credentials: false
       # O setup-dotnet lê o global.json da árvore da tag, e as tags até à v0.2.16 não o têm: pára aqui com o que fazer.
       - name: A tag tem de ter global.json
         run: |
           if (-not (Test-Path global.json)) { throw "A tag $env:RELEASE_TAG nao tem global.json (as tags ate a v0.2.16 nao o tem): publicar a partir de uma tag que o tenha" }
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           global-json-file: global.json
       # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.16.0
       - name: O feed de updates do cliente tem de apontar para este repositório
@@ -141,7 +144,7 @@ jobs:
       # Os mesmos testes, com as mesmas opções, do job verify.
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
       - if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
           path: TestResults
@@ -152,11 +155,17 @@ jobs:
           if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
           if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 10) { throw "listas de filtros em falta no publish" }
           if (-not (Test-Path publish/Shields/resources/scriptlets.json)) { throw "scriptlets.json em falta no publish" }
+      # A versão do vpk é a do pacote Velopack do Eteris.Browser.csproj (um vpk mais novo podia empacotar o que o
+      # cliente não sabe ler); o token chega pelo ambiente do passo, nunca escrito na linha de comando.
       - run: dotnet tool install -g vpk --version 1.2.161
       - name: Descarregar releases anteriores para gerar pacotes delta
-        run: vpk download github --repoUrl $env:REPO_URL --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
+        run: vpk download github --repoUrl $env:REPO_URL --token $env:RELEASE_TOKEN --outputDir Releases
         continue-on-error: true
+        env:
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # O CI também não tem o google-oauth.json (nunca no repositório): sai sem login Google, e o pack.ps1 só o aceita a pedido.
       - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox -SemLogin
       # Rascunho: quem publica é o build/release.ps1, com a chave que o CI não tem
-      - run: vpk upload github --repoUrl $env:REPO_URL --releaseName "Éteris $env:RELEASE_TAG (sem codecs)" --tag $env:RELEASE_TAG --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
+      - run: vpk upload github --repoUrl $env:REPO_URL --releaseName "Éteris $env:RELEASE_TAG (sem codecs)" --tag $env:RELEASE_TAG --token $env:RELEASE_TOKEN --outputDir Releases
+        env:
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}

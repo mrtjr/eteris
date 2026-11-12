@@ -6,11 +6,14 @@ namespace Eteris.Browser.Tests;
 // Guardas dos fluxos do GitHub Actions que só correm ao publicar (um erro aqui só aparecia no dia da versão).
 public class WorkflowTests
 {
-    private static string Workflow(string name, [System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    private static string Workflow(string name)
+        => File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", name));
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
-        return File.ReadAllText(Path.Combine(dir!.FullName, ".github", "workflows", name));
+        return dir!.FullName;
     }
 
     // O MSBuild lê variáveis de ambiente como propriedades: VERSION=v0.2.0 virava Version=v0.2.0 no projeto de
@@ -172,6 +175,27 @@ public class WorkflowTests
     public void Release_PublishSemCodecs_HasATimeout()
         => Assert.Contains("timeout-minutes: 60", Job(Workflow("release.yml").Replace("\r\n", "\n"), "publish-sem-codecs"));
 
+    // CAD-09: o vpk instalado no CI é o da versão do Velopack do projeto (um vpk mais novo podia empacotar o que o
+    // cliente não sabe ler), e o token chega aos comandos vpk pelo ambiente do passo, nunca escrito na linha de comando.
+    [Fact]
+    public void Release_InstallsThePinnedVpk()
+    {
+        var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Eteris.Browser.csproj"));
+        var velopack = Regex.Match(csproj, @"<PackageReference Include=""Velopack"" Version=""([^""]+)"" />");
+        Assert.True(velopack.Success, "Eteris.Browser.csproj sem o PackageReference do Velopack");
+
+        var publish = Job(Workflow("release.yml").Replace("\r\n", "\n"), "publish-sem-codecs");
+        Assert.Matches(new Regex(@"^\s+- run: dotnet tool install -g vpk --version " + Regex.Escape(velopack.Groups[1].Value) + "$", RegexOptions.Multiline), publish);
+
+        var steps = Regex.Split(publish, @"(?=^      - )", RegexOptions.Multiline);
+        foreach (var command in new[] { "vpk download github", "vpk upload github" })
+        {
+            var step = Assert.Single(steps, s => s.Contains(command, StringComparison.Ordinal));
+            Assert.Contains("--token $env:RELEASE_TOKEN", step);
+            Assert.Matches(new Regex(@"^        env:\n          RELEASE_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}$", RegexOptions.Multiline), step);
+        }
+    }
+
     // Os testes que arrancam o Éteris (tests/Eteris.Browser.E2E.Tests, fora da solução) têm o seu fluxo: compila o
     // executável em Release, corre-os com prazo, e os resultados guardam-se mesmo quando passam.
     [Fact]
@@ -191,9 +215,9 @@ public class WorkflowTests
     // CAD-09: uma etiqueta («@v4») pode passar a apontar para outro código sem aviso; cada ação fica fixada por SHA, com
     // a versão em comentário (o Dependabot sobe-as, um pedido de cada vez). Permissões mínimas no nível de cima, os
     // checkouts sem a credencial guardada no .git, e nenhum segredo numa linha de comando (fica nos registos do job e
-    // na linha de comandos do processo; passa pelo ambiente). O release.yml fica de fora até o PR que o muda estar no
-    // main (ver o registo da auditoria).
+    // na linha de comandos do processo; passa pelo ambiente).
     [Theory]
+    [InlineData("release.yml")]
     [InlineData("build.yml")]
     [InlineData("pages.yml")]
     [InlineData("stress.yml")]

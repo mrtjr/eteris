@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -7,7 +6,7 @@ namespace Eteris.Browser.Infrastructure;
 
 // «Local State» do Chromium (preferências globais, lidas no arranque). O DNS cifrado vive aqui e não nas
 // preferências do perfil, por isso é escrito antes de o CEF arrancar. Um ficheiro ilegível nunca é reescrito; um ficheiro
-// igual ao pedido também não (INF-12), e o que muda grava-se por um ficheiro temporário e troca (INF-08).
+// igual ao pedido também não (INF-12), e o que muda grava-se por um ficheiro temporário e troca, o AtomicFile (INF-08).
 public static class LocalState
 {
     public static bool ApplySecureDns(string path, string mode, string templates) => Apply(path, mode, templates, energySaver: null);
@@ -29,35 +28,13 @@ public static class LocalState
             if (energySaver is { } state) SetPath(obj, EnergySaver.PrefPath, state);
             else RemovePath(obj, EnergySaver.PrefPath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            Write(path, obj.ToJsonString());
+            AtomicFile.WriteText(path, obj.ToJsonString(), backup: false);
             return true;
         }
         catch (JsonException) { return false; }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
         catch (InvalidOperationException) { return false; }
-    }
-
-    // Ficheiro temporário, descarga para o disco e troca: um corte a meio nunca deixa o «Local State» truncado (o Chromium
-    // guarda aí a chave dos cookies, os cookies perdiam-se), e um ficheiro aberto por outro processo ou só de leitura deixa
-    // o original como está. Em falha apaga o temporário.
-    private static void Write(string path, string json)
-    {
-        var temp = path + ".tmp";
-        try
-        {
-            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                stream.Write(new UTF8Encoding(false).GetBytes(json));
-                stream.Flush(true);
-            }
-            File.Move(temp, path, overwrite: true);
-        }
-        catch
-        {
-            try { File.Delete(temp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-            throw;
-        }
     }
 
     private static bool AlreadyAsAsked(JsonObject obj, string mode, string templates, int? energySaver)
