@@ -19,8 +19,9 @@
 #      tal como vieram (nunca reescritos aqui: BOM, ConvertTo-Json e escapes do PowerShell 5.1 mudavam-nos), sobe o .sig
 #      e descarrega de novo o índice e o .sig. Com -Key -IndiceDaRelease (emergência pelo CI, cujo pacote nasceu no CI,
 #      sem pacotes nesta máquina): assina o índice do rascunho sem essa conferência;
-#   6. verifica o índice e o .sig descarregados com as chaves de src\Eteris.Browser\Updates\update-keys.txt: se o índice
-#      do rascunho não for o que se assinou, falha aqui.
+#   6. verifica o índice e o .sig descarregados com as chaves de src\Eteris.Browser\Updates\update-keys.txt TAL COMO
+#      ESTÁ NO COMMIT (git show HEAD:…, não a árvore de trabalho): se o índice do rascunho não for o que se assinou, ou a
+#      chave não for uma das que esta versão leva, falha aqui.
 # Só então «gh release edit --draft=false». A frase-passe da chave pede-a a ferramenta build/sign, na consola.
 # As mensagens de recusa têm sempre um troço só em ASCII (o que os testes procuram: a consola do CI não é a do dono).
 $ErrorActionPreference = "Stop"
@@ -168,9 +169,14 @@ try {
   }
   if (-not (Test-Path -LiteralPath "$signedIndex.sig" -PathType Leaf)) { throw "falta a assinatura releases.win.json.sig em $tag (passe -Key)" }
 
-  # 6. Verificar com as chaves que o Éteris publicado leva.
-  $keys = Join-Path $root "src\Eteris.Browser\Updates\update-keys.txt"
-  if ((Run-Sign @("verify", $keys, $signedIndex, "$signedIndex.sig")) -ne 0) { throw "assinatura inválida para as chaves de update-keys.txt: o releases.win.json de $tag não é o que foi assinado" }
+  # 6. Verificar com as chaves que o Éteris publicado leva: as do update-keys.txt do commit da etiqueta (M4), não as da
+  # árvore de trabalho — uma chave por comitar passava aqui e nenhum cliente a conhecia. As linhas de chave são ASCII
+  # (Base64), por isso a página de códigos da consola não as muda; os comentários não contam.
+  $headKeys = Native-Out "git" @("-C", $root, "show", "HEAD:src/Eteris.Browser/Updates/update-keys.txt")
+  if ($null -eq $headKeys) { throw "o update-keys.txt não está no commit $(Short $commit) (git show HEAD:src/Eteris.Browser/Updates/update-keys.txt)" }
+  $keys = Join-Path $signed "update-keys.txt"
+  [System.IO.File]::WriteAllText($keys, $headKeys + "`n", (New-Object System.Text.UTF8Encoding $false))
+  if ((Run-Sign @("verify", $keys, $signedIndex, "$signedIndex.sig")) -ne 0) { throw "assinatura inválida para as chaves de update-keys.txt do commit $(Short $commit): o releases.win.json de $tag não é o que foi assinado, ou a chave não está comitada" }
 
   # 7. Publicar.
   & gh release edit $tag --repo $Repo --draft=false

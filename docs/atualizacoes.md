@@ -75,7 +75,9 @@ dotnet run --project build/sign -c Release -- verify <update-keys.txt> <ficheiro
    todos os campos em que o Éteris confia — `FileName`, `PackageId`, `Version` (a do `-Version`), `Type`, `SHA256` e
    `Size` — e que as entradas são exatamente os `Full` e `Delta` de `Releases\assets.win.json`, nem a mais nem a menos
    (um token roubado podia ter trocado o índice do rascunho); só então assina os bytes desse índice tal como vieram
-   (nunca reescritos em PowerShell), sobe o `.sig`, volta a descarregar o índice e o `.sig`, verifica-os e publica.
+   (nunca reescritos em PowerShell), sobe o `.sig`, volta a descarregar o índice e o `.sig`, verifica-os com as chaves
+   do `update-keys.txt` **do commit** (`git show HEAD:…`, não o da árvore de trabalho: uma chave por comitar não está no
+   Éteris que se publica) e só então publica.
 
 A primeira versão com a verificação (a 0.2.16) tem de sair já assinada: é o índice dela que os clientes novos leem na
 procura seguinte. Se a última release publicada não tiver um `.sig` válido, todos os clientes desde a 0.2.16 ficam sem

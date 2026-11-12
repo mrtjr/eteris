@@ -29,6 +29,10 @@ public class ReleaseScriptTests
         // (o objeto da etiqueta e, na linha ^{}, o commit A).
         public string RemoteTags { get; init; } = Annotated(A);
         public string? PublishCommit { get; init; }
+        // update-keys.txt no HEAD («git show HEAD:…»; nulo: não está no commit) e na árvore de trabalho. O verify falso só
+        // aceita um ficheiro de chaves com CHAVE-VALIDA.
+        public string? HeadKeys { get; init; } = "# chaves\nCHAVE-VALIDA\n";
+        public string WorktreeKeys { get; init; } = "# chaves\nCHAVE-VALIDA\n";
         public string RunsJson { get; init; } = Ok;
         public string ReleaseJson { get; init; } = Draft;
         // Já há no rascunho um .sig válido para o índice dele (o caso sem -Key).
@@ -134,6 +138,30 @@ public class ReleaseScriptTests
         var run = await RunReleaseAsync(new Scenario { RemoteTags = A + "\trefs/tags/v9.9.9\n" });
         Assert.True(run.ExitCode == 0, "o release.ps1 não publicou; saída: " + run.Output);
         Assert.True(run.Line(l => l.Contains("ls-remote origin refs/tags/v9.9.9", StringComparison.Ordinal)) >= 0, "conferiu a etiqueta em origin");
+    }
+
+    // M4 (revisão final): a verificação usa as chaves do commit que se publica (as que o Éteris dessa versão leva), não as
+    // da árvore de trabalho: uma chave por comitar publicava uma release que nenhum cliente verifica.
+    [Fact]
+    public async Task Release_WithAKeyOnlyInTheWorkingTree_Refuses()
+    {
+        var run = await RunReleaseAsync(new Scenario { HeadKeys = "# sem chaves\n" });
+        AssertRefused(run, "update-keys.txt");
+        Assert.True(run.VerifyLine >= 0, "não chegou a verificar");
+        Assert.DoesNotContain(@"src\Eteris.Browser\Updates", run.Calls[run.VerifyLine]);
+    }
+
+    [Fact]
+    public async Task Release_WithoutUpdateKeysInTheCommit_Refuses()
+        => AssertRefused(await RunReleaseAsync(new Scenario { HeadKeys = null }), "git show");
+
+    [Fact]
+    public async Task Release_VerifiesWithTheKeysOfTheCommit()
+    {
+        var run = await RunReleaseAsync(new Scenario { WorktreeKeys = "# chave por comitar trocada\nOUTRA\n" });
+        Assert.True(run.ExitCode == 0, "o release.ps1 não publicou; saída: " + run.Output);
+        Assert.True(run.Line(l => l.Contains("show HEAD:src/Eteris.Browser/Updates/update-keys.txt", StringComparison.Ordinal)) >= 0, "leu as chaves do HEAD");
+        Assert.Contains(@"Releases\assinatura", run.Calls[run.VerifyLine]);
     }
 
     [Fact]
@@ -267,6 +295,9 @@ public class ReleaseScriptTests
             var log = Path.Combine(tools, "calls.log");
             File.WriteAllText(Path.Combine(tools, "runs.json"), s.RunsJson);
             File.WriteAllText(Path.Combine(tools, "remote.txt"), s.RemoteTags);
+            if (s.HeadKeys is not null) File.WriteAllText(Path.Combine(tools, "head-keys.txt"), s.HeadKeys);
+            var updates = Directory.CreateDirectory(Path.Combine(root, "src", "Eteris.Browser", "Updates")).FullName;
+            File.WriteAllText(Path.Combine(updates, "update-keys.txt"), s.WorktreeKeys);
             File.WriteAllText(Path.Combine(tools, "release.json"), s.ReleaseJson);
             // O rascunho: o índice gerado pelo vpk upload e, se o cenário o disser, um .sig válido para ele.
             var draftIndex = DraftIndex(s.Change);
@@ -279,6 +310,11 @@ public class ReleaseScriptTests
                 if "%~3"=="rev-parse" (echo {s.Head}& exit /b 0)
                 if "%~3"=="rev-list" (echo {s.TagCommit}& exit /b 0)
                 if "%~3"=="ls-remote" (type "%~dp0remote.txt"& exit /b 0)
+                if "%~3"=="show" goto show
+                exit /b 0
+                :show
+                if not exist "%~dp0head-keys.txt" exit /b 128
+                type "%~dp0head-keys.txt"
                 exit /b 0
 
                 """.Replace("\n", "\r\n"));
@@ -316,6 +352,7 @@ public class ReleaseScriptTests
                 copy /y "%~3" "%~3.sig" >nul
                 exit /b 0
                 :verify
+                findstr /c:"CHAVE-VALIDA" "%~2" >nul || exit /b 1
                 fc /b "%~3" "%~4" >nul || exit /b 1
                 exit /b {s.VerifyExit}
 
