@@ -21,7 +21,7 @@ jobs:
       # Um teste preso deixa um dump (5 min); o TRX guarda a duração de cada teste; se falhar, os resultados ficam no job.
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
           path: TestResults
