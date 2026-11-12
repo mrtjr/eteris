@@ -13,6 +13,7 @@
 ### Segurança
 
 - As Novidades deixam de anunciar o isolamento das páginas numa publicação que saia sem ele: dizem que essa versão corre sem isolamento.
+- Um atalho alterado já não consegue passar interruptores ao motor (proxy, porta de depuração, `--no-sandbox`).
 
 ### Privacidade
 

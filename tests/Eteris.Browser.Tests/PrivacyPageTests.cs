@@ -224,6 +224,15 @@ public class PrivacyPageTests
         Assert.Contains("fora do AppContainer", row.Detail);
     }
 
+    // INF-09: o motor já não lê o --no-sandbox do Chromium, por isso a linha deixa de olhar para ele.
+    [Fact]
+    public void Sandbox_Row_NoLongerLooksAtTheChromiumSwitch()
+    {
+        var page = Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "PrivacyPage.cs");
+        Assert.DoesNotContain("\"--no-sandbox\"", page);
+        Assert.DoesNotContain("ou --no-sandbox", Find(Good() with { Sandbox = Isolation.OffBySwitch }, "sandbox").Detail);
+    }
+
     [Fact]
     public void Sandbox_RetryPending_SaysNextStart()
     {

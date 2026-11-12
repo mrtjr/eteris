@@ -24,4 +24,22 @@ public static class StartupArgs
     // Perfil alternativo (como no Chrome): dados, cache e instância única separados do perfil normal.
     public static string? UserDataDir(IEnumerable<string> args)
         => args.FirstOrDefault(a => a.StartsWith(UserDataDirFlag, StringComparison.OrdinalIgnoreCase))?[UserDataDirFlag.Length..];
+
+    // O proxy das provas (docs/sandbox.md, «Proxy com o serviço de rede no AppContainer (D9)»): como o motor já não lê os
+    // interruptores do Chromium postos na linha de comandos do Éteris (CommandLineArgsDisabled, INF-09), as provas usam
+    // --eteris-proxy=<proxy> e --eteris-proxy-pac=<PAC>, só com um perfil de teste (--user-data-dir). Devolve o que o
+    // Prepare põe nos CefCommandLineArgs, por esta ordem; sem perfil de teste, ou sem valor, nada.
+    public static IReadOnlyList<(string Switch, string Value)> TestProxy(IEnumerable<string> args, bool customProfile)
+    {
+        if (!customProfile) return [];
+        var list = new List<(string, string)>();
+        var proxy = ValueOf(args, "--eteris-proxy=");
+        if (proxy is { Length: > 0 }) list.Add(("proxy-server", proxy));
+        var pac = ValueOf(args, "--eteris-proxy-pac=");
+        if (pac is { Length: > 0 }) list.Add(("proxy-pac-url", pac));
+        return list;
+    }
+
+    private static string? ValueOf(IEnumerable<string> args, string flag)
+        => args.FirstOrDefault(a => a.StartsWith(flag, StringComparison.OrdinalIgnoreCase))?[flag.Length..];
 }

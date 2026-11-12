@@ -253,7 +253,7 @@ public static class PrivacyPage
                     true);
             case Infrastructure.Isolation.OffBySwitch:
                 return new("sandbox", title,
-                    "Desligado por um interruptor na linha de comandos (--eteris-no-sandbox ou --no-sandbox): tire-o do atalho.", false);
+                    "Desligado pelo interruptor --eteris-no-sandbox na linha de comandos: tire-o do atalho.", false);
             case Infrastructure.Isolation.OffAfterFailures:
                 var detail = "Desligado por precaução: o Éteris não arrancou bem com ele nas duas últimas vezes.";
                 return s.SandboxRetryPending
@@ -329,7 +329,8 @@ public static class PrivacyPage
             PrivacyPreferences.ChromiumPasswordsOff,
             Infrastructure.SandboxFallback.IsolationOf(Infrastructure.CefConfigurator.SandboxSupported, Infrastructure.SandboxInfo.Available != 0,
                 Infrastructure.CefConfigurator.SandboxActive, Infrastructure.StartupGuard.Current.Notice, Infrastructure.SandboxInfo.Disabled(args),
-                args.Contains("--no-sandbox", StringComparer.OrdinalIgnoreCase)),
+                // O motor já não lê o --no-sandbox do Chromium (CommandLineArgsDisabled, INF-09): só o do Éteris conta.
+                engineNoSandbox: false),
             Infrastructure.NetworkSandbox.Enabled, Infrastructure.StartupGuard.Current.ReenableRequested,
             Shields.ShieldEngine.Cosmetic is not null, settings.HttpsFirst);
     }

@@ -16,6 +16,11 @@ public static class CefConfigurator
         var settings = new CefSettings
         {
             CachePath = profilePath,
+            // O motor deixa de ler os interruptores do Chromium e da CEF postos na linha de comandos do Éteris (um atalho
+            // alterado com --remote-debugging-port, --proxy-server ou --no-sandbox): só vale o que o Éteris decide, pelos
+            // CefCommandLineArgs e pelas definições (INF-09). Só o proxy das provas tem interruptores próprios, só com um
+            // perfil de teste (StartupArgs.TestProxy).
+            CommandLineArgsDisabled = true,
             // Locale: a língua dos sites (EngineHardening.Configure, mais abaixo).
             LogSeverity = LogSeverity.Disable,
         };
@@ -131,6 +136,8 @@ public static class CefConfigurator
         if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
         var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox,
             shaderCache);
+        // O proxy das provas ao vivo (--eteris-proxy, --eteris-proxy-pac): só com um perfil de teste.
+        foreach (var (name, value) in StartupArgs.TestProxy(args, AppPaths.IsCustomProfile)) settings.CefCommandLineArgs[name] = value;
         // Só nas medições de desempenho (ETERIS_TEST_HOST_RULES; nunca numa instalação): nomes de teste para 127.0.0.1.
         PerfDiagnostics.ConfigureEngine(settings);
         StartupTrace.Mark("cef.settings");
