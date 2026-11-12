@@ -39,7 +39,7 @@ public partial class MainWindow
     private static Task<CoreWebView2Environment> VideoEnvironment()
         => s_videoEnvironment ??= CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
-            userDataFolder: Path.Combine(AppPaths.Root, "video-engine"),
+            userDataFolder: AppPaths.VideoEngine,
             options: new CoreWebView2EnvironmentOptions(VideoEngine.BrowserArguments(Settings.Current.BlockAutoplay), language: "pt-PT"));
 
     private WebView2? ActiveVideo
@@ -582,5 +582,91 @@ public partial class MainWindow
     private void SetVideoMuted(BrowserTab tab)
     {
         if (_videoViews.TryGetValue(tab, out var view) && view.CoreWebView2 is { } core) core.IsMuted = tab.IsMuted || TestSwitches.Mute;
+    }
+
+    // ---------- Limpezas no perfil do motor de vídeo ----------
+    // «Apagar dados», «Triturar», «Esquecer ao fechar» e os sites de salto chegam também ao que o WebView2 guardou no
+    // perfil normal («eteris»). As janelas privadas usam o modo InPrivate do WebView2: nada no disco, nada a limpar.
+
+    // «Apagar dados» (chamado fora do fio da interface): as caixas marcadas, no perfil inteiro do WebView2. False se o
+    // perfil existe e não foi possível abri-lo ou apagar.
+    internal static Task<bool> ClearVideoEngineAsync(ClearDataRequest request)
+    {
+        var kinds = VideoEngine.DataKinds(request.History, request.Cookies, request.Cache);
+        if (kinds == 0) return Task.FromResult(true);
+        return Application.Current.Dispatcher.InvokeAsync(() => WithVideoProfileAsync(core => core.Profile.ClearBrowsingDataAsync(kinds))).Task.Unwrap();
+    }
+
+    // Uma aba viva do motor de vídeo de uma janela normal (o perfil «eteris»), ou nulo. Uma vista a fechar ou caída
+    // pode lançar ao ler o CoreWebView2: conta como não haver aba viva.
+    private static CoreWebView2? LiveVideoCore()
+    {
+        try { return NormalWindows().SelectMany(w => w._videoViews.Values).Select(v => v.CoreWebView2).FirstOrDefault(c => c is not null); }
+        catch (Exception) { return null; }
+    }
+
+    // Corre a ação no perfil normal do motor de vídeo, no fio da interface: numa aba viva dele ou, sem nenhuma, num
+    // controlador escondido criado só para isto. Sem a pasta do motor de vídeo (nunca foi usado) não há nada a limpar e
+    // o runtime do WebView2 não arranca. Devolve false com qualquer falha.
+    private static async Task<bool> WithVideoProfileAsync(Func<CoreWebView2, Task> action)
+    {
+        if (!Directory.Exists(AppPaths.VideoEngine)) return true;
+        if (LiveVideoCore() is { } live)
+        {
+            try
+            {
+                await action(live);
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
+        CoreWebView2Environment environment;
+        try { environment = await VideoEnvironment(); }
+        catch (Exception)
+        {
+            // Como em InitializeVideoViewAsync: a próxima tentativa volta a criar o ambiente.
+            s_videoEnvironment = null;
+            return false;
+        }
+        CoreWebView2Controller? controller = null;
+        try
+        {
+            var options = environment.CreateCoreWebView2ControllerOptions();
+            options.ProfileName = "eteris";
+            options.IsInPrivateModeEnabled = false;
+            // HWND_MESSAGE: a documentação do WebView2 aceita-o como pai de um WebView que nunca se vê — não depende de
+            // haver uma janela aberta.
+            controller = await environment.CreateCoreWebView2ControllerAsync(new IntPtr(-3), options);
+            ConfigureVideoPrivacy(controller.CoreWebView2);
+            await action(controller.CoreWebView2);
+            return true;
+        }
+        catch (Exception) { return false; }
+        finally
+        {
+            try { controller?.Close(); }
+            catch (Exception) { }
+        }
+    }
+
+    // «Triturar», «Esquecer ao fechar» e os sites de salto no motor de vídeo: os cookies do site e dos subdomínios (a
+    // regra do Triturar, SiteScope.CookieBelongs) e o armazenamento das origens dadas (uma que falhe não impede as
+    // outras). Devolve quantos cookies apagou, ou -1 se o perfil do motor de vídeo existe e não foi possível abri-lo
+    // (quem chama di-lo no aviso: a limpeza não estreita em silêncio).
+    private static async Task<int> ClearVideoSiteAsync(string site, IReadOnlyList<string> origins)
+    {
+        var deleted = 0;
+        var reached = await WithVideoProfileAsync(async core =>
+        {
+            var manager = core.CookieManager;
+            foreach (var cookie in (await manager.GetCookiesAsync(null)).Where(c => SiteScope.CookieBelongs(c.Domain, site)))
+            {
+                manager.DeleteCookie(cookie);
+                deleted++;
+            }
+            foreach (var origin in origins) await VideoPageScript.ClearOriginAsync(core, origin);
+        });
+        return reached ? deleted : -1;
     }
 }

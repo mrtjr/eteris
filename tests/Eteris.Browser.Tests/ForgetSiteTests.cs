@@ -221,6 +221,19 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.Contains("await DeleteSiteCookiesAsync(manager, site)", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
     }
 
+    // Os cookies que o motor não deixou apagar e o perfil do motor de vídeo que não se abriu chegam ao aviso, e um site
+    // de salto com alguma coisa por apagar fica à espera da volta seguinte; a contagem sem resposta não diz «nenhum».
+    [Fact]
+    public void SiteCleanup_ReportsTheCookiesAndTheVideoEngineThatStayed()
+    {
+        var forget = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs"));
+        Assert.Contains("catch (Exception) { cookiesFailed = true; }", forget);
+        Assert.Contains("SiteScope.ShredDone(result.Cookies, result.History, result.Storage, IsPrivate, result.CookiesFailed, result.VideoEngineFailed)", forget);
+        Assert.Contains("catch (Exception) { return -1; }", forget);
+        var bounce = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Bounce.cs"));
+        Assert.Contains("if (!done.Storage || done.CookiesFailed || done.VideoEngineFailed) continue;", bounce);
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

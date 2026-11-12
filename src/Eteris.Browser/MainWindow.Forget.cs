@@ -24,8 +24,9 @@ public partial class MainWindow
     private static bool s_forgetSweepDone;
     private bool _forgetOnCloseDone;
 
-    // Storage: o armazenamento foi mesmo apagado (pelo DevTools de uma página viva deste contexto).
-    public sealed record ShredResult(int Cookies, int History, bool Storage);
+    // Storage: o armazenamento foi mesmo apagado (pelo DevTools de uma página viva deste contexto). CookiesFailed: o
+    // motor não deixou ler ou apagar os cookies; VideoEngineFailed: o perfil do motor de vídeo existe e não se abriu.
+    public sealed record ShredResult(int Cookies, int History, bool Storage, bool CookiesFailed = false, bool VideoEngineFailed = false);
 
     private void WatchForgetOnClose()
     {
@@ -73,7 +74,7 @@ public partial class MainWindow
             if (SiteScope.StillOpen(site, OpenAddresses()) || !AppData.IsForgetOnClose(site)) return;
             if (NormalWindows().FirstOrDefault(w => !w._forgetOnCloseDone) is not { } window) return;
             var result = await window.ShredSiteAsync(site);
-            window.ShowToast($"{site} foi esquecido — {SiteScope.ShredDone(result.Cookies, result.History, result.Storage)}");
+            window.ShowToast($"{site} foi esquecido — {SiteScope.ShredDone(result.Cookies, result.History, result.Storage, false, result.CookiesFailed, result.VideoEngineFailed)}");
         };
         s_forgetTimers[site] = timer;
         timer.Start();
@@ -155,6 +156,9 @@ public partial class MainWindow
 
     private IRequestContext CookieContext => PrivateContext ?? Cef.GetGlobalRequestContext();
 
+    // Os cookies do site no motor principal, para a confirmação do Triturar; -1 se o motor não os deixou ler (a
+    // confirmação di-lo em vez de «nenhum cookie»). Os do motor de vídeo não se contam aqui: contá-los arrancava o
+    // WebView2 só para abrir a confirmação; o aviso depois de triturar já os inclui.
     private async Task<int> CountSiteCookiesAsync(string site)
     {
         try
@@ -162,7 +166,7 @@ public partial class MainWindow
             var cookies = await CookieContext.GetCookieManager(null).VisitAllCookiesAsync();
             return cookies.Count(c => SiteScope.CookieBelongs(c.Domain, site));
         }
-        catch (Exception) { return 0; }
+        catch (Exception) { return -1; }
     }
 
     // Apaga já tudo o que o site deixou (cookies e armazenamento do contexto desta janela; histórico e permissões do
@@ -199,16 +203,20 @@ public partial class MainWindow
         Shields.LocalNetworkGrants.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site), IsPrivate);
         Permissions.PermissionGrants.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site), IsPrivate);
         ForgetSiteInUndo(site);
-        var (cookies, storage) = await ClearSiteStorageAsync(site, seen);
-        return new ShredResult(cookies, history, storage);
+        var cleared = await ClearSiteStorageAsync(site, seen);
+        return new ShredResult(cleared.Cookies, history, cleared.Storage, cleared.CookiesFailed, cleared.VideoEngineFailed);
     }
 
     // Cookies e armazenamento (local, IndexedDB, cache e trabalhadores) do site e dos seus subdomínios, no contexto
-    // desta janela; devolve quantos cookies apagou e se o armazenamento foi apagado. Usado por «Triturar», «Esquecer
-    // ao fechar» e pelos sites de salto. Também tira ao motor as decisões dele sobre a rede local dessas origens.
-    private async Task<(int Cookies, bool Storage)> ClearSiteStorageAsync(string site, IEnumerable<string> seenUrls)
+    // desta janela e, numa janela normal, no perfil do motor de vídeo; devolve quantos cookies apagou (dos dois
+    // motores), se o armazenamento foi apagado, se os cookies do motor principal falharam e se o perfil do motor de vídeo
+    // ficou por abrir. Usado por «Triturar», «Esquecer ao fechar» e pelos sites de salto. Também tira ao motor as
+    // decisões dele sobre a rede local dessas origens.
+    private async Task<(int Cookies, bool Storage, bool CookiesFailed, bool VideoEngineFailed)> ClearSiteStorageAsync(string site, IEnumerable<string> seenUrls)
     {
         var cookies = 0;
+        var cookiesFailed = false;
+        var videoFailed = false;
         var seen = seenUrls.ToList();
         try
         {
@@ -222,14 +230,29 @@ public partial class MainWindow
                 seen.Add("http://" + host + "/");
             }
         }
-        catch (Exception) { }
+        // O motor não deixou ler ou apagar os cookies: o aviso di-lo, e as origens dos subdomínios que só se conheciam
+        // por eles ficam de fora.
+        catch (Exception) { cookiesFailed = true; }
 
         var origins = SiteScope.Origins(site, seen);
         foreach (var origin in origins) Permissions.EnginePermissions.ResetAll(CookieContext, origin);
 
+        // O perfil do motor de vídeo (MainWindow.VideoEngine.cs), só numa janela normal (a privada usa o InPrivate do
+        // WebView2). Com uma aba viva desse motor limpa-se sempre (apanha os cookies de terceiros que as páginas dele
+        // carregaram); sem ela, só para os sites que lá abriram, para não arrancar o runtime do WebView2 sem necessidade.
+        // Fica de fora: os cookies de terceiros de um site que nunca abriu no motor de vídeo, sem nenhuma aba desse motor
+        // aberta, e um site a que se fez «Repor» nas Definições por site (sai das duas listas); saem com «Apagar dados» e
+        // com «Apagar ao fechar».
+        if (!IsPrivate && (LiveVideoCore() is not null || VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site))))
+        {
+            var video = await ClearVideoSiteAsync(site, origins);
+            if (video < 0) videoFailed = true;
+            else cookies += video;
+        }
+
         // O armazenamento apaga-se por origem, pelo DevTools de uma página viva deste contexto. Logo depois de fechar as
         // abas do site, a aba que fica pode ainda não ter motor: espera-se por ele.
-        if (await LiveBrowserAsync(TimeSpan.FromSeconds(8)) is not { } browser) return (cookies, false);
+        if (await LiveBrowserAsync(TimeSpan.FromSeconds(8)) is not { } browser) return (cookies, false, cookiesFailed, videoFailed);
         try
         {
             using var client = browser.GetDevToolsClient();
@@ -239,9 +262,9 @@ public partial class MainWindow
                 try { await DevToolsCalls.Run(() => client.Storage.ClearDataForOriginAsync(origin, "all")); }
                 catch (Exception) { }
             }
-            return (cookies, true);
+            return (cookies, true, cookiesFailed, videoFailed);
         }
-        catch (Exception) { return (cookies, false); }
+        catch (Exception) { return (cookies, false, cookiesFailed, videoFailed); }
     }
 
     // Os cookies do site e dos seus subdomínios (a mesma regra do Triturar), um a um por endereço e nome: devolve
@@ -340,6 +363,6 @@ public partial class MainWindow
         foreach (var tab in siteTabs) Tabs.CloseQuietly(tab);
         if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
         var result = await ShredSiteAsync(site, seen);
-        ShowToast($"{site} triturado — {SiteScope.ShredDone(result.Cookies, result.History, result.Storage, IsPrivate)}");
+        ShowToast($"{site} triturado — {SiteScope.ShredDone(result.Cookies, result.History, result.Storage, IsPrivate, result.CookiesFailed, result.VideoEngineFailed)}");
     }
 }

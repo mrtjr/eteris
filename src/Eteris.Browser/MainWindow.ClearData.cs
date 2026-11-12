@@ -21,6 +21,9 @@ public partial class MainWindow
         var cookiesFailed = false;
         var cacheFailed = false;
         var storageFailed = 0;
+        var cookieSitesUnknown = false;
+        // Cada resposta leva também os sites que ficaram por conhecer (os cookies não se deixaram ler).
+        ClearOutcome Done(ClearOutcome outcome) => outcome with { CookieSitesUnknown = cookieSitesUnknown };
         IReadOnlyList<string> origins = [];
         if (request.Cookies)
         {
@@ -29,17 +32,17 @@ public partial class MainWindow
             // as do histórico, as dos cookies (lidas antes de os apagar) e as das abas abertas deste contexto.
             IEnumerable<string> domains;
             try { domains = (await manager.VisitAllCookiesAsync()).Select(c => c.Domain).ToList(); }
-            catch (Exception) { domains = []; }
+            catch (Exception) { domains = []; cookieSitesUnknown = true; }
             origins = SiteScope.KnownOrigins(historyOrigins, domains, IsPrivate ? Tabs.Tabs.Select(t => t.Address) : OpenAddresses());
             // O gestor do contexto da janela não precisa de página; o CefSharp devolve -1 quando não chega aos cookies.
             try { cookiesFailed = await manager.DeleteCookiesAsync(string.Empty, string.Empty) < 0; }
             catch (Exception) { cookiesFailed = true; }
         }
-        if (origins.Count == 0 && !request.Cache) return new ClearOutcome(cookiesFailed);
+        if (origins.Count == 0 && !request.Cache) return Done(new ClearOutcome(cookiesFailed));
 
         // O armazenamento e a cache apagam-se pelo DevTools de uma página viva deste contexto.
         if (await LiveBrowserAsync(TimeSpan.FromSeconds(8)) is not { } browser)
-            return new ClearOutcome(cookiesFailed, request.Cache, origins.Count);
+            return Done(new ClearOutcome(cookiesFailed, request.Cache, origins.Count));
         try
         {
             using var client = browser.GetDevToolsClient();
@@ -55,7 +58,7 @@ public partial class MainWindow
                 catch (Exception) { cacheFailed = true; }
             }
         }
-        catch (Exception) { return new ClearOutcome(cookiesFailed, request.Cache, origins.Count); }
-        return new ClearOutcome(cookiesFailed, cacheFailed, storageFailed);
+        catch (Exception) { return Done(new ClearOutcome(cookiesFailed, request.Cache, origins.Count)); }
+        return Done(new ClearOutcome(cookiesFailed, cacheFailed, storageFailed));
     }
 }

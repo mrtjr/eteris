@@ -1,3 +1,5 @@
+using System.IO;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Tabs;
 using Microsoft.Web.WebView2.Core;
 
@@ -230,5 +232,50 @@ public class VideoEngineTests
     {
         const string url = "https://www.w3schools.com/html/mov_bbb.mp4";
         Assert.Equal(VideoEngine.PageTitle(null, url), VideoEngine.MainEngineTitle("w3schools.com/html/mov_bbb.mp4", url));
+    }
+
+    [Fact]
+    public void DataKinds_MapTheClearDataBoxes()
+    {
+        Assert.Equal(CoreWebView2BrowsingDataKinds.AllSite, VideoEngine.DataKinds(history: false, cookies: true, cache: false));
+        Assert.Equal(CoreWebView2BrowsingDataKinds.DiskCache, VideoEngine.DataKinds(false, false, true));
+        Assert.Equal(CoreWebView2BrowsingDataKinds.BrowsingHistory | CoreWebView2BrowsingDataKinds.DownloadHistory, VideoEngine.DataKinds(true, false, false));
+        Assert.Equal((CoreWebView2BrowsingDataKinds)0, VideoEngine.DataKinds(false, false, false));
+    }
+
+    [Fact]
+    public void MayHoldData_OnlyForSitesThatOpenedInTheVideoEngine()
+    {
+        Assert.True(VideoEngine.MayHoldData("twitch.tv", remembered: false, optedOut: false));
+        Assert.True(VideoEngine.MayHoldData("exemplo.pt", remembered: true, optedOut: false));
+        // O botão «Motor de vídeo» tira o site dos lembrados e põe-no nos excluídos: os dados dele continuam no WebView2.
+        Assert.True(VideoEngine.MayHoldData("exemplo.pt", remembered: false, optedOut: true));
+        Assert.False(VideoEngine.MayHoldData("exemplo.pt", remembered: false, optedOut: false));
+    }
+
+    [Fact]
+    public void EveryCleanup_ReachesTheVideoEngineProfile()
+    {
+        string Src(params string[] parts) => File.ReadAllText(Path.Combine([RepoRoot(), "src", "Eteris.Browser", .. parts]));
+        Assert.Equal(Path.Combine(AppPaths.Root, "video-engine"), AppPaths.VideoEngine);
+        Assert.Contains("userDataFolder: AppPaths.VideoEngine", Src("MainWindow.VideoEngine.cs"));
+        Assert.Contains("if (!Directory.Exists(AppPaths.VideoEngine)) return true;", Src("MainWindow.VideoEngine.cs"));
+        // Janela normal: com uma aba viva no motor de vídeo limpa-se sempre; sem ela, só os sites que lá podem ter dados.
+        Assert.Contains("if (!IsPrivate && (LiveVideoCore() is not null || VideoEngine.MayHoldData(", Src("MainWindow.Forget.cs"));
+        Assert.Contains("await ClearVideoSiteAsync(site, origins)", Src("MainWindow.Forget.cs"));
+        Assert.Contains("if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request))", Src("Browser", "EterisSchemeHandlerFactory.cs"));
+        // O DevTools do WebView2 só pelo canal (SandboxRulesTests).
+        Assert.Contains("\"Storage.clearDataForOrigin\"", Src("Browser", "VideoPageScript.cs"));
+        Assert.Contains("VideoPageScript.ClearOriginAsync(core, origin)", Src("MainWindow.VideoEngine.cs"));
+        Assert.Contains("ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine);", Src("Infrastructure", "CefConfigurator.cs"));
+        var exit = Src("App.xaml.cs");
+        Assert.True(exit.IndexOf("ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine)", StringComparison.Ordinal) > exit.IndexOf("CefConfigurator.Shutdown();", StringComparison.Ordinal));
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 }

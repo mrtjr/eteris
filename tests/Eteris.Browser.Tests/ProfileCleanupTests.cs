@@ -111,4 +111,17 @@ public sealed class ProfileCleanupTests : IDisposable
         Assert.Equal("url-source=http://127.0.0.1:9/", args["component-updater"]);
         Assert.Contains("OptimizationGuideModelDownloading", args["disable-features"]);
     }
+
+    [Fact]
+    public void RemoveVideoEngineData_DeletesTheFolder_AndSaysWhenItStayed()
+    {
+        var folder = Path.Combine(_root, "video-engine");
+        var network = Directory.CreateDirectory(Path.Combine(folder, "EBWebView", "eteris", "Network")).FullName;
+        File.WriteAllText(Path.Combine(network, "Cookies"), "x");
+        using (new FileStream(Path.Combine(network, "Cookies"), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.False(ProfileCleanup.RemoveVideoEngineData(folder));
+        Assert.True(ProfileCleanup.RemoveVideoEngineData(folder));
+        Assert.False(Directory.Exists(folder));
+        Assert.True(ProfileCleanup.RemoveVideoEngineData(folder));
+    }
 }

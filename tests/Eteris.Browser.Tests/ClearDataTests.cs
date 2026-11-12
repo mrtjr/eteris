@@ -48,6 +48,23 @@ public class ClearDataTests
             new ClearDataRequest(false, true, false, DateTime.MinValue, Vault: true).Report(new ClearOutcome(StorageFailed: 1)));
     }
 
+    // O motor não deixou ler os cookies: os sites que só se conheciam por eles ficam com o armazenamento, e di-lo.
+    [Fact]
+    public void Report_SaysWhenTheCookieSitesWereUnknown()
+    {
+        Assert.Equal("Não foi possível apagar o armazenamento dos sites que só tinham cookies. Apagado: cookies.",
+            new ClearDataRequest(false, true, false, DateTime.MinValue).Report(new ClearOutcome(CookieSitesUnknown: true)));
+        Assert.True(new ClearOutcome(CookieSitesUnknown: true).Failed);
+    }
+
+    [Fact]
+    public void ClearEngineData_MarksTheCookieSitesUnknown_WhenTheEngineDidNotListThem()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.ClearData.cs"));
+        Assert.Contains("catch (Exception) { domains = []; cookieSitesUnknown = true; }", code);
+        Assert.Contains("CookieSitesUnknown = cookieSitesUnknown", code);
+    }
+
     [Fact]
     public void Route_AnswersOnlyAfterTheEngineCleared()
     {

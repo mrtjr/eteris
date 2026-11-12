@@ -280,6 +280,24 @@ public static class VideoEngine
     public static bool OpensInVideoEngine(string site, bool remembered, bool optedOut, bool mainHasCodecs = false)
         => !optedOut && (remembered || (!mainHasCodecs && KnownH264Sites.Contains(site)));
 
+    // O site pode ter deixado dados no perfil do motor de vídeo: abriu lá (lembrado, ou da lista embutida) ou o
+    // utilizador mandou-o voltar ao motor principal (o botão tira-o dos lembrados e põe-no nos excluídos; o que o
+    // WebView2 guardou continua lá). Decide se o Triturar e companhia abrem o perfil do WebView2 sem aba viva dele.
+    public static bool MayHoldData(string site, bool remembered, bool optedOut)
+        => remembered || optedOut || KnownH264Sites.Contains(site);
+
+    // As caixas de «Apagar dados» no WebView2: cookies e dados de sites → tudo o que é do site (cookies e todo o
+    // armazenamento); cache → a cache do disco; histórico → o histórico próprio do WebView2 e o das transferências
+    // (inteiros, seja qual for o período: não se veem em lado nenhum). 0: nada a apagar.
+    public static CoreWebView2BrowsingDataKinds DataKinds(bool history, bool cookies, bool cache)
+    {
+        CoreWebView2BrowsingDataKinds kinds = 0;
+        if (cookies) kinds |= CoreWebView2BrowsingDataKinds.AllSite;
+        if (cache) kinds |= CoreWebView2BrowsingDataKinds.DiskCache;
+        if (history) kinds |= CoreWebView2BrowsingDataKinds.BrowsingHistory | CoreWebView2BrowsingDataKinds.DownloadHistory;
+        return kinds;
+    }
+
     // Argumentos do motor do Edge: sem SmartScreen (enviaria os endereços visitados à Microsoft), sem a interface
     // do Office nos PDFs, sem tráfego de fundo, sem pings de auditoria de links e sem o «component updater» (no
     // diagnóstico descarregou componentes sem ação do utilizador). Com «bloquear reprodução automática», a mesma

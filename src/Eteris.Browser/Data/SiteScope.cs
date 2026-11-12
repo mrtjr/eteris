@@ -100,7 +100,8 @@ public static class SiteScope
     // trancadas ou têm nota, que se perdem com elas.
     public static string ShredSummary(string site, int cookies, int history, bool isPrivate = false, int closingTabs = -1, int locked = 0, int noted = 0)
     {
-        var parts = new List<string> { cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies" };
+        // cookies < 0: o motor não os deixou contar (não se diz «nenhum»).
+        var parts = new List<string> { cookies < 0 ? "os cookies (não foi possível contá-los)" : cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies" };
         if (!isPrivate)
             parts.Add(history == 0 ? "nenhuma entrada do histórico" : history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico");
         parts.Add("o armazenamento do site (local, bases de dados, cache e trabalhadores)");
@@ -140,13 +141,22 @@ public static class SiteScope
     }
 
     // O aviso depois de apagar. storage: o armazenamento foi mesmo apagado (precisa de uma página viva do contexto).
-    public static string ShredDone(int cookies, int history, bool storage, bool isPrivate = false)
+    // cookiesFailed: o motor não deixou ler ou apagar os cookies; videoEngineFailed: o perfil do motor de vídeo existe
+    // e não se abriu. Só o armazenamento em falta mantém a frase de sempre; o resto diz «não foi possível apagar».
+    public static string ShredDone(int cookies, int history, bool storage, bool isPrivate = false, bool cookiesFailed = false, bool videoEngineFailed = false)
     {
         var cookieText = cookies == 1 ? "1 cookie" : $"{cookies} cookies";
         var text = isPrivate
             ? cookieText + (cookies == 1 ? " apagado" : " apagados")
             : $"{cookieText} e {(history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico")} apagados";
-        return storage ? text : text + " — o armazenamento ficou por apagar (o motor não estava pronto)";
+        if (!cookiesFailed && !videoEngineFailed)
+            return storage ? text : text + " — o armazenamento ficou por apagar (o motor não estava pronto)";
+        var stayed = new List<string>();
+        if (cookiesFailed) stayed.Add("todos os cookies");
+        if (!storage) stayed.Add("o armazenamento");
+        if (videoEngineFailed) stayed.Add("os dados do motor de vídeo");
+        var names = stayed.Count == 1 ? stayed[0] : string.Join(", ", stayed[..^1]) + " e " + stayed[^1];
+        return text + " — não foi possível apagar " + names;
     }
 
     // O aviso do cadeado › «Apagar cookies e dados deste site»: quantos cookies saíram e, se o armazenamento não

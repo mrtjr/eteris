@@ -95,6 +95,18 @@ public static class ProfileCleanup
         return stayed;
     }
 
+    // «Apagar cookies e dados de sites ao fechar» no motor de vídeo: a pasta de dados do WebView2 inteira (cookies,
+    // armazenamento, cache e o histórico próprio do WebView2), ao sair e no arranque seguinte, sempre com o WebView2
+    // fechado. Devolve true se a pasta já não existe (ou nunca existiu); false se ficou (um processo do WebView2 ainda a
+    // fechar segura ficheiros: o arranque seguinte acaba o trabalho).
+    public static bool RemoveVideoEngineData(string folder)
+    {
+        try { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return !Directory.Exists(folder);
+    }
+
     public static int RemoveChromiumHistory(string profileRoot)
     {
         var dir = Path.Combine(profileRoot, "Default");

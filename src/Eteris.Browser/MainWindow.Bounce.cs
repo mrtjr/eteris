@@ -160,8 +160,10 @@ public partial class MainWindow
                 var seen = new List<string>(Bounces.OriginsOf(site));
                 try { seen.AddRange(await Task.Run(() => AppData.History.SiteUrls(site))); }
                 catch (Exception) { }
-                // Sem motor pronto o armazenamento fica: o site continua à espera da próxima volta.
-                if (!(await window.ClearSiteStorageAsync(site, seen)).Storage) continue;
+                // Sem motor pronto o armazenamento fica (ou os cookies, ou o perfil do motor de vídeo): o site continua à
+                // espera da próxima volta.
+                var done = await window.ClearSiteStorageAsync(site, seen);
+                if (!done.Storage || done.CookiesFailed || done.VideoEngineFailed) continue;
                 Bounces.MarkCleared(site);
                 Shields.PrivacyLedger.Count(Shields.PrivacyCategory.Forgotten, site);
                 cleared.Add(site);
