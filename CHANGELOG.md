@@ -1,5 +1,7 @@
 # Alterações
 
+## 0.2.16 — por publicar
+
 ## 0.2.15 — 2026-11-12
 
 A versão do **login simples**: «Entrar com o Google» com um clique, a partir do menu, das boas-vindas ou das

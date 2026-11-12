@@ -55,14 +55,17 @@ public class PublicTextsTests
         yield return ("CHANGELOG 0.2.15", Flat(ChangelogEntry()));
     }
 
-    // R12: a entrada da 0.2.15 abre o CHANGELOG, com a data da publicação, e a história fica como estava.
+    // R12: a 0.2.15 é a última versão publicada, com a data da publicação: por cima dela só podem estar secções por
+    // publicar, e a história fica como estava.
     [Fact]
     public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
-        Assert.Equal("## 0.2.15 — 2026-11-12", headings[0]);
-        Assert.Equal("## 0.2.14 — 2026-11-09", headings[1]);
+        var i = headings.IndexOf("## 0.2.15 — 2026-11-12");
+        Assert.True(i >= 0, "sem a entrada 0.2.15");
+        Assert.Equal("## 0.2.14 — 2026-11-09", headings[i + 1]);
+        Assert.All(headings.Take(i), h => Assert.EndsWith("— por publicar", h));
         Assert.Single(headings, l => l.StartsWith("## 0.2.14", StringComparison.Ordinal));
         Assert.Contains("## 0.2.14 — 2026-11-09\n\nA versão das **páginas isoladas**.", log);
         Assert.Contains("## 0.2.13 — 2026-11-09\n\nA versão do **login completo**.", log);
