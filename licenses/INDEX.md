@@ -51,7 +51,7 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | percent-encoding 2.3.2 (motor de bloqueio) | MIT OR Apache-2.0 | `rust/percent-encoding-2.3.2/` |
 | potential_utf 0.1.6 (motor de bloqueio) | Unicode-3.0 | `rust/potential_utf-0.1.6/` |
 | proc-macro2 1.0.107 (motor de bloqueio) | MIT OR Apache-2.0 | `rust/proc-macro2-1.0.107/` |
-| psl 2.1.247 (motor de bloqueio) | MIT/Apache-2.0 | `rust/psl-2.1.247/` |
+| psl 2.1.249 (motor de bloqueio) | MIT/Apache-2.0 | `rust/psl-2.1.249/` |
 | psl-types 2.0.11 (motor de bloqueio) | MIT/Apache-2.0 | `rust/psl-types-2.0.11/` |
 | quote 1.0.47 (motor de bloqueio) | MIT OR Apache-2.0 | `rust/quote-1.0.47/` |
 | regex 1.13.1 (motor de bloqueio) | MIT OR Apache-2.0 | `rust/regex-1.13.1/` |
@@ -85,5 +85,5 @@ Textos completos das licenças de tudo o que o Éteris distribui. Gerado por `bu
 | zerovec 0.11.9 (motor de bloqueio) | Unicode-3.0 | `rust/zerovec-0.11.9/` |
 | zerovec-derive 0.11.7 (motor de bloqueio) | Unicode-3.0 | `rust/zerovec-derive-0.11.7/` |
 | zmij 1.0.23 (motor de bloqueio) | MIT | `rust/zmij-1.0.23/` |
-| Public Suffix List (dados, no crate psl 2.1.247 dentro do eteris_shields.dll) | MPL-2.0 | `PublicSuffixList-MPL-2.0.txt` |
+| Public Suffix List (dados, no crate psl 2.1.249 dentro do eteris_shields.dll) | MPL-2.0 | `PublicSuffixList-MPL-2.0.txt` |
 | Lista de palavras BIP39 em português (kit de recuperação, dentro do Eteris.Sync.dll) | MIT | `BIP39-wordlist-LICENSE.txt` |

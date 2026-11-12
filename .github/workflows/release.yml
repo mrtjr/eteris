@@ -40,7 +40,7 @@ jobs:
       # (com o «v») não é uma versão NuGet válida — o restauro do projeto de testes falhava sem mensagem.
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -61,7 +61,7 @@ jobs:
       # (numa execução verde, a duração de cada teste).
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
           path: TestResults
@@ -85,7 +85,7 @@ jobs:
           if ($env:SEM_CODECS -ne "true") { throw "Publicacao pelo CI so com sem_codecs = true (as releases normais sao locais: docs/motor.md)" }
           if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag invalida: $env:RELEASE_TAG (esperado vX.Y.Z)" }
           Write-Host "::warning::Publicacao de emergencia SEM codecs ($env:RELEASE_TAG): runtime da CEF do NuGet."
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
       # O setup-dotnet lê o global.json da árvore da tag, e as tags até à v0.2.16 não o têm: pára aqui com o que fazer.
@@ -111,7 +111,7 @@ jobs:
       # Os mesmos testes, com as mesmas opções, do job verify.
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
           path: TestResults
