@@ -41,7 +41,7 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
@@ -92,7 +92,7 @@ jobs:
       - name: A tag tem de ter global.json
         run: |
           if (-not (Test-Path global.json)) { throw "A tag $env:RELEASE_TAG nao tem global.json (as tags ate a v0.2.16 nao o tem): publicar a partir de uma tag que o tenha" }
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
