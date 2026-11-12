@@ -175,8 +175,9 @@ public partial class MainWindow
         yield return new("", "Capturar área visível", "Só o que está no ecrã", null, () => CapturePage(false));
         if (WebHost(Tabs.Active?.Address) is { } pickHost)
         {
-            yield return new("\uE7BC", AppData.IsSavedForLater(Tabs.Active!.Address) ? "Já está na lista de leitura" : "Ler mais tarde",
-                "Guarda esta página na lista «Para ler»", null, SaveForLater);
+            if (!IsPrivate)
+                yield return new("\uE7BC", AppData.IsSavedForLater(Tabs.Active!.Address) ? "Já está na lista de leitura" : "Ler mais tarde",
+                    "Guarda esta página na lista «Para ler»", null, SaveForLater);
             if (!IsPrivate && Tabs.Active is { } darkTab && Shields.DarkPages.IsCandidate(darkTab.Address) && WebHost(darkTab.Address) is { } darkSite)
             {
                 var dark = AppData.IsDark(darkSite);

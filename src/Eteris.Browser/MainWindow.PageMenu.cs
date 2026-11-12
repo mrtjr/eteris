@@ -90,6 +90,7 @@ public partial class MainWindow
 
     private void SaveForLater()
     {
+        if (IsPrivate) return;
         if (Tabs.Active is not { } tab || WebHost(tab.Address) is null) return;
         AppData.SaveForLater(tab.Address, tab.Title);
         ShowToast("Guardado em «Para ler» — veja em Favoritos › Para ler");

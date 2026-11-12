@@ -468,9 +468,13 @@ public partial class MainWindow
         if (Tabs.Active is not { } tab || !tab.UsesVideoEngine) return;
         if (WebHost(tab.Address) is { } host)
         {
-            AppData.SetVideoSite(host, false);
+            // Na janela privada o perfil não se toca: o site lembrado fica, e o `optedOut` em memória tem prioridade.
             if (IsPrivate) _privateVideoOptOut.Add(TrackerBlocker.RegistrableDomain(host.ToLowerInvariant()));
-            else AppData.SetVideoOptOut(host, true);
+            else
+            {
+                AppData.SetVideoSite(host, false);
+                AppData.SetVideoOptOut(host, true);
+            }
         }
         SwitchToNormalEngine(tab, tab.Address);
         ShowToast("Este site volta a abrir no motor principal");
