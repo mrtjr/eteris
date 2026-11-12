@@ -5,6 +5,7 @@
 ### Correções
 
 - «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
+- Uma conversão escrita com algarismos de outro alfabeto (ou uma conta colada com milhares de parênteses) na barra de endereço já não fecha o Éteris.
 
 ## 0.2.16 — 2026-11-12
 
