@@ -32,6 +32,21 @@ public class StaRunnerTests
         Assert.Contains("IsBackground = true", runner);
     }
 
+    // Cada StaRunner.Run prende uma thread do pool enquanto espera pela thread STA: na fase paralela da bateria, com o
+    // pool ocupado, era um teste intermitente (TFI-04). Os ficheiros que o usam correm na coleção sem paralelismo.
+    [Fact]
+    public void StaTests_RunInTheWpfCollection()
+    {
+        var missing = TestSources()
+            .Where(f => Path.GetFileName(f) is not ("StaRunner.cs" or "StaRunnerTests.cs"))
+            .Where(f => File.ReadAllText(f) is var text && text.Contains("StaRunner.Run", StringComparison.Ordinal)
+                        && !text.Contains("[Collection(WpfCollection.Name)]", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        Assert.True(missing.Count == 0, "Usam o StaRunner fora da coleção WpfCollection: " + string.Join(", ", missing));
+    }
+
     [Fact]
     public void Run_ReturnsTheResultFromAnStaThread()
     {
