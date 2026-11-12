@@ -607,10 +607,21 @@ public partial class MainWindow
 
     // Corre a ação no perfil normal do motor de vídeo, no fio da interface: numa aba viva dele ou, sem nenhuma, num
     // controlador escondido criado só para isto. Sem a pasta do motor de vídeo (nunca foi usado) não há nada a limpar e
-    // o runtime do WebView2 não arranca. Devolve false com qualquer falha.
+    // o runtime do WebView2 não arranca. Devolve false com qualquer falha e ao fim de VideoEngine.CleanupLimit (um
+    // runtime que não responde não deixa «A apagar…» nem a volta dos sites de salto penduradas).
     private static async Task<bool> WithVideoProfileAsync(Func<CoreWebView2, Task> action)
     {
         if (!Directory.Exists(AppPaths.VideoEngine)) return true;
+        using var limit = new CancellationTokenSource();
+        var work = RunInVideoProfileAsync(action, limit.Token);
+        if (await Task.WhenAny(work, Task.Delay(VideoEngine.CleanupLimit)) == work) return await work;
+        limit.Cancel();
+        return false;
+    }
+
+    // O trabalho de WithVideoProfileAsync; nunca lança. expired: o tempo-limite passou e a limpeza já respondeu.
+    private static async Task<bool> RunInVideoProfileAsync(Func<CoreWebView2, Task> action, CancellationToken expired)
+    {
         if (LiveVideoCore() is { } live)
         {
             try
@@ -637,7 +648,15 @@ public partial class MainWindow
             options.IsInPrivateModeEnabled = false;
             // HWND_MESSAGE: a documentação do WebView2 aceita-o como pai de um WebView que nunca se vê — não depende de
             // haver uma janela aberta.
-            controller = await environment.CreateCoreWebView2ControllerAsync(new IntPtr(-3), options);
+            try { controller = await environment.CreateCoreWebView2ControllerAsync(new IntPtr(-3), options); }
+            catch (Exception)
+            {
+                // O ambiente pode ter deixado de servir (o runtime saiu ou foi atualizado): a próxima tentativa cria outro.
+                s_videoEnvironment = null;
+                return false;
+            }
+            // Chegou depois do tempo-limite: a limpeza já respondeu «não foi possível»; fecha-se (finally) sem apagar.
+            if (expired.IsCancellationRequested) return false;
             ConfigureVideoPrivacy(controller.CoreWebView2);
             await action(controller.CoreWebView2);
             return true;
@@ -652,11 +671,12 @@ public partial class MainWindow
 
     // «Triturar», «Esquecer ao fechar» e os sites de salto no motor de vídeo: os cookies do site e dos subdomínios (a
     // regra do Triturar, SiteScope.CookieBelongs) e o armazenamento das origens dadas (uma que falhe não impede as
-    // outras). Devolve quantos cookies apagou, ou -1 se o perfil do motor de vídeo existe e não foi possível abri-lo
-    // (quem chama di-lo no aviso: a limpeza não estreita em silêncio).
-    private static async Task<int> ClearVideoSiteAsync(string site, IReadOnlyList<string> origins)
+    // outras). Devolve quantos cookies apagou e se ficou tudo apagado: Complete é false se o perfil do motor de vídeo
+    // existe e não se abriu (ou passou o tempo-limite) ou se o motor recusou alguma origem — quem chama di-lo no aviso.
+    private static async Task<(int Cookies, bool Complete)> ClearVideoSiteAsync(string site, IReadOnlyList<string> origins)
     {
         var deleted = 0;
+        var refused = 0;
         var reached = await WithVideoProfileAsync(async core =>
         {
             var manager = core.CookieManager;
@@ -665,8 +685,9 @@ public partial class MainWindow
                 manager.DeleteCookie(cookie);
                 deleted++;
             }
-            foreach (var origin in origins) await VideoPageScript.ClearOriginAsync(core, origin);
+            foreach (var origin in origins)
+                if (!await VideoPageScript.ClearOriginAsync(core, origin)) refused++;
         });
-        return reached ? deleted : -1;
+        return (deleted, reached && refused == 0);
     }
 }

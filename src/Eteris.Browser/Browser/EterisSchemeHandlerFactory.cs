@@ -663,7 +663,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         // O perfil do motor de vídeo (WebView2), com as mesmas caixas. As janelas privadas usam o modo InPrivate do
         // WebView2: nada no disco, e nunca se toca no perfil normal a partir delas. Sem a pasta do motor de vídeo não se
         // arranca o runtime (MainWindow.WithVideoProfileAsync).
-        if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request)) outcome = outcome with { VideoEngineFailed = true };
+        if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request).ConfigureAwait(false)) outcome = outcome with { VideoEngineFailed = true };
         return request.Report(outcome);
     }
 

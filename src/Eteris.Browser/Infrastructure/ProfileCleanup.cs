@@ -107,6 +107,23 @@ public static class ProfileCleanup
         return !Directory.Exists(folder);
     }
 
+    // Ao sair, os processos do WebView2 fecham depois das janelas e podem ainda segurar ficheiros da pasta: tenta-se
+    // algumas vezes, com pausas curtas (no máximo 8 × 250 ms = 2 s, e só com «Apagar ao fechar»). Se mesmo assim ficar,
+    // o arranque seguinte (CefConfigurator.Prepare) acaba o trabalho.
+    public const int VideoEngineExitAttempts = 8;
+    public static readonly TimeSpan VideoEngineExitPause = TimeSpan.FromMilliseconds(250);
+
+    // Corre a tentativa até ela dar true, no máximo `times` vezes, com uma pausa entre elas. Devolve o último resultado.
+    public static bool Retry(Func<bool> attempt, int times, TimeSpan pause)
+    {
+        for (var i = 1; ; i++)
+        {
+            if (attempt()) return true;
+            if (i >= times) return false;
+            if (pause > TimeSpan.Zero) Thread.Sleep(pause);
+        }
+    }
+
     public static int RemoveChromiumHistory(string profileRoot)
     {
         var dir = Path.Combine(profileRoot, "Default");

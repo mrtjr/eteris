@@ -118,12 +118,12 @@ public partial class App : Application
             if (ProfileCleanup.ShouldRemoveGpuCaches(Data.Settings.Current.ClearOnExit)) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
             // «Apagar cookies e dados de sites ao fechar»: o armazenamento dos sites (Local Storage, IndexedDB…) e o ficheiro
             // dos cookies, também com o motor já fechado; e a pasta inteira do motor de vídeo (WebView2), cujas abas já
-            // fecharam com as janelas. O arranque seguinte repete-o como garantia (um processo do WebView2 ainda a fechar
-            // pode segurar ficheiros).
+            // fecharam com as janelas. Os processos do WebView2 ainda podem estar a fechar: tenta-se durante até 2 s. O
+            // arranque seguinte repete-o como garantia.
             if (Data.Settings.Current.ClearOnExit)
             {
                 ProfileCleanup.RemoveSiteData(AppPaths.Profile);
-                ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine);
+                ProfileCleanup.Retry(() => ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine), ProfileCleanup.VideoEngineExitAttempts, ProfileCleanup.VideoEngineExitPause);
             }
         }
         finally

@@ -124,4 +124,42 @@ public sealed class ProfileCleanupTests : IDisposable
         Assert.False(Directory.Exists(folder));
         Assert.True(ProfileCleanup.RemoveVideoEngineData(folder));
     }
+
+    // Ao sair, os processos do WebView2 ainda podem estar a fechar: a pasta tenta-se apagar algumas vezes.
+    [Fact]
+    public void Retry_StopsAtTheFirstSuccess_AndGivesUpAfterTheLastTry()
+    {
+        var calls = 0;
+        Assert.True(ProfileCleanup.Retry(() => ++calls == 3, 5, TimeSpan.Zero));
+        Assert.Equal(3, calls);
+        calls = 0;
+        Assert.False(ProfileCleanup.Retry(() => { calls++; return false; }, 4, TimeSpan.Zero));
+        Assert.Equal(4, calls);
+    }
+
+    [Fact]
+    public void Retry_DeletesTheVideoEngineFolder_OnceTheFileIsReleased()
+    {
+        var folder = Path.Combine(_root, "video-engine");
+        var network = Directory.CreateDirectory(Path.Combine(folder, "EBWebView", "eteris", "Network")).FullName;
+        File.WriteAllText(Path.Combine(network, "Cookies"), "x");
+        var held = new FileStream(Path.Combine(network, "Cookies"), FileMode.Open, FileAccess.Read, FileShare.None);
+        var tries = 0;
+        Assert.True(ProfileCleanup.Retry(() =>
+        {
+            // O «WebView2» larga o ficheiro antes da 3.ª tentativa: as duas primeiras falham.
+            if (++tries == 3) held.Dispose();
+            return ProfileCleanup.RemoveVideoEngineData(folder);
+        }, ProfileCleanup.VideoEngineExitAttempts, TimeSpan.Zero));
+        Assert.Equal(3, tries);
+        Assert.False(Directory.Exists(folder));
+    }
+
+    [Fact]
+    public void Exit_RetriesTheVideoEngineFolder_OnlyWithClearOnExit()
+    {
+        var exit = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "App.xaml.cs"));
+        Assert.Contains("ProfileCleanup.Retry(() => ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine), ProfileCleanup.VideoEngineExitAttempts, ProfileCleanup.VideoEngineExitPause);", exit);
+        Assert.True(ProfileCleanup.VideoEngineExitAttempts * ProfileCleanup.VideoEngineExitPause <= TimeSpan.FromSeconds(2));
+    }
 }

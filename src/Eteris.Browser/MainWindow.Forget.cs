@@ -246,8 +246,8 @@ public partial class MainWindow
         if (!IsPrivate && (LiveVideoCore() is not null || VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site))))
         {
             var video = await ClearVideoSiteAsync(site, origins);
-            if (video < 0) videoFailed = true;
-            else cookies += video;
+            cookies += video.Cookies;
+            if (!video.Complete) videoFailed = true;
         }
 
         // O armazenamento apaga-se por origem, pelo DevTools de uma página viva deste contexto. Logo depois de fechar as

@@ -283,6 +283,10 @@ public static class VideoEngine
     // O site pode ter deixado dados no perfil do motor de vídeo: abriu lá (lembrado, ou da lista embutida) ou o
     // utilizador mandou-o voltar ao motor principal (o botão tira-o dos lembrados e põe-no nos excluídos; o que o
     // WebView2 guardou continua lá). Decide se o Triturar e companhia abrem o perfil do WebView2 sem aba viva dele.
+    // O tempo máximo de uma limpeza no perfil do motor de vídeo (arrancar o runtime a frio, abrir o controlador
+    // escondido e apagar): passado isto a limpeza responde «não foi possível» e nada fica pendurado.
+    public static readonly TimeSpan CleanupLimit = TimeSpan.FromSeconds(15);
+
     public static bool MayHoldData(string site, bool remembered, bool optedOut)
         => remembered || optedOut || KnownH264Sites.Contains(site);
 

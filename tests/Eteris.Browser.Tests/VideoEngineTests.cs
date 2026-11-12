@@ -263,13 +263,29 @@ public class VideoEngineTests
         // Janela normal: com uma aba viva no motor de vídeo limpa-se sempre; sem ela, só os sites que lá podem ter dados.
         Assert.Contains("if (!IsPrivate && (LiveVideoCore() is not null || VideoEngine.MayHoldData(", Src("MainWindow.Forget.cs"));
         Assert.Contains("await ClearVideoSiteAsync(site, origins)", Src("MainWindow.Forget.cs"));
-        Assert.Contains("if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request))", Src("Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request).ConfigureAwait(false))", Src("Browser", "EterisSchemeHandlerFactory.cs"));
         // O DevTools do WebView2 só pelo canal (SandboxRulesTests).
         Assert.Contains("\"Storage.clearDataForOrigin\"", Src("Browser", "VideoPageScript.cs"));
         Assert.Contains("VideoPageScript.ClearOriginAsync(core, origin)", Src("MainWindow.VideoEngine.cs"));
         Assert.Contains("ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine);", Src("Infrastructure", "CefConfigurator.cs"));
         var exit = Src("App.xaml.cs");
         Assert.True(exit.IndexOf("ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine)", StringComparison.Ordinal) > exit.IndexOf("CefConfigurator.Shutdown();", StringComparison.Ordinal));
+    }
+
+    // Uma limpeza do motor de vídeo nunca fica pendurada: tempo-limite, controlador tardio fechado, ambiente reposto
+    // quando o controlador não se cria, e as origens recusadas chegam ao aviso.
+    [Fact]
+    public void VideoProfileCleanup_HasATimeLimit_AndSaysWhatStayed()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        Assert.Equal(TimeSpan.FromSeconds(15), VideoEngine.CleanupLimit);
+        Assert.Contains("await Task.WhenAny(work, Task.Delay(VideoEngine.CleanupLimit))", code);
+        Assert.Contains("if (expired.IsCancellationRequested) return false;", code);
+        var create = code.IndexOf("controller = await environment.CreateCoreWebView2ControllerAsync(", StringComparison.Ordinal);
+        var reset = code.IndexOf("s_videoEnvironment = null;", create, StringComparison.Ordinal);
+        Assert.True(create > 0 && reset > create);
+        Assert.Contains("if (!await VideoPageScript.ClearOriginAsync(core, origin)) refused++;", code);
+        Assert.Contains("if (!video.Complete) videoFailed = true;", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
