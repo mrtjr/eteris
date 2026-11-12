@@ -72,6 +72,9 @@ public static class AtomicFile
             {
                 if (Parse(File.ReadAllText(backup, Encoding.UTF8), parse) is { } previous)
                 {
+                    // O ficheiro danificado já está em .corrupt: a versão boa volta ao seu lugar. Sem isto, a 1.ª gravação
+                    // seguinte trocava o .bak pelo ficheiro danificado e a cópia boa perdia-se.
+                    KeepCopy(backup, path);
                     outcome = AtomicRead.FromBackup;
                     return previous;
                 }

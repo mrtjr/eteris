@@ -50,6 +50,10 @@ public sealed class AtomicFileTests : IDisposable
         Assert.Equal("um", AtomicFile.ReadText(_path, text => text.Contains('\0') ? null : text, out var outcome));
         Assert.Equal(AtomicRead.FromBackup, outcome);
         Assert.Equal(new byte[16], File.ReadAllBytes(_path + ".corrupt"));
+        // A versão boa volta ao lugar: a gravação seguinte não põe o ficheiro danificado no .bak.
+        Assert.Equal("um", File.ReadAllText(_path));
+        AtomicFile.WriteText(_path, "tres", backup: true);
+        Assert.Equal("um", File.ReadAllText(_path + ".bak"));
     }
 
     [Fact]
