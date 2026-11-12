@@ -16,6 +16,14 @@ public class TestEnvironmentTests
     }
 
     [Fact]
+    public void ThreadPool_KeepsRoomForBlockingTests()
+    {
+        ThreadPool.GetMinThreads(out var worker, out var io);
+        Assert.True(worker >= TestEnvironment.MinPoolThreads, $"mínimo de threads de trabalho: {worker}");
+        Assert.True(io >= TestEnvironment.MinPoolThreads, $"mínimo de threads de E/S: {io}");
+    }
+
+    [Fact]
     public void Process_HasNoEterisVariables()
         => Assert.DoesNotContain(Environment.GetEnvironmentVariables().Keys.Cast<string>(),
                                  k => k.StartsWith("ETERIS_", StringComparison.OrdinalIgnoreCase));

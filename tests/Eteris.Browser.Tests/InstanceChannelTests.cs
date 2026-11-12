@@ -22,10 +22,12 @@ public class InstanceChannelTests
         var name = "eteris-test-" + Guid.NewGuid().ToString("N");
         var count = 0;
         var done = new TaskCompletionSource();
-        // Muitos envios seguidos: no servidor do GitHub (mais lento) um deles falhava ao apanhar o canal a reabrir.
+        // Muitos envios seguidos: prova que o canal reabre entre mensagens, não a latência. Cada envio tem 15 s, porque
+        // na bateria o pool de threads pode estar preso por testes síncronos; o prazo curto fica só em
+        // Listen_PipeExistsWhenListenReturns.
         using var listener = InstanceChannel.Listen(name, _ => { if (Interlocked.Increment(ref count) == 10) done.TrySetResult(); });
-        for (var i = 0; i < 10; i++) Assert.True(InstanceChannel.Send(name, [$"https://s{i}.pt/"]), $"envio {i} falhou");
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        for (var i = 0; i < 10; i++) Assert.True(InstanceChannel.Send(name, [$"https://s{i}.pt/"], timeoutMs: 15_000), $"envio {i} falhou");
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(15));
     }
 
     // CI: «envio 0 falhou» ao fim dos 2 s — o pipe era criado dentro de um Task.Run e, com o pool de threads ocupado

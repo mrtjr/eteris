@@ -11,6 +11,8 @@ internal static class TestEnvironment
 {
     public static string ProfileRoot { get; private set; } = "";
 
+    public const int MinPoolThreads = 64;
+
     [ModuleInitializer]
     internal static void Initialize()
     {
@@ -35,5 +37,10 @@ internal static class TestEnvironment
             }
             catch (Exception) { }
         };
+
+        // 4. Folga no pool de threads: os testes que esperam de forma síncrona (PowerShell, Node, StaRunner) prendem
+        // threads do pool e atrasavam as continuações dos outros (o «envio i falhou» do InstanceChannel no CI).
+        ThreadPool.GetMinThreads(out var w, out var io);
+        ThreadPool.SetMinThreads(Math.Max(w, MinPoolThreads), Math.Max(io, MinPoolThreads));
     }
 }
