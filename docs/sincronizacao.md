@@ -665,7 +665,7 @@ Windows Hello, os interruptores «Pedir o Windows Hello…» (são deste PC) e a
 - O que isto dá, além da cifra do ficheiro: o estado do motor, os instantâneos, a base do `ProfileSync`, os lotes
   pendentes e o `.eteris` **nunca têm um segredo nem um site em claro**, mesmo dentro da DPAPI; o bloco selado é
   incompressível (nenhum canal lateral de compressão ao lado dos títulos que os sites escolhem); e um aparelho com uma
-  linha desligada recebe os selos dessa linha e **nunca os abre**.
+  linha desligada recebe os selos dessa linha e guarda-os sem os usar nem mostrar (só os abre para os voltar a selar se fizer uma «nova cadeia»).
 - O motor guarda no estado do aparelho (protegido por DPAPI, nunca no transporte) as chaves dos selos da cadeia atual,
   só para voltar a selar os registos que o próprio aparelho escreveu quando outro faz «nova cadeia» (a cadeia antiga já
   não existe quando ele dá por isso).
@@ -684,7 +684,7 @@ da conta e a deste computador vai para o histórico. Apagar deixa uma lápide (c
 
 | Linha | Coleções | Por omissão | O que diz |
 |---|---|---|---|
-| Favoritos | `bookmarks` | ligado | Os favoritos e as pastas |
+| Favoritos | `bookmarks` | ligado | Os favoritos (endereço e título) |
 | Espaços | `spaces` | ligado | Nome, cor e emoji; as abas de cada Espaço ficam em cada computador |
 | Definições | `settings` | ligado | Só as que fazem sentido noutro computador |
 | Decisões do Escudo | `shield` | ligado | Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site |
@@ -708,8 +708,9 @@ enviar e de aplicar essas coleções aqui e **não apaga nada**, nem aqui nem na
 outra vez faz a primeira junção só dessa linha (`SavedSync.Joined`). Texto do topo (`SyncChoices.Intro`): «Tudo é
 cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca
 lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que
-recebe: desligar uma linha não apaga nada. Quem perder o kit de recuperação e todos os computadores perde estes dados:
-não há «esqueci-me do kit».»
+envia e o que aplica: desligar uma linha não apaga nada, e o que os outros enviam dessa linha fica guardado aqui cifrado
+(a chave da conta abre-o em qualquer computador ligado). Quem perder o kit de recuperação e todos os computadores perde
+estes dados: não há «esqueci-me do kit».»
 
 **Emparelhamento, nova cadeia e exportar.**
 

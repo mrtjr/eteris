@@ -472,7 +472,8 @@ public sealed class PairingGuest : PairingSide
     }
 
     // Espera que o utilizador confirme no anfitrião e devolve o segredo de conta. Só depois de ConfirmCode.
-    // A interface mostra depois o nome do anfitrião (HostName) e o código outra vez antes de juntar o aparelho à conta.
+    // O nome do anfitrião (HostName) aparece depois de entrar, no aviso «aprovado em …»; o código já foi confirmado antes de o
+    // segredo se abrir.
     public async Task<AccountSecret> WaitForSecretAsync(CancellationToken cancellationToken = default)
     {
         if (_transcript is null) throw new InvalidOperationException("Ainda não há código de verificação.");
