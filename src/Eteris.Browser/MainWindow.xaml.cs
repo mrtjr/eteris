@@ -236,6 +236,7 @@ public partial class MainWindow : Window
             if (!string.Equals(tab.Address, address, StringComparison.Ordinal))
             {
                 tab.IsReaderable = false;
+                tab.ReaderOpen = false;
                 tab.VideoOffer = null;
             }
             // «Esquecer ao fechar»: ir para outro site também é sair do anterior.
@@ -279,8 +280,10 @@ public partial class MainWindow : Window
                 return;
             }
             if (ReaderScripts.ParseReport(e.Message) is not { } reader) return;
+            // O leitor corre depois da página (sem segredo): só vale da aba ativa e com o leitor aberto por ela.
             Dispatcher.InvokeAsync(() =>
             {
+                if (!ReaderScripts.AcceptsReport(ReferenceEquals(tab, Tabs.Active), tab.ReaderOpen)) return;
                 Data.Settings.Set("readerTheme", reader.Theme);
                 Data.Settings.Set("readerSize", reader.Size.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 Data.Settings.Set("readerSerif", reader.Serif ? "true" : "false");

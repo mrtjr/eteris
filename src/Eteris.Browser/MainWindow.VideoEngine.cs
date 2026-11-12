@@ -250,6 +250,7 @@ public partial class MainWindow
             // Na troca para o motor de vídeo o endereço da aba já é o novo: o ícone do site anterior sai pelo site dele.
             else tab.ForgetFaviconOfOtherSite(address);
             tab.IsReaderable = false;
+            tab.ReaderOpen = false;
             tab.Address = address;
         };
         core.DocumentTitleChanged += (_, _) =>

@@ -92,6 +92,10 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isReaderable;
 
+    // O leitor foi aberto nesta aba (ToggleReader recebeu «opened»): só então o aviso do leitor conta (ReaderScripts.AcceptsReport).
+    // Não é observável nem guardado; apaga-se ao mudar de página.
+    public bool ReaderOpen { get; set; }
+
     // A aba usa o motor de vídeo (WebView2) em vez do motor principal — ver Tabs/VideoEngine.cs.
     [ObservableProperty]
     private bool _usesVideoEngine;
