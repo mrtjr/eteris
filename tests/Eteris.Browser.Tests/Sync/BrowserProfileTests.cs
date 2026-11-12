@@ -175,6 +175,7 @@ internal sealed class MemoryProfileData : IProfileData
 
     public Dictionary<string, string> Bookmarks { get; } = new(StringComparer.Ordinal);
     public UserSettings Settings { get; set; } = new();
+    public bool SettingsUnreadable { get; set; }
     public bool Unreadable { get; set; }
     public Func<IReadOnlyList<Bookmark>>? BookmarksReader { get; set; }
     public string NotesText { get; set; } = string.Empty;

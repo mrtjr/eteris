@@ -14,6 +14,7 @@ internal interface IProfileData
 {
     IReadOnlyList<Bookmark> ReadBookmarks();                              // lança se não se leu
     UserSettings Settings { get; }
+    bool SettingsUnreadable { get; }                                      // o settings.json existia e não se leu (DAD-07)
     List<string>? ShieldKeys();                                           // null = não se leu
     string? Notes();                                                      // null = não se leu
     IReadOnlyList<(string Name, int Color, string? Icon)>? Spaces();      // null = não se sabe
@@ -63,8 +64,16 @@ internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileR
                 items.Add(new LocalItem(Collections.Bookmarks, mark.Url, new JsonObject { ["title"] = mark.Title }));
         }
         catch (Exception) { unreadable.Add(Collections.Bookmarks); }
-        foreach (var (key, value) in ProfileTransfer.SettingValues(_data.Settings))
-            items.Add(new LocalItem(Collections.Settings, key, new JsonObject { ["value"] = value }));
+        // Um settings.json que existia e não se leu: as predefinições em uso não seguem para os outros aparelhos (DAD-07).
+        if (_data.SettingsUnreadable)
+        {
+            unreadable.Add(Collections.Settings);
+            // E no arranque seguinte, com o settings.json já gravado, as predefinições não sobem como alterações locais.
+            ProfileRejoin.Add(Collections.Settings);
+        }
+        else
+            foreach (var (key, value) in ProfileTransfer.SettingValues(_data.Settings))
+                items.Add(new LocalItem(Collections.Settings, key, new JsonObject { ["value"] = value }));
         if (_data.ShieldKeys() is { } shield) foreach (var key in shield) items.Add(new LocalItem(Collections.Shield, key, new JsonObject()));
         else unreadable.Add(Collections.Shield);
 
@@ -78,6 +87,8 @@ internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileR
             foreach (var (name, color, icon) in spaces)
                 items.Add(new LocalItem(Collections.Spaces, name, SpaceData(name, color, icon, order++)));
         }
+        // Coleções cujo perfil local foi posto de lado (base de dados, definições): não se dão como apagadas (ProfileRejoin).
+        foreach (var collection in ProfileRejoin.Pending()) if (!unreadable.Contains(collection)) unreadable.Add(collection);
         return new LocalRead(items, unreadable);
     }
 
@@ -222,6 +233,8 @@ internal sealed class LiveProfileData : IProfileData
     public IReadOnlyList<Bookmark> ReadBookmarks() => AppData.ReadBookmarks(b => b.All(100_000));
 
     public UserSettings Settings => Data.Settings.Current;
+
+    public bool SettingsUnreadable => Data.Settings.Unreadable;
 
     public List<string>? ShieldKeys() => BrowserProfile.ShieldKeys();
 

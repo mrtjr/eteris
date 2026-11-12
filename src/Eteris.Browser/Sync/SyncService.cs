@@ -124,6 +124,8 @@ internal static class SyncService
                 Changed?.Invoke();
                 if (first) NeedsSignIn?.Invoke();
             };
+            // As coleções cujo perfil local se pôs de lado voltam a fazer a «primeira junção» (ProfileRejoin).
+            ProfileRejoin.Apply(_agent);
             return _agent;
         }
     }

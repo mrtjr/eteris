@@ -66,7 +66,7 @@ public class SiteKnowledgeTests
         Assert.Contains("ObservedVerdict.UserBlocked", source[rule..]);
         // «Repor» o site e o fim da sessão privada levam as regras.
         Assert.Contains("Shields.SiteRules.Forget(site);", File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Data", "AppData.cs")));
-        Assert.Equal(2, CountOf(File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "MainWindow.Private.cs")), "SiteRules.ForgetPrivate()"));
+        Assert.Equal(1, CountOf(File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Tabs", "PrivateSession.cs")), "SiteRules.ForgetPrivate()"));
     }
 
     private static int CountOf(string text, string what)

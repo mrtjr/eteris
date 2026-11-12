@@ -64,20 +64,51 @@ public static class AppData
         PrivateHidden.Clear();
     }
 
-    private static readonly Lazy<HistoryStore> LazyHistory = StartupTrace.Lazy<HistoryStore>("LazyHistory", () => new HistoryStore(AppPaths.Database));
-    private static readonly Lazy<ShieldExceptionStore?> LazyShieldExceptions = StartupTrace.Lazy<ShieldExceptionStore?>("LazyShieldExceptions", () =>
-    {
-        try { return new ShieldExceptionStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    // Como a base se abre (DAD-15): cada loja abre-se por um RetryLazy, que volta a tentar passados 30 s se a abertura
+    // falhou (ocupada, antivírus), em vez de guardar a falha até sair. Só uma base que o SQLite diz estar danificada se
+    // põe de lado (eteris.db.bak-<data>), e então todas as lojas se esquecem do que abriram para abrir a nova. A ordem dos
+    // trincos é «o da loja, depois AsideGate» e o Reset não espera por nenhum: duas lojas que encontrem a base danificada
+    // ao mesmo tempo (a abertura em fundo e a 1.ª aba) não se prendem uma à outra.
+    private static readonly Lock AsideGate = new();
+    private static readonly List<Action> Resets = [];   // só cresce nos inicializadores estáticos
+    private static int _asides;                          // quantas vezes a base foi posta de lado
 
-    private static readonly Lazy<SiteZoomStore?> LazyZoom = StartupTrace.Lazy<SiteZoomStore?>("LazyZoom", () =>
+    private static RetryLazy<T> Db<T>(string name, Func<T> make) where T : class
     {
-        try { return new SiteZoomStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+        var timed = StartupTrace.Timed(name, make);
+        var lazy = new RetryLazy<T>(() =>
+        {
+            var seen = Volatile.Read(ref _asides);
+            try { return timed(); }
+            catch (Exception e) when (ProfileDatabase.IsCorrupt(e))
+            {
+                lock (AsideGate)
+                {
+                    // Outra loja já a pôs de lado entretanto: a base nova não se põe de lado outra vez, só se volta a abrir.
+                    if (seen == _asides)
+                    {
+                        if (ProfileDatabase.MoveAside(AppPaths.Database, DateTime.Now) is null) throw;
+                        _asides++;
+                        // A base nova está vazia: sem isto a sincronização lia os favoritos e as escolhas do Escudo como
+                        // apagados e enviava as remoções para a conta (Sync/ProfileRejoin.cs).
+                        Sync.ProfileRejoin.Add(Eteris.Sync.Model.Collections.Bookmarks);
+                        Sync.ProfileRejoin.Add(Eteris.Sync.Model.Collections.Shield);
+                        foreach (var reset in Resets) reset();
+                    }
+                }
+                return make();
+            }
+        }, ProfileDatabase.RetryAfter);
+        Resets.Add(lazy.Reset);
+        return lazy;
+    }
 
-    public static HistoryStore History => LazyHistory.Value;
+    private static readonly RetryLazy<HistoryStore> LazyHistory = Db("LazyHistory", () => new HistoryStore(AppPaths.Database));
+    private static readonly RetryLazy<ShieldExceptionStore> LazyShieldExceptions = Db("LazyShieldExceptions", () => new ShieldExceptionStore(AppPaths.Database));
+
+    private static readonly RetryLazy<SiteZoomStore> LazyZoom = Db("LazyZoom", () => new SiteZoomStore(AppPaths.Database));
+
+    public static HistoryStore History => LazyHistory.Required;
 
     private static readonly Lazy<HistoryWriter> LazyWriter = StartupTrace.Lazy<HistoryWriter>("LazyWriter", () => new HistoryWriter(() => History, TimeSpan.FromSeconds(1)));
 
@@ -98,11 +129,7 @@ public static class AppData
         if (LazyWriter.IsValueCreated) LazyWriter.Value.Dispose();
     }
 
-    private static readonly Lazy<HiddenElementsStore?> LazyHidden = StartupTrace.Lazy<HiddenElementsStore?>("LazyHidden", () =>
-    {
-        try { return new HiddenElementsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<HiddenElementsStore> LazyHidden = Db("LazyHidden", () => new HiddenElementsStore(AppPaths.Database));
 
     public static IReadOnlyList<string> HiddenElements(string host)
     {
@@ -131,11 +158,7 @@ public static class AppData
         NotifySyncableChanged();
     }
 
-    private static readonly Lazy<DailyStatsStore?> LazyDaily = StartupTrace.Lazy<DailyStatsStore?>("LazyDaily", () =>
-    {
-        try { return new DailyStatsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<DailyStatsStore> LazyDaily = Db("LazyDaily", () => new DailyStatsStore(AppPaths.Database));
 
     private static Timer? _statsTimer;
 
@@ -154,7 +177,7 @@ public static class AppData
             _ = LazyVideo.Value;
             _ = LazyVideoOff.Value;
             _ = LazyShieldExceptions.Value;
-            _ = LazyBookmarks.Value;
+            _ = LazyBookmarks.Required;
             _ = LazyDark.Value;
         }
         catch (Exception) { }
@@ -172,11 +195,7 @@ public static class AppData
     }
 
     // Relatório de privacidade (eteris://privacy/): agregados por dia, categoria e domínio do rastreador.
-    private static readonly Lazy<PrivacyEventsStore?> LazyPrivacyEvents = StartupTrace.Lazy<PrivacyEventsStore?>("LazyPrivacyEvents", () =>
-    {
-        try { return new PrivacyEventsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<PrivacyEventsStore> LazyPrivacyEvents = Db("LazyPrivacyEvents", () => new PrivacyEventsStore(AppPaths.Database));
 
     private static DateOnly _privacyPruned;
 
@@ -266,23 +285,19 @@ public static class AppData
         catch (Exception) { return new Dictionary<string, string>(); }
     }
 
-    private static readonly Lazy<BookmarkStore> LazyBookmarks = StartupTrace.Lazy<BookmarkStore>("LazyBookmarks", () => new BookmarkStore(AppPaths.Database));
+    private static readonly RetryLazy<BookmarkStore> LazyBookmarks = Db("LazyBookmarks", () => new BookmarkStore(AppPaths.Database));
 
     public static IReadOnlyList<Bookmark> Bookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read)
     {
-        try { return read(LazyBookmarks.Value); }
+        try { return read(LazyBookmarks.Required); }
         catch (Exception) { return []; }
     }
 
     // Como Bookmarks, mas uma falha de leitura chega a quem chama (a sincronização não pode confundir «não li» com
     // «não há favoritos»).
-    public static IReadOnlyList<Bookmark> ReadBookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read) => read(LazyBookmarks.Value);
+    public static IReadOnlyList<Bookmark> ReadBookmarks(Func<BookmarkStore, IReadOnlyList<Bookmark>> read) => read(LazyBookmarks.Required);
 
-    private static readonly Lazy<ReadingListStore?> LazyReading = StartupTrace.Lazy<ReadingListStore?>("LazyReading", () =>
-    {
-        try { return new ReadingListStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<ReadingListStore> LazyReading = Db("LazyReading", () => new ReadingListStore(AppPaths.Database));
 
     public static IReadOnlyList<ReadingItem> ReadingList()
     {
@@ -332,17 +347,9 @@ public static class AppData
         catch (Exception) { return false; }
     }
 
-    private static readonly Lazy<SavedSessionsStore?> LazySessions = StartupTrace.Lazy<SavedSessionsStore?>("LazySessions", () =>
-    {
-        try { return new SavedSessionsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<SavedSessionsStore> LazySessions = Db("LazySessions", () => new SavedSessionsStore(AppPaths.Database));
 
-    private static readonly Lazy<DoneTabsStore?> LazyDone = StartupTrace.Lazy<DoneTabsStore?>("LazyDone", () =>
-    {
-        try { return new DoneTabsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<DoneTabsStore> LazyDone = Db("LazyDone", () => new DoneTabsStore(AppPaths.Database));
 
     // Devolve false quando não ficou gravado (base de dados indisponível): quem fecha a aba a seguir tem de o saber.
     public static bool MarkDone(string url, string title)
@@ -373,11 +380,7 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    private static readonly Lazy<SnoozedTabsStore?> LazySnoozed = StartupTrace.Lazy<SnoozedTabsStore?>("LazySnoozed", () =>
-    {
-        try { return new SnoozedTabsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<SnoozedTabsStore> LazySnoozed = Db("LazySnoozed", () => new SnoozedTabsStore(AppPaths.Database));
 
     // Adiar, esquecer a adiada e arquivar devolvem false quando a base de dados não gravou: a aba não pode sair da
     // faixa (nem voltar outra vez a cada minuto) por causa de uma escrita que falhou em silêncio.
@@ -415,11 +418,7 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    private static readonly Lazy<ArchivedTabsStore?> LazyArchived = StartupTrace.Lazy<ArchivedTabsStore?>("LazyArchived", () =>
-    {
-        try { return new ArchivedTabsStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<ArchivedTabsStore> LazyArchived = Db("LazyArchived", () => new ArchivedTabsStore(AppPaths.Database));
 
     public static bool ArchiveTab(string url, string title, string? name, DateTime lastActiveUtc, DateTime nowUtc)
     {
@@ -477,16 +476,12 @@ public static class AppData
 
     public static int ImportBookmarks(IReadOnlyList<Bookmark> marks)
     {
-        try { return BookmarkImport.Import(LazyBookmarks.Value, marks, DateTime.UtcNow); }
+        try { return BookmarkImport.Import(LazyBookmarks.Required, marks, DateTime.UtcNow); }
         catch (Exception) { return 0; }
         finally { NotifySyncableChanged(); }
     }
 
-    private static readonly Lazy<Permissions.SitePermissionStore?> LazyPermissions = StartupTrace.Lazy<Permissions.SitePermissionStore?>("LazyPermissions", () =>
-    {
-        try { return new Permissions.SitePermissionStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<Permissions.SitePermissionStore> LazyPermissions = Db("LazyPermissions", () => new Permissions.SitePermissionStore(AppPaths.Database));
 
     // «Definições por site»: zoom, escudo, permissões e elementos escondidos de cada site.
     public static IReadOnlyList<SiteSummary> SiteSummaries()
@@ -530,11 +525,7 @@ public static class AppData
         SetVideoOptOut(site, false);
     }
 
-    private static readonly Lazy<StrictSiteStore?> LazyStrict = StartupTrace.Lazy<StrictSiteStore?>("LazyStrict", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyStrict = Db("LazyStrict", () => new StrictSiteStore(AppPaths.Database));
 
     public static bool IsStrict(string host) => LazyStrict.Value?.Contains(host) == true;
 
@@ -549,11 +540,7 @@ public static class AppData
         NotifySyncableChanged();
     }
 
-    private static readonly Lazy<StrictSiteStore?> LazyDark = StartupTrace.Lazy<StrictSiteStore?>("LazyDark", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database, "dark_sites"); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyDark = Db("LazyDark", () => new StrictSiteStore(AppPaths.Database, "dark_sites"));
 
     public static bool IsDark(string host) => LazyDark.Value?.Contains(host) == true;
 
@@ -568,11 +555,7 @@ public static class AppData
     }
 
     // «HTTPS primeiro»: hosts que o utilizador aceitou abrir sempre por http:// («Sempre para este site»).
-    private static readonly Lazy<StrictSiteStore?> LazyHttp = StartupTrace.Lazy<StrictSiteStore?>("LazyHttp", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database, "http_sites", exactHost: true); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyHttp = Db("LazyHttp", () => new StrictSiteStore(AppPaths.Database, "http_sites", exactHost: true));
 
     public static bool IsHttpException(string host) => LazyHttp.Value?.Contains(host) == true;
 
@@ -594,11 +577,7 @@ public static class AppData
     }
 
     // «Esquecer este site ao fechar»: sites (domínio registável) cujos dados se apagam ao fechar a última aba.
-    private static readonly Lazy<StrictSiteStore?> LazyForget = StartupTrace.Lazy<StrictSiteStore?>("LazyForget", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database, "forget_sites", siteOf: SiteScope.OfHost); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyForget = Db("LazyForget", () => new StrictSiteStore(AppPaths.Database, "forget_sites", siteOf: SiteScope.OfHost));
 
     public static bool IsForgetOnClose(string host) => LazyForget.Value?.Contains(host) == true;
 
@@ -633,17 +612,9 @@ public static class AppData
     // Sites que abrem no motor de vídeo (precisam de H.264/AAC). Duas listas: a do motor principal sem codecs, e a do
     // motor com codecs da plataforma (Tabs/PlatformCodecs.cs) — os sites lembrados só por faltarem os codecs não devem
     // continuar a sair do motor principal quando ele os passa a ter; desligar um site tira-o das duas.
-    private static readonly Lazy<StrictSiteStore?> LazyVideo = StartupTrace.Lazy<StrictSiteStore?>("LazyVideo", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database, "video_sites"); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyVideo = Db("LazyVideo", () => new StrictSiteStore(AppPaths.Database, "video_sites"));
 
-    private static readonly Lazy<StrictSiteStore?> LazyVideoWithCodecs = StartupTrace.Lazy<StrictSiteStore?>("LazyVideoWithCodecs", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database, "video_sites_codecs"); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyVideoWithCodecs = Db("LazyVideoWithCodecs", () => new StrictSiteStore(AppPaths.Database, "video_sites_codecs"));
 
     public static bool IsVideoSite(string host, bool platformCodecs = false)
         => (platformCodecs ? LazyVideoWithCodecs : LazyVideo).Value?.Contains(host) == true;
@@ -667,8 +638,8 @@ public static class AppData
     {
         try
         {
-            if (LazyBookmarks.Value.Saved(url) is not { } saved) return null;
-            LazyBookmarks.Value.Remove(url);
+            if (LazyBookmarks.Required.Saved(url) is not { } saved) return null;
+            LazyBookmarks.Required.Remove(url);
             return saved;
         }
         catch (Exception) { return null; }
@@ -677,18 +648,14 @@ public static class AppData
 
     public static bool RestoreBookmark(SavedBookmark saved)
     {
-        try { return LazyBookmarks.Value.Restore(saved); }
+        try { return LazyBookmarks.Required.Restore(saved); }
         catch (Exception) { return false; }
         finally { NotifySyncableChanged(); }
     }
 
     // Sites que o utilizador mandou voltar ao motor principal (botão «Motor de vídeo»): nunca trocam sozinhos, nem os da
     // lista embutida (VideoEngine.KnownH264Sites).
-    private static readonly Lazy<StrictSiteStore?> LazyVideoOff = StartupTrace.Lazy<StrictSiteStore?>("LazyVideoOff", () =>
-    {
-        try { return new StrictSiteStore(AppPaths.Database, "video_sites_off"); }
-        catch (Exception) { return null; }
-    });
+    private static readonly RetryLazy<StrictSiteStore> LazyVideoOff = Db("LazyVideoOff", () => new StrictSiteStore(AppPaths.Database, "video_sites_off"));
 
     public static bool IsVideoOptOut(string host) => LazyVideoOff.Value?.Contains(host) == true;
 
@@ -704,27 +671,27 @@ public static class AppData
 
     public static void RemoveBookmark(string url)
     {
-        try { LazyBookmarks.Value.Remove(url); }
+        try { LazyBookmarks.Required.Remove(url); }
         catch (Exception) { }
         NotifySyncableChanged();
     }
 
     public static void RenameBookmark(string url, string title)
     {
-        try { LazyBookmarks.Value.Rename(url, title); }
+        try { LazyBookmarks.Required.Rename(url, title); }
         catch (Exception) { }
         NotifySyncableChanged();
     }
 
     public static bool IsBookmarked(string url)
     {
-        try { return LazyBookmarks.Value.Contains(url); }
+        try { return LazyBookmarks.Required.Contains(url); }
         catch (Exception) { return false; }
     }
 
     public static bool ToggleBookmark(string url, string title)
     {
-        try { return LazyBookmarks.Value.Toggle(url, title, DateTime.UtcNow); }
+        try { return LazyBookmarks.Required.Toggle(url, title, DateTime.UtcNow); }
         catch (Exception) { return false; }
         finally { NotifySyncableChanged(); }
     }

@@ -63,6 +63,11 @@ public partial class MainWindow
         ShowProfileNotices();
     }
 
+    // A base de dados do perfil estava danificada e pôs-se de lado (Data/ProfileDatabase.cs): pode vir da abertura em fundo,
+    // antes de haver janela, e o aviso espera por ela.
+    internal static void NotifyDatabaseSetAside(string fileName)
+        => NotifyProfile($"A base de dados do perfil estava danificada: ficou guardada como {fileName} e começou uma nova (favoritos, histórico e escolhas por site vazios)");
+
     private static void ShowProfileNotices()
     {
         if (s_profileNotices.Count == 0 || NormalWindows().FirstOrDefault(w => w.IsLoaded) is not { } window) return;

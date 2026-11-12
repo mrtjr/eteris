@@ -395,4 +395,25 @@ public sealed class VaultStoreTests : IDisposable
         command.CommandText = sql;
         Assert.Equal(1, command.ExecuteNonQuery());
     }
+
+    // VAU-13: a chave do cofre tem de estar no disco antes de ganhar o nome (um corte de energia deixava-a vazia, com o
+    // cofre cifrado com ela).
+    [Fact]
+    public void VaultKey_IsFlushedToDiskBeforeTheRename()
+    {
+        var key = Source("Vault/VaultKey.cs");
+        var flush = key.IndexOf("Flush(flushToDisk: true)", StringComparison.Ordinal);
+        Assert.True(flush > 0 && flush < key.IndexOf("File.Move(temp, path, overwrite: false)", StringComparison.Ordinal));
+    }
+
+    private static readonly string Root = FindRoot();
+
+    private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
+
+    private static string Source(string relative) => File.ReadAllText(Path.Combine(Root, "src", "Eteris.Browser", relative));
 }

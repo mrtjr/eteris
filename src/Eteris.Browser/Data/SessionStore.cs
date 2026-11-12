@@ -92,11 +92,26 @@ public sealed class SessionStore(string path)
         return session;
     }
 
+    // Como a última leitura correu (nenhuma escrita a muda): a janela avisa quando o ficheiro estava danificado.
+    public Infrastructure.AtomicRead LastLoad { get; private set; } = Infrastructure.AtomicRead.Missing;
+
+    private readonly Lock _writing = new();
+    private bool _setAside;
+
+    // Descarregado para o disco e com a versão anterior em session.json.bak (Infrastructure/AtomicFile.cs). O que não se
+    // leu nunca se grava por cima: depois de um Unreadable, a 1.ª escrita põe o ficheiro antigo em .corrupt.
     private void Write(Session session)
     {
-        var temporary = path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(session, Options));
-        File.Move(temporary, path, overwrite: true);
+        var json = JsonSerializer.Serialize(session, Options);
+        lock (_writing)
+        {
+            if (LastLoad == Infrastructure.AtomicRead.Unreadable && !_setAside)
+            {
+                Infrastructure.AtomicFile.SetAside(path);
+                _setAside = true;
+            }
+            Infrastructure.AtomicFile.WriteText(path, json, backup: true);
+        }
     }
 
     // Como Save, mas nunca lança: um ficheiro só de leitura, preso por outro programa ou um .tmp que não se deixa
@@ -150,9 +165,9 @@ public sealed class SessionStore(string path)
     {
         try
         {
-            if (!File.Exists(path)) return null;
-            var session = Read(File.ReadAllText(path));
-            if (session?.Urls is null) return null;
+            var session = Infrastructure.AtomicFile.ReadText(path, json => Read(json) is { Urls: not null } read ? read : null, out var outcome);
+            LastLoad = outcome;
+            if (session is null) return null;
             // A janela do nível de cima e as de Windows (saltam-se as entradas sem sessão), cada uma filtrada; ficam
             // só as que têm o que repor, e a 1.ª que sobrar passa a ser a de cima.
             var windows = new List<SessionWindow> { new(session) };
