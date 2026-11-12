@@ -908,7 +908,11 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
 - **Perfil do navegador** (`Vault/VaultSyncProfile.cs`, `ProfileWithVault`; `Sync/SyncService.cs`): o resto do perfil
   (`BrowserProfile`) mais o cofre. As coleções do cofre só se leem quando estão ligadas neste aparelho; **sem nenhuma
   ligada, ou sem cofre neste perfil, a leitura não o abre nem o cria**. Um cofre que não abre (chave em falta, DPAPI de
-  outra conta, base ocupada) conta como «não se leu», nunca como vazio. Mudar o cofre neste computador marca uma ronda
+  outra conta, base ocupada, base de dados em falta ou vazia com a chave no sítio) conta como «não se leu», nunca como
+  vazio; para recomeçar apagam-se os dois ficheiros (`cofre.key` e `cofre.db`) e a conta volta a encher o cofre. Fica
+  de fora: repor só um `cofre.db` de uma cópia antiga, com a mesma chave e o estado da sincronização atual, continua a
+  contar como apagados os itens criados depois dessa cópia (o Éteris não o distingue de os apagar à mão; a página manda
+  repor a pasta inteira). Mudar o cofre neste computador marca uma ronda
   para 10 s depois (`VaultService.Changed` → `SyncService.Touch`), como os favoritos.
 - **Nunca sobe:** o histórico local, os candidatos por guardar, a chave do cofre, a janela de graça, os «Pedir o Windows
   Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre não muda a impressão).

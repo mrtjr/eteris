@@ -42,6 +42,12 @@ public sealed partial class VaultService : IDisposable
 
     private static void Raise() => Changed?.Invoke();
 
+    // Com o cofre.key no sítio e o cofre.db em falta ou com 0 bytes, o cofre não abre: uma base nova e vazia com a mesma
+    // chave era lida pela sincronização como «o utilizador apagou tudo» (as chaves locais batem com as da conta), e as
+    // palavras-passe saíam da conta e dos outros computadores. Uma criação interrompida entre a chave e a base cai na
+    // mesma página e resolve-se da mesma forma (apagar os dois ficheiros).
+    public const string DatabaseGoneText = "A base de dados do cofre desapareceu (a chave ficou): o cofre não foi substituído por um vazio.";
+
     private VaultStore Store
     {
         get
@@ -53,6 +59,8 @@ public sealed partial class VaultService : IDisposable
                 var dbPath = Path.Combine(_root, VaultStore.FileName);
                 if (!File.Exists(keyPath) && File.Exists(dbPath))
                     throw new VaultUnavailableException("A chave do cofre desapareceu: o cofre ficou como estava, sem ser aberto.");
+                if (File.Exists(keyPath) && (!File.Exists(dbPath) || new FileInfo(dbPath).Length == 0))
+                    throw new VaultUnavailableException(DatabaseGoneText);
                 Directory.CreateDirectory(_root);
                 var key = VaultKey.LoadOrCreate(keyPath, _protector);
                 try { return _store = new VaultStore(dbPath, key); }

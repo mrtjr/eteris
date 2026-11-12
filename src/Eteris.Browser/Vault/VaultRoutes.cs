@@ -146,8 +146,8 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
     public static string UnavailablePage(string message, string host = "passwords")
         => SimplePage(TitleOf(host), message,
             "<p>Nada foi apagado: o cofre continua neste computador, tal como estava, e o Éteris não o substitui por um vazio.</p>"
-            + "<p>Isto acontece quando a pasta do Éteris veio de outra conta do Windows ou de outro computador, quando o ficheiro cofre.key se perdeu, ou quando outro programa tem o cofre aberto.</p>"
-            + "<p>Feche o Éteris e abra-o outra vez. Se continuar, reponha a pasta do Éteris (com o cofre.key) de uma cópia de segurança feita nesta conta do Windows. Com a sincronização ligada, as palavras-passe continuam nos outros computadores.</p>");
+            + "<p>Isto acontece quando a pasta do Éteris veio de outra conta do Windows ou de outro computador, quando o ficheiro cofre.key se perdeu, quando o ficheiro cofre.db desapareceu ou ficou vazio, ou quando outro programa tem o cofre aberto.</p>"
+            + "<p>Feche o Éteris e abra-o outra vez. Se continuar, reponha a pasta do Éteris (com o cofre.key) de uma cópia de segurança feita nesta conta do Windows. Com a sincronização ligada, as palavras-passe continuam nos outros computadores. Para recomeçar com um cofre vazio, feche o Éteris e apague os dois ficheiros do cofre (cofre.key e cofre.db) na pasta do Éteris, nunca só um: com a sincronização ligada, as palavras-passe da conta voltam a enchê-lo.</p>");
 
     // ---- Palavras-passe ----
 

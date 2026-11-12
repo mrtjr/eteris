@@ -13,6 +13,7 @@
 ### Conta e sincronização
 
 - **Trocar a chave com mais de dois computadores pede o identificador do kit.** Um aparelho removido que ainda chegasse ao Drive conseguia deixar aos outros uma conta sua; agora, quando há mais de um remetente possível, o computador que ficou espera que escreva os 4 caracteres do kit novo antes de continuar.
+- Um cofre cuja base de dados desapareceu (com a chave no sítio) deixa de ser lido como vazio: a sincronização já não apaga as palavras-passe na conta por causa disso.
 
 ### Correções
 

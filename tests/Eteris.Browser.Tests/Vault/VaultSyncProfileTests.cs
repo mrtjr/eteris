@@ -343,6 +343,72 @@ public sealed class VaultSyncProfileTests : IDisposable
         Assert.Single(a.Logins());
     }
 
+    // Auditoria, VAU-03: o cofre.db desapareceu (ou ficou com 0 bytes) e o cofre.key ficou. O cofre não nasce vazio:
+    // não abre, as coleções ficam ilegíveis e nada se apaga na conta. Apagados os dois ficheiros, a conta volta a
+    // encher o cofre.
+    [Theory]
+    [InlineData(false)]  // ficheiro apagado
+    [InlineData(true)]   // ficheiro com 0 bytes
+    public async Task AVaultWhoseDatabaseVanished_IsUnreadable_AndDeletesNothing(bool empty)
+    {
+        long now = 1_762_560_000_000;
+        var folder = Path.Combine(_root, "pasta");
+        var dirA = Path.Combine(_root, "A");
+        var keyA = Path.Combine(dirA, VaultKey.FileName);
+        var dbA = Path.Combine(dirA, VaultStore.FileName);
+        var current = Vault("A");
+        current.SaveLogin(Login("Inventada-A"));
+        var vaultA = new VaultSyncProfile(() => current, () => File.Exists(keyA));
+        SyncAgent? agentA = null;
+        agentA = new SyncAgent(() => new FolderTransport(folder), new ProfileWithVault(new MemoryProfile(), vaultA, () => agentA?.EnabledCollections),
+            new MemoryStore(), "A", () => now, (_, ct) => Task.Delay(5, ct));
+        await agentA.StartAsync();
+
+        var b = Vault("B");
+        SyncAgent? agentB = null;
+        agentB = new SyncAgent(() => new FolderTransport(folder), new ProfileWithVault(new MemoryProfile(), Profile(b), () => agentB?.EnabledCollections),
+            new MemoryStore(), "B", () => now, (_, ct) => Task.Delay(5, ct));
+        await agentB.StartAsync();
+        await agentB.JoinWithCodeAsync(agentA.RevealKit()!.Words);
+        async Task Rounds()
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.True(await agentA.RunAsync());
+                Assert.True(await agentB.RunAsync());
+            }
+        }
+        await Rounds();
+        Assert.Single(b.Logins());
+
+        // A base de dados do cofre de A desaparece; a chave fica.
+        current.Dispose();
+        SqliteConnection.ClearAllPools();
+        if (empty) File.WriteAllBytes(dbA, []);
+        else File.Delete(dbA);
+        current = new VaultService(dirA, new Dpapi(VaultKey.Purpose));
+        _open.Add(current);
+
+        var (items, unreadable) = vaultA.Read(null);
+        Assert.Empty(items);
+        Assert.Equal(Collections.Secret.Order(StringComparer.Ordinal), unreadable.Order(StringComparer.Ordinal));
+        Assert.Equal(VaultService.DatabaseGoneText, Assert.Throws<VaultUnavailableException>(() => current.Logins()).Message);
+        Assert.Equal(empty, File.Exists(dbA));          // não nasceu uma base nova
+        await Rounds();
+        Assert.Single(b.Logins());                      // nada foi apagado na conta
+
+        // Recomeçar: sem os dois ficheiros do cofre, nasce um cofre novo e a conta volta a enchê-lo.
+        current.Dispose();
+        SqliteConnection.ClearAllPools();
+        File.Delete(keyA);
+        File.Delete(dbA);
+        current = new VaultService(dirA, new Dpapi(VaultKey.Purpose));
+        _open.Add(current);
+        await Rounds();
+        Assert.Single(current.Logins());
+        Assert.Single(b.Logins());
+    }
+
     // Dois computadores pela pasta local, com o cofre real: guardar num aparece no outro, apagar some, mudar nos dois
     // deixa a anterior no histórico; e Pagamentos só passa depois de ligado nos dois.
     [Fact]
