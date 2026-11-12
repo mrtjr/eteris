@@ -1508,6 +1508,41 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
     }
 
+    // Um perfil que rebenta a ler, com um erro que não é dos passageiros (um defeito, não a rede).
+    private sealed class ThrowingProfile(MemoryProfile inner) : ILocalProfileReader
+    {
+        public bool Throw { get; set; }
+
+        public LocalRead Read() => Throw ? throw new InvalidCastException("dados inventados") : inner.Read();
+
+        public IReadOnlyList<LocalItem> Collect() => Read().Items;
+
+        public IReadOnlyCollection<LocalChange> Apply(IReadOnlyList<LocalChange> changes) => inner.Apply(changes);
+    }
+
+    // Auditoria, SYN-05: uma exceção fora das passageiras a meio de uma ronda deixa o erro à vista e uma linha de registo
+    // (sem dados), em vez de a ronda falhar calada para sempre.
+    [Fact]
+    public async Task UnexpectedFailure_IsShownAndLogged_NotSwallowed()
+    {
+        var lines = new List<string>();
+        var profile = new ThrowingProfile(new MemoryProfile());
+        var agent = new SyncAgent(() => _cloud, profile, new MemoryStore(), "Casa", Now, Quick) { Log = lines.Add };
+        _cloud.Watch("Casa", agent);
+        await agent.StartAsync();
+        profile.Throw = true;
+        Assert.False(await agent.RunAsync());
+        Assert.Equal("A sincronização falhou com um erro inesperado (InvalidCastException). O Éteris tenta outra vez mais tarde.", agent.Status.Error);
+        Assert.Single(lines);
+        Assert.Contains("InvalidCastException", lines[0]);
+        Assert.DoesNotContain("dados inventados", lines[0]);
+
+        // Quem chama cancelou: continua a ser um cancelamento, não uma falha.
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => agent.RunAsync(cancellationToken: cancelled.Token));
+    }
+
     // Auditoria, SYN-09: um estado que não se leu não é «não existe»: nada o substitui por um vazio.
     [Fact]
     public async Task UnreadableState_IsNotOverwrittenByStart()

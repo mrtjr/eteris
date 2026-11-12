@@ -41,6 +41,7 @@ ajuda quem lê o código antigo, «(até à 0.2.14: …)».
 | Tokens, conta e estado da sincronização cifrados com DPAPI no perfil | `src/Eteris.Browser/Sync/Dpapi.cs` | pronto |
 | O perfil do Éteris para a sincronização (ler e aplicar) | `Sync/BrowserProfile.cs`, `MainWindow.Sync.cs` | pronto |
 | O serviço no navegador (agente, agendador, estado para a interface) | `Sync/SyncService.cs` | pronto |
+| Registo local das falhas inesperadas da sincronização: hora, texto fixo e tipo da falha (nunca dados, nomes nem caminhos; no máximo 64 KiB); sai com «Sair» e «apagar a chave» | `<perfil>\sync\sync.log`, `Sync/SyncLog.cs` | pronto (0.2.17; o dono ainda confirma que cabe no que o Éteris promete guardar) |
 | Definições › **Sincronização** (sempre que há `google-oauth.json`) | `settings.html`, `SettingsPage.cs` | pronta |
 | A conta no menu do navegador (nome, e-mail, avatar, estado da sincronização, pedidos) | `MainWindow.BrowserMenu.cs` | pronta |
 | Exportar / importar o perfil cifrado num ficheiro `.eteris` (o cofre só com a caixa e o Windows Hello) | `Sync/ProfileTransfer.cs` | pronto |

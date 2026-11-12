@@ -176,6 +176,28 @@ public class SyncSettingsSectionTests
 
     // ---- a pausa da troca de chave (auditoria, SYN-01) ----------------------------------------------------------------
 
+    // Auditoria, SYN-05: as Definições dizem o que ficou à espera (aparelhos que este computador ainda não leu, itens do cofre
+    // que ficaram de fora), em vez de uma ronda «bem sucedida» que não fez tudo.
+    [Fact]
+    public void StatusData_SaysWhatIsWaiting()
+    {
+        Assert.Null(SyncService.WaitingText(TestStatus.Of(SyncPhase.On)));
+        var devices = TestStatus.Of(SyncPhase.On) with { PendingDevices = 2 };
+        Assert.Equal("Há alterações de 2 aparelhos que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.", SyncService.WaitingText(devices));
+        Assert.Equal("Há alterações de 1 aparelho que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.",
+            SyncService.WaitingText(TestStatus.Of(SyncPhase.On) with { PendingDevices = 1 }));
+        var secrets = TestStatus.Of(SyncPhase.On) with { SecretErrors = 1 };
+        Assert.Equal("1 item do cofre ficou de fora desta ronda (não abriu ou não se pôde cifrar).", SyncService.WaitingText(secrets));
+        Assert.Equal("3 itens do cofre ficaram de fora desta ronda (não abriram ou não se puderam cifrar).",
+            SyncService.WaitingText(TestStatus.Of(SyncPhase.On) with { SecretErrors = 3 }));
+        var both = SyncService.WaitingText(TestStatus.Of(SyncPhase.On) with { PendingDevices = 2, SecretErrors = 1 });
+        Assert.Equal("Há alterações de 2 aparelhos que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda. "
+            + "1 item do cofre ficou de fora desta ronda (não abriu ou não se pôde cifrar).", both);
+        var data = SyncService.StatusData(devices, Now).ToString()!;
+        Assert.Contains("pendingDevices = 2", data, StringComparison.Ordinal);
+        Assert.Contains("Há alterações de 2 aparelhos", data, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void StatusData_AndSummary_SayARekeyIsPending()
     {

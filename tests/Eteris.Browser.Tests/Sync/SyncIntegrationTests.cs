@@ -417,6 +417,19 @@ public class SyncIntegrationTests
             Assert.DoesNotContain("DeviceName", File.ReadAllText(file, Encoding.UTF8));
     }
 
+    // Auditoria, SYN-05: o registo local da sincronização não guarda caminhos nem nomes (só a hora, um texto fixo e o tipo da
+    // falha) e fica pequeno. As pastas do exemplo estão fora de \Users\ para o RepositoryHygieneTests não as confundir com
+    // um perfil verdadeiro.
+    [Fact]
+    public void SyncLog_KeepsNoPaths_AndStaysSmall()
+    {
+        Assert.Equal(@"falha em <perfil>\sync\sync.state de <utilizador>\x",
+            SyncLog.Clean(@"falha em D:\perfil\sync\sync.state de D:\pessoa\x", @"D:\perfil", @"D:\pessoa"));
+        Assert.Equal(@"D:\perfil\x", SyncLog.Clean(@"D:\perfil\x", string.Empty, string.Empty));
+        Assert.Equal(200, SyncLog.Clean(new string('a', 500), @"D:\perfil", @"D:\pessoa").Length);
+        Assert.Equal("a b", SyncLog.Clean("a\r\nb", string.Empty, string.Empty));
+    }
+
     // Auditoria, SYN-10: uma carga das regras de bloqueio por site que falhou não é «sem regras»: o Escudo fica ilegível
     // nessa ronda, e as regras não se apagam nos outros computadores.
     [Fact]

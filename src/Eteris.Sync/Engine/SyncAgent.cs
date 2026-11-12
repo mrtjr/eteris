@@ -184,6 +184,9 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // O estado guardado neste computador existe mas não se leu: nada o substitui por um vazio (SyncAgent.StateUnreadableText).
     public bool StateUnreadable { get; init; }
 
+    // Itens do cofre que ficaram de fora da última ronda (não abriram ou não se puderam cifrar).
+    public int SecretErrors { get; init; }
+
     // Fase Choose num aparelho sem nenhum estado desta conta (SyncAgent.MayAutoRequest): pode pedir a aprovação.
     public bool MayAutoPair { get; init; }
 
@@ -246,6 +249,8 @@ public sealed class SyncAgent
     private bool _needsUpdate;
     private bool _needsSignIn;
     private int _pendingDevices;
+    // Itens do cofre que ficaram de fora da última ronda (não abriram ou não se puderam cifrar): as Definições di-lo.
+    private int _secretErrors;
     private int _waiting;
     // Identificadores errados na pausa da troca de chave (ConfirmRekeyAsync). Só memória, como as tentativas dos códigos.
     private int _rekeyWrong;
@@ -673,6 +678,7 @@ public sealed class SyncAgent
                         && (_phase == SyncPhase.Choose || (_phase == SyncPhase.Stopped && _saved.Stopped == GoneText)),
                     RekeyPending = RekeyHeld(_saved),
                     StateUnreadable = _unreadable,
+                    SecretErrors = _secretErrors,
                     MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
                     JoinedNow = _justJoined && _phase == SyncPhase.On,
                     AccountSecrets = _saved is { Secret: not null, AccountSecrets: true },
@@ -775,6 +781,18 @@ public sealed class SyncAgent
         catch (Exception e) when (IsTransient(e))
         {
             Fail(e);
+            return false;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Uma exceção fora das passageiras (um defeito, não a rede): a ronda não falha calada para sempre. O erro fica à
+            // vista no estado e uma linha no registo, só com o tipo (nunca a mensagem, que pode ter dados).
+            Log?.Invoke($"A ronda acabou com uma falha inesperada ({e.GetType().Name}).");
+            lock (_gate)
+            {
+                _error = $"A sincronização falhou com um erro inesperado ({e.GetType().Name}). O Éteris tenta outra vez mais tarde.";
+                if (_phase == SyncPhase.Starting) _phase = SyncPhase.On;
+            }
             return false;
         }
         finally
@@ -999,6 +1017,7 @@ public sealed class SyncAgent
             _needsSignIn = false;
             _needsUpdate = report.NeedsUpdate;
             _pendingDevices = report.Pending.Count;
+            _secretErrors = report.SecretErrors;
             _phase = SyncPhase.On;
             _justJoined = false;
         }
@@ -2283,6 +2302,7 @@ public sealed class SyncAgent
             _needsSignIn = false;
             _needsUpdate = false;
             _pendingDevices = 0;
+            _secretErrors = 0;
             _waiting = 0;
             _devices = [];
             _secretsInAccount = false;

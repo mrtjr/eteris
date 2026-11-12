@@ -12,6 +12,7 @@
 - Quando outro computador da conta desliga uma proteção (HTTPS primeiro, DNS cifrado, o Escudo ou o modo estrito num site), o estado da sincronização passa a dizê-lo.
 - Um pedido à Google que esgota o prazo no início de sessão já não desaparece como se tivesse carregado em «Cancelar»: a barra diz «Sem ligação à Google. Tente de novo.»
 - O Drive às vezes responde ao limite de pedidos com um 403 (em vez do 429): o Éteris espera e repete, em vez de falhar a ronda.
+- Uma sincronização que falha por um erro inesperado diz-no nas Definições e deixa um registo local sem dados (`sync\sync.log`), em vez de falhar calada; as Definições dizem também quando há alterações de outro aparelho por ler. Um lote com conteúdo malformado, ou um registo de chaves sem a chave embrulhada, é recusado em vez de fazer cair a ronda.
 
 ### Pesquisa
 

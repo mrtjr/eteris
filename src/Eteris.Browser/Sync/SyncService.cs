@@ -108,7 +108,12 @@ internal static class SyncService
                     Arm();
                 },
                 // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
-                Log = m => System.Diagnostics.Debug.WriteLine("[sincronização] " + m),
+                // Textos fixos e o tipo da falha: o registo local (SyncLog) e, para um depurador, a saída de depuração.
+                Log = m =>
+                {
+                    System.Diagnostics.Debug.WriteLine("[sincronização] " + m);
+                    SyncLog.Write(m);
+                },
             };
             // Observa primeiro e avisa depois: as janelas refrescam as barras a partir de Changed e têm de já encontrar o
             // aviso pendente (o agendador para quando é preciso entrar, por isso pode não haver outra mudança).
@@ -289,8 +294,9 @@ internal static class SyncService
                     if (PausedAfterRound()) Schedule.Stop();
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                SyncLog.Write($"O agendador falhou ({e.GetType().Name}).");
                 // Uma ronda que falhou também conta como a 1.ª (corra bem ou mal).
                 _firstRoundDone = true;
                 lock (Gate) Schedule.Done(Now(), ok: false);
@@ -405,6 +411,8 @@ internal static class SyncService
         // de «Sair» segue (os tokens da Google saem) e a mensagem fica para a página (área «signout»).
         try { Agent()?.SignOut(forgetKey); }
         catch (SyncUserException e) { Say("signout", e.Message); }
+        // O registo local sai com a chave (não fica nada deste computador depois de «apagar a chave»).
+        if (forgetKey) SyncLog.Delete();
         lock (Gate) Schedule.Stop();
         Arm();
     }
@@ -902,6 +910,18 @@ internal static class SyncService
         return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
+    // O que ficou à espera numa ronda «bem sucedida»: alterações de aparelhos que este computador ainda não conseguiu ler e
+    // itens do cofre que ficaram de fora. null = nada à espera.
+    public static string? WaitingText(SyncStatus status)
+    {
+        var parts = new List<string>();
+        if (status.PendingDevices > 0)
+            parts.Add($"Há alterações de {status.PendingDevices} {(status.PendingDevices == 1 ? "aparelho" : "aparelhos")} que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.");
+        if (status.SecretErrors == 1) parts.Add("1 item do cofre ficou de fora desta ronda (não abriu ou não se pôde cifrar).");
+        else if (status.SecretErrors > 1) parts.Add($"{status.SecretErrors} itens do cofre ficaram de fora desta ronda (não abriram ou não se puderam cifrar).");
+        return parts.Count == 0 ? null : string.Join(' ', parts);
+    }
+
     public static object StatusData(SyncStatus? status, long nowMs) => status is null
         ? new { phase = "off" }
         : new
@@ -912,7 +932,9 @@ internal static class SyncService
             lastText = status.LastSuccessMs > 0 ? "Sincronizado " + Ago(status.LastSuccessMs, nowMs) + "." : null,
             error = status.Error,
             needsSignIn = status.NeedsSignIn,
-            notice = status.Notice,
+            pendingDevices = status.PendingDevices,
+            secretErrors = status.SecretErrors,
+            notice = new[] { status.Notice, WaitingText(status) }.Where(t => !string.IsNullOrEmpty(t)) is var texts && texts.Any() ? string.Join(' ', texts) : null,
             // O kit de recuperação sem o segredo (as palavras só pela rota do kit, depois da confirmação do Windows):
             // a impressão digital, «saved», «pending» ou «stale», a recusa e quantos computadores se conhecem.
             kit = status.Kit is { } k
