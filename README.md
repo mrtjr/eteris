@@ -59,10 +59,26 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 
 ## Desenvolvimento
 
+Requisitos (Windows 10 ou 11, x64):
+
+- SDK do .NET 10 (a versão exata está em `global.json`);
+- Rust 1.85 ou posterior: o `dotnet build` compila o Escudo com o `cargo`;
+- Node 22 no PATH: os testes dos scripts injetados correm no Node e falham sem ele;
+- git no PATH.
+
 ```
 dotnet build
 dotnet test
 ```
+
+Os testes ao vivo arrancam o Éteris compilado num perfil temporário e correm à parte:
+
+```
+dotnet build src/Eteris.Browser -c Release
+dotnet test tests/Eteris.Browser.E2E.Tests -c Release
+```
+
+Publicar (motor com codecs, sandbox e pacote): [docs/motor.md](docs/motor.md) e [docs/sandbox.md](docs/sandbox.md).
 
 ## Licença
 
@@ -70,5 +86,8 @@ O Éteris é software livre: pode usá-lo, estudá-lo, alterá-lo e redistribuí
 [GNU GPL versão 3 ou posterior](LICENSE). Os componentes de terceiros e as respetivas licenças estão em
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) e na pasta [licenses/](licenses/INDEX.md).
 
-Design e decisões: [docs/superpowers/specs/2026-11-05-eteris-browser-design.md](docs/superpowers/specs/2026-11-05-eteris-browser-design.md).
+Como funciona: [docs/motor.md](docs/motor.md), [docs/sandbox.md](docs/sandbox.md),
+[docs/palavras-passe.md](docs/palavras-passe.md), [docs/sincronizacao.md](docs/sincronizacao.md) e
+[docs/paridade.md](docs/paridade.md). O desenho inicial, de 2026-11-05, ficou como documento histórico:
+[docs/superpowers/specs/2026-11-05-eteris-browser-design.md](docs/superpowers/specs/2026-11-05-eteris-browser-design.md).
 Alterações: [CHANGELOG.md](CHANGELOG.md).
