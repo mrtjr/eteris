@@ -99,12 +99,13 @@ public class PasswordGeneratorTests
     }
 
     // Onde o relógio arranca: este padrão não é uma sequência de peças, as 50 primeiras tentativas levam sempre um
-    // símbolo e falham, e só a 51.ª (sem símbolos) o cumpre. Com o relógio antes da preparação, nunca lá chegava.
+    // símbolo e falham, e só a 51.ª (sem símbolos) o cumpre. Com o relógio antes da preparação, nunca lá chegava. O
+    // prazo é de 5 s para as 51 tentativas caberem nele mesmo com a bateria inteira a correr em paralelo.
     [Fact]
     public void SlowPreparation_LeavesTheBudgetToTheLaterAttempts()
     {
-        var pw = PasswordGenerator.Generate(new PasswordRules(null, null, "(?=.*[a-z])[A-Za-z0-9]{20}"), TimeSpan.FromMilliseconds(500),
-                                            prepared: () => Thread.Sleep(600));
+        var pw = PasswordGenerator.Generate(new PasswordRules(null, null, "(?=.*[a-z])[A-Za-z0-9]{20}"), TimeSpan.FromSeconds(5),
+                                            prepared: () => Thread.Sleep(5500));
         Assert.NotNull(pw);
         Assert.Matches("^[A-Za-z0-9]{20}$", pw);
     }
