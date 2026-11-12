@@ -10,6 +10,10 @@
 
 - O Google passa a ser uma das escolhas de motor de pesquisa nas Definições › Pesquisa (o padrão continua a ser o DuckDuckGo). Com ele, as pesquisas vão para a Google, que as pode juntar à sua conta Google se tiver sessão iniciada nela; o que escreve na barra não lhe é enviado enquanto escreve, só a pesquisa feita. As Boas-vindas continuam a oferecer só o DuckDuckGo, o Brave e o Startpage.
 
+### Privacidade
+
+- eteris://privacy/ passa a conferir o isolamento das páginas (com o motivo quando está desligado e a forma de o voltar a ligar), o motor completo do Escudo e o HTTPS primeiro.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

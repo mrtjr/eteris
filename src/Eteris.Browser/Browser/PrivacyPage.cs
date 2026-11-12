@@ -22,7 +22,7 @@ public static class PrivacyPage
     ];
 
     // Kept: true = cumprida, false = falhou, null = opcional e desligada (escolha do utilizador).
-    public sealed record Promise(string Id, string Title, string Detail, bool? Kept, string? Live = null, string? Fix = null);
+    public sealed record Promise(string Id, string Title, string Detail, bool? Kept, string? Live = null, string? Fix = null, string? FixLabel = null);
 
     public sealed record State(
         IReadOnlyDictionary<string, string> EngineArgs,
@@ -46,7 +46,15 @@ public static class PrivacyPage
         CnameSource CnameSource = CnameSource.WindowsDns,
         bool SyncOn = false,
         bool LeakCheckOff = true,
-        bool ChromiumPasswordsOff = true);
+        bool ChromiumPasswordsOff = true,
+        Infrastructure.Isolation Sandbox = Infrastructure.Isolation.On,
+        bool NetworkSandboxed = true,
+        bool SandboxRetryPending = false,
+        bool FullShield = true,
+        bool HttpsFirst = true);
+
+    // «Voltar a ligar» (D6): pede ao arranque seguinte para voltar a tentar o sandbox (precisa do token da página).
+    public const string SandboxRetryUrl = "eteris://privacy/sandbox-retry";
 
     // Exemplos à vista, decididos pelas mesmas funções que o tratador de pedidos usa.
     public const string BounceSample = "https://l.facebook.com/l.php?u=https%3A%2F%2Fwww.exemplo.pt%2Fartigo";
@@ -103,6 +111,7 @@ public static class PrivacyPage
 
         return
         [
+            SandboxPromise(s),
             new("gpc-header", "Pede a cada site para não o seguir",
                 gpcHeader ? "Cada pedido leva o cabeçalho «Sec-GPC: 1» (Global Privacy Control). O antigo «DNT: 1» já não vai: o Chrome e o Brave não o enviam e só servia para o distinguir." : "Os pedidos saem sem o cabeçalho Sec-GPC.",
                 gpcHeader),
@@ -217,7 +226,45 @@ public static class PrivacyPage
                           + string.Join(", ", fingerprint.Select(f => EnginePerformance.FeatureName(f.Feature)))
                           + " muda o desenho do canvas, e a impressão digital passa a ser a de um Chrome com o mesmo motor de desenho. Desliga-se com --eteris-sem-ajustes-motor.",
                 tuning.Count == 0 ? null : fingerprint.Count == 0),
+            new("shield", "Escudo com as listas completas",
+                s.FullShield
+                    ? "O motor do Escudo carregou as listas completas (filtros de rede, cosméticos e scriptlets)."
+                    : "O motor do Escudo não carregou (eteris_shields.dll em falta ou bloqueada): só a lista mínima embutida está a bloquear.",
+                s.FullShield),
+            new("https-first", "HTTPS primeiro",
+                s.HttpsFirst
+                    ? "Os endereços http:// abrem por HTTPS; quando o site não o tem, o Éteris avisa antes de abrir."
+                    : "Opcional · desligado: os endereços http:// abrem como foram escritos.",
+                s.HttpsFirst ? true : null, Fix: s.HttpsFirst ? null : "eteris://settings/#privacidade"),
         ];
+    }
+
+    // A linha do isolamento das páginas (INF-10): ✔ só com o sandbox em vigor; desligado, diz porquê e, depois do recuo
+    // por precaução, oferece «Voltar a ligar».
+    private static Promise SandboxPromise(State s)
+    {
+        const string title = "Páginas isoladas (sandbox)";
+        switch (s.Sandbox)
+        {
+            case Infrastructure.Isolation.On:
+                return new("sandbox", title,
+                    "Cada página corre fechada, sem acesso aos seus ficheiros nem ao sistema."
+                    + (s.NetworkSandboxed ? string.Empty : " O serviço de rede corre fora do AppContainer: a pasta desta cópia não tem a permissão que a instalação dá."),
+                    true);
+            case Infrastructure.Isolation.OffBySwitch:
+                return new("sandbox", title,
+                    "Desligado por um interruptor na linha de comandos (--eteris-no-sandbox ou --no-sandbox): tire-o do atalho.", false);
+            case Infrastructure.Isolation.OffAfterFailures:
+                var detail = "Desligado por precaução: o Éteris não arrancou bem com ele nas duas últimas vezes.";
+                return s.SandboxRetryPending
+                    ? new("sandbox", title, detail + " Volta a ser ligado no próximo arranque.", false)
+                    : new("sandbox", title, detail, false, Fix: SandboxRetryUrl, FixLabel: "Voltar a ligar →");
+            case Infrastructure.Isolation.OffRetried:
+                return new("sandbox", title,
+                    "Desligado neste arranque: o Éteris não conseguiu arrancar com ele. Da próxima vez volta a tentar.", false);
+            default:
+                return new("sandbox", title, "Esta versão do Éteris foi publicada sem o isolamento das páginas.", false);
+        }
     }
 
     // A exceção que o utilizador escolheu: com sessão Google para a sincronização, os pedidos dela (cifrados, para a pasta
@@ -272,18 +319,28 @@ public static class PrivacyPage
         var (visible, hidden) = Infrastructure.CaptureShield.Count();
         var settings = Data.Settings.Current;
         var bounces = MainWindow.Bounces;
+        var args = Environment.GetCommandLineArgs();
         return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.ScriptFor("https://example.com/") is not null,
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
             settings.UncloakCname, CnameStats.BlockedCount, CnameStats.DecisionCount, CnameStats.MicrosPerDecision, Cname.SourceFor(isPrivate: false),
             Sync.SyncService.Enabled || (!Sync.SyncService.FolderMode && Sync.GoogleSync.SignedIn), PrivacyPreferences.LeakCheckOff,
-            PrivacyPreferences.ChromiumPasswordsOff);
+            PrivacyPreferences.ChromiumPasswordsOff,
+            Infrastructure.SandboxFallback.IsolationOf(Infrastructure.CefConfigurator.SandboxSupported, Infrastructure.SandboxInfo.Available != 0,
+                Infrastructure.CefConfigurator.SandboxActive, Infrastructure.StartupGuard.Current.Notice, Infrastructure.SandboxInfo.Disabled(args),
+                args.Contains("--no-sandbox", StringComparer.OrdinalIgnoreCase)),
+            Infrastructure.NetworkSandbox.Enabled, Infrastructure.StartupGuard.Current.ReenableRequested,
+            Shields.ShieldEngine.Cosmetic is not null, settings.HttpsFirst);
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.
     public const string ReportClearedRedirect =
         "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0;url=eteris://privacy/#relatorio\"><title>Relatório apagado</title>";
+
+    // Depois de «Voltar a ligar»: volta à página (sem script) e sem repetir o pedido.
+    public const string SandboxRetryRedirect =
+        "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0;url=eteris://privacy/\"><title>Isolamento das páginas</title>";
 
     public static string CategoryLabel(string category) => category switch
     {
@@ -327,7 +384,12 @@ public static class PrivacyPage
         var promises = Promises(state);
         var data = new
         {
-            promises = promises.Select(p => new { id = p.Id, title = p.Title, detail = p.Detail, kept = p.Kept, live = p.Live, fix = p.Fix }),
+            promises = promises.Select(p => new
+            {
+                id = p.Id, title = p.Title, detail = p.Detail, kept = p.Kept, live = p.Live,
+                // A nova tentativa do sandbox muda estado: leva o token da página interna (InternalPages.IsAuthorized).
+                fix = p.Fix == SandboxRetryUrl ? p.Fix + "?t=" + InternalPages.Token : p.Fix, fixLabel = p.FixLabel,
+            }),
             report = ReportJson(events, today ?? DateOnly.FromDateTime(DateTime.Today)),
             sync = SyncBlock,
         };
