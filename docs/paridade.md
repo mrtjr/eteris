@@ -341,7 +341,7 @@ workers dão a versão real do Windows e do Chromium (`GetUserAgentMetadata` no 
 
 ## 7. Tráfego sem ação do utilizador — medido (2026-11-08)
 
-A promessa do Éteris é «nada sai do computador sem um pedido seu». Medido com um proxy HTTP local que **regista todos
+A promessa do Éteris é «sem tráfego de fundo da Google nem do Chromium». Medido com um proxy HTTP local que **regista todos
 os pedidos (CONNECT incluídos) e não encaminha nenhum** (responde 502), passado ao motor só por argumento
 (`--proxy-server=http://127.0.0.1:8897`, nada no Windows), num perfil de teste novo: 60 s com a nova aba, depois 60 s
 com uma página local servida em `127.0.0.1` (o laço local não passa pelo proxy, por isso tudo o que aparece no registo
@@ -371,9 +371,11 @@ local (0.2.10, mesma sessão: os 2 acima); no 2.º arranque do mesmo perfil, **0
 a página. Com um proxy que encaminha, a pesquisa na Google, o example.com e `eteris://privacy/` (✔ na promessa nova)
 funcionam como antes. O que o relógio de rede fazia deixa de existir: o aviso «o relógio do computador está errado»
 nas páginas de erro de certificado passa a vir só da data da compilação do motor, como no Chromium sem rede.
-
 Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
 pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
+A descarga das listas do Escudo num perfil novo (1.º arranque e de 7 em 7 dias) também não passa pelo proxy do motor
+(`HttpClient`) e ficou fora da medição; por isso a promessa não diz «nada sai do computador» e `eteris://privacy/` nomeia
+as duas ligações (atualizações e listas).
 
 **Formulários (0.2.13; `docs/palavras-passe.md`, A0).** Com o mesmo método, numa página local
 com um início de sessão, uma morada e um cartão enviados (dados inventados): o motor mandava o par utilizador/palavra-
@@ -382,7 +384,7 @@ início de sessão, apesar de `credentials_enable_service=false` — a verifica�
 Corte: `profile.password_manager_leak_detection=false` nas preferências do perfil, lida de volta; e, preventivo (0
 pedidos medidos), `--disable-features=AutofillServerCommunication` contra o servidor de previsões de formulários
 (`content-autofill.googleapis.com`). Depois: **0 pedidos** no proxy e 0 linhas `googleapis` no NetLog. A promessa
-«Nada sai do computador sem um pedido seu» em `eteris://privacy/` diz também os formulários.
+«Sem tráfego de fundo da Google nem do Chromium» em `eteris://privacy/` diz também os formulários.
 
 **Sincronização (0.2.13).** Por omissão está desligada e a promessa fica exatamente como medida
 acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o estado só leem o disco; testes

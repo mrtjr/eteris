@@ -115,11 +115,12 @@ public static class PrivacyPage
                     ? "Topics, Protected Audience (FLEDGE), Attribution Reporting, Shared Storage e Fenced Frames estão desligados no motor."
                     : "Ainda ligadas no motor: " + string.Join(", ", missingAds) + ".",
                 missingAds.Count == 0, Live: "ads"),
-            new("quiet", "Nada sai do computador sem um pedido seu",
+            new("quiet", "Sem tráfego de fundo da Google nem do Chromium",
                 !quiet ? "O motor arrancou sem os interruptores que cortam o tráfego de fundo."
                     : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para passwordsleakcheck-pa.googleapis.com."
                     : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
-                    : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com).",
+                    : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com)."
+                      + " O que o Éteris pede sozinho: procura atualizações no GitHub depois de abrir e descarrega as listas do Escudo no 1.º arranque e de 7 em 7 dias (ublockorigin.github.io e easylist-downloads.adblockplus.org).",
                 quiet && formsQuiet),
             new("passwords", "As suas palavras-passe não vão para ninguém",
                 !s.ChromiumPasswordsOff ? "O gestor de palavras-passe e o preenchimento automático do Chromium não ficaram desligados no perfil (credentials_enable_service, autofill.profile_enabled, autofill.credit_card_enabled)."

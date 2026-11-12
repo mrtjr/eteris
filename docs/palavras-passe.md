@@ -45,7 +45,7 @@ Testes: `Vault/PrivacyPreferencesGuardTests` (as quatro preferências do gestor 
 continuam `false`, a verificação de fugas desligada e lida do perfil, o interruptor do motor, a promessa),
 `EngineHardeningTests.Build_FixesEverySwitchThatKeepsTheEngineQuiet` (lista inteira do `disable-features`) e
 `EngineFeatureNamesTests` (`AutofillServerCommunication` é uma `base::Feature` do `libcef.dll` em uso).
-`eteris://privacy/` › «Nada sai do computador sem um pedido seu» passa a dizer também os formulários e fica ✘ (a dizer
+`eteris://privacy/` › «Sem tráfego de fundo da Google nem do Chromium» passa a dizer também os formulários e fica ✘ (a dizer
 o quê) se a verificação de fugas estiver ligada no perfil ou se faltar o interruptor.
 
 ## A1. Modelos, origens e validações

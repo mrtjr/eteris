@@ -17,6 +17,27 @@ public class PrivacyPageTests
 
     private static PrivacyPage.Promise Find(PrivacyPage.State state, string id) => Assert.Single(PrivacyPage.Promises(state), p => p.Id == id);
 
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
+
+    // O título diz o que cobre (o motor), não promete «nada»: o Éteris faz duas ligações sozinho e o detalhe di-las.
+    [Fact]
+    public void Quiet_TitleNamesWhatItCovers_AndTheDetailNamesUpdatesAndLists()
+    {
+        var quiet = Find(Good(), "quiet");
+        Assert.Equal("Sem tráfego de fundo da Google nem do Chromium", quiet.Title);
+        Assert.True(quiet.Kept);
+        foreach (var host in FilterLists.Sources.Values.Select(u => new Uri(u).Host).Distinct()) Assert.Contains(host, quiet.Detail);
+        foreach (var s in new[] { "GitHub", "de 7 em 7 dias", "passwordsleakcheck-pa.googleapis.com", "content-autofill.googleapis.com" }) Assert.Contains(s, quiet.Detail);
+        var settings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.DoesNotContain("só consulta a cache do Windows", settings);
+        Assert.Contains("Com o DNS cifrado ligado pergunta o nome ao mesmo fornecedor, cifrado; na janela privada sem DNS cifrado só lê a cache do Windows.", settings);
+    }
+
     [Fact]
     public void Promises_WithTheRealEngineConfiguration_AreKept()
     {
