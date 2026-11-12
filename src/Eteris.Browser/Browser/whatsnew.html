@@ -34,6 +34,7 @@
   kbd { display: inline-block; margin-top: 8px; font: 600 11.5px "Segoe UI", sans-serif; padding: 3px 8px; border-radius: 7px;
         color: var(--text); background: rgba(127, 127, 140, .14); border-bottom: 2px solid rgba(127, 127, 140, .3); }
   .foot { margin-top: 34px; color: var(--faint); font-size: 13px; }
+  .older { grid-column: 1 / -1; margin: 18px 0 0; color: var(--faint); font-size: 13px; font-weight: 600; }
   .foot a { color: #67e8f9; text-decoration: none; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
 </style>
@@ -53,6 +54,10 @@
   document.getElementById('tag').textContent = 'Versão ' + data.version;
   const grid = document.getElementById('grid');
   data.items.forEach((h, i) => {
+    if (i === data.older && data.older > 0 && data.older < data.items.length) {
+      const sep = document.createElement('h2'); sep.className = 'older'; sep.textContent = 'Versões anteriores';
+      grid.append(sep);
+    }
     const item = document.createElement('div'); item.className = 'item'; item.style.animationDelay = (i * 0.05) + 's';
     const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = h.icon;
     const body = document.createElement('div');

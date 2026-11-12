@@ -42,7 +42,7 @@ public static class WhatsNewPage
         // 0.2.14
         new("🔐", SandboxTitle, "Como no Chrome, no Firefox e no Brave: cada página corre fechada, sem acesso aos seus ficheiros nem ao sistema. Se o isolamento falhar neste PC, o Éteris abre sem ele e avisa."),
         new("📉", LighterTitle, "Medido contra a 0.2.13: 11% a 16% menos memória e, com 20 abas abertas e paradas, o processador desce de 1,72% para 0,13% de um núcleo."),
-        new("⏸", UnseenTitle, "Com a janela minimizada, uma página animada deixa de desenhar, como no Chrome, no Firefox e no Brave: 6,47% → 0,59% de um núcleo. Nunca com som, multimédia ou câmara em uso."),
+        new("⏸", UnseenTitle, "Com a janela minimizada, uma página animada deixa de desenhar, como no Chrome, no Firefox e no Brave. Nunca com som, multimédia ou câmara em uso."),
         new("💤", PressureTitle, "Com a memória do Windows quase esgotada, adormece a aba usada há mais tempo e, ao acordar, a página volta ao mesmo ponto. Desliga-se em Definições › Abas."),
         // 0.2.13
         new("☁", "Conta Google e sincronização cifrada", "Opcional: favoritos, Espaços, definições, Escudo, notas e palavras-passe passam entre computadores, cifrados no PC antes de irem para a pasta oculta do seu Google Drive."),
@@ -104,9 +104,13 @@ public static class WhatsNewPage
     public static bool ShouldShow(string lastSeenVersion, string currentVersion, bool firstRun)
         => !firstRun && !string.Equals(lastSeenVersion, currentVersion, StringComparison.Ordinal);
 
+    // Quantos destaques são da versão em curso: os que vêm antes do 1.º da versão anterior (o do sandbox, o 1.º da
+    // 0.2.14). Numa versão futura, a âncora passa a ser o 1.º destaque da versão anterior.
+    public static int NewCount => Highlights.TakeWhile(h => h.Title != SandboxTitle).Count();
+
     public static string Render(string version)
     {
-        var data = new { version, items = Highlights.Select(h => new { icon = h.Icon, title = h.Title, detail = h.Detail, keys = h.Keys }) };
+        var data = new { version, older = NewCount, items = Highlights.Select(h => new { icon = h.Icon, title = h.Title, detail = h.Detail, keys = h.Keys }) };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
 }

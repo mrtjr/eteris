@@ -148,7 +148,7 @@ public class WhatsNewTests
 
     // Os 3 destaques do desempenho da 0.2.14 dizem só o que a medição contra a 0.2.13 deu (docs/paridade.md, «Medição da
     // 0.2.14»): memória −11% (1 aba) a −16% (20 abas); processador parado com 20 abas 1,72% → 0,13% de um núcleo; janela
-    // minimizada com uma página animada 6,47% → 0,59%; e o sono com pouca memória, com a opção em Definições › Abas. Não
+    // minimizada com uma página animada (sem número: a prova 6 de build/perf/README.md por repetir); e o sono com pouca memória, com a opção em Definições › Abas. Não
     // prometem nada do que ficou em aberto: a janela tapada por outra continua a desenhar e o arranque não ficou mais
     // rápido (custa cerca de 40 ms a mais com o sandbox).
     [Fact]
@@ -162,7 +162,9 @@ public class WhatsNewTests
 
         var unseen = Assert.Single(WhatsNewPage.Highlights, h => h.Title == WhatsNewPage.UnseenTitle);
         Assert.Contains("minimizada", unseen.Detail);
-        Assert.Contains("6,47% → 0,59%", unseen.Detail);
+        // Os números «6,47% → 0,59%» saíram: a prova 6 de build/perf/README.md ainda não foi repetida na publicação final.
+        Assert.DoesNotContain("6,47%", unseen.Detail);
+        Assert.DoesNotContain("0,59%", unseen.Detail);
         Assert.Contains("Nunca com som", unseen.Detail);
 
         var pressure = Assert.Single(WhatsNewPage.Highlights, h => h.Title == WhatsNewPage.PressureTitle);
@@ -239,5 +241,27 @@ public class WhatsNewTests
     {
         Assert.Contains(WhatsNewPage.Highlights, h => h.Detail.Contains("gerada por IA", StringComparison.Ordinal));
         Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Detail.Contains("fotografia", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // A etiqueta «Versão X» não pode cobrir os destaques de outras versões: os da versão em curso vêm primeiro e, a
+    // seguir, uma divisória «Versões anteriores» (PRO-16).
+    [Fact]
+    public void Render_SeparatesTheNewHighlightsFromOlderVersions()
+    {
+        Assert.InRange(WhatsNewPage.NewCount, 1, 8);
+        Assert.Equal(WhatsNewPage.SandboxTitle, WhatsNewPage.Highlights[WhatsNewPage.NewCount].Title);
+        Assert.Contains("\"older\":" + WhatsNewPage.NewCount, WhatsNewPage.Render("0.2.15"));
+        var template = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Browser", "whatsnew.html"));
+        Assert.Contains("Versões anteriores", template);
+        Assert.Contains("data.older", template);
+    }
+
+    [Fact]
+    public void Readme_DoesNotOverpromise()
+    {
+        var readme = File.ReadAllText(Path.Combine(Root(), "README.md"));
+        Assert.DoesNotContain("sem abrir aba nem deixar rasto.", readme);
+        Assert.Contains("sem abrir aba nem deixar rasto no histórico (a página é pedida ao site).", readme);
+        Assert.Contains("DNS cifrado e apagar dados ao fechar (opcionais)", readme);
     }
 }
