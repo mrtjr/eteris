@@ -9,3 +9,8 @@
 #
 # As chaves PRIVADAS nunca entram neste repositório, no GitHub nem no CI: geram-se e guardam-se fora daqui com
 # «dotnet run --project build/sign -c Release -- new-key <ficheiro.pem>», que escreve a linha pública a colar aqui.
+
+# Uso (assina as releases), gerada a 2026-11-12:
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXoBuH7BOfgf5QiPMKvOAcG6VDW04rKDuheQY/AdSjTc+1zO2mVXrSpLmO1vt2yV5ozycf8wMmjMbyXWGjOh2bQ==
+# Reserva, gerada a 2026-11-12 e guardada noutro sítio:
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElN14d3rw1fDcclTyk//bPB00on5MemNU1UKqI0W1p4UaewOkNdqBHIvauA+MeorpY+l+6nqJ1Uk+MxbiCKWizQ==
