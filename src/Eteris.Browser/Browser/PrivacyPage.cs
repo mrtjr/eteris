@@ -6,7 +6,8 @@ namespace Eteris.Browser.Browser;
 
 // eteris://privacy/ — o que o Éteris promete, cada promessa com ✔/✘ lido do estado em vigor (a linha de comandos que
 // o motor recebeu, as preferências que o Chromium aceitou, os cabeçalhos que o tratador de pedidos põe, a afinidade das
-// janelas no Windows) e, quando dá, confirmado ao vivo pelo JavaScript da própria página.
+// janelas no Windows) e, quando dá, confirmado ao vivo pelo JavaScript da própria página; o DNS cifrado é a exceção: lê-se o
+// que foi pedido ao motor no arranque (Local State), não o estado em vigor.
 public static class PrivacyPage
 {
     public const string Url = "eteris://privacy/";
@@ -196,7 +197,10 @@ public static class PrivacyPage
                     : "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede — e o WebRTC já não deixa a porta mDNS à escuta neste computador.",
                 s.WebRtcProtected && webRtcFixed && webRtcQuiet),
             new("dns", "DNS cifrado",
-                s.SecureDns is { } dns ? $"Os nomes dos sites vão cifrados para {dns}." : "Opcional · desligado: os nomes dos sites vão para o DNS do sistema.",
+                s.SecureDns is { } dns
+                    ? $"Pedido ao motor no arranque: os nomes dos sites vão cifrados para {dns}. O Éteris não lê o estado em vigor no motor; "
+                      + "num PC gerido (domínio, Entra ID ou controlo parental) o Chromium pode desligar o DNS cifrado."
+                    :"Opcional · desligado: os nomes dos sites vão para o DNS do sistema.",
                 s.SecureDns is null ? null : true, Fix: s.SecureDns is null ? "eteris://settings/#privacidade" : null),
             new("recall", "Escondido do Recall e das capturas de ecrã",
                 !s.HideFromCapture ? "Opcional · desligado: com ele ligado as capturas, gravações e partilhas de ecrã mostram um vazio."

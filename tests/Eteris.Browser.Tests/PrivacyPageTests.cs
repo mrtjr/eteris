@@ -18,6 +18,16 @@ public class PrivacyPageTests
 
     private static PrivacyPage.Promise Find(PrivacyPage.State state, string id) => Assert.Single(PrivacyPage.Promises(state), p => p.Id == id);
 
+    // A linha «DNS cifrado» lê o que foi pedido ao motor no arranque (Local State), não o estado em vigor: diz-o (EGR-15).
+    [Fact]
+    public void Dns_DetailSaysItWasRequested_NotVerified()
+    {
+        var dns = Find(Good() with { SecureDns = "Quad9" }, "dns");
+        Assert.True(dns.Kept);
+        Assert.Equal("Pedido ao motor no arranque: os nomes dos sites vão cifrados para Quad9. O Éteris não lê o estado em vigor no motor; "
+            + "num PC gerido (domínio, Entra ID ou controlo parental) o Chromium pode desligar o DNS cifrado.", dns.Detail);
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
