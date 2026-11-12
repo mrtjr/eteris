@@ -55,13 +55,13 @@ public class PublicTextsTests
         yield return ("CHANGELOG 0.2.15", Flat(ChangelogEntry()));
     }
 
-    // R12: a entrada da 0.2.15 abre o CHANGELOG, sem data (o dono põe-na ao publicar), e a história fica como estava.
+    // R12: a entrada da 0.2.15 abre o CHANGELOG, com a data da publicação, e a história fica como estava.
     [Fact]
     public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
-        Assert.Equal("## 0.2.15 — por publicar", headings[0]);
+        Assert.Equal("## 0.2.15 — 2026-11-12", headings[0]);
         Assert.Equal("## 0.2.14 — 2026-11-09", headings[1]);
         Assert.Single(headings, l => l.StartsWith("## 0.2.14", StringComparison.Ordinal));
         Assert.Contains("## 0.2.14 — 2026-11-09\n\nA versão das **páginas isoladas**.", log);

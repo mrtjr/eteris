@@ -1,6 +1,6 @@
 # Alterações
 
-## 0.2.15 — por publicar
+## 0.2.15 — 2026-11-12
 
 A versão do **login simples**: «Entrar com o Google» com um clique, a partir do menu, das boas-vindas ou das
 Definições, e a sincronização cifrada começa sozinha. Um computador novo pede para entrar sozinho e aprova-se
