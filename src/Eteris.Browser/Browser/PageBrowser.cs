@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Windows;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
 
@@ -12,6 +13,16 @@ public class PageBrowser : ChromiumWebBrowser
 {
     public PageBrowser(string address) : base(address)
     {
+    }
+
+    // O endereço mudou (no fio da interface). Um evento da própria página em vez de um AddValueChanged no descritor da
+    // propriedade: esse guardava a página numa tabela estática do WPF até o Éteris sair (MOT-14).
+    public event Action? AddressChanged;
+
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.Property == AddressProperty) AddressChanged?.Invoke();
     }
 
     // Tamanho, em píxeis, da área onde a página vai aparecer. Sem ele, a janela do CEF nasce com o tamanho da static

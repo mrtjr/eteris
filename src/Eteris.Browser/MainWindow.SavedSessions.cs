@@ -89,7 +89,11 @@ public partial class MainWindow
     private void SaveSession(IReadOnlyList<SavedTab> tabs)
     {
         var name = SavedSessionNames.Suggest(tabs, AppData.SavedSessions().Select(s => s.Name).ToList());
-        AppData.SaveSession(name, tabs);
+        if (!AppData.SaveSession(name, tabs))
+        {
+            ShowToast("Não foi possível guardar a sessão — a base de dados do perfil não está acessível");
+            return;
+        }
         ShowToast($"Sessão «{name}» guardada — reabra-a pela paleta (Ctrl+K)");
     }
 

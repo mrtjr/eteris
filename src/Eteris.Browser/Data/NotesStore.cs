@@ -17,18 +17,18 @@ public sealed class NotesStore(string path)
     public string Load() => TryLoad() ?? string.Empty;
 
     // null = o ficheiro existe mas não se leu agora (bloqueado por outro programa): não é o mesmo que notas vazias.
+    // Um ficheiro cheio de zeros (corte de energia) volta da cópia anterior (notas.md.bak) e fica em .corrupt.
     public string? TryLoad()
     {
-        try { return File.Exists(path) ? File.ReadAllText(path, Encoding.UTF8) : string.Empty; }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        var text = Infrastructure.AtomicFile.ReadText(path, text => text.Length > 0 && text.All(c => c == '\0') ? null : text, out var outcome);
+        return outcome == Infrastructure.AtomicRead.Missing ? string.Empty : text;
     }
 
-    // Escrita atómica: um ficheiro temporário substitui o anterior, para um fecho a meio não deixar notas cortadas.
+    // Escrita atómica, descarregada para o disco e com a versão anterior em notas.md.bak: um fecho ou um corte de energia
+    // a meio não deixa notas cortadas nem vazias.
     public void Save(string text)
     {
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, text, new UTF8Encoding(false));
-        File.Move(temp, path, overwrite: true);
+        Infrastructure.AtomicFile.WriteText(path, text, backup: true);
         Saved?.Invoke();
     }
 

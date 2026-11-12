@@ -37,8 +37,16 @@ internal sealed class BrowserProfile : ILocalProfileReader
                 items.Add(new LocalItem(Collections.Bookmarks, mark.Url, new JsonObject { ["title"] = mark.Title }));
         }
         catch (Exception) { unreadable.Add(Collections.Bookmarks); }
-        foreach (var (key, value) in ProfileTransfer.SettingValues(Data.Settings.Current))
-            items.Add(new LocalItem(Collections.Settings, key, new JsonObject { ["value"] = value }));
+        // Um settings.json que existia e não se leu: as predefinições em uso não seguem para os outros aparelhos (DAD-07).
+        if (Data.Settings.Unreadable)
+        {
+            unreadable.Add(Collections.Settings);
+            // E no arranque seguinte, com o settings.json já gravado, as predefinições não sobem como alterações locais.
+            ProfileRejoin.Add(Collections.Settings);
+        }
+        else
+            foreach (var (key, value) in ProfileTransfer.SettingValues(Data.Settings.Current))
+                items.Add(new LocalItem(Collections.Settings, key, new JsonObject { ["value"] = value }));
         if (ShieldKeys() is { } shield) foreach (var key in shield) items.Add(new LocalItem(Collections.Shield, key, new JsonObject()));
         else unreadable.Add(Collections.Shield);
 
@@ -52,6 +60,8 @@ internal sealed class BrowserProfile : ILocalProfileReader
             foreach (var (name, color, icon) in spaces)
                 items.Add(new LocalItem(Collections.Spaces, name, SpaceData(name, color, icon, order++)));
         }
+        // Coleções cujo perfil local foi posto de lado (base de dados, definições): não se dão como apagadas (ProfileRejoin).
+        foreach (var collection in ProfileRejoin.Pending()) if (!unreadable.Contains(collection)) unreadable.Add(collection);
         return new LocalRead(items, unreadable);
     }
 

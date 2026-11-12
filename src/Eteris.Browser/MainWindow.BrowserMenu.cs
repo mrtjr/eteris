@@ -306,7 +306,7 @@ public partial class MainWindow
 
         Divider();
         Row("\uE721", "Procurar na página…", OpenFind, "Ctrl+F", ActiveBrowser is not null);
-        Row("\uE749", "Imprimir…", () => ActiveBrowser?.Print(), "Ctrl+P", ActiveBrowser is not null);
+        Row("\uE749", "Imprimir…", () => ReadyBrowser?.Print(), "Ctrl+P", ReadyBrowser is not null);
         Row("\uE722", "Capturar página inteira", () => CapturePage(true), "Ctrl+Shift+S", ActiveBrowser is not null);
         if (!IsPrivate)
             Row("\uE74D", "Apagar dados de navegação…", () => OpenInternal(SettingsPage.Url + "#clearToggle"));

@@ -1637,7 +1637,7 @@
                             Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="12"
                             Content="&#xE76B;" Click="SideCollapse_Click" ToolTip="Encolher a barra de abas" />
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ListBox x:Name="SideTabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
+                        <ListBox x:Name="SideTabList"
                                  ItemContainerStyle="{StaticResource SideTabItemStyle}"
                                  Background="Transparent" BorderThickness="0" Padding="0">
                             <ListBox.Template>

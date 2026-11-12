@@ -139,8 +139,8 @@ public class ReadyNewTabTests
     [Fact]
     public void Stores_ReadThroughTheTweak()
     {
-        Assert.Contains("Migrate(Read(File.ReadAllText(path)) ?? new())", Source(Path.Combine("Data", "UserSettings.cs")));
-        Assert.Contains("var session = Read(File.ReadAllText(path));", Source(Path.Combine("Data", "SessionStore.cs")));
+        Assert.Contains("AtomicFile.ReadText(path, Read, out var outcome)", Source(Path.Combine("Data", "UserSettings.cs")));
+        Assert.Contains("json => Read(json) is { Urls: not null } read ? read : null", Source(Path.Combine("Data", "SessionStore.cs")));
         Assert.Equal(2, Regex.Matches(Source(Path.Combine("Data", "UserSettings.cs")) + Source(Path.Combine("Data", "SessionStore.cs")),
             @"PerfTuning\.IsOn\(Infrastructure\.PerfTuning\.ReadyNewTab\)").Count);
     }
