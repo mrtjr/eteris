@@ -126,7 +126,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             // Relatório de privacidade: só os bloqueios, só o domínio do rastreador (a rede local nem isso) e nunca o que
             // o auto-teste faz de propósito (o pedido a 127.0.0.1 dele não é um rastreio).
             if (isPrivate || PrivacyCategory.Of(verdict) is not { } category || !PrivacyLedger.Counts(pageUrl)) return;
-            PrivacyLedger.Count(category, verdict == ObservedVerdict.LocalNetwork ? null : detail ?? SiteObservatory.HostOf(url).ToString());
+            PrivacyLedger.Count(category, verdict == ObservedVerdict.LocalNetwork ? null : PrivacyLedger.SubjectFor(pageUrl, detail ?? SiteObservatory.HostOf(url).ToString()));
         }
 
         // Desmascarar CNAME (Shields/CnameUncloak.cs) para um pedido que as listas deixaram passar. Com o nome já na

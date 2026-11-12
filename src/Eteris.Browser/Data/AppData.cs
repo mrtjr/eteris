@@ -266,7 +266,20 @@ public static class AppData
         // As «Feitas» do período também: «Apagar histórico» e «Esquecer» mostravam-nas ainda no Radar.
         try { LazyDone.Value?.DeleteSince(sinceUtc); }
         catch (Exception) { }
+        // O relatório de privacidade: os domínios dos dias do período saem, os totais ficam. Grava-se antes o que está
+        // pendente no livro, para que também isso perca o domínio.
+        FlushShieldStats();
+        try { LazyPrivacyEvents.Value?.ForgetSubjectsSince(sinceUtc == DateTime.MinValue ? DateOnly.MinValue : DateOnly.FromDateTime(sinceUtc.ToLocalTime())); }
+        catch (Exception) { }
         if (sinceUtc == DateTime.MinValue) QueueWrite(h => h.Compact());
+    }
+
+    // «Triturar» um site: o domínio dele sai do relatório de privacidade (a contagem fica sem domínio).
+    public static void ForgetPrivacySubject(string site)
+    {
+        FlushShieldStats();
+        try { LazyPrivacyEvents.Value?.ForgetSubject(site); }
+        catch (Exception) { }
     }
 
     public static IReadOnlyList<T> TryRead<T>(Func<HistoryStore, IReadOnlyList<T>> read)

@@ -142,6 +142,42 @@ public class PrivacyReportTests
         Assert.Contains("privateContext ? null : AppData.PrivacyEvents(30)", factory);
     }
 
+    // Os totais ficam e os domínios saem: «Apagar histórico» (desde o dia), «Esquecer» e «Triturar» (um site).
+    [Fact]
+    public void Store_ForgetSubjectsSince_KeepsTotalsAndDropsDomains()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"eteris-report-{Guid.NewGuid():N}.db");
+        try
+        {
+            var store = new PrivacyEventsStore(path);
+            store.Add(Today, [(PrivacyCategory.Lists, "exemplo.pt", 3), (PrivacyCategory.Lists, "", 2), (PrivacyCategory.Cloaked, "t.net", 1)]);
+            store.Add(Today.AddDays(-3), [(PrivacyCategory.Lists, "antigo.pt", 4)]);
+            store.ForgetSubjectsSince(Today);
+            var rows = store.Since(Today.AddDays(-10)).OrderBy(e => e.Day).ThenBy(e => e.Category).ToList();
+            Assert.Equal(
+                [new PrivacyEvent(Today.AddDays(-3), PrivacyCategory.Lists, "antigo.pt", 4), new PrivacyEvent(Today, PrivacyCategory.Cloaked, "", 1), new PrivacyEvent(Today, PrivacyCategory.Lists, "", 5)],
+                rows);
+            store.Add(Today, [(PrivacyCategory.Lists, "outro.pt", 1)]);
+            store.ForgetSubject("antigo.pt");
+            Assert.Equal(["", "", "", "outro.pt"], store.Since(Today.AddDays(-10)).Select(e => e.Subject).Order(StringComparer.Ordinal));
+            Assert.Equal(11, store.Since(Today.AddDays(-10)).Sum(e => e.Count));
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ClearingHistoryAndShredding_AlsoForgetTheReportDomains()
+    {
+        Assert.Contains("PrivacyLedger.SubjectFor(pageUrl, detail ?? SiteObservatory.HostOf(url).ToString())", Read("src", "Eteris.Browser", "Shields", "PrivacyRequestHandler.cs"));
+        var data = Read("src", "Eteris.Browser", "Data", "AppData.cs");
+        Assert.Contains("ForgetSubjectsSince(", data);
+        Assert.Contains("AppData.ForgetPrivacySubject(site);", Read("src", "Eteris.Browser", "MainWindow.Forget.cs"));
+    }
+
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([Root(), .. parts]));
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
@@ -157,6 +193,16 @@ public class PrivacyReportTests
 [Collection(GlobalStateCollection.Name)]
 public class PrivacyLedgerTests
 {
+    [Fact]
+    public void SubjectFor_DropsTheDomain_WhenTheBlockedRequestIsFirstParty()
+    {
+        Assert.Null(PrivacyLedger.SubjectFor("https://www.jornal.pt/artigo", "www.jornal.pt"));
+        Assert.Null(PrivacyLedger.SubjectFor("https://www.jornal.pt/artigo", "metrics.jornal.pt"));
+        Assert.Equal("www.google-analytics.com", PrivacyLedger.SubjectFor("https://www.jornal.pt/artigo", "www.google-analytics.com"));
+        Assert.Equal("x.pt", PrivacyLedger.SubjectFor(null, "x.pt"));
+        Assert.Null(PrivacyLedger.SubjectFor("https://www.jornal.pt/", ""));
+    }
+
     [Fact]
     public void Ledger_AggregatesBySiteOfTheTracker()
     {

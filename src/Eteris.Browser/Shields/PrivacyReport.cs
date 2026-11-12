@@ -47,6 +47,14 @@ public static class PrivacyLedger
         _pending.AddOrUpdate(key, 1, (_, n) => n + 1);
     }
 
+    // O domínio que se guarda para um pedido bloqueado: nenhum (só o total) quando o pedido é do próprio site da página,
+    // porque aí o domínio é o do site visitado e o relatório não guarda sites visitados; senão, o do rastreador.
+    public static string? SubjectFor(string? pageUrl, string? subject)
+    {
+        if (string.IsNullOrEmpty(subject)) return null;
+        return SiteScope.SiteOf(pageUrl) is { } page && page == SiteScope.OfHost(subject) ? null : subject;
+    }
+
     // Devolve (e esvazia) o que ainda não foi gravado.
     public static IReadOnlyList<(string Category, string Subject, int Count)> Take()
     {

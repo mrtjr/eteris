@@ -5,7 +5,8 @@ using Microsoft.Data.Sqlite;
 namespace Eteris.Browser.Data;
 
 // Agregados do relatório de privacidade: (dia, categoria, domínio do rastreador) → contagem. Sem sites visitados nem
-// endereços; podados a PrivacyReport.KeepDays dias e apagáveis num clique (eteris://privacy/).
+// endereços; podados a PrivacyReport.KeepDays dias e apagáveis num clique (eteris://privacy/). Um pedido bloqueado do
+// próprio site conta sem domínio; apagar o histórico ou triturar um site tira os domínios e deixa os totais.
 public sealed class PrivacyEventsStore
 {
     private readonly string _connectionString;
@@ -62,6 +63,30 @@ public sealed class PrivacyEventsStore
     public void Prune(DateOnly today) => Execute("DELETE FROM privacy_events WHERE day < $d", Key(today.AddDays(-PrivacyReport.KeepDays)));
 
     public void Clear() => Execute("DELETE FROM privacy_events", null);
+
+    // «Apagar histórico» e «Esquecer»: os domínios dos dias a partir de `from` saem e os totais ficam (somados à linha
+    // sem domínio da mesma categoria e dia).
+    public void ForgetSubjectsSince(DateOnly from) => FoldSubjects("subject <> '' AND day >= $v", Key(from));
+
+    // «Triturar» um site: as linhas com o domínio dele (de qualquer dia) perdem o domínio e o total fica.
+    public void ForgetSubject(string site) => FoldSubjects("subject = $v", site);
+
+    private void FoldSubjects(string where, string value)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            INSERT INTO privacy_events(day, category, subject, count)
+              SELECT day, category, '', SUM(count) FROM privacy_events WHERE {where} GROUP BY day, category
+              ON CONFLICT(day, category, subject) DO UPDATE SET count = count + excluded.count;
+            DELETE FROM privacy_events WHERE {where};
+            """;
+        command.Parameters.AddWithValue("$v", value);
+        command.ExecuteNonQuery();
+        transaction.Commit();
+    }
 
     private void Execute(string sql, string? day)
     {
