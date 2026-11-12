@@ -71,7 +71,7 @@ public class FinalReviewUiTextsTests
     {
         var overlay = Source("MainWindow.Overlay.cs");
         Assert.DoesNotContain("Closed += (_, _) => _overlay?.Close();", overlay);
-        Assert.Matches(@"Closed \+= \(_, _\) =>\s*\{\s*var closing = _overlay;\s*_overlay = null;\s*closing\?\.Close\(\);", overlay);
+        Assert.Matches(@"Closed \+= \(_, _\) =>\s*\{\s*(?://[^\r\n]*\s*)?ReleaseOverlayWatches\(\);\s*var closing = _overlay;\s*_overlay = null;\s*closing\?\.Close\(\);", overlay);
         Assert.Contains("if (_overlay is null || _overlayRoot is null) return;", Body(overlay, "private void UpdateOverlayVisibility()", "var needed"));
     }
 

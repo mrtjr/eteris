@@ -19,6 +19,11 @@ public class SearchSuggestTests
     public void Startpage_HasNoEndpoint()
         => Assert.Null(SearchSuggest.EndpointFor(SearchEngine.Startpage, "x"));
 
+    // Com o Google, o que se escreve na barra não vai para a Google letra a letra: só a pesquisa feita (como no Startpage).
+    [Fact]
+    public void Google_HasNoEndpoint()
+        => Assert.Null(SearchSuggest.EndpointFor(SearchEngine.Google, "x"));
+
     [Theory]
     [InlineData("")]
     [InlineData("not json")]

@@ -378,7 +378,8 @@ Como se chegou à origem (A/B, só por argumentos do motor): `--disable-features
 Correção: os dois nomes estão em `EngineHardening.NoGoogleAtStartup` (com o porquê), juntos ao `disable-features` do
 motor desde o primeiro processo (as preferências do perfil só se aplicam depois do arranque e não chegariam ao 1.º).
 Testes: `Build_FixesEverySwitchThatKeepsTheEngineQuiet` fixa a lista inteira de `disable-features` e os interruptores
-de tráfego de fundo; `EngineFeatureNamesTests` prova que os dois nomes são `base::Feature` do `libcef.dll` em uso; a
+de tráfego de fundo; `EngineFeatureNamesTests` prova que os dois nomes são `base::Feature` do `libcef.dll` do NuGet e,
+quando existe, do da compilação própria (`build/cef-codecs/out/runtime`); a
 promessa nova «No arranque, nada sai para a Google» em `eteris://privacy/` fica ✘ e diz o nome se algum faltar.
 
 Medição final (`main` publicado como a release, perfil novo): **0 pedidos** em 60 s de nova aba + 60 s de página

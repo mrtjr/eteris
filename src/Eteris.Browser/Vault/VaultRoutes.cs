@@ -383,6 +383,7 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
     {
         CsvFileError.TooLarge => "O ficheiro tem mais de 1000 KiB (o limite do Chrome): divida-o ou exporte só uma parte.",
         CsvFileError.TooManyRows => $"O ficheiro tem mais de {PasswordCsv.MaxRows} linhas (o limite do Chrome).",
+        CsvFileError.NotUtf8 => "O ficheiro não está em UTF-8: exporte-o outra vez do navegador ou grave-o em UTF-8.",
         _ => "Não é um ficheiro de palavras-passe: faltam as colunas do endereço, do utilizador ou da palavra-passe.",
     });
 

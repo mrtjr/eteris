@@ -15,7 +15,7 @@ public static class Bangs
         new("r", new("Reddit", "https://www.reddit.com/search/?q={q}"), "https://www.reddit.com/"),
         new("so", new("Stack Overflow", "https://stackoverflow.com/search?q={q}"), "https://stackoverflow.com/"),
         new("mdn", new("MDN", "https://developer.mozilla.org/pt-BR/search?q={q}"), "https://developer.mozilla.org/"),
-        new("g", new("Google", "https://www.google.com/search?q={q}"), "https://www.google.com/"),
+        new("g", SearchEngine.Google, "https://www.google.com/"),
         new("b", SearchEngine.Brave, "https://search.brave.com/"),
         new("ddg", SearchEngine.DuckDuckGo, "https://duckduckgo.com/"),
         new("sp", SearchEngine.Startpage, "https://www.startpage.com/"),

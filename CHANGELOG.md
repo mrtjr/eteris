@@ -27,6 +27,27 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 - As Novidades separam os destaques da versão em curso dos das versões anteriores com uma divisória «Versões anteriores» (a etiqueta «Versão» já não cobre destaques de outras versões). O destaque «Janela minimizada não gasta» deixa de citar os números «6,47% → 0,59% de um núcleo» até a prova 6 de `build/perf/README.md` ser repetida na publicação final. O README diz que o Espreitar não deixa rasto no histórico (a página é pedida ao site) e marca o DNS cifrado e o apagar dados ao fechar como opcionais.
 - A promessa «DNS cifrado», em `eteris://privacy/`, diz agora que foi pedido ao motor no arranque e que o Éteris não lê o estado em vigor: num PC gerido (domínio, Entra ID ou controlo parental) o Chromium pode desligar o DNS cifrado. A linha mantém o ✔ com esta ressalva; a medição num PC gerido ainda não foi feita.
 
+### Conta e sincronização
+
+- **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
+
+### Pesquisa
+
+- O Google passa a ser uma das escolhas de motor de pesquisa nas Definições › Pesquisa (o padrão continua a ser o DuckDuckGo). Com ele, as pesquisas vão para a Google, que as pode juntar à sua conta Google se tiver sessão iniciada nela; o que escreve na barra não lhe é enviado enquanto escreve, só a pesquisa feita. As Boas-vindas continuam a oferecer só o DuckDuckGo, o Brave e o Startpage.
+
+### Correções
+
+- «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
+- Uma conversão escrita com algarismos de outro alfabeto (ou uma conta colada com milhares de parênteses) na barra de endereço já não fecha o Éteris.
+- Escrever no filtro das abas verticais já não muda de aba nem deixa a janela sem aba ativa: só o Enter salta para o primeiro resultado.
+- Mudar a palavra-passe de uma conta guardada com uma gerada pelo Éteris já não deixa dois itens para o mesmo site e utilizador.
+- Importar palavras-passe e escolher as do ficheiro já não apaga a nota do item guardado.
+- Importar um CSV de palavras-passe gravado noutra codificação (por exemplo, pelo Excel) é recusado com uma explicação, em vez de guardar palavras-passe com os acentos trocados.
+- Um corte de energia a meio de uma gravação já não repõe as definições nem a sessão em silêncio: fica uma cópia anterior (`.bak`), o ficheiro danificado é guardado (`.corrupt`) e o Éteris avisa.
+- Se a base de dados do perfil estiver danificada, o Éteris guarda-a à parte, começa uma nova e avisa, em vez de mostrar favoritos e histórico vazios sem explicação; se estiver só ocupada, volta a tentar.
+- Fechar uma janela já não deixa o temporizador do sono das abas a correr até o Éteris sair (a janela fechada ficava na memória).
+- Abas e janelas fechadas (as privadas incluídas) deixam de ficar na memória do Éteris até ele sair.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

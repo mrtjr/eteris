@@ -33,7 +33,6 @@ public class CofreFillTests
             const ok = C.fillField(f, 'Inventada-1!');
             print(ok + ' ' + calls.join(','));
             """);
-        if (output is null) return;
         Assert.Equal("true foco:pw,nativo:pw,input:true:Inventada-1!,change:true", output);
     }
 
@@ -43,7 +42,6 @@ public class CofreFillTests
         var output = CofreClassifierTests.Run(Setup + """
             print([C.fillField({ focus() {} }, 'x'), C.fillField(null, 'x'), C.fillField(new Field('a'), 42)].join(','));
             """);
-        if (output is null) return;
         Assert.Equal("false,false,false", output);
     }
 
@@ -58,7 +56,6 @@ public class CofreFillTests
             const plan = C.fillPlan(kinds, visible, { username: 'ana', password: 'Inventada-1!' });
             print(JSON.stringify(plan));
             """);
-        if (output is null) return;
         Assert.Equal("""[[0,"ana"],[1,"Inventada-1!"]]""", output);
     }
 
@@ -69,7 +66,6 @@ public class CofreFillTests
         var output = CofreClassifierTests.Run("""
             print(JSON.stringify(C.fillPlan(['username', 'password', 'new-password', 'new-password'], [true, true, true, true], { 'new-password': 'Gerada-1' })));
             """);
-        if (output is null) return;
         Assert.Equal("""[[2,"Gerada-1"],[3,"Gerada-1"]]""", output);
     }
 
@@ -93,7 +89,6 @@ public class CofreFillTests
                   JSON.stringify(C.fillPlan(['username', 'password'], [true, true], { username: '', password: 'x' })) + ' ' +
                   JSON.stringify(C.fillPlan(['username'], [true], { username: 'ana', password: 'x' })));
             """);
-        if (output is null) return;
         Assert.Equal("""[[1,"x"]] [[1,"x"]] [[0,"ana"]]""", output);
     }
 }

@@ -156,7 +156,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $runtime 'manifest.json'))) { Fail "
 if (-not (Test-Path -LiteralPath (Join-Path $runtime 'bootstrap.exe'))) { Fail "o runtime do motor não tem o bootstrap.exe (build/cef-codecs/build.ps1)" }
 $motor = Get-Content -LiteralPath (Join-Path $runtime 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($motor.cefsharp -ne $Official) { Fail "o motor é para o CefSharp $($motor.cefsharp), este script compila o $Official" }
-foreach ($tool in 'git', 'cmake', 'dotnet') { if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "falta $tool no PATH" } }
+foreach ($tool in 'git', 'cmake', 'dotnet', 'node') { if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "falta $tool no PATH" } }
 if (-not $SkipCefSharp) {
   if (-not (Test-Path -LiteralPath $vcvars)) { Fail "faltam as Build Tools do Visual Studio 2022 ($vcvars)" }
   if (-not (@(& dotnet --list-sdks) -match '^9\.')) { Fail 'falta o SDK do .NET 9 (o C++/CLI do CefSharp compila com ele: build/cefsharp/README.md)' }

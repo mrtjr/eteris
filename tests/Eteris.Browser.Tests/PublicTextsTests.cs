@@ -55,18 +55,18 @@ public class PublicTextsTests
         yield return ("CHANGELOG 0.2.15", Flat(ChangelogEntry()));
     }
 
-    // R12: a 0.2.17 está por publicar (sem data) e vem por cima da 0.2.16, a última publicada, e da 0.2.15; a história fica como
-    // estava.
+    // R12: a 0.2.16 é a última versão publicada, com a data da publicação, logo seguida da 0.2.15; por cima dela só podem
+    // estar secções por publicar, e a história fica como estava.
     [Fact]
     public void Changelog_LeadsWithTheCurrentVersion_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
-        Assert.Equal("## 0.2.17 — por publicar", headings[0]);
-        Assert.Equal("## 0.2.16 — 2026-11-12", headings[1]);
-        Assert.Equal("## 0.2.15 — 2026-11-12", headings[2]);
-        Assert.Equal("## 0.2.14 — 2026-11-09", headings[3]);
-        Assert.Single(headings, l => l.StartsWith("## 0.2.17", StringComparison.Ordinal));
+        var i = headings.IndexOf("## 0.2.16 — 2026-11-12");
+        Assert.True(i >= 0, "sem a entrada 0.2.16");
+        Assert.All(headings.Take(i), h => Assert.EndsWith("— por publicar", h));
+        Assert.Equal("## 0.2.15 — 2026-11-12", headings[i + 1]);
+        Assert.Equal("## 0.2.14 — 2026-11-09", headings[i + 2]);
         Assert.Single(headings, l => l.StartsWith("## 0.2.16", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.15", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.14", StringComparison.Ordinal));
@@ -254,7 +254,8 @@ public class PublicTextsTests
             Assert.DoesNotMatch(@"\bEdge\b", h.Title + " " + h.Detail);
         Assert.DoesNotMatch(@"\bEdge\b", ChangelogEntry());
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
-        Assert.DoesNotMatch(@"\bEdge\b", log[..log.IndexOf("\n## 0.2.16", StringComparison.Ordinal)]);
+        var current = log[..log.IndexOf("## 0.2.16", StringComparison.Ordinal)];
+        Assert.DoesNotMatch(@"\bEdge\b", current);
     }
 
     private static readonly Regex Address = new(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", RegexOptions.Compiled);

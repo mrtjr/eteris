@@ -44,7 +44,8 @@ pelo pipeline de entrada do motor e enviados com Enter (dados inventados; cartã
 Testes: `Vault/PrivacyPreferencesGuardTests` (as quatro preferências do gestor e do preenchimento do Chromium
 continuam `false`, a verificação de fugas desligada e lida do perfil, o interruptor do motor, a promessa),
 `EngineHardeningTests.Build_FixesEverySwitchThatKeepsTheEngineQuiet` (lista inteira do `disable-features`) e
-`EngineFeatureNamesTests` (`AutofillServerCommunication` é uma `base::Feature` do `libcef.dll` em uso).
+`EngineFeatureNamesTests` (`AutofillServerCommunication` é uma `base::Feature` do `libcef.dll` do NuGet
+e, quando existe, do da compilação própria, `build/cef-codecs/out/runtime`).
 `eteris://privacy/` › «Sem tráfego de fundo da Google nem do Chromium» passa a dizer também os formulários e fica ✘ (a dizer
 o quê) se a verificação de fugas estiver ligada no perfil ou se faltar o interruptor.
 

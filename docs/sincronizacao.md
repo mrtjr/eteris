@@ -209,7 +209,8 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
 - **Dois computadores a criar a conta ao mesmo tempo** (Drive vazio para os dois): na primeira meia hora, enquanto
   estiver sozinho na conta que criou, cada um confere se há outra; a de identificador menor fica e o outro sai da sua
   (apaga-a do Drive) e volta a «escolher como entrar», sem perder nada deste computador.
-- **«Sair deste computador»** (Definições › Sincronização › Mais opções): a sincronização para neste computador e os
+- **«Sair deste computador»** (Definições › Sincronização › Mais opções e, desde a 0.2.17, o «Sair» à direita do
+  cartão da conta no menu ⋯; as duas pela mesma função, `SyncService.SignOutHere`): a sincronização para neste computador e os
   tokens e a conta guardada **deste computador** são apagados. «Sair deste computador» não revoga nada e não faz
   nenhum pedido à Google (zero pedidos de rede; teste `GoogleSyncTests.SignOutRoute_NeverRevokes`): os outros
   computadores continuam ligados. Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar
@@ -586,6 +587,16 @@ Definições › Sincronização («Ligado como *nome* (*e-mail*) ao Google Driv
   linha da conta é a primeira paragem; aberto com o rato, o foco fica em «Nova aba», para o convite não aparecer
   realçado em cada abertura. O menu cresce até à altura da janela (sem o antigo teto fixo de 665 px, o menu inteiro
   com a linha da conta cabe numa janela normal) e, numa janela baixa, a barra de deslocamento tem as cores do tema.
+  **Desde a 0.2.17, com sessão, há um «Sair» à direita do cartão** (ao lado, não dentro: o clique nele não abre as
+  Definições). Não aparece no convite «Entrar», nas janelas privadas nem na pasta de teste, e fica desativado enquanto
+  corre outra saída da conta (a dica e o leitor de ecrã dizem porquê). Sai em dois passos: o 1.º toque troca o texto
+  por «Confirmar» (o menu fica aberto; um 2.º toque antes de meio segundo não conta, nem uma tecla mantida premida — a
+  repetição do Windows, pelo WPF ou vinda da página) e o 2.º sai deste computador como nas Definições, mas **nunca
+  apaga a chave** (`forgetKey: false`; para isso, as Definições), fecha o menu e avisa «Saiu da conta Google neste
+  computador. A chave da sincronização e os dados ficaram aqui.» (sem a 2.ª frase quando ainda não havia chave). Se
+  gravar o estado falhar, os tokens saem na mesma e o aviso di-lo. Nome acessível e dica: «Sair deste computador».
+  Pelo teclado, o cartão e o «Sair» são uma linha: → vai ao «Sair», ← volta ao cartão, ↓ segue para «Nova aba»; o Tab
+  e o leitor de ecrã vão do cartão para o «Sair»; a inicial chega ao cartão e não ao «Sair».
 - **Nas Definições** (0.2.15, mais curtas): sem sessão, o título, a frase «Os seus favoritos, palavras-passe e
   definições em todos os seus computadores, cifrados ponta a ponta.», o botão «Entrar com o Google» e a ligação «Como
   protegemos os seus dados» (para `eteris://privacy/#sincronizacao`, o bloco «Se ligar a sincronização», sempre à vista,

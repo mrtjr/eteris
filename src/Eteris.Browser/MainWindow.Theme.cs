@@ -48,6 +48,6 @@ public partial class MainWindow
         // As páginas internas abertas são geradas com o tema: recarregam para o acompanhar.
         if (IsPrivate) return;
         foreach (var (tab, browser) in _browsers)
-            if (tab.Address.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase) && !browser.IsDisposed) browser.Reload();
+            if (tab.Address.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase) && IsReady(browser)) browser.Reload();
     }
 }

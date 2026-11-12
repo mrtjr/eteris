@@ -341,7 +341,6 @@ public class VideoEngineTests
             const frame = run(false);
             print([top.join(','), frame.join(',')].join('\n'));
             """);
-        if (output is null) return;
         var lines = output.Split('\n');
         Assert.Equal("42.5,0", lines[0]); // o 1.º vídeo salta para 42,5 s; o 2.º fica no início
         Assert.Equal("0,0", lines[1]); // num iframe o script não faz nada
@@ -375,7 +374,7 @@ public class VideoEngineTests
         Assert.Contains("await EnsureVideoCosmeticsAsync(core, url, cosmeticHosts);", code);
     }
 
-    private static string? RunResume(string body)
+    private static string RunResume(string body)
     {
         var setup = """
             class HTMLMediaElement { constructor(duration) { this.duration = duration; this.currentTime = 0; } }
@@ -391,27 +390,7 @@ public class VideoEngineTests
               return media.map(m => m.currentTime);
             };
             """.Replace("SCRIPT", System.Text.Json.JsonSerializer.Serialize(VideoEngine.ResumeScript(42.5)));
-        var file = Path.Combine(Path.GetTempPath(), $"eteris-resume-{Guid.NewGuid():N}.js");
-        File.WriteAllText(file, setup + "\n" + body);
-        try
-        {
-            System.Diagnostics.Process? node;
-            try
-            {
-                node = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("node", [file])
-                {
-                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-                });
-            }
-            catch (System.ComponentModel.Win32Exception) { return null; } // Node não instalado: não há como verificar aqui.
-            if (node is null) return null;
-            var output = node.StandardOutput.ReadToEnd();
-            var error = node.StandardError.ReadToEnd();
-            node.WaitForExit(30_000);
-            Assert.True(node.ExitCode == 0, error);
-            return output.Replace("\r\n", "\n");
-        }
-        finally { File.Delete(file); }
+        return NodeRunner.Run(setup + "\n" + body);
     }
 
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

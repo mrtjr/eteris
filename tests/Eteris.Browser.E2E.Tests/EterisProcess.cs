@@ -87,7 +87,7 @@ public sealed class EterisProcess : IAsyncDisposable
             await Task.Delay(250);
         }
         if (_process.HasExited) throw new XunitException($"o processo saiu com o código {_process.ExitCode}");
-        throw new XunitException($"nenhuma página serviu em {timeout.TotalSeconds:0} s; vistas: " + (seen.Count == 0 ? "nenhuma" : string.Join(", ", seen)));
+        throw new XunitException($"nenhuma página serviu em {timeout.TotalSeconds:0} s (DevTools em 127.0.0.1:{_port}); vistas: " + (seen.Count == 0 ? "nenhuma" : string.Join(", ", seen)));
     }
 
     public async ValueTask DisposeAsync()
@@ -103,6 +103,7 @@ public sealed class EterisProcess : IAsyncDisposable
             }
         }
         catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { } // o Kill apanhou o processo já a sair
         finally { _process.Dispose(); }
 
         // O motor solta o perfil um pouco depois de o processo principal sair; se não der, a pasta fica.

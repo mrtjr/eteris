@@ -304,7 +304,8 @@ da 1.ª página desliga-os nessa versão, `PerfTuning.Suspend` pelo `StartupGuar
 omissão: o Graphite (e14.6) espera pela D-3 e, ligado, fica ✘ em `eteris://privacy/` («As afinações de desempenho não
 mudam o que os sites medem»).
 
-Os nomes verificam-se no `libcef.dll` em uso (`EngineFeatureNamesTests`: cada nome é uma `base::Feature`, com o estado por
+Os nomes verificam-se no `libcef.dll` do NuGet e, quando existe, no da compilação própria
+(`build/cef-codecs/out/runtime`) (`EngineFeatureNamesTests`: cada nome é uma `base::Feature`, com o estado por
 omissão que o plano conta; as `V8Flag_x` são flags do V8 e procura-se a flag). Cada uma mede-se com um braço próprio
 contra L1, por exemplo `@{ Nome = 'L1-e14.1'; Navegador = 'eteris'; Exe = '...'; Ambiente = @('ETERIS_TEST_AJUSTES=e14.1') }`,
 e confirma-se em `chrome://gpu` / `chrome://version` (com `ETERIS_TEST_DEVTOOLS_PORT`) que o motor a recebeu.

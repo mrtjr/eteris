@@ -54,11 +54,13 @@ public static class CefConfigurator
         settings.CefCommandLineArgs["disable-features"] = string.Join(',',
             new[]
                 {
-                    existing, "MediaRouter", "DialMediaRouteProvider", "CastMediaRouteProvider",
+                    // Saíram DialMediaRouteProvider, CastMediaRouteProvider, OptimizationHintsFetching,
+                    // OptimizationGuideModelDownloading e OptimizationGuideOnDeviceModel: não são base::Feature do motor
+                    // 156 (o Chromium ignorava-os). EngineFeatureNamesTests confere tudo o que aqui vai.
+                    existing, "MediaRouter",
                     // O «Optimization Guide» descarrega da Google, à margem do component updater, o manifesto dos
                     // modelos de IA no dispositivo (Gemini Nano/Gemma) e sugestões de otimização.
-                    "OptimizationHints", "OptimizationHintsFetching", "OptimizationGuideModelDownloading",
-                    "OptimizationGuideOnDeviceModel", "OnDeviceModelPerformanceParams",
+                    "OptimizationHints", "OnDeviceModelPerformanceParams",
                     // O «HTTPS primeiro» é do Éteris (Shields/HttpsFirst.cs, com aviso): o do Chromium subia o pedido
                     // antes de o tratador o ver e recuava em silêncio para http://. O recuo rápido (~3 s) que ele tinha
                     // é agora do Éteris: PrivacyRequestHandler.WatchUpgrade sonda o http:// e mostra o aviso (-7).

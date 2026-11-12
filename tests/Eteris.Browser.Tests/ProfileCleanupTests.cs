@@ -109,7 +109,7 @@ public sealed class ProfileCleanupTests : IDisposable
         Assert.Equal("1", args["disable-component-update"]);
         Assert.Equal("1", args["disable-background-networking"]);
         Assert.Equal("url-source=http://127.0.0.1:9/", args["component-updater"]);
-        Assert.Contains("OptimizationGuideModelDownloading", args["disable-features"]);
+        Assert.Contains("OptimizationHints", args["disable-features"]);
     }
 
     [Fact]
