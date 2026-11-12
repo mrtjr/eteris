@@ -563,7 +563,7 @@ public partial class MainWindow
         if (Tabs.Active is not { } tab) return;
         if (ActiveVideo is not { } view)
         {
-            ActiveBrowser?.Back();
+            ReadyBrowser?.Back();
             return;
         }
         if (view.CoreWebView2 is not { } core) return;
@@ -586,7 +586,7 @@ public partial class MainWindow
             if (view.CoreWebView2 is { CanGoForward: true } core) core.GoForward();
             return;
         }
-        if (ActiveBrowser is not { } browser) return;
+        if (ReadyBrowser is not { } browser) return;
         switch (tab.Crossing.Forward(inVideo: false, browser.CanGoForward))
         {
             case EngineCrossing.Step.InEngine:
@@ -601,7 +601,7 @@ public partial class MainWindow
     private void StopActive()
     {
         if (ActiveVideo?.CoreWebView2 is { } core) core.Stop();
-        else ActiveBrowser?.Stop();
+        else ReadyBrowser?.Stop();
     }
 
     private bool ReloadVideo()

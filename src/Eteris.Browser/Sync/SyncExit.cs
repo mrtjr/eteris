@@ -16,6 +16,15 @@ internal static class SyncExit
 
     public const string SignOutHelp = "Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar «Retirar o acesso».";
     public const string SignOutKeeps = "A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a chave».";
+    // O aviso depois do «Sair» do menu ⋯ (0.2.17; PROPOSTA): o menu nunca apaga a chave. Sem chave guardada (a sessão
+    // Google ainda não tinha juntado este computador à conta), não fala dela.
+    public const string SignOutDone = "Saiu da conta Google neste computador. A chave da sincronização e os dados ficaram aqui.";
+    public static string SignOutDoneText(bool hasKey) => hasKey ? SignOutDone : "Saiu da conta Google neste computador.";
+    // O «Sair» do menu desativado enquanto corre outra saída da conta nas Definições (e o porquê, na dica e para o
+    // leitor de ecrã).
+    public const string SignOutBusy = "Há uma saída da conta a decorrer nas Definições: espere que acabe.";
+    // Gravar o estado da sincronização falhou (ficheiro preso, disco cheio): os tokens da Google saíram na mesma.
+    public const string SignOutNotSaved = "Saiu da conta Google neste computador, mas não foi possível gravar o estado da sincronização. Confirme em Definições › Sincronização.";
 
     // ---- «Retirar o acesso» (título e texto do plano; o resto é PROPOSTA) ----------------------------------------------
 

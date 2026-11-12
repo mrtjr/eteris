@@ -24,7 +24,13 @@ public static class VaultKey
         var temp = path + ".novo";
         try
         {
-            File.WriteAllBytes(temp, protector.Protect(key));
+            // Descarregada para o disco antes de ganhar o nome: um corte de energia deixava-a vazia, com o cofre cifrado com ela.
+            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                var wrapped = protector.Protect(key);
+                stream.Write(wrapped, 0, wrapped.Length);
+                stream.Flush(flushToDisk: true);
+            }
             File.Move(temp, path, overwrite: false);
             return key;
         }

@@ -13,6 +13,9 @@ namespace Eteris.Browser.Tests.Vault;
 
 // B1 (docs/palavras-passe.md): a linha «Palavras-passe e preenchimento automático ›» no menu do Éteris, com o submenu
 // de cinco entradas (como o do Chrome), as Definições e a paleta.
+// Na coleção sem paralelismo: cada OnSta prende uma thread do pool enquanto espera pela thread STA, e as classes da
+// coleção correm depois da fase paralela.
+[Collection(WpfCollection.Name)]
 public class VaultMenuTests
 {
     // As cinco entradas do submenu, pela ordem do Chrome, cada uma com a página e a secção.

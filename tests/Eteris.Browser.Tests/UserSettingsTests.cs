@@ -1,5 +1,6 @@
 using System.IO;
 using Eteris.Browser.Data;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Omnibox;
 using Eteris.Browser.Tabs;
 
@@ -9,7 +10,13 @@ public sealed class UserSettingsTests : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), "eteris-settings-" + Guid.NewGuid() + ".json");
 
-    public void Dispose() => File.Delete(_path);
+    public void Dispose()
+    {
+        File.Delete(_path);
+        File.Delete(_path + ".tmp");
+        File.Delete(_path + ".bak");
+        File.Delete(_path + ".corrupt");
+    }
 
     [Fact]
     public void Defaults_ArePrivacyFirst()
@@ -87,6 +94,7 @@ public sealed class UserSettingsTests : IDisposable
     [Theory]
     [InlineData("engine", "brave")]
     [InlineData("engine", "startpage")]
+    [InlineData("engine", "google")]
     [InlineData("startup", "newtab")]
     [InlineData("sleep", "5")]
     [InlineData("sleep", "0")]
@@ -131,9 +139,52 @@ public sealed class UserSettingsTests : IDisposable
     [Theory]
     [InlineData("brave", "Brave Search")]
     [InlineData("startpage", "Startpage")]
+    [InlineData("google", "Google")]
     [InlineData("nope", "DuckDuckGo")]
     public void SearchEngine_ById(string id, string name)
         => Assert.Equal(name, SearchEngine.ById(id).Name);
+
+    // O Google é uma escolha, nunca o padrão; pesquisa em www.google.com e o atalho !g usa o mesmo motor.
+    [Fact]
+    public void Google_IsAChoice_NotTheDefault()
+    {
+        Assert.Equal("https://www.google.com/search?q=fado%20lisboa", SearchEngine.Google.UrlFor("fado lisboa"));
+        Assert.Equal(SearchEngine.DuckDuckGo, SearchEngine.Default);
+        Assert.Equal("duckduckgo", new UserSettings().SearchEngine);
+        Assert.Same(SearchEngine.Google, Bangs.Find("!g")!.Engine);
+    }
+
+    // Cada motor que as definições aceitam tem o seu botão nas Definições (e só esses), e o texto diz o que o Google faz
+    // com as pesquisas. As Boas-vindas dizem «Nenhum deles cria um perfil seu»: lá ficam só os motores que não o fazem.
+    [Fact]
+    public void EveryEngine_HasItsButtonInSettings_AndWelcomeKeepsOnlyThePrivateOnes()
+    {
+        var settings = Page("settings.html");
+        Assert.Equal(UserSettings.Engines.Order(), EngineButtons(settings).Order());
+        Assert.Contains("Com o Google, as pesquisas vão para a Google, que as guarda e as pode juntar à sua conta Google se tiver sessão iniciada nela neste navegador.", settings);
+        // As sugestões enquanto escreve só existem com o DuckDuckGo e o Brave (SearchSuggest.EndpointFor).
+        Assert.Contains("Só com o DuckDuckGo e o Brave.", settings);
+
+        var welcome = Page("welcome.html");
+        Assert.Equal(["brave", "duckduckgo", "startpage"], EngineButtons(welcome).Order());
+        Assert.Contains("Nenhum deles cria um perfil seu", welcome);
+    }
+
+    private static string Page(string name) => File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Browser", name));
+
+    private static IEnumerable<string> EngineButtons(string html)
+    {
+        var seg = System.Text.RegularExpressions.Regex.Match(html, "data-key=\"engine\"[^>]*>(?<b>.*?)</div>",
+            System.Text.RegularExpressions.RegexOptions.Singleline).Groups["b"].Value;
+        return System.Text.RegularExpressions.Regex.Matches(seg, "data-value=\"([a-z]+)\"").Select(m => m.Groups[1].Value);
+    }
+
+    private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
+    }
 
     [Fact]
     public void Sleep_NeverWhenThresholdIsZero()
@@ -142,6 +193,31 @@ public sealed class UserSettingsTests : IDisposable
     [Fact]
     public void Sleep_UsesCustomThreshold()
         => Assert.True(SleepPolicy.ShouldSleep(false, false, false, false, DateTime.UtcNow.AddMinutes(-6), DateTime.UtcNow, TimeSpan.FromMinutes(5)));
+    // DAD-07: um settings.json estragado repunha as predefinições (incluindo as de privacidade) em silêncio.
+    [Fact]
+    public void Load_Corrupt_UsesBakAndKeepsCorruptCopy()
+    {
+        var store = new SettingsStore(_path);
+        store.Save(new UserSettings { SearchEngine = "brave" });
+        store.Save(new UserSettings { SearchEngine = "startpage" });
+        File.WriteAllText(_path, "{ not json");
+        Assert.Equal("brave", store.Load().SearchEngine);
+        Assert.Equal(AtomicRead.FromBackup, store.LastLoad);
+        Assert.Equal("{ not json", File.ReadAllText(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void Save_AfterAnUnreadableLoad_SetsTheOldFileAside()
+    {
+        File.WriteAllText(_path, "{ not json");
+        var store = new SettingsStore(_path);
+        Assert.Equal(new UserSettings(), store.Load());
+        Assert.Equal(AtomicRead.Unreadable, store.LastLoad);
+        store.Save(new UserSettings { SearchEngine = "brave" });
+        Assert.Equal("{ not json", File.ReadAllText(_path + ".corrupt"));
+        Assert.Equal("brave", new SettingsStore(_path).Load().SearchEngine);
+    }
+
 }
 
 public class SettingsPageTests

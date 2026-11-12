@@ -56,4 +56,28 @@ public class InstantAnswerTests
         Assert.Equal("= 8", list[0].Text);
         Assert.Equal(SuggestionKind.Search, list[1].Kind);
     }
+
+    // NAV-06: a barra de endereço corre isto a cada letra, na thread da janela; qualquer exceção (ou uma pilha esgotada)
+    // fechava o Éteris inteiro.
+    [Theory]
+    [InlineData("１０ km em m")]
+    [InlineData("۱۰ km to mi")]
+    public void Convert_NonAsciiDigits_IsNull(string input)
+    {
+        Assert.Null(InstantAnswer.Convert(input));
+        Assert.Null(InstantAnswer.Answer(input));
+    }
+
+    [Fact]
+    public void Calculate_DeepNesting_IsNull()
+    {
+        Assert.Null(InstantAnswer.Calculate(new string('(', 100_000) + "1+1"));
+        Assert.Null(InstantAnswer.Calculate(new string('-', 100_000) + "1"));
+        Assert.Null(InstantAnswer.Calculate("2" + string.Concat(Enumerable.Repeat("^2", 100_000))));
+        Assert.Equal("2", InstantAnswer.Calculate(new string('(', 20) + "1+1" + new string(')', 20)));
+        Assert.Null(InstantAnswer.Calculate(new string('(', 40) + "1+1" + new string(')', 40)));
+    }
+
+    [Fact]
+    public void Answer_LongInput_IsNull() => Assert.Null(InstantAnswer.Answer("1+" + new string('1', InstantAnswer.MaxLength)));
 }

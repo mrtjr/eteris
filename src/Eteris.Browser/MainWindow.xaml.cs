@@ -113,6 +113,13 @@ public partial class MainWindow : Window
     private ChromiumWebBrowser? ActiveBrowser
         => Tabs.Active is { } tab && _browsers.TryGetValue(tab, out var browser) ? browser : null;
 
+    // O motor de uma aba acabada de acordar (ou de uma janela a fechar) ainda não está inicializado, ou já foi libertado:
+    // Voltar, Avançar, Parar, Recarregar e Imprimir sobre ele lançam, e num `async void` isso fechava o Éteris.
+    private ChromiumWebBrowser? ReadyBrowser
+        => ActiveBrowser is { IsDisposed: false, IsBrowserInitialized: true } browser ? browser : null;
+
+    private static bool IsReady(ChromiumWebBrowser browser) => !browser.IsDisposed && browser.IsBrowserInitialized;
+
     private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         // Mover não cria nem destrói abas: o item vem em OldItems e NewItems e não se pode recriar o browser. A aba
@@ -172,7 +179,7 @@ public partial class MainWindow : Window
             BirthSize = PageAreaPixels,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
-            KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromPage(key, ctrl, shift, alt, tab), KeyUpFromPage),
+            KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt, repeat) => ShortcutFromPage(key, ctrl, shift, alt, tab, repeat), KeyUpFromPage),
             FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
@@ -226,7 +233,7 @@ public partial class MainWindow : Window
                 chooseCertificate: AskClientCertificate),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
-        DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>
+        browser.AddressChanged += () =>
         {
             if (browser.Address is not string address) return;
             // Na página de erro a omnibox continua a mostrar o endereço que falhou, mas sem cadeado nem «Ligação segura»
@@ -264,7 +271,7 @@ public partial class MainWindow : Window
             // Depois do commit (o DevTools volta a entregar mensagens): os scripts do site atual ficam registados, e os
             // links dentro do mesmo site já os encontram.
             else if (browser.GetBrowser() is { } cef) _ = Task.Run(() => injector.EnsureHost(cef, address));
-        });
+        };
         browser.ConsoleMessage += (_, e) =>
         {
             // Chega na thread do CEF; as definições avisam a interface, por isso guarda-se na thread da janela.
@@ -472,7 +479,7 @@ public partial class MainWindow : Window
     // pedido sai. Nunca espera mais de 150 ms.
     private async Task ScriptsReadyFor(BrowserTab tab, ChromiumWebBrowser browser, string url)
     {
-        if (!_scriptlets.TryGetValue(tab, out var injector) || browser.IsDisposed || browser.GetBrowser() is not { } cef) return;
+        if (!_scriptlets.TryGetValue(tab, out var injector) || browser.IsDisposed || !browser.IsBrowserInitialized || browser.GetBrowser() is not { } cef) return;
         var ready = injector.EnsureHost(cef, url);
         if (!ready.IsCompleted) await Task.WhenAny(ready, Task.Delay(150));
     }
@@ -727,7 +734,7 @@ public partial class MainWindow : Window
         if (ctrl && shift && key == Key.O) return OpenBookmarks;
         if (ctrl && shift && key == Key.S) return () => CapturePage(fullPage: true);
         if (ctrl && key == Key.OemComma) return OpenSettings;
-        if (ctrl && key == Key.P) return () => ActiveBrowser?.Print();
+        if (ctrl && key == Key.P) return () => ReadyBrowser?.Print();
         if (ctrl && key is Key.OemPlus or Key.Add) return () => Zoom(1);
         if (ctrl && key is Key.OemMinus or Key.Subtract) return () => Zoom(-1);
         if (ctrl && key is Key.D0 or Key.NumPad0) return () => Zoom(0);
@@ -762,8 +769,8 @@ public partial class MainWindow : Window
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
     // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página:
     // decide BrowserMenuKeys.FromPage (puro) e o trabalho vai para a thread da janela. Não se lê nada do WPF aqui.
-    // from: a aba de onde veio a tecla (null: um site fixado na barra lateral).
-    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt, BrowserTab? from = null)
+    // from: a aba de onde veio a tecla (null: um site fixado na barra lateral). repeat: a tecla está a ser mantida premida.
+    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt, BrowserTab? from = null, bool repeat = false)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
@@ -771,6 +778,8 @@ public partial class MainWindow : Window
         if (_browserMenuOpenForPage)
         {
             var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null);
+            // Um Enter mantido premido não ativa nada no menu (o «Sair» pede dois toques deliberados): é consumido.
+            if (repeat && decision == BrowserMenuKey.Activate) return true;
             // Nenhuma tecla chega à página com o menu aberto, nem os modificadores sozinhos (como no Chrome).
             Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;

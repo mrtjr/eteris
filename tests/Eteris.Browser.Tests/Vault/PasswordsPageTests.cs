@@ -480,6 +480,19 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.Contains("1000 KiB", reply["message"]!.GetValue<string>());
     }
 
+    // VAU-12: um CSV noutra codificação (o Excel grava em Windows-1252) guardava palavras-passe com os acentos trocados.
+    [Fact]
+    public async Task Import_NotUtf8_Refused()
+    {
+        var csv = Path.Combine(_f.Root, "latin1.csv");
+        File.WriteAllBytes(csv, Encoding.Latin1.GetBytes("url,username,password\nhttps://a.exemplo.test,ana,Coração2024\n"));
+        _f.Host.ImportPath = csv;
+        var reply = VaultFixture.Json(await _f.Get("passwords", "/import"));
+        Assert.False(reply["ok"]!.GetValue<bool>());
+        Assert.Contains("UTF-8", reply["message"]!.GetValue<string>());
+        Assert.Empty(_f.Vault.Logins());
+    }
+
     // Exportar pede sempre o Windows Hello (sem janela de graça), depois o diálogo nativo; avisa numa pasta da nuvem.
     [Fact]
     public async Task Export_AlwaysReauth_ThenNativeDialog_CloudWarning()

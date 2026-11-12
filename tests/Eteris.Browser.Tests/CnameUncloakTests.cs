@@ -172,8 +172,8 @@ public class CnameUncloakTests
         var handler = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Shields", "PrivacyRequestHandler.cs"));
         Assert.Contains("var cache = Cname.For(isPrivate);", handler);
         Assert.DoesNotContain("Cname.Cache.", handler);
-        var ending = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Private.cs"));
-        Assert.Equal(2, ending.Split("Shields.Cname.PrivateCache.Clear();").Length - 1);
+        var ending = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Tabs", "PrivateSession.cs"));
+        Assert.Equal(1, ending.Split("Shields.Cname.PrivateCache.Clear();").Length - 1);
     }
 
     [Fact]

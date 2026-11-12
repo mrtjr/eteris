@@ -251,7 +251,7 @@ public partial class MainWindow
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.
         browser.FindHandler = NewFindHandler();
-        browser.KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromWebPanel(browser, key, ctrl, shift, alt), KeyUpFromPage);
+        browser.KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt, repeat) => ShortcutFromWebPanel(browser, key, ctrl, shift, alt, repeat), KeyUpFromPage);
         // O foco no painel: o campo do cofre da aba deixa de contar (as teclas da lista nunca vêm de um painel).
         browser.FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(ForgetVaultFocus));
         // Ecrã inteiro pedido pelo site (um vídeo): não cabe na barra — sai e diz como o ver numa aba.
@@ -335,10 +335,10 @@ public partial class MainWindow
             }));
 
     // Tecla premida com o foco num site fixado (thread do CEF).
-    private bool ShortcutFromWebPanel(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt)
+    private bool ShortcutFromWebPanel(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt, bool repeat)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
-        if (WebPanelKeys.Resolve(key, ctrl, shift, alt) is not { } command) return ShortcutFromPage(virtualKey, ctrl, shift, alt);
+        if (WebPanelKeys.Resolve(key, ctrl, shift, alt) is not { } command) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
         Dispatcher.InvokeAsync(() =>
         {

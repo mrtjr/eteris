@@ -119,6 +119,8 @@ internal static class SyncService
                 Changed?.Invoke();
                 if (first) NeedsSignIn?.Invoke();
             };
+            // As coleções cujo perfil local se pôs de lado voltam a fazer a «primeira junção» (ProfileRejoin).
+            ProfileRejoin.Apply(_agent);
             return _agent;
         }
     }
@@ -386,6 +388,18 @@ internal static class SyncService
         lock (Gate) Schedule.Stop();
         Arm();
     }
+
+    // «Sair deste computador», inteiro: a sincronização para aqui e os tokens e a conta guardada deste computador saem
+    // (na pasta de teste não há Google). O mesmo para a rota das Definições e para o «Sair» do menu ⋯. Se gravar o estado
+    // falhar (ficheiro preso, disco cheio), os tokens saem na mesma e a exceção segue para quem chamou.
+    public static void SignOutHere(bool forgetKey)
+    {
+        try { SignOut(forgetKey); }
+        finally { if (!FolderMode) GoogleSync.SignOut(); }
+    }
+
+    // Há uma chave da sincronização guardada neste computador (para o aviso do «Sair» do menu).
+    public static bool HasKey => Agent()?.HasKey == true;
 
     // ---- saídas da conta (0.2.15, T12): «Retirar o acesso», «Perdi um computador», «Começar do zero…» ---------------
 

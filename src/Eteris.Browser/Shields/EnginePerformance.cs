@@ -19,8 +19,9 @@ public sealed record EngineTweak(string Feature, string What, string Tweak, bool
 // promessas de Shields/EngineHardening.cs: entram pelo mesmo Merge (nunca substituem o enable-features) e cada uma fica
 // atrás do seu ajuste (Infrastructure/PerfTuning.cs), desligável sem compilar de novo; --eteris-sem-ajustes-motor desliga
 // a lista inteira (e o --eteris-sem-ajustes, tudo). Como nas listas de privacidade, cada nome tem de ser uma base::Feature
-// do libcef.dll em uso (EngineFeatureNamesTests, sem os parâmetros «:nome/valor»); os «V8Flag_x» não são base::Feature
-// (o gin passa-os ao V8 como --x) e o teste procura a flag do V8.
+// do libcef.dll do NuGet e, quando existe, do da compilação própria (build/cef-codecs/out/runtime)
+// (EngineFeatureNamesTests, sem os parâmetros «:nome/valor»); os «V8Flag_x» não são base::Feature (o gin passa-os ao V8
+// como --x) e o teste procura a flag do V8.
 //
 // Porquê: a nossa CEF compila com is_official_build, que força disable_fieldtrial_testing_config (cef/tools/gn_args.py):
 // tudo o que o Chrome estável liga por variações (Finch) fica desligado no Éteris. As entradas vêm da configuração de

@@ -166,7 +166,8 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    **Prova da marca da Web (desde a 0.2.17, antes do pacote):** com a publicação a correr, transferir um ficheiro na
    janela normal e na privada e correr `Get-Content <ficheiro> -Stream Zone.Identifier`; esperado `ZoneId=3`. Sem a
    marca, o SmartScreen e o Office deixam de avisar ao abrir o que veio da Internet: não empacotar.
-3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --token … --outputDir Releases` — o pacote delta tem
+3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --outputDir Releases` (o repositório é público: não
+   precisa de token) — o pacote delta tem
    de partir do pacote `full` **publicado**: a pasta `Releases` não pode ter um `full` local da mesma versão que não
    seja o do GitHub (na 0.2.9 o `0.2.8-full` local era outro; os pacotes locais antigos foram guardados à parte).
 4. `.\build\pack.ps1 -Version X.Y.Z` → `full`, `delta`, `Setup`, `Portable`, `releases.win.json` e `RELEASES`. Só
@@ -194,8 +195,9 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
 6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
    (compilar e testes, sem pack nem upload).
 7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z
-   --token … --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo
-   (`$env:GH_TOKEN = (gh auth token)`), nunca em ficheiros.
+   --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo, nunca em
+   ficheiros nem na linha de comandos: `$env:VPK_TOKEN = (gh auth token)` antes e `Remove-Item Env:VPK_TOKEN` depois (o
+   `vpk` lê o `VPK_TOKEN` em vez do `--token`; o `GH_TOKEN` não lhe chega). Assim saiu a 0.2.16.
 8. `.\build\release.ps1 -Version X.Y.Z -Key <chave.pem>` (docs/atualizacoes.md): recusa enquanto o CI do commit da
    etiqueta não estiver verde (o fluxo `build` incluído), confere o `releases.win.json` do rascunho (o que o
    `vpk upload github` gerou, só com os pacotes desta versão) com os pacotes de `Releases\` desta máquina, assina os bytes
@@ -210,7 +212,9 @@ tem a chave). Sai com o runtime do NuGet, sem codecs e sem sandbox
 (`publish.ps1 -NoSandbox`: o CI não tem o motor próprio, que traz o bootstrap, nem o CefSharp com o patch) e sem login
 Google (`pack.ps1 -NoSandbox -SemLogin`: o `google-oauth.json` nunca está no repositório): a sonda do arranque
 (`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
-antes da 0.2.9. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
+antes da 0.2.9. Só serve para tags com `global.json` (as tags até à v0.2.16 não o têm): o fluxo corre os passos de
+hoje sobre a árvore da tag e o `setup-dotnet` lê dela a versão do SDK, por isso numa tag sem ele o job pára logo a
+seguir ao checkout e publica-se a partir de uma tag nova. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
 dono e o CI descarregá-lo e verificá-lo pelo SHA256 do manifesto; um runner próprio com o checkout em `C:\cef`.
 
 **Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem

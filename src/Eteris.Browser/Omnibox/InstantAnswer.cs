@@ -8,14 +8,18 @@ public static partial class InstantAnswer
 {
     private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-PT");
 
-    public static string? Answer(string input) => Calculate(input) ?? Convert(input);
+    // Acima disto não há conta nem conversão: a barra de endereço corre isto a cada letra, e um texto colado enorme não
+    // deve custar nada.
+    public const int MaxLength = 200;
+
+    public static string? Answer(string input) => input.Length > MaxLength ? null : Calculate(input) ?? Convert(input);
 
     // ---------- Contas ----------
 
     public static string? Calculate(string input)
     {
         var text = input.Trim().TrimStart('=').Trim().ToLowerInvariant();
-        if (text.Length == 0 || !text.Any(char.IsDigit)) return null;
+        if (text.Length == 0 || !text.Any(char.IsAsciiDigit)) return null;
         if (!HasOperation().IsMatch(text)) return null;
         if (Regex.Replace(text, "sqrt|pi", "").Any(char.IsLetter)) return null;
 
@@ -27,6 +31,16 @@ public static partial class InstantAnswer
     private sealed class Parser(string text)
     {
         private int _i;
+
+        // Cada nível de parênteses custa 2 (Power e Unary), cada «-» ou «^» encadeado custa 1: sem este limite, 100 000
+        // sinais ou parênteses esgotavam a pilha e fechavam o Éteris (uma pilha esgotada não se apanha).
+        private int _depth;
+        private const int MaxDepth = 64;
+
+        private void Enter()
+        {
+            if (++_depth > MaxDepth) throw new FormatException();
+        }
 
         public double? Parse()
         {
@@ -68,17 +82,27 @@ public static partial class InstantAnswer
 
         private double Power()
         {
-            var value = Unary();
-            return Take('^') ? Math.Pow(value, Power()) : value;
+            Enter();
+            try
+            {
+                var value = Unary();
+                return Take('^') ? Math.Pow(value, Power()) : value;
+            }
+            finally { _depth--; }
         }
 
         private double Unary()
         {
-            if (Take('-')) return -Unary();
-            if (Take('+')) return Unary();
-            var value = Primary();
-            while (Take('%')) value /= 100;
-            return value;
+            Enter();
+            try
+            {
+                if (Take('-')) return -Unary();
+                if (Take('+')) return Unary();
+                var value = Primary();
+                while (Take('%')) value /= 100;
+                return value;
+            }
+            finally { _depth--; }
         }
 
         private double Primary()
@@ -101,7 +125,7 @@ public static partial class InstantAnswer
 
             var start = _i;
             var separators = 0;
-            while (_i < text.Length && (char.IsDigit(text[_i]) || text[_i] is '.' or ','))
+            while (_i < text.Length && (char.IsAsciiDigit(text[_i]) || text[_i] is '.' or ','))
             {
                 if (text[_i] is '.' or ',') separators++;
                 _i++;
@@ -169,7 +193,7 @@ public static partial class InstantAnswer
         if (!Units.TryGetValue(match.Groups[3].Value.Replace(" ", ""), out var to)) return null;
         if (from.Dimension != to.Dimension) return null;
 
-        var value = double.Parse(match.Groups[1].Value.Replace(',', '.'), CultureInfo.InvariantCulture);
+        if (!double.TryParse(match.Groups[1].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) return null;
         var result = from.Dimension == "temperature" ? ConvertTemperature(value, from.Symbol, to.Symbol) : value * from.Factor / to.Factor;
         return Format(result, 2) + " " + to.Symbol;
     }
@@ -190,6 +214,6 @@ public static partial class InstantAnswer
     [GeneratedRegex(@"[-+*/^%×÷]|sqrt")]
     private static partial Regex HasOperation();
 
-    [GeneratedRegex(@"^(-?\d+(?:[.,]\d+)?)\s*(°?\s*[a-zA-Zçãéó]+)\s+(?:em|to|in|para)\s+(°?\s*[a-zA-Zçãéõó]+)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(-?[0-9]+(?:[.,][0-9]+)?)\s*(°?\s*[a-zA-Zçãéó]+)\s+(?:em|to|in|para)\s+(°?\s*[a-zA-Zçãéõó]+)$", RegexOptions.IgnoreCase)]
     private static partial Regex ConversionPattern();
 }

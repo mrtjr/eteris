@@ -11,7 +11,7 @@ namespace Eteris.Browser.Data;
 // são escritas, como na leitura por reflexão. Ninguém as muda depois: as alterações passam pelo With (cópias com with).
 public sealed record UserSettings
 {
-    public static readonly string[] Engines = ["duckduckgo", "brave", "startpage"];
+    public static readonly string[] Engines = ["duckduckgo", "brave", "startpage", "google"];
     public static readonly int[] SleepChoices = [0, 5, 20, 60];
     public static readonly string[] NewTabThemes = ["aurora", "ocean", "sunset", "forest", "minimal"];
 
@@ -164,10 +164,18 @@ public sealed class SettingsStore(string path)
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
+    // Como a última leitura correu (nenhuma escrita a muda); Missing até à 1.ª leitura.
+    public Infrastructure.AtomicRead LastLoad { get; private set; } = Infrastructure.AtomicRead.Missing;
+
+    private bool _setAside;
+
+    // Um ficheiro danificado volta da cópia anterior (settings.json.bak) e fica em .corrupt; sem cópia que sirva, valem as
+    // predefinições e o ficheiro antigo fica guardado na 1.ª gravação (Save).
     public UserSettings Load()
     {
-        try { return File.Exists(path) ? Migrate(Read(File.ReadAllText(path)) ?? new()) : new(); }
-        catch (Exception) { return new(); }
+        var read = Infrastructure.AtomicFile.ReadText(path, Read, out var outcome);
+        LastLoad = outcome;
+        return Migrate(read ?? new());
     }
 
     // Ajuste e12: lida com o código gerado (Data/StartupJson.cs); sem ele, por reflexão, como sempre. O mesmo resultado.
@@ -180,11 +188,17 @@ public sealed class SettingsStore(string path)
     public static UserSettings Migrate(UserSettings settings)
         => !settings.SiteLanguageChosen && settings.SiteLanguage == "pt-PT" ? settings with { SiteLanguage = "system" } : settings;
 
+    // Descarregado para o disco e com a versão anterior em settings.json.bak. O que não se leu nunca se grava por cima:
+    // depois de um Unreadable, a 1.ª gravação põe o ficheiro antigo em .corrupt (se não conseguir, lança).
     public void Save(UserSettings settings)
     {
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(settings, Options));
-        File.Move(temp, path, overwrite: true);
+        var json = JsonSerializer.Serialize(settings, Options);
+        if (LastLoad == Infrastructure.AtomicRead.Unreadable && !_setAside)
+        {
+            Infrastructure.AtomicFile.SetAside(path);
+            _setAside = true;
+        }
+        Infrastructure.AtomicFile.WriteText(path, json, backup: true);
     }
 }
 
@@ -238,6 +252,24 @@ public static class Settings
     {
         get { lock (Gate) return _current ??= Store.Load(); }
     }
+
+    // Como o settings.json se leu no arranque (danificado, lido da cópia anterior…); vale até o Éteris fechar.
+    public static Infrastructure.AtomicRead LoadOutcome
+    {
+        get
+        {
+            lock (Gate)
+            {
+                _ = Current;
+                return Store.LastLoad;
+            }
+        }
+    }
+
+    // O settings.json existia e não se leu: as predefinições em uso não são escolhas do utilizador e não seguem para os
+    // outros aparelhos (a sincronização trataria as gravadas por cima como alterações locais). Vale até o Éteris fechar,
+    // mesmo depois de gravar.
+    public static bool Unreadable => LoadOutcome == Infrastructure.AtomicRead.Unreadable;
 
     public static bool Set(string key, string value)
     {

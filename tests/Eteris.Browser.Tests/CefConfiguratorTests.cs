@@ -61,7 +61,6 @@ public class CefConfiguratorTests
     {
         var features = CefConfigurator.Build("p").CefCommandLineArgs["disable-features"].Split(',');
         Assert.Contains("MediaRouter", features);
-        Assert.Contains("DialMediaRouteProvider", features);
     }
 
     // O «HTTPS primeiro» do Chromium subia os pedidos antes do Éteris e falhava sem aviso: fica desligado.

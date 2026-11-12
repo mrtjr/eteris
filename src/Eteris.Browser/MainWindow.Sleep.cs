@@ -72,8 +72,13 @@ public partial class MainWindow
             CreateBrowser(sleeping);
         }
 
-        _sleepTimer ??= new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, (_, _) => SleepIdleTabs(), Dispatcher);
-        _sleepTimer.Start();
+        if (_sleepTimer is null)
+        {
+            // O construtor com tratador já o liga. Parado no fecho: um temporizador ligado fica na lista do Dispatcher e
+            // segurava a janela fechada até o Éteris sair (e uma troca de aba depois de fechar não o volta a ligar).
+            _sleepTimer = new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, (_, _) => SleepIdleTabs(), Dispatcher);
+            Closed += (_, _) => _sleepTimer.Stop();
+        }
         // Ajuste e13: o sono por pressão de memória, um só para todas as janelas (MainWindow.Pressure.cs).
         WatchMemoryPressure();
     }

@@ -10,17 +10,25 @@ public partial class MainWindow
     private async void ReloadActive(bool ignoreCache = false)
     {
         if (ReloadVideo()) return;
-        if (Tabs.Active is not { } tab || ActiveBrowser is not { } browser) return;
-        // Recarregar volta a perguntar pela rede local (um «Bloquear» por engano não fica sem saída nesta janela).
-        if (Shields.LocalNetwork.SiteOf(tab.Address) is { } site) _localNetworkAsked.Remove(site);
-        await ScriptsReadyFor(tab, browser, tab.Address);
-        if (browser.IsDisposed) return;
-        // Só um endereço http, https ou de ficheiro volta a abrir; sem alvo válido recarrega-se a própria página de erro.
-        if (ErrorPage.ReloadTarget(browser.Address ?? string.Empty) is { } target)
+        // Uma aba acabada de acordar já está a carregar o seu endereço: sem motor pronto, não há nada a recarregar.
+        if (Tabs.Active is not { } tab || ReadyBrowser is not { } browser) return;
+        try
         {
-            browser.Load(target);
-            return;
+            // Recarregar volta a perguntar pela rede local (um «Bloquear» por engano não fica sem saída nesta janela).
+            if (Shields.LocalNetwork.SiteOf(tab.Address) is { } site) _localNetworkAsked.Remove(site);
+            await ScriptsReadyFor(tab, browser, tab.Address);
+            if (!IsReady(browser)) return;
+            // Só um endereço http, https ou de ficheiro volta a abrir; sem alvo válido recarrega-se a própria página de erro.
+            if (ErrorPage.ReloadTarget(browser.Address ?? string.Empty) is { } target)
+            {
+                browser.Load(target);
+                return;
+            }
+            browser.Reload(ignoreCache);
         }
-        browser.Reload(ignoreCache);
+        catch (Exception)
+        {
+            // `async void`: uma exceção aqui fechava o Éteris.
+        }
     }
 }

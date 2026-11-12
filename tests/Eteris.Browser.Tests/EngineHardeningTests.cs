@@ -46,9 +46,8 @@ public class EngineHardeningTests
         Assert.Equal(
             new[]
             {
-                "MediaRouter", "DialMediaRouteProvider", "CastMediaRouteProvider",
-                "OptimizationHints", "OptimizationHintsFetching", "OptimizationGuideModelDownloading",
-                "OptimizationGuideOnDeviceModel", "OnDeviceModelPerformanceParams", "HttpsUpgrades",
+                "MediaRouter",
+                "OptimizationHints", "OnDeviceModelPerformanceParams", "HttpsUpgrades",
                 "BrowsingTopics", "Fledge", "ConversionMeasurement", "FencedFrames",
                 "PrivacySandboxAdsAPIsOverride", "PrivacySandboxAdsAPIsM1Override",
                 "WebRtcHideLocalIpsWithMdns",
