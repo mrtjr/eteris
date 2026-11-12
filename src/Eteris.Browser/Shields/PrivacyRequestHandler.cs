@@ -516,7 +516,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                             using var frame = browser.MainFrame;
                             if (frame is null || !frame.IsValid) return;
                             using var probe = frame.CreateRequest(false);
-                            probe.Url = original;
+                            probe.Url = HttpsFirst.ProbeUrl(original);
                             probe.Method = "HEAD";
                             probe.Flags = UrlRequestFlags.StopOnRedirect | UrlRequestFlags.SkipCache;
                             var client = new HttpProbe((status, location) =>

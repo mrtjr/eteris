@@ -10,6 +10,7 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 - «Apagar cookies e dados de sites ao fechar» apaga agora o armazenamento dos sites (Local Storage, IndexedDB, Service Workers…) e o ficheiro dos cookies já ao fechar o Éteris, com o motor acabado de fechar; antes só o fazia no arranque seguinte, e os dados ficavam no disco entretanto. A limpeza do arranque mantém-se como garantia.
 - O que se apaga do histórico deixa de se poder ler no ficheiro `eteris.db`: o Éteris passa a apagar com `secure_delete` (o texto apagado é substituído por zeros) em todas as ligações dos armazéns com endereços, compacta o ficheiro depois de «Apagar tudo» e uma vez ao sair do Éteris, para limpar o que as versões anteriores deixaram, e repete o esvaziamento do registo antecipado quando a base está ocupada. Antes, endereços e títulos apagados podiam continuar legíveis no ficheiro.
 - Numa janela privada, «Ler mais tarde» deixa de aparecer e de gravar, no menu da página e na paleta de comandos (como já era no Espreitar e na barra lateral): a lista de leitura do perfil não recebe nada do que se lê em privado. E o selo «Motor de vídeo» numa janela privada já não apaga do perfil o site lembrado; a escolha fica só em memória até a janela fechar.
+- A sondagem do «HTTPS primeiro» pergunta agora só pela origem do site (anfitrião e porta): o pedido em claro que o Éteris faz por `http://` enquanto o `https://` não responde deixa de levar o caminho, os parâmetros e as credenciais do endereço antes de aceitares o `http://`.
 
 ## 0.2.16 — 2026-11-12
 
