@@ -143,9 +143,11 @@ try {
   }
 
   # 2. Os fluxos do CI desse commit.
-  $runsJson = Native-Out "gh" @("run", "list", "--repo", $Repo, "--commit", $commit, "--json", "workflowName,status,conclusion", "--limit", "50")
+  $runsJson = Native-Out "gh" @("run", "list", "--repo", $Repo, "--commit", $commit, "--json", "workflowName,event,status,conclusion", "--limit", "50")
   if ($null -eq $runsJson) { throw "não consegui ler os fluxos do GitHub Actions para o commit $(Short $commit) (gh run list)" }
-  $runs = @(($runsJson | ConvertFrom-Json) | ForEach-Object { $_ })
+  # As execuções «dinâmicas» do GitHub (event dynamic, como as «Dependabot Updates») não são o CI deste código: correm
+  # sozinhas nos commits do main e uma falha delas não pode bloquear a release.
+  $runs = @(($runsJson | ConvertFrom-Json) | ForEach-Object { $_ } | Where-Object { $_.event -ne "dynamic" })
   $running = @($runs | Where-Object { $_.status -ne "completed" })
   if ($running.Count -gt 0) { throw "há fluxos ainda a correr para o commit $(Short $commit): $(($running | ForEach-Object { $_.workflowName }) -join ', '); espere que acabem" }
   $failed = @($runs | Where-Object { $_.conclusion -ne "success" -and $_.conclusion -ne "skipped" })

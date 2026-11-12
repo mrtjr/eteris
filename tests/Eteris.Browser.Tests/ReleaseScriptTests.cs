@@ -117,6 +117,22 @@ public class ReleaseScriptTests
     public async Task Release_WithAFailedOrRunningWorkflow_Refuses(string runs, string expected)
         => AssertRefused(await RunReleaseAsync(new Scenario { RunsJson = runs }), expected);
 
+    // As execuções «dinâmicas» do GitHub (event dynamic: as «Dependabot Updates», que correm sozinhas nos commits do main)
+    // não são o CI deste código: uma falhada ou cancelada não pode bloquear a release, sem saída a não ser um commit novo.
+    // O CI do próprio commit (build, release, e2e) continua a contar.
+    [Fact]
+    public async Task Release_IgnoresDynamicRuns_LikeDependabotUpdates()
+    {
+        const string runs = """[{"workflowName":"build","event":"push","status":"completed","conclusion":"success"},{"workflowName":"Dependabot Updates","event":"dynamic","status":"completed","conclusion":"failure"},{"workflowName":"Dependabot Updates","event":"dynamic","status":"in_progress","conclusion":""}]""";
+        var run = await RunReleaseAsync(new Scenario { RunsJson = runs });
+        Assert.True(run.ExitCode == 0, "o release.ps1 não publicou por causa de uma execução do Dependabot; saída: " + run.Output);
+        Assert.True(run.EditLine >= 0, "o release.ps1 não publicou");
+    }
+
+    [Fact]
+    public async Task Release_StillRefusesAFailedPushRun_EvenNextToDynamicOnes()
+        => AssertRefused(await RunReleaseAsync(new Scenario { RunsJson = """[{"workflowName":"build","event":"push","status":"completed","conclusion":"success"},{"workflowName":"e2e","event":"push","status":"completed","conclusion":"failure"},{"workflowName":"Dependabot Updates","event":"dynamic","status":"completed","conclusion":"success"}]""" }), "falhou");
+
     [Fact]
     public async Task Release_WhenTheTagIsNotHead_Refuses()
         => AssertRefused(await RunReleaseAsync(new Scenario { Head = A, TagCommit = B }), "e o HEAD");
