@@ -118,10 +118,38 @@ public class GoogleSyncTests
         Assert.Equal(a.Fingerprint(), c.Fingerprint());
         Assert.Equal("PIN do cadeado: 4321", c.Notes);
 
-        var all = string.Join("\n", google.Files.Select(f => f.Name + "\n" + Encoding.Latin1.GetString(f.Data)));
+        var all = DriveText(google, a.ChainId, a.Device.Id, b.Device.Id, c.Device.Id);
         foreach (var leak in new[] { "consulta", "Resultado", "4321", "cadeado", "light", "Portátil", "Telemóvel", "android" })
             Assert.DoesNotContain(leak, all, StringComparison.Ordinal);
         Assert.All(google.Requests, r => Assert.Matches("^(GET|POST|PATCH|PUT|DELETE) https://(www\\.googleapis\\.com/(upload/)?drive/v3/files|oauth2\\.googleapis\\.com/token)", r));
+    }
+
+    // Os identificadores aleatórios da cadeia e dos aparelhos não contam como fuga: no CI da v0.2.16 a cadeia
+    // caa5d0751d432197715227a4c11ca287 tinha «4321» por acaso, no nome da pasta e no campo «chain» do registo de chaves
+    // (que fica em claro), e o teste acima falhou. O texto em claro continua a contar, no nome ou no conteúdo.
+    [Fact]
+    public void DriveText_HidesTheKnownRandomIds_ButNotPlaintext()
+    {
+        const string chain = "caa5d0751d432197715227a4c11ca287";
+        var google = new FakeGoogle();
+        google.Put($"eteris/{chain}/keys", Encoding.UTF8.GetBytes($$"""{"format":1,"chain":"{{chain}}","generation":1}"""));
+        Assert.Contains("4321", DriveText(google), StringComparison.Ordinal);
+        Assert.DoesNotContain("4321", DriveText(google, chain), StringComparison.Ordinal);
+
+        google.Put($"eteris/{chain}/n", Encoding.UTF8.GetBytes("PIN do cadeado: 4321"));
+        Assert.Contains("4321", DriveText(google, chain), StringComparison.Ordinal);
+        var named = new FakeGoogle();
+        named.Put("eteris/4321/k", [1]);
+        Assert.Contains("4321", DriveText(named, chain), StringComparison.Ordinal);
+    }
+
+    // O que o Drive vê: o nome e os bytes de cada ficheiro, com os identificadores aleatórios dados (a cadeia, os
+    // aparelhos) trocados por «<id>» nos dois — um identificador podia conter por acaso os algarismos procurados.
+    private static string DriveText(FakeGoogle google, params string[] randomIds)
+    {
+        var text = string.Join("\n", google.Files.Select(f => f.Name + "\n" + Encoding.Latin1.GetString(f.Data)));
+        foreach (var id in randomIds) text = text.Replace(id, "<id>", StringComparison.Ordinal);
+        return text;
     }
 
     [Fact]
@@ -1035,7 +1063,17 @@ public class GoogleSyncTests
         var factory = Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
         var route = CaseBlock(factory, "case \"/sync-google-out\":");
         Assert.DoesNotContain("Revoke", route);
-        Assert.Contains("Sync.GoogleSync.SignOut();", route);
+        Assert.Contains("Sync.SyncService.SignOutHere(", route);
+        // «Sair deste computador» é uma só função, a da rota das Definições e a do «Sair» do menu ⋯ (e só essas).
+        var here = Body(Src("Eteris.Browser", "Sync", "SyncService.cs"), "public static void SignOutHere(bool forgetKey)");
+        Assert.Contains("SignOut(forgetKey);", here);
+        Assert.Contains("if (!FolderMode) GoogleSync.SignOut();", here);
+        Assert.DoesNotContain("Revoke", here);
+        var browser = Path.Combine(FindRoot(), "src", "Eteris.Browser");
+        var callers = Directory.EnumerateFiles(browser, "*.cs", SearchOption.AllDirectories)
+            .Where(f => File.ReadAllText(f).Contains("SignOutHere(", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(browser, f).Replace('\\', '/')).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(["Browser/EterisSchemeHandlerFactory.cs", "MainWindow.BrowserMenu.cs", "Sync/SyncService.cs"], callers);
         var sync = Src("Eteris.Browser", "Sync", "GoogleSync.cs");
         Assert.DoesNotContain("Revoke", Body(sync, "public static void SignOut()"));
         var oauth = Src("Eteris.Sync", "Google", "GoogleOAuth.cs");

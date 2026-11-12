@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
@@ -32,6 +33,8 @@ public partial class MainWindow
     private BrowserMenuReturn? _browserMenuPressReturn;
     // Marca o painel dos controlos do zoom: para as setas, a linha do zoom é um grupo (↑ e ↓ contam-na uma vez).
     private static readonly object BrowserMenuZoomGroup = new();
+    // Marca o painel do cartão da conta com o «Sair» à direita: para as setas, também uma linha só (→ vai ao «Sair»).
+    private static readonly object BrowserMenuAccountGroup = new();
     // Lido na thread do CEF (ShortcutFromPage): o menu está aberto. Atualizado só na thread da janela, ao abrir e ao fechar.
     private volatile bool _browserMenuOpenForPage;
     // As partes do menu aberto que o submenu troca (a lista, a linha da conta, os botões do menu principal).
@@ -330,12 +333,18 @@ public partial class MainWindow
         var heading = BrowserMenuHeading(IsPrivate);
         DockPanel.SetDock(heading, Dock.Top);
         content.Children.Add(heading);
-        if (BuildBrowserMenuAccount(popup, rowStyle) is { } account)
+        if (BuildBrowserMenuAccount(popup, rowStyle, out var accountKind) is { } account)
         {
             // Primeira na ordem do teclado, como está primeiro no ecrã.
             buttons.Insert(0, account);
             var holder = new StackPanel { Margin = new Thickness(6, 0, 6, 0) };
-            holder.Children.Add(account);
+            // Com sessão, o «Sair» à direita do cartão (ao lado, não dentro: o clique nele não abre as Definições).
+            if (BuildBrowserMenuSignOut(popup, accountKind, controlStyle) is { } signOut)
+            {
+                buttons.Insert(1, signOut);
+                holder.Children.Add(BrowserMenuAccountCard(account, signOut));
+            }
+            else holder.Children.Add(account);
             holder.Children.Add(BrowserMenuDivider());
             DockPanel.SetDock(holder, Dock.Top);
             content.Children.Add(holder);
@@ -461,11 +470,12 @@ public partial class MainWindow
     internal static MenuAccountRow BrowserMenuAccountRow(bool isPrivate, bool available, bool connected)
         => isPrivate || !available ? MenuAccountRow.None : connected ? MenuAccountRow.Account : MenuAccountRow.SignIn;
 
-    private Button? BuildBrowserMenuAccount(Popup popup, Style rowStyle)
+    private Button? BuildBrowserMenuAccount(Popup popup, Style rowStyle, out MenuAccountRow shown)
     {
         // Só lê o disco (tokens e estado cifrados); nada sai daqui para a Google.
         var available = !IsPrivate && SyncService.Available;
         var kind = BrowserMenuAccountRow(IsPrivate, available, available && SyncService.Connected);
+        shown = kind;
         if (kind == MenuAccountRow.None) return null;
         var button = BrowserMenuAccountButton(kind, kind == MenuAccountRow.Account ? GoogleSync.Account : null, rowStyle);
         // A ação decide-se no clique (o estado pode mudar com o menu aberto); abrir o menu não inicia nada.
@@ -489,6 +499,119 @@ public partial class MainWindow
         SyncService.Look();
         if (SyncService.Enabled && GoogleSync.Account is null) GoogleSync.RequestAccount();
         return button;
+    }
+
+    // ---- «Sair» no cartão da conta (0.2.17) --------------------------------------------------------------------------
+
+    // Só com sessão, fora da pasta de teste (lá é «Desligar», nas Definições); desativado enquanto corre outra saída da
+    // conta («Retirar o acesso», «Perdi um computador», «Começar do zero»).
+    internal enum MenuSignOut { Hidden, Enabled, Disabled }
+
+    internal static MenuSignOut BrowserMenuSignOut(MenuAccountRow kind, bool folderMode, bool exitBusy)
+        => kind != MenuAccountRow.Account || folderMode ? MenuSignOut.Hidden : exitBusy ? MenuSignOut.Disabled : MenuSignOut.Enabled;
+
+    // Dois passos, como o «apagar também a chave» das Definições: o 1.º arma; um 2.º antes de meio segundo (duplo clique)
+    // não conta; depois disso sai. Fechar o menu desarma (cada abertura faz um botão novo).
+    internal enum MenuSignOutStep { Arm, Ignore, Run }
+
+    internal const long BrowserMenuSignOutGuardMs = 500;
+
+    // Uma tecla mantida premida (a repetição automática do Windows) nunca conta: nem arma, nem confirma.
+    internal static MenuSignOutStep BrowserMenuSignOutStep(long? armedAtMs, long nowMs, bool repeat = false)
+        => repeat ? MenuSignOutStep.Ignore
+            : armedAtMs is not { } armed ? MenuSignOutStep.Arm
+            : nowMs - armed < BrowserMenuSignOutGuardMs ? MenuSignOutStep.Ignore : MenuSignOutStep.Run;
+
+    private Button? BuildBrowserMenuSignOut(Popup popup, MenuAccountRow kind, Style style)
+    {
+        var state = BrowserMenuSignOut(kind, SyncService.FolderMode, SyncService.ExitBusy is not null);
+        if (state == MenuSignOut.Hidden) return null;
+        var button = BrowserMenuSignOutButton(style);
+        ApplyBrowserMenuSignOutState(button, state);
+        long? armedAt = null;
+        // O Enter num botão do WPF clica a cada KeyDown, também nas repetições: o clique a seguir sabe se foi uma.
+        var repeat = false;
+        button.PreviewKeyDown += (_, e) => repeat = e.IsRepeat;
+        button.PreviewMouseLeftButtonDown += (_, _) => repeat = false;
+        button.Click += (_, _) =>
+        {
+            var step = BrowserMenuSignOutStep(armedAt, Environment.TickCount64, repeat);
+            repeat = false;
+            switch (step)
+            {
+                case MenuSignOutStep.Arm:
+                    armedAt = Environment.TickCount64;
+                    ArmBrowserMenuSignOut(button);
+                    break;
+                case MenuSignOutStep.Run:
+                    // Outra saída pode ter começado nas Definições com o menu aberto: aí não sai, diz porquê.
+                    if (SyncService.ExitBusy is not null)
+                    {
+                        RunBrowserMenuAction(popup, () => ShowToast(SyncExit.SignOutBusy));
+                        break;
+                    }
+                    RunBrowserMenuAction(popup, () =>
+                    {
+                        var hasKey = SyncService.HasKey;
+                        try
+                        {
+                            SyncService.SignOutHere(forgetKey: false);
+                            ShowToast(SyncExit.SignOutDoneText(hasKey));
+                        }
+                        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ShowToast(SyncExit.SignOutNotSaved); }
+                    });
+                    break;
+            }
+        };
+        return button;
+    }
+
+    // Ativo ou desativado; desativado (outra saída da conta a decorrer), a dica e a ajuda dizem porquê.
+    internal static void ApplyBrowserMenuSignOutState(Button button, MenuSignOut state)
+    {
+        button.IsEnabled = state == MenuSignOut.Enabled;
+        var why = state == MenuSignOut.Disabled ? SyncExit.SignOutBusy : null;
+        button.ToolTip = why ?? "Sair deste computador";
+        AutomationProperties.SetHelpText(button, why ?? SyncExit.SignOutHelp);
+    }
+
+    // «Sair» (o cartão é estreito); o nome acessível e a dica dizem o alcance, e a ajuda é a das Definições. Um botão,
+    // como os do zoom: fora da contagem «n de N» das linhas.
+    internal static Button BrowserMenuSignOutButton(Style style)
+    {
+        var button = new Button
+        {
+            Style = style, Content = "Sair", Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, ToolTip = "Sair deste computador",
+        };
+        ToolTipService.SetShowOnDisabled(button, true);
+        AutomationProperties.SetName(button, "Sair deste computador");
+        AutomationProperties.SetHelpText(button, SyncExit.SignOutHelp);
+        return button;
+    }
+
+    // O 1.º toque: pede a confirmação no próprio botão (o menu fica aberto) e o leitor de ecrã ouve o nome novo.
+    internal static void ArmBrowserMenuSignOut(Button button)
+    {
+        var old = AutomationProperties.GetName(button);
+        const string Name = "Confirmar: sair deste computador";
+        button.Content = "Confirmar";
+        button.ToolTip = "Carregue outra vez para sair deste computador";
+        AutomationProperties.SetName(button, Name);
+        UIElementAutomationPeer.FromElement(button)?.RaisePropertyChangedEvent(AutomationElementIdentifiers.NameProperty, old, Name);
+    }
+
+    // O cartão e o «Sair» lado a lado, no painel marcado como um grupo para as setas. O cartão é o 1.º filho: o Tab e o
+    // leitor de ecrã seguem a ordem dos filhos, e assim seguem a do ecrã (cartão, depois «Sair»).
+    internal static Grid BrowserMenuAccountCard(Button account, Button signOut)
+    {
+        var card = new Grid { Tag = BrowserMenuAccountGroup };
+        card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        card.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        card.Children.Add(account);
+        Grid.SetColumn(signOut, 1);
+        card.Children.Add(signOut);
+        return card;
     }
 
     // O que o clique na linha faz. Sem sessão entra logo (o navegador do sistema); com a sincronização em pausa por a
@@ -817,11 +940,15 @@ public partial class MainWindow
         var enabled = _browserMenuButtons.Where(button => button.IsEnabled).ToArray();
         var current = Array.FindIndex(enabled, button => button.IsKeyboardFocusWithin);
         var next = move == BrowserMenuKey.Initial
-            // A inicial procura nas linhas; os controlos do zoom (−, 100%, +) não contam.
-            ? BrowserMenuKeys.NextByInitial(key, current, enabled.Select(button => BrowserMenuGroupOf(button) == button ? AutomationProperties.GetName(button) : null).ToArray())
+            ? BrowserMenuKeys.NextByInitial(key, current, BrowserMenuInitialLabels(enabled))
             : BrowserMenuKeys.Move(move, current, BrowserMenuRows(enabled));
         if (next >= 0) FocusBrowserMenuButton(enabled[next]);
     }
+
+    // O nome de cada controlo para a inicial: as linhas contam (também o cartão da conta, num grupo com o «Sair»); os
+    // controlos agrupados que não são linhas (−, 100%, + do zoom, o «Sair») não.
+    internal static string?[] BrowserMenuInitialLabels(IReadOnlyList<Button> buttons)
+        => buttons.Select(button => button is BrowserMenuItemButton || BrowserMenuGroupOf(button) == button ? AutomationProperties.GetName(button) : null).ToArray();
 
     // A linha de cada controlo, para as setas: os controlos do zoom partilham uma (são seguidos em buttons).
     internal static int[] BrowserMenuRows(IReadOnlyList<Button> buttons)
@@ -840,7 +967,7 @@ public partial class MainWindow
     }
 
     private static object BrowserMenuGroupOf(Button button)
-        => button.Parent is FrameworkElement { Tag: var tag } panel && ReferenceEquals(tag, BrowserMenuZoomGroup) ? panel : button;
+        => button.Parent is FrameworkElement { Tag: var tag } panel && (ReferenceEquals(tag, BrowserMenuZoomGroup) || ReferenceEquals(tag, BrowserMenuAccountGroup)) ? panel : button;
 
     private static void FocusBrowserMenuButton(Button button)
     {

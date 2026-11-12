@@ -173,7 +173,7 @@ public partial class MainWindow : Window
             BirthSize = PageAreaPixels,
             // Com a página em janela própria, o teclado e o foco vão direto para o Chromium: os atalhos do Éteris e a
             // escolha da metade ativa no ecrã dividido chegam por estes dois tratadores.
-            KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt) => ShortcutFromPage(key, ctrl, shift, alt, tab), KeyUpFromPage),
+            KeyboardHandler = new ShortcutKeyboardHandler((key, ctrl, shift, alt, repeat) => ShortcutFromPage(key, ctrl, shift, alt, tab, repeat), KeyUpFromPage),
             FocusHandler = new PageFocusHandler(() => Dispatcher.InvokeAsync(() => OnPageFocused(tab))),
             LifeSpanHandler = new PopupToTabHandler(request => Dispatcher.InvokeAsync(
                 () => DecidePopup(tab, request, () => Volatile.Read(ref lastActivation)))),
@@ -741,8 +741,8 @@ public partial class MainWindow : Window
     // o Esc chega à página na mesma, e também fecha a folha de atalhos, sai do ecrã inteiro ou para o carregamento.
     // Com o menu do Éteris aberto (o foco do Win32 ainda na página, por um instante), a tecla é do menu e não da página:
     // decide BrowserMenuKeys.FromPage (puro) e o trabalho vai para a thread da janela. Não se lê nada do WPF aqui.
-    // from: a aba de onde veio a tecla (null: um site fixado na barra lateral).
-    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt, BrowserTab? from = null)
+    // from: a aba de onde veio a tecla (null: um site fixado na barra lateral). repeat: a tecla está a ser mantida premida.
+    private bool ShortcutFromPage(int virtualKey, bool ctrl, bool shift, bool alt, BrowserTab? from = null, bool repeat = false)
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
@@ -750,6 +750,8 @@ public partial class MainWindow : Window
         if (_browserMenuOpenForPage)
         {
             var decision = BrowserMenuKeys.FromPage(key, ctrl, shift, alt, shortcut is not null);
+            // Um Enter mantido premido não ativa nada no menu (o «Sair» pede dois toques deliberados): é consumido.
+            if (repeat && decision == BrowserMenuKey.Activate) return true;
             // Nenhuma tecla chega à página com o menu aberto, nem os modificadores sozinhos (como no Chrome).
             Dispatcher.InvokeAsync(() => HandleBrowserMenuKeyFromPage(decision, shortcut, key));
             return true;

@@ -2,6 +2,14 @@
 
 ## 0.2.17 — por publicar
 
+### Conta e sincronização
+
+- **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
+
+### Pesquisa
+
+- O Google passa a ser uma das escolhas de motor de pesquisa nas Definições › Pesquisa (o padrão continua a ser o DuckDuckGo). Com ele, as pesquisas vão para a Google, que as pode juntar à sua conta Google se tiver sessão iniciada nela; o que escreve na barra não lhe é enviado enquanto escreve, só a pesquisa feita. As Boas-vindas continuam a oferecer só o DuckDuckGo, o Brave e o Startpage.
+
 ### Correções
 
 - «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
