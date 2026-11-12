@@ -321,9 +321,9 @@ public sealed partial class VaultService : IDisposable
         if (Store.Get(collection, id) is not { } entry) return;
         var meta = (JsonObject)entry.Meta.DeepClone();
         meta["used"] = Time(Now);
-        // A impressão da sincronização muda com a «última utilização» (o segredo só se lê para a refazer).
-        Store.UpdateMeta(collection, id, meta, Now, SyncOf(collection, id, meta, entry.HasSecret ? Store.ReadSecret(collection, id) : null));
-        Raise();
+        // A impressão da sincronização não depende da «última utilização» (SecretSchemas.LastUsedField): a chave local e a
+        // impressão gravadas ficam como estão, nada marca uma ronda e o segredo nem se lê. Segue com a alteração seguinte.
+        Store.UpdateMeta(collection, id, meta, Now);
     }
 
     public IReadOnlyList<VaultEntry> List(VaultCollection collection) => Store.List(collection);

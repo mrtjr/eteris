@@ -156,7 +156,7 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   emparelhamento (com a chave da sessão), no estado do aparelho e nos lotes (com a chave da conta); o `0-request` leva só
   a hora. Os outros computadores veem o nome novo na ronda seguinte.
 - **Alterações** nos dois sentidos, com conflitos resolvidos por HLC (ganha a última ronda que as enviou) e lápides
-  (o apagado não volta). O que o utilizador muda a meio de uma ronda que traz outra versão fica e segue na seguinte. Se uma versão das notas vinda de outro computador ficou por aplicar (o utilizador estava a escrever) e ele volta a mudar as notas antes da ronda seguinte, as duas edições fundem-se a três, a partir do texto da última ronda.
+  (o apagado não volta). O que o utilizador muda a meio de uma ronda que traz outra versão fica e segue na seguinte. Se uma versão das notas vinda de outro computador ficou por aplicar (o utilizador estava a escrever) e ele volta a mudar as notas antes da ronda seguinte, as duas edições fundem-se a três, a partir do texto da última ronda. Preencher uma palavra-passe (a «última utilização» do item) não é uma alteração do item: não marca uma ronda e não repõe no Drive a versão que este computador ainda não atualizou.
 - **Aparelhos**: lista nas Definições › Sincronização › Mais opções (nome, «este computador», quando sincronizou, «·
   recebe pagamentos e documentos») com **«Remover»** (duas vezes, para confirmar). Remover faz **nova cadeia**: segredo
   e chaves novos, tudo recifrado, a cadeia antiga apagada, e um kit de recuperação novo (o antigo deixa de valer, em

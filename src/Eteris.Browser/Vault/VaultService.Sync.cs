@@ -67,6 +67,11 @@ public sealed partial class VaultService
         var id = stored.FixedId ?? existing ?? VaultIds.New();
         // Um ID fixo (cartões, contactos…) que já é de outro item com outra chave: não se sobrepõe.
         if (existing is null && Store.Get(collection, id) is not null) return null;
+        // A utilização mais recente fica: a «última utilização» não conta para a impressão, e a de aqui pode ser posterior à
+        // do item recebido (preencheu-se antes de a ronda trazer a alteração).
+        if (existing is not null && Store.Get(collection, existing) is { } local && Text(local.Meta, SecretSchemas.LastUsedField) is { } used
+            && (Text(stored.Meta, SecretSchemas.LastUsedField) is not { } received || string.CompareOrdinal(used, received) > 0))
+            stored.Meta[SecretSchemas.LastUsedField] = used;
         var replaced = false;
         if (collection == VaultCollection.Logins && existing is not null && Store.ReadSecret(collection, existing) is { } before)
             replaced = Text(before, "password") != Text(stored.Secret!, "password");

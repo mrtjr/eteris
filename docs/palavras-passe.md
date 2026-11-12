@@ -891,8 +891,10 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
 
 - **Chave local e impressão gravadas com cada item** (`VaultStore`: colunas `sync_key` e `sync_print`, com
   `K_sync = HKDF(chave do cofre, "Eteris.Cofre:sync")`): `sync_key = HMAC(K_sync, coleção ‖ chave natural)` e
-  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar, «última
-  utilização»), por isso a sincronização compara o cofre **sem decifrar nada**. Um cofre de antes (sem as colunas)
+  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar), por isso a
+  sincronização compara o cofre **sem decifrar nada**. A «última utilização» não entra na impressão (`SecretSchemas.LastUsedField`):
+  preencher não conta como alterar o item; a utilização segue com a alteração seguinte e, ao aplicar um item recebido, fica a mais
+  recente das duas. Um cofre de antes (sem as colunas)
   ganha-as ao abrir; os itens dele ganham a chave e a impressão na primeira leitura. Nenhuma das duas diz o site, o
   utilizador ou o conteúdo, e são de cada computador (outra chave do cofre, outras chaves locais).
 - **Formato da sincronização** (`Vault/VaultSyncMap.cs`): cada item vai com os nomes de `SecretSchemas`; a chave
@@ -916,7 +918,9 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
   repor a pasta inteira). Mudar o cofre neste computador marca uma ronda
   para 10 s depois (`VaultService.Changed` → `SyncService.Touch`), como os favoritos.
 - **Nunca sobe:** o histórico local, os candidatos por guardar, a chave do cofre, a janela de graça, os «Pedir o Windows
-  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre não muda a impressão).
+  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre ou preencher não muda a impressão:
+  `ReadingOrUsingTheVault_ChangesNothingThatSyncs`, `AutofillOnAStaleDevice_DoesNotRevertAPasswordChangedElsewhere` e
+  `OldPrints_AreNotSentAsLocalChanges_AfterTheUpgrade`).
 
 Testes: `Vault/VaultSyncProfileTests` — só chaves e impressões opacas, estáveis ao reabrir; as sete coleções de ida e
 volta para outro computador **sem eco**, com chaves locais diferentes, servindo depois as sugestões, o cartão e «nunca
