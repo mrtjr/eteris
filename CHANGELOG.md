@@ -5,6 +5,7 @@
 ### Segurança
 
 - Desligar “Pedir o Windows Hello” ou importar um perfil já não passa sem confirmação quando o valor vem escrito como “False”.
+- O preenchimento de palavras-passe já não entra em páginas que o próprio site isolou (sandbox), onde pode correr conteúdo de terceiros.
 
 ## 0.2.16 — 2026-11-12
 
