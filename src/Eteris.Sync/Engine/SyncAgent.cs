@@ -2351,7 +2351,7 @@ public sealed class SyncAgent
                     catch (ArgumentException e)
                     {
                         left.Add(path);
-                        Log?.Invoke($"Apagar do transporte: «{path}» ficou de fora ({e.Message}).");
+                        Log?.Invoke($"Apagar do transporte: um ficheiro ficou de fora ({e.GetType().Name}).");
                     }
                 }
             }
@@ -2375,7 +2375,7 @@ public sealed class SyncAgent
         catch (Exception e)
         {
             var text = NotDeletedText(e);
-            Log?.Invoke($"Apagar do transporte: não acabou ({e.GetType().Name}: {e.Message}).");
+            Log?.Invoke($"Apagar do transporte: não acabou ({e.GetType().Name}).");
             if (IsTransient(e)) Fail(e);
             lock (_gate)
                 if (ReferenceEquals(_saved, saved) && saved.DeletePending)

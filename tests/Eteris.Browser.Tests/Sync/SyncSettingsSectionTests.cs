@@ -182,6 +182,8 @@ public class SyncSettingsSectionTests
     public void StatusData_SaysWhatIsWaiting()
     {
         Assert.Null(SyncService.WaitingText(TestStatus.Of(SyncPhase.On)));
+        // Parada ou em pausa, o que ficou da última ronda não aparece ao lado do aviso de paragem.
+        Assert.Null(SyncService.WaitingText(TestStatus.Of(SyncPhase.Stopped) with { PendingDevices = 2, SecretErrors = 1 }));
         var devices = TestStatus.Of(SyncPhase.On) with { PendingDevices = 2 };
         Assert.Equal("Há alterações de 2 aparelhos que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.", SyncService.WaitingText(devices));
         Assert.Equal("Há alterações de 1 aparelho que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.",

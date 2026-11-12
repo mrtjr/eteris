@@ -430,6 +430,22 @@ public class SyncIntegrationTests
         Assert.Equal("a b", SyncLog.Clean("a\r\nb", string.Empty, string.Empty));
     }
 
+    // Auditoria, SYN-05: tudo o que o agente passa a Log vai para o sync.log: só texto fixo e o tipo da exceção, nunca a
+    // mensagem (que pode ter nomes e caminhos) nem um caminho do transporte.
+    [Fact]
+    public void AgentLog_CarriesOnlyFixedTextAndTheExceptionType()
+    {
+        var agent = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Sync", "Engine", "SyncAgent.cs"));
+        var calls = agent.Split('\n').Where(l => l.Contains("Log?.Invoke(", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(calls);
+        foreach (var call in calls)
+        {
+            Assert.DoesNotContain(".Message", call, StringComparison.Ordinal);
+            Assert.DoesNotContain("{path}", call, StringComparison.Ordinal);
+            Assert.DoesNotContain("{file", call, StringComparison.Ordinal);
+        }
+    }
+
     // Auditoria, SYN-10: uma carga das regras de bloqueio por site que falhou não é «sem regras»: o Escudo fica ilegível
     // nessa ronda, e as regras não se apagam nos outros computadores.
     [Fact]

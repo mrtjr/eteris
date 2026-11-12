@@ -915,6 +915,8 @@ internal static class SyncService
     public static string? WaitingText(SyncStatus status)
     {
         var parts = new List<string>();
+        // Só com a sincronização ligada: parada, em pausa ou a escolher a conta, o que ficou da última ronda já não é notícia.
+        if (status.Phase != SyncPhase.On) return null;
         if (status.PendingDevices > 0)
             parts.Add($"Há alterações de {status.PendingDevices} {(status.PendingDevices == 1 ? "aparelho" : "aparelhos")} que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.");
         if (status.SecretErrors == 1) parts.Add("1 item do cofre ficou de fora desta ronda (não abriu ou não se pôde cifrar).");
