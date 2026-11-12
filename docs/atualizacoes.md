@@ -79,8 +79,8 @@ dotnet run --project build/sign -c Release -- verify <update-keys.txt> <ficheiro
    do `update-keys.txt` **do commit** (`git show HEAD:…`, não o da árvore de trabalho: uma chave por comitar não está no
    Éteris que se publica) e só então publica.
 
-A primeira versão com a verificação (a 0.2.16) tem de sair já assinada: é o índice dela que os clientes novos leem na
-procura seguinte. Se a última release publicada não tiver um `.sig` válido, todos os clientes desde a 0.2.16 ficam sem
+A primeira versão com a verificação, a 0.2.16, saiu já assinada (ver «Estado»): é o índice dela que os clientes novos
+leem na procura seguinte. Se a última release publicada não tiver um `.sig` válido, todos os clientes desde a 0.2.16 ficam sem
 atualizações até sair uma release assinada.
 
 ## Rotação
@@ -123,7 +123,7 @@ nenhum pacote.
   do commit da etiqueta, e um índice com um bit trocado é recusado.
 - As instalações 0.2.15 e anteriores não verificam assinaturas e atualizam para a 0.2.16 como sempre. Da 0.2.16 em
   diante, **todas as releases têm de sair assinadas** (`build\release.ps1 -Key …`): uma release publicada sem `.sig`
-  válido deixa estas instalações sem atualizações até sair outra assinada.
+  válido deixa as instalações 0.2.16 e seguintes sem atualizações até sair outra assinada.
 
 Num repositório sem nenhuma linha de chave em `update-keys.txt` (uma cópia de teste, por exemplo), o Éteris compilado
 arranca mas recusa todas as atualizações sem pedir nada à rede, o `build/pack.ps1` recusa empacotar e o

@@ -102,7 +102,8 @@ public sealed class UpdateSignatureTests : IDisposable
     public void ParseKeys_SkipsCommentsAndBlankLines()
         => Assert.Equal(["AAA=", "BBB="], UpdateSignature.ParseKeys("# chave 1\r\nAAA=\r\n\r\n  BBB=  \n# fim\n"));
 
-    // Passa com zero chaves (o estado até o dono gerar as dele): cada linha que lá estiver tem de ser uma pública P-256.
+    // Cada linha que lá estiver tem de ser uma pública P-256 (passaria com zero chaves; é o pack.ps1 que recusa empacotar
+    // sem nenhuma).
     [Fact]
     public void EmbeddedKeys_AreP256PublicKeys()
         => Assert.All(UpdateSignature.EmbeddedKeys, k =>
