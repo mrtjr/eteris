@@ -42,13 +42,36 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
         var id = await IdOfAsync(path, cancellationToken).ConfigureAwait(false);
         if (id is null) return null;
         using var response = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, $"{GoogleEndpoints.Files}/{Uri.EscapeDataString(id)}?alt=media"),
-            cancellationToken, allowNotFound: true).ConfigureAwait(false);
+            cancellationToken, allowNotFound: true, completion: HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             lock (_ids) _ids.Remove(path);
             return null;
         }
-        return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        // Cada tipo de ficheiro tem um tamanho máximo, conferido antes de o pôr em memória: quem tem acesso à pasta sem ter
+        // a chave (um aparelho removido) não gasta a memória de quem lê. Pelos cabeçalhos, e, sem eles, cortando a leitura.
+        var limit = SyncPaths.MaxBytes(path);
+        if (response.Content.Headers.ContentLength is { } length && length > limit) throw new FormatException("Ficheiro grande demais.");
+        // Com ResponseHeadersRead o prazo do HttpClient deixa de cobrir o corpo: tem um prazo próprio (uma falha passageira).
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(http.Timeout);
+        try
+        {
+            await using var body = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+            using var buffer = new MemoryStream();
+            var block = new byte[81_920];
+            int read;
+            while ((read = await body.ReadAsync(block, deadline.Token).ConfigureAwait(false)) > 0)
+            {
+                if (buffer.Length + read > limit) throw new FormatException("Ficheiro grande demais.");
+                buffer.Write(block, 0, read);
+            }
+            return buffer.ToArray();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("O Drive demorou demais a entregar o ficheiro.");
+        }
     }
 
     public async Task WriteAsync(string path, byte[] data, CancellationToken cancellationToken = default)
@@ -193,14 +216,14 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
 
     // retry: false para os pedidos que criam um ficheiro (ver WriteAsync): uma falha 429/5xx chega logo a quem chama.
     private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> build, CancellationToken cancellationToken, bool allowNotFound = false,
-        bool retry = true)
+        bool retry = true, HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
     {
         var refreshed = false;
         for (var attempt = 1; ; attempt++)
         {
             using var request = build();
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await accessToken(false, cancellationToken).ConfigureAwait(false));
-            var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await http.SendAsync(request, completion, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode || (allowNotFound && response.StatusCode == HttpStatusCode.NotFound)) return response;
             var status = (int)response.StatusCode;
             response.Dispose();

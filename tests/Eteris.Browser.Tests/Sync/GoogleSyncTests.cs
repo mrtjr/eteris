@@ -7,9 +7,11 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Eteris.Sync.Crypto;
 using Eteris.Sync.Engine;
+using Eteris.Sync.Format;
 using Eteris.Sync.Google;
 using Eteris.Sync.Model;
 using Eteris.Sync.Pairing;
+using Eteris.Sync.Transport;
 
 using Stage = Eteris.Browser.Sync.SignInStage;
 
@@ -30,6 +32,49 @@ public class GoogleSyncTests
         var session = new GoogleSession(oauth, new TokenStore(Path.Combine(Path.GetTempPath(), "eteris-sync-tests", Guid.NewGuid().ToString("N") + ".tokens"), new PlainProtector()), Now);
         session.Use(tokens);
         return (new GoogleDriveTransport(http, session.AccessTokenAsync, NoWait), http);
+    }
+
+    [Theory]
+    [InlineData(false)]   // a resposta diz o tamanho: recusa pelos cabeçalhos
+    [InlineData(true)]    // sem Content-Length: corta a leitura no limite
+    public async Task Drive_AnOversizedFile_IsRefused(bool hideLength)
+    {
+        var google = new FakeGoogle { HideMediaLength = hideLength };
+        var (drive, _) = Drive(google);
+        var keys = "eteris/" + new string('a', 32) + "/keys";
+        google.Put(keys, new byte[SyncPaths.SmallFileBytes + 1]);
+        await Assert.ThrowsAsync<FormatException>(() => drive.ReadAsync(keys));
+        google.Put("eteris/" + new string('b', 32) + "/keys", new byte[SyncPaths.SmallFileBytes]);
+        Assert.Equal(SyncPaths.SmallFileBytes, (await drive.ReadAsync("eteris/" + new string('b', 32) + "/keys"))!.Length);
+    }
+
+    [Fact]
+    public void MaxBytes_ByKindOfFile()
+    {
+        var chain = new string('a', 32);
+        var device = new string('b', 32);
+        Assert.Equal(SyncPaths.SmallFileBytes, SyncPaths.MaxBytes(SyncPaths.Keys(chain)));
+        Assert.Equal(SyncPaths.SmallFileBytes, SyncPaths.MaxBytes(SyncPaths.Rekey(chain, device, device)));
+        Assert.Equal(SyncPaths.SmallFileBytes, SyncPaths.MaxBytes(SyncPaths.Pairing("sessao") + "0-request"));
+        Assert.Equal(SyncPaths.StateFileBytes, SyncPaths.MaxBytes(SyncPaths.State(chain, device)));
+        Assert.Equal(SealedFile.MaxFileBytes, SyncPaths.MaxBytes(SyncPaths.Batch(chain, device, 1)));
+        Assert.Equal(SealedFile.MaxFileBytes, SyncPaths.MaxBytes(SyncPaths.Snapshot(chain, device, 1)));
+        Assert.True(SealedFile.PaddedLength(4 + SealedFile.MaxPlainBytes) + 300 <= SealedFile.MaxFileBytes);
+    }
+
+    [Fact]
+    public async Task FolderTransport_AnOversizedFile_IsRefused()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "eteris-sync-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var transport = new FolderTransport(folder);
+            var keys = SyncPaths.Keys(new string('a', 32));
+            await transport.WriteAsync(keys, new byte[SyncPaths.SmallFileBytes + 1]);
+            await Assert.ThrowsAsync<FormatException>(() => transport.ReadAsync(keys));
+            Assert.Null(await transport.ReadAsync(SyncPaths.Keys(new string('c', 32))));
+        }
+        finally { try { Directory.Delete(folder, recursive: true); } catch (IOException) { } }
     }
 
     [Fact]

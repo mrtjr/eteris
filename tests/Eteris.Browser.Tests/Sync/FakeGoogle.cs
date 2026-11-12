@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -67,6 +68,9 @@ internal sealed class FakeGoogle : HttpMessageHandler
         lock (_holds) _holds[path] = hold;
         return (hold.Item1.Task, () => hold.Item2.TrySetResult());
     }
+
+    // A resposta de «alt=media» não anuncia o tamanho (sem Content-Length): quem lê tem de cortar a leitura no limite.
+    public bool HideMediaLength { get; set; }
 
     public void FailNext(HttpStatusCode status, int times = 1)
     {
@@ -157,7 +161,7 @@ internal sealed class FakeGoogle : HttpMessageHandler
                     return new HttpResponseMessage(HttpStatusCode.NoContent);
                 }
                 if (request.Method == HttpMethod.Get && query.GetValueOrDefault("alt") == "media")
-                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(file.Data) };
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = HideMediaLength ? new UnsizedContent(file.Data) : new ByteArrayContent(file.Data) };
             }
         }
         if (path == "/upload/drive/v3/files" && request.Method == HttpMethod.Post)
@@ -287,4 +291,18 @@ internal sealed class FakeGoogle : HttpMessageHandler
 
     private static HttpResponseMessage Json(HttpStatusCode status, JsonNode body)
         => new(status) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+}
+
+// Um corpo que não sabe o seu tamanho (TryComputeLength falso), como uma resposta em blocos: um StreamContent sobre um
+// MemoryStream continuava a anunciar o tamanho.
+internal sealed class UnsizedContent(byte[] data) : HttpContent
+{
+    protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        => stream.WriteAsync(data, 0, data.Length);
+
+    protected override bool TryComputeLength(out long length)
+    {
+        length = 0;
+        return false;
+    }
 }
