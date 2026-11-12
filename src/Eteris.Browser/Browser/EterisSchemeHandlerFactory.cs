@@ -88,7 +88,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             if (!privateContext && InternalPages.IsAuthorized(request.Url)) Infrastructure.StartupGuard.Current.Reenable();
             return Html(PrivacyPage.SandboxRetryRedirect);
         }
-        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
+        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version, Infrastructure.CefConfigurator.SandboxSupported && Infrastructure.SandboxInfo.Available != 0));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
                 Sync.SignInEntry.OffersNow(privateContext)));

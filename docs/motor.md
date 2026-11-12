@@ -200,7 +200,9 @@ Google (`pack.ps1 -NoSandbox -SemLogin`: o `google-oauth.json` nunca está no re
 (`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
 antes da 0.2.9. Só serve para tags com `global.json` (as tags até à v0.2.16 não o têm): o fluxo corre os passos de
 hoje sobre a árvore da tag e o `setup-dotnet` lê dela a versão do SDK, por isso numa tag sem ele o job pára logo a
-seguir ao checkout e publica-se a partir de uma tag nova. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
+seguir ao checkout e publica-se a partir de uma tag nova. Cada etiqueta ensaia este caminho no CI (trabalho `ensaio` do
+`release.yml`: o mesmo `publish.ps1` e `pack.ps1`, sem envio), para ele não se descobrir partido no dia da emergência; as
+Novidades dessa publicação dizem que corre sem isolamento (eteris://whatsnew/). Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
 dono e o CI descarregá-lo e verificá-lo pelo SHA256 do manifesto; um runner próprio com o checkout em `C:\cef`.
 
 **Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem

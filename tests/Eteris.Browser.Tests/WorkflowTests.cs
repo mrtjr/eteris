@@ -33,7 +33,7 @@ public class WorkflowTests
         var yml = Workflow("release.yml").Replace("\r\n", "\n");
         var jobs = Regex.Matches(yml[yml.IndexOf("\njobs:\n", StringComparison.Ordinal)..], @"^  ([A-Za-z0-9_-]+):\n", RegexOptions.Multiline)
             .Select(m => m.Groups[1].Value).ToList();
-        Assert.Equal(["verify", "publish-sem-codecs"], jobs);
+        Assert.Equal(["verify", "ensaio", "publish-sem-codecs"], jobs);
 
         var verify = Job(yml, "verify");
         Assert.Contains("if: github.event_name == 'push'", verify);
@@ -78,6 +78,38 @@ public class WorkflowTests
         Assert.Contains("global.json", message.Groups[1].Value);
         // Só ASCII: a página de códigos do runner troca os acentos (TFI-01).
         Assert.True(message.Groups[1].Value.All(c => c < 128), "mensagem da guarda fora do ASCII: " + message.Groups[1].Value);
+    }
+
+    // CAD-05: o vpk tem a versão do pacote Velopack (o 1.2.161 do projeto), e não a última que houver no dia da emergência.
+    [Fact]
+    public void Release_PinsVpkToTheVelopackPackageVersion()
+    {
+        var yml = Workflow("release.yml").Replace("\r\n", "\n");
+        var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Eteris.Browser.csproj"));
+        var version = Regex.Match(csproj, "<PackageReference Include=\"Velopack\" Version=\"([^\"]+)\"").Groups[1].Value;
+        Assert.Matches(@"^\d+\.\d+\.\d+$", version);
+        var installs = Regex.Matches(yml, @"dotnet tool install -g vpk.*").Select(m => m.Value.TrimEnd()).ToList();
+        Assert.Equal(2, installs.Count);
+        Assert.All(installs, line => Assert.Equal("dotnet tool install -g vpk --version " + version, line));
+    }
+
+    // CAD-05: a publicação de emergência (pelo CI, sem codecs nem sandbox) nunca era vista a funcionar antes do dia em
+    // que fazia falta. Cada etiqueta ensaia os mesmos passos até ao pacote, sem enviar nada nem ter a escrita.
+    [Fact]
+    public void Release_Rehearsal_RunsTheEmergencyStepsWithoutUploading()
+    {
+        var yml = Workflow("release.yml").Replace("\r\n", "\n");
+        var ensaio = Job(yml, "ensaio");
+        Assert.Contains("if: github.event_name == 'push'", ensaio);
+        Assert.Contains("timeout-minutes: 60", ensaio);
+        Assert.Contains("publish.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox", ensaio);
+        Assert.Contains("pack.ps1 -Version $env:RELEASE_TAG.TrimStart(\"v\") -NoSandbox -SemLogin", ensaio);
+        Assert.Contains("EterisBrowser-win-Setup.exe", ensaio);
+        // Um \b a mais num caminho do Windows (.\build) vira um backspace no YAML e o passo parte no CI.
+        Assert.DoesNotContain(yml, c => char.IsControl(c) && c is not ('\n' or '\r' or '\t'));
+        Assert.Contains(@".\build\pack.ps1 -Version", ensaio);
+        foreach (var no in new[] { "vpk upload", "vpk download", "contents: write", "secrets." })
+            Assert.DoesNotContain(no, ensaio);
     }
 
     // CI instável (v0.2.11): um teste preso só se via como «Assert.True() Failure» e, sem prazo no job, um bloqueio
@@ -207,6 +239,13 @@ public class WorkflowTests
         var yml = Workflow("build.yml").Replace("\r\n", "\n");
         Assert.Contains("push:\n    branches: [main]", yml);
         Assert.Contains("pull_request:", yml);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 
     private static string Job(string yml, string name)

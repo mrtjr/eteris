@@ -6,7 +6,8 @@ name: release
 # (110–150 GB, 5–10 h): uma publicação daqui sai com o runtime da CEF do NuGet, SEM codecs, e os utilizadores
 # atualizados pelo Velopack voltariam a um motor sem H.264/AAC.
 #
-# - push de uma tag v*: só verificação (compilar e correr os testes), sem pack nem upload;
+# - push de uma tag v*: verificação (compilar e correr os testes) e ensaio da publicação de emergência (o mesmo
+#   publish e pack que ela faz, sem o envio), para o caminho de emergência não se descobrir partido na emergência;
 # - workflow_dispatch com «sem_codecs» = true: publicação de emergência pelo CI, sem codecs (o Éteris recorre ao motor
 #   de vídeo do WebView2 para H.264/AAC, como antes da 0.2.9). Sem «sem_codecs» = true nada é publicado.
 
@@ -68,6 +69,35 @@ jobs:
       - name: Só verificação — esta tag publica-se localmente com o motor próprio
         run: Write-Host "Tag $env:RELEASE_TAG verificada. Sem pack nem upload; a release publica-se localmente com build/cef-codecs (docs/motor.md, Publicacao)."
 
+  # Ensaio da emergência (CAD-05): os mesmos passos do publish-sem-codecs até ao pacote, sem confirmação, sem os testes (já
+  # correm no verify), sem descarregar releases nem enviar nada, e sem permissão de escrita nem segredos. Se o publish.ps1
+  # ou o pack.ps1 (a chave pública das atualizações em update-keys.txt, por exemplo) partirem, partem aqui.
+  ensaio:
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      REPO_URL: https://github.com/${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
+      - run: dotnet restore
+      - name: O instalador tem de levar o motor do escudo
+        run: |
+          .\build\publish.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox
+          if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
+          if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 10) { throw "listas de filtros em falta no publish" }
+          if (-not (Test-Path publish/Shields/resources/scriptlets.json)) { throw "scriptlets.json em falta no publish" }
+      - run: dotnet tool install -g vpk --version 1.2.161
+      - run: .\build\pack.ps1 -Version $env:RELEASE_TAG.TrimStart("v") -NoSandbox -SemLogin
+      - name: O ensaio tem de ter produzido o instalador
+        run: |
+          if (-not (Test-Path Releases/EterisBrowser-win-Setup.exe)) { throw "Releases/EterisBrowser-win-Setup.exe em falta depois do pack.ps1" }
+
   publish-sem-codecs:
     if: github.event_name == 'workflow_dispatch' && inputs.sem_codecs == true
     runs-on: windows-latest
@@ -122,7 +152,7 @@ jobs:
           if (-not (Test-Path publish/eteris_shields.dll)) { throw "eteris_shields.dll em falta no publish" }
           if ((Get-ChildItem publish/Shields/lists/*.txt).Count -lt 10) { throw "listas de filtros em falta no publish" }
           if (-not (Test-Path publish/Shields/resources/scriptlets.json)) { throw "scriptlets.json em falta no publish" }
-      - run: dotnet tool install -g vpk
+      - run: dotnet tool install -g vpk --version 1.2.161
       - name: Descarregar releases anteriores para gerar pacotes delta
         run: vpk download github --repoUrl $env:REPO_URL --token "${{ secrets.GITHUB_TOKEN }}" --outputDir Releases
         continue-on-error: true
