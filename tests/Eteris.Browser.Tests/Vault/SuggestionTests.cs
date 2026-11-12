@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Input;
@@ -264,13 +265,34 @@ public class VaultFillPolicyTests
     public void OtherSite_NeverFromHttpsToHttp(string saved, string page, bool offered)
         => Assert.Equal(offered, VaultFillPolicy.OffersElsewhere(saved, page));
 
-    // Contra cliques roubados: um clique nos primeiros 300 ms da lista não conta.
+    // Contra cliques roubados: um clique nos primeiros 500 ms da lista não conta.
     [Fact]
-    public void Clicks_InTheFirst300ms_AreIgnored()
+    public void Clicks_InTheFirst500ms_AreIgnored()
     {
         Assert.False(VaultFillPolicy.AcceptsClick(TimeSpan.FromMilliseconds(120)));
-        Assert.False(VaultFillPolicy.AcceptsClick(TimeSpan.FromMilliseconds(299)));
-        Assert.True(VaultFillPolicy.AcceptsClick(TimeSpan.FromMilliseconds(300)));
+        Assert.False(VaultFillPolicy.AcceptsClick(TimeSpan.FromMilliseconds(499)));
+        Assert.True(VaultFillPolicy.AcceptsClick(TimeSpan.FromMilliseconds(500)));
+    }
+
+    [Fact]
+    public void Click_WithoutPointerLeavingTheRowAfterShow_IsIgnored()
+    {
+        Assert.False(VaultFillPolicy.AcceptsPointer(rowUnderCursorAtShow: true, cursorLeftSince: false));
+        Assert.True(VaultFillPolicy.AcceptsPointer(rowUnderCursorAtShow: true, cursorLeftSince: true));
+        Assert.True(VaultFillPolicy.AcceptsPointer(rowUnderCursorAtShow: false, cursorLeftSince: false));
+        Assert.False(VaultFillPolicy.CountsAsLeaving(3.9));   // a mão treme ao clicar; a lista a fugir de um cursor parado dá 0
+        Assert.True(VaultFillPolicy.CountsAsLeaving(4));
+    }
+
+    [Fact]
+    public void Enter_InTheFirst500msOfTheList_DoesNotFill()
+    {
+        Assert.False(VaultFillPolicy.AcceptsKey(TimeSpan.FromMilliseconds(499)));
+        Assert.True(VaultFillPolicy.AcceptsKey(TimeSpan.FromMilliseconds(500)));
+        var window = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Vault.cs"));
+        Assert.Contains("VaultFillPolicy.AcceptsKey(DateTime.UtcNow - _vaultShownAt)", window);
+        var list = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Vault", "SuggestionList.xaml.cs"));
+        Assert.Contains("VaultFillPolicy.AcceptsPointer(", list);
     }
 
     // D-5: preencher palavras-passe só pede o Windows Hello com o interruptor ligado.

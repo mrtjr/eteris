@@ -17,6 +17,10 @@ public partial class SuggestionList : UserControl
     private Point? _lastMouse;
     // A linha onde o botão do rato desceu e quando (UTC): só um clique que começa e acaba na mesma linha escolhe.
     private (SuggestionRowElement Element, DateTime At)? _pressed;
+    // Onde o cursor estava (píxeis do ecrã) quando a lista apareceu e se saiu de uma linha depois disso: uma lista que
+    // nasce debaixo de um cursor parado só aceita o clique depois de o cursor se ter mexido (VAU-04).
+    private Point? _cursorAtShow;
+    private bool _cursorLeft;
 
     public SuggestionList()
     {
@@ -66,6 +70,8 @@ public partial class SuggestionList : UserControl
         // apareceu por baixo dele).
         _lastMouse = null;
         _pressed = null;
+        _cursorAtShow = CursorOnScreen();
+        _cursorLeft = false;
         Rows.Children.Clear();
         _rows.Clear();
         for (var i = 0; i < rows.Count; i++)
@@ -173,6 +179,14 @@ public partial class SuggestionList : UserControl
             if (!moved) return;
             Select(_rows.FindIndex(r => ReferenceEquals(r.Element, element)));
         };
+        // O cursor só «saiu» se a linha ainda é desta lista e ele andou pelo menos PointerSlack desde que a lista
+        // apareceu: uma lista que sai de baixo de um cursor parado (ou se refaz) não conta.
+        element.MouseLeave += (_, _) =>
+        {
+            if (!_rows.Exists(r => ReferenceEquals(r.Element, element))) return;
+            if (_cursorAtShow is { } at && CursorOnScreen() is { } now && VaultFillPolicy.CountsAsLeaving((now - at).Length))
+                _cursorLeft = true;
+        };
         element.MouseLeftButtonDown += (_, e) =>
         {
             e.Handled = true;
@@ -183,11 +197,39 @@ public partial class SuggestionList : UserControl
             e.Handled = true;
             if (_pressed is not { } pressed || !ReferenceEquals(pressed.Element, element)) return;
             _pressed = null;
+            // A linha estava debaixo do cursor quando a lista apareceu e o cursor ainda não saiu dela: o clique é
+            // do que estava ali antes (um rótulo da página clicado duas vezes), não uma escolha.
+            var held = _cursorAtShow is { } p && RowRectOnScreen(element) is { } rect && rect.Contains(p);
+            if (!VaultFillPolicy.AcceptsPointer(held, _cursorLeft)) return;
             var i = _rows.FindIndex(r => ReferenceEquals(r.Element, element));
             if (i >= 0) Chosen?.Invoke(i, pressed.At);
         };
         return element;
     }
+
+    private static Rect? RowRectOnScreen(SuggestionRowElement element)
+    {
+        try
+        {
+            if (PresentationSource.FromVisual(element) is null) return null;
+            return new Rect(element.PointToScreen(new Point(0, 0)), element.PointToScreen(new Point(element.ActualWidth, element.ActualHeight)));
+        }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    // O cursor em píxeis do ecrã: o WPF não recebe os movimentos do rato sobre a página (mesmo padrão de MainWindow.AutoHide).
+    private static Point? CursorOnScreen() => GetCursorPos(out var p) ? new Point(p.X, p.Y) : null;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct CursorPoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out CursorPoint point);
 
     // Em píxeis do ecrã: a lista mexe-se (aparece noutro campo, muda de tamanho) sem o cursor se mexer.
     private Point? Screen(Point local)

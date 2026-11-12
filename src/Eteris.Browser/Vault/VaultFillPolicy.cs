@@ -15,7 +15,10 @@ public enum FillVerdict { Allowed, TabHidden, WindowInactive, DocumentGone, Othe
 public static class VaultFillPolicy
 {
     // Contra cliques roubados (clickjacking): um clique na lista logo depois de ela aparecer não conta.
-    public static readonly TimeSpan ClickGuard = TimeSpan.FromMilliseconds(300);
+    public static readonly TimeSpan ClickGuard = TimeSpan.FromMilliseconds(500);
+
+    // Em píxeis do ecrã: a mão treme ao clicar; uma lista que sai de baixo de um cursor parado dá 0.
+    public const double PointerSlack = 4.0;
 
     public const string NoUsername = "(sem utilizador)";
     public const string InsecureDetail = "Ligação não segura";
@@ -83,6 +86,15 @@ public static class VaultFillPolicy
     }
 
     public static bool AcceptsClick(TimeSpan sinceShown) => sinceShown >= ClickGuard;
+
+    // O Enter também espera o guarda: um campo que ganha o foco por script e um «↓ Enter» imediato não preenchem.
+    public static bool AcceptsKey(TimeSpan sinceShown) => AcceptsClick(sinceShown);
+
+    // Uma lista que nasceu debaixo do cursor só aceita o clique depois de o cursor ter saído da linha (e voltado).
+    public static bool AcceptsPointer(bool rowUnderCursorAtShow, bool cursorLeftSince) => !rowUnderCursorAtShow || cursorLeftSince;
+
+    // Só um deslocamento do cursor (píxeis do ecrã) desde que a lista apareceu conta como «saiu».
+    public static bool CountsAsLeaving(double movedPixels) => movedPixels >= PointerSlack;
 
     // D-5: «Pedir o Windows Hello ao preencher palavras-passe» (deste PC, desligado por omissão).
     public static bool NeedsReauth(bool askHello) => ReauthPolicy.Needs(ReauthPurpose.FillPassword, askHello, askPayments: true);

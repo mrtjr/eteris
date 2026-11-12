@@ -550,8 +550,11 @@ CPF, cartão com CVC; os dois campos de rastreio escondidos (opacidade 0 e fora 
   delas**; Tab, ou Enter sem escolha, fecham a lista e seguem para a página (enviar o formulário continua a funcionar);
   as letras seguem para a página (filtram a lista); Ctrl e Alt nunca são da lista. Com a lista fechada num campo com
   sugestões, ↓ abre-a com a primeira escolhida.
-- **Rato:** um clique numa linha preenche; um clique nos primeiros **300 ms** da lista não conta (cliques roubados). O
-  clique não ativa a camada (`WM_MOUSEACTIVATE` → `MA_NOACTIVATE`): o foco do teclado fica no campo da página, que não
+- **Rato:** um clique numa linha preenche; um clique nos primeiros **500 ms** da lista não conta (cliques roubados), e o
+  **Enter** também espera esses 500 ms. Se a lista nasceu por baixo do cursor, o clique nessa linha só conta depois de o
+  cursor ter saído dela (pelo menos 4 píxeis do ecrã desde que a lista apareceu) e voltado: uma lista que aparece
+  debaixo de um cursor parado (o rótulo do campo clicado duas vezes) não preenche. O clique
+  não ativa a camada (`WM_MOUSEACTIVATE` → `MA_NOACTIVATE`): o foco do teclado fica no campo da página, que não
   recebe um `blur`. Só um rato que se mexe escolhe uma linha: a lista a aparecer por baixo de um cursor parado não tira
   a escolha feita com as setas (encontrado na prova ao vivo).
 - **Preencher** (`FillVaultLoginAsync`): (1) a aba à vista na janela ativa, o mesmo documento (`VaultChannel.IsCurrent`:
@@ -571,7 +574,7 @@ Testes: `Vault/SuggestionTests` (`SuggestionGeometryTests`: por baixo, largura m
 `VaultKeysTests`: nada com a lista fechada, ↓ abre só num campo com sugestões, setas, Enter com e sem escolha, Esc, Tab,
 letras e atalhos para a página; `VaultFillPolicyTests`: exatas primeiro e o mesmo site marcado, `http`/`https` e o
 aviso, `localhost` seguro, domínios parecidos sem nada, filtro pelo prefixo, onde se sugere, aba escondida, janela
-inativa, documento que saiu, outro site, a pergunta com os dois nomes, os 300 ms, o Windows Hello pelo interruptor),
+inativa, documento que saiu, outro site, a pergunta com os dois nomes, os 500 ms, o cursor parado, o Enter imediato, o Windows Hello pelo interruptor),
 `Vault/CofreFillTests` (no Node: setter nativo por cima do da instância, foco, `input` e `change` a borbulhar; recusa
 o que não tem valor nativo; o plano só com os campos do início de sessão visíveis; sem utilizador só a palavra-passe),
 `VaultChannelGuardTests` (o script só escreve na zona «preencher»).
@@ -1083,9 +1086,10 @@ O que mudou depois da revisão de segurança e de experiência (testes em `Vault
 - **Só com gesto.** A lista abre sozinha só depois de um botão do rato (ou toque) confiável no próprio campo ou da tecla
   Tab; um `campo.focus()` da página manda o foco com `gesture:false` e a lista só abre com ↓. O `generate` só sai
   depois de um gesto. `scroll`, `input` e `submit` sintéticos (`isTrusted=false`) não contam.
-- **Contra cliques roubados.** A lista fecha quando o campo se mexe (como no Chrome e no Firefox); o guarda de 300 ms
+- **Contra cliques roubados.** A lista fecha quando o campo se mexe (como no Chrome e no Firefox); o guarda de 500 ms
   recomeça sempre que a lista aparece ou muda de linhas; o clique só escolhe se o botão desceu na própria linha depois
-  do guarda. As teclas da lista são só da aba do campo (um site fixado, a outra metade do ecrã ou a barra de endereço
+  do guarda e, se a lista nasceu debaixo do cursor, depois de o cursor ter saído da linha (4 píxeis do ecrã); o Enter
+  também espera o guarda. As teclas da lista são só da aba do campo (um site fixado, a outra metade do ecrã ou a barra de endereço
   esquecem o foco do cofre).
 - **Campos escondidos.** Um campo conta como visível com opacidade efetiva ≥ 0,9, pelo menos 10×10 px, texto com cor,
   a maior parte de cinco pontos de amostra no próprio campo (um rótulo dele só não tapa se for transparente) e, num
