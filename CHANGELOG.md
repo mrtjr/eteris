@@ -35,6 +35,7 @@
 
 ### Correções
 
+- **Sites que ficavam incompletos com o Escudo ligado** (por exemplo, o ge.globo.com e o g1.globo.com: só cinco notícias, sem a coluna das classificações nem o resto da página). Um pedido bloqueado pelo Escudo passa a falhar como num bloqueador de extensão (`ERR_BLOCKED_BY_CLIENT`) e não como um pedido cancelado, que deixava o código desses sites à espera. Os rastreadores continuam bloqueados e nada sai para a rede; como a página agora carrega por inteiro, o contador do Escudo pode mostrar mais bloqueios nesses sites.
 - «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
 - Uma conversão escrita com algarismos de outro alfabeto (ou uma conta colada com milhares de parênteses) na barra de endereço já não fecha o Éteris.
 - Escrever no filtro das abas verticais já não muda de aba nem deixa a janela sem aba ativa: só o Enter salta para o primeiro resultado.

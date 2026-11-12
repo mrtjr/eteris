@@ -179,12 +179,16 @@ public static class UpdateService
         }
     }
 
-    public static async Task CheckAndDownloadAsync()
+    public static Task CheckAndDownloadAsync() => CheckAndDownloadAsync(NewManager);
+
+    // Quem cria o UpdateManager vem de fora para os testes poderem dar-lhe uma instalação de teste e uma fonte que lança (ou
+    // sem versão nova): é assim que o caminho «sem ligação» (Failed) e o «já atualizado» (UpToDate) são exercitados.
+    internal static async Task CheckAndDownloadAsync(Func<UpdateManager?> createManager)
     {
         if (State == UpdateState.Ready || Interlocked.Exchange(ref _checking, 1) == 1) return;
         try
         {
-            var manager = NewManager();
+            var manager = createManager();
             if (manager is null || !manager.IsInstalled)
             {
                 State = UpdateState.Development;

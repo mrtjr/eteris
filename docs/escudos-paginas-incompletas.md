@@ -1,7 +1,24 @@
-# Escudos: páginas que ficam incompletas (investigação em pausa)
+# Escudos: páginas que ficavam incompletas
 
-Estado: **em pausa** a 2026-11-12, a pedido do dono, para dar prioridade ao botão «Sair» do menu. Nada mudou no código
-por causa disto. Este registo diz o que já se sabe e onde retomar.
+Estado: **corrigido para a 0.2.17** (2026-11-12). Um sub-recurso bloqueado deixa de ser cancelado
+(`CefReturnValue.Cancel` → `net::ERR_ABORTED`) e passa a falhar com `net::ERR_BLOCKED_BY_CLIENT` por um tratador local,
+sem ir à rede: `Shields/BlockedByClientHandler.cs` e `PrivacyResourceHandler.Settle`/`ContinueAfterBlock` em
+`Shields/PrivacyRequestHandler.cs` (testes em `BlockedByClientTests`). Os frames e os websockets continuam cancelados.
+A marca do pedido é o identificador e o endereço (o identificador do CEF é o `request_id` do Blink, único só dentro
+de cada processo da página), e nos bloqueios tardios (CNAME, rede local) só se marca um pedido ainda à espera.
+
+**Prova ao vivo** (build de desenvolvimento, perfil de teste, servidor local com contagem de ligações, nomes reais de
+rastreadores mapeados para 127.0.0.1): nenhum de ~20 tipos de pedido bloqueado chegou ao servidor (script, fetch,
+XHR, imagem, `sendBeacon`, CSS, fonte, prefetch, EventSource, workers, service worker, redireções 302, https); todos
+falham com `ERR_BLOCKED_BY_CLIENT`, e o iframe e o `<object>` com `ERR_ABORTED`, como antes. O contador do Escudo deu
+o mesmo total que antes. Com o Escudo ligado: ge Flamengo 2939 → 14444 px, ge 2797 → 14544 px, g1 3197 → 14573 px,
+com os rastreadores bloqueados; www.globo.com, uol, folha e publico.pt iguais.
+
+**Fica por corrigir (anterior a esta mudança, igual na 0.2.16):** um **WebSocket** (`ws://`) para um rastreador
+bloqueado chegou ao servidor na prova, e não entra na contagem do Escudo — o tratador ou não vê o pedido ou deixa-o
+passar. A investigar à parte.
+
+O resto deste registo é a investigação, tal como ficou quando estava em pausa.
 
 ## O sintoma
 
