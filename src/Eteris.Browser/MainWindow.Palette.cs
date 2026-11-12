@@ -105,8 +105,8 @@ public partial class MainWindow
             yield return new("", $"Reabrir «{entry.Title}»", entry.Address, null, () => Tabs.ReopenClosed(entry));
         }
         foreach (var command in SessionCommands()) yield return command;
-        yield return new("", "Esquecer os últimos 15 minutos", "Apaga o histórico e as «Feitas» desse período e as abas e janelas fechadas recentes, em todas as janelas", null, () => Forget(15));
-        yield return new("", "Esquecer a última hora", "Apaga o histórico e as «Feitas» da última hora e as abas e janelas fechadas recentes, em todas as janelas", null, () => Forget(60));
+        yield return new("", "Esquecer os últimos 15 minutos", ForgetHint(15, IsPrivate), null, () => Forget(15));
+        yield return new("", "Esquecer a última hora", ForgetHint(60, IsPrivate), null, () => Forget(60));
         if (Tabs.Tabs.Any(t => t.Media == Eteris.Browser.Tabs.MediaState.Playing))
             yield return new("\uE769", "Pausar tudo o que está a tocar", "Vídeos e áudio de todas as abas", null, PauseAllMedia);
         if (Tabs.Tabs.Any(t => !ReferenceEquals(t, Tabs.Active) && !t.IsMuted && t.Media != Eteris.Browser.Tabs.MediaState.None))
@@ -408,10 +408,26 @@ public partial class MainWindow
 
     // ---------- Esquecer ----------
 
+    // O subtítulo e o aviso de «Esquecer»: numa janela privada só chega a ela (não grava histórico, e o do perfil não é
+    // dela).
+    internal static string ForgetHint(int minutes, bool isPrivate)
+    {
+        if (isPrivate) return "Esquece as abas fechadas recentes e a pilha de anulação desta janela (a janela privada não grava histórico)";
+        return minutes < 60 ? "Apaga o histórico e as «Feitas» desse período e as abas e janelas fechadas recentes, em todas as janelas"
+            : "Apaga o histórico e as «Feitas» da última hora e as abas e janelas fechadas recentes, em todas as janelas";
+    }
+
+    internal static string ForgetDone(int minutes, bool isPrivate)
+        => (minutes < 60 ? $"Os últimos {minutes} minutos foram esquecidos" : "A última hora foi esquecida") + (isPrivate ? " nesta janela" : "");
+
     private void Forget(int minutes)
     {
-        AppData.ForgetSince(DateTime.UtcNow.AddMinutes(-minutes));
-        ForgetBounceVisits(DateTime.UtcNow.AddMinutes(-minutes));
+        // Numa janela privada o histórico, as «Feitas» e os sites de salto do perfil não se tocam: não são dela.
+        if (!IsPrivate)
+        {
+            AppData.ForgetSince(DateTime.UtcNow.AddMinutes(-minutes));
+            ForgetBounceVisits(DateTime.UtcNow.AddMinutes(-minutes));
+        }
         // Em todas as janelas do mesmo contexto (a privada só a própria): as abas fechadas e a pilha de anulação também,
         // senão a paleta mostrava «Anular: Feito «título»» e o Ctrl+Z repunha a aba esquecida.
         foreach (var window in IsPrivate ? [this] : NormalWindows())
@@ -421,7 +437,7 @@ public partial class MainWindow
         }
         // A janela fechada não guarda a hora em que fechou: saem todas.
         if (!IsPrivate) s_closedWindows.Clear();
-        ShowToast(minutes < 60 ? $"Os últimos {minutes} minutos foram esquecidos" : "A última hora foi esquecida");
+        ShowToast(ForgetDone(minutes, IsPrivate));
     }
 
     // ---------- Modo foco ----------

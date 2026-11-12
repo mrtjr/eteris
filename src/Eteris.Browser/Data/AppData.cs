@@ -99,9 +99,8 @@ public static class AppData
         LazyWriter.Value.Dispose();
         // O escritor já esvaziou a fila e a tarefa dele parou: a compactação única (para o que versões anteriores
         // apagaram sem secure_delete) corre agora, ao sair, e nunca no arranque. Se a base estiver ocupada, repete na
-        // saída seguinte.
-        try { History.CompactOnce(); }
-        catch (Exception) { }
+        // saída seguinte. Espera pela compactação de um «Apagar tudo» que ainda esteja a correr (nunca correm as duas).
+        LazyWriter.Value.RunAsideNow(h => h.CompactOnce());
     }
 
     private static readonly Lazy<HiddenElementsStore?> LazyHidden = StartupTrace.Lazy<HiddenElementsStore?>("LazyHidden", () =>
@@ -259,7 +258,8 @@ public static class AppData
     }
 
     // «Esquecer» o histórico desde sinceUtc (DateTime.MinValue = desde sempre). Desde sempre, compacta-se o ficheiro
-    // depois (VACUUM), na fila do escritor: fora da thread da janela e da de rede.
+    // depois (VACUUM), quando o apagar já está escrito: numa tarefa à parte (HistoryWriter.RunAside), fora da thread da
+    // janela e da de rede e fora da fila do escritor — quem lê o histórico não fica à espera da compactação.
     public static void ForgetSince(DateTime sinceUtc)
     {
         TryWrite(h => h.DeleteSince(sinceUtc));
@@ -271,7 +271,7 @@ public static class AppData
         FlushShieldStats();
         try { LazyPrivacyEvents.Value?.ForgetSubjectsSince(sinceUtc == DateTime.MinValue ? DateOnly.MinValue : DateOnly.FromDateTime(sinceUtc.ToLocalTime())); }
         catch (Exception) { }
-        if (sinceUtc == DateTime.MinValue) QueueWrite(h => h.Compact());
+        if (sinceUtc == DateTime.MinValue) _ = LazyWriter.Value.RunAside(h => h.Compact());
     }
 
     // «Triturar» um site: o domínio dele sai do relatório de privacidade (a contagem fica sem domínio).

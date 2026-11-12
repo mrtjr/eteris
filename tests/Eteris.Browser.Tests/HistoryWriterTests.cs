@@ -82,6 +82,46 @@ public sealed class HistoryWriterTests : IDisposable
         Assert.Equal("B final", _store.Visits(1)[0].Title);
     }
 
+    // Revisão final do plano 6: a compactação (VACUUM) depois de «Apagar tudo» corre ao lado da fila — quem lê ou apaga
+    // (omnibox, paleta, barra lateral, eteris://history) despeja a fila e não pode ficar à espera dela.
+    [Fact]
+    public async Task AsideWork_DoesNotHoldBackFlush_NorTheQueue()
+    {
+        using var writer = new HistoryWriter(() => _store, TimeSpan.FromSeconds(1));
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var aside = writer.RunAside(_ =>
+        {
+            started.Set();
+            release.Wait(TimeSpan.FromSeconds(10));
+        });
+        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        writer.Enqueue(h => h.Record("https://d.pt/", "D", T0));
+        Assert.True(writer.Flush(TimeSpan.FromMilliseconds(500)));
+        Assert.Single(_store.Visits(10));
+        release.Set();
+        await aside.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    // Duas compactações nunca correm ao mesmo tempo (a de «Apagar tudo» e a única, ao sair).
+    [Fact]
+    public async Task AsideWork_RunsOneAtATime()
+    {
+        using var writer = new HistoryWriter(() => _store, TimeSpan.FromSeconds(1));
+        var running = 0;
+        var overlapped = false;
+        void Work(HistoryStore _)
+        {
+            if (Interlocked.Increment(ref running) > 1) overlapped = true;
+            Thread.Sleep(50);
+            Interlocked.Decrement(ref running);
+        }
+        var first = writer.RunAside(Work);
+        writer.RunAsideNow(Work);
+        await first.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(overlapped);
+    }
+
     [Fact]
     public void AFailingWrite_DoesNotStopTheQueue()
     {

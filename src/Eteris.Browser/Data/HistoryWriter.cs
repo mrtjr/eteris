@@ -70,6 +70,24 @@ public sealed class HistoryWriter : IDisposable
         Enqueue(h => h.UpdateTitle(url, title));
     }
 
+    // Trabalho longo e raro (a compactação, VACUUM) ao lado da fila, uma de cada vez: não conta para o Flush, por isso
+    // quem lê ou apaga (omnibox, paleta, barra lateral, eteris://history) não espera por ele. Com o WAL, as leituras
+    // seguem durante o VACUUM; uma escrita (a da fila ou um apagar) espera pela vez dela no SQLite, como antes.
+    // Uma falha fica aqui, como nas escritas da fila.
+    private readonly Lock _aside = new();
+
+    public Task RunAside(Action<HistoryStore> work) => Task.Run(() => RunAsideNow(work));
+
+    // O mesmo, já, na thread que chama (a compactação única ao sair espera pela que esteja a correr).
+    public void RunAsideNow(Action<HistoryStore> work)
+    {
+        lock (_aside)
+        {
+            try { work(_store()); }
+            catch (Exception) { }
+        }
+    }
+
     // Espera (no máximo timeout) que tudo o que já foi pedido esteja escrito, incluindo os títulos à espera.
     public bool Flush(TimeSpan timeout)
     {

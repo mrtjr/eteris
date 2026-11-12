@@ -132,6 +132,74 @@ public class ClearDataTests
         Assert.Contains("IsPrivate ? Tabs.Tabs.Select(t => t.Address) : OpenAddresses()", window);
     }
 
+    // Revisão final do plano 6: a janela privada não apaga o histórico do perfil — nem «Apagar dados › histórico» nem
+    // «Esquecer os últimos minutos» a partir dela (o histórico do perfil não é dela).
+    [Fact]
+    public void PrivateWindow_DoesNotForgetTheProfileHistory()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        var clear = code[code.IndexOf("private static async Task<string> ClearBrowsingDataAsync(", StringComparison.Ordinal)..];
+        clear = clear[..clear.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("if (request.History && !privateContext)", clear);
+        var palette = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Palette.cs"));
+        var forget = palette[palette.IndexOf("private void Forget(int minutes)", StringComparison.Ordinal)..];
+        forget = forget[..forget.IndexOf("\n    }", StringComparison.Ordinal)];
+        var gate = forget.IndexOf("if (!IsPrivate)", StringComparison.Ordinal);
+        Assert.True(gate > 0 && gate < forget.IndexOf("AppData.ForgetSince(", StringComparison.Ordinal)
+                    && gate < forget.IndexOf("ForgetBounceVisits(", StringComparison.Ordinal));
+        Assert.DoesNotContain("em todas as janelas\", null, () => Forget(", palette);
+    }
+
+    // A compactação de «Apagar tudo» e a única ao sair correm ao lado da fila do escritor (HistoryWriterTests).
+    [Fact]
+    public void Compaction_RunsAsideOfTheWriterQueue()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data", "AppData.cs"));
+        Assert.DoesNotContain("QueueWrite(h => h.Compact())", code);
+        Assert.Contains("LazyWriter.Value.RunAside(h => h.Compact())", code);
+        Assert.Contains("LazyWriter.Value.RunAsideNow(h => h.CompactOnce())", code);
+    }
+
+    // Ao sair, a compactação única (pode demorar com um histórico grande) vem depois das limpezas de privacidade: o
+    // apagar dos cookies, as palavras-passe por apagar de vez e a área de transferência não esperam por ela.
+    [Fact]
+    public void OnExit_ClosesTheHistoryAfterThePrivacySteps()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "App.xaml.cs"));
+        var close = code.IndexOf("Data.AppData.CloseHistory();", StringComparison.Ordinal);
+        Assert.True(close > 0);
+        foreach (var step in new[] { "DeleteCookiesAsync(string.Empty, string.Empty)", "Vault.VaultRoutes.CommitPendingOnExit();", "Vault.SecureClipboard.ClearPendingOnExit();" })
+            Assert.True(code.IndexOf(step, StringComparison.Ordinal) is var at && at > 0 && at < close, step);
+    }
+
+    // O CHANGELOG da 0.2.17 nomeia os armazéns com secure_delete; se um armazém o ganhar ou perder, a frase muda com ele.
+    [Fact]
+    public void SecureDelete_ChangelogNamesTheStoresThatHaveIt()
+    {
+        var data = Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data");
+        var stores = Directory.GetFiles(data, "*Store.cs")
+            .Where(f => File.ReadAllText(f).Contains("SqliteSetup.SecureDelete(connection);", StringComparison.Ordinal))
+            .Select(Path.GetFileNameWithoutExtension).Order(StringComparer.Ordinal).ToList();
+        Assert.Equal(["ArchivedTabsStore", "DoneTabsStore", "HistoryStore", "PrivacyEventsStore", "SavedSessionsStore", "SnoozedTabsStore"], stores);
+        var log = File.ReadAllText(Path.Combine(RepoRoot(), "CHANGELOG.md"));
+        log = log[..log.IndexOf("## 0.2.16", StringComparison.Ordinal)];
+        Assert.DoesNotContain("todas as ligações dos armazéns", log);
+        Assert.Contains("no histórico, nas «Feitas», no Arquivo, nas «Adiadas», nas sessões guardadas e no relatório de privacidade", log);
+        Assert.Contains("os favoritos, a lista «Para ler», a sessão das abas abertas e as notas não estão incluídos", log);
+    }
+
+    [Fact]
+    public void ForgetCommand_SaysWhatItReaches_InEachKindOfWindow()
+    {
+        Assert.Contains("em todas as janelas", MainWindow.ForgetHint(15, isPrivate: false));
+        Assert.Contains("histórico", MainWindow.ForgetHint(60, isPrivate: false));
+        var inPrivate = MainWindow.ForgetHint(15, isPrivate: true);
+        Assert.DoesNotContain("todas as janelas", inPrivate);
+        Assert.Contains("desta janela", inPrivate);
+        Assert.Equal("Os últimos 15 minutos foram esquecidos", MainWindow.ForgetDone(15, isPrivate: false));
+        Assert.Equal("A última hora foi esquecida nesta janela", MainWindow.ForgetDone(60, isPrivate: true));
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

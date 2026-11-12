@@ -93,7 +93,6 @@ public partial class App : Application
         StartupGuard.Current.Healthy();
         StartupGuard.Current.Flush();
         Data.AppData.FlushShieldStats();
-        Data.AppData.CloseHistory();
         if (Data.Settings.Current.ClearOnExit)
         {
             try { Cef.GetGlobalCookieManager().DeleteCookiesAsync(string.Empty, string.Empty).Wait(TimeSpan.FromSeconds(3)); }
@@ -105,6 +104,9 @@ public partial class App : Application
         // Uma palavra-passe copiada há menos de 60 s sai da área de transferência (se ainda lá estiver).
         try { Vault.SecureClipboard.ClearPendingOnExit(); }
         catch (Exception) { }
+        // O histórico fecha depois das limpezas de privacidade: a compactação única (AppData.CloseHistory) pode demorar
+        // com um histórico grande e não as pode atrasar.
+        Data.AppData.CloseHistory();
         try
         {
             // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se

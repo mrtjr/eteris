@@ -651,7 +651,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         // As origens do histórico inteiro, seja qual for o período (cookies e armazenamento saem por inteiro), lidas antes
         // de apagar o histórico. Numa janela privada a limpeza é a do contexto dela: o histórico do perfil não conta.
         IReadOnlyList<string> historyOrigins = request.Cookies && !privateContext ? AppData.TryRead(h => h.Origins()) : [];
-        if (request.History)
+        // O histórico do perfil (e as «Feitas», o relatório e os sites de salto) também não se apaga a partir dela: a
+        // janela privada não grava histórico.
+        if (request.History && !privateContext)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
             AppData.ForgetSince(since);
