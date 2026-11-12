@@ -1,5 +1,7 @@
 # Éteris — Fase 1: Esqueleto — Plano de Implementação
 
+> **Documento histórico (2026-11-05).** Descreve o desenho inicial; partes foram abandonadas (o motor de pesquisa Atenix, o «DNT: 1», o «sem contas», a sincronização e o gestor de palavras-passe fora do âmbito). O estado atual está em `docs/motor.md`, `docs/sandbox.md`, `docs/palavras-passe.md`, `docs/sincronizacao.md` e `docs/paridade.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Um navegador Windows instalável (`Eteris-Setup.exe`, sem admin) que abre uma janela com uma aba Chromium, carrega páginas, e verifica atualizações no GitHub Releases ao arrancar.

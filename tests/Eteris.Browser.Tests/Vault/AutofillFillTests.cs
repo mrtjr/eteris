@@ -156,7 +156,6 @@ public class AutofillFillTests
             const b = C.fillPlan(['given-name', 'street-address', 'address-number'], [true, true, true], v);
             print(JSON.stringify(a) + ' ' + JSON.stringify(b));
             """);
-        if (output is null) return;
         Assert.Equal("""[[0,"Ana Teste"],[1,"Rua X, 12"],[2,"1000-001"],[3,"Lisboa"]] [[0,"Ana"],[1,"Rua X"],[2,"12"]]""", output);
     }
 
@@ -170,7 +169,6 @@ public class AutofillFillTests
               { options: [{ value: '28', text: '2028' }, { value: '29', text: '2029' }] }, { maxLength: 2 }];
             print(JSON.stringify(C.fillPlan(kinds, kinds.map(() => true), v, metas)) + ' foco=' + C.focusAfter(kinds, kinds.map(() => true), v, 0));
             """);
-        if (output is null) return;
         Assert.Equal("""[[0,"4111111111111111"],[1,"Titular"],[2,"08/29"],[4,"08/2029"],[5,"8"],[6,"29"],[7,"29"]] foco=3""", output);
     }
 
@@ -185,7 +183,6 @@ public class AutofillFillTests
               { maxLength: 11 }, { maxLength: 8 }, { maxLength: 14 }];
             print(JSON.stringify(C.fillPlan(kinds, kinds.map(() => true), v, metas)));
             """);
-        if (output is null) return;
         Assert.Equal("""[[0,"BR"],[1,"SP"],[2,"52998224725"],[3,"01310100"],[4,"529.982.247-25"]]""", output);
     }
 
@@ -198,7 +195,6 @@ public class AutofillFillTests
             const metas = [{ filled: true }, { filled: true }, {}];
             print(JSON.stringify(C.fillPlan(['given-name', 'city', 'postal-code'], [true, true, true], v, metas, { keep: true, anchor: 0 })));
             """);
-        if (output is null) return;
         Assert.Equal("""[[0,"Ana"],[2,"1000-001"]]""", output);
     }
 }

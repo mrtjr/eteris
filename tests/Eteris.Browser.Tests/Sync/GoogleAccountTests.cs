@@ -18,6 +18,9 @@ namespace Eteris.Browser.Tests.Sync;
 
 // A conta no menu e nas Definições: nome e e-mail pedidos ao Drive (about.get, âmbito drive.appdata já concedido),
 // guardados cifrados, apagados ao sair, e pedidos só depois de uma ação do utilizador — nunca no arranque.
+// Na coleção sem paralelismo: cada OnSta prende uma thread do pool enquanto espera pela thread STA, e as classes da
+// coleção correm depois da fase paralela.
+[Collection(WpfCollection.Name)]
 public class GoogleAccountTests
 {
     private long _now = 1_762_560_000_000;

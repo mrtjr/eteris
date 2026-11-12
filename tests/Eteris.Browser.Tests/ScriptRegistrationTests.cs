@@ -101,34 +101,11 @@ public class ScriptRegistrationTests
               ancestorOrigins: {{(topOrigin is null ? "[]" : "[" + System.Text.Json.JsonSerializer.Serialize(topOrigin) + "]")}} };
             globalThis.hit = false;
             """;
-        if (RunNode(setup + "\n" + script + "\nprocess.stdout.write(String(globalThis.hit));") is not { } output) return;
+        var output = RunNode(setup + "\n" + script + "\nprocess.stdout.write(String(globalThis.hit));");
         Assert.Equal(expected ? "true" : "false", output);
     }
 
-    private static string? RunNode(string script)
-    {
-        var file = Path.Combine(Path.GetTempPath(), $"eteris-guard-{Guid.NewGuid():N}.js");
-        File.WriteAllText(file, script);
-        try
-        {
-            Process? node;
-            try
-            {
-                node = Process.Start(new ProcessStartInfo("node", [file])
-                {
-                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-                });
-            }
-            catch (System.ComponentModel.Win32Exception) { return null; } // Node não instalado: não há como verificar aqui.
-            if (node is null) return null;
-            var output = node.StandardOutput.ReadToEnd();
-            var error = node.StandardError.ReadToEnd();
-            node.WaitForExit(30_000);
-            Assert.True(node.ExitCode == 0, error);
-            return output;
-        }
-        finally { File.Delete(file); }
-    }
+    private static string RunNode(string script) => NodeRunner.Run(script);
 
     // Regras de código: o pedido da página nunca fica à espera (era o ~1 s por navegação), e os scripts nas páginas
     // antes dos da própria página só entram pelo ScriptletInjector. A única espera que resta no tratador é a do CNAME

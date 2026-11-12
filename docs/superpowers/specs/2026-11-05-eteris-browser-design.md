@@ -1,5 +1,7 @@
 # Éteris — navegador web privado + Atenix (metabusca) — Design
 
+> **Documento histórico (2026-11-05).** Descreve o desenho inicial; partes foram abandonadas (o motor de pesquisa Atenix, o «DNT: 1», o «sem contas», a sincronização e o gestor de palavras-passe fora do âmbito). O estado atual está em `docs/motor.md`, `docs/sandbox.md`, `docs/palavras-passe.md`, `docs/sincronizacao.md` e `docs/paridade.md`.
+
 Data: 2026-11-05
 Estado: aprovado em conversa; aguarda revisão escrita
 

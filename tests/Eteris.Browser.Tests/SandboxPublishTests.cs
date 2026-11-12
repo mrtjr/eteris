@@ -51,6 +51,12 @@ public class SandboxPublishTests
         Assert.DoesNotContain("ErrorActionPreference", param);
     }
 
+    // O build-all.ps1 corre a bateria antes de publicar: os testes dos scripts injetados falham sem o Node, por isso o
+    // script exige-o à partida, como o git, o cmake e o dotnet.
+    [Fact]
+    public void BuildAll_RequiresTheToolsTheTestsNeed()
+        => Assert.Contains("foreach ($tool in 'git', 'cmake', 'dotnet', 'node')", Read("build", "sandbox", "build-all.ps1"));
+
     [Fact]
     public void Publish_IsWithSandboxByDefault_AndNoSandboxIsTheEmergencyExit()
     {
@@ -228,7 +234,8 @@ public class SandboxPublishTests
     }
 
     // A recusa sem git lê-se em qualquer página de códigos da consola: a do runner (437), a da máquina do dono (850) e
-    // a UTF-8 (65001). O «:<cp>» é o que o chcp escreve depois de mudar, e prova que a mudança pegou.
+    // a UTF-8 (65001). O «:<cp>» é o que o chcp escreve depois de mudar, e prova que a mudança pegou: tem de ser o
+    // primeiro «:» da saída (o chcp escreve antes do PowerShell), para não casar com um «pack.ps1:437» de um erro.
     [Theory]
     [InlineData(437)]
     [InlineData(850)]
@@ -237,7 +244,7 @@ public class SandboxPublishTests
     {
         var mark = "{ \"version\": \"9.9.9\", \"sandbox\": true, \"commit\": \"" + new string('a', 40) + "\", \"google_oauth\": true }";
         var (said, output) = await RunPackAsync(mark, file: true, "", head: null, codePage);
-        Assert.True(said(":" + codePage), "o chcp não mudou a página de códigos; saída: " + output);
+        Assert.True(Regex.IsMatch(output, @"^[^:\\]*:" + codePage + @"(?!\d)"), "o chcp não mudou a página de códigos; saída: " + output);
         Assert.True(said(NoHeadRefusal), "o pack.ps1 não recusou por não ler o HEAD; saída: " + output);
         Assert.True(said("publique de novo"), "a recusa manda publicar de novo");
     }

@@ -1,8 +1,9 @@
 namespace Eteris.Browser.Shields;
 
 // Interruptores de linha de comandos do motor que cumprem promessas do Éteris. Um nome que não existe é ignorado em
-// silêncio pelo Chromium: cada nome destas listas tem de ser uma base::Feature do libcef.dll em uso (o teste
-// EngineFeatureNamesTests procura a estrutura no binário) e aparece em eteris://privacy/ com o que faz.
+// silêncio pelo Chromium: cada nome destas listas tem de ser uma base::Feature do libcef.dll do NuGet e, quando existe,
+// do da compilação própria (build/cef-codecs/out/runtime) (o teste EngineFeatureNamesTests procura a estrutura no
+// binário) e aparece em eteris://privacy/ com o que faz.
 public static class EngineHardening
 {
     // As APIs de publicidade do Chromium («Privacy Sandbox»): nenhum site pode pedir ao Éteris um resumo dos

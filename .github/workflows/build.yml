@@ -1,8 +1,14 @@
 name: build
 
+# Uma vez por alteração: no push do main e em cada pedido (antes corria duas vezes por pedido, no push do ramo e no
+# pull_request). As ações estão fixadas por SHA, com a versão em comentário (o Dependabot sobe-as).
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -10,18 +16,25 @@ jobs:
     # Hoje leva 4 a 5 min: um bloqueio não pode comer as 6 h por omissão.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          dotnet-version: 10.0.x
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          global-json-file: global.json
+      # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.16.0
       - name: Escudo (Rust) — testes, incluindo as listas reais
-        run: cargo test --release --manifest-path src/Eteris.Shields/Cargo.toml
+        run: cargo test --release --locked --manifest-path src/Eteris.Shields/Cargo.toml
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
-      # Um teste preso deixa um dump (5 min); o TRX guarda a duração de cada teste; se falhar, os resultados ficam no job.
+      # Um teste preso deixa um dump (5 min); o TRX guarda a duração de cada teste; os resultados ficam sempre no job
+      # (numa execução verde, a duração de cada teste).
       - run: dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=testes.trx" --results-directory TestResults
-      - if: failure()
-        uses: actions/upload-artifact@v7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: testes-${{ github.run_id }}-${{ github.run_attempt }}
           path: TestResults

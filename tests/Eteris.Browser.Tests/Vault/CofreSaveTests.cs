@@ -12,7 +12,6 @@ public class CofreSaveTests
         var output = CofreClassifierTests.Run("""
             print(JSON.stringify(C.submission({ formKind: 'login', kinds: ['username', 'password'], user: 0 }, ['ana@exemplo.test', 'Inventada-1!'])));
             """);
-        if (output is null) return;
         Assert.Equal("""{"formKind":"login","username":"ana@exemplo.test","password":"Inventada-1!"}""", output);
     }
 
@@ -24,7 +23,6 @@ public class CofreSaveTests
             const change = C.submission({ formKind: 'change', kinds: ['password', 'new-password', 'new-password'], user: -1 }, ['Antiga-0!', 'Nova-2?', 'Nova-2?']);
             print(JSON.stringify(signup) + ' ' + JSON.stringify(change));
             """);
-        if (output is null) return;
         Assert.Equal("""{"formKind":"signup","username":"ana","newPassword":"Nova-2?"} {"formKind":"change","username":"","password":"Antiga-0!","newPassword":"Nova-2?"}""", output);
     }
 
@@ -40,7 +38,6 @@ public class CofreSaveTests
               C.submission({ formKind: 'other', kinds: ['one-time-code'], user: -1 }, ['123456']),
             ].map(x => JSON.stringify(x)).join(' '));
             """);
-        if (output is null) return;
         Assert.Equal("null null null null", output);
     }
 
@@ -53,7 +50,6 @@ public class CofreSaveTests
                   JSON.stringify(C.constraints({ minLength: -1, maxLength: -1, pattern: '' })) + ' ' +
                   JSON.stringify(C.constraints({ minLength: 0, maxLength: 524288, pattern: null })));
             """);
-        if (output is null) return;
         Assert.Equal("""{"minLength":8,"maxLength":16,"pattern":"[A-Za-z0-9]+"} {} {}""", output);
     }
 

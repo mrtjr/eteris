@@ -1,0 +1,45 @@
+name: stress
+
+# Bateria de repetição: a bateria inteira 20 vezes seguidas, com só dois processadores, para encontrar as
+# intermitências antes de elas rebentarem num build normal. Manual e semanal; não repete para passar a verde — uma
+# corrida vermelha deixa o job vermelho, e corrige-se a causa.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      DOTNET_PROCESSOR_COUNT: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          global-json-file: global.json
+      # Os testes dos scripts injetados correm no Node e falham sem ele (a versão da máquina de publicação).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.16.0
+      - run: dotnet build -c Release
+      - name: 20 corridas da bateria
+        shell: pwsh
+        run: |
+          $falhas = 0
+          for ($i = 1; $i -le 20; $i++) {
+            dotnet test -c Release --no-build --blame-hang-timeout 5m --blame-hang-dump-type mini --logger "trx;LogFileName=corrida-$i.trx" --results-directory TestResults
+            if ($LASTEXITCODE -ne 0) { $falhas++ }
+          }
+          if ($falhas -gt 0) { throw "$falhas de 20 corridas falharam" }
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: stress-${{ github.run_id }}
+          path: TestResults
