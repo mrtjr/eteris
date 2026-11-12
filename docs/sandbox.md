@@ -894,6 +894,42 @@ pop-ups, abas, ecrã dividido.
 Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo C, cada atualização do motor (ver
 `docs/paridade.md`, #3) obriga a recompilar a versão própria do CefSharp.
 
+## Páginas internas (eteris://) — quem pode pedir (auditoria 3: INT-07, VAU-09)
+
+O modelo tem três camadas:
+
+1. **Esquema isolado no processo da página.** `eteris` é registado como «display isolated»: uma página da web não o
+   pede diretamente (medido: uma moldura `eteris://` direta numa página web fica vazia). Um redirecionamento do
+   servidor (302) passava ao lado desta regra — ver a prova abaixo.
+2. **Token.** As ações (`/set`, `/delete`, `/list` do cofre…) exigem o token aleatório da sessão
+   (`InternalPages.Token`), que só as páginas internas recebem.
+3. **Porta no processo do navegador (novo).** A fábrica do esquema (`EterisSchemeHandlerFactory.Create`) pergunta quem
+   pede antes de qualquer rota: `InternalPages.Serves(topo, pedido, frame principal)`. Abrir uma página (frame
+   principal, caminho `/`) vale sempre; molduras e sub-recursos só quando o documento de topo do separador é uma página
+   interna; as rotas do cofre (`eteris://passwords/…`, `eteris://autofill/…`) só para a própria página. O resto recebe
+   403. Logo a seguir a uma navegação (um F5) o frame principal ainda não tem endereço na thread de rede: vale então a
+   navegação em curso, anotada pelo `PrivacyRequestHandler` (`InternalPages.NoteNavigation`/`TopOf`).
+   `OnBeforeBrowse` cancela os redirecionamentos para `eteris://` e as molduras `eteris://` numa página que não é interna
+   (`InternalPages.BlocksNavigation`). As respostas levam `X-Frame-Options: SAMEORIGIN` (as páginas leem as rotas em
+   iframes ocultos da mesma origem: `DENY` partia-as) e `X-Content-Type-Options: nosniff`.
+
+O tipo de recurso é declarado pelo processo da página: a porta trava molduras e sub-recursos, não um processo
+comprometido que diga «MainFrame». Por isso a raiz de `eteris://passwords` e `eteris://autofill` deixou de levar
+registos (sites, utilizadores, cartões mascarados): a página abre vazia (`loading`) e pede-os por `/list`.
+
+**Prova antes da correção (2026-11-12, perfil de teste, servidor em 127.0.0.1, lida por CDP):**
+
+| Observação | Antes | Depois |
+|---|---|---|
+| `<iframe src="eteris://settings/">` numa página web mostra as Definições? | não (o esquema isolado trava-o) | não |
+| `<iframe src="/salto">` com `302 → eteris://settings/` mostra as Definições? | **sim** (a página das Definições abriu dentro do site) | não |
+| Clique num link `/salto` (`302 → eteris://settings/`) leva a aba às Definições? | **sim** | não (a aba fica no site) |
+
+Com dois «sim», o INT-07 mantém a severidade média (não é só defesa em profundidade). Depois da correção, também
+recusados: `302 → eteris://passwords/` e `302 → eteris://passwords/list` numa moldura, `<img>` direto e por 302 para
+`eteris://newtab/wallpaper/coast.jpg` numa página web, e — com o token certo — uma moldura
+`eteris://passwords/list?t=…` posta nas Definições (403).
+
 ## Regras para o código
 
 - **Nunca** usar no código do Éteris `EvaluateScriptAsync`, `ExecuteScriptAsync`, `ExecuteJavaScriptAsync`,

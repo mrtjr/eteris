@@ -23,6 +23,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         Infrastructure.StartupTrace.MarkOnce("cef.navegar");
         try
         {
+            // INT-07: um redirecionamento para eteris:// e uma moldura eteris:// numa página web não abrem (antes, um 302
+            // de um site mostrava as Definições dentro dele e levava a aba para lá).
+            if (Browser.InternalPages.BlocksNavigation(SafeFrame.MainUrl(browser), request.Url, frame.IsMain, isRedirect)) return true;
             if (onMainNavigation is not null && frame.IsMain)
                 onMainNavigation(new MainNavigation(SafeFrame.MainUrl(browser), request.Url, userGesture, isRedirect, request.TransitionType,
                     _resources.TakeRewrite(browser.Identifier, request.Url)));
@@ -261,6 +264,9 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                     newUrl = jump;
                 }
                 _navigatingTo[browser.Identifier] = newUrl;
+                // A porta das páginas internas também precisa de saber para onde vai a página (InternalPages.TopOf). Um
+                // redirecionamento para eteris:// nunca chega a topo (OnBeforeBrowse cancela-o): não se anota.
+                if (!Browser.InternalPages.IsInternal(newUrl)) Browser.InternalPages.NoteNavigation(browser.Identifier, newUrl);
             }
             catch (Exception) { }
         }
@@ -357,6 +363,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
                 if (browserless || browser is null) return CefReturnValue.Continue;
                 var result = DecideMainFrame(browser, request);
                 _navigatingTo[browser.Identifier] = request.Url;
+                Browser.InternalPages.NoteNavigation(browser.Identifier, request.Url);
                 return result;
             }
 

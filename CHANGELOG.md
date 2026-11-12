@@ -13,6 +13,7 @@
 - O painel de transferências mostra sempre a extensão do ficheiro, ignora cliques no primeiro segundo e pede confirmação antes de abrir programas e scripts.
 - O cadeado da barra de endereço só aparece depois de a página chegar: um endereço escrito e ainda não carregado, uma página de erro ou texto por enviar já não mostram “Ligação segura”.
 - Num endereço com muitos subdomínios, a barra mostra sempre o domínio verdadeiro: corta pela esquerda e destaca-o.
+- As páginas internas do Éteris deixam de responder a pedidos que não venham de uma página interna, não se deixam embutir em sites e a página das palavras-passe só recebe a lista depois de aberta.
 
 ### Privacidade
 

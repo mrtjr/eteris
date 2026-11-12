@@ -34,16 +34,41 @@ public sealed class AutofillPageTests : IDisposable
         _f.Vault.Save(TravelItem.Vehicle(string.Empty, "Renault", "Clio", 2019, "Ana Teste", "AB-12-CD", "PT", Vin));
         _f.Vault.Save(TravelItem.Loyalty(string.Empty, "TAP", "Miles&Go", Loyalty, "Ana Teste"));
         var html = (await _f.Get("autofill", "/")).Body;
+        var list = await _f.Get("autofill", "/list");
         foreach (var secret in new[] { "4111111111111111", Card, Iban, "PT50 0002 0123", Nif, "123 456 789", Vin, Loyalty })
+        {
             Assert.DoesNotContain(secret, html);
-        Assert.Contains("•••• 1111", html);
-        Assert.Contains("PT50 •••• 0154", html);
-        Assert.Contains("•••• 6789", html);
-        Assert.Contains("•••• 4321", html);
-        Assert.Contains("Visa", html);
-        Assert.Contains("AB-12-CD", html);
+            Assert.DoesNotContain(secret, list.Body);
+        }
+        // A lista vem por /list (VAU-09), em JSON com os caracteres fora do ASCII escapados: comparam-se os campos.
+        var json = VaultFixture.Json(list);
+        Assert.Equal("•••• 1111", json["cards"]![0]!["masked"]!.GetValue<string>());
+        Assert.Equal("Visa", json["cards"]![0]!["brand"]!.GetValue<string>());
+        Assert.Equal("PT50 •••• 0154", json["ibans"]![0]!["masked"]!.GetValue<string>());
+        Assert.Equal("•••• 6789", json["docs"]![0]!["masked"]!.GetValue<string>());
+        var travel = json["travel"]!.AsArray();
+        Assert.Contains(travel, t => t!["plate"]?.GetValue<string>() == "AB-12-CD");
+        Assert.Contains(travel, t => t!["masked"]?.GetValue<string>() == "•••• 4321");
         Assert.Equal(0, _f.Reauth.Prompts);
     }
+
+    // VAU-09: a raiz não leva os registos do cofre (vêm por /list, que a fábrica só serve à própria página).
+    [Fact]
+    public async Task Root_HasNoVaultMetadata()
+    {
+        await AddCard();
+        var list = (await _f.Get("autofill", "/list")).Body;
+        var root = (await _f.Get("autofill", "/")).Body;
+        Assert.Contains("\"cards\":[{", list);
+        Assert.Contains("\"cards\":[]", root);
+        Assert.Contains("\"contacts\":[]", root);
+        Assert.Contains("\"loading\":true", root);
+        Assert.DoesNotContain("•••• 1111", root);
+    }
+
+    // Os cartões mascarados da lista (/list), em texto.
+    private async Task<string[]> MaskedCards()
+        => VaultFixture.Json(await _f.Get("autofill", "/list"))["cards"]!.AsArray().Select(c => c!["masked"]!.GetValue<string>()).ToArray();
 
     [Fact]
     public void Template_SectionsThemedNoSecurityCode()
@@ -167,11 +192,12 @@ public sealed class AutofillPageTests : IDisposable
         Assert.Equal("ABC1D23", _f.Vault.GetTravel(car)!.Plate);
         Assert.Equal(Vin, _f.Vault.GetTravel(car)!.Vin);
         Assert.Equal(Loyalty, _f.Vault.GetTravel(miles)!.Number);
-        var html = (await _f.Get("autofill", "/")).Body;
-        Assert.Contains("Mastercard", html);
-        Assert.Contains("CNH", html);
-        Assert.Contains("CPF", html);
-        Assert.Contains("NIF", html);
+        var json = VaultFixture.Json(await _f.Get("autofill", "/list"));
+        Assert.Equal("Mastercard", json["cards"]![0]!["brand"]!.GetValue<string>());
+        var docNames = string.Join(" | ", json["docs"]!.AsArray().Select(d => d!["typeName"]!.GetValue<string>()));
+        Assert.Contains("CNH", docNames);
+        Assert.Contains("CPF", docNames);
+        Assert.Contains("NIF", docNames);
     }
 
     // Editar um item com segredo pede o Hello (é ver o número); sem ele nada muda. Os contactos editam-se sem pedir.
@@ -203,9 +229,9 @@ public sealed class AutofillPageTests : IDisposable
     {
         var card = await AddCard();
         var reply = VaultFixture.Json(await _f.Get("autofill", "/delete", $"c=cards&id={card}"));
-        Assert.DoesNotContain("•••• 1111", (await _f.Get("autofill", "/")).Body);
+        Assert.DoesNotContain("•••• 1111", await MaskedCards());
         await _f.Get("autofill", "/undo", "u=" + reply["undo"]!.GetValue<string>());
-        Assert.Contains("•••• 1111", (await _f.Get("autofill", "/")).Body);
+        Assert.Contains("•••• 1111", await MaskedCards());
         await _f.Get("autofill", "/delete", $"c=cards&id={card}");
         _f.Host.RunScheduled();
         Assert.Null(_f.Vault.GetCard(card));
