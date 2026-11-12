@@ -11,7 +11,7 @@ namespace Eteris.Browser.Data;
 // são escritas, como na leitura por reflexão. Ninguém as muda depois: as alterações passam pelo With (cópias com with).
 public sealed record UserSettings
 {
-    public static readonly string[] Engines = ["duckduckgo", "brave", "startpage"];
+    public static readonly string[] Engines = ["duckduckgo", "brave", "startpage", "google"];
     public static readonly int[] SleepChoices = [0, 5, 20, 60];
     public static readonly string[] NewTabThemes = ["aurora", "ocean", "sunset", "forest", "minimal"];
 

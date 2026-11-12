@@ -6,6 +6,9 @@ public sealed record SearchEngine(string Name, string Template)
     public static readonly SearchEngine DuckDuckGo = new("DuckDuckGo", "https://duckduckgo.com/?q={q}");
     public static readonly SearchEngine Brave = new("Brave Search", "https://search.brave.com/search?q={q}");
     public static readonly SearchEngine Startpage = new("Startpage", "https://www.startpage.com/do/search?q={q}");
+    // Uma escolha nas Definições, nunca o padrão nem nas Boas-vindas («Nenhum deles cria um perfil seu»); sem sugestões
+    // enquanto escreve (SearchSuggest), como o Startpage.
+    public static readonly SearchEngine Google = new("Google", "https://www.google.com/search?q={q}");
 
     // O Atenix só fica no ar na fase 5; até lá a pesquisa padrão é o DuckDuckGo.
     public static SearchEngine Default => DuckDuckGo;
@@ -14,6 +17,7 @@ public sealed record SearchEngine(string Name, string Template)
     {
         "brave" => Brave,
         "startpage" => Startpage,
+        "google" => Google,
         _ => DuckDuckGo,
     };
 
