@@ -420,6 +420,10 @@ public sealed class SyncAccountChoiceTests : IDisposable
         await trabalho.Agent.RefreshDevicesAsync();
 
         await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Terceiro").Id);
+        // O «trabalho» fixou o «terceiro» (pediu a lista): a troca de chave pede-lhe o identificador do kit novo.
+        Assert.True(await trabalho.Agent.RunAsync());
+        if (trabalho.Agent.Status.RekeyPending) await trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
         await Settle(casa, trabalho);
         Assert.True(casa.Agent.AccountSecrets);
         Assert.True(trabalho.Agent.AccountSecrets);

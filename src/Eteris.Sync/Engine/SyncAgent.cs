@@ -170,6 +170,11 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // por a conta ter desaparecido (Stopped com a chave guardada): o alerta «conta substituída». Nunca pede sozinho.
     public bool ChainReplaced { get; init; }
 
+    // A conta mudou de chave noutro aparelho e a mensagem que deixou a conta nova a este não é inequívoca (este
+    // aparelho fixou mais chaves do que a de quem a escreveu): a sincronização está em pausa, sem perder nada, até se
+    // escrever o identificador do kit novo (SyncAgent.ConfirmRekeyAsync) ou se desistir (SyncAgent.AbandonRekey).
+    public bool RekeyPending { get; init; }
+
     // Fase Choose num aparelho sem nenhum estado desta conta (SyncAgent.MayAutoRequest): pode pedir a aprovação.
     public bool MayAutoPair { get; init; }
 
@@ -233,6 +238,8 @@ public sealed class SyncAgent
     private bool _needsSignIn;
     private int _pendingDevices;
     private int _waiting;
+    // Identificadores errados na pausa da troca de chave (ConfirmRekeyAsync). Só memória, como as tentativas dos códigos.
+    private int _rekeyWrong;
     private GuestFlow? _guest;
     // Entrou agora na conta (aprovação ou código de recuperação): até ao fim da primeira ronda. Só memória.
     private bool _justJoined;
@@ -606,6 +613,7 @@ public sealed class SyncAgent
                     PairingQuiet = PairingFatigue.Quiet(_saved?.BadPairings, now),
                     ChainReplaced = _saved?.Secret is not null
                         && (_phase == SyncPhase.Choose || (_phase == SyncPhase.Stopped && _saved.Stopped == GoneText)),
+                    RekeyPending = RekeyHeld(_saved),
                     MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
                     JoinedNow = _justJoined && _phase == SyncPhase.On,
                     AccountSecrets = _saved is { Secret: not null, AccountSecrets: true },
@@ -998,8 +1006,11 @@ public sealed class SyncAgent
     }
 
     // A conta deste aparelho desapareceu: outro aparelho fez «nova cadeia» (e deixou-lhe a conta nova), removeu este
-    // aparelho, ou os dados foram apagados. Segue as contas novas em sequência (duas remoções seguidas enquanto este
-    // aparelho estava desligado) até uma que exista.
+    // aparelho, ou os dados foram apagados. Procura a conta nova (FindRekeyAsync) e só a segue sozinho quando a
+    // mensagem é inequívoca: quem a escreveu é a única chave fixada neste aparelho. Com mais chaves fixadas, a mensagem
+    // pode ser de um aparelho removido (tem a chave dele fixada aqui e, enquanto tiver acesso ao Drive, consegue apagar
+    // a mensagem verdadeira e deixar a sua): fica em pausa, sem perder nada, até o utilizador escrever o identificador
+    // do kit novo (ConfirmRekeyAsync).
     private async Task ChainGoneAsync(SavedSync saved, CancellationToken cancellationToken)
     {
         SyncState? old;
@@ -1013,58 +1024,13 @@ public sealed class SyncAgent
         {
             try
             {
-                var transport = Transport();
-                var chain = old.ChainId;
-                var consumed = new List<string>();
-                for (var hop = 0; hop < MaxRekeyHops; hop++)
+                var (found, consumed, unambiguous) = await FindRekeyAsync(Transport(), old, cancellationToken).ConfigureAwait(false);
+                using var rekey = found;
+                if (rekey is not null)
                 {
-                    using var rekey = await SyncEngine.ReceiveRekeyAsync(transport, old, chain, cancellationToken).ConfigureAwait(false);
-                    if (rekey is null) break;
-                    if (rekey.Conflict)
-                    {
-                        Stop(saved, ConflictText, StopKeeps.Secret);
-                        return;
-                    }
-                    consumed.AddRange(rekey.Paths);
-                    SyncEngine engine;
-                    try
-                    {
-                        engine = await SyncEngine.JoinAsync(transport, rekey.Secret!, old.Device, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    }
-                    catch (ChainGoneException)
-                    {
-                        // Esta conta nova também já foi substituída: a mensagem seguinte está dentro dela.
-                        chain = rekey.Secret!.ChainId;
-                        continue;
-                    }
-                    engine.AdoptDeviceKeys(old, rekey.Devices);
-                    engine.RestageOwn(old);
-                    var rekeyed = Snapshot(engine);
-                    lock (_gate)
-                    {
-                        if (!IsCurrent(saved)) return;
-                        _engine = engine;
-                        saved.Secret = Kdf.Base64Url(rekey.Secret!.ToBytes());
-                        // Este computador recebeu a cadeia nova: o kit que tinha guardado deixou de valer.
-                        KitFor(saved, rekey.Secret!);
-                        saved.HadAccount = true;
-                        saved.Engine = rekeyed;
-                        saved.Rotation = null;
-                        saved.CreatedMs = 0;
-                        // Os dados deste computador não mudaram: a base continua a valer, e o que mudou desde a última
-                        // ronda segue para a conta nova; o que este aparelho tinha escrito volta a seguir com a hora
-                        // original (RestageOwn), para não ser desfeito pelo instantâneo de quem trocou a chave.
-                        saved.LastCompactMs = 0;
-                        saved.LastCompactSeq = 0;
-                        _store.Save(saved);
-                        _notice = DeviceNameText.Clean(rekey.FromName) is { } deNome
-                            ? $"A conta mudou de chave em «{deNome}» (um aparelho foi removido, ou há um kit de recuperação novo). Este computador continua ligado."
-                            : "A conta mudou de chave (um aparelho foi removido, ou há um kit de recuperação novo). Este computador continua ligado.";
-                    }
-                    // Só agora, com a conta nova guardada, as mensagens saem do transporte (melhor esforço).
-                    try { await SyncEngine.ForgetRekeysAsync(transport, consumed, cancellationToken).ConfigureAwait(false); }
-                    catch (Exception e) when (IsTransient(e)) { }
-                    await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
+                    if (rekey.Conflict) Stop(saved, ConflictText, StopKeeps.Secret);
+                    else if (!unambiguous) Stop(saved, RekeyHeldText, StopKeeps.Everything);
+                    else await AdoptRekeyAsync(saved, old, rekey, consumed, cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
@@ -1078,6 +1044,186 @@ public sealed class SyncAgent
         }
         Stop(saved, GoneText, StopKeeps.Secret);
     }
+
+    // A conta nova deixada a este aparelho: segue as mensagens r/ em sequência (duas remoções seguidas enquanto este
+    // aparelho estava desligado) até uma conta que exista. NUNCA entra numa conta: nada deste aparelho é escrito numa
+    // conta por confirmar. «Consumed»: as mensagens lidas pelo caminho (saem do transporte depois de a conta nova ficar
+    // guardada). «Unambiguous»: em todos os saltos, quem escreveu a mensagem era a única chave fixada neste aparelho.
+    // Devolve Rekey nulo quando não há mensagem (ou os saltos se esgotaram), ou um Conflict. Quem recebe o resultado
+    // faz-lhe Dispose.
+    private static async Task<(RekeyResult? Rekey, List<string> Consumed, bool Unambiguous)> FindRekeyAsync(ISyncTransport transport,
+        SyncState old, CancellationToken cancellationToken)
+    {
+        var chain = old.ChainId;
+        var consumed = new List<string>();
+        var unambiguous = true;
+        for (var hop = 0; hop < MaxRekeyHops; hop++)
+        {
+            var rekey = await SyncEngine.ReceiveRekeyAsync(transport, old, chain, cancellationToken).ConfigureAwait(false);
+            if (rekey is null || rekey.Conflict) return (rekey, consumed, unambiguous);
+            var exists = false;
+            try
+            {
+                consumed.AddRange(rekey.Paths);
+                unambiguous &= SyncEngine.RekeyIsUnambiguous(old, rekey.From);
+                exists = await transport.ReadAsync(SyncPaths.Keys(rekey.Secret!.ChainId), cancellationToken).ConfigureAwait(false) is not null;
+                if (exists) return (rekey, consumed, unambiguous);
+                // Esta conta nova também já foi substituída: a mensagem seguinte está dentro dela.
+                chain = rekey.Secret.ChainId;
+            }
+            finally
+            {
+                if (!exists) rekey.Dispose();
+            }
+        }
+        return (null, consumed, unambiguous);
+    }
+
+    // Entra na conta nova de uma mensagem r/ (inequívoca, ou confirmada pelo identificador do kit), guarda-a e faz uma
+    // ronda. Uma ChainGoneException da ronda (a conta nova, já guardada, desapareceu) sai para quem chama.
+    private async Task AdoptRekeyAsync(SavedSync saved, SyncState old, RekeyResult rekey, List<string> consumed, CancellationToken cancellationToken)
+    {
+        var transport = Transport();
+        SyncEngine engine;
+        try
+        {
+            engine = await SyncEngine.JoinAsync(transport, rekey.Secret!, old.Device, _now, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (ChainGoneException)
+        {
+            // A conta mudou entre a leitura e a entrada: nada foi gravado, e a tentativa seguinte repete (passageira).
+            throw new IOException("A conta mudou outra vez durante a troca de chave.");
+        }
+        engine.AdoptDeviceKeys(old, rekey.Devices);
+        engine.RestageOwn(old);
+        var rekeyed = Snapshot(engine);
+        lock (_gate)
+        {
+            if (!IsCurrent(saved)) return;
+            _engine = engine;
+            saved.Secret = Kdf.Base64Url(rekey.Secret!.ToBytes());
+            // Este computador recebeu a cadeia nova: o kit que tinha guardado deixou de valer.
+            KitFor(saved, rekey.Secret!);
+            saved.HadAccount = true;
+            saved.Engine = rekeyed;
+            saved.Rotation = null;
+            saved.CreatedMs = 0;
+            // Os dados deste computador não mudaram: a base continua a valer, e o que mudou desde a última
+            // ronda segue para a conta nova; o que este aparelho tinha escrito volta a seguir com a hora
+            // original (RestageOwn), para não ser desfeito pelo instantâneo de quem trocou a chave.
+            saved.LastCompactMs = 0;
+            saved.LastCompactSeq = 0;
+            _store.Save(saved);
+            // O nome que este aparelho já conhecia do remetente, não o que vem na mensagem (quem a escreve põe lá o
+            // que quiser).
+            _notice = DeviceNameText.Clean(old.DeviceNames.GetValueOrDefault(rekey.From)) is { } deNome
+                ? $"A conta mudou de chave em «{deNome}» (um aparelho foi removido, ou há um kit de recuperação novo). Este computador continua ligado."
+                : "A conta mudou de chave (um aparelho foi removido, ou há um kit de recuperação novo). Este computador continua ligado.";
+        }
+        // Só agora, com a conta nova guardada, as mensagens saem do transporte (melhor esforço).
+        try { await SyncEngine.ForgetRekeysAsync(transport, consumed, cancellationToken).ConfigureAwait(false); }
+        catch (Exception e) when (IsTransient(e)) { }
+        await CycleAsync(saved, cancellationToken).ConfigureAwait(false);
+    }
+
+    // A pausa da troca de chave (Status.RekeyPending): o utilizador escreveu o identificador do kit novo, lido nas
+    // Definições do computador onde fez a alteração. O identificador deriva do segredo da conta nova e não está no
+    // transporte: um aparelho removido não o conhece, e a conta que ele deixar tem outro. Certo, este aparelho entra
+    // na conta nova; errado PairingCode.MaxWrong vezes, para de vez (junta-se outra vez pelo kit ou por aprovação).
+    public async Task ConfirmRekeyAsync(string kitId, CancellationToken cancellationToken = default)
+    {
+        var typed = RecoveryCode.Normalize(kitId ?? string.Empty);
+        if (typed.Length != 4) throw new SyncUserException(RekeyIdFormatText);
+        await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
+        SetRunning(true);
+        SavedSync? saved = null;
+        try
+        {
+            SyncState old;
+            lock (_gate)
+            {
+                saved = _saved;
+                if (!RekeyHeld(saved)) throw new SyncUserException(NoRekeyText);
+                old = saved!.Engine!;
+            }
+            var (found, consumed, _) = await FindRekeyAsync(Transport(), old, cancellationToken).ConfigureAwait(false);
+            using var rekey = found;
+            // «Desistir» (AbandonRekey) ou «Sair» enquanto se lia o transporte: já não há pausa para confirmar.
+            lock (_gate)
+                if (!RekeyHeld(saved)) throw new SyncUserException(NoRekeyText);
+            if (rekey is null)
+            {
+                Stop(saved, GoneText, StopKeeps.Secret);
+                throw new SyncUserException(GoneText);
+            }
+            if (rekey.Conflict)
+            {
+                Stop(saved, ConflictText, StopKeeps.Secret);
+                throw new SyncUserException(ConflictText);
+            }
+            if (!CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(rekey.Secret!.KitId), System.Text.Encoding.ASCII.GetBytes(typed)))
+            {
+                bool refused;
+                lock (_gate)
+                {
+                    refused = ++_rekeyWrong >= PairingCode.MaxWrong;
+                    if (refused) _rekeyWrong = 0;
+                }
+                if (!refused) throw new SyncUserException(RekeyWrongText);
+                Stop(saved, RekeyRefusedText, StopKeeps.Secret);
+                throw new SyncUserException(RekeyRefusedText);
+            }
+            lock (_gate)
+            {
+                if (!RekeyHeld(saved)) throw new SyncUserException(NoRekeyText);
+                // Sem gravar: só AdoptRekeyAsync grava, já com a conta nova. Se o Éteris fechar antes, ao reabrir a
+                // pausa continua.
+                saved.Enabled = true;
+                saved.Stopped = null;
+                _phase = SyncPhase.Starting;
+                _notice = null;
+                _error = null;
+                _rekeyWrong = 0;
+            }
+            await AdoptRekeyAsync(saved, old, rekey, consumed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ChainGoneException)
+        {
+            Stop(saved!, GoneText, StopKeeps.Secret);
+            throw new SyncUserException(GoneText);
+        }
+        catch (Exception e) when (IsTransient(e))
+        {
+            // A conta nova ainda não ficou guardada: a pausa volta a ficar como estava. Já guardada: é uma ronda que
+            // falhou, e a seguinte repete.
+            if (_engine is null) Stop(saved!, RekeyHeldText, StopKeeps.Everything);
+            else Fail(e);
+            throw new SyncUserException(Message(e));
+        }
+        finally
+        {
+            EndRun();
+        }
+        Notify();
+    }
+
+    // Desiste da pausa da troca de chave: passa a valer o alerta «conta substituída» (Status.ChainReplaced) e este
+    // computador junta-se outra vez por aprovação ou pelo kit. Um ConfirmRekeyAsync a correr deixa de gravar (IsCurrent).
+    public void AbandonRekey()
+    {
+        SavedSync? saved;
+        lock (_gate)
+        {
+            saved = _saved;
+            if (!RekeyHeld(saved)) return;
+            _rekeyWrong = 0;
+        }
+        Stop(saved!, GoneText, StopKeeps.Secret);
+    }
+
+    // Chamado dentro do _gate: este aparelho está na pausa da troca de chave (com o estado e a base guardados).
+    private bool RekeyHeld(SavedSync? saved)
+        => saved is { Engine: not null } && ReferenceEquals(_saved, saved) && _phase == SyncPhase.Stopped && saved.Stopped == RekeyHeldText;
 
     private enum StopKeeps
     {
@@ -1141,6 +1287,19 @@ public sealed class SyncAgent
 
     private const string ConflictText =
         "A sincronização parou: dois aparelhos deixaram a este computador contas novas que não batem certo (um deles pode ter sido removido da conta). Para continuar, junte este computador outra vez à conta, com o kit de recuperação novo ou por aprovação noutro computador.";
+
+    public const string RekeyHeldText =
+        "A sincronização está em pausa: a conta mudou de chave noutro computador (um aparelho foi removido, ou há um kit de recuperação novo). Para este computador continuar, escreva aqui o identificador do kit novo: os 4 caracteres de «O seu kit atual termina em…», nas Definições › Sincronização do computador onde fez a alteração. Nada foi apagado.";
+
+    private const string RekeyWrongText =
+        "Esse identificador não é o da conta nova deixada a este computador. Confirme os 4 caracteres no outro computador e escreva-os outra vez.";
+
+    private const string RekeyIdFormatText = "Escreva os 4 caracteres do identificador do kit.";
+
+    private const string RekeyRefusedText =
+        "A sincronização parou: a conta nova deixada a este computador não é a do identificador que escreveu (pode ter sido deixada por um aparelho removido). Junte este computador outra vez à conta, com o kit de recuperação novo ou por aprovação noutro computador. A chave ficou neste computador; nada daqui foi apagado.";
+
+    private const string NoRekeyText = "Não há nenhuma troca de chave por confirmar.";
 
     private const string WrongKeysText =
         "A sincronização parou: o registo de chaves da conta no Google Drive não abre com a chave guardada neste computador (foi alterado ou danificou-se). A chave ficou neste computador; nada foi apagado.";
@@ -1855,7 +2014,9 @@ public sealed class SyncAgent
     }
 
     // Remove um aparelho da conta: nova cadeia (kit de recuperação novo, por guardar; o antigo deixa de valer); os que ficam
-    // recebem a conta nova sozinhos, o removido deixa de conseguir abrir o que vier a seguir. Não retira a autorização
+    // recebem a conta nova — sozinhos só quando este aparelho é a única chave que fixaram; os outros ficam em pausa
+    // até se escrever neles o identificador do kit novo (ConfirmRekeyAsync), porque o removido tem a chave fixada neles
+    // e consegue deixar-lhes uma mensagem sua —, o removido deixa de conseguir abrir o que vier a seguir. Não retira a autorização
     // Google do removido (ainda pode apagar ou estragar os ficheiros no Drive): isso só o faz «Perdi um computador».
     // «shown»: os aparelhos que o utilizador viu na lista quando decidiu (por omissão, a última lista). Só esses, e só
     // com a chave fixada antes desta ação, recebem a conta nova.
@@ -1917,9 +2078,15 @@ public sealed class SyncAgent
                     saved.LastCompactMs = _now();
                     saved.LastCompactSeq = rotated.State.NextSeq - 1;
                     _store.Save(saved);
+                    // Ninguém para avisar, ou um kit novo numa conta de dois: quem fica segue sozinho. Nos outros casos
+                    // os que ficam podem ter mais chaves fixadas e pedem o identificador do kit (ConfirmRekeyAsync).
+                    var alone = staying.Count == 0 || (device is null && staying.Count == 1);
+                    var others = alone
+                        ? "; os outros aparelhos continuam ligados sozinhos."
+                        : ". Nos outros computadores, escreva o identificador deste kit (os 4 caracteres de «O seu kit atual termina em…») para continuarem ligados.";
                     var done = device is null
-                        ? "A conta tem um kit de recuperação novo (o antigo deixou de valer); os outros aparelhos continuam ligados sozinhos."
-                        : $"«{name}» foi removido. A conta tem um kit de recuperação novo (o antigo deixou de valer); os outros aparelhos continuam ligados sozinhos.";
+                        ? "A conta tem um kit de recuperação novo (o antigo deixou de valer)" + others
+                        : $"«{name}» foi removido. A conta tem um kit de recuperação novo (o antigo deixou de valer)" + others;
                     // Os selos novos não servem de nada contra o que o aparelho removido já leu (desenho, secção 4.5).
                     if (device is not null && engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)))
                         done += " O aparelho removido já tinha as suas palavras-passe: mude as dos sites importantes.";

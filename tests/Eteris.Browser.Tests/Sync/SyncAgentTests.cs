@@ -422,6 +422,7 @@ public sealed class SyncAgentTests : IDisposable
         await portatil.Agent.StartAsync();
         await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
         await Settle(casa, trabalho, portatil);
+        await trabalho.Agent.RefreshDevicesAsync(); // o «trabalho» fixa o «portátil»: o caso de três aparelhos
         var devices = await casa.Agent.RefreshDevicesAsync();
         Assert.Equal(3, devices.Count);
         Assert.True(devices[0].IsThis);
@@ -434,10 +435,13 @@ public sealed class SyncAgentTests : IDisposable
         Assert.NotEqual(oldCode, casa.Store.Load()!.Secret);
         Assert.Contains("Portátil", casa.Agent.Status.Notice);
 
-        // O que fica recebe a conta nova sozinho, e o que tinha por enviar segue.
+        // O que fica recebe a conta nova depois de confirmar, e o que tinha por enviar segue.
         Assert.True(await trabalho.Agent.RunAsync());
+        Assert.True(trabalho.Agent.Status.RekeyPending);            // três aparelhos: pede o identificador do kit
+        Assert.Equal(SyncAgent.RekeyHeldText, trabalho.Agent.Status.Notice);
+        await trabalho.Agent.ConfirmRekeyAsync(" " + casa.Agent.Status.Kit!.Id.ToLowerInvariant() + " ");
         Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
-        Assert.Contains("mudou de chave", trabalho.Agent.Status.Notice);
+        Assert.Contains("mudou de chave em «Casa»", trabalho.Agent.Status.Notice);
         Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
         casa.Profile.Bookmark("https://depois.example/", "Depois");
         await Settle(casa, trabalho);
@@ -453,6 +457,135 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Null(portatil.Store.Load()!.Engine);
         Assert.Contains("removido noutro aparelho", portatil.Agent.Status.Notice);
         Assert.Equal(2, (await casa.Agent.RefreshDevicesAsync()).Count(d => d.LastSyncMs > 0));
+    }
+
+    // ---- a mensagem r/ de um aparelho removido (SYN-01) ---------------------------------------------------------------
+
+    // Três aparelhos na conta, cada um com as chaves dos outros dois fixadas.
+    private async Task<(Device Casa, Device Trabalho, Device Portatil)> ThreeAsync()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
+        await Settle(casa, trabalho, portatil);
+        foreach (var device in new[] { casa, trabalho, portatil })
+            Assert.Equal(3, (await device.Agent.RefreshDevicesAsync()).Count);
+        Assert.Equal(2, trabalho.Store.Load()!.Engine!.PeerKeys.Count);
+        return (casa, trabalho, portatil);
+    }
+
+    // A ronda de quem ficou depois de uma troca de chave: se ficou em pausa, confirma com o identificador do kit de quem trocou.
+    private static async Task FollowRekeyAsync(Device stayed, Device rotated)
+    {
+        Assert.True(await stayed.Agent.RunAsync());
+        if (stayed.Agent.Status.RekeyPending) await stayed.Agent.ConfirmRekeyAsync(rotated.Agent.Status.Kit!.Id);
+        Assert.Equal(SyncPhase.On, stayed.Agent.Status.Phase);
+    }
+
+    // A conta do atacante: o identificador do kit dela não coincide, por acaso (1 em 1 048 576), com o da conta verdadeira.
+    private static Eteris.Sync.Crypto.AccountSecret Hijack(string realKitId)
+    {
+        while (true)
+        {
+            var secret = Eteris.Sync.Crypto.AccountSecret.Create();
+            if (secret.KitId != realKitId) return secret;
+            secret.Dispose();
+        }
+    }
+
+    private static string SecretOf(Eteris.Sync.Crypto.AccountSecret secret) => Eteris.Sync.Crypto.Kdf.Base64Url(secret.ToBytes());
+
+    // O removido apagou a mensagem verdadeira (r/B/A) e deixou a dele (r/B/P) com uma conta sua; depois, a ronda do
+    // «trabalho».
+    private async Task<(Device Casa, Device Trabalho, Eteris.Sync.Crypto.AccountSecret Hijack)> HijackedByDeletingTheRealMessageAsync()
+    {
+        var (casa, trabalho, portatil) = await ThreeAsync();
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        var old = casa.Store.Load()!.Engine!;
+        var stolen = portatil.Store.Load()!.Engine!;          // o estado do removido: a chave dele e as fixadas
+        var idB = trabalho.Store.Load()!.Engine!.Device.Id;
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+
+        await _cloud.DeleteAsync(SyncPaths.Rekey(old.ChainId, idB, old.Device.Id));
+        var hijack = Hijack(casa.Agent.Status.Kit!.Id);
+        await SyncEngine.CreateAsync(_cloud, hijack, stolen.Device, Now);
+        await SyncEngine.FinishRotationAsync(_cloud, stolen, hijack,
+            new RotationPending { OldChain = old.ChainId, Staying = new Dictionary<string, string> { [idB] = stolen.PeerKeys[idB] } });
+
+        Assert.True(await trabalho.Agent.RunAsync());
+        return (casa, trabalho, hijack);
+    }
+
+    [Fact]
+    public async Task RemovedDevice_DeletesTheRealMessage_OthersDoNotFollow()
+    {
+        var (_, trabalho, taken) = await HijackedByDeletingTheRealMessageAsync();
+        using var hijack = taken;
+        var idB = trabalho.Store.Load()!.Engine!.Device.Id;
+
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        Assert.Equal(SyncAgent.RekeyHeldText, trabalho.Agent.Status.Notice);
+        Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
+        Assert.NotNull(trabalho.Store.Load()!.Engine);          // a pausa não deita fora o estado nem a base
+        Assert.NotNull(trabalho.Store.Load()!.Baseline);
+        Assert.Empty(_cloud.Paths(SyncPaths.Batches(hijack.ChainId) + idB + "/"));
+        Assert.False(_cloud.Has(SyncPaths.State(hijack.ChainId, idB)));
+        // Reabrir o Éteris a meio: a pausa continua.
+        Assert.True(NewDevice("Trabalho", store: trabalho.Store, profile: trabalho.Profile).Agent.Status.RekeyPending);
+    }
+
+    // A variante sem apagar a mensagem verdadeira: o removido apaga o registo de chaves da conta nova e deixa a
+    // mensagem dele lá dentro (o segundo salto).
+    [Fact]
+    public async Task RemovedDevice_DeletesTheKeysOfTheNewAccount_OthersDoNotFollow()
+    {
+        var (casa, trabalho, portatil) = await ThreeAsync();
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        var stolen = portatil.Store.Load()!.Engine!;
+        var idB = trabalho.Store.Load()!.Engine!.Device.Id;
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+
+        var newChain = casa.Store.Load()!.Engine!.ChainId;
+        using var hijack = Hijack(casa.Agent.Status.Kit!.Id);
+        await SyncEngine.CreateAsync(_cloud, hijack, stolen.Device, Now);
+        await SyncEngine.FinishRotationAsync(_cloud, stolen, hijack,
+            new RotationPending { OldChain = newChain, Staying = new Dictionary<string, string> { [idB] = stolen.PeerKeys[idB] } });
+
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.False(_cloud.Has(SyncPaths.Keys(newChain)));
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
+        // A conta que o segundo salto encontra é a do removido, não a do identificador.
+        await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+        Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
+        Assert.Empty(_cloud.Paths(SyncPaths.Batches(hijack.ChainId) + idB + "/"));
+    }
+
+    [Fact]
+    public async Task Rekey_ThreeWrongIdentifiers_StopForGood_AndRejoiningByKitWorks()
+    {
+        var (casa, trabalho, taken) = await HijackedByDeletingTheRealMessageAsync();
+        using var hijack = taken;
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+
+        // Um identificador que nem tem 4 caracteres não conta como erro.
+        await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync("AB"));
+        for (var wrong = 0; wrong < 2; wrong++)
+        {
+            await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+            Assert.True(trabalho.Agent.Status.RekeyPending);
+        }
+        await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.False(trabalho.Agent.Status.RekeyPending);
+        Assert.Null(trabalho.Store.Load()!.Engine);
+        Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
+
+        await trabalho.Agent.StartAsync();
+        await trabalho.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
     }
 
     [Fact]
@@ -804,8 +937,7 @@ public sealed class SyncAgentTests : IDisposable
         Assert.True(await trabalho.Agent.RunAsync());
         _now += 1000;
         await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
-        Assert.True(await trabalho.Agent.RunAsync());
-        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        await FollowRekeyAsync(trabalho, casa); // o «trabalho» leu um lote do «portátil»: fixou-o, e pede o identificador
         await Settle(casa, trabalho);
         foreach (var device in new[] { casa, trabalho })
         {
@@ -873,8 +1005,7 @@ public sealed class SyncAgentTests : IDisposable
 
         casa.Profile.Bookmark("https://depois.example/", "Depois");
         Assert.True(await casa.Agent.RunAsync());
-        Assert.True(await quarto.Agent.RunAsync());
-        Assert.Equal(SyncPhase.On, quarto.Agent.Status.Phase);
+        await FollowRekeyAsync(quarto, casa); // o «quarto» fixou os outros três: confirma com o identificador do kit final
         Assert.Equal(casa.Store.Load()!.Secret, quarto.Store.Load()!.Secret);
         await Settle(casa, quarto);
         Assert.Equal("Depois", quarto.Profile.Title("https://depois.example/"));

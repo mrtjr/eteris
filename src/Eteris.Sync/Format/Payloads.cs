@@ -50,7 +50,8 @@ public sealed record DeviceStatePayload
 
 // Conta nova entregue a um aparelho que fica, quando outro faz «nova cadeia» para tirar um terceiro da conta.
 // Cifrada com ECDH entre as chaves estáticas dos dois aparelhos (fixadas antes): o aparelho removido, que tem o código
-// antigo, não a abre nem a forja.
+// antigo, não abre a dos outros. Consegue escrever uma sua (tem a chave fixada nos que ficam): quem recebe só segue
+// sozinho quando o remetente é a única chave que fixou (SyncEngine.RekeyIsUnambiguous).
 public sealed record RekeyPayload
 {
     [JsonPropertyName("secret")] public required string Secret { get; init; }

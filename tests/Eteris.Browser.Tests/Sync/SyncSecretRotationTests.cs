@@ -73,6 +73,8 @@ public sealed class SyncSecretRotationTests : IDisposable
         await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
         Assert.Contains("O aparelho removido já tinha as suas palavras-passe: mude as dos sites importantes.", casa.Agent.Status.Notice);
         Assert.True(await trabalho.Agent.RunAsync());
+        // O «trabalho» leu um lote do «portátil» (fixou-o): a troca de chave pede-lhe o identificador do kit novo.
+        if (trabalho.Agent.Status.RekeyPending) await trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id);
         await Settle(casa, trabalho);
 
         // Depois da nova cadeia, os selos (e as chaves opacas) são outros: só abrem com a K_seg nova.

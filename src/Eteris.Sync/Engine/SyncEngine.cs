@@ -773,7 +773,9 @@ public sealed class SyncEngine
     // «Nova cadeia» (aparelho perdido ou removido, código exposto): segredo novo, DEK nova, o estado todo recifrado na
     // pasta da cadeia nova e a antiga apagada. Os aparelhos que ficam recebem a conta nova na cadeia antiga
     // (r/<aparelho>/<este>), cifrada com ECDH entre as chaves estáticas fixadas: o removido, que tem o código antigo,
-    // não a lê nem a forja. Só recebem a conta nova os aparelhos com chave fixada ANTES (aqui não se fixa nenhuma chave
+    // não lê a mensagem dos outros. Mas consegue escrever uma sua: tem a chave fixada nos que ficam e, enquanto tiver
+    // acesso ao transporte, apaga a verdadeira — por isso quem recebe só segue sozinho com um único remetente possível
+    // (RekeyIsUnambiguous); senão pede o identificador do kit novo (SyncAgent.ConfirmRekeyAsync). Só recebem a conta nova os aparelhos com chave fixada ANTES (aqui não se fixa nenhuma chave
     // nova: um estado de aparelho escrito à pressa pelo removido não entra). Um aparelho sem chave fixada tem de voltar
     // a entrar (código de recuperação novo ou aprovação).
     //
@@ -928,6 +930,12 @@ public sealed class SyncEngine
             foreach (var (_, _, secret) in found) secret.Dispose();
         }
     }
+
+    // Uma mensagem r/ de «from» só pode ser de quem trocou a chave quando «from» é a única chave fixada neste aparelho.
+    // Com outra chave fixada, a mensagem pode ser de um aparelho removido: tem a chave dele fixada aqui e, enquanto
+    // tiver acesso ao transporte, consegue apagar a mensagem verdadeira (com a acusação) e deixar a sua.
+    public static bool RekeyIsUnambiguous(SyncState state, string from)
+        => state.PeerKeys.Keys.All(id => id == state.Device.Id || id == from);
 
     // As mensagens r/ já tratadas (a conta nova ficou guardada): saem do transporte.
     public static async Task ForgetRekeysAsync(ISyncTransport transport, IEnumerable<string> paths, CancellationToken cancellationToken = default)

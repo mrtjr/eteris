@@ -596,6 +596,21 @@ public class SyncEngineTests
         Assert.Null(contested.Secret);
     }
 
+    // Só se segue sozinho uma mensagem r/ quando quem a escreveu é a única chave fixada neste aparelho: com outra
+    // chave fixada, o remetente pode ser um aparelho removido que apagou a mensagem verdadeira.
+    [Fact]
+    public async Task RekeyIsUnambiguous_OnlyWhenTheSenderIsTheOnlyPinnedPeer()
+    {
+        using var lab = new SyncLab();
+        var (a, b, lost) = await Three(lab);
+        await SyncLab.SettleAsync(a, b, lost);
+        foreach (var device in new[] { a, b, lost }) await device.DevicesAsync();
+        Assert.False(SyncEngine.RekeyIsUnambiguous(b.State, a.Device.Id));   // o «b» também fixou o «lost»
+        b.State.PeerKeys.Remove(lost.Device.Id);
+        Assert.True(SyncEngine.RekeyIsUnambiguous(b.State, a.Device.Id));
+        Assert.False(SyncEngine.RekeyIsUnambiguous(b.State, lost.Device.Id));
+    }
+
     // A troca de chave não fixa chaves novas: um aparelho inventado pelo removido (um estado a/ escrito à pressa, com
     // uma chave dele) não recebe a conta nova.
     [Fact]
