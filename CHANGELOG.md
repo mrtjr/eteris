@@ -6,6 +6,7 @@
 
 - A cor do tema que um site declara deixa de passar pelo conversor de cores do Windows: um valor forjado podia levar o Éteris a abrir um endereço fora do motor.
 - Uma página que faz cair processos do motor já não consegue desligar o isolamento das páginas: as quedas só contam até haver conteúdo web, e depois de um arranque falhado a sessão volta com as abas a dormir.
+- As atualizações passam a ser conferidas: o Éteris só descarrega e instala pacotes que constem de uma lista de versões assinada pelo autor, com uma chave que não está no GitHub, e volta a conferir cada pacote depois de o descarregar.
 
 ### Privacidade
 

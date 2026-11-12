@@ -58,6 +58,8 @@
     <EmbeddedResource Include="Shields\resources\owners.json" LogicalName="Eteris.Browser.Shields.owners.json" />
     <EmbeddedResource Include="Browser\Vendor\readability\Readability.js" LogicalName="Eteris.Browser.Readability.js" />
     <EmbeddedResource Include="Browser\Vendor\readability\Readability-readerable.js" LogicalName="Eteris.Browser.Readability-readerable.js" />
+    <!-- Chaves públicas das atualizações (docs/atualizacoes.md): sem nenhuma, o Éteris recusa todas as atualizações. -->
+    <EmbeddedResource Include="Updates\update-keys.txt" LogicalName="Eteris.Browser.Updates.update-keys.txt" />
     <None Include="$(ShieldsDir)target\release\eteris_shields.dll" Link="eteris_shields.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <None Include="Shields\lists\*.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- Gerado por build/scriptlets a partir do uBlock Origin; só muda com uma nova versão do Éteris. -->

@@ -1,3 +1,5 @@
+using System.IO;
+using System.Net.Http;
 using Velopack;
 using Velopack.Locators;
 using Velopack.Sources;
@@ -74,8 +76,43 @@ public static class UpdateService
     // O único sítio onde nasce o UpdateManager do Éteris; nulo fora de uma instalação Velopack.
     private static UpdateManager? NewManager()
     {
-        try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }
+        try { return new UpdateManager(CreateSource()); }
         catch (Exception) { return null; }
+    }
+
+    // A fonte das atualizações: as releases do GitHub, filtradas pelo índice assinado da última release (INF-02, CAD-01;
+    // docs/atualizacoes.md). Sem chaves em update-keys.txt, nenhuma atualização é aceite.
+    public static IUpdateSource CreateSource()
+        => new SignedUpdateSource(new GithubSource(RepoUrl, null, false), FetchLatestAsset, UpdateSignature.EmbeddedKeys);
+
+    // Tamanho máximo do índice e da assinatura: um índice com todas as versões tem poucos KB.
+    private const int MaxAssetBytes = 1024 * 1024;
+
+    // Criado só na 1.ª procura (nada de rede nem de objetos novos no arranque).
+    private static readonly Lazy<HttpClient> s_http = new(() =>
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Eteris/1.0");
+        return http;
+    });
+
+    // Um ficheiro da última release publicada (o índice ou a assinatura), no máximo MaxAssetBytes.
+    private static async Task<byte[]> FetchLatestAsset(string name, CancellationToken cancel)
+    {
+        using var response = await s_http.Value.GetAsync(RepoUrl + "/releases/latest/download/" + Uri.EscapeDataString(name),
+            HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > MaxAssetBytes) throw new HttpRequestException($"{name} grande demais");
+        await using var stream = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancel).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxAssetBytes) throw new HttpRequestException($"{name} grande demais");
+            buffer.Write(chunk, 0, read);
+        }
+        return buffer.ToArray();
     }
 
     // Aplicar no arranque um pacote já descarregado (INF-03): só se houver um, se nenhum outro processo correr a partir

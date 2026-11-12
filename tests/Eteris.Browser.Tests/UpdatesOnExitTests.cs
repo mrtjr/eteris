@@ -39,9 +39,9 @@ public class UpdatesOnExitTests
     public void TestPatch_FindsTheLineWhereTheManagerIsBorn()
     {
         var service = Source(Path.Combine("Updates", "UpdateService.cs"));
-        Assert.Single(Regex.Matches(service, Regex.Escape("try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }")));
+        Assert.Single(Regex.Matches(service, Regex.Escape("try { return new UpdateManager(CreateSource()); }")));
         Assert.DoesNotContain("manager = new UpdateManager(", service);
-        Assert.Contains("old1 = 'try { return new UpdateManager(new GithubSource(RepoUrl, null, false)); }'",
+        Assert.Contains("old1 = 'try { return new UpdateManager(CreateSource()); }'",
             File.ReadAllText(Path.Combine(Root, "build", "sandbox", "provas", "patch-velopack-teste.py")));
     }
 
