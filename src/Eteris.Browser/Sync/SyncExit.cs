@@ -16,6 +16,8 @@ internal static class SyncExit
 
     public const string SignOutHelp = "Sai só deste computador. A Google continua a listar o Éteris na sua conta até usar «Retirar o acesso».";
     public const string SignOutKeeps = "A chave da sincronização e os dados ficam neste computador, a não ser que marque «apagar também a chave».";
+    // O aviso depois do «Sair» do menu ⋯ (0.2.17; PROPOSTA): o menu nunca apaga a chave.
+    public const string SignOutDone = "Saiu da conta Google neste computador. A chave da sincronização e os dados ficaram aqui.";
 
     // ---- «Retirar o acesso» (título e texto do plano; o resto é PROPOSTA) ----------------------------------------------
 

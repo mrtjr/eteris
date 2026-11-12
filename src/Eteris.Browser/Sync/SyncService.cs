@@ -387,6 +387,14 @@ internal static class SyncService
         Arm();
     }
 
+    // «Sair deste computador», inteiro: a sincronização para aqui e os tokens e a conta guardada deste computador saem
+    // (na pasta de teste não há Google). O mesmo para a rota das Definições e para o «Sair» do menu ⋯.
+    public static void SignOutHere(bool forgetKey)
+    {
+        SignOut(forgetKey);
+        if (!FolderMode) GoogleSync.SignOut();
+    }
+
     // ---- saídas da conta (0.2.15, T12): «Retirar o acesso», «Perdi um computador», «Começar do zero…» ---------------
 
     private static volatile string? _exitBusy;

@@ -7,7 +7,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
@@ -322,6 +324,141 @@ public class GoogleAccountTests
         var menu = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.BrowserMenu.cs"));
         Assert.Contains("buttons.Insert(0, account);", menu);
         Assert.Contains("OpenInternal(SettingsPage.Url + \"#sincronizacao\")", menu);
+    }
+
+    // ---- «Sair» no cartão da conta (0.2.17) ---------------------------------------------------------------------------
+
+    // Só com sessão (não no convite «Entrar», nem em janela privada, onde não há cartão); não na pasta de teste (lá é
+    // «Desligar», só nas Definições); desativado enquanto outra saída da conta corre nas Definições.
+    [Theory]
+    [InlineData("Account", false, false, "Enabled")]
+    [InlineData("Account", false, true, "Disabled")]
+    [InlineData("Account", true, false, "Hidden")]
+    [InlineData("Account", true, true, "Hidden")]
+    [InlineData("SignIn", false, false, "Hidden")]
+    [InlineData("SignIn", true, true, "Hidden")]
+    [InlineData("None", false, false, "Hidden")]
+    public void MenuSignOut_OnlyWithSession_NotInTheTestFolder_DisabledWhileAnExitRuns(string kind, bool folderMode, bool exitBusy, string expected)
+        => Assert.Equal(expected, MainWindow.BrowserMenuSignOut(Enum.Parse<MainWindow.MenuAccountRow>(kind), folderMode, exitBusy).ToString());
+
+    // Diz «Sair» (o cartão é estreito); o nome acessível e a dica dizem o alcance, «Sair deste computador», e a ajuda é a
+    // das Definições. É um botão (como os do zoom), fora da contagem «n de N» das linhas.
+    [Fact]
+    public void MenuSignOut_SaysSair_NamedSairDesteComputador_AButtonOutsideTheItemCount()
+    {
+        var (content, name, tip, help, item, type, position) = OnSta(() =>
+        {
+            var signOut = MainWindow.BrowserMenuSignOutButton(new Style(typeof(Button)));
+            MainWindow.NumberBrowserMenuItems([new BrowserMenuItemButton(), signOut, new BrowserMenuItemButton()]);
+            return (signOut.Content as string, AutomationProperties.GetName(signOut), signOut.ToolTip as string, AutomationProperties.GetHelpText(signOut),
+                signOut is BrowserMenuItemButton, UIElementAutomationPeer.CreatePeerForElement(signOut).GetAutomationControlType(),
+                AutomationProperties.GetPositionInSet(signOut));
+        });
+        Assert.Equal("Sair", content);
+        Assert.Equal("Sair deste computador", name);
+        Assert.Equal("Sair deste computador", tip);
+        Assert.Equal(SyncExit.SignOutHelp, help);
+        Assert.False(item);
+        Assert.Equal(AutomationControlType.Button, type);
+        Assert.Equal(-1, position);
+    }
+
+    // Ao lado do cartão, nunca dentro dele: um clique no «Sair» não abre as Definições, os textos do cartão não o
+    // incluem, e o cartão pode voltar a desenhar-se (a sincronização mudou) sem o perder.
+    [Fact]
+    public void MenuSignOut_IsASiblingOfTheCard()
+    {
+        var (sameParent, cardClicks, signOutClicks, texts, stillThere, tagged) = OnSta(() =>
+        {
+            var card = MainWindow.BrowserMenuAccountButton(MainWindow.MenuAccountRow.Account, new GoogleAccount("Ana Teste", "ana@example.com"), new Style(typeof(Button)));
+            var signOut = MainWindow.BrowserMenuSignOutButton(new Style(typeof(Button)));
+            var row = MainWindow.BrowserMenuAccountCard(card, signOut);
+            var cardClicks = 0;
+            var signOutClicks = 0;
+            card.Click += (_, _) => cardClicks++;
+            signOut.Click += (_, _) => signOutClicks++;
+            signOut.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, signOut));
+            var texts = Texts((DependencyObject)card.Content).Select(t => t.Text).ToArray();
+            MainWindow.FillBrowserMenuAccount(card, MainWindow.MenuAccountRow.Account, new GoogleAccount("Ana Teste", "ana@example.com"));
+            var marker = typeof(MainWindow).GetField("BrowserMenuAccountGroup", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+            return (ReferenceEquals(card.Parent, signOut.Parent) && ReferenceEquals(row, card.Parent), cardClicks, signOutClicks, texts,
+                row.Children.Contains(signOut), ReferenceEquals(row.Tag, marker));
+        });
+        Assert.True(sameParent);
+        Assert.True(tagged);
+        Assert.Equal(0, cardClicks);
+        Assert.Equal(1, signOutClicks);
+        Assert.DoesNotContain("Sair", texts);
+        Assert.True(stillThere);
+    }
+
+    // Com as setas o cartão e o «Sair» são uma linha (→ vai ao «Sair», ↓ segue para a linha de baixo); a inicial chega ao
+    // cartão (pelo nome dele) e não ao «Sair», como os controlos do zoom.
+    [Fact]
+    public void MenuSignOut_SharesTheCardRow_AndTheInitialReachesTheCard()
+    {
+        var (rows, labels) = OnSta(() =>
+        {
+            var card = MainWindow.BrowserMenuAccountButton(MainWindow.MenuAccountRow.Account, new GoogleAccount("Ana Teste", "ana@example.com"), new Style(typeof(Button)));
+            var signOut = MainWindow.BrowserMenuSignOutButton(new Style(typeof(Button)));
+            MainWindow.BrowserMenuAccountCard(card, signOut);
+            var newTab = new BrowserMenuItemButton();
+            AutomationProperties.SetName(newTab, "Nova aba");
+            var back = new Button();
+            AutomationProperties.SetName(back, "Voltar");
+            var top = new StackPanel();
+            top.Children.Add(newTab);
+            top.Children.Add(back);
+            Button[] buttons = [card, signOut, newTab, back];
+            return (MainWindow.BrowserMenuRows(buttons), MainWindow.BrowserMenuInitialLabels(buttons));
+        });
+        Assert.Equal([0, 0, 1, 2], rows);
+        Assert.Equal(1, BrowserMenuKeys.Move(BrowserMenuKey.NextInGroup, 0, rows));
+        Assert.Equal(0, BrowserMenuKeys.Move(BrowserMenuKey.PreviousInGroup, 1, rows));
+        Assert.Equal(2, BrowserMenuKeys.Move(BrowserMenuKey.Next, 1, rows));
+        Assert.StartsWith("Conta Google: Ana Teste", labels[0]);
+        Assert.Null(labels[1]);
+        Assert.Equal("Nova aba", labels[2]);
+        Assert.Equal("Voltar", labels[3]);
+    }
+
+    // Dois passos, como o «apagar também a chave» das Definições: o 1.º arma (o botão passa a «Confirmar» e o leitor de
+    // ecrã ouve o nome novo); um 2.º antes de meio segundo não conta (duplo clique); depois disso, sai.
+    [Theory]
+    [InlineData(null, 1000L, "Arm")]
+    [InlineData(1000L, 1000L, "Ignore")]
+    [InlineData(1000L, 1499L, "Ignore")]
+    [InlineData(1000L, 1500L, "Run")]
+    [InlineData(1000L, 90000L, "Run")]
+    public void MenuSignOut_TwoSteps(long? armedAt, long now, string expected)
+        => Assert.Equal(expected, MainWindow.BrowserMenuSignOutStep(armedAt, now).ToString());
+
+    [Fact]
+    public void MenuSignOut_FirstPressAsksToConfirm()
+    {
+        var (content, name, tip) = OnSta(() =>
+        {
+            var signOut = MainWindow.BrowserMenuSignOutButton(new Style(typeof(Button)));
+            MainWindow.ArmBrowserMenuSignOut(signOut);
+            return (signOut.Content as string, AutomationProperties.GetName(signOut), signOut.ToolTip as string);
+        });
+        Assert.Equal("Confirmar", content);
+        Assert.Equal("Confirmar: sair deste computador", name);
+        Assert.Equal("Carregue outra vez para sair deste computador", tip);
+    }
+
+    // No código: sai pela mesma função da rota das Definições, só neste computador (nunca apaga a chave, nunca revoga),
+    // fecha o menu e diz o que ficou; o «Sair» é o 2.º do teclado, logo a seguir ao cartão; nenhum temporizador.
+    [Fact]
+    public void Menu_SignOut_SignsOutHere_KeepsTheKey_AndNeverRevokes()
+    {
+        var menu = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.BrowserMenu.cs"));
+        Assert.Contains("RunBrowserMenuAction(popup, () => { SyncService.SignOutHere(forgetKey: false); ShowToast(SyncExit.SignOutDone); })", menu);
+        Assert.DoesNotContain("forgetKey: true", menu);
+        Assert.DoesNotContain("Revoke", menu);
+        Assert.DoesNotContain("Timer", menu);
+        Assert.Contains("buttons.Insert(1, signOut);", menu);
+        Assert.Equal("Saiu da conta Google neste computador. A chave da sincronização e os dados ficaram aqui.", SyncExit.SignOutDone);
     }
 
     // ---- «Sair» a meio de um pedido ----------------------------------------------------------------------------------
