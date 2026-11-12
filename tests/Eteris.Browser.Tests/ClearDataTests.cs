@@ -1,4 +1,6 @@
+using System.IO;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Data;
 
 namespace Eteris.Browser.Tests;
 
@@ -31,4 +33,92 @@ public class ClearDataTests
     public void Summary_IsReadable()
         => Assert.Equal("Histórico, cookies e cache apagados",
             new ClearDataRequest(true, true, true, DateTime.MinValue).Summary);
+
+    [Fact]
+    public void Report_SaysWhatFailedAndWhatWasCleared()
+    {
+        var all = new ClearDataRequest(true, true, true, DateTime.MinValue);
+        Assert.Equal("Histórico, cookies e cache apagados", all.Report(new ClearOutcome()));
+        Assert.Equal("Não foi possível apagar os cookies. Apagado: histórico e cache.", all.Report(new ClearOutcome(CookiesFailed: true)));
+        Assert.Equal("Não foi possível apagar os cookies e a cache. Apagado: histórico.", all.Report(new ClearOutcome(CookiesFailed: true, CacheFailed: true)));
+        Assert.Equal("Não foi possível apagar os cookies.", new ClearDataRequest(false, true, false, DateTime.MinValue).Report(new ClearOutcome(CookiesFailed: true)));
+        Assert.Equal("Não foi possível apagar a cache, os dados de 2 sites e os dados do motor de vídeo. Apagado: cookies.",
+            new ClearDataRequest(false, true, true, DateTime.MinValue).Report(new ClearOutcome(CacheFailed: true, StorageFailed: 2, VideoEngineFailed: true)));
+        Assert.Equal("Não foi possível apagar os dados de 1 site. Apagado: cookies e palavras-passe e preenchimento automático.",
+            new ClearDataRequest(false, true, false, DateTime.MinValue, Vault: true).Report(new ClearOutcome(StorageFailed: 1)));
+    }
+
+    [Fact]
+    public void Route_AnswersOnlyAfterTheEngineCleared()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        var start = code.IndexOf("private static async Task<string> ClearBrowsingDataAsync(", StringComparison.Ordinal);
+        var end = code.IndexOf("private static IResourceHandler BookmarksRoute(", StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start);
+        var body = code[start..end];
+        Assert.Contains("await MainWindow.ClearEngineDataAsync(browserId, request", body);
+        Assert.Contains("return request.Report(", body);
+        Assert.DoesNotContain("GetDevToolsClient", body);
+        Assert.DoesNotContain("Task.Run", body);
+        Assert.DoesNotContain("catch (Exception) { }", body);
+        Assert.DoesNotContain("ClearBrowsingData(request, browser)", code);
+        // O cofre continua a pedir primeiro o Windows Hello: recusado, nada se apaga.
+        Assert.Contains("if (request.Vault)", code);
+        Assert.Contains("Não foi confirmado com o Windows: nada foi apagado.", code);
+        Assert.Contains("'A apagar…'", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html")));
+    }
+
+    // Uma exceção a meio (contexto privado já libertado, Dispatcher abortado, a confirmação do Windows) não pode dar o
+    // texto genérico do VaultResourceHandler, que a página mostraria com ✓.
+    [Fact]
+    public async Task Reply_SaysNotCleared_WhenTheClearingThrows()
+    {
+        Assert.Equal("Não foi possível apagar os dados de navegação.", await ClearDataRequest.ReplyAsync(() => throw new ObjectDisposedException("contexto")));
+        Assert.Equal("Cookies apagados", await ClearDataRequest.ReplyAsync(() => Task.FromResult("Cookies apagados")));
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        var start = code.IndexOf("private IResourceHandler ClearData(", StringComparison.Ordinal);
+        var end = code.IndexOf("private static async Task<string> ClearBrowsingDataAsync(", StringComparison.Ordinal);
+        var route = code[start..end];
+        Assert.Equal(2, route.Split("new VaultResourceHandler(async () => Vault.VaultReply.Text(await ClearDataRequest.ReplyAsync(").Length - 1);
+    }
+
+    [Fact]
+    public void Cookies_ClearStorageOfEveryKnownOrigin()
+    {
+        var origins = SiteScope.KnownOrigins(
+            ["https://a.pt/x", "https://a.pt:443/y", "http://b.pt:8080/z", "eteris://settings/"],
+            [".c.pt", "www.c.pt"],
+            ["https://d.pt/aberta", "eteris://newtab/"]);
+        Assert.Equal(["http://b.pt:8080", "http://c.pt", "http://www.c.pt", "https://a.pt", "https://c.pt", "https://d.pt", "https://www.c.pt"], origins);
+        Assert.Null(SiteScope.OriginOf("eteris://settings/"));
+        Assert.Equal("https://a.pt", SiteScope.OriginOf("https://A.pt/x?y"));
+    }
+
+    [Fact]
+    public void SettingsPage_SaysCookiesSiteDataAndCacheGoEntirely()
+    {
+        var settings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.Contains("Cookies e dados de sites <small>(termina sessões; apaga todos os cookies e o que guardaram os sites do histórico e das abas abertas, seja qual for o período)</small>", settings);
+        // Não promete «tudo»: o armazenamento de um site que já não está no histórico, nos cookies nem numa aba fica.
+        Assert.DoesNotContain("apaga tudo, desde sempre", settings);
+        Assert.Contains("Imagens e ficheiros em cache <small>(apaga tudo, seja qual for o período)</small>", settings);
+    }
+
+    // Numa janela privada a limpeza é a do contexto dela: não se leem as origens do histórico do perfil.
+    [Fact]
+    public void PrivateWindow_DoesNotReadTheProfileHistory()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.Contains("request.Cookies && !privateContext ? AppData.TryRead(h => h.Origins()) : []", code);
+        Assert.Contains("ClearBrowsingDataAsync(request, browserId, privateContext)", code);
+        var window = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.ClearData.cs"));
+        Assert.Contains("IsPrivate ? Tabs.Tabs.Select(t => t.Address) : OpenAddresses()", window);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
 }

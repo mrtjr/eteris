@@ -392,8 +392,8 @@
         <div class="item clearpanel" id="clearPanel" hidden>
           <div class="label">
             <label class="check"><input type="checkbox" value="history" checked> Histórico de navegação</label>
-            <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões)</small></label>
-            <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache</label>
+            <label class="check"><input type="checkbox" value="cookies"> Cookies e dados de sites <small>(termina sessões; apaga todos os cookies e o que guardaram os sites do histórico e das abas abertas, seja qual for o período)</small></label>
+            <label class="check"><input type="checkbox" value="cache" checked> Imagens e ficheiros em cache <small>(apaga tudo, seja qual for o período)</small></label>
             <label class="check"><input type="checkbox" value="vault"> Palavras-passe e preenchimento automático <small>(tudo, desde sempre; pede o Windows Hello; com a sincronização ligada, apaga também nos outros computadores)</small></label>
             <div class="seg" id="clearRange" style="margin-top:12px">
               <button data-value="hour" class="on">Última hora</button>
@@ -422,7 +422,7 @@
       <h2>Palavras-passe e preenchimento automático</h2>
       <div class="card">
         <div class="item">
-          <div class="label"><b>Gestor de palavras-passe</b><span>As palavras-passe ficam cifradas neste computador e nada vai para a Google. Ver, copiar, importar do Chrome, Brave ou Firefox e exportar.</span></div>
+          <div class="label"><b>Gestor de palavras-passe</b><span>As palavras-passe ficam cifradas neste computador; para a Google só vai a cópia cifrada, e só se ligar a sincronização. Ver, copiar, importar do Chrome, Brave ou Firefox e exportar.</span></div>
           <a class="link" href="eteris://passwords/">Abrir →</a>
         </div>
         <div class="item">
@@ -740,6 +740,7 @@
   document.getElementById('clearGo').addEventListener('click', () => {
     const what = [...clearPanel.querySelectorAll('input:checked')].map(i => i.value).join(',');
     if (!what) return;
+    document.getElementById('clearResult').textContent = 'A apagar…';
     clearProbe.src = `eteris://${location.host}/clear?what=${what}&range=${clearRange}&t=${data.token}&n=${Date.now()}`;
   });
   // Definições por site: cada site com o que tem guardado e um botão para repor tudo.

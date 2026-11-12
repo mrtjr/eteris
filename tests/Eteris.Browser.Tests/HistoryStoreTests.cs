@@ -263,4 +263,13 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.Equal("https://a.pt/x", HistoryStore.WithoutUserInfo("https://a.pt/x"));
         Assert.Equal("não é url", HistoryStore.WithoutUserInfo("não é url"));
     }
+
+    [Fact]
+    public void Origins_AreDistinctAndOnlyWeb()
+    {
+        _store.Record("https://a.pt/1", "A1", T0);
+        _store.Record("https://a.pt/2", "A2", T0);
+        _store.Record("http://b.pt:8080/", "B", T0);
+        Assert.Equal(["http://b.pt:8080", "https://a.pt"], _store.Origins().Order(StringComparer.Ordinal));
+    }
 }

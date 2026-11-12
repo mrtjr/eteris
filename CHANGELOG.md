@@ -10,13 +10,17 @@
 
 ### Privacidade
 
+- A política de privacidade passa a dizer a data certa: «Em vigor desde» e «Última atualização» ficaram em 8 de novembro de 2026, apesar de o texto ter mudado a 9 e a 10 de novembro; agora dizem 12 de novembro de 2026, nas duas línguas.
 - Esquecer uma permissão no cadeado, triturar um site ou responder sem «Lembrar» passa a valer também no motor: o site volta mesmo a perguntar. Antes, o motor guardava para sempre cada «Permitir» e cada «Bloquear», incluindo a recusa automática dos pedidos de notificações, que continuava depois de desligar essa opção. «Permitir» sem «Lembrar» vale até fechar o Éteris para notificações e várias transferências, e uma só vez para câmara, microfone, ecrã e localização. Fica de fora a área de transferência: o motor continua a lembrar a decisão dela, mesmo depois de a esquecer no cadeado.
+- **«Apagar dados de navegação › Cookies e dados de sites» apaga também o que os sites guardaram.** Até aqui saíam só os cookies: o armazenamento local, o IndexedDB, a Cache Storage e os service workers ficavam, e um site que guardasse a sessão aí continuava a reconhecê-lo. Agora apaga-se o armazenamento de cada site do histórico, dos cookies e das abas abertas. Isto vale seja qual for o período escolhido, como os cookies e a cache, que saem por inteiro; a página passa a dizê-lo. O que um site guardou sem estar em nenhum destes sítios, e o que um site guardou dentro de outro (num iframe de terceiros, à parte), só sai com «Apagar cookies e dados de sites ao fechar».
+- «Apagar dados de navegação» só responde depois de apagar: mostra «A apagar…» enquanto o motor trabalha e, se os cookies ou a cache não saírem, diz «Não foi possível apagar…» sem o ✓. Antes, a resposta «✓ … apagados» saía logo, e uma falha do motor ficava escondida.
 
 ### Conta e sincronização
 
 - **Trocar a chave com mais de dois computadores pede o identificador do kit.** Um aparelho removido que ainda chegasse ao Drive conseguia deixar aos outros uma conta sua; agora, quando há mais de um remetente possível, o computador que ficou espera que escreva os 4 caracteres do kit novo antes de continuar.
 - Um aparelho removido que voltasse a pôr no Drive o registo de chaves antigo conseguia manter outro computador a sincronizar com ele, sem aviso. Agora a mensagem da troca de chave vale mesmo com esse registo presente. Se o aparelho removido também apagar essa mensagem antes de o outro computador a ler, isto não chega: use «Perdi um computador / foi roubado», que lhe retira o acesso na Google.
 - Um cofre cuja base de dados desapareceu (com a chave no sítio) deixa de ser lido como vazio: a sincronização já não apaga as palavras-passe na conta por causa disso.
+- O cartão «Gestor de palavras-passe» das Definições deixa de dizer que nada vai para a Google: com a sincronização ligada, a cópia cifrada do cofre vai para o seu Google Drive (como a página pública e a política já dizem desde a 0.2.15).
 
 ### Correções
 
@@ -26,6 +30,7 @@
 - Com mais de uma janela aberta, atualizar, encerrar o Windows ou uma queda já não deixam só as abas de uma: a sessão guarda todas as janelas normais, com os seus Espaços, notas e trancas, e todas voltam no arranque seguinte.
 - Notas com duas janelas abertas: o que se escreve numa aparece na outra e escrever numa janela que mostrava o texto antigo já não apaga o que a outra gravou.
 - As abas já não adormecem com uma gravação ou chamada em curso, com um vídeo em Picture-in-Picture nem com texto por enviar numa caixa de texto; o tempo em que o computador esteve suspenso deixou de contar para o prazo, e com pouca memória só adormecem abas deixadas há pelo menos 2 minutos.
+- O comando da paleta «Adormecer abas em segundo plano» também deixa acordadas as abas com uma gravação ou chamada, com multimédia a tocar, com Picture-in-Picture ou com texto por enviar: antes adormecia-as todas, cortava a chamada e o texto perdia-se. A multi-seleção (Ctrl/Shift+clique e «Adormecer») continua a adormecer as abas escolhidas.
 
 ## 0.2.15 — 2026-11-12
 

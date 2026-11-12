@@ -129,10 +129,20 @@ public class PublicTextsTests
             Assert.Equal("googleapis.com/auth/drive.appdata", m.Value);
     }
 
-    // A data de uma política só o dono a muda (ao publicar): o conteúdo mudou na 0.2.15, a data não se toca aqui.
+    // A data de uma política só o dono a muda (ao publicar). O texto mudou a 9 e a 10 de novembro (0.2.15) e a data
+    // ficou em 8; o dono pediu-a acertada a 12 de novembro de 2026, o dia em que esta versão do texto é publicada. As
+    // quatro frases (vigor e última atualização, nas duas línguas) dizem a mesma data.
     [Fact]
     public void PrivacyPolicy_EffectiveDateIsUntouched()
-        => Assert.Contains("Em vigor desde 8 de novembro de 2026", Policy());
+    {
+        var policy = Policy();
+        Assert.Contains("Em vigor desde 12 de novembro de 2026", policy);
+        Assert.Contains("Última atualização: 12 de novembro de 2026.", policy);
+        Assert.Contains("Effective 12 November 2026.", policy);
+        Assert.Contains("Last updated: 12 November 2026.", policy);
+        Assert.DoesNotContain("8 de novembro de 2026", policy);
+        Assert.DoesNotContain("8 November 2026", policy);
+    }
 
     // «Sair deste computador» já não revoga (T12). As cadeias são as que os textos da 0.2.13/0.2.14 tinham.
     [Fact]
