@@ -289,16 +289,23 @@ public sealed class PairingFlowStateTests : IDisposable
     public void EveryRoundEnd_StopsTheScheduler_WhenSignInIsNeeded()
     {
         var service = GoogleSyncTests.Src("Eteris.Browser", "Sync", "SyncService.cs");
-        const string done = "Schedule.Done(Now(), ok);";
+        // Todos os pontos que acertam o agendador depois de uma ronda ou de uma ação (RoundEnded, Tick, StartAsync, as
+        // saídas «Perdi um computador»/«Começar do zero…» e as ações das Definições). Só o catch do Tick (uma exceção
+        // inesperada, sem estado novo do agente para ler) fica de fora.
+        const string done = "Schedule.Done(Now(), ";
         const string stop = "if (PausedAfterRound()) Schedule.Stop();";
         var ends = new List<int>();
         for (var at = service.IndexOf(done, StringComparison.Ordinal); at >= 0; at = service.IndexOf(done, at + 1, StringComparison.Ordinal))
-            ends.Add(at);
-        Assert.Equal(3, ends.Count);
-        foreach (var at in ends)
+        {
+            var end = service.IndexOf(");", at, StringComparison.Ordinal) + 2;
+            if (service[at..end] == "Schedule.Done(Now(), ok: false);") continue;
+            ends.Add(end);
+        }
+        Assert.Equal(5, ends.Count);
+        foreach (var end in ends)
         {
             // A linha seguinte (sem contar comentários) é a paragem, dentro do mesmo lock (Gate).
-            var next = service[(at + done.Length)..].Split('\n').Select(l => l.Trim()).First(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal));
+            var next = service[end..].Split('\n').Select(l => l.Trim()).First(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal));
             Assert.Equal(stop, next);
         }
         Assert.Contains("RoundEnded = ok =>", service);

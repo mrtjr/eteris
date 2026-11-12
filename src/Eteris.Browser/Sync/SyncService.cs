@@ -473,7 +473,11 @@ internal static class SyncService
     private static void AfterExit(SyncAgent agent)
     {
         if (!agent.Enabled) return;
-        lock (Gate) Schedule.Done(Now(), agent.Status.Error is null);
+        lock (Gate)
+        {
+            Schedule.Done(Now(), agent.Status.Error is null);
+            if (PausedAfterRound()) Schedule.Stop();
+        }
         Arm();
     }
 
@@ -784,7 +788,11 @@ internal static class SyncService
             await action(agent).ConfigureAwait(false);
             if (agent.Enabled)
             {
-                lock (Gate) Schedule.Done(Now(), agent.Status.Error is null);
+                lock (Gate)
+                {
+                    Schedule.Done(Now(), agent.Status.Error is null);
+                    if (PausedAfterRound()) Schedule.Stop();
+                }
                 Arm();
             }
             return null;
