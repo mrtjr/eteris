@@ -253,6 +253,7 @@ public partial class MainWindow
             tab.ReaderOpen = false;
             tab.Address = address;
             tab.PendingAddress = null;
+            tab.ShowsErrorPage = false;
         };
         core.DocumentTitleChanged += (_, _) =>
         {
@@ -388,6 +389,7 @@ public partial class MainWindow
         if (!Tabs.Tabs.Contains(tab) || _videoViews.ContainsKey(tab) || !VideoEngine.CanHost(url)) return;
         tab.Address = url;
         tab.PendingAddress = null;
+        tab.ShowsErrorPage = false;
         tab.UsesVideoEngine = true;
         tab.VideoOffer = null;
         if (tab.IsSleeping || !_browsers.ContainsKey(tab)) tab.Crossing.EnterVideo(null);
@@ -420,6 +422,7 @@ public partial class MainWindow
         if (resumeAt > 1 && VideoEngine.IsDirectMedia(url)) url = VideoEngine.WithTimeFragment(url, resumeAt);
         tab.Address = url;
         tab.PendingAddress = null;
+        tab.ShowsErrorPage = false;
         CreateVideoView(tab, resumeAt);
         // Recurso: se o motor de vídeo não pintar em 5 s, a troca acaba na mesma (fica o branco do fundo).
         _ = Dispatcher.InvokeAsync(async () =>
@@ -465,6 +468,7 @@ public partial class MainWindow
         tab.UsesVideoEngine = false;
         tab.Address = url;
         tab.PendingAddress = null;
+        tab.ShowsErrorPage = false;
         if (!tab.IsSleeping && !_browsers.ContainsKey(tab)) CreateBrowser(tab);
         LayoutBrowsers();
     }

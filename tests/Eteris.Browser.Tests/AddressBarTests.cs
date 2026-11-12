@@ -52,4 +52,19 @@ public class AddressBarTests
         Assert.Contains("tab.PendingAddress = url;", load);
         Assert.DoesNotContain("tab.Address = url;", load);
     }
+
+    [Fact]
+    public void VideoEngine_EveryAddressWrite_ClearsTheErrorPageMark()
+    {
+        // Passar da página de erro para o motor de vídeo (ou de volta) não deixa a marca de «página de erro» agarrada.
+        var lines = File.ReadAllLines(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var writes = 0;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!lines[i].TrimStart().StartsWith("tab.Address = ", StringComparison.Ordinal)) continue;
+            writes++;
+            Assert.Contains(lines.Skip(i).Take(4), l => l.Contains("tab.ShowsErrorPage = false;", StringComparison.Ordinal));
+        }
+        Assert.Equal(4, writes);
+    }
 }
