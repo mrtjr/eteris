@@ -260,8 +260,10 @@ public class VideoEngineTests
         Assert.Equal(Path.Combine(AppPaths.Root, "video-engine"), AppPaths.VideoEngine);
         Assert.Contains("userDataFolder: AppPaths.VideoEngine", Src("MainWindow.VideoEngine.cs"));
         Assert.Contains("if (!Directory.Exists(AppPaths.VideoEngine)) return true;", Src("MainWindow.VideoEngine.cs"));
-        // Janela normal: com uma aba viva no motor de vídeo limpa-se sempre; sem ela, só os sites que lá podem ter dados.
-        Assert.Contains("if (!IsPrivate && (LiveVideoCore() is not null || VideoEngine.MayHoldData(", Src("MainWindow.Forget.cs"));
+        // Janela normal: com uma aba viva no motor de vídeo limpa-se sempre; sem ela, só os sites que lá podem ter dados
+        // (na varredura do arranque, só os pendentes: ForgetLeftoversTests).
+        Assert.Contains("if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep,", Src("MainWindow.Forget.cs"));
+        Assert.Contains("VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site))))", Src("MainWindow.Forget.cs"));
         Assert.Contains("await ClearVideoSiteAsync(site, origins)", Src("MainWindow.Forget.cs"));
         Assert.Contains("if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request).ConfigureAwait(false))", Src("Browser", "EterisSchemeHandlerFactory.cs"));
         // O DevTools do WebView2 só pelo canal (SandboxRulesTests).

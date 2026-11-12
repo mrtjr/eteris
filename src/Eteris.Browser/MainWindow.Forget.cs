@@ -127,18 +127,18 @@ public partial class MainWindow
     private async Task ForgetLeftoversAsync()
     {
         // As janelas da sessão que ainda não voltaram (depois da 1.ª página) também contam como abertas.
+        // O motor de vídeo só se abre para os sites que lá deixaram alguma coisa pendente (AppData.VideoForgetPending,
+        // VideoEngine.ClearsSite): esta varredura corre em cada arranque e não pode arrancar o WebView2 sem nada a apagar.
         var open = OpenAddresses().Concat(AddressesToRestore()).ToList();
-        var forgotten = new List<string>();
+        var results = new List<SiteScope.Leftover>();
         foreach (var site in AppData.ForgetOnCloseSites().Where(s => !SiteScope.StillOpen(s, open)).ToList())
         {
             ShredResult result;
-            try { result = await ShredSiteAsync(site); }
+            try { result = await ShredSiteAsync(site, startupSweep: true); }
             catch (Exception) { continue; }
-            if (result.Cookies + result.History > 0) forgotten.Add(site);
+            results.Add(new(site, result.Cookies, result.History, result.Storage, result.CookiesFailed, result.VideoEngineFailed));
         }
-        if (forgotten.Count > 0)
-            ShowToast(forgotten.Count == 1 ? $"{forgotten[0]} foi esquecido (tinha ficado por apagar ao sair)"
-                : $"{forgotten.Count} sites esquecidos (tinham ficado por apagar ao sair): {string.Join(", ", forgotten)}");
+        if (SiteScope.LeftoversDone(results) is { } text) ShowToast(text);
     }
 
     private static IEnumerable<MainWindow> NormalWindows()
@@ -171,8 +171,9 @@ public partial class MainWindow
 
     // Apaga já tudo o que o site deixou (cookies e armazenamento do contexto desta janela; histórico e permissões do
     // perfil, ou as desta janela na privada). Só toca no site indicado. seenBefore: endereços do site recolhidos antes
-    // de fechar as abas dele (cada origem tem o seu armazenamento).
-    private async Task<ShredResult> ShredSiteAsync(string site, IEnumerable<string>? seenBefore = null)
+    // de fechar as abas dele (cada origem tem o seu armazenamento). startupSweep: a varredura do arranque (o motor de
+    // vídeo só se abre se o site lá ficou pendente).
+    private async Task<ShredResult> ShredSiteAsync(string site, IEnumerable<string>? seenBefore = null, bool startupSweep = false)
     {
         var history = 0;
         var seen = Tabs.Tabs.Select(t => t.Address).Concat(seenBefore ?? []).ToList();
@@ -203,7 +204,7 @@ public partial class MainWindow
         Shields.LocalNetworkGrants.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site), IsPrivate);
         Permissions.PermissionGrants.ForgetWhere(key => SiteScope.HostKeyBelongs(key, site), IsPrivate);
         ForgetSiteInUndo(site);
-        var cleared = await ClearSiteStorageAsync(site, seen);
+        var cleared = await ClearSiteStorageAsync(site, seen, startupSweep);
         return new ShredResult(cleared.Cookies, history, cleared.Storage, cleared.CookiesFailed, cleared.VideoEngineFailed);
     }
 
@@ -212,7 +213,7 @@ public partial class MainWindow
     // motores), se o armazenamento foi apagado, se os cookies do motor principal falharam e se o perfil do motor de vídeo
     // ficou por abrir. Usado por «Triturar», «Esquecer ao fechar» e pelos sites de salto. Também tira ao motor as
     // decisões dele sobre a rede local dessas origens.
-    private async Task<(int Cookies, bool Storage, bool CookiesFailed, bool VideoEngineFailed)> ClearSiteStorageAsync(string site, IEnumerable<string> seenUrls)
+    private async Task<(int Cookies, bool Storage, bool CookiesFailed, bool VideoEngineFailed)> ClearSiteStorageAsync(string site, IEnumerable<string> seenUrls, bool startupSweep = false)
     {
         var cookies = 0;
         var cookiesFailed = false;
@@ -221,8 +222,9 @@ public partial class MainWindow
         try
         {
             var manager = CookieContext.GetCookieManager(null);
-            var (deleted, hosts) = await DeleteSiteCookiesAsync(manager, site);
+            var (deleted, hosts, failed) = await DeleteSiteCookiesAsync(manager, site);
             cookies = deleted;
+            cookiesFailed = failed;
             // Um subdomínio com cookies (accounts.exemplo.pt num iframe) também tem armazenamento.
             foreach (var host in hosts)
             {
@@ -242,10 +244,15 @@ public partial class MainWindow
         // carregaram); sem ela, só para os sites que lá abriram, para não arrancar o runtime do WebView2 sem necessidade.
         // Fica de fora: os cookies de terceiros de um site que nunca abriu no motor de vídeo, sem nenhuma aba desse motor
         // aberta, e um site a que se fez «Repor» nas Definições por site (sai das duas listas); saem com «Apagar dados» e
-        // com «Apagar ao fechar».
-        if (!IsPrivate && (LiveVideoCore() is not null || VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site))))
+        // com «Apagar ao fechar». A varredura do arranque só o abre para os sites pendentes (VideoEngine.ClearsSite).
+        // Um site com «esquecer» fica pendente antes de tentar e só sai quando o motor de vídeo apagou tudo: uma saída
+        // cortada a meio (o limite de 6 s, o Windows a encerrar) deixa-o para a varredura seguinte.
+        if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep, AppData.VideoForgetPending.Contains(site),
+                VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site))))
         {
+            if (AppData.IsForgetOnClose(site)) AppData.VideoForgetPending.Add(site);
             var video = await ClearVideoSiteAsync(site, origins);
+            if (video.Complete) AppData.VideoForgetPending.Remove(site);
             cookies += video.Cookies;
             if (!video.Complete) videoFailed = true;
         }
@@ -269,15 +276,21 @@ public partial class MainWindow
 
     // Os cookies do site e dos seus subdomínios (a mesma regra do Triturar), um a um por endereço e nome: devolve
     // quantos o motor apagou e os anfitriões distintos que os tinham (cada um tem o seu armazenamento). Uma falha do
-    // motor sobe a quem chama, que a mostra — nunca estreita o âmbito em silêncio.
-    private static async Task<(int Deleted, IReadOnlyList<string> Hosts)> DeleteSiteCookiesAsync(ICookieManager manager, string site)
+    // motor sobe a quem chama, que a mostra — nunca estreita o âmbito em silêncio. Failed: o motor respondeu -1 a algum
+    // apagar (o CefSharp devolve -1 quando não chega aos cookies, como em MainWindow.ClearData.cs); os outros seguem.
+    internal static async Task<(int Deleted, IReadOnlyList<string> Hosts, bool Failed)> DeleteSiteCookiesAsync(ICookieManager manager, string site)
     {
         var all = await manager.VisitAllCookiesAsync();
         var plan = SiteScope.CookieDeletions(all.Select(c => (c.Domain, c.Path, c.Name)), site);
         var deleted = 0;
+        var failed = false;
         foreach (var (url, name, _) in plan)
-            if (await manager.DeleteCookiesAsync(url, name) > 0) deleted++;
-        return (deleted, plan.Select(p => p.Host).Distinct(StringComparer.Ordinal).ToList());
+        {
+            var answer = await manager.DeleteCookiesAsync(url, name);
+            if (answer > 0) deleted++;
+            else if (answer < 0) failed = true;
+        }
+        return (deleted, plan.Select(p => p.Host).Distinct(StringComparer.Ordinal).ToList(), failed);
     }
 
     private async Task<ChromiumWebBrowser?> LiveBrowserAsync(TimeSpan limit)
@@ -313,6 +326,10 @@ public partial class MainWindow
         if (IsPrivate || SiteScope.SiteOf(Tabs.Active?.Address) is not { } site) return;
         var on = SiteInfoForgetToggle.IsChecked == true;
         AppData.SetForgetOnClose(site, on);
+        // Um site que já abriu no motor de vídeo pode lá ter dados: fica pendente para a varredura do arranque.
+        if (!on) AppData.VideoForgetPending.Remove(site);
+        else if (VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site)))
+            AppData.VideoForgetPending.Add(site);
         ShowToast(on ? $"{site} será esquecido quando deixar de ter abas dele" : $"{site} deixa de ser esquecido ao fechar");
     }
 

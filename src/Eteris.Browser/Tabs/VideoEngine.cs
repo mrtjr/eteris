@@ -290,6 +290,13 @@ public static class VideoEngine
     public static bool MayHoldData(string site, bool remembered, bool optedOut)
         => remembered || optedOut || KnownH264Sites.Contains(site);
 
+    // Uma limpeza de site (Triturar, Esquecer ao fechar, sites de salto) abre o perfil do motor de vídeo? Com uma aba viva
+    // dele, sempre (é barato). Sem ela: o Triturar, o temporizador e a saída seguem MayHoldData; a varredura do arranque
+    // (o que ficou por esquecer ao sair, a cada arranque) só para os sites marcados como pendentes — senão arrancava o
+    // WebView2 a frio, até 15 s, a cada arranque, mesmo sem nada para apagar.
+    public static bool ClearsSite(bool liveCore, bool startupSweep, bool pending, bool mayHoldData)
+        => liveCore || (startupSweep ? pending : mayHoldData);
+
     // As caixas de «Apagar dados» no WebView2: cookies e dados de sites → tudo o que é do site (cookies e todo o
     // armazenamento); cache → a cache do disco; histórico → o histórico próprio do WebView2 e o das transferências
     // (inteiros, seja qual for o período: não se veem em lado nenhum). 0: nada a apagar.

@@ -208,7 +208,25 @@ public sealed class ForgetSiteTests : IDisposable
     {
         Assert.Equal("Dados de exemplo.pt apagados (3 cookies)", SiteScope.SiteDataCleared("exemplo.pt", 3, storage: true));
         Assert.Equal("Dados de exemplo.pt apagados (1 cookie)", SiteScope.SiteDataCleared("exemplo.pt", 1, storage: true));
-        Assert.Equal("Dados de exemplo.pt apagados (nenhum cookie) — o armazenamento ficou por apagar", SiteScope.SiteDataCleared("exemplo.pt", 0, storage: false));
+        // Revisão final do plano 6: uma falha começa por «Não foi» e diz o que ficou (o armazenamento, cookies que o
+        // motor recusou, os dados do motor de vídeo).
+        Assert.Equal("Não foi possível apagar o armazenamento de exemplo.pt (nenhum cookie apagado)", SiteScope.SiteDataCleared("exemplo.pt", 0, storage: false));
+        Assert.Equal("Não foi possível apagar todos os cookies e os dados do motor de vídeo de exemplo.pt (1 cookie apagado)",
+            SiteScope.SiteDataCleared("exemplo.pt", 1, storage: true, cookiesFailed: true, videoEngineFailed: true));
+        Assert.Equal("Não foi possível apagar os dados do motor de vídeo de exemplo.pt (4 cookies apagados)",
+            SiteScope.SiteDataCleared("exemplo.pt", 4, storage: true, videoEngineFailed: true));
+    }
+
+    // O cadeado chega ao motor de vídeo com a regra do Triturar e conta as origens que o motor recusou.
+    [Fact]
+    public void LockPanel_ReachesTheVideoEngine_AndCountsRefusedOrigins()
+    {
+        var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
+        Assert.Contains("var (deleted, hosts, cookiesFailed) = await DeleteSiteCookiesAsync(", panel);
+        Assert.Contains("catch (Exception) { storage = false; }", panel[panel.IndexOf("foreach (var origin in origins)", StringComparison.Ordinal)..]);
+        Assert.Contains("VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: false,", panel);
+        Assert.Contains("await ClearVideoSiteAsync(site, origins)", panel);
+        Assert.Contains("SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed)", panel);
     }
 
     [Fact]

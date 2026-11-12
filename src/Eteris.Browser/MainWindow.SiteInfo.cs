@@ -266,7 +266,7 @@ public partial class MainWindow
                 return;
             }
 
-            var (deleted, hosts) = await DeleteSiteCookiesAsync(CookieContext.GetCookieManager(null), site);
+            var (deleted, hosts, cookiesFailed) = await DeleteSiteCookiesAsync(CookieContext.GetCookieManager(null), site);
             var origins = Data.SiteScope.Origins(site, [tab.Address, .. hosts.SelectMany(h => new[] { "https://" + h + "/", "http://" + h + "/" })]);
             var storage = true;
             try
@@ -274,13 +274,23 @@ public partial class MainWindow
                 using var client = browser.GetDevToolsClient();
                 foreach (var origin in origins)
                 {
-                    // Uma origem recusada pelo motor não impede as outras.
+                    // Uma origem recusada pelo motor não impede as outras, mas o aviso di-lo.
                     try { await DevToolsCalls.Run(() => client.Storage.ClearDataForOriginAsync(origin, "all")); }
-                    catch (Exception) { }
+                    catch (Exception) { storage = false; }
                 }
             }
             catch (Exception) { storage = false; }
-            ShowToast(Data.SiteScope.SiteDataCleared(site, deleted, storage));
+            // O perfil do motor de vídeo, com a regra do Triturar (MainWindow.Forget.cs): numa janela normal, com uma aba
+            // viva desse motor ou para um site que lá abriu.
+            var videoFailed = false;
+            if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: false,
+                    VideoEngine.MayHoldData(site, Data.AppData.IsVideoSite(site) || Data.AppData.IsVideoSite(site, platformCodecs: true), Data.AppData.IsVideoOptOut(site))))
+            {
+                var video = await ClearVideoSiteAsync(site, origins);
+                deleted += video.Cookies;
+                videoFailed = !video.Complete;
+            }
+            ShowToast(Data.SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed));
             ReloadActive();
         }
         catch (Exception ex)

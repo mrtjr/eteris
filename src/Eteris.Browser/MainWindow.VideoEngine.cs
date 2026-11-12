@@ -238,6 +238,7 @@ public partial class MainWindow
                 if (!e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) Dispatcher.InvokeAsync(() => SwitchToNormalEngine(tab, e.Uri));
                 return;
             }
+            NoteVideoForgetPending(e.Uri);
             mainNavigation = e.Uri;
             pageUrl = e.Uri;
             pageHost = WebHost(e.Uri);
@@ -317,6 +318,14 @@ public partial class MainWindow
                 tab.RecordBlocked(blocked);
             }
         };
+    }
+
+    // Um site com «Esquecer ao fechar» abriu numa aba do motor de vídeo de uma janela normal: fica pendente para a
+    // varredura do arranque (AppData.VideoForgetPending), caso a limpeza à saída não chegue a acontecer.
+    private void NoteVideoForgetPending(string url)
+    {
+        if (IsPrivate || SiteScope.SiteOf(url) is not { } site || !AppData.IsForgetOnClose(site)) return;
+        AppData.VideoForgetPending.Add(site);
     }
 
     // Voltar/Avançar de uma aba do motor de vídeo: o histórico dele e, na 1.ª entrada, o regresso ao motor principal.
@@ -613,11 +622,14 @@ public partial class MainWindow
 
     // «Apagar dados» (chamado fora do fio da interface): as caixas marcadas, no perfil inteiro do WebView2. False se o
     // perfil existe e não foi possível abri-lo ou apagar.
-    internal static Task<bool> ClearVideoEngineAsync(ClearDataRequest request)
+    internal static async Task<bool> ClearVideoEngineAsync(ClearDataRequest request)
     {
         var kinds = VideoEngine.DataKinds(request.History, request.Cookies, request.Cache);
-        if (kinds == 0) return Task.FromResult(true);
-        return Application.Current.Dispatcher.InvokeAsync(() => WithVideoProfileAsync(core => core.Profile.ClearBrowsingDataAsync(kinds))).Task.Unwrap();
+        if (kinds == 0) return true;
+        var done = await Application.Current.Dispatcher.InvokeAsync(() => WithVideoProfileAsync(core => core.Profile.ClearBrowsingDataAsync(kinds))).Task.Unwrap();
+        // Os dados dos sites saíram todos do perfil do motor de vídeo: nenhum fica pendente para a varredura do arranque.
+        if (done && request.Cookies) AppData.VideoForgetPending.Clear();
+        return done;
     }
 
     // Uma aba viva do motor de vídeo de uma janela normal (o perfil «eteris»), ou nulo. Uma vista a fechar ou caída

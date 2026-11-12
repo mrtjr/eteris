@@ -159,11 +159,48 @@ public static class SiteScope
         return text + " — não foi possível apagar " + names;
     }
 
+    // O resultado da varredura do arranque para um site (MainWindow.Forget.cs, ForgetLeftoversAsync).
+    public sealed record Leftover(string Site, int Cookies, int History, bool Storage, bool CookiesFailed = false, bool VideoEngineFailed = false)
+    {
+        public bool Failed => !Storage || CookiesFailed || VideoEngineFailed;
+    }
+
+    // O aviso da varredura do arranque: os sites esquecidos e, primeiro, os que ficaram com alguma coisa por apagar (o
+    // aviso começa então por «Não foi»). Nada apagado e nada falhado: sem aviso (é o caso de quase todos os arranques).
+    public static string? LeftoversDone(IReadOnlyList<Leftover> results)
+    {
+        var failed = results.Where(r => r.Failed).ToList();
+        var forgotten = results.Where(r => !r.Failed && r.Cookies + r.History > 0).Select(r => r.Site).ToList();
+        if (failed.Count == 0)
+        {
+            if (forgotten.Count == 0) return null;
+            return forgotten.Count == 1 ? $"{forgotten[0]} foi esquecido (tinha ficado por apagar ao sair)"
+                : $"{forgotten.Count} sites esquecidos (tinham ficado por apagar ao sair): {string.Join(", ", forgotten)}";
+        }
+        if (failed.Count == 1 && forgotten.Count == 0)
+        {
+            var r = failed[0];
+            return $"Não foi possível esquecer tudo de {r.Site} (tinha ficado por apagar ao sair) — "
+                   + ShredDone(r.Cookies, r.History, r.Storage, false, r.CookiesFailed, r.VideoEngineFailed);
+        }
+        var text = $"Não foi possível esquecer tudo de {Join(failed.Select(r => r.Site).ToList())} ({(failed.Count == 1 ? "tinha" : "tinham")} ficado por apagar ao sair)";
+        return forgotten.Count == 0 ? text : text + $"; {Join(forgotten)} {(forgotten.Count == 1 ? "foi esquecido" : "foram esquecidos")}";
+    }
+
+    private static string Join(List<string> names) => names.Count == 1 ? names[0] : string.Join(", ", names[..^1]) + " e " + names[^1];
+
     // O aviso do cadeado › «Apagar cookies e dados deste site»: quantos cookies saíram e, se o armazenamento não
     // pôde ser apagado, di-lo.
-    public static string SiteDataCleared(string site, int cookies, bool storage)
+    // cookiesFailed: o motor recusou apagar algum cookie; videoEngineFailed: o perfil do motor de vídeo não se abriu ou
+    // recusou alguma origem. Uma falha começa por «Não foi» e diz o que ficou.
+    public static string SiteDataCleared(string site, int cookies, bool storage, bool cookiesFailed = false, bool videoEngineFailed = false)
     {
         var cookieText = cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies";
-        return $"Dados de {site} apagados ({cookieText})" + (storage ? "" : " — o armazenamento ficou por apagar");
+        if (storage && !cookiesFailed && !videoEngineFailed) return $"Dados de {site} apagados ({cookieText})";
+        var stayed = new List<string>();
+        if (cookiesFailed) stayed.Add("todos os cookies");
+        if (!storage) stayed.Add("o armazenamento");
+        if (videoEngineFailed) stayed.Add("os dados do motor de vídeo");
+        return $"Não foi possível apagar {Join(stayed)} de {site} ({cookieText} {(cookies > 1 ? "apagados" : "apagado")})";
     }
 }

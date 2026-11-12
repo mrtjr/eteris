@@ -666,6 +666,16 @@ public static class AppData
 
     public static IReadOnlyList<string> ForgetOnCloseSites() => LazyForget.Value?.All() ?? [];
 
+    // Os sites com «Esquecer ao fechar» que podem ter alguma coisa por apagar no perfil do motor de vídeo: marcados
+    // quando uma aba desse motor abre o site, quando se liga o «esquecer» num site que já lá abriu e antes de cada
+    // limpeza do site nesse motor; desmarcados quando ela apaga tudo. A varredura do arranque só abre o perfil do motor
+    // de vídeo (que pode arrancar o WebView2 a frio) para estes (MainWindow.Forget.cs). Fora da pasta video-engine, que
+    // «Apagar ao fechar» apaga inteira.
+    // Preguiçoso: AppPaths.Root só fica certo depois do --user-data-dir.
+    private static readonly Lazy<SiteSetFile> LazyVideoForgetPending = new(() => new SiteSetFile(System.IO.Path.Combine(AppPaths.Root, "video-por-esquecer.txt")));
+
+    public static SiteSetFile VideoForgetPending => LazyVideoForgetPending.Value;
+
     public static void SetForgetOnClose(string host, bool on)
     {
         try
