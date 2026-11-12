@@ -670,7 +670,7 @@ da conta e a deste computador vai para o histórico. Apagar deixa uma lápide (c
 
 | Linha | Coleções | Por omissão | O que diz |
 |---|---|---|---|
-| Favoritos | `bookmarks` | ligado | Os favoritos e as pastas |
+| Favoritos | `bookmarks` | ligado | Os favoritos |
 | Espaços | `spaces` | ligado | Nome, cor e emoji; as abas de cada Espaço ficam em cada computador |
 | Definições | `settings` | ligado | Só as que fazem sentido noutro computador |
 | Decisões do Escudo | `shield` | ligado | Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site |

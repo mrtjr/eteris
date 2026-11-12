@@ -20,7 +20,7 @@ internal static class SyncChoices
 
     private static readonly IReadOnlyDictionary<string, (string Title, string Text)> Texts = new Dictionary<string, (string, string)>(StringComparer.Ordinal)
     {
-        ["bookmarks"] = ("Favoritos", "Os favoritos e as pastas"),
+        ["bookmarks"] = ("Favoritos", "Os favoritos"),
         ["spaces"] = ("Espaços", "Nome, cor e emoji; as abas de cada Espaço ficam em cada computador"),
         ["settings"] = ("Definições", "Só as que fazem sentido noutro computador"),
         ["shield"] = ("Decisões do Escudo", "Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site"),
