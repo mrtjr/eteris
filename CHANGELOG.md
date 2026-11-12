@@ -22,6 +22,10 @@
 - O cartão de permissão ignora cliques no primeiro meio segundo, começa com “Lembrar” desligado para a câmara, o microfone, o ecrã e a localização, e só aparece na aba que pediu.
 - Uma página já não consegue passar a aba para o motor de vídeo com uma mensagem forjada; com o motor com codecs a troca passa a ser sempre pelo botão; no motor de vídeo, as permissões são as do Éteris e o WebRTC segue a mesma política de IP.
 
+### Compatibilidade
+
+- Os sites que pedem um certificado de cliente (bancos, administração pública, intranets) passam a abrir: o Éteris mostra uma janela com o titular, o emissor e a validade de cada certificado, não envia nenhum sem o utilizador escolher e não se lembra da escolha.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as

@@ -143,6 +143,11 @@ public partial class MainWindow : Window
         UpdateTabWidth();
     }
 
+    // MOT-01: o site pede um certificado de cliente. O diálogo é do Éteris, modal sobre esta janela (nunca o motor, nunca o
+    // primeiro da lista) e nada fica lembrado. Vem da thread de rede do CEF; a janela responde na sua thread.
+    private Task<string?> AskClientCertificate(string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+        => Dispatcher.InvokeAsync(() => ClientCertificateDialog.Ask(this, host, port, rows)).Task;
+
     private void CreateBrowser(BrowserTab tab)
     {
         if (TryCreateVideoView(tab)) return;
@@ -217,7 +222,8 @@ public partial class MainWindow : Window
                         tab.RecordBlocked(label);
                     });
                 },
-                observatory: tab.Observatory),
+                observatory: tab.Observatory,
+                chooseCertificate: AskClientCertificate),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         DependencyPropertyDescriptor.FromProperty(ChromiumWebBrowser.AddressProperty, typeof(ChromiumWebBrowser)).AddValueChanged(browser, (_, _) =>

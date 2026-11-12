@@ -180,7 +180,7 @@ public partial class MainWindow
             // A rede local que o utilizador deixou ao site também chega na pré-visualização (sem cartão: a pré-visualização
             // não pergunta nada).
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, ShieldOn, onBlocked: _ => { }, isPrivate: IsPrivate,
-                localNetworkAllowed: IsLocalNetworkAllowed),
+                localNetworkAllowed: IsLocalNetworkAllowed, chooseCertificate: AskClientCertificate),
         };
         // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
         browser.FrameLoadStart += (_, e) =>

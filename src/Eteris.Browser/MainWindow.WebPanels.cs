@@ -245,7 +245,8 @@ public partial class MainWindow
                 userAgent: mobile ? WebPanels.MobileUserAgent : null,
                 // Rede local: o que o site já tem autorizado nas abas vale também na barra lateral.
                 localNetworkAllowed: IsLocalNetworkAllowed,
-                onMainNavigation: nav => Volatile.Write(ref panelHistory.Last, nav)),
+                onMainNavigation: nav => Volatile.Write(ref panelHistory.Last, nav),
+                chooseCertificate: AskClientCertificate),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.

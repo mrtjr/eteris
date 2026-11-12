@@ -14,7 +14,8 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     Action? onCrashed = null, string? userAgent = null, Action? onMainFrameRequest = null, bool isPrivate = false,
     Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
     Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null,
-    Action<string, string>? onCloaked = null, SiteObservatory? observatory = null)
+    Action<string, string>? onCloaked = null, SiteObservatory? observatory = null,
+    Func<string, int, IReadOnlyList<ClientCertificateRow>, Task<string?>>? chooseCertificate = null)
     : CefSharp.Handler.RequestHandler
 {
     protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
@@ -32,6 +33,38 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
         }
         catch (Exception) { }
         return false;
+    }
+
+    // MOT-01: um site que pede certificado de cliente. O motor 156.0.15 cortava a ligação sem perguntar (prova ao vivo de
+    // 2026-11-12), por isso a decisão é sempre do Éteris: sem diálogo (sem «chooseCertificate», um proxy que pede
+    // certificado, nenhum certificado instalado) não se envia nada; com diálogo, só o que o utilizador escolher. Nada fica
+    // lembrado e nenhuma exceção sai daqui (corre na thread de rede do CEF).
+    protected override bool OnSelectClientCertificate(IWebBrowser chromiumWebBrowser, IBrowser browser, bool isProxy, string host,
+        int port, System.Security.Cryptography.X509Certificates.X509Certificate2Collection certificates, ISelectClientCertificateCallback callback)
+    {
+        void Answer(string? thumbprint)
+        {
+            try
+            {
+                using (callback) callback.Select(ClientCertificates.Choose(certificates, thumbprint));
+            }
+            catch (Exception) { }
+        }
+        try
+        {
+            if (chooseCertificate is null || isProxy || certificates.Count == 0)
+            {
+                Answer(null);
+                return true;
+            }
+            chooseCertificate(host, port, ClientCertificates.Rows(certificates)).ContinueWith(
+                task => Answer(task.IsCompletedSuccessfully ? task.Result : null), TaskScheduler.Default);
+        }
+        catch (Exception)
+        {
+            Answer(null);
+        }
+        return true;
     }
 
     // Cabeçalhos de um pedido feito «como telemóvel» (vista móvel de um site fixado na barra lateral): o agente e

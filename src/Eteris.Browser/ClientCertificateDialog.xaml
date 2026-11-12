@@ -1,0 +1,55 @@
+<!-- MOT-01: o diálogo do Éteris para o pedido de certificado de cliente. Modal sobre a janela do pedido; «Não enviar» é a
+     resposta por omissão (Enter, Esc, fechar) e nenhum certificado vem escolhido. -->
+<Window x:Class="Eteris.Browser.ClientCertificateDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Certificado de cliente" Width="520" SizeToContent="Height" MinHeight="260"
+        ResizeMode="NoResize" ShowInTaskbar="False" WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        FontFamily="{DynamicResource UiFont}" Foreground="{DynamicResource TextBrush}"
+        Background="{DynamicResource SurfaceRaisedBrush}"
+        AutomationProperties.Name="Certificado de cliente">
+    <StackPanel Margin="22,20,22,20">
+        <TextBlock x:Name="Question" TextWrapping="Wrap" FontSize="14" />
+        <TextBlock Text="Escolha o certificado a enviar:" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,14,0,6" />
+        <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource FieldBorderBrush}" Background="{DynamicResource FieldBrush}">
+            <ListBox x:Name="List" MaxHeight="190" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextBrush}"
+                     SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     AutomationProperties.Name="Certificados disponíveis">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="10,8" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bg" Background="Transparent" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+        <DockPanel Margin="0,18,0,0" LastChildFill="False">
+            <Button x:Name="SendButton" DockPanel.Dock="Right" Content="Enviar certificado" Style="{StaticResource PrimaryPillButton}"
+                    Margin="8,0,0,0" IsEnabled="False" />
+            <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="Não enviar" Style="{StaticResource PillButton}"
+                    IsDefault="True" IsCancel="True" />
+        </DockPanel>
+    </StackPanel>
+</Window>
