@@ -185,7 +185,10 @@ public partial class MainWindow
         // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
         browser.FrameLoadStart += (_, e) =>
         {
-            if (e.Frame.IsMain) _glanceLoads.Committed(Volatile.Read(ref _glanceSerial));
+            if (!e.Frame.IsMain) return;
+            // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01).
+            if (Infrastructure.SandboxFallback.IsWebContent(e.Url)) Infrastructure.StartupGuard.Current.WebContentCommitted();
+            _glanceLoads.Committed(Volatile.Read(ref _glanceSerial));
         };
         browser.FrameLoadEnd += (_, e) =>
         {

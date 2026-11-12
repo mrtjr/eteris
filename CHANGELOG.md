@@ -5,6 +5,8 @@
 ### Segurança
 
 - A cor do tema que um site declara deixa de passar pelo conversor de cores do Windows: um valor forjado podia levar o Éteris a abrir um endereço fora do motor.
+- Uma página que faz cair processos do motor já não consegue desligar o isolamento das páginas: as quedas só contam até haver conteúdo web, e depois de um arranque falhado a sessão volta com as abas a dormir.
+- As atualizações passam a ser conferidas: o Éteris só descarrega e instala pacotes que constem de uma lista de versões assinada pelo autor, com uma chave que não está no GitHub, e volta a conferir cada pacote depois de o descarregar.
 
 ### Privacidade
 
@@ -23,6 +25,7 @@
 ### Correções
 
 - O gerador de palavras-passe já não desiste num computador ocupado: os 100 ms do padrão do site contam só as tentativas, não a preparação, e a primeira tentativa faz-se sempre (antes podia aparecer «Este campo não aceita uma palavra-passe gerada» num campo que a aceita).
+- Abrir o Éteris outra vez, ou um link noutra aplicação, com uma atualização já descarregada deixou de fechar a janela que estava aberta: a atualização aplica-se ao sair, ou no arranque seguinte quando não há outro Éteris a correr.
 - Um `session.json` só de leitura ou preso por outro programa já não fecha o Éteris: a sessão fica por gravar e aparece um aviso.
 - Com mais de uma janela aberta, atualizar, encerrar o Windows ou uma queda já não deixam só as abas de uma: a sessão guarda todas as janelas normais, com os seus Espaços, notas e trancas, e todas voltam no arranque seguinte.
 - Notas com duas janelas abertas: o que se escreve numa aparece na outra e escrever numa janela que mostrava o texto antigo já não apaga o que a outra gravou.

@@ -251,13 +251,37 @@ public class SandboxPublishTests
         Assert.Equal(@"At<tmp>\build\pack.ps1:41 e C:\Users\<utilizador>\x", Masked(text, temp));
     }
 
+    // Authenticode (decisão D3 de docs/atualizacoes.md): quando houver certificado, o pack.ps1 passa -SignParams ao vpk
+    // pack como --signParams; sem ele, os argumentos do vpk pack são os de sempre.
+    [Fact]
+    public void Pack_PassesSignParamsToVpkOnlyWhenGiven()
+    {
+        var pack = File.ReadAllText(Path.Combine(Root(), "build", "pack.ps1"));
+        Assert.Contains("[string]$SignParams = \"\"", pack);
+        const string only = "if ($SignParams) { $vpkArgs += @(\"--signParams\", $SignParams) }";
+        Assert.Contains(only, pack);
+        Assert.True(pack.IndexOf(only, StringComparison.Ordinal) < pack.IndexOf("vpk pack", StringComparison.Ordinal), "o --signParams junta-se antes do vpk pack");
+        Assert.Contains("vpk pack @vpkArgs", pack);
+    }
+
+    // INF-02, CAD-01: sem nenhuma chave pública em update-keys.txt o Éteris empacotado recusaria todas as atualizações
+    // (falha fechada do SignedUpdateSource): o pack.ps1 não o empacota.
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_RefusesWithoutAnUpdateKey()
+    {
+        var (said, output) = await RunPackAsync("{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": true }",
+                                                file: true, "", head: null, key: false);
+        Assert.True(said("update-keys.txt"), "o pack.ps1 não recusou por falta da chave; saída: " + output);
+    }
+
     // Corre o pack.ps1 verdadeiro numa cópia com uma pasta publish\ falsa: só a marca «mark» e, com «file», um
     // publish\google-oauth.json (vazio, feito aqui). O PATH do processo fica só com o sistema (e, com «head», uma pasta
     // onde só há um git.cmd falso que responde «head»): o vpk nunca corre daqui. Confirma que recusou sem empacotar e
     // devolve uma função que diz se o pack.ps1 escreveu um texto, e a saída para as mensagens de falha. Com «codePage»,
-    // corre por um cmd.exe que muda primeiro a página de códigos da consola (chcp) e escreve a nova.
+    // corre por um cmd.exe que muda primeiro a página de códigos da consola (chcp) e escreve a nova. Com «key», a cópia
+    // leva um src\Eteris.Browser\Updates\update-keys.txt com uma linha de chave (falsa: o pack.ps1 só vê se há uma).
     private static async Task<(Func<string, bool> Said, string Output)> RunPackAsync(string mark, bool file, string switches, string? head,
-                                                                                     int? codePage = null)
+                                                                                     int? codePage = null, bool key = true)
     {
         var dir = Directory.CreateTempSubdirectory("eteris-pack-");
         try
@@ -268,6 +292,11 @@ public class SandboxPublishTests
             File.Copy(Path.Combine(Root(), "build", "pack.ps1"), script);
             File.WriteAllText(Path.Combine(dir.FullName, "publish", "eteris-build.json"), mark);
             if (file) File.WriteAllText(Path.Combine(dir.FullName, "publish", "google-oauth.json"), "{}");
+            if (key)
+            {
+                var updates = Directory.CreateDirectory(Path.Combine(dir.FullName, "src", "Eteris.Browser", "Updates")).FullName;
+                File.WriteAllText(Path.Combine(updates, "update-keys.txt"), "# teste\r\nAAAA\r\n");
+            }
             var start = new ProcessStartInfo("powershell.exe")
             {
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,

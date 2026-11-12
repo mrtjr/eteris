@@ -1,0 +1,16 @@
+# Chaves públicas das atualizações do Éteris (docs/atualizacoes.md).
+#
+# Formato: uma chave por linha, ECDSA P-256 em SubjectPublicKeyInfo (DER) codificada em Base64; as linhas vazias e as
+# que começam por # são ignoradas. A 1.ª linha de chave é a de uso (a que assina as releases); as seguintes são as de
+# reserva, guardadas noutro sítio, para rodar a chave sem deixar as instalações sem atualizações.
+#
+# O Éteris só aceita uma atualização se o releases.win.json da última release tiver uma assinatura válida para alguma
+# destas chaves. Sem nenhuma linha de chave, recusa todas (e o build/pack.ps1 recusa empacotar).
+#
+# As chaves PRIVADAS nunca entram neste repositório, no GitHub nem no CI: geram-se e guardam-se fora daqui com
+# «dotnet run --project build/sign -c Release -- new-key <ficheiro.pem>», que escreve a linha pública a colar aqui.
+
+# Uso (assina as releases), gerada a 2026-11-12:
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXoBuH7BOfgf5QiPMKvOAcG6VDW04rKDuheQY/AdSjTc+1zO2mVXrSpLmO1vt2yV5ozycf8wMmjMbyXWGjOh2bQ==
+# Reserva, gerada a 2026-11-12 e guardada noutro sítio:
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElN14d3rw1fDcclTyk//bPB00on5MemNU1UKqI0W1p4UaewOkNdqBHIvauA+MeorpY+l+6nqJ1Uk+MxbiCKWizQ==

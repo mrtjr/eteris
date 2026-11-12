@@ -179,13 +179,20 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    «Entrar com o Google» e não «indisponível»). Nunca instalar o `Setup` na máquina do dono.
 6. `git push`, `git tag vX.Y.Z` e `git push origin vX.Y.Z` — o push da tag só põe o `release.yml` a **verificar**
    (compilar e testes, sem pack nem upload).
-7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --publish --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z
-   --token … --outputDir Releases` e as notas da release (`gh release edit`), com a nota do motor próprio e da oferta
-   do código-fonte do FFmpeg (`licenses/FFmpeg-SOURCE.txt`). O token só no ambiente do processo
+7. `vpk upload github --repoUrl https://github.com/mrtjr/eteris --releaseName "Éteris vX.Y.Z" --tag vX.Y.Z
+   --token … --outputDir Releases`, sem publicar: a release **fica em rascunho**. O token só no ambiente do processo
    (`$env:GH_TOKEN = (gh auth token)`), nunca em ficheiros.
+8. `.\build\release.ps1 -Version X.Y.Z -Key <chave.pem>` (docs/atualizacoes.md): recusa enquanto o CI do commit da
+   etiqueta não estiver verde (o fluxo `build` incluído), confere o `releases.win.json` do rascunho (o que o
+   `vpk upload github` gerou, só com os pacotes desta versão) com os pacotes de `Releases\` desta máquina, assina os bytes
+   dele tal como vieram, sobe o `.sig`, volta a descarregar e verificar os dois e só então publica. Depois, as notas da release
+   (`gh release edit`), com a nota do motor próprio e da oferta do código-fonte do FFmpeg
+   (`licenses/FFmpeg-SOURCE.txt`).
 
 A publicação pelo CI ficou só para **emergências** (esta máquina indisponível): `workflow_dispatch` do `release.yml`
-com a tag e o input obrigatório `sem_codecs` = true. Sai com o runtime do NuGet, sem codecs e sem sandbox
+com a tag e o input obrigatório `sem_codecs` = true. Também fica em rascunho; publica-se com
+`build\release.ps1 -Version X.Y.Z -Key <chave.pem> -IndiceDaRelease`, que assina o índice que o CI lá pôs (o CI nunca
+tem a chave). Sai com o runtime do NuGet, sem codecs e sem sandbox
 (`publish.ps1 -NoSandbox`: o CI não tem o motor próprio, que traz o bootstrap, nem o CefSharp com o patch) e sem login
 Google (`pack.ps1 -NoSandbox -SemLogin`: o `google-oauth.json` nunca está no repositório): a sonda do arranque
 (`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
