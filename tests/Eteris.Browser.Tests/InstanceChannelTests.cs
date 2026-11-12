@@ -45,6 +45,29 @@ public class InstanceChannelTests
         Assert.Equal(["https://www.rtp.pt/"], args);
     }
 
+    // INF-05: o Dispose pára mesmo a escuta (antes devolvia um CancellationTokenSource, que ao ser libertado não cancela
+    // nada): um envio a seguir já não encontra o pipe e a mensagem não chega.
+    [Fact]
+    public async Task Listen_Dispose_StopsListening()
+    {
+        var name = "eteris-test-" + Guid.NewGuid().ToString("N");
+        var called = 0;
+        var listener = InstanceChannel.Listen(name, _ => Interlocked.Increment(ref called));
+        listener.Dispose();
+        await Task.Delay(300);
+        Assert.False(InstanceChannel.Send(name, ["x"], timeoutMs: 300));
+        Assert.Equal(0, called);
+    }
+
+    // O que o teste acima não vê (o ciclo antigo ficava a girar sem pipe estável): o Dispose cancela mesmo.
+    [Fact]
+    public void Listen_ReturnsAListenerWhoseDisposeCancels()
+    {
+        var source = Sync.GoogleSyncTests.Src("Eteris.Browser", "Infrastructure", "InstanceChannel.cs");
+        Assert.Contains("return new Listener(stop);", source);
+        Assert.Contains("public void Dispose() => stop.Cancel();", source);
+    }
+
     [Fact]
     public void Send_WithoutListener_ReturnsFalse()
         => Assert.False(InstanceChannel.Send("eteris-test-nobody-" + Guid.NewGuid().ToString("N"), ["x"], timeoutMs: 300));

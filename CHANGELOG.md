@@ -17,6 +17,7 @@
 ### Correções
 
 - O Éteris volta a procurar atualizações de 6 em 6 horas e depois de uma falha; uma sessão aberta durante dias já não fica sem saber de uma versão nova.
+- Abrir o Éteris (ou um link) enquanto ele ainda está a fechar já não se perde: o novo lançamento espera e abre.
 
 ## 0.2.16 — 2026-11-12
 

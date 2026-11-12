@@ -55,11 +55,10 @@ public partial class App : Application
             JumpListTasks.Install();
             StartupTrace.Mark("jumplist");
         });
-        _channel = InstanceChannel.Listen(Program.ChannelName, args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
+        // O canal já escuta desde o Program.Main; aqui só se ligam os lançamentos guardados e os seguintes à janela.
+        Program.Inbox.Attach(args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
         StartupTrace.Mark("onstartup.fim");
     }
-
-    private IDisposable? _channel;
 
     // Logo a seguir ao Cef.Initialize (na thread onde ele correu): o que precisa do contexto global do motor.
     internal static void OnCefReady()
@@ -88,7 +87,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _channel?.Dispose();
+        Program.Channel?.Dispose();
         // Fecho normal: este arranque não caiu (rede de segurança do sandbox, Infrastructure/StartupGuard.cs).
         StartupGuard.Current.Healthy();
         StartupGuard.Current.Flush();

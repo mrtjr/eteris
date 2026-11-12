@@ -11,6 +11,12 @@ public static class Program
     // Nome do canal desta instância (por perfil), para receber links de lançamentos posteriores.
     public static string ChannelName { get; private set; } = InstanceName;
 
+    // Os lançamentos de outros processos que chegam antes de a janela existir (App.OnStartup liga-se a esta caixa).
+    public static InstanceInbox Inbox { get; } = new();
+
+    // A escuta do canal; o App.OnExit pára-a (um 2.º lançamento a meio do fecho espera pelo fim em vez de falar com ninguém).
+    public static IDisposable? Channel { get; private set; }
+
     [STAThread]
     public static void Main(string[] args)
     {
@@ -41,16 +47,30 @@ public static class Program
             : InstanceName;
 
         ChannelName = instanceName;
-        using var instance = SingleInstance.TryAcquire(instanceName);
+        // Já há um Éteris neste perfil (ou ainda há, a fechar): entrega-lhe os argumentos (um link, --private) e sai; se ele
+        // fechar entretanto, este lançamento passa a ser a instância principal em vez de perder o pedido (INF-05). Quem
+        // envia tem direito ao primeiro plano; passa-o à instância aberta para a janela poder vir à frente.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var firstSend = true;
+        var (instance, delivered) = InstanceHandoff.Run(
+            () => SingleInstance.TryAcquire(instanceName),
+            () =>
+            {
+                SingleInstance.AllowAnyForeground();
+                var sent = InstanceChannel.Send(instanceName, args, firstSend ? 2000 : 500);
+                firstSend = false;
+                return sent;
+            },
+            () => clock.Elapsed, Thread.Sleep);
         if (instance is null)
         {
-            // Já há um Éteris aberto neste perfil: entrega-lhe os argumentos (um link, --private) e sai.
-            // Quem envia tem direito ao primeiro plano; passa-o à instância aberta para a janela poder vir à frente.
-            SingleInstance.AllowAnyForeground();
-            if (InstanceChannel.Send(instanceName, args)) return;
-            if (!AppPaths.IsCustomProfile) SingleInstance.ActivateExisting(InstanceName);
+            if (!delivered && !AppPaths.IsCustomProfile) SingleInstance.ActivateExisting(InstanceName);
             return;
         }
+        using var held = instance;
+        // A escuta começa já, e não no fim do App.OnStartup: um lançamento que chegue enquanto a janela se carrega fica na
+        // caixa (Inbox) até o App se ligar a ela.
+        Channel = InstanceChannel.Listen(ChannelName, Inbox.Post);
         StartupTrace.Mark("instancia");
         // Uma atualização já descarregada aplica-se agora só se este for o único Éteris da instalação e não trouxer link nem
         // pedido de janela privada, nem foi reaberto pelo Update.exe nem é a nova tentativa do sandbox; senão fica para a

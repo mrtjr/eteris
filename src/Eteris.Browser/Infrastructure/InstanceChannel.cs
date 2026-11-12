@@ -62,7 +62,16 @@ public static class InstanceChannel
             // Parado antes de o ciclo usar o primeiro pipe: fecha-o na mesma.
             if (next is not null) await next.DisposeAsync();
         });
-        return stop;
+        return new Listener(stop);
+    }
+
+    // Dispose pára mesmo a escuta: cancela o ciclo, que sai pelo OperationCanceledException e fecha o pipe que tiver. Antes
+    // devolvia-se o CancellationTokenSource e libertá-lo não cancela nada: o ciclo continuava, a lançar
+    // ObjectDisposedException em cada volta (stop.Token) e a esperar 100 ms, até ao fim do processo. O
+    // CancellationTokenSource não se liberta enquanto o ciclo o usa.
+    private sealed class Listener(CancellationTokenSource stop) : IDisposable
+    {
+        public void Dispose() => stop.Cancel();
     }
 
     private static NamedPipeServerStream NewServer(string name) => new(PipeName(name), PipeDirection.In, 1,
