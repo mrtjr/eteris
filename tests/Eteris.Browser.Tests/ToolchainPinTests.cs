@@ -43,6 +43,20 @@ public class ToolchainPinTests
         Assert.True(missing.Count == 0, "cargo sem --locked:\n" + string.Join("\n", missing));
     }
 
+    // O Rust mínimo é o maior rust-version das dependências do Cargo.lock (hoje os icu_* 2.4, que pedem o 1.88). O
+    // Cargo.toml do Escudo declara-o — um cargo mais antigo diz logo a versão que falta em vez de falhar a meio — e o
+    // README diz o mesmo número.
+    [Fact]
+    public void Cargo_DeclaresMinimumRust_AndReadmeAgrees()
+    {
+        var toml = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Shields", "Cargo.toml"));
+        var declared = Regex.Match(toml, @"^rust-version\s*=\s*""([^""]+)""", RegexOptions.Multiline);
+        Assert.True(declared.Success, "src/Eteris.Shields/Cargo.toml sem rust-version");
+        Assert.Equal("1.88", declared.Groups[1].Value);
+        var readme = File.ReadAllText(Path.Combine(Root(), "README.md"));
+        Assert.Contains("Rust " + declared.Groups[1].Value + " ou posterior", readme);
+    }
+
     private static IEnumerable<(string Name, string Text)> Workflows()
         => Directory.EnumerateFiles(Path.Combine(Root(), ".github", "workflows"), "*.yml")
             .Select(f => (Path.GetFileName(f), File.ReadAllText(f).Replace("\r\n", "\n", StringComparison.Ordinal)));

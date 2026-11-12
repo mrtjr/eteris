@@ -16,7 +16,7 @@ public class ReadmeTests
         var end = readme.IndexOf("## Licença", StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start, "README.md sem «## Desenvolvimento» antes de «## Licença»");
         var section = readme[start..end];
-        foreach (var needed in new[] { ".NET 10", "Rust 1.85", "Node 22", "global.json", "tests/Eteris.Browser.E2E.Tests" })
+        foreach (var needed in new[] { ".NET 10", "Rust 1.88","Node 22", "global.json", "tests/Eteris.Browser.E2E.Tests" })
             Assert.True(section.Contains(needed, StringComparison.Ordinal), $"«## Desenvolvimento» não diz «{needed}»");
     }
 

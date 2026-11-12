@@ -2,6 +2,8 @@
 name = "eteris_shields"
 version = "0.1.0"
 edition = "2024"
+# O maior rust-version das dependências do Cargo.lock (os icu_* 2.4 pedem o 1.88); o README diz o mesmo.
+rust-version = "1.88"
 license = "MPL-2.0"
 publish = false
 

@@ -62,7 +62,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 Requisitos (Windows 10 ou 11, x64):
 
 - SDK do .NET 10 (a versão exata está em `global.json`);
-- Rust 1.85 ou posterior: o `dotnet build` compila o Escudo com o `cargo`;
+- Rust 1.88 ou posterior: o `dotnet build` compila o Escudo com o `cargo`;
 - Node 22 no PATH: os testes dos scripts injetados correm no Node e falham sem ele;
 - git no PATH.
 
