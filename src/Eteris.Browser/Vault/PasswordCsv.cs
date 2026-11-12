@@ -30,7 +30,7 @@ public sealed record ImportConflict(CsvLogin Incoming, string? ExistingId);
 
 public sealed record ImportPlan(IReadOnlyList<CsvLogin> Add, int Duplicates, IReadOnlyList<ImportConflict> Conflicts, IReadOnlyList<CsvRejected> Invalid);
 
-// «a do ficheiro» (a atual fica no histórico do item: nenhuma se perde) ou «a atual».
+// «a do ficheiro» (a atual fica no histórico do item: nenhuma se perde; a nota e os outros campos do item guardado ficam) ou «a atual».
 public enum ConflictChoice { UseFile, KeepCurrent }
 
 // Kept: as diferentes do ficheiro em que o utilizador escolheu «Manter as atuais» (a pergunta já resolveu o conflito:
@@ -166,7 +166,21 @@ public static class PasswordCsv
         {
             if (choose(conflict) == ConflictChoice.UseFile)
             {
-                vault.SaveLogin(ToItem(conflict.Incoming));
+                // Só a palavra-passe (e o que o ficheiro traz) muda: a nota, a última utilização e o formulário do item
+                // guardado ficam (VAU-11); a palavra-passe anterior vai para o histórico.
+                var incoming = conflict.Incoming;
+                var existing = vault.GetLogin(conflict.ExistingId ?? vault.FindLogin(incoming.Origin, incoming.Username) ?? string.Empty);
+                vault.SaveLogin(existing is null
+                    ? ToItem(incoming)
+                    : existing with
+                    {
+                        Password = incoming.Password,
+                        Generated = false,
+                        Note = JoinNotes(existing.Note, incoming.Note),
+                        Used = incoming.Used ?? existing.Used,
+                        FormAction = incoming.FormAction ?? existing.FormAction,
+                        Realm = incoming.Realm ?? existing.Realm,
+                    });
                 replaced++;
             }
             else
@@ -175,6 +189,16 @@ public static class PasswordCsv
             }
         }
         return new(plan.Add.Count, replaced, kept, plan.Invalid.Count, plan.Duplicates);
+    }
+
+    // Uma nota «em falta» é nula ou vazia. Sem nota no ficheiro fica a guardada; sem nota guardada fica a do ficheiro;
+    // iguais, uma só; diferentes, as duas (a do ficheiro primeiro) se couberem em MaxNote, senão fica a guardada.
+    internal static string? JoinNotes(string? stored, string? incoming)
+    {
+        if (string.IsNullOrEmpty(incoming)) return stored;
+        if (string.IsNullOrEmpty(stored) || stored == incoming) return incoming;
+        var both = incoming + "\n\n" + stored;
+        return both.Length <= MaxNote ? both : stored;
     }
 
     private static LoginItem ToItem(CsvLogin c)
