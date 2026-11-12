@@ -122,7 +122,7 @@
   <ItemGroup>
     <PackageReference Include="CefSharp.Wpf.NETCore" Version="156.0.150" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
