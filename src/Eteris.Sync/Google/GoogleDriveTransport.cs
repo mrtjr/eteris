@@ -226,6 +226,9 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
             var response = await http.SendAsync(request, completion, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode || (allowNotFound && response.StatusCode == HttpStatusCode.NotFound)) return response;
             var status = (int)response.StatusCode;
+            // O limite de pedidos também vem como 403 (rateLimitExceeded, userRateLimitExceeded): repete-se como o 429. Os
+            // outros 403 (sem permissão, sem espaço) falham logo. O corpo lê-se aqui, antes de descartar a resposta.
+            var rateLimited = status == 403 && await IsRateLimitAsync(response, cancellationToken).ConfigureAwait(false);
             response.Dispose();
             if (status == 401 && !refreshed)
             {
@@ -233,12 +236,27 @@ public sealed class GoogleDriveTransport(HttpClient http, Func<bool, Cancellatio
                 await accessToken(true, cancellationToken).ConfigureAwait(false);
                 continue;
             }
-            if ((status == 429 || status >= 500) && attempt < MaxAttempts && retry)
+            if ((status == 429 || rateLimited || status >= 500) && attempt < MaxAttempts && retry)
             {
                 await _delay(TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt - 1)), cancellationToken).ConfigureAwait(false);
                 continue;
             }
             throw new HttpRequestException($"Google Drive respondeu {status}.", null, (HttpStatusCode)status);
+        }
+    }
+
+    // O corpo de um 403 diz se é o limite de pedidos. Sem motivo legível, conta como um 403 qualquer.
+    private static async Task<bool> IsRateLimitAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await response.Content.LoadIntoBufferAsync(64 * 1024, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return body.Contains("rateLimitExceeded", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException)
+        {
+            return false;
         }
     }
 

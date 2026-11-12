@@ -44,6 +44,23 @@ public class GoogleSyncTests
         Assert.Contains("or System.Net.Sockets.SocketException or OperationCanceledException)", sync, StringComparison.Ordinal);
     }
 
+    // Auditoria, SYN-07: o Drive também responde 403 (rateLimitExceeded, userRateLimitExceeded) ao limite de pedidos: repete-se
+    // com espera, como o 429. Os outros 403 falham logo.
+    [Fact]
+    public async Task Drive_RateLimit403_IsRetried_OtherForbiddenIsNot()
+    {
+        var google = new FakeGoogle();
+        var (drive, _) = Drive(google);
+        await drive.WriteAsync("eteris/c/keys", [1]);
+        google.FailNext(HttpStatusCode.Forbidden, 2, reason: "userRateLimitExceeded");
+        Assert.Single(await drive.ListAsync("eteris/"));
+        google.FailNext(HttpStatusCode.Forbidden, 1, reason: "rateLimitExceeded");
+        Assert.Single(await drive.ListAsync("eteris/"));
+        google.FailNext(HttpStatusCode.Forbidden);                      // sem motivo de limite: não repete
+        var refused = await Assert.ThrowsAsync<HttpRequestException>(() => drive.ListAsync("eteris/"));
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+    }
+
     [Theory]
     [InlineData(false)]   // a resposta diz o tamanho: recusa pelos cabeçalhos
     [InlineData(true)]    // sem Content-Length: corta a leitura no limite

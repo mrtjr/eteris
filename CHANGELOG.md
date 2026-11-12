@@ -11,6 +11,7 @@
 - Se o estado da sincronização não se conseguir ler ao abrir, o Éteris diz-no e não o substitui por um vazio quando se carrega em «Ligar»; «Recomeçar sem o estado antigo» põe o ficheiro de lado e este computador volta a entrar na conta.
 - Quando outro computador da conta desliga uma proteção (HTTPS primeiro, DNS cifrado, o Escudo ou o modo estrito num site), o estado da sincronização passa a dizê-lo.
 - Um pedido à Google que esgota o prazo no início de sessão já não desaparece como se tivesse carregado em «Cancelar»: a barra diz «Sem ligação à Google. Tente de novo.»
+- O Drive às vezes responde ao limite de pedidos com um 403 (em vez do 429): o Éteris espera e repete, em vez de falhar a ronda.
 
 ### Pesquisa
 
