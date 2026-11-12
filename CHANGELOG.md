@@ -2,6 +2,10 @@
 
 ## 0.2.16 — por publicar
 
+### Correções
+
+- O gerador de palavras-passe já não desiste num computador ocupado: os 100 ms do padrão do site contam só as tentativas, não a preparação, e a primeira tentativa faz-se sempre (antes podia aparecer «Este campo não aceita uma palavra-passe gerada» num campo que a aceita).
+
 ## 0.2.15 — 2026-11-12
 
 A versão do **login simples**: «Entrar com o Google» com um clique, a partir do menu, das boas-vindas ou das

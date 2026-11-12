@@ -13,7 +13,8 @@ public sealed record PasswordRules(int? MinLength, int? MaxLength, string? Patte
 // +, *, ?) gera-se peça a peça; outro padrão (lookaheads, grupos, alternativas) aceita a palavra-passe normal se ela o
 // cumprir. A palavra-passe inteira tem de cumprir o padrão, como no HTML; se não der, null (o gerador não se oferece).
 // O padrão vem da página: corre sem retrocesso (NonBacktracking, tempo linear) e, quando o padrão o exige (lookaheads),
-// com retrocesso mas com um limite de tempo para a geração inteira (Budget), para uma página não parar a interface.
+// com retrocesso. Nos dois casos as tentativas todas juntas têm um limite de tempo (Budget), contado depois de o padrão
+// estar preparado, para uma página não parar a interface.
 public static class PasswordGenerator
 {
     public const string Lower = "abcdefghijkmnpqrstuvwxyz";
@@ -25,12 +26,15 @@ public static class PasswordGenerator
 
     private const string All = Lower + Upper + Digits + Symbols;
     private static readonly TimeSpan s_regexTimeout = TimeSpan.FromMilliseconds(20);
-    // O tempo total que o padrão da página pode gastar numa geração (todas as tentativas juntas).
+    // O tempo que o padrão da página pode gastar numa geração: as tentativas todas juntas, depois de o padrão estar
+    // preparado (compilado e lido em peças). A primeira tentativa faz-se sempre.
     public static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(100);
 
     public static double EntropyBits(int length, int alphabet) => length * Math.Log2(alphabet);
 
-    public static string? Generate(PasswordRules? rules = null)
+    public static string? Generate(PasswordRules? rules = null) => Generate(rules, Budget);
+
+    internal static string? Generate(PasswordRules? rules, TimeSpan budget, Action? prepared = null)
     {
         var min = rules?.MinLength is > 0 and var m ? m : (int?)null;
         var max = rules?.MaxLength is > 0 and var x ? x : (int?)null;
@@ -39,18 +43,25 @@ public static class PasswordGenerator
         var target = Math.Clamp(DefaultLength, Math.Min(min ?? 1, hi), hi);
         if (string.IsNullOrEmpty(rules?.Pattern)) return Default(target);
 
-        var clock = System.Diagnostics.Stopwatch.StartNew();
+        // Preparar o padrão não conta para o prazo: só as tentativas. Numa máquina ocupada, compilar o padrão e ler as
+        // peças podia gastar os 100 ms antes da primeira tentativa.
         if (Compile("^(?:" + rules.Pattern + ")$") is not { } check) return null;
+        var pieces = Atoms(rules.Pattern);
+        prepared?.Invoke();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var outOfTime = false;
+        var compared = false;
         bool Fits(string pw)
         {
             if (pw.Length < (min ?? 0) || pw.Length > (max ?? int.MaxValue)) return false;
-            if (clock.Elapsed > Budget) { outOfTime = true; return false; }
+            // A primeira comparação com o padrão faz-se sempre; o prazo vale a partir da segunda.
+            if (compared && clock.Elapsed > budget) { outOfTime = true; return false; }
+            compared = true;
             try { return check.IsMatch(pw); }
-            catch (RegexMatchTimeoutException) { outOfTime = clock.Elapsed > Budget; return false; }
+            catch (RegexMatchTimeoutException) { outOfTime = clock.Elapsed > budget; return false; }
         }
 
-        if (Atoms(rules.Pattern) is { } atoms)
+        if (pieces is { } atoms)
         {
             if (atoms.All(a => a.Chars.Length == 1)) return null;
             for (var attempt = 0; attempt < 50 && !outOfTime; attempt++)
@@ -151,7 +162,9 @@ public static class PasswordGenerator
     private static string? CharsOf(string cls)
     {
         Regex one;
-        try { one = new Regex("^" + cls + "$", RegexOptions.CultureInvariant, s_regexTimeout); }
+        // Sem prazo: um carácter contra uma classe não retrocede, e com 20 ms uma máquina ocupada lançava
+        // RegexMatchTimeoutException para fora do Generate.
+        try { one = new Regex("^" + cls + "$", RegexOptions.CultureInvariant, Regex.InfiniteMatchTimeout); }
         catch (ArgumentException) { return null; }
         var safe = new string(All.Where(ch => one.IsMatch(ch.ToString())).ToArray());
         if (safe.Length > 0) return safe;

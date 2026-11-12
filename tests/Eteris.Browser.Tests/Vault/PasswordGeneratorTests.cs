@@ -68,7 +68,8 @@ public class PasswordGeneratorTests
     public void ImpossibleLimits_GiveNothing()
         => Assert.Null(PasswordGenerator.Generate(new PasswordRules(20, 10, null)));
 
-    // pattern: o campo valida a palavra-passe inteira (como o HTML: ^(?:pattern)$).
+    // pattern: o campo valida a palavra-passe inteira (como o HTML: ^(?:pattern)$). Com um prazo largo: prova que o
+    // padrão é cumprido, não a velocidade da máquina.
     [Theory]
     [InlineData("[A-Za-z0-9]+", 20)]
     [InlineData("[a-z0-9]{8,12}", 12)]
@@ -79,12 +80,46 @@ public class PasswordGeneratorTests
     {
         for (var i = 0; i < 30; i++)
         {
-            var pw = PasswordGenerator.Generate(new PasswordRules(null, null, pattern));
+            var pw = PasswordGenerator.Generate(new PasswordRules(null, null, pattern), TimeSpan.FromSeconds(30));
             Assert.NotNull(pw);
             Assert.Matches("^(?:" + pattern + ")$", pw);
             Assert.Equal(length, pw!.Length);
         }
     }
+
+    // O prazo conta só as tentativas: uma preparação lenta (máquina ocupada, padrão compilado devagar) não o gasta.
+    [Theory]
+    [InlineData("[a-z0-9]{8,12}", 12)]
+    [InlineData(@"\d{6}", 6)]
+    public void Pattern_SlowPreparation_DoesNotSpendTheBudget(string pattern, int length)
+    {
+        var pw = PasswordGenerator.Generate(new PasswordRules(null, null, pattern), PasswordGenerator.Budget, prepared: () => Thread.Sleep(150));
+        Assert.NotNull(pw);
+        Assert.Equal(length, pw!.Length);
+    }
+
+    // Onde o relógio arranca: este padrão não é uma sequência de peças, as 50 primeiras tentativas levam sempre um
+    // símbolo e falham, e só a 51.ª (sem símbolos) o cumpre. Com o relógio antes da preparação, nunca lá chegava.
+    [Fact]
+    public void SlowPreparation_LeavesTheBudgetToTheLaterAttempts()
+    {
+        var pw = PasswordGenerator.Generate(new PasswordRules(null, null, "(?=.*[a-z])[A-Za-z0-9]{20}"), TimeSpan.FromMilliseconds(500),
+                                            prepared: () => Thread.Sleep(600));
+        Assert.NotNull(pw);
+        Assert.Matches("^[A-Za-z0-9]{20}$", pw);
+    }
+
+    [Fact]
+    public void Budget_Zero_StillTriesOnce()
+    {
+        var pw = PasswordGenerator.Generate(new PasswordRules(null, null, "[a-z0-9]{8,12}"), TimeSpan.Zero);
+        Assert.NotNull(pw);
+        Assert.Equal(12, pw!.Length);
+    }
+
+    [Fact]
+    public void Budget_Zero_GivesUpAfterTheFirstFailedAttempt()
+        => Assert.Null(PasswordGenerator.Generate(new PasswordRules(32, null, "(?=(.+)+~).*"), TimeSpan.Zero));
 
     [Theory]
     [InlineData("abc")]          // só um texto fixo

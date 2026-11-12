@@ -1069,7 +1069,8 @@ mesma janela.
 O que mudou depois da revisão de segurança e de experiência (testes em `Vault/*Tests` e `Sync/SyncSecretProfileTests`):
 
 - **A página não dita o ritmo.** O `pattern` do campo corre sem retrocesso (`RegexOptions.NonBacktracking`); com
-  lookaheads, com retrocesso mas com 100 ms para a geração inteira, e sempre fora da thread da interface.
+  lookaheads, com retrocesso. Nos dois casos as tentativas têm 100 ms ao todo, contados depois de o padrão estar
+  preparado (a primeira tentativa faz-se sempre), e a geração corre sempre fora da thread da interface.
 - **Só com gesto.** A lista abre sozinha só depois de um botão do rato (ou toque) confiável no próprio campo ou da tecla
   Tab; um `campo.focus()` da página manda o foco com `gesture:false` e a lista só abre com ↓. O `generate` só sai
   depois de um gesto. `scroll`, `input` e `submit` sintéticos (`isTrusted=false`) não contam.
