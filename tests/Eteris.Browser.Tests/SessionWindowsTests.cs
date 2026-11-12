@@ -66,6 +66,36 @@ public sealed class SessionWindowsTests
         Assert.Contains("SessionExit.LockedAtRisk(", Source("MainWindow.ClosedWindows.cs"));
     }
 
+    // Revisão final, achado 1: a varredura do arranque («esquecer ao fechar») conta as abas das janelas que ainda vão
+    // voltar, com os seus Espaços — senão apagava os sites delas pouco antes de as repor.
+    [Fact]
+    public void Addresses_IncludeEveryWorkspace()
+    {
+        var session = new Data.Session(["https://a.pt/"], 0,
+            Spaces: [new Data.SessionSpace("Geral", 0), new Data.SessionSpace("Trabalho", 1, Tabs: new Data.Session(["https://b.pt/"], 0))]);
+        Assert.Equal(["https://a.pt/", "https://b.pt/"], Data.SessionStore.Addresses(session));
+    }
+
+    [Fact]
+    public void StartupSweep_CountsTheWindowsStillToRestore()
+        => Assert.Contains("OpenAddresses().Concat(AddressesToRestore())", Source("MainWindow.Forget.cs"));
+
+    // Revisão final, achado 2: com o ecrã dividido, a outra metade à vista também está em uso (decisão D3).
+    [Fact]
+    public void SwitchingWorkspace_KeepsTheSplitPartnerAwake()
+        => Assert.Matches(@"Tabs\.KeepsAwake = tab => [^;]*_split\?\.PaneOf\(tab\) is not null", Source("MainWindow.xaml.cs"));
+
+    // Revisão final, achados 3 e 4: o encerramento do Windows comporta-se como «Atualizar para…» — a sessão já foi
+    // gravada inteira, por isso nenhuma janela pede confirmação pelas trancadas (o WPF fecha-a na mesma e saltava a
+    // gravação da posição e das notas) nem apaga sites com «esquecer» de janelas que vão voltar.
+    [Fact]
+    public void WindowsSessionEnd_BehavesLikeTheUpdate()
+    {
+        Assert.Contains("Updates.UpdateService.RestartRequested || _endingPrivateSession || s_sessionFrozen ? 0 : LockedTabsAtRisk()",
+            Source("MainWindow.ClosedWindows.cs"));
+        Assert.Contains("|| Updates.UpdateService.RestartRequested || s_sessionFrozen) return;", Source("MainWindow.Forget.cs"));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

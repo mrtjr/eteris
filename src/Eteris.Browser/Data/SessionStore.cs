@@ -190,6 +190,10 @@ public sealed class SessionStore(string path)
         return main with { Spaces = spaces, SpaceIndex = spaces is null ? 0 : Math.Clamp(session.SpaceIndex, 0, spaces.Count - 1) };
     }
 
+    // Os endereços de uma janela gravada: a faixa e os Espaços na reserva.
+    public static IEnumerable<string> Addresses(Session session)
+        => session.Urls.Concat(session.Spaces?.SelectMany(s => s.Tabs?.Urls ?? []) ?? []);
+
     private static bool IsOnlyInternal(Session session)
         => session.Urls.All(u => u.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
 

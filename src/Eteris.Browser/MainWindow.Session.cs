@@ -73,6 +73,10 @@ public partial class MainWindow
         if (!IsPrivate) WatchSessionChanges();
     }
 
+    // As abas das janelas que ainda vão voltar: para a varredura do «esquecer ao fechar» não apagar os sites delas.
+    private static IEnumerable<string> AddressesToRestore()
+        => s_windowsToRestore?.SelectMany(w => SessionStore.Addresses(w.Tabs)) ?? [];
+
     // Depois da 1.ª página (não atrasa o arranque), sem roubar o foco à dona. Uma janela que falhe não impede as outras.
     private static void RestoreOtherWindows()
     {
