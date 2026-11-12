@@ -8,8 +8,8 @@ public class AppPathsTests
     private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     [Fact]
-    public void Root_IsUnderLocalApplicationData_NamedEteris()
-        => Assert.Equal(Path.Combine(LocalAppData, "Eteris"), AppPaths.Root);
+    public void DefaultRoot_IsUnderLocalApplicationData_NamedEteris()
+        => Assert.Equal(Path.Combine(LocalAppData, "Eteris"), AppPaths.DefaultRoot);
 
     [Fact]
     public void Database_IsEterisDbInsideRoot()
