@@ -118,36 +118,39 @@ public class GoogleSyncTests
         Assert.Equal(a.Fingerprint(), c.Fingerprint());
         Assert.Equal("PIN do cadeado: 4321", c.Notes);
 
-        var all = DriveText(google);
+        var all = DriveText(google, a.ChainId, a.Device.Id, b.Device.Id, c.Device.Id);
         foreach (var leak in new[] { "consulta", "Resultado", "4321", "cadeado", "light", "Portátil", "Telemóvel", "android" })
             Assert.DoesNotContain(leak, all, StringComparison.Ordinal);
         Assert.All(google.Requests, r => Assert.Matches("^(GET|POST|PATCH|PUT|DELETE) https://(www\\.googleapis\\.com/(upload/)?drive/v3/files|oauth2\\.googleapis\\.com/token)", r));
     }
 
-    // O nome de uma pasta aleatória (32 hexadecimais) não conta como fuga: no CI da v0.2.16 a pasta
-    // caa5d0751d432197715227a4c11ca287 tinha «4321» por acaso e o teste acima falhou. O texto em claro num nome curto
-    // ou no conteúdo continua a contar.
+    // Os identificadores aleatórios da cadeia e dos aparelhos não contam como fuga: no CI da v0.2.16 a cadeia
+    // caa5d0751d432197715227a4c11ca287 tinha «4321» por acaso, no nome da pasta e no campo «chain» do registo de chaves
+    // (que fica em claro), e o teste acima falhou. O texto em claro continua a contar, no nome ou no conteúdo.
     [Fact]
-    public void DriveText_IgnoresRandomFolderIds_ButNotPlaintext()
+    public void DriveText_HidesTheKnownRandomIds_ButNotPlaintext()
     {
+        const string chain = "caa5d0751d432197715227a4c11ca287";
         var google = new FakeGoogle();
-        google.Put("eteris/caa5d0751d432197715227a4c11ca287/k", [1]);
-        Assert.DoesNotContain("4321", DriveText(google), StringComparison.Ordinal);
-
-        google.Put("eteris/4321/k", [1]);
+        google.Put($"eteris/{chain}/keys", Encoding.UTF8.GetBytes($$"""{"format":1,"chain":"{{chain}}","generation":1}"""));
         Assert.Contains("4321", DriveText(google), StringComparison.Ordinal);
+        Assert.DoesNotContain("4321", DriveText(google, chain), StringComparison.Ordinal);
 
-        var only = new FakeGoogle();
-        only.Put("eteris/caa5d0751d432197715227a4c11ca287/n", Encoding.UTF8.GetBytes("PIN do cadeado: 4321"));
-        Assert.Contains("4321", DriveText(only), StringComparison.Ordinal);
+        google.Put($"eteris/{chain}/n", Encoding.UTF8.GetBytes("PIN do cadeado: 4321"));
+        Assert.Contains("4321", DriveText(google, chain), StringComparison.Ordinal);
+        var named = new FakeGoogle();
+        named.Put("eteris/4321/k", [1]);
+        Assert.Contains("4321", DriveText(named, chain), StringComparison.Ordinal);
     }
 
-    // O que o Drive vê: o nome e os bytes de cada ficheiro. Nos nomes, os identificadores aleatórios (16 ou mais
-    // hexadecimais seguidos) passam a «<id>»: um texto em claro nunca é só hexadecimal, e um identificador podia conter
-    // por acaso os algarismos procurados.
-    private static string DriveText(FakeGoogle google)
-        => string.Join("\n", google.Files.Select(f =>
-            Regex.Replace(f.Name, "[0-9a-fA-F]{16,}", "<id>") + "\n" + Encoding.Latin1.GetString(f.Data)));
+    // O que o Drive vê: o nome e os bytes de cada ficheiro, com os identificadores aleatórios dados (a cadeia, os
+    // aparelhos) trocados por «<id>» nos dois — um identificador podia conter por acaso os algarismos procurados.
+    private static string DriveText(FakeGoogle google, params string[] randomIds)
+    {
+        var text = string.Join("\n", google.Files.Select(f => f.Name + "\n" + Encoding.Latin1.GetString(f.Data)));
+        foreach (var id in randomIds) text = text.Replace(id, "<id>", StringComparison.Ordinal);
+        return text;
+    }
 
     [Fact]
     public async Task Pairing_WorksThroughTheFakeDrive()
