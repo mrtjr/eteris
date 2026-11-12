@@ -39,6 +39,7 @@ public static class InstanceChannel
         {
             var next = first;
             var nextConnection = firstConnection;
+            var failures = 0;
             while (!stop.IsCancellationRequested)
             {
                 try
@@ -54,10 +55,15 @@ public static class InstanceChannel
                         var buffer = new char[MaxMessage];
                         var length = await reader.ReadBlockAsync(buffer, stop.Token);
                         if (JsonSerializer.Deserialize<string[]>(new string(buffer, 0, length)) is { } args) onArgs(args);
+                        failures = 0;
                     }
                 }
                 catch (OperationCanceledException) { return; }
-                catch (Exception) { await Task.Delay(100); }
+                catch (Exception)
+                {
+                    // Recua em vez de martelar de 100 em 100 ms (o nome ocupado por outro processo, por exemplo).
+                    await Task.Delay(RetryDelay(++failures));
+                }
             }
             // Parado antes de o ciclo usar o primeiro pipe: fecha-o na mesma.
             if (next is not null) await next.DisposeAsync();
@@ -73,6 +79,10 @@ public static class InstanceChannel
     {
         public void Dispose() => stop.Cancel();
     }
+
+    // A espera antes de recriar o pipe depois de uma falha: 100 ms, 200 ms, 400 ms… até 30 s (sem transbordar).
+    public static TimeSpan RetryDelay(int failures)
+        => failures >= 10 ? TimeSpan.FromSeconds(30) : TimeSpan.FromMilliseconds(Math.Min(30_000, 100L << Math.Max(0, failures - 1)));
 
     private static NamedPipeServerStream NewServer(string name) => new(PipeName(name), PipeDirection.In, 1,
         PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);

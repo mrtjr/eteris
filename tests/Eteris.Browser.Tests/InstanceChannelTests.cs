@@ -68,6 +68,13 @@ public class InstanceChannelTests
         Assert.Contains("public void Dispose() => stop.Cancel();", source);
     }
 
+    // INF-06: a recriação do pipe recua (100 ms, 200 ms, … até 30 s) em vez de martelar de 100 em 100 ms.
+    [Theory]
+    [InlineData(0, 100)] [InlineData(1, 100)] [InlineData(2, 200)] [InlineData(5, 1600)] [InlineData(9, 25600)]
+    [InlineData(10, 30000)] [InlineData(40, 30000)] [InlineData(int.MaxValue, 30000)]
+    public void RetryDelay_DoublesUpToThirtySeconds(int failures, int ms)
+        => Assert.Equal(TimeSpan.FromMilliseconds(ms), InstanceChannel.RetryDelay(failures));
+
     [Fact]
     public void Send_WithoutListener_ReturnsFalse()
         => Assert.False(InstanceChannel.Send("eteris-test-nobody-" + Guid.NewGuid().ToString("N"), ["x"], timeoutMs: 300));

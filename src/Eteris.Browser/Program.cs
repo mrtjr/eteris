@@ -6,7 +6,7 @@ namespace Eteris.Browser;
 
 public static class Program
 {
-    private const string InstanceName = "Eteris.Browser";
+    private const string InstanceName = InstanceNames.Base;
 
     // Nome do canal desta instância (por perfil), para receber links de lançamentos posteriores.
     public static string ChannelName { get; private set; } = InstanceName;
@@ -41,12 +41,10 @@ public static class Program
         StartupTrace.Mark("velopack");
 
         if (StartupArgs.UserDataDir(args) is { } userDataDir) AppPaths.UseRoot(userDataDir);
-        var instanceName = AppPaths.IsCustomProfile
-            ? InstanceName + "." + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(
-                System.Text.Encoding.UTF8.GetBytes(AppPaths.Root.ToLowerInvariant())))[..12]
-            : InstanceName;
-
-        ChannelName = instanceName;
+        // O mutex e o canal seguem a pasta do perfil (normalizada) e o canal também a sessão do Windows (INF-06): dois
+        // utilizadores do mesmo PC já não disputam o mesmo pipe.
+        var instanceName = InstanceNames.Mutex(AppPaths.Root, AppPaths.IsCustomProfile);
+        ChannelName = InstanceNames.Channel(AppPaths.Root, System.Diagnostics.Process.GetCurrentProcess().SessionId);
         // Já há um Éteris neste perfil (ou ainda há, a fechar): entrega-lhe os argumentos (um link, --private) e sai; se ele
         // fechar entretanto, este lançamento passa a ser a instância principal em vez de perder o pedido (INF-05). Quem
         // envia tem direito ao primeiro plano; passa-o à instância aberta para a janela poder vir à frente.
@@ -57,7 +55,7 @@ public static class Program
             () =>
             {
                 SingleInstance.AllowAnyForeground();
-                var sent = InstanceChannel.Send(instanceName, args, firstSend ? 2000 : 500);
+                var sent = InstanceChannel.Send(ChannelName, args, firstSend ? 2000 : 500);
                 firstSend = false;
                 return sent;
             },
