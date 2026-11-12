@@ -116,6 +116,9 @@ public partial class App : Application
             // Caches da GPU no disco (ajuste e3): com o motor fechado, que as tem abertas. Com «Apagar ao fechar», depois de
             // «Apagar dados › cache» e depois de uma janela privada (Infrastructure/ProfileCleanup.cs).
             if (ProfileCleanup.ShouldRemoveGpuCaches(Data.Settings.Current.ClearOnExit)) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
+            // «Apagar cookies e dados de sites ao fechar»: o armazenamento dos sites (Local Storage, IndexedDB…) e o ficheiro
+            // dos cookies, também com o motor já fechado. O arranque seguinte repete-o como garantia.
+            if (Data.Settings.Current.ClearOnExit) ProfileCleanup.RemoveSiteData(AppPaths.Profile);
         }
         finally
         {

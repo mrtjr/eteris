@@ -52,7 +52,6 @@ public static class ProfileCleanup
         return removed;
     }
 
-    // «Apagar cookies e dados de sites ao fechar»: garantia no arranque seguinte, mesmo que o fecho tenha falhado.
     // Versões antigas deixavam o «component updater» do Chrome descarregar o módulo Widevine (DRM) da Google.
     // Já não é descarregado; apaga-se o que tiver ficado no perfil. Devolve true se havia alguma coisa.
     public static bool RemoveDownloadedWidevine(string profileRoot)
@@ -68,22 +67,32 @@ public static class ProfileCleanup
         catch (UnauthorizedAccessException) { return false; }
     }
 
-    public static void RemoveSiteData(string profileRoot)
+    // «Apagar cookies e dados de sites ao fechar»: corre ao sair (App.OnExit, depois de o motor fechar, que tem estas
+    // pastas abertas enquanto vive) e outra vez no arranque seguinte (CefConfigurator.Prepare), como garantia mesmo que o
+    // fecho tenha falhado. Devolve o que ficou por apagar: o nome de cada pasta de dados de sites e «Network/Cookies» (e o
+    // journal) que continuem a existir depois da tentativa; vazio quando saiu tudo (ou quando não há perfil).
+    public static IReadOnlyList<string> RemoveSiteData(string profileRoot)
     {
+        var stayed = new List<string>();
         var dir = Path.Combine(profileRoot, "Default");
-        if (!Directory.Exists(dir)) return;
+        if (!Directory.Exists(dir)) return stayed;
         foreach (var folder in SiteDataFolders)
         {
-            try { if (Directory.Exists(Path.Combine(dir, folder))) Directory.Delete(Path.Combine(dir, folder), recursive: true); }
+            var path = Path.Combine(dir, folder);
+            try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+            if (Directory.Exists(path)) stayed.Add(folder);
         }
         foreach (var file in CookieFiles)
         {
-            try { File.Delete(Path.Combine(dir, "Network", file)); }
+            var path = Path.Combine(dir, "Network", file);
+            try { File.Delete(path); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+            if (File.Exists(path)) stayed.Add("Network/" + file);
         }
+        return stayed;
     }
 
     public static int RemoveChromiumHistory(string profileRoot)

@@ -49,6 +49,37 @@ public sealed class ProfileCleanupTests : IDisposable
     }
 
     [Fact]
+    public void RemoveSiteData_ReportsWhatStayed()
+    {
+        var def = Directory.CreateDirectory(Path.Combine(_root, "Default")).FullName;
+        foreach (var dir in new[] { "Local Storage", "IndexedDB" })
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(def, dir)).FullName, "data"), "x");
+        using (new FileStream(Path.Combine(def, "IndexedDB", "data"), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Equal(["IndexedDB"], ProfileCleanup.RemoveSiteData(_root));
+        Assert.False(Directory.Exists(Path.Combine(def, "Local Storage")));
+        Assert.Empty(ProfileCleanup.RemoveSiteData(_root));
+        Assert.Empty(ProfileCleanup.RemoveSiteData(Path.Combine(_root, "nada")));
+    }
+
+    // Ao sair, com o motor já fechado (tem as pastas abertas): como as caches da GPU (GpuCacheTests).
+    [Fact]
+    public void Exit_RemovesSiteDataAfterTheEngineShutsDown()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "App.xaml.cs"));
+        var shutdown = code.IndexOf("CefConfigurator.Shutdown();", StringComparison.Ordinal);
+        var remove = code.IndexOf("ProfileCleanup.RemoveSiteData(AppPaths.Profile)", StringComparison.Ordinal);
+        Assert.True(shutdown > 0 && remove > shutdown);
+        Assert.Contains("ProfileCleanup.RemoveSiteData(AppPaths.Profile);", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Infrastructure", "CefConfigurator.cs")));
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
+
+    [Fact]
     public void MissingProfile_IsFine()
         => Assert.Equal(0, ProfileCleanup.RemoveChromiumHistory(Path.Combine(_root, "nada")));
 

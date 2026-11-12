@@ -7,6 +7,7 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 ### Privacidade
 
 - «Apagar cookies e dados deste site», no cadeado, apaga agora os cookies do domínio e dos subdomínios (os de `.exemplo.pt` também) e o armazenamento das origens do site, com a mesma regra do «Triturar»; antes só apagava os da página aberta. O aviso diz quantos cookies saíram.
+- «Apagar cookies e dados de sites ao fechar» apaga agora o armazenamento dos sites (Local Storage, IndexedDB, Service Workers…) e o ficheiro dos cookies já ao fechar o Éteris, com o motor acabado de fechar; antes só o fazia no arranque seguinte, e os dados ficavam no disco entretanto. A limpeza do arranque mantém-se como garantia.
 
 ## 0.2.16 — 2026-11-12
 
