@@ -2185,6 +2185,7 @@ public sealed class SyncAgent
                     // Os selos novos não servem de nada contra o que o aparelho removido já leu (desenho, secção 4.5).
                     if (device is not null && engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)))
                         done += " O aparelho removido já tinha as suas palavras-passe: mude as dos sites importantes.";
+                    if (device is not null) done += " Reveja também as proteções (Escudo, «HTTPS primeiro») que esse aparelho possa ter mudado.";
                     _notice = newcomers.Count == 0 ? done
                         : done + $" Apareceu na conta {string.Join(", ", newcomers)}, que não estava na lista: não recebeu a chave nova. Se for seu, junte-o outra vez com o kit novo ou por aprovação.";
                 }

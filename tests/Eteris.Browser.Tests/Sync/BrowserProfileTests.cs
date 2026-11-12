@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using Eteris.Browser.Data;
 using Eteris.Browser.Sync;
+using Eteris.Browser.Vault;
 using Eteris.Sync.Engine;
 using Eteris.Sync.Model;
 using Microsoft.Data.Sqlite;
@@ -123,6 +124,46 @@ public sealed class BrowserProfileTests
         Assert.Empty(data.Bookmarks);
         Assert.Empty(data.ShieldKeys()!);
         Assert.Equal(settings, data.Settings);
+    }
+
+    // Auditoria, SYN-14: o que baixa a proteção e chega da conta aplica-se como antes mas deixa um aviso.
+    [Fact]
+    public void SyncedChange_ThatLowersProtection_IsDescribed()
+    {
+        static LocalChange Setting(string key, string value) => new(Collections.Settings, key, new JsonObject { ["value"] = value });
+        var now = new UserSettings();
+        Assert.Equal("Desligar «HTTPS primeiro»", BrowserProfile.Weakening(now, Setting("httpsFirst", "false")));
+        var withDns = new UserSettings { SecureDns = Eteris.Browser.Shields.SecureDns.Providers.Keys.First() };
+        Assert.Equal("Desligar o «DNS cifrado»", BrowserProfile.Weakening(withDns, Setting("dns", "off")));
+        Assert.Null(BrowserProfile.Weakening(now, Setting("dns", "off")));                       // já estava desligado
+        Assert.Null(BrowserProfile.Weakening(now, Setting("theme", "light")));
+        Assert.Equal("Desligar o Escudo em exemplo.test", BrowserProfile.Weakening(now, new LocalChange(Collections.Shield, "off|exemplo.test|", new JsonObject())));
+        Assert.Contains("exemplo.test", BrowserProfile.Weakening(now, new LocalChange(Collections.Shield, "http|exemplo.test|", new JsonObject())));
+        Assert.Equal("Desligar o modo estrito em exemplo.test", BrowserProfile.Weakening(now, new LocalChange(Collections.Shield, "strict|exemplo.test|", null)));
+        Assert.Null(BrowserProfile.Weakening(now, new LocalChange(Collections.Shield, "strict|exemplo.test|", new JsonObject())));
+        Assert.Null(BrowserProfile.Weakening(now, new LocalChange(Collections.Shield, "off|exemplo.test|", null)));   // voltar a ligar
+        Assert.Null(BrowserProfile.Weakening(now, new LocalChange(Collections.Bookmarks, "https://exemplo.test/", null)));
+    }
+
+    [Fact]
+    public void SyncedChange_ThatLowersProtection_LeavesANoticeOnce()
+    {
+        var profile = new BrowserProfile(new MemoryProfileData());
+        var applied = profile.Apply(
+        [
+            new LocalChange(Collections.Settings, "httpsFirst", new JsonObject { ["value"] = "false" }),
+            new LocalChange(Collections.Shield, "off|exemplo.test|", new JsonObject()),
+            new LocalChange(Collections.Shield, "off|não é anfitrião|", new JsonObject()),      // recusada: não entra no aviso
+            new LocalChange(Collections.Settings, "theme", new JsonObject { ["value"] = "light" }),
+        ]);
+        Assert.Equal(3, applied.Count);
+        Assert.Equal("Noutro computador da conta baixou-se a proteção: Desligar «HTTPS primeiro»; Desligar o Escudo em exemplo.test. Se não foi você, reveja as proteções e os aparelhos ligados.",
+            profile.TakeNotice());
+        Assert.Null(profile.TakeNotice());
+        // Junto com o cofre: o aviso do perfil chega ao agente pelo ProfileWithVault.
+        profile.Apply([new LocalChange(Collections.Shield, "http|exemplo.test|", new JsonObject())]);
+        var both = new ProfileWithVault(profile, new VaultSyncProfile(() => throw new InvalidOperationException("não devia abrir"), () => false), () => null);
+        Assert.Contains("exemplo.test", both.TakeNotice());
     }
 }
 

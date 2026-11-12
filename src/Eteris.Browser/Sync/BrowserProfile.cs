@@ -45,9 +45,11 @@ internal interface IProfileData
 // Uma coleção que não se consegue ler (base de dados ocupada, notas bloqueadas pelo antivírus, sem janela nem sessão
 // gravada) vai em LocalRead.Unreadable, e não como vazia: vazia queria dizer «apaguei tudo» nos outros aparelhos.
 // Este tipo só fala com o perfil por IProfileData (as chamadas vivas estão em LiveProfileData, no fim do ficheiro).
-internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileReader
+internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileReader, ILocalNotices
 {
     private readonly IProfileData _data = data ?? new LiveProfileData();
+    private readonly Lock _gate = new();
+    private string? _notice;
 
     public IReadOnlyList<LocalItem> Collect() => Read().Items;
 
@@ -104,12 +106,40 @@ internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileR
         catch (Exception) { return null; }
     }
 
+    // O que esta alteração vinda da conta baixa na proteção deste computador (a descrição), ou null. Avisa-se, não se retém:
+    // a alteração aplica-se na mesma (reter deixava este computador diferente da conta).
+    internal static string? Weakening(UserSettings current, LocalChange change)
+    {
+        if (change.Collection == Collections.Settings)
+            return !change.Remove && change.Data!["value"] is JsonValue v && v.TryGetValue<string>(out var value)
+                ? ProfileTransfer.WeakensSetting(current, change.Key, value)
+                : null;
+        if (change.Collection != Collections.Shield) return null;
+        var parts = change.Key.Split('|', 3);
+        if (parts.Length != 3) return null;
+        if (change.Remove) return parts[0] == "strict" ? $"Desligar o modo estrito em {parts[1]}" : null;
+        return ProfileTransfer.WeakensShield(parts[0], parts[1]);
+    }
+
+    // O aviso das alterações que baixaram a proteção, para o estado da sincronização (lido no fim de cada ronda).
+    public string? TakeNotice()
+    {
+        lock (_gate)
+        {
+            var notice = _notice;
+            _notice = null;
+            return notice;
+        }
+    }
+
     public IReadOnlyCollection<LocalChange> Apply(IReadOnlyList<LocalChange> changes)
     {
         var applied = new List<LocalChange>();
+        var lowered = new List<string>();
         foreach (var change in changes)
         {
             bool ok;
+            var weaker = Weakening(_data.Settings, change);
             try
             {
                 ok = change.Collection switch
@@ -123,8 +153,15 @@ internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileR
                 };
             }
             catch (Exception e) when (e is IOException or InvalidOperationException or FormatException or UnauthorizedAccessException) { ok = false; }
-            if (ok) applied.Add(change);
+            if (!ok) continue;
+            applied.Add(change);
+            if (weaker is not null && !lowered.Contains(weaker)) lowered.Add(weaker);
         }
+        if (lowered.Count > 0)
+            lock (_gate)
+                _notice = "Noutro computador da conta baixou-se a proteção: " + string.Join("; ", lowered.Take(5))
+                          + (lowered.Count > 5 ? $" e mais {lowered.Count - 5}" : string.Empty)
+                          + ". Se não foi você, reveja as proteções e os aparelhos ligados.";
         return applied;
     }
 

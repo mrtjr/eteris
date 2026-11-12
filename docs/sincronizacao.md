@@ -72,6 +72,8 @@ quando o utilizador carregar em «Ligar a sincronização»). Exportar/importar 
 
 O que é de cada computador fica: as abas, o zoom por site, as permissões dadas a sites, a barra lateral.
 
+**Proteções que descem.** Uma alteração que vem da conta e baixa a proteção deste computador (desligar «HTTPS primeiro», o «DNS cifrado» e outras proteções das Definições, o Escudo ou o modo estrito num site, uma exceção ao HTTPS) aplica-se como as outras (reter deixava este computador diferente da conta), mas deixa um aviso no estado da sincronização (Definições › Sincronização): «Noutro computador da conta baixou-se a proteção: …». Ao remover um aparelho, o aviso manda rever também as proteções. **Limite conhecido:** o aviso só se vê nas Definições; não há notificação na janela.
+
 ## Os fluxos
 
 - **Entrar.** Um clique em «Entrar com o Google» chega: na linha da conta do menu ⋯ («Entrar com o Google…»,
