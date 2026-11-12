@@ -61,7 +61,9 @@ public class PublicTextsTests
     public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
-        var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
+        // Por cima da última versão publicada pode haver uma secção «por publicar» (a versão em curso).
+        var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal))
+            .SkipWhile(l => l.EndsWith("— por publicar", StringComparison.Ordinal)).ToList();
         Assert.Equal("## 0.2.16 — 2026-11-12", headings[0]);
         Assert.Equal("## 0.2.15 — 2026-11-12", headings[1]);
         Assert.Equal("## 0.2.14 — 2026-11-09", headings[2]);

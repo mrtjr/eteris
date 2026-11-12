@@ -112,6 +112,13 @@ public partial class MainWindow : Window
     private ChromiumWebBrowser? ActiveBrowser
         => Tabs.Active is { } tab && _browsers.TryGetValue(tab, out var browser) ? browser : null;
 
+    // O motor de uma aba acabada de acordar (ou de uma janela a fechar) ainda não está inicializado, ou já foi libertado:
+    // Voltar, Avançar, Parar, Recarregar e Imprimir sobre ele lançam, e num `async void` isso fechava o Éteris.
+    private ChromiumWebBrowser? ReadyBrowser
+        => ActiveBrowser is { IsDisposed: false, IsBrowserInitialized: true } browser ? browser : null;
+
+    private static bool IsReady(ChromiumWebBrowser browser) => !browser.IsDisposed && browser.IsBrowserInitialized;
+
     private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         // Mover não cria nem destrói abas: o item vem em OldItems e NewItems e não se pode recriar o browser. A aba
@@ -446,7 +453,7 @@ public partial class MainWindow : Window
     // pedido sai. Nunca espera mais de 150 ms.
     private async Task ScriptsReadyFor(BrowserTab tab, ChromiumWebBrowser browser, string url)
     {
-        if (!_scriptlets.TryGetValue(tab, out var injector) || browser.IsDisposed || browser.GetBrowser() is not { } cef) return;
+        if (!_scriptlets.TryGetValue(tab, out var injector) || browser.IsDisposed || !browser.IsBrowserInitialized || browser.GetBrowser() is not { } cef) return;
         var ready = injector.EnsureHost(cef, url);
         if (!ready.IsCompleted) await Task.WhenAny(ready, Task.Delay(150));
     }
@@ -699,7 +706,7 @@ public partial class MainWindow : Window
         if (ctrl && shift && key == Key.O) return OpenBookmarks;
         if (ctrl && shift && key == Key.S) return () => CapturePage(fullPage: true);
         if (ctrl && key == Key.OemComma) return OpenSettings;
-        if (ctrl && key == Key.P) return () => ActiveBrowser?.Print();
+        if (ctrl && key == Key.P) return () => ReadyBrowser?.Print();
         if (ctrl && key is Key.OemPlus or Key.Add) return () => Zoom(1);
         if (ctrl && key is Key.OemMinus or Key.Subtract) return () => Zoom(-1);
         if (ctrl && key is Key.D0 or Key.NumPad0) return () => Zoom(0);

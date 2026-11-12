@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.2.17 — por publicar
+
+### Correções
+
+- «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
+
 ## 0.2.16 — 2026-11-12
 
 A versão do **trabalho que não se perde**: uma correção de segurança (a cor do tema que um site declara), todas as
