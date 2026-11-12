@@ -12,6 +12,8 @@ public sealed class SessionStoreTests : IDisposable
     {
         File.Delete(_path);
         File.Delete(_path + ".tmp");
+        File.Delete(_path + ".bak");
+        File.Delete(_path + ".corrupt");
     }
 
     // ARQ-02: um session.json só de leitura ou preso por outro programa não pode fechar o Éteris.
@@ -250,5 +252,52 @@ public sealed class SessionStoreTests : IDisposable
         Assert.Equal(["https://d.pt/"], other.Tabs.Urls);
         Assert.Equal(0, other.Tabs.ActiveIndex);
         Assert.Null(other.Placement);
+    }
+
+    // DAD-07: um corte de energia pouco depois de gravar deixava o session.json com o tamanho certo e cheio de zeros.
+    [Fact]
+    public void Load_ZeroFilledFile_FallsBackToBak()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/"], 0);
+        store.Save(["https://b.pt/"], 0);
+        File.WriteAllBytes(_path, new byte[64]);
+        Assert.Equal(["https://a.pt/"], store.Load()!.Urls);
+        Assert.Equal(AtomicRead.FromBackup, store.LastLoad);
+        Assert.True(File.Exists(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void Load_MissingFile_IgnoresTheBak()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/"], 0);
+        store.Save(["https://b.pt/"], 0);
+        File.Delete(_path);
+        Assert.Null(store.Load());
+        Assert.Equal(AtomicRead.Missing, store.LastLoad);
+    }
+
+    [Fact]
+    public void Save_AfterALockedLoad_SetsTheOldFileAside_AndNeverUsesTheBak()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["https://a.pt/"], 0);
+        store.Save(["https://b.pt/"], 0);
+        using (new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.None)) Assert.Null(store.Load());
+        Assert.Equal(AtomicRead.Unreadable, store.LastLoad);
+        store.Save(["https://c.pt/"], 0);
+        Assert.Contains("https://b.pt/", File.ReadAllText(_path + ".corrupt"));
+        Assert.Equal(["https://c.pt/"], store.Load()!.Urls);
+    }
+
+    // Só páginas internas é uma sessão lida e sem nada para repor: não é um ficheiro danificado.
+    [Fact]
+    public void Load_OnlyInternalPages_IsNull_WithLastLoadOk()
+    {
+        var store = new SessionStore(_path);
+        store.Save(["eteris://newtab/"], 0);
+        Assert.Null(store.Load());
+        Assert.Equal(AtomicRead.Ok, store.LastLoad);
     }
 }
