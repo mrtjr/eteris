@@ -1063,7 +1063,17 @@ public class GoogleSyncTests
         var factory = Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
         var route = CaseBlock(factory, "case \"/sync-google-out\":");
         Assert.DoesNotContain("Revoke", route);
-        Assert.Contains("Sync.GoogleSync.SignOut();", route);
+        Assert.Contains("Sync.SyncService.SignOutHere(", route);
+        // «Sair deste computador» é uma só função, a da rota das Definições e a do «Sair» do menu ⋯ (e só essas).
+        var here = Body(Src("Eteris.Browser", "Sync", "SyncService.cs"), "public static void SignOutHere(bool forgetKey)");
+        Assert.Contains("SignOut(forgetKey);", here);
+        Assert.Contains("if (!FolderMode) GoogleSync.SignOut();", here);
+        Assert.DoesNotContain("Revoke", here);
+        var browser = Path.Combine(FindRoot(), "src", "Eteris.Browser");
+        var callers = Directory.EnumerateFiles(browser, "*.cs", SearchOption.AllDirectories)
+            .Where(f => File.ReadAllText(f).Contains("SignOutHere(", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(browser, f).Replace('\\', '/')).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(["Browser/EterisSchemeHandlerFactory.cs", "MainWindow.BrowserMenu.cs", "Sync/SyncService.cs"], callers);
         var sync = Src("Eteris.Browser", "Sync", "GoogleSync.cs");
         Assert.DoesNotContain("Revoke", Body(sync, "public static void SignOut()"));
         var oauth = Src("Eteris.Sync", "Google", "GoogleOAuth.cs");
