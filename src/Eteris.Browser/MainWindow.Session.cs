@@ -19,23 +19,34 @@ public partial class MainWindow
     private static DispatcherTimer? s_unfreezeTimer;
 
     // Restaura as abas da última sessão; um endereço passado ao abrir junta-se no fim e fica ativo.
+    // Todas as janelas normais gravam a sessão e, com «Continuar onde parei», todas voltam: a dona (a 1.ª) repõe as
+    // suas abas logo e as outras depois da 1.ª página (RestoreOtherWindows), cada uma com as suas abas e a sua posição.
     private static bool s_sessionOwnerTaken;
     private bool _ownsSession;
+    // As outras janelas da sessão, à espera da 1.ª página; até voltarem a sessão não se grava (o ficheiro com todas
+    // as janelas não pode ser substituído pelo da dona sozinha).
+    private static IReadOnlyList<Data.SessionWindow>? s_windowsToRestore;
 
-    // Só a primeira janela normal (a dona) restaura a sessão e corre o plano de arranque; todas as janelas normais a
-    // gravam; janelas privadas nunca.
-    private void StartTabs(string? initialUrl)
+    // Só a primeira janela normal (a dona) lê a sessão e corre o plano de arranque; uma janela reposta traz a sua
+    // («restored»); todas as janelas normais a gravam; janelas privadas nunca.
+    private void StartTabs(string? initialUrl, Data.SessionWindow? restored)
     {
-        _ownsSession = !IsPrivate && !s_sessionOwnerTaken;
+        _ownsSession = !IsPrivate && restored is null && !s_sessionOwnerTaken;
         if (_ownsSession) s_sessionOwnerTaken = true;
 
         PendingSplit? restoredSplit = null;
-        if (_ownsSession && Data.Settings.Current.Startup == "restore" && SessionFile.Load() is { } previous)
+        var previous = restored?.Tabs ?? (_ownsSession && Data.Settings.Current.Startup == "restore" ? SessionFile.Load() : null);
+        if (previous is not null)
         {
             Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas);
             // Os outros Espaços ficam na reserva, a dormir, com a sua aba ativa e o seu ecrã dividido.
             Tabs.RestoreWorkspaces(previous.Spaces, previous.SpaceIndex);
             restoredSplit = SplitTabs(previous.Split);
+            if (_ownsSession && previous.Windows is { Count: > 0 } others)
+            {
+                s_windowsToRestore = others;
+                FirstPaint.App.Then(RestoreOtherWindows);
+            }
         }
 
         var version = Browser.SettingsPage.Version;
@@ -62,6 +73,18 @@ public partial class MainWindow
         if (!IsPrivate) WatchSessionChanges();
     }
 
+    // Depois da 1.ª página (não atrasa o arranque), sem roubar o foco à dona. Uma janela que falhe não impede as outras.
+    private static void RestoreOtherWindows()
+    {
+        foreach (var entry in s_windowsToRestore ?? [])
+        {
+            try { new MainWindow(null, false, entry) { ShowActivated = false }.Show(); }
+            catch (Exception) { }
+        }
+        s_windowsToRestore = null;
+        ArmSessionTimer();
+    }
+
     private void WatchSessionChanges()
     {
         Tabs.Tabs.CollectionChanged += (_, _) => ScheduleSessionSave();
@@ -78,7 +101,8 @@ public partial class MainWindow
         };
     }
 
-    private bool HasOtherNormalWindows() => NormalWindows().Any(w => !ReferenceEquals(w, this));
+    // Só as carregadas, como em SaveSessionNow: uma janela reposta que falhou a meio não conta.
+    private bool HasOtherNormalWindows() => NormalWindows().Any(w => !ReferenceEquals(w, this) && w.IsLoaded);
 
     private static void HandSessionOver(MainWindow leaving)
     {
@@ -124,6 +148,11 @@ public partial class MainWindow
     private static void SaveSessionNow()
     {
         if (s_sessionFrozen) return;
+        if (s_windowsToRestore is not null)
+        {
+            ArmSessionTimer();
+            return;
+        }
         var windows = SessionExit.Order(NormalWindows().Where(w => w.IsLoaded).ToList(), w => w._ownsSession);
         if (windows.Count == 0) return;
         if (!SessionFile.TrySaveWindows(windows.Select(w => w.SessionSnapshot()).ToList())) WarnSessionNotSaved();

@@ -52,12 +52,11 @@ public partial class MainWindow
 
     private static readonly TimeSpan LockedCloseWindow = TimeSpan.FromSeconds(4);
 
-    // As trancadas (em todos os Espaços) que se perderiam: a janela dona da sessão com «Continuar onde parei» guarda-as.
+    // As trancadas (em todos os Espaços) que se perderiam: só a última janela normal, com «Continuar onde parei», fica
+    // na sessão; com outra janela normal aberta esta sai dela (também quando é a dona).
     private int LockedTabsAtRisk()
-    {
-        if (!IsPrivate && _ownsSession && Data.Settings.Current.Startup == "restore") return 0;
-        return Tabs.Workspaces.Sum(w => Tabs.TabsOf(w).Count(t => t.IsLocked));
-    }
+        => SessionExit.LockedAtRisk(IsPrivate, Data.Settings.Current.Startup == "restore",
+            NormalWindows().Count(w => !ReferenceEquals(w, this)), Tabs.Workspaces.Sum(w => Tabs.TabsOf(w).Count(t => t.IsLocked)));
 
     private static void ReopenClosedWindow()
     {

@@ -25,7 +25,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<BrowserTab, ChromiumWebBrowser> _browsers = new();
     private readonly Dictionary<BrowserTab, ScriptletInjector> _scriptlets = new();
 
-    public MainWindow(string? initialUrl = null, bool isPrivate = false)
+    public MainWindow(string? initialUrl = null, bool isPrivate = false, Data.SessionWindow? restored = null)
     {
         InitializeComponent();
         StartupTrace.Mark("janela.xaml");
@@ -68,11 +68,11 @@ public partial class MainWindow : Window
         Closed += (_, _) => DisposeBrowsers();
         Closed += (_, _) => ForgetVaultWindow();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
-        StartTabs(initialUrl);
+        StartTabs(initialUrl, restored);
         StartupTrace.Mark("janela.abas");
         WatchSnoozed();
         WatchArchive();
-        RestorePlacement();
+        RestorePlacement(restored?.Placement);
         WatchUpdates();
         WatchBackdropSetting();
         WatchTabLayoutSetting();

@@ -48,6 +48,24 @@ public sealed class SessionWindowsTests
         Assert.Contains("MainWindow.FreezeSessionForExit();", app);
     }
 
+    [Theory]
+    [InlineData(false, true, 0, 3, 0)]   // a última janela normal, com «Continuar onde parei»: fica na sessão
+    [InlineData(false, true, 1, 3, 3)]   // fica outra janela normal aberta: esta sai da sessão
+    [InlineData(false, false, 0, 3, 3)]  // sem «Continuar onde parei»
+    [InlineData(true, true, 0, 3, 3)]    // janela privada
+    public void LockedAtRisk_OnlyTheLastNormalWindowIsSafe(bool isPrivate, bool restores, int others, int locked, int expected)
+        => Assert.Equal(expected, SessionExit.LockedAtRisk(isPrivate, restores, others, locked));
+
+    [Fact]
+    public void OtherWindows_ComeBackAfterTheFirstPage()
+    {
+        Assert.Contains("public MainWindow(string? initialUrl = null, bool isPrivate = false, Data.SessionWindow? restored = null)", Source("MainWindow.xaml.cs"));
+        var session = Source("MainWindow.Session.cs");
+        Assert.Contains("FirstPaint.App.Then(RestoreOtherWindows);", session);
+        Assert.Contains("ShowActivated = false", session);
+        Assert.Contains("SessionExit.LockedAtRisk(", Source("MainWindow.ClosedWindows.cs"));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
