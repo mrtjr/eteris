@@ -7,6 +7,27 @@ using Eteris.Sync.Model;
 
 namespace Eteris.Browser.Sync;
 
+// O que o BrowserProfile lê e escreve no perfil. A implementação viva (LiveProfileData) chama AppData, Settings, SiteRules e a
+// janela, que são estáticos e ficam presos ao perfil do processo; os testes põem um duplo em memória e provam as regras do
+// BrowserProfile (o que é ilegível, o que se valida, o que conta como aplicado) sem tocar no perfil verdadeiro.
+internal interface IProfileData
+{
+    IReadOnlyList<Bookmark> ReadBookmarks();                              // lança se não se leu
+    UserSettings Settings { get; }
+    List<string>? ShieldKeys();                                           // null = não se leu
+    string? Notes();                                                      // null = não se leu
+    IReadOnlyList<(string Name, int Color, string? Icon)>? Spaces();      // null = não se sabe
+    bool IsBookmarked(string url);
+    void AddBookmark(string url, string title);
+    void RenameBookmark(string url, string title);
+    void RemoveBookmark(string url);
+    bool SetSetting(string key, string value);                            // true = ficou aplicada
+    bool HasShield(string kind, string host, string value);
+    void SetShield(string kind, string host, string value, bool on);
+    bool ApplyNotes(string text);                                         // false = não se aplicou agora
+    bool ApplySpace(string name, JsonObject? data);                       // data null = remover
+}
+
 // O perfil do Éteris visto pela sincronização (ILocalProfile): o que se lê e o que se aplica, coleção a coleção.
 //
 //   favoritos            URL → título
@@ -23,8 +44,11 @@ namespace Eteris.Browser.Sync;
 // interface usa (AppData, Settings), por isso o resto do Éteris vê as alterações como se fossem feitas aqui.
 // Uma coleção que não se consegue ler (base de dados ocupada, notas bloqueadas pelo antivírus, sem janela nem sessão
 // gravada) vai em LocalRead.Unreadable, e não como vazia: vazia queria dizer «apaguei tudo» nos outros aparelhos.
-internal sealed class BrowserProfile : ILocalProfileReader
+// Este tipo só fala com o perfil por IProfileData (as chamadas vivas estão em LiveProfileData, no fim do ficheiro).
+internal sealed class BrowserProfile(IProfileData? data = null) : ILocalProfileReader
 {
+    private readonly IProfileData _data = data ?? new LiveProfileData();
+
     public IReadOnlyList<LocalItem> Collect() => Read().Items;
 
     public LocalRead Read()
@@ -33,19 +57,19 @@ internal sealed class BrowserProfile : ILocalProfileReader
         var unreadable = new List<string>();
         try
         {
-            foreach (var mark in AppData.ReadBookmarks(b => b.All(100_000)))
+            foreach (var mark in _data.ReadBookmarks())
                 items.Add(new LocalItem(Collections.Bookmarks, mark.Url, new JsonObject { ["title"] = mark.Title }));
         }
         catch (Exception) { unreadable.Add(Collections.Bookmarks); }
-        foreach (var (key, value) in ProfileTransfer.SettingValues(Data.Settings.Current))
+        foreach (var (key, value) in ProfileTransfer.SettingValues(_data.Settings))
             items.Add(new LocalItem(Collections.Settings, key, new JsonObject { ["value"] = value }));
-        if (ShieldKeys() is { } shield) foreach (var key in shield) items.Add(new LocalItem(Collections.Shield, key, new JsonObject()));
+        if (_data.ShieldKeys() is { } shield) foreach (var key in shield) items.Add(new LocalItem(Collections.Shield, key, new JsonObject()));
         else unreadable.Add(Collections.Shield);
 
-        if (new NotesStore(Path.Combine(AppPaths.Root, "notas.md")).TryLoad() is not { } notes) unreadable.Add(Collections.Notes);
+        if (_data.Notes() is not { } notes) unreadable.Add(Collections.Notes);
         else if (notes.Length > 0) items.Add(new LocalItem(Collections.Notes, Collections.NotesKey, new JsonObject { ["text"] = notes }));
 
-        if (Spaces() is not { } spaces) unreadable.Add(Collections.Spaces);
+        if (_data.Spaces() is not { } spaces) unreadable.Add(Collections.Spaces);
         else
         {
             var order = 0;
@@ -80,22 +104,6 @@ internal sealed class BrowserProfile : ILocalProfileReader
         catch (Exception) { return null; }
     }
 
-    // Espaços da primeira janela normal (na thread da interface); sem janela, os da sessão gravada. null = nem janela
-    // nem sessão legível (não se sabe que Espaços há).
-    private static IReadOnlyList<(string Name, int Color, string? Icon)>? Spaces()
-    {
-        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
-        {
-            try
-            {
-                if (dispatcher.Invoke(MainWindow.SyncSpaces) is { } live) return live;
-            }
-            catch (Exception e) when (e is InvalidOperationException or TaskCanceledException) { }
-        }
-        var session = new SessionStore(Path.Combine(AppPaths.Root, "session.json")).Load();
-        return session is null ? null : (session.Spaces ?? []).Select(s => (s.Name, s.ColorIndex, s.Icon)).ToList();
-    }
-
     public IReadOnlyCollection<LocalChange> Apply(IReadOnlyList<LocalChange> changes)
     {
         var applied = new List<LocalChange>();
@@ -109,8 +117,8 @@ internal sealed class BrowserProfile : ILocalProfileReader
                     Collections.Bookmarks => ApplyBookmark(change),
                     Collections.Settings => ApplySetting(change),
                     Collections.Shield => ApplyShield(change),
-                    Collections.Notes => OnInterface(() => MainWindow.ApplySyncedNotes(change.Data?["text"]?.GetValue<string>() ?? string.Empty)),
-                    Collections.Spaces => OnInterface(() => MainWindow.ApplySyncedSpace(change.Key, change.Data)),
+                    Collections.Notes => _data.ApplyNotes(change.Data?["text"]?.GetValue<string>() ?? string.Empty),
+                    Collections.Spaces => _data.ApplySpace(change.Key, change.Data),
                     _ => false,
                 };
             }
@@ -120,33 +128,32 @@ internal sealed class BrowserProfile : ILocalProfileReader
         return applied;
     }
 
-    private static bool ApplyBookmark(LocalChange change)
+    private bool ApplyBookmark(LocalChange change)
     {
         if (!Uri.TryCreate(change.Key, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return false;
         if (change.Remove)
         {
-            AppData.RemoveBookmark(change.Key);
-            return !AppData.IsBookmarked(change.Key);
+            _data.RemoveBookmark(change.Key);
+            return !_data.IsBookmarked(change.Key);
         }
         var title = change.Data!["title"]?.GetValue<string>() ?? string.Empty;
         if (title.Length > 300) title = title[..300];
-        if (AppData.IsBookmarked(change.Key)) AppData.RenameBookmark(change.Key, title);
-        else AppData.ImportBookmarks([new Bookmark(change.Key, title)]);
-        return AppData.IsBookmarked(change.Key);
+        if (_data.IsBookmarked(change.Key)) _data.RenameBookmark(change.Key, title);
+        else _data.AddBookmark(change.Key, title);
+        return _data.IsBookmarked(change.Key);
     }
 
-    private static bool ApplySetting(LocalChange change)
+    private bool ApplySetting(LocalChange change)
     {
         // Só as que viajam; apagar uma definição não se aplica (cada computador tem sempre todas).
         if (change.Remove || !Collections.SyncableSettings.Contains(change.Key)) return false;
         if (change.Data!["value"]?.GetValue<string>() is not { } value) return false;
-        if (Data.Settings.Current.With(change.Key, value) is not { } next) return false;
-        if (next == Data.Settings.Current) return true;
-        // Na thread da interface: quem ouve Settings.Changed (tema, abas, densidade…) mexe na janela.
-        return OnInterface(() => Data.Settings.Set(change.Key, value));
+        if (_data.Settings.With(change.Key, value) is not { } next) return false;
+        if (next == _data.Settings) return true;
+        return _data.SetSetting(change.Key, value);
     }
 
-    private static bool ApplyShield(LocalChange change)
+    private bool ApplyShield(LocalChange change)
     {
         var parts = change.Key.Split('|', 3);
         if (parts.Length != 3 || !Collections.ShieldKinds.Contains(parts[0]) || !ProfileTransfer.IsHost(parts[1])) return false;
@@ -155,28 +162,98 @@ internal sealed class BrowserProfile : ILocalProfileReader
         switch (kind)
         {
             case "off":
-                AppData.SetShield(host, !on);
-                return AppData.IsShieldOn(host) != on;
             case "strict":
-                AppData.SetStrict(host, on);
-                return AppData.IsStrict(host) == on;
             case "http":
-                AppData.SetHttpException(host, on);
-                return AppData.IsHttpException(host) == on;
+                break;
             case "hide":
                 if (value.Length is 0 or > 2000) return false;
-                if (on) AppData.HideElement(host, value);
-                else AppData.UnhideElement(host, value);
-                return AppData.HiddenElements(host).Contains(value) == on;
+                break;
             case "rule":
                 if (!ProfileTransfer.IsHost(value)) return false;
-                if (on) Shields.SiteRules.Block(host, value, isPrivate: false);
-                else Shields.SiteRules.RemoveExact(host, value);
-                return Shields.SiteRules.All().Contains((host, value)) == on;
+                break;
             default:
                 return false;
         }
+        _data.SetShield(kind, host, value, on);
+        return _data.HasShield(kind, host, value) == on;
     }
+}
+
+// O perfil verdadeiro: as chamadas ao AppData, às Definições, às regras por site e à janela, uma a uma.
+internal sealed class LiveProfileData : IProfileData
+{
+    public IReadOnlyList<Bookmark> ReadBookmarks() => AppData.ReadBookmarks(b => b.All(100_000));
+
+    public UserSettings Settings => Data.Settings.Current;
+
+    public List<string>? ShieldKeys() => BrowserProfile.ShieldKeys();
+
+    public string? Notes() => new NotesStore(Path.Combine(AppPaths.Root, "notas.md")).TryLoad();
+
+    // Espaços da primeira janela normal (na thread da interface); sem janela, os da sessão gravada. null = nem janela
+    // nem sessão legível (não se sabe que Espaços há).
+    public IReadOnlyList<(string Name, int Color, string? Icon)>? Spaces()
+    {
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
+        {
+            try
+            {
+                if (dispatcher.Invoke(MainWindow.SyncSpaces) is { } live) return live;
+            }
+            catch (Exception e) when (e is InvalidOperationException or TaskCanceledException) { }
+        }
+        var session = new SessionStore(Path.Combine(AppPaths.Root, "session.json")).Load();
+        return session is null ? null : (session.Spaces ?? []).Select(s => (s.Name, s.ColorIndex, s.Icon)).ToList();
+    }
+
+    public bool IsBookmarked(string url) => AppData.IsBookmarked(url);
+
+    public void AddBookmark(string url, string title) => AppData.ImportBookmarks([new Bookmark(url, title)]);
+
+    public void RenameBookmark(string url, string title) => AppData.RenameBookmark(url, title);
+
+    public void RemoveBookmark(string url) => AppData.RemoveBookmark(url);
+
+    // Na thread da interface: quem ouve Settings.Changed (tema, abas, densidade…) mexe na janela.
+    public bool SetSetting(string key, string value) => OnInterface(() => Data.Settings.Set(key, value));
+
+    public bool HasShield(string kind, string host, string value) => kind switch
+    {
+        "off" => !AppData.IsShieldOn(host),
+        "strict" => AppData.IsStrict(host),
+        "http" => AppData.IsHttpException(host),
+        "hide" => AppData.HiddenElements(host).Contains(value),
+        "rule" => Shields.SiteRules.All().Contains((host, value)),
+        _ => false,
+    };
+
+    public void SetShield(string kind, string host, string value, bool on)
+    {
+        switch (kind)
+        {
+            case "off":
+                AppData.SetShield(host, !on);
+                break;
+            case "strict":
+                AppData.SetStrict(host, on);
+                break;
+            case "http":
+                AppData.SetHttpException(host, on);
+                break;
+            case "hide":
+                if (on) AppData.HideElement(host, value);
+                else AppData.UnhideElement(host, value);
+                break;
+            case "rule":
+                if (on) Shields.SiteRules.Block(host, value, isPrivate: false);
+                else Shields.SiteRules.RemoveExact(host, value);
+                break;
+        }
+    }
+
+    public bool ApplyNotes(string text) => OnInterface(() => MainWindow.ApplySyncedNotes(text));
+
+    public bool ApplySpace(string name, JsonObject? data) => OnInterface(() => MainWindow.ApplySyncedSpace(name, data));
 
     private static bool OnInterface(Func<bool> action)
     {
