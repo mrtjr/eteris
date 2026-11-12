@@ -312,6 +312,8 @@ public partial class MainWindow : Window
         browser.FrameLoadStart += (_, e) =>
         {
             if (!e.Frame.IsMain) return;
+            // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01).
+            if (SandboxFallback.IsWebContent(e.Url)) StartupGuard.Current.WebContentCommitted();
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
             ResetUnstoredEnginePermissions(e.Browser, e.Url, permissionStore);

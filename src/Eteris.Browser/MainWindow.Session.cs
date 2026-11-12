@@ -22,12 +22,17 @@ public partial class MainWindow
         if (_ownsSession) s_sessionOwnerTaken = true;
 
         PendingSplit? restoredSplit = null;
+        // Depois de um arranque falhado com o sandbox (INF-01), as abas voltam todas a dormir e abre-se uma nova aba: uma
+        // página que faça cair processos do motor não volta a correr sozinha. O Begin já correu (CefConfigurator.WaitReady).
+        var afterFailedStart = Infrastructure.StartupGuard.Current.PreviousStartFailed;
         if (_ownsSession && Data.Settings.Current.Startup == "restore" && _session.Load() is { } previous)
         {
-            Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas);
+            Tabs.Restore(previous.Urls, previous.ActiveIndex, previous.Titles, previous.Pinned, previous.GroupIds, previous.Groups, previous.Metas,
+                wakeActive: !afterFailedStart);
             // Os outros Espaços ficam na reserva, a dormir, com a sua aba ativa e o seu ecrã dividido.
             Tabs.RestoreWorkspaces(previous.Spaces, previous.SpaceIndex);
-            restoredSplit = SplitTabs(previous.Split);
+            // Nesse arranque o ecrã dividido não se repõe (acordaria as duas abas).
+            if (!afterFailedStart) restoredSplit = SplitTabs(previous.Split);
         }
 
         var version = Browser.SettingsPage.Version;
@@ -35,7 +40,7 @@ public partial class MainWindow
         if (_ownsSession)
         {
             var plan = Browser.StartupPages.Plan(Data.Settings.IsFirstRun, Data.Settings.Current.LastSeenVersion, version, initialUrl,
-                hasRestoredTabs: Tabs.Tabs.Count > 0);
+                hasRestoredTabs: Tabs.Tabs.Count > 0 && !afterFailedStart);
             if (plan.Any(t => t.Url == Browser.WelcomePage.Url || t.Url == Browser.WhatsNewPage.Url)) Data.Settings.MarkVersionSeen(version);
             foreach (var tab in plan) Tabs.NewTab(tab.Url, tab.Activate);
             planActivated = plan.Any(t => t.Activate);

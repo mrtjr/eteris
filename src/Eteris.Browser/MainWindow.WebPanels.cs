@@ -270,6 +270,8 @@ public partial class MainWindow
         {
             if (e.Frame.IsMain && e.Browser is { } cef && e.Url is { } committed)
             {
+                // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01).
+                if (SandboxFallback.IsWebContent(e.Url)) StartupGuard.Current.WebContentCommitted();
                 _ = Task.Run(() => injector.EnsureHost(cef, committed));
                 ResetUnstoredEnginePermissions(cef, committed, permissionStore);
             }
