@@ -22,6 +22,7 @@
 
 ### Correções
 
+- **Sites que ficavam incompletos com o Escudo ligado** (por exemplo, o ge.globo.com e o g1.globo.com: só cinco notícias, sem a coluna das classificações nem o resto da página). Um pedido bloqueado pelo Escudo passa a falhar como num bloqueador de extensão (`ERR_BLOCKED_BY_CLIENT`) e não como um pedido cancelado, que deixava o código desses sites à espera. Os rastreadores continuam bloqueados e nada sai para a rede; como a página agora carrega por inteiro, o contador do Escudo pode mostrar mais bloqueios nesses sites.
 - O Éteris volta a procurar atualizações de 6 em 6 horas e depois de uma falha; uma sessão aberta durante dias já não fica sem saber de uma versão nova.
 - Abrir o Éteris (ou um link) enquanto ele ainda está a fechar já não se perde: o novo lançamento espera e abre.
 - Se o Éteris não conseguir abrir duas vezes seguidas, à terceira oferece procurar e instalar uma versão corrigida antes de arrancar o motor.

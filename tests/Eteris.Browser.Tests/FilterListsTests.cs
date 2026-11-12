@@ -159,13 +159,3 @@ public class UpdateTextTests
     public void Describe_IsPlainPortuguese(Eteris.Browser.Updates.UpdateState state, string? version, string text)
         => Assert.Equal(text, Eteris.Browser.Updates.UpdateService.Describe(state, version));
 }
-
-public class UpdateStateTests
-{
-    [Fact]
-    public async Task NotInstalled_EndsInDevelopmentState()
-    {
-        await Eteris.Browser.Updates.UpdateService.CheckAndDownloadAsync();
-        Assert.Equal(Eteris.Browser.Updates.UpdateState.Development, Eteris.Browser.Updates.UpdateService.State);
-    }
-}

@@ -143,7 +143,8 @@ public class UpdateScheduleTests
     public void CheckAndDownload_NoLongerStopsAtAReadyVersion_AndNeverGoesThroughCheckingWithOne()
     {
         var code = GoogleSyncTests.Src("Eteris.Browser", "Updates", "UpdateService.cs");
-        var body = code[code.IndexOf("public static async Task CheckAndDownloadAsync()", StringComparison.Ordinal)..];
+        // O corpo vive na sobrecarga com quem cria o UpdateManager (o plano 1 tornou-o injetável para os testes).
+        var body = code[code.IndexOf("internal static async Task CheckAndDownloadAsync(Func<UpdateManager?> createManager)", StringComparison.Ordinal)..];
         Assert.DoesNotContain("State == UpdateState.Ready ||", body);
         Assert.Contains("StateAfterCheck(before", body);
         Assert.Contains("before != UpdateState.Ready", body);
