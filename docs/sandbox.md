@@ -15,6 +15,13 @@ permissão de que o serviço precisa) — ver «Como publicar com o sandbox», a
 Velopack, «Revisão da 0.2.12») ficam como histórico: o sandbox ficou pronto para a 0.2.12, mas a 0.2.12 e a 0.2.13
 saíram sem ele.
 
+Continua fora do sandbox a descodificação de imagens de sites: os ícones e a imagem do Espreitar (`og:image`) são
+descodificados pelo Windows (WIC) no processo principal, que não está fechado. Por isso só entram PNG, JPEG, GIF e ICO,
+reconhecidos pela assinatura e com as dimensões lidas do cabeçalho dentro do limite (512 px nos ícones, 4096 px no
+Espreitar; um PNG ou bitmap embutido num ICO conta pelo cabeçalho dele), e a descodificação corre fora da thread da
+janela (`Browser/ImageSniff.cs`). Os ícones e as `og:image` em WebP deixam de aparecer. A saída a prazo é expor o
+`CefBrowserHost::DownloadImage` no patch de `build/cefsharp`, para a descodificação ficar no processo do motor.
+
 ## Como publicar com o sandbox (desde a 0.2.14, por omissão)
 
 `build/publish.ps1` publica com o sandbox; `-NoSandbox` fica para emergências (é o que a publicação pelo CI sem codecs

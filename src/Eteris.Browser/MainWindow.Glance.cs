@@ -277,7 +277,7 @@ public partial class MainWindow
         if (ShieldOn(LinkPreview.HostOf(pageUrl)) && ShieldEngine.Current.ShouldBlock(imageUrl, pageUrl, "image")) return;
         if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http")) return;
         if (browser.IsDisposed || !browser.IsBrowserInitialized) return;
-        var client = new EngineFetchClient(bytes => Dispatcher.InvokeAsync(() => ShowGlanceImage(bytes, serial)),
+        var client = new EngineFetchClient(bytes => _ = DecodeAndShowGlanceImageAsync(bytes, serial),
             LinkPreview.MaxImageBytes, LinkPreview.AcceptsImage);
         _ = Cef.UIThreadTaskFactory.StartNew(() =>
         {
@@ -298,22 +298,42 @@ public partial class MainWindow
         });
     }
 
-    private void ShowGlanceImage(byte[]? bytes, int serial)
+    // Chamado nas threads do CEF: assinatura e dimensões pelo cabeçalho, descodificação fora da thread da janela.
+    private async Task DecodeAndShowGlanceImageAsync(byte[]? bytes, int serial)
     {
-        if (bytes is null || serial != _glanceSerial || !GlanceOpen || bytes.Length == 0) return;
         try
         {
+            if (bytes is null || bytes.Length == 0) return;
+            var image = await Task.Run(() => DecodeGlanceImage(bytes));
+            if (image is null) return;
+            await Dispatcher.InvokeAsync(() => ShowGlanceImage(image, serial));
+        }
+        catch (Exception) { }
+    }
+
+    private static BitmapSource? DecodeGlanceImage(byte[] bytes)
+    {
+        if (!ImageSniff.Accepts(bytes, ImageSniff.MaxPreviewSide)) return null;
+        try
+        {
+            using var stream = new MemoryStream(bytes);
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.DecodePixelWidth = 1080;
-            image.StreamSource = new MemoryStream(bytes);
+            image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
-            GlanceImage.ImageSource = image;
-            GlanceImageHost.Visibility = Visibility.Visible;
+            return image;
         }
-        catch (Exception) { }
+        catch (Exception) { return null; }
+    }
+
+    private void ShowGlanceImage(BitmapSource image, int serial)
+    {
+        if (serial != _glanceSerial || !GlanceOpen) return;
+        GlanceImage.ImageSource = image;
+        GlanceImageHost.Visibility = Visibility.Visible;
     }
 
     private async Task GlanceWatchdog(int serial)
