@@ -94,11 +94,20 @@ public sealed partial class VaultService : IDisposable
             && LoginIds(origin, username).FirstOrDefault(other => other != item.Id && GetLogin(other)?.Generated == false) is { } same
             && GetLogin(same) is { } kept)
         {
-            var merged = SaveLogin(kept with { Password = item.Password, Note = item.Note ?? kept.Note });
+            // Pelo caminho interno, que não volta a procurar duplicados: com dois itens confirmados já no cofre (o defeito
+            // antigo deixava-os), cada um juntava-se ao outro sem fim e o Éteris fechava com a pilha esgotada.
+            var merged = SaveLoginCore(kept with { Password = item.Password, Note = item.Note ?? kept.Note });
             Store.Delete(VaultCollection.Logins, item.Id, Now);
             Raise();
             return merged;
         }
+        return SaveLoginCore(item);
+    }
+
+    private string SaveLoginCore(LoginItem item)
+    {
+        var origin = Origins.Normalize(item.Origin) ?? throw new ArgumentException("Origem inválida para uma palavra-passe.", nameof(item));
+        var username = item.Username ?? string.Empty;
         var id = !string.IsNullOrEmpty(item.Id) && Store.Get(VaultCollection.Logins, item.Id) is not null ? item.Id
             : FindLogin(origin, username) ?? (string.IsNullOrEmpty(item.Id) ? VaultIds.New() : item.Id);
         var old = GetLogin(id);

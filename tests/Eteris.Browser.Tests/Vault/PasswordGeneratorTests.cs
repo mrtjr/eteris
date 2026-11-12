@@ -229,6 +229,28 @@ public class PasswordGeneratorTests
         Assert.Equal("Antiga-0!", f.Vault.PreviousPassword(old));
     }
 
+    // O cofre de quem teve o VAU-02 nas versões anteriores já tem dois itens confirmados para o mesmo site e utilizador:
+    // gravar um deles juntava-se ao outro e o outro ao primeiro, sem fim (pilha esgotada, o Éteris fecha).
+    [Fact]
+    public void SaveLogin_WithTwoConfirmedDuplicatesAlreadyInTheVault_MergesThemWithoutLooping()
+    {
+        using var f = new VaultFixture();
+        var a = f.Vault.SaveLogin(new LoginItem("", "https://loja.exemplo.test", "ana@exemplo.test", "Antiga-0!", "nota", default, default, null, null, false, null));
+        var b = f.Vault.SaveGenerated("https://loja.exemplo.test", "Gerada-9", "ana@exemplo.test");
+        // O estado que o defeito antigo deixava: a gerada ficou «confirmada» ao lado da conta.
+        var store = (VaultStore)typeof(VaultService).GetProperty("Store", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(f.Vault)!;
+        var entry = store.Get(VaultCollection.Logins, b)!;
+        var meta = (System.Text.Json.Nodes.JsonObject)entry.Meta.DeepClone();
+        meta["generated"] = false;
+        Assert.True(store.UpdateMeta(VaultCollection.Logins, b, meta, f.Now));
+        Assert.Equal(2, f.Vault.Logins().Count(l => l.Username == "ana@exemplo.test"));
+
+        var kept = f.Vault.SaveLogin(f.Vault.GetLogin(a)! with { Note = "nota nova" });
+
+        Assert.Single(f.Vault.Logins(), l => l.Username == "ana@exemplo.test");
+        Assert.NotNull(f.Vault.GetLogin(kept));
+    }
+
     [Fact]
     public void Window_ConfirmsThroughConfirmGenerated()
     {
