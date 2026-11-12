@@ -282,6 +282,34 @@ public sealed class PairingFlowStateTests : IDisposable
         Assert.Contains("Schedule.Done(Now(), ok);", service);
     }
 
+    // RR-2 da re-revisão: os três pontos que acertam o agendador depois de uma ronda (StartAsync, Tick e o RoundEnded da
+    // primeira ronda depois de uma aprovação) param-no quando a ronda acabou com a sessão Google por renovar ou com a
+    // sincronização desligada — sem isto, mais uma ronda (e um pedido ao endpoint de tokens) 30 s depois.
+    [Fact]
+    public void EveryRoundEnd_StopsTheScheduler_WhenSignInIsNeeded()
+    {
+        var service = GoogleSyncTests.Src("Eteris.Browser", "Sync", "SyncService.cs");
+        const string done = "Schedule.Done(Now(), ok);";
+        const string stop = "if (PausedAfterRound()) Schedule.Stop();";
+        var ends = new List<int>();
+        for (var at = service.IndexOf(done, StringComparison.Ordinal); at >= 0; at = service.IndexOf(done, at + 1, StringComparison.Ordinal))
+            ends.Add(at);
+        Assert.Equal(3, ends.Count);
+        foreach (var at in ends)
+        {
+            // A linha seguinte (sem contar comentários) é a paragem, dentro do mesmo lock (Gate).
+            var next = service[(at + done.Length)..].Split('\n').Select(l => l.Trim()).First(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal));
+            Assert.Equal(stop, next);
+        }
+        Assert.Contains("RoundEnded = ok =>", service);
+        Assert.True(service.IndexOf(stop, service.IndexOf("RoundEnded = ok =>", StringComparison.Ordinal), StringComparison.Ordinal)
+            < service.IndexOf("Log = m =>", StringComparison.Ordinal));
+        var paused = GoogleSyncTests.Body(service, "private static bool PausedAfterRound()");
+        Assert.Contains("Guarded(", paused);
+        Assert.Contains("NeedsSignIn", paused);
+        Assert.Contains("!a.Enabled", paused);
+    }
+
     // Contar os pedidos de computadores novos é o último passo de uma ronda: se essa listagem falhar, a ronda — que já
     // enviou e recebeu tudo — conta como boa.
     [Fact]

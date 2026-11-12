@@ -103,6 +103,7 @@ internal static class SyncService
                     {
                         Schedule.Now(Now());
                         Schedule.Done(Now(), ok);
+                        if (PausedAfterRound()) Schedule.Stop();
                     }
                     Arm();
                 },
@@ -134,6 +135,11 @@ internal static class SyncService
             return fallback;
         }
     }
+
+    // Depois de uma ronda (StartAsync, Tick e RoundEnded, sempre com Gate): a autorização da Google retirada ou expirada
+    // (NeedsSignIn) ou a sincronização desligada param o agendador — nada se resolve sozinho até entrar outra vez ou
+    // voltar a ligar. O agente, uma vez criado, é sempre o mesmo (_agent).
+    private static bool PausedAfterRound() => Guarded(() => _agent is { } a && (a.Status.NeedsSignIn || !a.Enabled), false);
 
     internal static void Guarded(Action act)
     {
@@ -280,7 +286,7 @@ internal static class SyncService
                 {
                     Schedule.Done(Now(), ok);
                     // A autorização da Google foi retirada ou expirou: nada se resolve sozinho, para até entrar outra vez.
-                    if (agent.Status.NeedsSignIn) Schedule.Stop();
+                    if (PausedAfterRound()) Schedule.Stop();
                 }
             }
             catch (Exception)
@@ -340,7 +346,7 @@ internal static class SyncService
         {
             Schedule.Now(Now());
             Schedule.Done(Now(), ok);
-            if (Guarded(() => agent.Status.NeedsSignIn || !agent.Enabled, false)) Schedule.Stop();
+            if (PausedAfterRound()) Schedule.Stop();
         }
         Arm();
     }
