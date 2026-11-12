@@ -181,6 +181,10 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   - **Em dois passos**: a conta nova é criada sem tocar na antiga e **guardada** (segredo, estado e `RotationPending`)
     antes de se escreverem as mensagens `r/` e de se apagar a cadeia antiga — o registo de chaves em último lugar, porque
     é a falta dele que manda os outros procurar a mensagem. Uma falha a meio acaba na ronda seguinte.
+  - **O registo de chaves presente não prende ninguém na cadeia antiga**: em cada ronda, quem fica olha também para as
+    mensagens `r/` que lhe são dirigidas (na listagem que a ronda já faz, sem pedidos a mais quando não há nenhuma), e
+    uma mensagem válida conta como a troca mesmo com o registo lá — o removido tem o segredo antigo e podia voltar a
+    escrevê-lo. Por isso, numa troca interrompida antes de o registo sair, quem fica segue logo para a conta nova.
   - **Só os aparelhos que o utilizador viu na lista e com a chave fixada antes** recebem a conta nova (a troca não fixa
     chaves novas: um estado `a/` inventado à pressa pelo removido não entra); se aparecer outro, o aviso diz o nome.
     Depois da troca, os que ficaram continuam na lista (pela chave fixada) até escreverem o seu estado na conta nova.
@@ -763,6 +767,7 @@ explícita**: fala com a Google por um cliente HTTP próprio (`GoogleEndpoints.C
 | **Quem dita um código à pessoa** (por telefone, por mensagem) | levá-la a escrever no computador ligado o código do computador dele | — limite do *number matching*: escrever o código só protege se for o código que está a ver no seu outro computador: um código que alguém lhe dite por telefone ou envie por mensagem não deve ser escrito. Remédio: «Perdi um computador» (remove e troca a chave) |
 | **Quem apaga ou substitui a conta no Drive** | fazer um computador que já esteve na conta encontrar outra cadeia | que esse computador peça aprovação sozinho: mostra o alerta «a conta foi apagada ou substituída» e pede uma decisão (`SyncStatus.ChainReplaced`, `SavedSync.HadAccount`); «Fui eu» pede o Windows com segredos ligados neste computador |
 | **Um aparelho removido** (tem o kit antigo) | ler o que já tinha (o que já estava nesse computador continua lá); enquanto o acesso do Éteris à conta Google não for retirado, apagar ou estragar os ficheiros no Drive (remover troca a chave, não retira esse acesso — remédio: «Perdi um computador / foi roubado», que o retira); deixar aos outros uma mensagem com uma conta dele: quem a recebe fica em pausa e pede o identificador do kit novo, que ele não conhece (1 em 1 048 576 por tentativa, 3 tentativas) — salvo um aparelho desligado desde antes de o outro entrar, que só fixou a chave do removido e segue sozinho a mensagem dele | abrir a conta nova ou escrever nela algo que os outros aceitem |
+| **Um aparelho removido que repõe o registo de chaves da cadeia antiga** (tem o segredo antigo e ainda chega ao Drive) | manter viva a cadeia antiga só para si; se **também apagar a mensagem `r/`** deixada a um aparelho que ficou, antes de ele fazer uma ronda, esse aparelho não dá pela troca e continua a sincronizar com ele na cadeia antiga (nada no Drive o distingue de não ter havido troca; quem trocou a chave continua a vê-lo na lista sem ter passado para a conta nova) — remédio: «Perdi um computador / foi roubado», que retira o acesso na Google | prender na cadeia antiga um aparelho que ainda encontre a mensagem `r/` de quem trocou a chave: a mensagem conta como a troca mesmo com o registo reposto (segue sozinho, ou pede o identificador do kit novo, como na linha de cima) |
 | **Quem se mete no meio do emparelhamento** (controla o transporte) | tentar a sua sorte: 1 em 1 000 000 por pedido, com no máximo 3 pedidos acompanhados de cada vez (`PairingRequests.MaxAnswered`), e a barra deixa de abrir sozinha ao 3.º pedido que acabe mal em 24 h (`PairingFatigue`); com o código curto, fazer de anfitrião falso para o convidado (que mostra um código que o anfitrião verdadeiro não mostra) | receber o segredo sem o utilizador escrever no anfitrião o código que o convidado verdadeiro mostra; pôr o convidado na SUA conta sem o utilizador confirmar códigos iguais no convidado; ler o nome dos aparelhos |
 | **Quem rouba o PC com a sessão do Windows aberta** | o que esse Windows lê (tokens e estado protegidos por DPAPI do utilizador; o que já estava nesse computador) | — remédio: «Perdi um computador / foi roubado» noutro computador (remove, troca a chave e retira o acesso na Google) e mudar as palavras-passe importantes |
 | **Quem tem um ficheiro `.eteris`** | nada sem o código | — |
@@ -926,7 +931,10 @@ Tudo em <https://console.cloud.google.com/> com a conta Google do dono:
   `RemovedDevice_CannotHijackTheOthers_WithAnAccountOfItsOwn`, `RekeyIsUnambiguous_OnlyWhenTheSenderIsTheOnlyPinnedPeer`
   (auditoria, SYN-01; com `SyncAgentTests.RemovedDevice_DeletesTheRealMessage_OthersDoNotFollow`,
   `RemovedDevice_DeletesTheKeysOfTheNewAccount_OthersDoNotFollow` e
-  `Rekey_ThreeWrongIdentifiers_StopForGood_AndRejoiningByKitWorks`), `Rotation_GivesTheNewAccountOnlyToDevicesPinnedBefore`,
+  `Rekey_ThreeWrongIdentifiers_StopForGood_AndRejoiningByKitWorks`; e, da revisão, o registo de chaves antigo reposto
+  pelo removido: `RemovedDevice_RestoresTheOldKeys_OthersStillFindTheRekey`,
+  `…_ADeviceThatOnlyPinnedTheSenderFollowsAlone_AndOnlyOnce`, `…_AndSwapsTheMessage_OthersDoNotFollow` e
+  `AJunkRekeyFile_DoesNotStopTheRound`), `Rotation_GivesTheNewAccountOnlyToDevicesPinnedBefore`,
   `Rotation_InTwoSteps_OldAccountIntactUntilTheSecond_WhichCanBeRepeated`), `SyncAgentTests` (o que outro aparelho
   enviou e quem remove não leu fica; troca interrompida acaba na ronda seguinte; duas remoções seguidas; aparelho que
   aparece à pressa não recebe a chave; «Sair» a meio de uma ronda; outra conta Google; registo de chaves que não abre;

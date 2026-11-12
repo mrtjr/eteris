@@ -668,6 +668,128 @@ public sealed class SyncAgentTests : IDisposable
         Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
     }
 
+    // ---- o removido repõe o registo de chaves da cadeia antiga (revisão do SYN-01, I2) --------------------------------
+
+    // A conta só «desaparece» quando falta o registo de chaves. O removido tem o segredo antigo e, enquanto tiver
+    // acesso ao Drive, pode voltar a pôr lá o registo antigo: quem ficou não daria pela troca e continuava a sincronizar
+    // com ele na cadeia antiga. A mensagem r/ que quem trocou a chave lhe deixou conta como a troca.
+    [Fact]
+    public async Task RemovedDevice_RestoresTheOldKeys_OthersStillFindTheRekey()
+    {
+        var (casa, trabalho, portatil) = await ThreeAsync();
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        var oldChain = casa.Store.Load()!.Engine!.ChainId;
+        var oldKeys = _cloud.Memory.Files[SyncPaths.Keys(oldChain)].ToArray();   // o removido guardou uma cópia
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        Assert.False(_cloud.Has(SyncPaths.Keys(oldChain)));
+        await _cloud.WriteAsync(SyncPaths.Keys(oldChain), oldKeys);
+
+        _now += 1000;
+        trabalho.Profile.Bookmark("https://do-trabalho.example/", "Do trabalho, depois da remoção");
+        Assert.True(await trabalho.Agent.RunAsync());
+        // Três aparelhos fixados: a mensagem não é inequívoca, e o «trabalho» pede o identificador do kit novo.
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+
+        // O removido continua sozinho na cadeia antiga: não recebe nada do «trabalho», e o que escreve não chega a ninguém.
+        _now += 1000;
+        portatil.Profile.Bookmark("https://do-portatil.example/", "Do portátil, depois de removido");
+        Assert.True(await portatil.Agent.RunAsync());
+        await trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+        casa.Profile.Bookmark("https://da-casa.example/", "Da casa");
+        await Settle(casa, trabalho);
+        Assert.True(await portatil.Agent.RunAsync());
+        Assert.Equal("Do trabalho, depois da remoção", casa.Profile.Title("https://do-trabalho.example/"));
+        Assert.Equal("Da casa", trabalho.Profile.Title("https://da-casa.example/"));
+        Assert.Null(portatil.Profile.Title("https://do-trabalho.example/"));
+        Assert.Null(trabalho.Profile.Title("https://do-portatil.example/"));
+        Assert.Null(casa.Profile.Title("https://do-portatil.example/"));
+        Assert.Empty(_cloud.Paths(SyncPaths.Batches(oldChain) + trabalho.Store.Load()!.Engine!.Device.Id + "/"));
+    }
+
+    // O mesmo com um «trabalho» que só fixou a «casa»: segue sozinho para a conta nova. E uma mensagem já tratada não
+    // volta a disparar nada: as rondas seguintes ficam na conta nova, mesmo que o registo antigo volte a aparecer.
+    [Fact]
+    public async Task RemovedDevice_RestoresTheOldKeys_ADeviceThatOnlyPinnedTheSenderFollowsAlone_AndOnlyOnce()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var portatil = NewDevice("Portátil");
+        await portatil.Agent.StartAsync();
+        await portatil.Agent.JoinWithCodeAsync(casa.Agent.RevealKit()!.Words);
+        await Settle(casa, trabalho, portatil);
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        Assert.Single(trabalho.Store.Load()!.Engine!.PeerKeys);
+        var oldChain = casa.Store.Load()!.Engine!.ChainId;
+        var oldKeys = _cloud.Memory.Files[SyncPaths.Keys(oldChain)].ToArray();
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+        await _cloud.WriteAsync(SyncPaths.Keys(oldChain), oldKeys);
+
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.False(trabalho.Agent.Status.RekeyPending);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+        Assert.Contains("mudou de chave em «Casa»", trabalho.Agent.Status.Notice);
+
+        // Rondas seguintes: nada volta a disparar (o registo antigo reposto outra vez não interessa a quem já seguiu).
+        await _cloud.WriteAsync(SyncPaths.Keys(oldChain), oldKeys);
+        casa.Profile.Bookmark("https://da-casa.example/", "Da casa");
+        await Settle(casa, trabalho);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.False(trabalho.Agent.Status.RekeyPending);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+        Assert.Equal("Da casa", trabalho.Profile.Title("https://da-casa.example/"));
+        Assert.Empty(_cloud.Paths(SyncPaths.Rekeys(casa.Store.Load()!.Engine!.ChainId, trabalho.Store.Load()!.Engine!.Device.Id)));
+    }
+
+    // Um ficheiro em r/<este>/ que não é uma mensagem válida (lixo, ou de um aparelho sem chave fixada) não para a
+    // ronda nem tira o aparelho da conta: quem só consegue escrever no Drive não desliga ninguém.
+    [Fact]
+    public async Task AJunkRekeyFile_DoesNotStopTheRound()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        var state = trabalho.Store.Load()!.Engine!;
+        await _cloud.WriteAsync(SyncPaths.Rekey(state.ChainId, state.Device.Id, "aparelho-inventado"), [1, 2, 3]);
+        await _cloud.WriteAsync(SyncPaths.Rekey(state.ChainId, state.Device.Id, casa.Store.Load()!.Engine!.Device.Id), [1, 2, 3]);
+        casa.Profile.Bookmark("https://da-casa.example/", "Da casa");
+        await Settle(casa, trabalho);
+        Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
+        Assert.Null(trabalho.Agent.Status.Error);
+        Assert.Equal(casa.Store.Load()!.Secret, trabalho.Store.Load()!.Secret);
+        Assert.Equal("Da casa", trabalho.Profile.Title("https://da-casa.example/"));
+    }
+
+    // O removido repõe o registo antigo e troca a mensagem verdadeira por uma sua: o «trabalho» cai na pausa e não o segue.
+    [Fact]
+    public async Task RemovedDevice_RestoresTheOldKeys_AndSwapsTheMessage_OthersDoNotFollow()
+    {
+        var (casa, trabalho, portatil) = await ThreeAsync();
+        var devices = await casa.Agent.RefreshDevicesAsync();
+        var old = casa.Store.Load()!.Engine!;
+        var oldKeys = _cloud.Memory.Files[SyncPaths.Keys(old.ChainId)].ToArray();
+        var stolen = portatil.Store.Load()!.Engine!;
+        var idB = trabalho.Store.Load()!.Engine!.Device.Id;
+        await casa.Agent.RemoveDeviceAsync(devices.Single(d => d.Name == "Portátil").Id);
+
+        await _cloud.DeleteAsync(SyncPaths.Rekey(old.ChainId, idB, old.Device.Id));
+        using var hijack = Hijack(casa.Agent.Status.Kit!.Id);
+        await SyncEngine.CreateAsync(_cloud, hijack, stolen.Device, Now);
+        await SyncEngine.FinishRotationAsync(_cloud, stolen, hijack,
+            new RotationPending { OldChain = old.ChainId, Staying = new Dictionary<string, string> { [idB] = stolen.PeerKeys[idB] } });
+        await _cloud.WriteAsync(SyncPaths.Keys(old.ChainId), oldKeys);
+
+        trabalho.Profile.Bookmark("https://do-trabalho.example/", "Do trabalho, depois da remoção");
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal(SyncPhase.Stopped, trabalho.Agent.Status.Phase);
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        Assert.NotEqual(SecretOf(hijack), trabalho.Store.Load()!.Secret);
+        await Assert.ThrowsAsync<SyncUserException>(() => trabalho.Agent.ConfirmRekeyAsync(casa.Agent.Status.Kit!.Id));
+        Assert.True(trabalho.Agent.Status.RekeyPending);
+        Assert.Empty(_cloud.Paths(SyncPaths.Batches(hijack.ChainId) + idB + "/"));
+        Assert.Empty(_cloud.Paths(SyncPaths.Batches(old.ChainId) + idB + "/"));
+    }
+
     [Fact]
     public async Task Rekey_ThreeWrongIdentifiers_StopForGood_AndRejoiningByKitWorks()
     {
@@ -1051,8 +1173,10 @@ public sealed class SyncAgentTests : IDisposable
         }
     }
 
-    // A troca de chave falha a meio (o registo de chaves antigo não se apaga): a conta nova já está guardada, o outro
-    // aparelho continua na antiga sem parar, e a ronda seguinte acaba a troca — ninguém perde a chave.
+    // A troca de chave falha a meio (o registo de chaves antigo não se apaga): a conta nova já está guardada e a mensagem
+    // r/ já está escrita, por isso o outro aparelho segue logo para a conta nova, sem parar (o registo antigo ainda
+    // presente não o prende na cadeia antiga: revisão do SYN-01, I2); a ronda seguinte acaba a troca — ninguém perde a
+    // chave.
     [Fact]
     public async Task RemoveDevice_InterruptedHalfway_FinishesOnTheNextRound_AndNobodyLosesTheKey()
     {
@@ -1076,7 +1200,7 @@ public sealed class SyncAgentTests : IDisposable
         Assert.NotNull(saved.Rotation);
         Assert.True(await trabalho.Agent.RunAsync());
         Assert.Equal(SyncPhase.On, trabalho.Agent.Status.Phase);
-        Assert.Equal(oldSecret, trabalho.Store.Load()!.Secret);
+        Assert.Equal(saved.Secret, trabalho.Store.Load()!.Secret);   // já na conta nova (só fixou a «casa»: segue sozinho)
 
         flaky.FailDeletingKeys = false;
         Assert.True(await casa.Agent.RunAsync());

@@ -380,6 +380,18 @@ public sealed class SyncEngine
         var announced = AnnouncedNewerFormat(keysFile);
 
         var files = await _transport.ListAsync(SyncPaths.Chain(ChainId), cancellationToken).ConfigureAwait(false);
+        // O registo de chaves presente não prova que a conta continua a ser esta: um aparelho removido tem o segredo
+        // antigo e, enquanto chegar ao transporte, pode voltar a escrevê-lo depois de quem trocou a chave o apagar —
+        // quem ficou continuava aqui, a sincronizar com ele. Uma mensagem r/ válida dirigida a este aparelho conta como
+        // a troca (quem chama segue as regras de sempre: ReceiveRekeyAsync, RekeyIsUnambiguous). Sai da listagem que a
+        // ronda já faz: só se lê mais alguma coisa quando há um ficheiro em r/<este>/. Antes de ler ou aplicar um lote
+        // que seja. Não fecha o caso em que o removido também apaga a mensagem: aí nada no transporte distingue a troca.
+        var rekeys = SyncPaths.Rekeys(ChainId, Device.Id);
+        if (files.Any(f => f.StartsWith(rekeys, StringComparison.Ordinal)))
+        {
+            using var rekey = await ReceiveRekeyAsync(_transport, State, ChainId, cancellationToken).ConfigureAwait(false);
+            if (rekey is not null) throw new ChainGoneException("Outro aparelho trocou a chave da conta e deixou a conta nova a este.");
+        }
         var batches = new Dictionary<string, SortedSet<long>>(StringComparer.Ordinal);
         var snapshots = new List<(string Device, long Seq, string Path)>();
         foreach (var path in files)
