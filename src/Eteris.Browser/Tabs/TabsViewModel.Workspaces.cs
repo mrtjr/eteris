@@ -42,13 +42,17 @@ public partial class TabsViewModel
         var leaving = Tabs.ToList();
         current.StoredTabs.Clear();
         current.StoredTabs.AddRange(leaving);
-        current.StoredActiveIndex = Active is { } active ? Math.Max(0, leaving.IndexOf(active)) : 0;
+        var leavingActive = Active;
+        current.StoredActiveIndex = leavingActive is not null ? Math.Max(0, leaving.IndexOf(leavingActive)) : 0;
         current.IsCurrent = false;
         current.LeftUtc = now;
         foreach (var tab in leaving)
         {
             tab.IsMultiSelected = false;
-            if (!StaysAwakeOutOfView(tab)) tab.IsSleeping = true;
+            // Ficam acordadas as que a janela segura (KeepsAwake: captura, multimédia a tocar, a página que pediu para
+            // ficar) e a aba em uso (decisão D3: pode ter texto por enviar; o sono por tempo pergunta à página antes).
+            if (!StaysAwakeOutOfView(tab) && !(!tab.IsSleeping && (KeepsAwake?.Invoke(tab) == true || ReferenceEquals(tab, leavingActive))))
+                tab.IsSleeping = true;
         }
 
         // 2. As abas do destino entram (a dormir) e a sua ativa acorda; um Espaço vazio ganha uma aba nova.
@@ -75,6 +79,10 @@ public partial class TabsViewModel
     }
 
     private static DateTime Min(DateTime a, DateTime b) => a <= b ? a : b;
+
+    // O que a janela sabe e o modelo não (MainWindow.xaml.cs): uma aba que usa a câmara, o microfone ou o ecrã, que
+    // toca multimédia ou cuja página pediu para ficar acordada não adormece ao mudar de Espaço.
+    public Func<BrowserTab, bool>? KeepsAwake { get; set; }
 
     // Uma aba acordada que tranca ou toca som não adormece ao sair de vista (como na política de sono).
     public static bool StaysAwakeOutOfView(BrowserTab tab) => !tab.IsSleeping && (tab.IsLocked || tab.IsAudible);

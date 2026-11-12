@@ -26,7 +26,7 @@ public partial class MainWindow
     {
         if (!MemoryPressure.Applies(Data.Settings.Current) || !MemoryPressure.IsLowNow()) return;
         var candidates = Application.Current.Windows.OfType<MainWindow>().SelectMany(w => w.PressureCandidates()).ToList();
-        if (MemoryPressure.Pick(candidates) is not { } target) return;
+        if (MemoryPressure.Pick(candidates, DateTime.UtcNow) is not { } target) return;
         PerfCounters.Add("sono.pressao");
         target.Window.PutToSleep(target.Tab);
     }
@@ -37,6 +37,6 @@ public partial class MainWindow
             .Where(tab => !tab.IsSleeping && HasEngine(tab) && !_fallingAsleep.Contains(tab))
             .Select(tab => new MemoryPressure.Candidate<PressureTarget>(new PressureTarget(this, tab),
                 OnScreen: IsTabOnScreen(tab), Loading: tab.IsLoading, Audible: tab.IsAudible, Locked: tab.IsLocked,
-                Pinned: tab.IsPinned, Capturing: _browsers.TryGetValue(tab, out var browser) && IsCapturing(browser),
-                Playing: tab.Media == MediaState.Playing, LastActiveUtc: tab.LastActiveUtc));
+                Pinned: tab.IsPinned, Capturing: IsCapturingTab(tab), Playing: tab.Media == MediaState.Playing,
+                LastActiveUtc: tab.LastActiveUtc, Held: IsHeld(tab, DateTime.UtcNow)));
 }

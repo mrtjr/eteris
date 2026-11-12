@@ -25,7 +25,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<BrowserTab, ChromiumWebBrowser> _browsers = new();
     private readonly Dictionary<BrowserTab, ScriptletInjector> _scriptlets = new();
 
-    public MainWindow(string? initialUrl = null, bool isPrivate = false)
+    public MainWindow(string? initialUrl = null, bool isPrivate = false, Data.SessionWindow? restored = null)
     {
         InitializeComponent();
         StartupTrace.Mark("janela.xaml");
@@ -51,6 +51,10 @@ public partial class MainWindow : Window
         Tabs.PropertyChanged += OnTabsPropertyChanged;
         // Fechar (ou tirar da faixa) a metade ativa do ecrã dividido deixa a outra metade no ecrã, não a vizinha na faixa.
         Tabs.PreferredSuccessor = tab => _split?.PartnerOf(tab);
+        // Mudar de Espaço não adormece o que a janela segura: câmara, microfone ou ecrã, multimédia a tocar, a página
+        // que pediu para ficar acordada (MainWindow.Sleep.cs) e a outra metade do ecrã dividido, que estava à vista.
+        Tabs.KeepsAwake = tab => IsCapturingTab(tab) || tab.Media == MediaState.Playing || IsHeld(tab, DateTime.UtcNow)
+                                 || _split?.PaneOf(tab) is not null;
         StateChanged += (_, _) => OnWindowStateChanged();
         SourceInitialized += (_, _) =>
         {
@@ -68,11 +72,11 @@ public partial class MainWindow : Window
         Closed += (_, _) => DisposeBrowsers();
         Closed += (_, _) => ForgetVaultWindow();
         AuroraBar.IsVisibleChanged += (_, _) => AnimateAurora(AuroraBar.IsVisible && WindowState != WindowState.Minimized);
-        StartTabs(initialUrl);
+        StartTabs(initialUrl, restored);
         StartupTrace.Mark("janela.abas");
         WatchSnoozed();
         WatchArchive();
-        RestorePlacement();
+        RestorePlacement(restored?.Placement);
         WatchUpdates();
         WatchBackdropSetting();
         WatchTabLayoutSetting();
@@ -91,7 +95,7 @@ public partial class MainWindow : Window
         WatchWorkspaces();
         WatchSidebar();
         WatchAltTap();
-        Closing += (_, _) => FlushNotes();
+        Closing += (_, _) => FlushNotes(closing: true);
         ContentRendered += (_, _) => SetUpOverlayLayer();
         ContentRendered += (_, _) => WireSignInBar();
         StartupTrace.Mark("janela.ctor");

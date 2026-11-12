@@ -9,6 +9,15 @@ public partial class MainWindow
 {
     private BrowserTab? _previousActive;
     private DispatcherTimer? _sleepTimer;
+    // A página pediu para ficar acordada (texto por enviar, Picture-in-Picture; SleepProbe), até quando.
+    private readonly Dictionary<BrowserTab, DateTime> _sleepHolds = [];
+    // A ronda anterior do sono por tempo e o regresso da última suspensão do computador (o tempo suspenso não conta).
+    private DateTime? _lastSleepRoundUtc;
+    private DateTime? _sleepFloorUtc;
+
+    private bool IsHeld(BrowserTab tab, DateTime nowUtc) => _sleepHolds.TryGetValue(tab, out var until) && nowUtc < until;
+
+    private bool IsCapturingTab(BrowserTab tab) => _browsers.TryGetValue(tab, out var browser) && IsCapturing(browser);
 
     private void ReleaseBrowser(BrowserTab tab)
     {
@@ -20,6 +29,7 @@ public partial class MainWindow
     {
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         ReleaseVaultChannel(tab);
+        _sleepHolds.Remove(tab);
         if (!_browsers.Remove(tab, out var browser)) return;
         ForgetCnameQuota(browser);
         PageScript.Release(browser);
@@ -74,18 +84,24 @@ public partial class MainWindow
     private void SleepIdleTabs()
     {
         var now = DateTime.UtcNow;
+        // Uma ronda muito depois da anterior: o computador esteve suspenso; o prazo das abas recomeça agora.
+        if (SleepPolicy.WasSuspended(_lastSleepRoundUtc, now)) _sleepFloorUtc = now;
+        _lastSleepRoundUtc = now;
         var threshold = TimeSpan.FromMinutes(Data.Settings.Current.SleepMinutes);
         foreach (var tab in Tabs.Tabs.ToList())
         {
             if (!SleepPolicy.ShouldSleep(IsTabOnScreen(tab), tab.IsSleeping, tab.IsLoading, tab.IsAudible,
-                    tab.LastActiveUtc, now, threshold, tab.IsLocked)) continue;
+                    SleepPolicy.Later(tab.LastActiveUtc, _sleepFloorUtc), now, threshold, tab.IsLocked,
+                    isCapturing: IsCapturingTab(tab), isPlaying: tab.Media == MediaState.Playing, isHeld: IsHeld(tab, now))) continue;
             PutToSleep(tab);
         }
-        // As que ficaram acordadas noutro Espaço (com som, ou trancadas) seguem a mesma política: acabado o som,
-        // adormecem como as outras; uma trancada fica.
+        // As que ficaram acordadas noutro Espaço (com som, trancadas, a aba que estava em uso…) seguem a mesma
+        // política: acabado o som, adormecem como as outras; uma trancada fica.
         foreach (var tab in Tabs.AwakeOutOfView())
         {
-            if (!SleepPolicy.ShouldSleep(false, false, tab.IsLoading, tab.IsAudible, tab.LastActiveUtc, now, threshold, tab.IsLocked)) continue;
+            if (!SleepPolicy.ShouldSleep(false, false, tab.IsLoading, tab.IsAudible, SleepPolicy.Later(tab.LastActiveUtc, _sleepFloorUtc), now,
+                    threshold, tab.IsLocked, isCapturing: IsCapturingTab(tab), isPlaying: tab.Media == MediaState.Playing,
+                    isHeld: IsHeld(tab, now))) continue;
             PutToSleep(tab);
         }
         // Os sites fixados escondidos na barra lateral (ajuste e6, MainWindow.WebPanels.cs).
@@ -96,36 +112,47 @@ public partial class MainWindow
     private void SleepAllBackgroundTabs()
     {
         foreach (var tab in Tabs.Tabs.Where(t => !IsTabOnScreen(t) && !t.IsSleeping && !t.IsAudible && !t.IsLocked).ToList())
-            PutToSleep(tab);
+            PutToSleep(tab, byUser: true);
     }
 
-    // Adormece a aba: larga o motor. Com o ajuste e13, guarda antes a rolagem da página (até meio segundo de espera) e
-    // volta a confirmar, depois da resposta, que a aba continua fora de vista, acordada e sem som; sem o ajuste, o mesmo
-    // de sempre (largar já).
-    private void PutToSleep(BrowserTab tab)
+    // Adormece a aba: larga o motor. Antes pergunta à página (até meio segundo de espera) a rolagem — guardada com o
+    // ajuste e13 — e se tem texto por enviar ou Picture-in-Picture (SleepProbe): o sono por tempo e por pressão
+    // deixa-a acordada (e não volta a perguntar durante SleepProbe.HoldFor); um pedido explícito (byUser: a paleta,
+    // a multi-seleção) adormece na mesma. Depois da resposta volta a confirmar que a aba continua fora de vista,
+    // acordada e sem som. Sem motor inicializado, larga já.
+    private void PutToSleep(BrowserTab tab, bool byUser = false)
     {
-        if (!PerfTuning.IsOn(PerfTuning.SleepUnderPressure) || !_browsers.TryGetValue(tab, out var browser) || !browser.IsBrowserInitialized)
+        if (!_browsers.TryGetValue(tab, out var browser) || !browser.IsBrowserInitialized)
         {
             FallAsleep(tab);
             return;
         }
         if (!_fallingAsleep.Add(tab)) return;
-        _ = SleepKeepingScrollAsync(tab, browser);
+        _ = SleepKeepingScrollAsync(tab, browser, byUser);
     }
 
     private readonly HashSet<BrowserTab> _fallingAsleep = [];
 
-    private async Task SleepKeepingScrollAsync(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)
+    private async Task SleepKeepingScrollAsync(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, bool byUser)
     {
         var address = tab.Address;
         ScriptResult result;
-        try { result = await PageScript.EvaluateAsync(browser, SleepScroll.ReadScript, TimeSpan.FromMilliseconds(500)); }
+        try { result = await PageScript.EvaluateAsync(browser, SleepProbe.Script, TimeSpan.FromMilliseconds(500)); }
         catch (Exception) { result = ScriptResult.Failed; }
         _fallingAsleep.Remove(tab);
         // Entretanto a aba pode ter fechado, ido para à vista, começado a tocar ou adormecido por outro caminho.
         if (!_browsers.TryGetValue(tab, out var same) || !ReferenceEquals(same, browser) || tab.IsSleeping
             || IsTabOnScreen(tab) || tab.IsAudible || tab.IsLocked) return;
-        tab.SleptScroll = result.Success && tab.Address == address ? SleepScroll.From(address, result.Result) : null;
+        if (!byUser && (IsCapturing(browser) || tab.Media == MediaState.Playing)) return;
+        // Sem resposta (página sem contexto de script: PDF, página de erro) adormece como sempre: não tem texto a perder.
+        var probe = result.Success ? SleepProbe.Parse(result.Result) : null;
+        if (!byUser && probe is { KeepsAwake: true })
+        {
+            _sleepHolds[tab] = DateTime.UtcNow + SleepProbe.HoldFor;
+            return;
+        }
+        tab.SleptScroll = PerfTuning.IsOn(PerfTuning.SleepUnderPressure) && probe is not null && tab.Address == address
+            ? SleepScroll.From(address, probe.Y) : null;
         FallAsleep(tab);
     }
 

@@ -36,7 +36,7 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void NewWorkspace_SwitchesToIt_WithAFreshTab_AndPutsTheOldOnesToSleep()
+    public void NewWorkspace_SwitchesToIt_WithAFreshTab_AndPutsTheBackgroundOnesToSleep()
     {
         var vm = WithTabs("https://a.pt/", "https://b.pt/");
         var old = vm.Tabs.ToList();
@@ -49,7 +49,9 @@ public sealed class WorkspaceTests : IDisposable
         var fresh = Assert.Single(vm.Tabs);
         Assert.True(fresh.IsNewTab);
         Assert.Same(fresh, vm.Active);
-        Assert.All(old, t => Assert.True(t.IsSleeping));
+        // A de fundo adormece; a que estava em uso fica acordada (decisão D3: o sono por tempo pergunta-lhe antes).
+        Assert.True(old[0].IsSleeping);
+        Assert.False(old[1].IsSleeping);
         Assert.Equal(old, vm.TabsOf(vm.Workspaces[0]));
         Assert.Equal(2, vm.Workspaces[0].TabCount);
     }
@@ -70,7 +72,9 @@ public sealed class WorkspaceTests : IDisposable
         Assert.False(old[1].IsSleeping);
         Assert.True(old[0].IsSleeping);
         Assert.Equal(workTabs, vm.TabsOf(work));
-        Assert.All(workTabs, t => Assert.True(t.IsSleeping));
+        // A aba nova de fundo adormece; a que estava em uso no «Trabalho» fica acordada (decisão D3).
+        Assert.True(workTabs[0].IsSleeping);
+        Assert.False(workTabs[1].IsSleeping);
         Assert.False(vm.SwitchWorkspace(vm.Workspaces[0]), "já era o Espaço à vista");
     }
 
@@ -355,7 +359,8 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Same(work, row.Space);
         Assert.Equal("Relatório", row.Title);
         Assert.Equal("w.pt · 💼 Trabalho", row.Subtitle);
-        Assert.Equal("No Espaço «Trabalho» · A dormir", row.Status);
+        // A única aba do «Trabalho» era a que estava em uso: fica acordada (decisão D3).
+        Assert.Equal("No Espaço «Trabalho»", row.Status);
         Assert.Empty(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.Spaces, RadarSort.Recent, "xyz", spaces: others));
         Assert.Contains("Novo Espaço", TabRadar.Status(0, RadarScope.Spaces, ""));
         Assert.DoesNotContain(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.All, RadarSort.Recent, "", spaces: others), r => r.Space is not null);

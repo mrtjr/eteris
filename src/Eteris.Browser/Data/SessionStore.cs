@@ -3,10 +3,17 @@ using System.Text.Json;
 
 namespace Eteris.Browser.Data;
 
+// O nível de cima é uma janela (a 1.ª, a dona: a sua posição fica em window.json). As outras janelas normais vão em
+// Windows, pela ordem em que abriram, cada uma com a sua sessão completa e a sua posição. Um ficheiro sem Windows
+// (o formato antigo, ou uma só janela) lê-se como uma janela, e um Éteris antigo ignora o campo e abre a 1.ª.
 public sealed record Session(IReadOnlyList<string> Urls, int ActiveIndex, IReadOnlyList<string>? Titles = null,
     IReadOnlyList<bool>? Pinned = null, IReadOnlyList<int>? GroupIds = null, IReadOnlyList<SessionGroup>? Groups = null,
     SessionSplit? Split = null, IReadOnlyList<SessionTabMeta>? Metas = null, IReadOnlyList<SessionSpace>? Spaces = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] int SpaceIndex = 0);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] int SpaceIndex = 0,
+    IReadOnlyList<SessionWindow>? Windows = null);
+
+// Uma janela normal além da 1.ª: as suas abas (com os seus Espaços; um Windows lá dentro ignora-se) e onde estava.
+public sealed record SessionWindow(Session Tabs, Infrastructure.WindowPlacement? Placement = null);
 
 // Espaço (Tabs/Workspace.cs) gravado na sessão: nome, cor e ícone; as abas dos Espaços que não estão à vista vão
 // numa sessão própria (Tabs), e o que está à vista (SpaceIndex) usa as abas do nível de cima, como sempre — assim
@@ -45,6 +52,30 @@ public sealed class SessionStore(string path)
     public void Save(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles = null, IEnumerable<bool>? pinned = null,
         IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null, SessionSplit? split = null,
         IEnumerable<SessionTabMeta?>? metas = null, IReadOnlyList<SessionSpace>? spaces = null, int spaceIndex = 0)
+        => Write(Compose(urls, activeIndex, titles, pinned, groupIds, groups, split, metas, spaces, spaceIndex));
+
+    // Todas as janelas normais: a 1.ª no nível de cima, as outras em Windows (com uma só, o ficheiro fica igual ao
+    // de sempre). Lista vazia não escreve (nunca se grava uma sessão sem janelas). Nunca lança, como TrySave.
+    public bool TrySaveWindows(IReadOnlyList<SessionWindow> windows)
+    {
+        if (windows.Count == 0) return true;
+        var others = windows.Count > 1 ? windows.Skip(1).Select(w => w with { Tabs = w.Tabs with { Windows = null } }).ToList() : null;
+        try
+        {
+            Write(windows[0].Tabs with { Windows = others });
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DeleteTemporary();
+            return false;
+        }
+    }
+
+    // A sessão filtrada de uma janela (só o que se pode repor, com os Espaços), sem escrever.
+    public static Session Compose(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles = null, IEnumerable<bool>? pinned = null,
+        IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null, SessionSplit? split = null,
+        IEnumerable<SessionTabMeta?>? metas = null, IReadOnlyList<SessionSpace>? spaces = null, int spaceIndex = 0)
     {
         var session = Build(urls, activeIndex, titles, pinned, groupIds, groups, split, metas);
         if (spaces is { Count: > 0 })
@@ -58,10 +89,39 @@ public sealed class SessionStore(string path)
             }).ToList();
             session = session with { Spaces = kept, SpaceIndex = Math.Clamp(spaceIndex, 0, kept.Count - 1) };
         }
+        return session;
+    }
 
+    private void Write(Session session)
+    {
         var temporary = path + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(session, Options));
         File.Move(temporary, path, overwrite: true);
+    }
+
+    // Como Save, mas nunca lança: um ficheiro só de leitura, preso por outro programa ou um .tmp que não se deixa
+    // escrever dão false (a sessão fica por gravar e quem chama avisa) em vez de fechar o Éteris.
+    public bool TrySave(IEnumerable<string> urls, int activeIndex, IEnumerable<string>? titles = null, IEnumerable<bool>? pinned = null,
+        IEnumerable<int>? groupIds = null, IReadOnlyList<SessionGroup>? groups = null, SessionSplit? split = null,
+        IEnumerable<SessionTabMeta?>? metas = null, IReadOnlyList<SessionSpace>? spaces = null, int spaceIndex = 0)
+    {
+        try
+        {
+            Save(urls, activeIndex, titles, pinned, groupIds, groups, split, metas, spaces, spaceIndex);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DeleteTemporary();
+            return false;
+        }
+    }
+
+    // O .tmp de uma escrita que falhou não fica no perfil (se nem isso se deixar apagar, fica para a próxima escrita).
+    private void DeleteTemporary()
+    {
+        try { File.Delete(path + ".tmp"); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     // Só o que se pode repor (http, https, eteris://), todas as abas, com os campos por aba alinhados.
@@ -93,13 +153,15 @@ public sealed class SessionStore(string path)
             if (!File.Exists(path)) return null;
             var session = Read(File.ReadAllText(path));
             if (session?.Urls is null) return null;
-            var spaces = session.Spaces?.Where(s => s is { Name.Length: > 0 })
-                .Select(s => s with { Tabs = s.Tabs?.Urls is null ? null : Filter(s.Tabs) }).ToList();
-            if (spaces is { Count: 0 }) spaces = null;
-            var main = Filter(session);
-            // Só páginas internas em todos os Espaços: não vale a pena repor (a janela arranca como nova).
-            if (IsOnlyInternal(main) && (spaces is null || spaces.All(s => s.Tabs is null || IsOnlyInternal(s.Tabs)))) return null;
-            return main with { Spaces = spaces, SpaceIndex = spaces is null ? 0 : Math.Clamp(session.SpaceIndex, 0, spaces.Count - 1) };
+            // A janela do nível de cima e as de Windows (saltam-se as entradas sem sessão), cada uma filtrada; ficam
+            // só as que têm o que repor, e a 1.ª que sobrar passa a ser a de cima.
+            var windows = new List<SessionWindow> { new(session) };
+            if (session.Windows is { } others)
+                windows.AddRange(others.Where(w => w?.Tabs?.Urls is not null));
+            var kept = windows.Select(w => (Window: w, Tabs: FilterWindow(w.Tabs))).Where(x => x.Tabs is not null)
+                .Select(x => x.Window with { Tabs = x.Tabs! }).ToList();
+            if (kept.Count == 0) return null;
+            return kept[0].Tabs with { Windows = kept.Count > 1 ? kept.Skip(1).ToList() : null };
         }
         // Um ficheiro de cache nunca impede o arranque: valores fora do intervalo, sem permissão de leitura, etc.
         catch (Exception ex) when (ex is JsonException or IOException or ArgumentException or UnauthorizedAccessException
@@ -116,20 +178,40 @@ public sealed class SessionStore(string path)
             ? JsonSerializer.Deserialize(json, StartupJsonContext.Default.Session)
             : JsonSerializer.Deserialize<Session>(json);
 
+    // Uma janela lida do disco, filtrada com os seus Espaços (sem Windows interior); null se só tiver páginas
+    // internas em todos os Espaços: não vale a pena repor (a janela arranca como nova).
+    private static Session? FilterWindow(Session session)
+    {
+        var spaces = session.Spaces?.Where(s => s is { Name.Length: > 0 })
+            .Select(s => s with { Tabs = s.Tabs?.Urls is null ? null : Filter(s.Tabs) }).ToList();
+        if (spaces is { Count: 0 }) spaces = null;
+        var main = Filter(session);
+        if (IsOnlyInternal(main) && (spaces is null || spaces.All(s => s.Tabs is null || IsOnlyInternal(s.Tabs)))) return null;
+        return main with { Spaces = spaces, SpaceIndex = spaces is null ? 0 : Math.Clamp(session.SpaceIndex, 0, spaces.Count - 1) };
+    }
+
+    // Os endereços de uma janela gravada: a faixa e os Espaços na reserva.
+    public static IEnumerable<string> Addresses(Session session)
+        => session.Urls.Concat(session.Spaces?.SelectMany(s => s.Tabs?.Urls ?? []) ?? []);
+
     private static bool IsOnlyInternal(Session session)
         => session.Urls.All(u => u.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
 
     // Uma sessão lida do disco, só com o que se pode repor e com os campos por aba alinhados.
+    // Entradas null (ficheiro editado à mão ou estragado) não lançam: endereço null não se repõe, título null fica
+    // vazio e um grupo null fica sem nome (os índices dos grupos mantêm-se).
     private static Session Filter(Session session)
     {
         var indices = Enumerable.Range(0, session.Urls.Count).Where(i => IsRestorable(session.Urls[i])).ToList();
         var urls = indices.Select(i => session.Urls[i]).ToList();
-        var titles = indices.Select(i => session.Titles is { } t && i < t.Count ? t[i] : string.Empty).ToList();
+        var titles = indices.Select(i => session.Titles is { } t && i < t.Count ? t[i] ?? string.Empty : string.Empty).ToList();
         var pinned = indices.Select(i => session.Pinned is { } p && i < p.Count && p[i]).ToList();
         var groupCount = session.Groups?.Count ?? 0;
         var groupIds = indices.Select(i => session.GroupIds is { } g && i < g.Count && g[i] < groupCount ? g[i] : -1).ToList();
         var metas = indices.Select(i => session.Metas is { } m && i < m.Count ? m[i] ?? SessionTabMeta.Empty : SessionTabMeta.Empty).ToList();
-        return new Session(urls, Math.Clamp(session.ActiveIndex, 0, Math.Max(0, urls.Count - 1)), titles, pinned, groupIds, session.Groups ?? [],
+        var groups = session.Groups?.Select(g => g is { Name: not null } ? g : new SessionGroup(g?.Name ?? "", g?.ColorIndex ?? 0, g?.Collapsed ?? false))
+            .ToList() ?? [];
+        return new Session(urls, Math.Clamp(session.ActiveIndex, 0, Math.Max(0, urls.Count - 1)), titles, pinned, groupIds, groups,
             Remap(session.Split, indices), metas);
     }
 
@@ -143,8 +225,9 @@ public sealed class SessionStore(string path)
         return remapped.IsValid(keptIndices.Count) ? remapped : null;
     }
 
-    private static bool IsRestorable(string url)
-        => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-           || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-           || url.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase);
+    private static bool IsRestorable(string? url)
+        => url is not null
+           && (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+               || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+               || url.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase));
 }

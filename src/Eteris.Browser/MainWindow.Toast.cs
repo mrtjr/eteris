@@ -51,6 +51,25 @@ public partial class MainWindow
         FadeToast(ToastPolicy.Hold(ToastActions.Children.Count), fadeIn: true);
     }
 
+    // Avisos sobre ficheiros do perfil (sessão por gravar, ficheiro danificado…): um ShowToast simples dura 1,9 s e o
+    // seguinte substitui-o, por isso juntam-se numa fila e aparecem todos de uma vez, com «Entendi» (fica 6 s e não
+    // foge com o rato por cima), na primeira janela normal carregada. Um aviso pedido antes de haver janela aparece
+    // quando ela carrega (StartTabs). Só no fio da interface.
+    private static readonly List<string> s_profileNotices = [];
+
+    internal static void NotifyProfile(string message)
+    {
+        if (!s_profileNotices.Contains(message)) s_profileNotices.Add(message);
+        ShowProfileNotices();
+    }
+
+    private static void ShowProfileNotices()
+    {
+        if (s_profileNotices.Count == 0 || NormalWindows().FirstOrDefault(w => w.IsLoaded) is not { } window) return;
+        window.ShowToast(string.Join("\n", s_profileNotices), new ToastAction("Entendi", () => { }));
+        s_profileNotices.Clear();
+    }
+
     private void FadeToast(TimeSpan hold, bool fadeIn)
     {
         var fade = new DoubleAnimationUsingKeyFrames();

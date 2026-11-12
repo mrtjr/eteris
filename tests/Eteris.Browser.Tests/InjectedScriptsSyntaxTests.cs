@@ -23,6 +23,7 @@ public class InjectedScriptsSyntaxTests
         { "multimédia (tocar/pausar)", MediaInfo.ToggleScript },
         { "multimédia (pausar)", MediaInfo.PauseScript },
         { "abas quentes (vídeo a tocar)", WarmTabs.PlayingVideoScript },
+        { "sono (pergunta antes de adormecer)", SleepProbe.Script },
         { "áudio", AudioIndicator.AudibleScript },
         { "filtros cosméticos", CosmeticScripts.Inject(".anuncio { display: none !important; }") },
         { "filtros cosméticos (antes da página)", CosmeticScripts.InjectEarly(".anuncio { display: none !important; }") },

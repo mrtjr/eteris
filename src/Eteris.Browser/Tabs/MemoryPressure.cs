@@ -20,8 +20,10 @@ namespace Eteris.Browser.Tabs;
 // Regra pura e o sinal do Windows; o temporizador em MainWindow.Pressure.cs.
 public static class MemoryPressure
 {
-    // Um falso positivo custa no máximo uma aba por intervalo.
+    // Um falso positivo custa no máximo uma aba por intervalo. Com a pressão mantida, só adormecem abas deixadas há
+    // pelo menos MinIdle: duas abas usadas à vez já não se adormecem uma à outra (cada troca recarregava a página).
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan MinIdle = TimeSpan.FromMinutes(2);
 
     // Commit livre abaixo disto (ou de 5% do total) conta como pressão.
     public const ulong LowCommitBytes = 512UL << 20;
@@ -41,15 +43,17 @@ public static class MemoryPressure
         _ => "personalizado",
     };
 
+    // Held = a página pediu há pouco para ficar acordada (texto por enviar, Picture-in-Picture; SleepProbe).
     public sealed record Candidate<T>(T Tab, bool OnScreen, bool Loading, bool Audible, bool Locked, bool Pinned, bool Capturing,
-        bool Playing, DateTime LastActiveUtc);
+        bool Playing, DateTime LastActiveUtc, bool Held = false);
 
     public static bool MaySleep<T>(Candidate<T> c)
-        => !c.OnScreen && !c.Loading && !c.Audible && !c.Locked && !c.Pinned && !c.Capturing && !c.Playing;
+        => !c.OnScreen && !c.Loading && !c.Audible && !c.Locked && !c.Pinned && !c.Capturing && !c.Playing && !c.Held;
 
-    // A aba acordada usada há mais tempo que pode adormecer; nenhuma, se todas estão isentas.
-    public static T? Pick<T>(IEnumerable<Candidate<T>> candidates) where T : class
-        => candidates.Where(MaySleep).OrderBy(c => c.LastActiveUtc).FirstOrDefault()?.Tab;
+    // A aba acordada usada há mais tempo, deixada há pelo menos MinIdle, que pode adormecer; nenhuma, se todas estão
+    // isentas ou foram usadas há pouco.
+    public static T? Pick<T>(IEnumerable<Candidate<T>> candidates, DateTime nowUtc) where T : class
+        => candidates.Where(c => MaySleep(c) && nowUtc - c.LastActiveUtc >= MinIdle).OrderBy(c => c.LastActiveUtc).FirstOrDefault()?.Tab;
 
     // ---------- O sinal do Windows ----------
 
