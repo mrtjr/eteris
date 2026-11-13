@@ -144,6 +144,20 @@ public static partial class LinkPreview
     // A aba escondida recusou uma transferência: o link é um ficheiro, não uma página.
     public const string FileStatus = "Este link é um ficheiro, não uma página — «Abrir» transfere-o";
 
+    // Página lida, mas sem texto corrido nem descrição para resumir.
+    public const string NoSummaryStatus = "Sem resumo para esta página — «Abrir» mostra-a";
+
+    // O botão do rodapé que mostra o artigo inteiro no cartão (tecla E) e volta ao resumo.
+    public static string ExpandLabel(bool expanded) => expanded ? "Mostrar menos" : "Ler tudo aqui";
+
+    // Sem favicon na cache, o cartão mostra a 1.ª letra (ou algarismo) do site num círculo.
+    public static string Monogram(string? site)
+    {
+        foreach (var rune in (site ?? string.Empty).EnumerateRunes())
+            if (Rune.IsLetterOrDigit(rune)) return rune.ToString().ToUpper(CultureInfo.CurrentCulture);
+        return "?";
+    }
+
     // Páginas onde o Alt+clique espreita: as da web e as internas (nova aba, favoritos, histórico), que têm links
     // web e onde, sem o script, o Chromium transferia o destino.
     public static bool WantsAltClick(string? url)

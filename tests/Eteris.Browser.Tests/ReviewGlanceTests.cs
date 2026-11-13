@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using Eteris.Browser.Browser;
 
@@ -130,5 +131,62 @@ public class ReviewGlanceTests
             process.stdout.write([collectParas(many).length, collectParas(huge).length, collectParas(null).length, collectParas({}).length].join(','));
             """;
         Assert.Equal("60,5,0,0", NodeRunner.Run(LinkPreview.CollectParasScript + "\n" + fake));
+    }
+
+    // ---------- Proposta 1 «Espreitar a sério»: o cartão ----------
+
+    [Theory]
+    [InlineData("Wikipédia", "W")]
+    [InlineData("exemplo.pt", "E")]
+    [InlineData("  «Público»", "P")]
+    [InlineData("ébano.pt", "É")]
+    [InlineData("1 2 3 Zé", "1")]
+    [InlineData("", "?")]
+    [InlineData("…", "?")]
+    public void Monogram_IsTheFirstLetterOfTheSite(string site, string expected) => Assert.Equal(expected, LinkPreview.Monogram(site));
+
+    [Fact]
+    public void ExpandButton_SaysWhatItDoes()
+    {
+        Assert.Equal("Ler tudo aqui", LinkPreview.ExpandLabel(expanded: false));
+        Assert.Equal("Mostrar menos", LinkPreview.ExpandLabel(expanded: true));
+        Assert.Equal("Sem resumo para esta página — «Abrir» mostra-a", LinkPreview.NoSummaryStatus);
+    }
+
+    // O cartão: favicon (ou monograma) antes do site, «Ler tudo aqui» à esquerda de «Abrir ao lado», o estado como região
+    // viva educada; a tecla E e o botão fazem o mesmo; o estado sem resumo diz o que fazer.
+    [Fact]
+    public void Card_HasFaviconExpandAndAPoliteStatus()
+    {
+        var xaml = Source("MainWindow.xaml");
+        var card = xaml[xaml.IndexOf("x:Name=\"GlanceCard\"", StringComparison.Ordinal)..xaml.IndexOf("x:Name=\"MiniBar\"", StringComparison.Ordinal)];
+        var favicon = card.IndexOf("x:Name=\"GlanceFavicon\"", StringComparison.Ordinal);
+        Assert.True(favicon >= 0);
+        Assert.True(favicon < card.IndexOf("x:Name=\"GlanceSite\"", StringComparison.Ordinal));
+        Assert.Contains("x:Name=\"GlanceMonogram\"", card);
+        var expand = card.IndexOf("x:Name=\"GlanceExpand\"", StringComparison.Ordinal);
+        Assert.True(expand >= 0);
+        Assert.True(expand < card.IndexOf("Content=\"Abrir ao lado\"", StringComparison.Ordinal));
+        Assert.Contains("ToolTip=\"Mostrar o artigo inteiro aqui (E)\"", card);
+        Assert.Matches("x:Name=\"GlanceExpand\"[^>]*Visibility=\"Collapsed\"", card);
+        Assert.Matches("x:Name=\"GlanceStatusText\"[^>]*AutomationProperties.LiveSetting=\"Polite\"", card);
+
+        var code = Source("MainWindow.Glance.cs");
+        Assert.Contains("case GlanceAction.Expand: ToggleGlanceExpand(); break;", code);
+        Assert.Contains("GlanceExpand.Visibility = info.HasMore ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains("LinkPreview.NoSummaryStatus", code);
+        Assert.DoesNotContain("Esta página não tem texto para mostrar", code);
+        Assert.Contains("AutomationProperties.SetName(GlanceCard, \"Espreitar: \" + ", code);
+        Assert.Contains("AutomationProperties.SetName(GlanceMonogram, ", code);
+        // O favicon só vem da cache local (a mesma das listas), também na janela privada, que não escreve nela.
+        Assert.Contains("CachedSiteIcon(", code);
+        Assert.Contains("AppData.SiteIcons([url])", Source("MainWindow.Sidebar.cs"));
+    }
+
+    private static string Source(string file, [System.Runtime.CompilerServices.CallerFilePath] string caller = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(caller)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return File.ReadAllText(Path.Combine(dir!.FullName, "src", "Eteris.Browser", file));
     }
 }
