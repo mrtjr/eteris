@@ -17,7 +17,7 @@ public class PauseWiringTests
         // A tecla vinda da página (fio do CEF) lê uma bandeira, não o WPF; com a Pausa ligada nenhuma tecla vai para a página.
         Assert.Matches(@"if \(_pausedForPage\)\s*\{", code);
         // Na moldura, a Pausa vem antes de tudo (Radar, menu, atalhos): Esc e Ctrl+. voltam, o resto não corre atalhos.
-        Assert.Matches(@"AltKeyDown\(key, ctrl, shift\);\s*(//[^\n]*\n\s*)*if \(_pause is not null\)\s*\{\s*e\.Handled = HandlePauseKey\(key, ctrl, shift, alt, e\.IsRepeat\);\s*return;\s*\}\s*if \(RadarOpen\)", code);
+        Assert.Matches(@"AltKeyDown\(key, ctrl, shift\);\s*(//[^\n]*\n\s*)*if \(_pause is not null\)\s*\{\s*e\.Handled = HandlePauseKey\(key, ctrl, shift, alt, e\.IsRepeat\);\s*return;\s*\}\s*(//[^\n]*\n\s*)*(if \(e\.IsRepeat[^\n]*\n\s*)?(//[^\n]*\n\s*)*if \(RadarOpen\)", code);
     }
 
     [Fact]
@@ -219,9 +219,11 @@ public class PauseWiringTests
         var pause = Source("MainWindow.Pause.cs");
         Assert.Matches(@"private bool HandlePauseKey\(Key key, bool ctrl, bool shift, bool alt, bool repeat\)\s*\{\s*if \(key == Key\.Escape \|\| IsPauseToggleKey\(key, ctrl, shift, alt\)\)\s*\{\s*(//[^\n]*\n\s*)*if \(!repeat\) ResumeEverywhere\(\);\s*return true;", pause);
         var code = Source("MainWindow.xaml.cs");
-        Assert.Contains("else if (e.IsRepeat && IsPauseToggleKey(key, ctrl, shift, alt)) { }", code);
+        // Na moldura, logo a seguir à Pausa: antes do Radar e do menu do Éteris, que correm os atalhos (o TogglePause também).
+        Assert.Matches(@"e\.Handled = HandlePauseKey\(key, ctrl, shift, alt, e\.IsRepeat\);\s*return;\s*\}\s*(//[^\n]*\n\s*)*if \(e\.IsRepeat && IsPauseToggleKey\(key, ctrl, shift, alt\)\) return;\s*(//[^\n]*\n\s*)*if \(RadarOpen\)", code);
         Assert.Matches(@"if \(_pausedForPage\)\s*\{\s*if \(!repeat && \(key == Key\.Escape \|\| IsPauseToggleKey\(key, ctrl, shift, alt\)\)\) Dispatcher\.InvokeAsync\(ResumeEverywhere\);\s*return true;\s*\}", code);
-        Assert.Contains("if (repeat && IsPauseToggleKey(key, ctrl, shift, alt)) return true;", code);
+        // Logo a seguir à barreira da Pausa: antes do menu do Éteris aberto, que mandava a repetição para o TogglePause.
+        Assert.Matches(@"if \(_pausedForPage\)\s*\{[^}]*\}\s*(//[^\n]*\n\s*)*if \(repeat && IsPauseToggleKey\(key, ctrl, shift, alt\)\) return true;", code);
     }
 
     // O temporizador é partilhado: o Ctrl+. numa janela que não está em Pausa (aberta durante ela, ou onde um link de fora a
