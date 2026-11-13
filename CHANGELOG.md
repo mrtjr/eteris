@@ -8,7 +8,7 @@
 - O título aparece sem o nome do site («Europa continental» em vez de «Europa continental – Wikipédia, a enciclopédia livre»; «Título» em vez de «PÚBLICO | Título») e o site aparece pelo nome curto («Wikipédia», não «Wikimedia Foundation, Inc.»).
 - Ao lado do nome do site aparece o ícone dele, lido da cache local de ícones (sem pedido novo; também na janela privada, que não escreve nela); sem ícone guardado, aparece a 1.ª letra do site num círculo.
 - Novo botão «Ler tudo aqui» (tecla E): o artigo inteiro rola dentro do cartão, ainda sem JavaScript e sem cookies, com o texto que o Espreitar já tinha lido; «Mostrar menos» (ou E outra vez) volta ao resumo. Só aparece quando há mais do que o resumo mostra.
-- Uma página sem texto nem descrição para resumir diz «Sem resumo para esta página — «Abrir» mostra-a», e o leitor de ecrã ouve os estados do cartão (a espreitar, erro, sem resumo) sem perder o foco.
+- Uma página sem texto nem descrição para resumir diz «Sem resumo para esta página — «Abrir» mostra-a», e o leitor de ecrã ouve os estados do cartão (a espreitar, erro, sem resumo) e, com o resumo pronto, o título, sem perder o foco.
 
 ### Correções
 

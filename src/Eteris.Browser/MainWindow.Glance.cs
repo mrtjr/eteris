@@ -123,7 +123,7 @@ public partial class MainWindow
         _glanceInfo = null;
         _glanceExpanded = false;
         GlanceSite.Text = LinkPreview.HostOf(url);
-        ShowGlanceSiteIcon(url, GlanceSite.Text);
+        ShowGlanceSiteIcon(null, GlanceSite.Text);
         GlanceExpand.Visibility = Visibility.Collapsed;
         GlanceReading.Text = string.Empty;
         GlanceTitle.Text = LinkPreview.HostOf(url);
@@ -155,16 +155,21 @@ public partial class MainWindow
         AutomationProperties.SetName(GlanceScrollViewer, "Espreitar: " + title);
     }
 
-    // O ícone do site: o favicon guardado na cache local (a das listas, só leitura, também na janela privada, que não
-    // escreve nela) ou, sem ele, a 1.ª letra do site num círculo. Nenhum pedido.
-    private void ShowGlanceSiteIcon(string url, string site)
+    // O ícone do site: o favicon guardado na cache local de ícones do histórico (a das listas, só leitura, também na
+    // janela privada, que não escreve nela) ou, sem ele, a 1.ª letra do site num círculo. Nenhum pedido. Lê-se uma vez,
+    // quando a página chega (pageUrl: o endereço final, depois de redirecionamentos), direto da base e não da cache de
+    // ícones da janela, que não sabe de um histórico apagado. A carregar (pageUrl null), só o monograma. O favicon tem o
+    // mesmo nome acessível do monograma: o leitor de ecrã ouve o cabeçalho igual, com ou sem ícone.
+    private void ShowGlanceSiteIcon(string? pageUrl, string site)
     {
-        var icon = CachedSiteIcon(url, rememberMiss: false);
+        var icon = pageUrl is not null && HistoryStore.SiteIconKey(pageUrl) is { } key
+            && AppData.SiteIcons([pageUrl]).TryGetValue(key, out var dataUri) ? DecodeDataUri(dataUri) : null;
         GlanceFavicon.Source = icon;
         GlanceFavicon.Visibility = icon is null ? Visibility.Collapsed : Visibility.Visible;
         GlanceMonogram.Visibility = icon is null ? Visibility.Visible : Visibility.Collapsed;
         GlanceMonogramText.Text = LinkPreview.Monogram(site);
         AutomationProperties.SetName(GlanceMonogramText, site);
+        AutomationProperties.SetName(GlanceFavicon, site);
     }
 
     private void AnimateGlanceIn()
@@ -263,14 +268,17 @@ public partial class MainWindow
         {
             var response = await PageScript.EvaluateAsync(browser, LinkPreview.Script, TimeSpan.FromSeconds(6));
             if (serial != _glanceSerial || !GlanceOpen) return;
-            var info = response.Success ? LinkPreview.Parse(response.Result as string, url) : null;
+            // O cartão descreve a página lida (ícone, nome do site, marca no título, og:image relativa): depois de um
+            // redirecionamento, a do destino. «Abrir» e «Ler mais tarde» continuam com o link (_glanceUrl).
+            var page = LinkPreview.PageUrl(url, loadedUrl);
+            var info = response.Success ? LinkPreview.Parse(response.Result as string, page) : null;
             if (info is null)
             {
                 SetGlanceStatus("Não foi possível ler esta página", busy: false);
                 return;
             }
             FillGlance(info);
-            if (info.ImageUrl is { } image) LoadGlanceImage(browser, image, url, serial);
+            if (info.ImageUrl is { } image) LoadGlanceImage(browser, image, page, serial);
         }
         catch (Exception)
         {
@@ -295,7 +303,12 @@ public partial class MainWindow
         // «Ler tudo aqui» só quando o artigo tem mais do que o resumo mostra.
         GlanceExpand.Visibility = info.HasMore ? Visibility.Visible : Visibility.Collapsed;
         GlanceExpand.Content = LinkPreview.ExpandLabel(expanded: false);
-        SetGlanceStatus(info.Paragraphs.Count == 0 && info.Description is null ? LinkPreview.NoSummaryStatus : null, busy: false);
+        // A dica de um cartão anterior expandido («Voltar ao resumo») não fica: o leitor de ecrã lê-a como ajuda.
+        GlanceExpand.ToolTip = LinkPreview.ExpandTip(expanded: false);
+        var status = info.Paragraphs.Count == 0 && info.Description is null ? LinkPreview.NoSummaryStatus : null;
+        SetGlanceStatus(status, busy: false);
+        // Com o resumo pronto, o estado some sem nada dizer: o leitor de ecrã ouve o título (região viva educada).
+        if (status is null) Sync.LiveRegion.Announce(GlanceTitle);
     }
 
     private void ShowGlanceParagraphs(IReadOnlyList<string> paragraphs)
@@ -323,7 +336,7 @@ public partial class MainWindow
         var offset = GlanceScrollViewer.VerticalOffset;
         ShowGlanceParagraphs(_glanceExpanded ? info.FullParagraphs : info.Paragraphs);
         GlanceExpand.Content = LinkPreview.ExpandLabel(_glanceExpanded);
-        GlanceExpand.ToolTip = _glanceExpanded ? "Voltar ao resumo (E)" : "Mostrar o artigo inteiro aqui (E)";
+        GlanceExpand.ToolTip = LinkPreview.ExpandTip(_glanceExpanded);
         // A recolher, o resumo cabe acima do ponto onde se estava: volta-se ao princípio. A expandir, fica onde estava.
         if (_glanceExpanded) GlanceScrollViewer.ScrollToVerticalOffset(offset);
         else GlanceScrollViewer.ScrollToTop();
@@ -421,6 +434,13 @@ public partial class MainWindow
         var action = LinkPreview.ActionFor(key.ToString(), shift, Keyboard.Modifiers.HasFlag(ModifierKeys.Control), IsPrivate);
         // Alt+E fica para os atalhos da janela: só a tecla E sozinha expande.
         if (action == GlanceAction.Expand && Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) action = GlanceAction.None;
+        // A E é um interruptor: com ela premida, a repetição automática do teclado alternava sem parar entre o resumo e
+        // o artigo inteiro (o cartão a piscar e a saltar para o topo). Só o primeiro toque conta.
+        if (action == GlanceAction.Expand && e.IsRepeat)
+        {
+            e.Handled = true;
+            return;
+        }
         if (action != GlanceAction.None)
         {
             e.Handled = true;

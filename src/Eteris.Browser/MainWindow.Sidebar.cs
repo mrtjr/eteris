@@ -361,17 +361,14 @@ public partial class MainWindow
     }
 
     // Ícone guardado de um site (o mesmo das listas), ou null.
-    private ImageSource? StoredSiteIcon(string url) => IsPrivate ? null : CachedSiteIcon(url);
-
-    // Só uma leitura da cache local dos ícones (a do histórico): nenhum pedido. O Espreitar também a lê na janela
-    // privada, que nunca escreve nela. Sem rememberMiss, uma falta não fica guardada (e uma falta guardada volta a ser
-    // procurada): o Espreitar de um site ainda a carregar não deixa o ícone de fora até a janela fechar.
-    private ImageSource? CachedSiteIcon(string url, bool rememberMiss = true)
+    private ImageSource? StoredSiteIcon(string url)
     {
-        if (HistoryStore.SiteIconKey(url) is not { } site) return null;
-        if (_siteIconCache.TryGetValue(site, out var icon) && (icon is not null || rememberMiss)) return icon;
-        icon = AppData.SiteIcons([url]).TryGetValue(site, out var dataUri) ? DecodeDataUri(dataUri) : null;
-        if (icon is not null || rememberMiss) _siteIconCache[site] = icon;
+        if (IsPrivate || HistoryStore.SiteIconKey(url) is not { } site) return null;
+        if (!_siteIconCache.TryGetValue(site, out var icon))
+        {
+            icon = AppData.SiteIcons([url]).TryGetValue(site, out var dataUri) ? DecodeDataUri(dataUri) : null;
+            _siteIconCache[site] = icon;
+        }
         return icon;
     }
 

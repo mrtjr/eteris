@@ -150,7 +150,61 @@ public class ReviewGlanceTests
     {
         Assert.Equal("Ler tudo aqui", LinkPreview.ExpandLabel(expanded: false));
         Assert.Equal("Mostrar menos", LinkPreview.ExpandLabel(expanded: true));
+        Assert.Equal("Mostrar o artigo inteiro aqui (E)", LinkPreview.ExpandTip(expanded: false));
+        Assert.Equal("Voltar ao resumo (E)", LinkPreview.ExpandTip(expanded: true));
         Assert.Equal("Sem resumo para esta página — «Abrir» mostra-a", LinkPreview.NoSummaryStatus);
+    }
+
+    // O cartão descreve a página que foi lida: depois de um redirecionamento (http → https, encurtador, redirecionamento
+    // aberto), o endereço final; sem endereço web confirmado, o do link.
+    [Theory]
+    [InlineData("http://publico.pt/x", "https://www.publico.pt/x", "https://www.publico.pt/x")]
+    [InlineData("https://t.co/abc", "https://exemplo.pt/artigo", "https://exemplo.pt/artigo")]
+    [InlineData("https://exemplo.pt/a", "https://exemplo.pt/a", "https://exemplo.pt/a")]
+    [InlineData("https://exemplo.pt/a", "chrome-error://chromewebdata/", "https://exemplo.pt/a")]
+    [InlineData("https://exemplo.pt/a", "data:text/html,oi", "https://exemplo.pt/a")]
+    [InlineData("https://exemplo.pt/a", "", "https://exemplo.pt/a")]
+    [InlineData("https://exemplo.pt/a", null, "https://exemplo.pt/a")]
+    public void PageUrl_IsTheLoadedAddress_WhenItIsAWebPage(string link, string? loaded, string expected)
+        => Assert.Equal(expected, LinkPreview.PageUrl(link, loaded));
+
+    // Correções da revisão: o ícone e o nome do site saem da página lida (não do link) e da base, não da cache de ícones
+    // da janela (que não sabe de um histórico apagado), lidos uma só vez, quando a página chega; a dica de «Ler tudo aqui»
+    // volta ao princípio com cada cartão; a E premida não alterna sem parar; o favicon tem nome, como o monograma; o
+    // leitor de ecrã ouve o estado e, com o resumo pronto, o título.
+    [Fact]
+    public void Card_DescribesTheLoadedPage_AndResetsItsHints()
+    {
+        var code = Source("MainWindow.Glance.cs");
+        var extract = Method(code, "private async Task ExtractGlanceAsync(");
+        Assert.Contains("var page = LinkPreview.PageUrl(url, loadedUrl);", extract);
+        Assert.Contains("LinkPreview.Parse(response.Result as string, page)", extract);
+        Assert.Contains("LoadGlanceImage(browser, image, page, serial)", extract);
+        Assert.DoesNotContain("CachedSiteIcon", code);
+        Assert.DoesNotContain("_siteIconCache", code);
+        Assert.Contains("ShowGlanceSiteIcon(null, GlanceSite.Text);", Method(code, "private void ResetGlanceCard("));
+        Assert.Contains("AppData.SiteIcons([pageUrl])", Method(code, "private void ShowGlanceSiteIcon("));
+        Assert.Contains("AutomationProperties.SetName(GlanceFavicon, site);", code);
+
+        var fill = Method(code, "private void FillGlance(");
+        Assert.Contains("GlanceExpand.ToolTip = LinkPreview.ExpandTip(expanded: false);", fill);
+        Assert.Contains("Sync.LiveRegion.Announce(GlanceTitle)", fill);
+        Assert.Contains("GlanceExpand.ToolTip = LinkPreview.ExpandTip(_glanceExpanded);", Method(code, "private void ToggleGlanceExpand("));
+        Assert.DoesNotContain("\"Voltar ao resumo (E)\"", code);
+        Assert.Contains("if (action == GlanceAction.Expand && e.IsRepeat)", Method(code, "private void GlanceOverlay_KeyDown("));
+        Assert.Contains("if (text is not null) Sync.LiveRegion.Announce(GlanceStatusText);", Method(code, "private void SetGlanceStatus("));
+
+        var xaml = Source("MainWindow.xaml");
+        Assert.Matches("x:Name=\"GlanceTitle\"[^>]*AutomationProperties.LiveSetting=\"Polite\"", xaml);
+    }
+
+    // O corpo de um método do código-fonte: da assinatura até à chaveta que a fecha, à mesma indentação.
+    private static string Method(string code, string signature)
+    {
+        var start = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, signature);
+        var end = code.IndexOf("\n    }", start, StringComparison.Ordinal);
+        return code[start..end];
     }
 
     // O cartão: favicon (ou monograma) antes do site, «Ler tudo aqui» à esquerda de «Abrir ao lado», o estado como região
@@ -180,12 +234,9 @@ public class ReviewGlanceTests
         Assert.Contains("AutomationProperties.SetName(GlanceCard, \"Espreitar: \" + ", code);
         Assert.Contains("AutomationProperties.SetName(GlanceScrollViewer, \"Espreitar: \" + ", code);
         Assert.Contains("AutomationProperties.SetName(GlanceMonogramText, ", code);
-        // O favicon só vem da cache local (a mesma das listas), também na janela privada, que não escreve nela. Uma falta
-        // vista pelo Espreitar (a página ainda a carregar, o ícone ainda por guardar) não fica na cache da janela.
-        Assert.Contains("CachedSiteIcon(url, rememberMiss: false)", code);
-        var sidebar = Source("MainWindow.Sidebar.cs");
-        Assert.Contains("AppData.SiteIcons([url])", sidebar);
-        Assert.Contains("if (icon is not null || rememberMiss) _siteIconCache[site] = icon;", sidebar);
+        // O favicon só vem da cache local de ícones do histórico (a mesma das listas), também na janela privada, que não
+        // escreve nela (ver Card_DescribesTheLoadedPage_AndResetsItsHints).
+        Assert.Contains("AppData.SiteIcons([pageUrl])", code);
     }
 
     private static string Source(string file, [System.Runtime.CompilerServices.CallerFilePath] string caller = "")

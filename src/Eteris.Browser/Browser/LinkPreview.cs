@@ -150,6 +150,14 @@ public static partial class LinkPreview
     // O botão do rodapé que mostra o artigo inteiro no cartão (tecla E) e volta ao resumo.
     public static string ExpandLabel(bool expanded) => expanded ? "Mostrar menos" : "Ler tudo aqui";
 
+    // A dica do mesmo botão (e o texto de ajuda que o leitor de ecrã tira dela).
+    public static string ExpandTip(bool expanded) => expanded ? "Voltar ao resumo (E)" : "Mostrar o artigo inteiro aqui (E)";
+
+    // A página que o cartão descreve: o endereço confirmado da moldura principal quando é uma página web (depois de um
+    // redirecionamento, o destino, não o encurtador nem o http do link); senão (página de erro, about:, data:) o link.
+    public static string PageUrl(string link, string? loaded)
+        => loaded is not null && IsWeb(loaded) && Uri.TryCreate(loaded, UriKind.Absolute, out _) ? loaded : link;
+
     // Sem favicon na cache, o cartão mostra a 1.ª letra (ou algarismo) do site num círculo.
     public static string Monogram(string? site)
     {
