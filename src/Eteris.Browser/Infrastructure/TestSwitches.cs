@@ -50,6 +50,46 @@ public static class TestSwitches
 
     public static bool CrashBeforePaintFor(string? value, bool installed) => !installed && IsOn(value);
 
+    // A vigia (Watching/), nas provas ao vivo. As três só valem numa cópia não instalada e num perfil de teste: a vigia
+    // semeada escreve na base do perfil e a loja serve ficheiros locais num endereço https.
+    // - ETERIS_TEST_SHOP_DIR=<pasta>: os ficheiros da pasta respondem em https://loja-eteris.invalid/ (Browser/
+    //   TestShopSchemeHandlerFactory.cs), no contexto do perfil e nos contextos só em memória; um nome .invalid nunca vai à rede.
+    // - ETERIS_TEST_WATCH=<endereço>[TAB<seletor>]: cria essa vigia de preço ao arrancar, se ainda não houver uma para o endereço.
+    // - ETERIS_TEST_WATCH_SECONDS=<n>: o relógio da vigia passa de 1 min a n s (no máximo 60) e a próxima verificação vem n s
+    //   depois, sem o mínimo de 30 min nem o recuo.
+    public static string? ShopDir => ShopDirFor(Environment.GetEnvironmentVariable("ETERIS_TEST_SHOP_DIR"), IsInstalled, AppPaths.IsCustomProfile);
+
+    public static (string Url, string? Selector)? WatchSeed
+        => WatchSeedFor(Environment.GetEnvironmentVariable("ETERIS_TEST_WATCH"), IsInstalled, AppPaths.IsCustomProfile);
+
+    public static int? WatchSeconds => WatchSecondsFor(Environment.GetEnvironmentVariable("ETERIS_TEST_WATCH_SECONDS"), IsInstalled, AppPaths.IsCustomProfile);
+
+    public static string? ShopDirFor(string? value, bool installed, bool customProfile)
+    {
+        if (installed || !customProfile || string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            var full = System.IO.Path.GetFullPath(value.Trim());
+            return System.IO.Directory.Exists(full) ? full : null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    public static (string Url, string? Selector)? WatchSeedFor(string? value, bool installed, bool customProfile)
+    {
+        if (installed || !customProfile || string.IsNullOrWhiteSpace(value)) return null;
+        var parts = value.Split('\t', 2);
+        var url = parts[0].Trim();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)) return null;
+        var selector = parts.Length > 1 && parts[1].Trim() is { Length: > 0 } s ? s : null;
+        return (url, selector);
+    }
+
+    public static int? WatchSecondsFor(string? value, bool installed, bool customProfile)
+        => !installed && customProfile
+           && int.TryParse(value?.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+           && seconds is >= 1 and <= 86400 ? seconds : null;
+
     // Instalação do Velopack: o Update.exe está na pasta de cima (%LOCALAPPDATA%\<pacote>\current\Eteris.Browser.exe).
     // Com o sandbox, o AppContext.BaseDirectory é a pasta do Eteris.App.dll, a mesma do bootstrap (current\).
     // É a única regra de instalação: a pasta de teste da sincronização (Sync.SyncService.TestFolder), o ETERIS_TEST_REAUTH

@@ -34,6 +34,7 @@ public partial class MainWindow
         // As fábricas de esquemas são por contexto: sem isto eteris:// dá ERR_UNKNOWN_URL_SCHEME na janela privada.
         context.RegisterSchemeHandlerFactory(EterisSchemeHandlerFactory.SchemeName, string.Empty, new EterisSchemeHandlerFactory(privateContext: true));
         SelfTestSchemeHandlerFactory.Register(context);
+        TestShopSchemeHandlerFactory.Register(context);
         _ = Shields.PrivacyPreferences.ApplyAsync(context);
         return context;
     }

@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         StartTabs(initialUrl, restored);
         StartupTrace.Mark("janela.abas");
         WatchSnoozed();
+        WatchPages();
         WatchArchive();
         RestorePlacement(restored?.Placement);
         WatchUpdates();

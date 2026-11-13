@@ -51,15 +51,31 @@ public static class WatchRules
         if (challengeMarker) return PageBlock.Challenge;
         if ((httpStatus is 403 or 429 or 503) && LooksLikeChallenge(title)) return PageBlock.Challenge;
 
-        if (Uri.TryCreate(finalUrl, UriKind.Absolute, out var final))
-        {
-            // A página de erro do motor (sem rede, nome que não resolve) é uma falha de carga, não uma aplicação.
-            if (final.Scheme.Equals("chrome-error", StringComparison.OrdinalIgnoreCase)) return PageBlock.HttpError;
-            if (!EngineSchemes.Contains(final.Scheme, StringComparer.OrdinalIgnoreCase)) return PageBlock.AppRedirect;
-        }
+        // A página de erro do motor (sem rede, nome que não resolve) é uma falha de carga, não uma aplicação.
+        if (IsEngineError(finalUrl)) return PageBlock.HttpError;
+        if (IsAppScheme(finalUrl)) return PageBlock.AppRedirect;
 
         return httpStatus >= 400 ? PageBlock.HttpError : PageBlock.None;
     }
+
+    // Um endereço fora da web (meli://, mailto:, um programa, uma página interna do Éteris): o motor da vigia cancela a
+    // navegação e conta-a como salto para uma aplicação. A página de erro do motor não conta.
+    public static bool IsAppScheme(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && !IsEngineError(url)
+           && !EngineSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase);
+
+    // A espera do motor da vigia acaba quando a leitura já serve: o preço (numa vigia de preço — um pedaço ainda com o
+    // marcador ou vazio não serve), o pedaço com texto (numa vigia de mudança), ou uma página de desafio (esperar mais
+    // não a faz passar, e o Éteris nunca a contorna).
+    public static bool Settled(WatchKind kind, PageReading reading)
+    {
+        if (reading.ChallengeMarker) return true;
+        if (kind == WatchKind.Price) return reading.Price is not null;
+        return reading.PieceFound && !string.IsNullOrWhiteSpace(reading.PieceText);
+    }
+
+    private static bool IsEngineError(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme.Equals("chrome-error", StringComparison.OrdinalIgnoreCase);
 
     public static WatchCheck ToCheck(PageWatch w, PageReading? reading, PageBlock block, DateTime nowUtc)
     {

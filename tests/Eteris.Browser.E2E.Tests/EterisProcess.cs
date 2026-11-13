@@ -44,6 +44,10 @@ public sealed class EterisProcess : IAsyncDisposable
     }
 
     public static Task<EterisProcess> StartAsync(string url, params string[] arguments)
+        => StartAsync(url, new Dictionary<string, string>(), arguments);
+
+    // Com variáveis ETERIS_TEST_* próprias do teste (por cima das de omissão: porta do DevTools e som cortado).
+    public static Task<EterisProcess> StartAsync(string url, IReadOnlyDictionary<string, string> env, params string[] arguments)
     {
         var exe = ExePath();
         var profile = Directory.CreateTempSubdirectory("eteris-e2e-");
@@ -54,6 +58,7 @@ public sealed class EterisProcess : IAsyncDisposable
             start.Environment.Remove(name);
         start.Environment["ETERIS_TEST_DEVTOOLS_PORT"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
         start.Environment["ETERIS_TEST_MUTE"] = "1";
+        foreach (var (name, value) in env) start.Environment[name] = value;
         start.ArgumentList.Add("--user-data-dir=" + profile.FullName);
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         start.ArgumentList.Add(url);
@@ -90,6 +95,29 @@ public sealed class EterisProcess : IAsyncDisposable
         throw new XunitException($"nenhuma página serviu em {timeout.TotalSeconds:0} s (DevTools em 127.0.0.1:{_port}); vistas: " + (seen.Count == 0 ? "nenhuma" : string.Join(", ", seen)));
     }
 
+    // Minimiza a janela principal deste processo (só deste: nunca a de outro Éteris aberto), à espera que ela exista.
+    public void MinimizeMainWindow()
+    {
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(30))
+        {
+            _process.Refresh();
+            if (_process.HasExited) throw new XunitException($"o processo saiu com o código {_process.ExitCode}");
+            if (_process.MainWindowHandle != 0)
+            {
+                ShowWindow(_process.MainWindowHandle, SwMinimize);
+                return;
+            }
+            Thread.Sleep(250);
+        }
+        throw new XunitException("a janela principal não apareceu em 30 s");
+    }
+
+    private const int SwMinimize = 6;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(nint window, int command);
+
     public async ValueTask DisposeAsync()
     {
         try
@@ -124,7 +152,7 @@ public sealed class EterisProcess : IAsyncDisposable
         finally { listener.Stop(); }
     }
 
-    private static string Root([CallerFilePath] string source = "")
+    internal static string Root([CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;

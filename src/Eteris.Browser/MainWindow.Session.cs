@@ -121,8 +121,8 @@ public partial class MainWindow
         Closing += (_, _) => { if (!HasOtherNormalWindows()) SaveSessionNow(now: true); };
         Closed += (_, _) =>
         {
-            // A dona fecha com outras janelas abertas: o papel de dona (posição, abas adiadas) passa à seguinte,
-            // senão as adiadas deixavam de voltar.
+            // A dona fecha com outras janelas abertas: o papel de dona (posição, abas adiadas, vigias) passa à seguinte,
+            // senão as adiadas deixavam de voltar e as vigias de correr.
             if (_ownsSession) HandSessionOver(this);
             if (HasOtherNormalWindows()) ArmSessionTimer();
         };
@@ -147,6 +147,7 @@ public partial class MainWindow
         _ownsSession = s_sessionOwnerTaken = true;
         Closing += (_, _) => SavePlacement();
         WatchSnoozed();
+        WatchPages();
         ScheduleSessionSave();
     }
 

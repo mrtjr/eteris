@@ -35,6 +35,40 @@ public class WatchRulesTests
     [Fact] public void Classify_EngineErrorPageIsALoadFailure()
         => Assert.Equal(PageBlock.HttpError, WatchRules.Classify(0, "https://a.pt/p", "chrome-error://chromewebdata/", "", false));
 
+    // O motor da vigia cancela uma navegação para fora da web (meli://, um programa) e conta-a como salto para uma aplicação;
+    // as páginas do próprio motor e os documentos locais não contam.
+    [Theory]
+    [InlineData("meli://items-core/MLB1", true)]
+    [InlineData("mailto:loja@exemplo.pt", true)]
+    [InlineData("eteris://definicoes/", true)]
+    [InlineData("https://a.pt/p", false)]
+    [InlineData("http://a.pt/p", false)]
+    [InlineData("about:blank", false)]
+    [InlineData("data:text/html,ola", false)]
+    [InlineData("chrome-error://chromewebdata/", false)]
+    [InlineData("não é um endereço", false)]
+    public void IsAppScheme_OnlyOutsideTheWeb(string url, bool expected) => Assert.Equal(expected, WatchRules.IsAppScheme(url));
+
+    // A espera do motor acaba quando há preço (numa vigia de preço) ou quando o pedaço tem texto (numa vigia de mudança);
+    // um pedaço ainda vazio, ou só com o marcador do preço por pôr, não acaba a espera de uma vigia de preço.
+    [Fact] public void Settled_PriceWatchWaitsForAPrice()
+    {
+        Assert.False(WatchRules.Settled(WatchKind.Price, Reading(piece: "—")));
+        Assert.False(WatchRules.Settled(WatchKind.Price, Reading(piece: "")));
+        Assert.True(WatchRules.Settled(WatchKind.Price, Reading(price: 1234.56m)));
+    }
+
+    [Fact] public void Settled_ChangeWatchWaitsForText()
+    {
+        Assert.False(WatchRules.Settled(WatchKind.Change, Reading(piece: "  ")));
+        Assert.False(WatchRules.Settled(WatchKind.Change, Reading(pieceFound: false)));
+        Assert.True(WatchRules.Settled(WatchKind.Change, Reading(piece: "Em stock")));
+    }
+
+    // Uma página de desafio também acaba a espera: esperar mais não a faz passar (o Éteris nunca contorna).
+    [Fact] public void Settled_ChallengeEndsTheWait()
+        => Assert.True(WatchRules.Settled(WatchKind.Price, Reading(piece: "", marker: true)));
+
     [Fact] public void Outcome_ChallengeIsNeverAChange()
     {
         var w = Watch(kind: WatchKind.Price, lastPrice: 588.22m, status: WatchStatus.Ok);
