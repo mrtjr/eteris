@@ -19,6 +19,8 @@ public class WindowTimerRulesTests
         ["_guestSeen"] = "Closed += (_, _) => _guestSeen?.Stop();",
         ["_pairingTick"] = "Closed += (_, _) => _pairingTick?.Stop();",
         ["_sleepTimer"] = "Closed += (_, _) => _sleepTimer.Stop();",
+        // O relógio da vigia pára no Closed, com o lote a meio cancelado e o motor largado (MainWindow.Watch.cs).
+        ["_watchTimer"] = "_watchTimer.Stop();",
     };
 
     // De disparo único, ou que param sozinhos quando o trabalho acaba.

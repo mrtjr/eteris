@@ -152,7 +152,8 @@ public partial class MainWindow
     private static IEnumerable<string> AddressesOf(MainWindow window)
         => window.Tabs.Tabs.Select(t => t.Address)
             .Concat(window.Tabs.Workspaces.Where(s => !s.IsCurrent).SelectMany(s => s.StoredTabs.Select(t => t.Address)))
-            .Concat(window._webPanels.Select(p => p.Url));
+            .Concat(window._webPanels.Select(p => p.Url))
+            .Concat(window._clips.Select(c => c.Address));
 
     private IRequestContext CookieContext => PrivateContext ?? Cef.GetGlobalRequestContext();
 
@@ -172,8 +173,10 @@ public partial class MainWindow
     // Apaga já tudo o que o site deixou (cookies e armazenamento do contexto desta janela; histórico e permissões do
     // perfil, ou as desta janela na privada). Só toca no site indicado. seenBefore: endereços do site recolhidos antes
     // de fechar as abas dele (cada origem tem o seu armazenamento). startupSweep: a varredura do arranque (o motor de
-    // vídeo só se abre se o site lá ficou pendente).
-    private async Task<ShredResult> ShredSiteAsync(string site, IEnumerable<string>? seenBefore = null, bool startupSweep = false)
+    // vídeo só se abre se o site lá ficou pendente). forgetWatches: as vigias do site também saem — só no «Triturar»,
+    // cuja confirmação o diz; o «Esquecer ao fechar» deixa-as (a dica do interruptor di-lo, SiteScope.ForgetOnCloseHint).
+    private async Task<ShredResult> ShredSiteAsync(string site, IEnumerable<string>? seenBefore = null, bool startupSweep = false,
+        bool forgetWatches = false)
     {
         var history = 0;
         var seen = Tabs.Tabs.Select(t => t.Address).Concat(seenBefore ?? []).ToList();
@@ -194,6 +197,7 @@ public partial class MainWindow
             AppData.ForgetSitePermissions(site);
             Bounces.Forget(site);
             AppData.ForgetSiteTabs(site);
+            if (forgetWatches) AppData.DeleteWatchesOfSite(site);
             AppData.ForgetPrivacySubject(site);
         }
         else
@@ -318,7 +322,7 @@ public partial class MainWindow
         SiteInfoForgetRow.Visibility = site is null || IsPrivate ? Visibility.Collapsed : Visibility.Visible;
         if (site is null) return;
         SiteInfoForgetToggle.IsChecked = AppData.IsForgetOnClose(site);
-        SiteInfoForgetHint.Text = $"Quando deixar de ter abas de {site} (fechá-las, ir para outro site ou sair do Éteris), apagam-se os cookies, o armazenamento, o histórico e as permissões. As palavras-passe guardadas ficam.";
+        SiteInfoForgetHint.Text = SiteScope.ForgetOnCloseHint(site);
     }
 
     private void SiteInfoForgetToggle_Click(object sender, RoutedEventArgs e)
@@ -379,7 +383,7 @@ public partial class MainWindow
         var seen = siteTabs.Select(t => t.Address).ToList();
         foreach (var tab in siteTabs) Tabs.CloseQuietly(tab);
         if (Tabs.Tabs.Count == 0) Tabs.NewTab(NewTabUrl);
-        var result = await ShredSiteAsync(site, seen);
+        var result = await ShredSiteAsync(site, seen, forgetWatches: true);
         ShowToast($"{site} triturado — {SiteScope.ShredDone(result.Cookies, result.History, result.Storage, IsPrivate, result.CookiesFailed, result.VideoEngineFailed)}");
     }
 }

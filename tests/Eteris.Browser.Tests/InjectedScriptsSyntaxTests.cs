@@ -5,6 +5,7 @@ using Eteris.Browser.Browser;
 using Eteris.Browser.Omnibox;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
+using Eteris.Browser.Watching;
 
 namespace Eteris.Browser.Tests;
 
@@ -50,6 +51,14 @@ public class InjectedScriptsSyntaxTests
         { "imagem na imagem (janela escondida)", UnseenWindow.PictureInPictureScript },
         { "codecs da plataforma (sonda)", PlatformCodecs.ProbeScript },
         { "troca de página (1.º fotograma)", Eteris.Browser.Browser.PageScript.Expression(PageSwap.FirstPaintScript, asyncBody: true) },
+        { "vigia (leitura)", WatchScripts.Read("#preco") },
+        { "vigia (leitura sem pedaço)", WatchScripts.Read(null) },
+        { "vigia (leitura, seletor com aspas)", WatchScripts.Read("a[title=\"x'y\"] </script>") },
+        { "vigia (escolher pedaço)", Eteris.Browser.Browser.PageScript.Expression(WatchScripts.PickPiece("Clique no pedaço a vigiar · Esc para cancelar"), asyncBody: true) },
+        { "recorte (escolher pedaço)", Eteris.Browser.Browser.PageScript.Expression(WatchScripts.PickPiece("Clique no pedaço a recortar · Esc para cancelar",
+            "Este pedaço repete-se na página e não dá para o recortar sozinho · escolha outro ou Esc para cancelar"), asyncBody: true) },
+        { "recorte (isolar)", ClipScripts.Isolate("#preco") },
+        { "recorte (isolar, seletor com aspas)", ClipScripts.Isolate("a[title=\"x'y\"] </script>") },
     };
 
     // As páginas internas, como são servidas: o script sem atributos de cada uma.
@@ -60,6 +69,7 @@ public class InjectedScriptsSyntaxTests
     [InlineData("bookmarks")]
     [InlineData("welcome")]
     [InlineData("whatsnew")]
+    [InlineData("vigias")]
     public void InternalPageScript_IsValidJavaScript(string page)
     {
         var html = page switch
@@ -70,6 +80,7 @@ public class InjectedScriptsSyntaxTests
             "bookmarks" => BookmarksPage.Render([]),
             "welcome" => WelcomePage.Render(new Eteris.Browser.Data.UserSettings(), []),
             "whatsnew" => WhatsNewPage.Render(SettingsPage.Version),
+            "vigias" => WatchesPage.Render([], _ => [], new DateTime(2026, 12, 1, 12, 0, 0, DateTimeKind.Utc)),
             _ => throw new ArgumentOutOfRangeException(nameof(page)),
         };
         var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);

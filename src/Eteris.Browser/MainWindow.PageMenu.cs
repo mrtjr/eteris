@@ -66,6 +66,9 @@ public partial class MainWindow
             case PageCommand.Paste: frame?.Paste(); break;
             case PageCommand.SelectAll: frame?.SelectAll(); break;
             case PageCommand.HideElement: PickElementToHide(); break;
+            case PageCommand.WatchPrice: StartWatchPrice(); break;
+            case PageCommand.WatchChange: StartWatchChange(); break;
+            case PageCommand.ClipLive: StartClip(); break;
             case PageCommand.SavePdf: SaveAsPdf(); break;
             case PageCommand.ReadLater: SaveForLater(); break;
             case PageCommand.PlayInVideoEngine: PlayInVideoEngine(tab); break;

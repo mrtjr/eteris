@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         StartTabs(initialUrl, restored);
         StartupTrace.Mark("janela.abas");
         WatchSnoozed();
+        WatchPages();
         WatchArchive();
         RestorePlacement(restored?.Placement);
         WatchUpdates();
@@ -433,6 +434,7 @@ public partial class MainWindow : Window
             if (!firstLoad.Task.IsCompleted) StartupTrace.Mark("aba.carregada");
             firstLoad.TrySetResult();
             var url = e.Url;
+            var httpStatus = e.HttpStatusCode;
             // O 1.º documento de uma aba nasce antes de a sessão do canal do cofre poder ouvir o commit dele.
             VaultPageCommitted(tab, browser);
             // Aba parada: os registos de sites antigos a mais saem agora (nunca a meio de uma navegação).
@@ -448,6 +450,8 @@ public partial class MainWindow : Window
                 _ = ApplyGenericCosmeticsAsync(browser, url);
                 SettleChainLater(tab);
                 if (SelfTest.IsTestPage(url)) _ = RunSelfTestAsync(tab, browser, url);
+                // Uma página vigiada aberta pelo utilizador: lida ali, sem visita extra (MainWindow.Watch.cs).
+                ReadWatchedPagePassively(browser, url, httpStatus);
                 // 1.º documento da aba (nasceu sem os scripts precoces) ou qualquer outro: a deteção de vídeo que não
                 // toca corre agora; se o script precoce já corre na página, não faz nada.
                 if (VideoEngine.CanHost(url)) PageScript.Run(browser, VideoEngine.LateWatchScript);

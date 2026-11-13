@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Eteris.Browser.Omnibox;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Updates;
+using Eteris.Browser.Watching;
 using Eteris.Sync.Model;
 
 namespace Eteris.Browser.Tests;
@@ -59,6 +60,25 @@ public class PublicSiteSyncTests
             Assert.Contains(SearchEngine.DuckDuckGo.Name, half);
             Assert.Contains(SearchEngine.Brave.Name, half);
         }
+    }
+
+    // §4 da política diz também as visitas das vigias (etapa A): só as que o utilizador cria, no mínimo de 30 em 30 min,
+    // só com o Éteris aberto, e nunca contornando as proteções dos sites — nas duas línguas.
+    [Fact]
+    public void Policy_Section4_SaysTheWatchVisits()
+    {
+        var html = Flat(File.ReadAllText(Path.Combine(RepoRoot(), "docs", "site", "privacidade.html")));
+        var en = html.IndexOf("id=\"en\"", StringComparison.Ordinal);
+        Assert.True(en > 0);
+        // Sem as etiquetas (o «<strong>» do título de cada item), cada metade da política.
+        var pt = Regex.Replace(html[..en], "<[^>]+>", "");
+        var english = Regex.Replace(html[en..], "<[^>]+>", "");
+        Assert.Contains("Vigias de preço e de páginas: só as que criar. O site vigiado vê uma visita a cada verificação (no mínimo de 30 em 30 minutos, só com o Éteris aberto)", pt);
+        Assert.Contains("O Éteris nunca contorna as proteções dos sites.", pt);
+        Assert.Contains("Price and page watches: only the ones you create.", english);
+        Assert.Contains("only while Éteris is open", english);
+        Assert.Contains("never bypasses", english);
+        Assert.Equal(30, WatchSchedule.MinIntervalMinutes);
     }
 
     private static string Flat(string text) => Regex.Replace(text, @"\s+", " ");

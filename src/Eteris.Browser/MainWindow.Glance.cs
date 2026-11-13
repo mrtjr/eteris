@@ -429,35 +429,4 @@ public partial class MainWindow
         CloseGlance();
         ShowToast("Guardado em «Para ler» — veja em Favoritos › Para ler");
     }
-
-    private sealed class SilentFocusHandler : IFocusHandler
-    {
-        public void OnGotFocus(IWebBrowser chromiumWebBrowser, IBrowser browser) { }
-        public bool OnSetFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, CefFocusSource source) => true;
-        public void OnTakeFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, bool next) { }
-    }
-
-    private sealed class SilentDownloadHandler(Action onRefused) : CefSharp.Handler.DownloadHandler
-    {
-        protected override bool CanDownload(IWebBrowser chromiumWebBrowser, IBrowser browser, string url, string requestMethod)
-        {
-            onRefused();
-            return false;
-        }
-    }
-
-    private sealed class SilentMenuHandler : IContextMenuHandler
-    {
-        public void OnBeforeContextMenu(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IContextMenuParams parameters, IMenuModel model)
-            => model.Clear();
-        public bool OnContextMenuCommand(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IContextMenuParams parameters,
-            CefMenuCommand commandId, CefEventFlags eventFlags) => false;
-        public void OnContextMenuDismissed(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame) { }
-        public bool RunContextMenu(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IContextMenuParams parameters, IMenuModel model,
-            IRunContextMenuCallback callback)
-        {
-            callback.Cancel();
-            return true;
-        }
-    }
 }

@@ -95,6 +95,11 @@ public static class SiteScope
             .Where(site => isForget(site) && !StillOpen(site, open)).ToList();
     }
 
+    // A dica do interruptor «Esquecer ao fechar» do cadeado. As vigias ficam: são ferramentas que o utilizador criou (só o
+    // «Triturar» as leva), e as visitas delas nunca levam os cookies do site.
+    public static string ForgetOnCloseHint(string site)
+        => $"Quando deixar de ter abas de {site} (fechá-las, ir para outro site ou sair do Éteris), apagam-se os cookies, o armazenamento, o histórico e as permissões. As palavras-passe guardadas e as vigias ficam.";
+
     // O que a confirmação de «Triturar» diz que vai apagar. Na janela privada não há histórico, e as permissões são as
     // dadas nessa janela. closingTabs: as abas do site nesta janela (que fecham); locked/noted: quantas delas estão
     // trancadas ou têm nota, que se perdem com elas.
@@ -107,6 +112,8 @@ public static class SiteScope
         parts.Add("o armazenamento do site (local, bases de dados, cache e trabalhadores)");
         // As listas do Radar (Feitas, Arquivo, Adiadas) são do perfil: só a janela normal as tem.
         if (!isPrivate) parts.Add("as abas feitas, arquivadas e adiadas deste site");
+        // As vigias também são do perfil (AppData.DeleteWatchesOfSite).
+        if (!isPrivate) parts.Add("as vigias deste site");
         parts.Add(isPrivate ? "as permissões dadas nesta janela" : "as permissões dadas");
         // Um endereço IP (ou localhost) não tem subdomínios.
         var bare = System.Net.IPAddress.TryParse(site.Trim('[', ']'), out _) || !site.Contains('.');

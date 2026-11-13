@@ -129,6 +129,39 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.DoesNotContain("arquivadas", SiteScope.ShredSummary("exemplo.pt", 1, 1, isPrivate: true));
     }
 
+    // As vigias do site também saem (AppData.DeleteWatchesOfSite): a confirmação di-lo. A janela privada não as tem.
+    [Fact]
+    public void ShredSummary_SaysTheWatchesGo()
+    {
+        Assert.Contains("as vigias deste site", SiteScope.ShredSummary("exemplo.pt", 1, 1));
+        Assert.DoesNotContain("vigias", SiteScope.ShredSummary("exemplo.pt", 1, 1, isPrivate: true));
+    }
+
+    // Achado 5: as vigias saem só com o «Triturar» (a confirmação di-lo). O «Esquecer ao fechar» (temporizador, saída,
+    // varredura do arranque) não as leva: uma vigia acabada de criar num site destes desaparecia 10 s depois de fechar a
+    // aba, em silêncio. A dica do interruptor diz que ficam.
+    [Fact]
+    public void ForgetOnClose_KeepsTheWatches_OnlyShredTakesThem()
+    {
+        var forget = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs"));
+        Assert.Contains("if (forgetWatches) AppData.DeleteWatchesOfSite(site);", forget);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(forget, @"forgetWatches: true"));
+        var shred = forget[forget.IndexOf("private async void SiteInfoShredConfirm_Click(", StringComparison.Ordinal)..];
+        Assert.Contains("ShredSiteAsync(site, seen, forgetWatches: true)", shred);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(forget, @"AppData\.DeleteWatchesOfSite\("));
+    }
+
+    [Fact]
+    public void ForgetOnCloseHint_SaysTheWatchesStay()
+    {
+        var hint = SiteScope.ForgetOnCloseHint("loja.pt");
+        Assert.Contains("Quando deixar de ter abas de loja.pt", hint);
+        Assert.Contains("apagam-se os cookies, o armazenamento, o histórico e as permissões", hint);
+        Assert.Contains("As palavras-passe guardadas e as vigias ficam.", hint);
+        var forget = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs"));
+        Assert.Contains("SiteInfoForgetHint.Text = SiteScope.ForgetOnCloseHint(site);", forget);
+    }
+
     [Fact]
     public void Forget_ClearsEveryWindowAndTheClosedOnes()
     {
