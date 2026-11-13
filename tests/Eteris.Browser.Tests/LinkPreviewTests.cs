@@ -240,4 +240,254 @@ public class LinkPreviewTests
         Assert.Contains("JSON.stringify", LinkPreview.Script);
         Assert.StartsWith("(() => {", LinkPreview.Script);
     }
+
+    // ---------- Proposta 1 «Espreitar a sério»: resumo limpo, título sem o site, nome curto do site ----------
+
+    // As duas linhas da captura 16 (Wikipédia «Europa continental»), tal como estão: coordenadas da caixa de informação
+    // e as ligações «editar» coladas ao texto.
+    [Theory]
+    [InlineData("48° 12′ 30″ N, 16° 22′ 23″ LFuncionamentoEstatuto")]
+    [InlineData("território (d)porção continentaleditar - editar código-fonte - editar Wikidata")]
+    [InlineData("Origem: Wikipédia, a enciclopédia livre.")]
+    [InlineData("Curto demais.")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void IsProse_RejectsCoordinatesAndEditLinks(string? line) => Assert.False(LinkPreview.IsProse(line));
+
+    [Theory]
+    [InlineData("A Europa continental é a parte continental da Europa, excluindo as ilhas e os arquipélagos que a rodeiam.")]
+    [InlineData("O fado é um género musical português, geralmente cantado por uma só pessoa, acompanhada à guitarra portuguesa.")]
+    [InlineData("Em 2024, a cidade recebeu 7,5 milhões de turistas, mais 12 % do que no ano anterior, segundo o INE.")]
+    [InlineData("The iPhone was announced in January 2007 and went on sale in the United States that June.")]
+    // Sem pontuação final, mas comprido: um parágrafo que acaba numa citação ou num nome continua a ser prosa.
+    [InlineData("Uma frase longa que não acaba em ponto final porque o autor a deixou assim mas que tem palavras e letras suficientes para ser lida como prosa")]
+    // Chinês, sem espaços entre palavras: a regra das seis palavras não se aplica.
+    [InlineData("欧洲大陆是欧洲的大陆部分，不包括周围的岛屿和群岛，在英国通常被称为大陆，与不列颠群岛相对，也常用于其他岛国。")]
+    // Marcas em CamelCase (curtas) não são palavras coladas: notícias de tecnologia com duas ou mais continuam a ser prosa.
+    [InlineData("O WhatsApp e o TikTok anunciaram ontem novas regras para proteger os menores…")]
+    [InlineData("A Apple apresentou o novo iPhone e o novo iPad numa sessão em Cupertino.")]
+    [InlineData("O projeto foi reescrito em TypeScript, que compila para JavaScript, e ficou mais fácil de manter.")]
+    [InlineData("A OpenAI lançou o ChatGPT para o iPhone, e o YouTube e o LinkedIn seguiram-lhe os passos.")]
+    // Conta cada sequência de letras, não a palavra com a pontuação: «WhatsApp/TikTok» e «JavaScript-based» são duas marcas.
+    [InlineData("Os vídeos do WhatsApp/TikTok e os sites JavaScript-based da PlayStation’s Store ficam de fora.")]
+    public void IsProse_AcceptsARealParagraph(string line) => Assert.True(LinkPreview.IsProse(line));
+
+    [Theory]
+    // Mais de uma palavra colada (minúscula seguida de maiúscula): texto de estrutura, não prosa.
+    [InlineData("InícioHistória GeografiaClima e muitas outras secções do artigo que aparecem coladas aqui.")]
+    // Só números e símbolos: uma tabela achatada.
+    [InlineData("1990 — 23 456 · 1991 — 24 567 · 1992 — 25 678 · 1993 — 26 789 · total 99.")]
+    public void IsProse_RejectsStructureText(string line) => Assert.False(LinkPreview.IsProse(line));
+
+    [Fact]
+    public void Parse_PrefersParasOverText()
+    {
+        var json = JsonSerializer.Serialize(new
+        {
+            head = "<head><meta property=\"og:title\" content=\"Europa continental – Wikipédia, a enciclopédia livre\"></head>",
+            title = "Europa continental – Wikipédia, a enciclopédia livre",
+            site = "Wikimedia Foundation, Inc.",
+            text = "Origem: Wikipédia, a enciclopédia livre.\n48° 12′ 30″ N, 16° 22′ 23″ LFuncionamentoEstatuto\nterritório (d)porção continentaleditar - editar código-fonte - editar Wikidata\nTexto do textContent que não devia aparecer, porque há parágrafos limpos do artigo.",
+            paras = new[]
+            {
+                "48° 12′ 30″ N, 16° 22′ 23″ LFuncionamentoEstatuto",
+                "A Europa continental é a parte continental da Europa, excluindo as ilhas e os arquipélagos que a rodeiam.",
+                "No Reino Unido, o termo «o Continente» designa muitas vezes a Europa continental, por oposição às ilhas britânicas.",
+                "O conceito varia conforme o país: na Islândia e em Malta usa-se com um sentido parecido, mas não igual.",
+                "Há ainda um quarto parágrafo de prosa, que fica para «Ler tudo aqui» e não aparece no resumo do cartão.",
+            },
+            words = 900,
+        });
+        var info = LinkPreview.Parse(json, "https://pt.wikipedia.org/wiki/Europa_continental")!;
+        Assert.Equal("Europa continental", info.Title);
+        Assert.Equal("Wikipédia", info.Site);
+        Assert.Equal(3, info.Paragraphs.Count);
+        Assert.StartsWith("A Europa continental é", info.Paragraphs[0]);
+        Assert.DoesNotContain(info.Paragraphs, p => p.Contains("editar", StringComparison.Ordinal) || p.Contains('°'));
+        Assert.DoesNotContain(info.Paragraphs, p => p.Contains("textContent", StringComparison.Ordinal));
+        Assert.Equal(4, info.FullParagraphs.Count);
+        Assert.True(info.HasMore);
+    }
+
+    // Um parágrafo do meio com duas marcas em CamelCase não desaparece do resumo nem de «Ler tudo aqui».
+    [Fact]
+    public void Parse_KeepsParagraphsWithCamelCaseBrands()
+    {
+        var paras = new[]
+        {
+            "O Governo apresentou ontem uma proposta de lei sobre o uso das redes sociais pelos mais novos.",
+            "O WhatsApp e o TikTok anunciaram ontem novas regras para proteger os menores…",
+            "A proposta segue agora para o Parlamento, onde será discutida antes do fim do ano.",
+        };
+        var info = LinkPreview.Parse(JsonSerializer.Serialize(new { head = "", paras }), Page)!;
+        Assert.Equal(paras, info.Paragraphs);
+        Assert.Equal(paras, info.FullParagraphs);
+    }
+
+    [Fact]
+    public void Parse_WithoutParas_FiltersTextLines()
+    {
+        var json = JsonSerializer.Serialize(new
+        {
+            head = "",
+            text = "48° 12′ 30″ N, 16° 22′ 23″ LFuncionamentoEstatuto\nterritório (d)porção continentaleditar - editar código-fonte - editar Wikidata\nA Europa continental é a parte continental da Europa, excluindo as ilhas e os arquipélagos que a rodeiam.",
+            words = 40,
+        });
+        var info = LinkPreview.Parse(json, "https://pt.wikipedia.org/wiki/Europa_continental")!;
+        var only = Assert.Single(info.Paragraphs);
+        Assert.StartsWith("A Europa continental é", only);
+        Assert.False(info.HasMore);
+    }
+
+    [Fact]
+    public void Parse_CjkWithoutSpaces_FallsBackToUnfilteredParas()
+    {
+        // Parágrafos sem pontuação final e com menos de 120 caracteres: nenhum passa no IsProse, e o cartão mostra os
+        // primeiros de «paras» sem o filtro (como antes), em vez de ficar sem resumo.
+        var paras = Enumerable.Range(1, 4).Select(i => $"第{i}段欧洲大陆是欧洲的大陆部分不包括周围的岛屿和群岛在英国通常被称为大陆与不列颠群岛相对这里没有句号").ToArray();
+        Assert.All(paras, p => Assert.False(LinkPreview.IsProse(p)));
+        var json = JsonSerializer.Serialize(new { head = "", text = "", paras, words = 0 });
+        var info = LinkPreview.Parse(json, "https://zh.wikipedia.org/wiki/x")!;
+        Assert.Equal(3, info.Paragraphs.Count);
+        Assert.Equal(paras[0], info.Paragraphs[0]);
+    }
+
+    [Fact]
+    public void Parse_ExcerptIsTheDescription_WhenThereIsNoMetaDescription()
+    {
+        const string excerpt = "Uma descrição do Readability, tirada do artigo, com palavras suficientes para ser prosa.";
+        var json = JsonSerializer.Serialize(new
+        {
+            head = "",
+            excerpt,
+            paras = new[] { "O primeiro parágrafo do artigo é outro, com texto suficiente para contar como prosa." },
+        });
+        Assert.Equal(excerpt, LinkPreview.Parse(json, Page)!.Description);
+        // Um excerto igual ao 1.º parágrafo não se repete; um que não é prosa não entra.
+        var same = JsonSerializer.Serialize(new { head = "", excerpt, paras = new[] { excerpt } });
+        Assert.Null(LinkPreview.Parse(same, Page)!.Description);
+        var junk = JsonSerializer.Serialize(new { head = "", excerpt = "48° 12′ 30″ N, 16° 22′ 23″ LFuncionamentoEstatuto", paras = new[] { excerpt } });
+        Assert.Null(LinkPreview.Parse(junk, Page)!.Description);
+    }
+
+    [Fact]
+    public void Parse_FullParagraphs_KeepTheWholeTextUpToTheBudget()
+    {
+        var long1 = string.Join(' ', Enumerable.Repeat("palavra", 150)) + ".";
+        var paras = Enumerable.Range(0, 30).Select(_ => long1).ToArray();
+        var info = LinkPreview.Parse(JsonSerializer.Serialize(new { head = "", paras }), Page)!;
+        // O resumo corta o último parágrafo numa palavra; o artigo inteiro guarda-o inteiro.
+        Assert.EndsWith("…", info.Paragraphs[^1]);
+        Assert.Equal(long1, info.FullParagraphs[0]);
+        Assert.True(info.FullParagraphs.Sum(p => p.Length) <= LinkPreview.MaxFullChars);
+        Assert.True(info.FullParagraphs.Count > 3);
+        Assert.True(info.HasMore);
+    }
+
+    [Fact]
+    public void CleanTitle_StripsWikipediaSuffix()
+    {
+        var (title, tail) = LinkPreview.CleanTitle("Europa continental – Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org");
+        Assert.Equal("Europa continental", title);
+        Assert.Equal("Wikipédia, a enciclopédia livre", tail);
+    }
+
+    [Theory]
+    [InlineData("PÚBLICO | Título", null, "www.publico.pt", "Título", "PÚBLICO")]
+    [InlineData("Título da notícia - Observador", null, "observador.pt", "Título da notícia", "Observador")]
+    [InlineData("Ukraine war latest - BBC News", "BBC News", "www.bbc.co.uk", "Ukraine war latest", "BBC News")]
+    [InlineData("Como fiz isto – Blog do Zé", null, "blogdoze.pt", "Como fiz isto", "Blog do Zé")]
+    // A descrição do repositório fala do GitHub, mas não começa por ele: sai o 1.º segmento, que é só o nome.
+    [InlineData("GitHub - cli/cli: GitHub’s official command line tool", "GitHub", "github.com", "cli/cli: GitHub’s official command line tool", "GitHub")]
+    public void CleanTitle_StripsLeadingBrand(string raw, string? site, string host, string expected, string expectedTail)
+    {
+        var (title, tail) = LinkPreview.CleanTitle(raw, site, host);
+        Assert.Equal(expected, title);
+        Assert.Equal(expectedTail, tail);
+    }
+
+    // As duas pontas começam pelo site: corta-se o fim (o sufixo do site), não o título. Um 1.º segmento que fala do site
+    // mas tem mais do que o nome e uma palavra é título.
+    [Theory]
+    [InlineData("Wikipédia em português – Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org", "Wikipédia em português", "Wikipédia, a enciclopédia livre")]
+    [InlineData("Wikipédia – Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org", "Wikipédia", "Wikipédia, a enciclopédia livre")]
+    [InlineData("Ensino público | PÚBLICO", null, "www.publico.pt", "Ensino público", "PÚBLICO")]
+    public void CleanTitle_PrefersCuttingTheSiteSuffix(string raw, string? site, string host, string expected, string expectedTail)
+    {
+        var (title, tail) = LinkPreview.CleanTitle(raw, site, host);
+        Assert.Equal(expected, title);
+        Assert.Equal(expectedTail, tail);
+    }
+
+    [Theory]
+    [InlineData("Fado & saudade", "Exemplo", "exemplo.pt")]
+    [InlineData("Economia – o que muda em 2027", null, "www.bbc.co.uk")]
+    [InlineData("Spider-Man: Homecoming", null, "imdb.com")]
+    [InlineData("Público", null, "www.publico.pt")]
+    [InlineData("", null, "exemplo.pt")]
+    // A marca do site é uma palavra comum do próprio título (o og:title vem sem o sufixo do site): o título fica inteiro.
+    [InlineData("Ensino público - o que muda em setembro", null, "www.publico.pt")]
+    [InlineData("Serviço Nacional de Saúde – o investimento público caiu", "PÚBLICO", "www.publico.pt")]
+    [InlineData("Crossing the Atlantic – a history of migration", null, "www.theatlantic.com")]
+    [InlineData("Globo de Ouro – os vencedores", null, "g1.globo.com")]
+    [InlineData("A Bola de Ouro – os nomeados", null, "www.abola.pt")]
+    [InlineData("Time to act - the climate report", null, "time.com")]
+    public void CleanTitle_KeepsTitlesWithoutSite(string raw, string? site, string host)
+    {
+        var (title, tail) = LinkPreview.CleanTitle(raw, site, host);
+        Assert.Equal(raw, title);
+        Assert.Null(tail);
+    }
+
+    [Fact]
+    public void ShortSite_PrefersOgSiteName_ThenTitleTail_IgnoresLegalEntity()
+    {
+        Assert.Equal("Exemplo", LinkPreview.ShortSite("Exemplo", "Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org"));
+        Assert.Equal("Wikipédia", LinkPreview.ShortSite(null, "Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org"));
+        // Um og:site_name comprido demais passa a vez.
+        Assert.Equal("Wikipédia", LinkPreview.ShortSite("Um nome de site comprido demais para o cartão", "Wikipédia, a enciclopédia livre", null, "pt.wikipedia.org"));
+        Assert.Equal("pt.wikipedia.org", LinkPreview.ShortSite(null, null, "Wikimedia Foundation, Inc.", "pt.wikipedia.org"));
+        Assert.Equal("exemplo.pt", LinkPreview.ShortSite(null, null, "Exemplo, S.A.", "www.exemplo.pt"));
+        Assert.Equal("exemplo.pt", LinkPreview.ShortSite(null, null, "Exemplo GmbH", "www.exemplo.pt"));
+        Assert.Equal("O Blog", LinkPreview.ShortSite(null, null, "O Blog", "www.exemplo.pt"));
+        Assert.Equal("exemplo.pt", LinkPreview.ShortSite(" ", " ", "", "www.exemplo.pt"));
+    }
+
+    [Theory]
+    [InlineData("E", false, false, GlanceAction.Expand)]
+    [InlineData("E", true, false, GlanceAction.None)]
+    [InlineData("E", false, true, GlanceAction.None)]
+    public void ActionFor_E_Expands(string key, bool shift, bool ctrl, GlanceAction expected)
+        => Assert.Equal(expected, LinkPreview.ActionFor(key, shift, ctrl, isPrivate: false));
+
+    [Fact]
+    public void Script_KeepsTheArticleElement_AndCollectsCleanParagraphs()
+    {
+        var script = LinkPreview.Script;
+        Assert.Contains("serializer: el => el", script);
+        // O Readability tira as classes ao conteúdo; sem estas, .mw-editsection, .infobox e .navbox nunca se encontravam.
+        Assert.Contains("classesToPreserve: ['mw-editsection', 'infobox', 'navbox']", script);
+        Assert.Contains("const collectParas = ", script);
+        Assert.Contains("paras = collectParas(", script);
+        Assert.Contains("paras: paras,", script);
+        Assert.Contains("excerpt: ", script);
+        Assert.DoesNotContain("__COLLECT_PARAS__", script);
+    }
+
+    // Prova ao vivo (Wikipédia «Continente»): sem descrição no cabeçalho, o excerto do Readability é o 1.º parágrafo com
+    // as chamadas de nota («[1]») que o collectParas tira; continua a ser o mesmo parágrafo e não se repete.
+    [Fact]
+    public void Parse_ExcerptWithNoteMarks_IsNotRepeated()
+    {
+        const string first = "Continente é uma grande massa de terra cercada por água. Na gigantesca massa de água salgada (formada principalmente pelos oceanos) pela qual são cobertos cerca de 75% da superfície terrestre, é muito fácil notar aqui e ali o aparecimento de territórios contínuos muito extensos.";
+        const string excerpt = "Continente é uma grande massa de terra cercada por água.[1] Na gigantesca massa de água salgada (formada principalmente pelos oceanos)[2] pela qual são cobertos cerca de 75% da superfície terrestre, é muito fácil notar aqui e ali o aparecimento de territórios contínuos muito extensos.";
+        var json = JsonSerializer.Serialize(new { head = "", excerpt, paras = new[] { first, "Outro parágrafo, com texto suficiente para contar como prosa no cartão." } });
+        var info = LinkPreview.Parse(json, "https://pt.wikipedia.org/wiki/Continente")!;
+        Assert.Null(info.Description);
+        Assert.Equal(first, info.Paragraphs[0]);
+        // Uma descrição do cabeçalho cortada a 300 carateres, com notas, também não se repete.
+        var head = $"<meta name=\"description\" content=\"{excerpt}{excerpt}\">";
+        var info2 = LinkPreview.Parse(JsonSerializer.Serialize(new { head, paras = new[] { first + " " + first } }), "https://pt.wikipedia.org/wiki/Continente")!;
+        Assert.Null(info2.Description);
+    }
 }
