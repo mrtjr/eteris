@@ -194,6 +194,7 @@ public partial class MainWindow
             AppData.ForgetSitePermissions(site);
             Bounces.Forget(site);
             AppData.ForgetSiteTabs(site);
+            AppData.DeleteWatchesOfSite(site);
             AppData.ForgetPrivacySubject(site);
         }
         else

@@ -129,6 +129,14 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.DoesNotContain("arquivadas", SiteScope.ShredSummary("exemplo.pt", 1, 1, isPrivate: true));
     }
 
+    // As vigias do site também saem (AppData.DeleteWatchesOfSite): a confirmação di-lo. A janela privada não as tem.
+    [Fact]
+    public void ShredSummary_SaysTheWatchesGo()
+    {
+        Assert.Contains("as vigias deste site", SiteScope.ShredSummary("exemplo.pt", 1, 1));
+        Assert.DoesNotContain("vigias", SiteScope.ShredSummary("exemplo.pt", 1, 1, isPrivate: true));
+    }
+
     [Fact]
     public void Forget_ClearsEveryWindowAndTheClosedOnes()
     {
