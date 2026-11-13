@@ -55,18 +55,20 @@ public class PublicTextsTests
         yield return ("CHANGELOG 0.2.15", Flat(ChangelogEntry()));
     }
 
-    // R12: a 0.2.16 é a última versão publicada, com a data da publicação, logo seguida da 0.2.15; por cima dela só podem
-    // estar secções por publicar, e a história fica como estava.
+    // R12: a 0.2.17 é a última versão publicada, com a data da publicação, logo seguida da 0.2.16 e da 0.2.15; por cima
+    // dela só podem estar secções por publicar, e a história fica como estava.
     [Fact]
     public void Changelog_LeadsWithTheCurrentVersion_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
-        var i = headings.IndexOf("## 0.2.16 — 2026-11-12");
-        Assert.True(i >= 0, "sem a entrada 0.2.16");
+        var i = headings.IndexOf("## 0.2.17 — 2026-11-13");
+        Assert.True(i >= 0, "sem a entrada 0.2.17");
         Assert.All(headings.Take(i), h => Assert.EndsWith("— por publicar", h));
-        Assert.Equal("## 0.2.15 — 2026-11-12", headings[i + 1]);
-        Assert.Equal("## 0.2.14 — 2026-11-09", headings[i + 2]);
+        Assert.Equal("## 0.2.16 — 2026-11-12", headings[i + 1]);
+        Assert.Equal("## 0.2.15 — 2026-11-12", headings[i + 2]);
+        Assert.Equal("## 0.2.14 — 2026-11-09", headings[i + 3]);
+        Assert.Single(headings, l => l.StartsWith("## 0.2.17", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.16", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.15", StringComparison.Ordinal));
         Assert.Single(headings, l => l.StartsWith("## 0.2.14", StringComparison.Ordinal));
@@ -132,17 +134,21 @@ public class PublicTextsTests
             Assert.Equal("googleapis.com/auth/drive.appdata", m.Value);
     }
 
-    // A data de uma política só o dono a muda (ao publicar). O texto mudou a 9 e a 10 de novembro (0.2.15) e a data
-    // ficou em 8; o dono pediu-a acertada a 12 de novembro de 2026, o dia em que esta versão do texto é publicada. As
-    // quatro frases (vigor e última atualização, nas duas línguas) dizem a mesma data.
+    // A data de uma política muda-se só ao publicar. O texto mudou a 9 e a 10 de novembro (0.2.15) e a data ficou em 8;
+    // o dono pediu-a acertada a 12 de novembro de 2026. Os planos 2 e 6 da auditoria mudaram o texto outra vez (a
+    // cadência das atualizações, os fornecedores de DNS cifrado e os motores com sugestões), publicado com a 0.2.17 a 13
+    // de novembro de 2026 (decisão delegada pelo dono). As quatro frases (vigor e última atualização, nas duas línguas)
+    // dizem a mesma data.
     [Fact]
     public void PrivacyPolicy_EffectiveDateIsUntouched()
     {
         var policy = Policy();
-        Assert.Contains("Em vigor desde 12 de novembro de 2026", policy);
-        Assert.Contains("Última atualização: 12 de novembro de 2026.", policy);
-        Assert.Contains("Effective 12 November 2026.", policy);
-        Assert.Contains("Last updated: 12 November 2026.", policy);
+        Assert.Contains("Em vigor desde 13 de novembro de 2026", policy);
+        Assert.Contains("Última atualização: 13 de novembro de 2026.", policy);
+        Assert.Contains("Effective 13 November 2026.", policy);
+        Assert.Contains("Last updated: 13 November 2026.", policy);
+        Assert.DoesNotContain("12 de novembro de 2026", policy);
+        Assert.DoesNotContain("12 November 2026", policy);
         Assert.DoesNotContain("8 de novembro de 2026", policy);
         Assert.DoesNotContain("8 November 2026", policy);
     }

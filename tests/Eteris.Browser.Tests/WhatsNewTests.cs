@@ -28,6 +28,34 @@ public class WhatsNewTests
         Assert.True(WhatsNewPage.Highlights.Count >= 8);
     }
 
+    // 0.2.17: cinco destaques à frente, curtos, que só prometem o que o CHANGELOG da 0.2.17 diz — os sites completos com o
+    // Escudo (como numa extensão; os rastreadores continuam bloqueados), o «Sair» do menu (só deste computador, com
+    // confirmação, sem apagar a chave), o Google como escolha (o padrão continua o DuckDuckGo), as limpezas que chegam ao
+    // motor de vídeo e ao disco, e os certificados de cliente (nada enviado sem escolher). A divisória «Versões
+    // anteriores» fica logo a seguir (NewCount), antes do 1.º destaque da 0.2.16.
+    [Fact]
+    public void Highlights_LeadWithTheShieldFixSignOutGoogleCleanupsAndCertificatesIn0217()
+    {
+        string[] titles = ["Sites completos com o Escudo", "«Sair» no menu", "Google como motor de pesquisa", "Limpezas que chegam a todo o lado", "Certificados de cliente"];
+        var news = WhatsNewPage.Highlights.Take(titles.Length).ToList();
+        Assert.Equal(titles, news.Select(h => h.Title));
+        Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
+        Assert.Contains("ge.globo.com", news[0].Detail);
+        Assert.Contains("rastreadores continuam bloqueados", news[0].Detail);
+        Assert.Contains("só deste computador", news[1].Detail);
+        Assert.Contains("nunca apaga a chave", news[1].Detail);
+        Assert.Contains("DuckDuckGo", news[2].Detail);
+        Assert.Contains("motor de vídeo", news[3].Detail);
+        Assert.Contains("nenhum é enviado sem o escolher", news[4].Detail);
+        Assert.Equal(titles.Length, WhatsNewPage.NewCount);
+        Assert.Equal("Todas as janelas voltam", WhatsNewPage.Highlights[WhatsNewPage.NewCount].Title);
+        Assert.All(news, h =>
+        {
+            foreach (var s in new[] { "sandbox", "isolad", "sempre", "Edge" })
+                Assert.DoesNotContain(s, h.Title + " " + h.Detail, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
     // 0.2.16: três destaques à frente, curtos, que só prometem o que o CHANGELOG da 0.2.16 diz — todas as janelas voltam
     // (só as normais), as abas com trabalho em curso não adormecem (também pelo comando da paleta) e «Apagar dados» apaga
     // o armazenamento dos sites e diz o que falhou. O 4.º: as atualizações conferidas (lista assinada pelo autor, chave
@@ -37,7 +65,7 @@ public class WhatsNewTests
     public void Highlights_LeadWithWindowsSleepClearDataAndSignedUpdatesIn0216()
     {
         string[] titles = ["Todas as janelas voltam", "Abas que não perdem trabalho", "Limpar dados apaga mesmo", "Atualizações conferidas"];
-        var news = WhatsNewPage.Highlights.Take(titles.Length).ToList();
+        var news = WhatsNewPage.Highlights.Skip(5).Take(titles.Length).ToList();
         Assert.Equal(titles, news.Select(h => h.Title));
         Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
         Assert.Contains("janelas normais", news[0].Detail);
@@ -69,7 +97,7 @@ public class WhatsNewTests
     public void Highlights_LeadWithOneSignInIn0215()
     {
         string[] titles = ["Um login e pronto", "Computador novo, aprovado com um número", "Kit de recuperação em 24 palavras", "Sair só deste computador"];
-        var news = WhatsNewPage.Highlights.Skip(4).Take(titles.Length).ToList();
+        var news = WhatsNewPage.Highlights.Skip(9).Take(titles.Length).ToList();
         Assert.Equal(titles, news.Select(h => h.Title));
         Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
         Assert.Contains("Entre com o Google", news[0].Detail);
@@ -82,7 +110,7 @@ public class WhatsNewTests
     [Fact]
     public void Highlights_0215_PromiseOnlyWhatShips()
     {
-        var news = WhatsNewPage.Highlights.Skip(4).Take(4).ToList();
+        var news = WhatsNewPage.Highlights.Skip(9).Take(4).ToList();
         var kit = Assert.Single(news, h => h.Title.StartsWith("Kit de recuperação", StringComparison.Ordinal));
         Assert.Contains("Windows Hello", kit.Detail);
         Assert.Equal(24, Eteris.Sync.Crypto.RecoveryCode.WordCount);
@@ -108,11 +136,12 @@ public class WhatsNewTests
     // 0.2.15 («Um login e pronto»): os 4 destaques novos vêm à frente e os da 0.2.14 começam a seguir (os índices
     // contam-se a partir do destaque do sandbox, para uma versão nova não obrigar a renumerar).
     // 0.2.16: os 4 destaques novos vêm à frente dos 4 da 0.2.15, e o do sandbox passa ao índice 8.
+    // 0.2.17: os 5 destaques novos vêm à frente dos 4 da 0.2.16, e o do sandbox passa ao índice 13.
     [Fact]
     public void Highlights_LeadWithOneSignInThenTheSandboxAndPerformanceThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
     {
         var at = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
-        Assert.Equal(8, at);
+        Assert.Equal(13, at);
         var rest = WhatsNewPage.Highlights.Skip(at).ToList();
         Assert.Equal(WhatsNewPage.SandboxTitle, rest[0].Title);
         Assert.Equal(WhatsNewPage.LighterTitle, rest[1].Title);
@@ -249,7 +278,7 @@ public class WhatsNewTests
     public void Render_SeparatesTheNewHighlightsFromOlderVersions()
     {
         Assert.InRange(WhatsNewPage.NewCount, 1, 8);
-        Assert.Equal(WhatsNewPage.SandboxTitle, WhatsNewPage.Highlights[WhatsNewPage.NewCount].Title);
+        Assert.Equal(WhatsNewPage.PreviousVersionFirstTitle, WhatsNewPage.Highlights[WhatsNewPage.NewCount].Title);
         Assert.Contains("\"older\":" + WhatsNewPage.NewCount, WhatsNewPage.Render("0.2.15"));
         var template = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Browser", "whatsnew.html"));
         Assert.Contains("Versões anteriores", template);

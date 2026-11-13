@@ -14,7 +14,7 @@
 # descarregado da Google Cloud) vai para a pasta publish e o «Entrar com o Google» fica disponível. Nunca no repositório
 # (.gitignore). Sem ele publica sem login: a secção Sincronização diz «indisponível nesta compilação», e o pack.ps1 só
 # empacota essa publicação com -SemLogin. A marca eteris-build.json diz se o levou (google_oauth), nunca o client_id.
-param([string]$Version = "0.2.16", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0,
+param([string]$Version = "0.2.17", [switch]$NoSandbox, [string]$CefSharpFeed = "", [int]$CefSharpN = 0,
   [string]$SandboxClientDll = "", [string]$GoogleOAuthJson = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot

@@ -12,7 +12,7 @@
     <SelfContained>true</SelfContained>
     <AssemblyName>Eteris.Browser</AssemblyName>
     <RootNamespace>Eteris.Browser</RootNamespace>
-    <Version>0.2.16</Version>
+    <Version>0.2.17</Version>
     <Product>Éteris</Product>
     <StartupObject>Eteris.Browser.Program</StartupObject>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

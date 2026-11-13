@@ -27,8 +27,19 @@ public static class WhatsNewPage
     public const string UnseenTitle = "Janela minimizada não gasta";
     public const string PressureTitle = "Abas que adormecem quando falta memória";
 
+    // O 1.º destaque da versão anterior: a divisória «Versões anteriores» fica antes dele (NewCount). Numa versão nova,
+    // passa a ser o 1.º destaque da versão que acabou de sair.
+    public const string PreviousVersionFirstTitle = "Todas as janelas voltam";
+
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.17 (textos conferidos com o CHANGELOG da 0.2.17: o bloqueio como numa extensão, o «Sair» do menu ⋯, o Google
+        // como escolha, as limpezas no motor de vídeo, nos subdomínios e no disco, e a janela do certificado de cliente)
+        new("🧩", "Sites completos com o Escudo", "Sites como o ge.globo.com e o g1 já não ficam a meio com o Escudo ligado: um pedido bloqueado falha como numa extensão, e os rastreadores continuam bloqueados."),
+        new("↩", "«Sair» no menu", "Com sessão iniciada, o cartão da conta no menu ⋯ tem «Sair» à direita: sai só deste computador, pede confirmação e nunca apaga a chave da sincronização."),
+        new("🔎", "Google como motor de pesquisa", "O Google passa a ser uma das escolhas em Definições › Pesquisa; o padrão continua a ser o DuckDuckGo, e o que escreve só lhe chega quando pesquisa."),
+        new("🧽", "Limpezas que chegam a todo o lado", "«Apagar ao fechar», «Triturar» e o cadeado chegam ao motor de vídeo e aos subdomínios, e o que se apaga do histórico deixa de ficar legível no disco."),
+        new("🪪", "Certificados de cliente", "Sites de bancos e da administração pública que pedem certificado de cliente passam a abrir: escolhe-o numa janela própria, e nenhum é enviado sem o escolher."),
         // 0.2.16 (textos conferidos com o CHANGELOG da 0.2.16: a sessão com todas as janelas normais, o sono que poupa as
         // abas com trabalho em curso, também pelo comando da paleta, e «Apagar dados de navegação» que apaga o armazenamento
         // dos sites e diz o que falhou; as atualizações conferidas com uma lista assinada valem a partir desta versão — a
@@ -108,9 +119,9 @@ public static class WhatsNewPage
     public static bool ShouldShow(string lastSeenVersion, string currentVersion, bool firstRun)
         => !firstRun && !string.Equals(lastSeenVersion, currentVersion, StringComparison.Ordinal);
 
-    // Quantos destaques são da versão em curso: os que vêm antes do 1.º da versão anterior (o do sandbox, o 1.º da
-    // 0.2.14). Numa versão futura, a âncora passa a ser o 1.º destaque da versão anterior.
-    public static int NewCount => Highlights.TakeWhile(h => h.Title != SandboxTitle).Count();
+    // Quantos destaques são da versão em curso: os que vêm antes do 1.º da versão anterior (PreviousVersionFirstTitle).
+    // Antes a âncora era o do sandbox (o 1.º da 0.2.14), e os destaques da 0.2.15 e da 0.2.16 contavam como novos.
+    public static int NewCount => Highlights.TakeWhile(h => h.Title != PreviousVersionFirstTitle).Count();
 
     // Os destaques para este arranque: sem sandbox, o anúncio do isolamento das páginas dá lugar ao aviso de que esta versão
     // corre sem ele (os outros e a ordem não mudam).
