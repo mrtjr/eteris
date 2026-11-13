@@ -1798,6 +1798,8 @@
                                 <Button x:Name="GlanceReadLater" DockPanel.Dock="Left" Style="{StaticResource PillButton}" Content="Ler mais tarde"
                                         Click="GlanceReadLater_Click" ToolTip="Guardar em Favoritos › Para ler (Ctrl+Enter)" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="GlanceExpand" Style="{StaticResource PillButton}" Content="Ler tudo aqui" Click="GlanceExpand_Click" Margin="0,0,8,0"
+                                            Visibility="Collapsed" ToolTip="Mostrar o artigo inteiro aqui (E)" AutomationProperties.AcceleratorKey="E" />
                                     <Button Style="{StaticResource PillButton}" Content="Abrir ao lado" Click="GlanceSplit_Click" Margin="0,0,8,0"
                                             ToolTip="Abrir numa aba ao lado desta — ecrã dividido (Shift+Enter)" />
                                     <Button x:Name="GlanceOpenButton" Style="{StaticResource PrimaryPillButton}" Content="Abrir" Click="GlanceOpen_Click"
@@ -1817,21 +1819,30 @@
                                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="11"
                                                 Content="&#xE8BB;" Click="GlanceClose_Click" ToolTip="Fechar (Esc)" Margin="8,-4,-6,0" />
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE7B3;" FontFamily="{StaticResource IconFont}" FontSize="11" Foreground="{DynamicResource IrisBrush}"
-                                                       VerticalAlignment="Center" Margin="0,1,6,0" />
+                                            <!-- Favicon da cache local (sem pedido novo); sem ele, a 1.ª letra do site num círculo -->
+                                            <Grid Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,7,0">
+                                                <Image x:Name="GlanceFavicon" Width="16" Height="16" Visibility="Collapsed"
+                                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                                                <Border x:Name="GlanceMonogram" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource SurfaceBrush}"
+                                                        BorderBrush="{DynamicResource FieldBorderBrush}" BorderThickness="1">
+                                                    <TextBlock x:Name="GlanceMonogramText" FontSize="9" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                            </Grid>
                                             <TextBlock x:Name="GlanceSite" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300" />
                                             <TextBlock x:Name="GlanceReading" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
                                         </StackPanel>
                                     </DockPanel>
                                     <TextBlock x:Name="GlanceTitle" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="25"
-                                               LineStackingStrategy="BlockLineHeight" MaxHeight="75" TextTrimming="WordEllipsis"
+                                               LineStackingStrategy="BlockLineHeight" MaxHeight="75" TextTrimming="WordEllipsis" AutomationProperties.LiveSetting="Polite"
                                                Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6" />
                                     <TextBlock x:Name="GlanceByline" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"
                                                TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
                                     <StackPanel x:Name="GlanceStatus" Orientation="Horizontal" Margin="0,4,0,8">
                                         <Path x:Name="GlanceSpinner" Style="{StaticResource SpinnerArc}" Width="16" Height="16" Margin="0,0,10,0" />
-                                        <TextBlock x:Name="GlanceStatusText" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="GlanceStatusText" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"
+                                                   AutomationProperties.LiveSetting="Polite" />
                                     </StackPanel>
                                     <TextBlock x:Name="GlanceDescription" FontSize="13.5" TextWrapping="Wrap" LineHeight="21" FontStyle="Italic"
                                                Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,10" Visibility="Collapsed" />

@@ -10,10 +10,23 @@
 - **eteris://vigias** lista as vigias com o último preço e a curva, e deixa abrir, pausar e apagar. A janela privada não vigia nem mostra as vigias.
 - **Recortar um pedaço ao vivo**: «Recortar um pedaço ao vivo…» abre uma janela pequena, sempre por cima, só com esse pedaço da página, que pode recarregar sozinho («Recarregar a cada…»). O recorte usa a sua sessão (os seus cookies), e eteris://privacy diz quais recortes recarregam sozinhos.
 
+### Espreitar
+
+- O resumo do cartão mostra só parágrafos de texto corrido: deixam de aparecer as coordenadas e os dados das caixas de informação, as ligações «editar», as notas de rodapé, as legendas e os menus que a Wikipédia e outros sites metiam no meio do texto.
+- O título aparece sem o nome do site («Europa continental» em vez de «Europa continental – Wikipédia, a enciclopédia livre»; «Título» em vez de «PÚBLICO | Título») e o site aparece pelo nome curto («Wikipédia», não «Wikimedia Foundation, Inc.»).
+- Ao lado do nome do site aparece o ícone dele, lido da cache local de ícones (sem pedido novo; também na janela privada, que não escreve nela); sem ícone guardado, aparece a 1.ª letra do site num círculo.
+- Novo botão «Ler tudo aqui» (tecla E): o artigo inteiro rola dentro do cartão, ainda sem JavaScript e sem cookies, com o texto que o Espreitar já tinha lido; «Mostrar menos» (ou E outra vez) volta ao resumo. Só aparece quando há mais do que o resumo mostra.
+- Uma página sem texto nem descrição para resumir diz «Sem resumo para esta página — «Abrir» mostra-a», e o leitor de ecrã ouve os estados do cartão (a espreitar, erro, sem resumo) e, com o resumo pronto, o título, sem perder o foco.
+
 ### Privacidade
 
 - eteris://privacy passa a contar as vigias ativas e paradas e os recortes que recarregam sozinhos, e a política de privacidade explica os dois.
 - Apagar o histórico de um período apaga também os preços e textos que as vigias leram nesse período (as vigias ficam). «Esquecer ao fechar» deixa as vigias; só o «Triturar» do site as leva.
+
+### Correções
+
+- Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.
+- Num link que redireciona (um encurtador de links, ou de http para https), o cartão do Espreitar mostra o nome e a imagem do site de destino, cujo texto já mostrava. Antes, sem nome do site na página, aparecia o endereço do encurtador, e uma imagem com endereço relativo podia não aparecer.
 
 ## 0.2.17 — 2026-11-13
 
