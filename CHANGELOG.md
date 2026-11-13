@@ -1,5 +1,11 @@
 # Alterações
 
+## 0.2.18 — por publicar
+
+### Correções
+
+- Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.
+
 ## 0.2.17 — 2026-11-13
 
 A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apaga, apaga-o em todo o sítio onde os dados estão (também no motor de vídeo e no disco), e os textos de privacidade dizem só o que o código faz. Fecha a auditoria de novembro, com dezenas de correções de segurança, privacidade e estabilidade, e traz o «Sair» no menu ⋯, o Google como escolha de motor de pesquisa, os sites que ficavam incompletos com o Escudo ligado (como o ge.globo.com) e os sites que pedem certificado de cliente.

@@ -33,14 +33,7 @@ public partial class MainWindow
         // na janela principal (tapados pela página; só para medir).
         if (Infrastructure.PerfDiagnostics.Without(Infrastructure.PerfLayers.Overlay)) return;
         var root = new Grid();
-        foreach (var source in new[] { TitleRow, ToolbarRow })
-        {
-            var row = new RowDefinition();
-            BindingOperations.SetBinding(row, RowDefinition.HeightProperty,
-                new Binding(nameof(RowDefinition.ActualHeight)) { Source = source, Converter = PixelsToGridLength.Instance });
-            root.RowDefinitions.Add(row);
-        }
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        BindChromeRows(root, this, TitleRowHeightProperty, ToolbarRowHeightProperty);
 
         var host = (Grid)RootBorder.Child;
         // Ajuste e5 (MainWindow.LinkBubble.cs): a bolha do link numa janela própria e o contorno do ecrã dividido na
@@ -100,6 +93,23 @@ public partial class MainWindow
             closing?.Close();
         };
         UpdateOverlayVisibility();
+    }
+
+    // As linhas da camada: a da barra de título e a da barra de ferramentas, ligadas às propriedades de dependência das
+    // alturas (as que o SlideBar anima, por isso a camada acompanha cada quadro), e a da página. Ligadas antes a
+    // RowDefinition.ActualHeight, que não avisa quando muda, ficavam com as alturas do arranque: depois de passar às abas
+    // verticais, o véu do Espreitar, a barra de procura, a de permissões e os avisos ficavam 42 px abaixo do topo da
+    // página (e, no sentido inverso, por cima da barra de ferramentas).
+    internal static void BindChromeRows(Grid root, DependencyObject source, DependencyProperty title, DependencyProperty toolbar)
+    {
+        foreach (var property in new[] { title, toolbar })
+        {
+            var row = new RowDefinition();
+            BindingOperations.SetBinding(row, RowDefinition.HeightProperty,
+                new Binding { Path = new PropertyPath(property), Source = source, Converter = PixelsToGridLength.Instance });
+            root.RowDefinitions.Add(row);
+        }
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
     }
 
     // Barra de carregamento: na janela principal, no fundo das barras, logo acima da página (fora dela). Na camada,
@@ -250,7 +260,7 @@ public partial class MainWindow
         public static readonly PixelsToGridLength Instance = new();
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            => new GridLength(value is double pixels ? pixels : 0);
+            => new GridLength(value is double pixels && pixels > 0 ? pixels : 0);
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
