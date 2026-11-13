@@ -59,7 +59,7 @@ public class ShieldTighteningTests
     }
 
     // Esvaziar é Network.setCacheDisabled(true) (o Blink chama MemoryCache::EvictResources no processo da página) e logo
-    // false, sempre: uma falha a meio não pode deixar a página sem cache para sempre. Uma sessão DevTools própria e curta.
+    // false, sempre: uma falha a meio não pode deixar a página sem cache para sempre.
     [Fact]
     public void Eviction_DisablesTheCacheAndAlwaysTurnsItBackOn()
     {
@@ -70,6 +70,30 @@ public class ShieldTighteningTests
         Assert.True(on > 0 && off > on);
         Assert.Contains("finally", evict[on..off]);
         Assert.Contains("PerfDiagnostics.Without(Infrastructure.PerfLayers.DevTools)", evict);
+    }
+
+    // O CEF tem uma só sessão DevTools por página, partilhada por todos os clientes (o PageScript, o ScriptletInjector, o
+    // cofre); largar o cliente não desliga o que ele ligou. O domínio Network ligado para esvaziar a cache sai logo a
+    // seguir, sempre (finally): senão ficava ligado na página até ela fechar, a guardar respostas e a emitir eventos de
+    // cada pedido. Mais nenhum código liga o Network nessa sessão.
+    [Fact]
+    public void Eviction_TurnsTheNetworkDomainBackOff()
+    {
+        var evict = Source("Browser", "RendererCache.cs");
+        var enable = evict.IndexOf("client.Network.EnableAsync()", StringComparison.Ordinal);
+        var off = evict.IndexOf("client.Network.SetCacheDisabledAsync(false)", StringComparison.Ordinal);
+        var disable = evict.IndexOf("client.Network.DisableAsync()", StringComparison.Ordinal);
+        Assert.True(enable > 0 && off > enable && disable > off);
+        Assert.Contains("finally", evict[enable..disable]);
+        Assert.Equal(2, Regex.Matches(evict[enable..disable], @"\bfinally\b").Count);
+        Assert.DoesNotContain("Uma sessão própria", evict);
+        var src = Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser");
+        var enabling = Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
+                        && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"Network\.EnableAsync|Network\.enable"))
+            .Select(Path.GetFileName);
+        Assert.Equal(["RendererCache.cs"], enabling);
     }
 
     // Cada janela esvazia a cache das páginas abertas do site (abas, Espreitar, painéis), não só a da aba ativa: a outra
