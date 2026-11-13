@@ -14,13 +14,15 @@ namespace Eteris.Browser.Data;
 // - Uma falha não apaga a última leitura boa; Failures conta as falhas seguidas (WatchRules.IsFailure), como as regras e a
 //   agenda esperam, e FailingSince guarda a hora da primeira.
 // - As leituras de preço guardam-se 90 dias (contados da verificação mais recente); saem com a vigia.
+// - baseline_from_tab guarda a fonte da linha de base (last_price/last_text): a aba do utilizador ou o motor escondido
+//   (WatchRules.Outcome não compara fontes diferentes). Só muda com uma verificação que traz preço ou texto.
 public sealed class WatchStore
 {
     private static readonly TimeSpan Keep = TimeSpan.FromDays(90);
 
     private const string Columns = """
         id, url, site, title, kind, selector, use_session, interval_min, target_price, paused, status, failures, last_block,
-        created_at, last_check_at, next_check_at, last_text, last_price, currency, failing_since
+        created_at, last_check_at, next_check_at, last_text, last_price, currency, failing_since, baseline_from_tab
         """;
 
     private readonly string _connectionString;
@@ -36,11 +38,21 @@ public sealed class WatchStore
                 kind TEXT NOT NULL, selector TEXT, use_session INTEGER NOT NULL, interval_min INTEGER NOT NULL,
                 target_price TEXT, paused INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0,
                 last_block TEXT NOT NULL, created_at INTEGER NOT NULL, last_check_at INTEGER, next_check_at INTEGER NOT NULL,
-                last_text TEXT, last_price TEXT, currency TEXT, failing_since INTEGER);
+                last_text TEXT, last_price TEXT, currency TEXT, failing_since INTEGER,
+                baseline_from_tab INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS watch_readings(watch_id INTEGER NOT NULL, at INTEGER NOT NULL, price TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS watch_readings_by_watch ON watch_readings(watch_id, at);
             """;
         command.ExecuteNonQuery();
+        // Um eteris.db de antes da coluna (versões de trabalho desta etapa) ganha-a.
+        using var columns = connection.CreateCommand();
+        columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('watches') WHERE name = 'baseline_from_tab'";
+        if ((long)columns.ExecuteScalar()! == 0)
+        {
+            using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE watches ADD COLUMN baseline_from_tab INTEGER NOT NULL DEFAULT 0";
+            alter.ExecuteNonQuery();
+        }
     }
 
     // Uma vigia nova verifica-se já (NextCheckUtc = nowUtc), nunca com menos de 30 min de intervalo.
@@ -101,7 +113,8 @@ public sealed class WatchStore
                     failures = CASE WHEN $failed THEN failures + 1 ELSE 0 END,
                     failing_since = CASE WHEN $failed THEN COALESCE(failing_since, $at) ELSE NULL END,
                     last_price = COALESCE($price, last_price), currency = COALESCE($currency, currency),
-                    last_text = COALESCE($text, last_text)
+                    last_text = COALESCE($text, last_text),
+                    baseline_from_tab = CASE WHEN $price IS NULL AND $text IS NULL THEN baseline_from_tab ELSE $fromTab END
                 WHERE id = $id
                 """;
             update.Parameters.AddWithValue("$status", check.Status.ToString());
@@ -112,6 +125,7 @@ public sealed class WatchStore
             update.Parameters.AddWithValue("$price", Price(check.Price));
             update.Parameters.AddWithValue("$currency", (object?)check.Currency ?? DBNull.Value);
             update.Parameters.AddWithValue("$text", (object?)check.Text ?? DBNull.Value);
+            update.Parameters.AddWithValue("$fromTab", check.FromTab ? 1 : 0);
             update.Parameters.AddWithValue("$id", id);
             if (update.ExecuteNonQuery() == 0) return false;
         }
@@ -230,7 +244,7 @@ public sealed class WatchStore
                 Status: Enum.Parse<WatchStatus>(reader.GetString(10)), Failures: reader.GetInt32(11), CreatedUtc: FromTicks(reader.GetInt64(13)),
                 LastCheckUtc: FromTicks(reader, 14), NextCheckUtc: FromTicks(reader.GetInt64(15)), LastText: Text(reader, 16),
                 LastPrice: Price(reader, 17), Currency: Text(reader, 18), FailingSinceUtc: FromTicks(reader, 19),
-                LastBlock: Enum.Parse<PageBlock>(reader.GetString(12))));
+                LastBlock: Enum.Parse<PageBlock>(reader.GetString(12)), BaselineFromTab: reader.GetInt64(20) != 0));
         return rows;
     }
 

@@ -300,11 +300,11 @@ public class WatchRulesTests
     }
 
     // A leitura passiva (o utilizador abriu a página) grava o preço de uma vigia bloqueada, que continua bloqueada, e
-    // avisa se baixou; um pedaço que voltou tira a vigia de «desapareceu».
+    // avisa se baixou desde a leitura anterior na aba; um pedaço que voltou tira a vigia de «desapareceu».
     [Fact] public void PassiveReading_KeepsBlocked_AndBringsMissingBack()
     {
-        var blocked = Watch(kind: WatchKind.Price, lastPrice: 588.22m, status: WatchStatus.Blocked, failures: 2, lastBlock: PageBlock.Challenge);
-        var check = WatchRules.ToCheck(blocked, Reading(price: 499.99m), PageBlock.None, Now);
+        var blocked = Watch(kind: WatchKind.Price, lastPrice: 588.22m, status: WatchStatus.Blocked, failures: 2, lastBlock: PageBlock.Challenge) with { BaselineFromTab = true };
+        var check = WatchRules.Passive(blocked, Reading(price: 499.99m), PageBlock.None, Now)!;
         Assert.Equal((WatchStatus.Blocked, (decimal?)499.99m), (check.Status, check.Price));
         Assert.Equal(WatchOutcome.PriceDropped, WatchRules.Outcome(blocked, check));
 
@@ -312,6 +312,64 @@ public class WatchRulesTests
         var back = WatchRules.ToCheck(missing, Reading(piece: "Em stock"), PageBlock.None, Now);
         Assert.Equal(WatchStatus.Ok, back.Status);
         Assert.Equal(WatchOutcome.Changed, WatchRules.Outcome(missing, back));
+        Assert.Equal(WatchStatus.Ok, WatchRules.Passive(missing, Reading(piece: "Em stock"), PageBlock.None, Now)?.Status);
+    }
+
+    // Achado 1: a aba (com os cookies do utilizador e a largura da janela) e o motor escondido (sem cookies, 1280x900)
+    // podem ler valores diferentes da mesma página: um preço de sócio ou regional, «Olá, …», um pedaço que só aparece
+    // numa largura. Uma leitura nunca se compara com a de outra fonte: só avisa contra uma linha de base da mesma fonte.
+    [Fact] public void TabReading_AgainstAnEngineBaseline_IsNothing()
+    {
+        var w = Watch(kind: WatchKind.Price, lastPrice: 100m, status: WatchStatus.Ok);
+        var passive = WatchRules.Passive(w, Reading(price: 90m), PageBlock.None, Now);
+        Assert.NotNull(passive);
+        Assert.Equal(WatchStatus.Ok, passive.Status);
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(w, passive));
+        // A linha de base do motor fica: a leitura da aba não a substitui (nem entra na curva).
+        Assert.Null(passive.Price);
+
+        var change = Watch(kind: WatchKind.Change, lastText: "Entrar", status: WatchStatus.Ok);
+        var greeting = WatchRules.Passive(change, Reading(piece: "Olá, Ana"), PageBlock.None, Now);
+        Assert.NotNull(greeting);
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(change, greeting));
+        Assert.Null(greeting.Text);
+    }
+
+    [Fact] public void EngineReading_AgainstATabBaseline_IsNothing()
+    {
+        // A primeira leitura vem da aba (a vigia acabada de criar): a primeira visita do motor não avisa.
+        var price = Watch(kind: WatchKind.Price, lastPrice: 110m, status: WatchStatus.Ok) with { BaselineFromTab = true };
+        var engine = WatchRules.ToCheck(price, Reading(price: 100m), PageBlock.None, Now);
+        Assert.False(engine.FromTab);
+        Assert.Equal(100m, engine.Price);
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(price, engine));
+
+        var change = Watch(kind: WatchKind.Change, lastText: "Olá, Ana", status: WatchStatus.Ok) with { BaselineFromTab = true };
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(change, WatchRules.ToCheck(change, Reading(piece: "Entrar"), PageBlock.None, Now)));
+    }
+
+    [Fact] public void SameSourceReadings_StillWarn()
+    {
+        // Aba contra aba (a vigia ainda só leu na aba): baixou.
+        var tab = Watch(kind: WatchKind.Price, lastPrice: 100m, status: WatchStatus.Ok) with { BaselineFromTab = true };
+        var again = WatchRules.Passive(tab, Reading(price: 90m), PageBlock.None, Now)!;
+        Assert.True(again.FromTab);
+        Assert.Equal(WatchOutcome.PriceDropped, WatchRules.Outcome(tab, again));
+
+        // A primeira leitura (na criação) é da aba e fica como linha de base.
+        var fresh = Watch(kind: WatchKind.Price, lastPrice: null, status: WatchStatus.New);
+        Assert.Equal(90m, WatchRules.Passive(fresh, Reading(price: 90m), PageBlock.None, Now)?.Price);
+
+        // «Com a minha sessão»: o motor também leva os cookies; as duas fontes comparam-se.
+        var session = Watch(kind: WatchKind.Price, lastPrice: 100m, status: WatchStatus.Ok) with { UseSession = true };
+        var withSession = WatchRules.Passive(session, Reading(price: 90m), PageBlock.None, Now)!;
+        Assert.Equal(WatchOutcome.PriceDropped, WatchRules.Outcome(session, withSession));
+
+        // Bloqueada com a linha de base do motor: a 1.ª leitura na aba passa a ser a linha de base, sem avisar.
+        var blocked = Watch(kind: WatchKind.Price, lastPrice: 100m, status: WatchStatus.Blocked, failures: 2, lastBlock: PageBlock.Challenge);
+        var first = WatchRules.Passive(blocked, Reading(price: 90m), PageBlock.None, Now)!;
+        Assert.Equal(90m, first.Price);
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(blocked, first));
     }
 
     // O endereço de uma vigia: a mesma página aberta noutra âncora (#avaliacoes, #:~:text=…) é ela; numa aplicação de uma
@@ -331,7 +389,7 @@ public class WatchRulesTests
     // a vigia em «falhou», «desapareceu» nem «bloqueada», nem gasta a hora da próxima verificação.
     [Fact] public void Passive_RecordsOnlyGoodReadings()
     {
-        var w = Watch(lastPrice: 588.22m);
+        var w = Watch(lastPrice: 588.22m) with { BaselineFromTab = true };
         Assert.Equal(499.99m, WatchRules.Passive(w, Reading(price: 499.99m), PageBlock.None, Now)?.Price);
         Assert.Null(WatchRules.Passive(w, Reading(price: 499.99m, marker: true), PageBlock.None, Now));
         Assert.Null(WatchRules.Passive(w, Reading(price: 499.99m), PageBlock.Challenge, Now));
@@ -344,7 +402,7 @@ public class WatchRulesTests
         Assert.Null(WatchRules.Passive(blocked, Reading(pieceFound: false), PageBlock.None, Now));
         Assert.Equal(WatchStatus.Blocked, WatchRules.Passive(blocked, Reading(price: 499.99m), PageBlock.None, Now)?.Status);
 
-        var change = Watch(kind: WatchKind.Change, lastText: "Esgotado");
+        var change = Watch(kind: WatchKind.Change, lastText: "Esgotado") with { BaselineFromTab = true };
         Assert.Equal("Em stock", WatchRules.Passive(change, Reading(piece: "Em stock"), PageBlock.None, Now)?.Text);
         Assert.Null(WatchRules.Passive(change, Reading(piece: "  "), PageBlock.None, Now));
         Assert.Null(WatchRules.Passive(change, Reading(pieceFound: false), PageBlock.None, Now));

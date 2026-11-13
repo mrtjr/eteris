@@ -147,6 +147,57 @@ public sealed class WatchStoreTests : IDisposable
         Assert.Equal([9m], _store.Prices(id).Select(p => p.Price));
     }
 
+    // A linha de base guarda a fonte (aba ou motor): uma leitura que a substitui grava a sua; uma verificação sem preço
+    // nem texto (a aba contra a linha de base do motor, uma falha) deixa-a como estava.
+    [Fact] public void Record_KeepsWhereTheBaselineCameFrom()
+    {
+        var id = _store.Add(New(), Now);
+        _store.Record(id, Ok(Now, 90m) with { FromTab = true }, Now.AddHours(2));
+        Assert.True(Assert.Single(_store.All()).BaselineFromTab);
+
+        _store.Record(id, Ok(Now.AddHours(2), 100m), Now.AddHours(4));
+        Assert.False(Assert.Single(_store.All()).BaselineFromTab);
+
+        _store.Record(id, new WatchCheck(Now.AddHours(3), WatchStatus.Ok, null, null, null, PageBlock.None, FromTab: true), Now.AddHours(5));
+        var w = Assert.Single(_store.All());
+        Assert.Equal((false, (decimal?)100m), (w.BaselineFromTab, w.LastPrice));
+        Assert.Equal(2, _store.Prices(id).Count);
+    }
+
+    // Um eteris.db de uma versão anterior desta etapa (sem a coluna) abre e ganha-a.
+    [Fact] public void OldTable_GainsTheBaselineColumn()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "eteris-watches-old-" + Guid.NewGuid() + ".db");
+        try
+        {
+            using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + path))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    CREATE TABLE watches(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, site TEXT NOT NULL, title TEXT NOT NULL,
+                        kind TEXT NOT NULL, selector TEXT, use_session INTEGER NOT NULL, interval_min INTEGER NOT NULL,
+                        target_price TEXT, paused INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0,
+                        last_block TEXT NOT NULL, created_at INTEGER NOT NULL, last_check_at INTEGER, next_check_at INTEGER NOT NULL,
+                        last_text TEXT, last_price TEXT, currency TEXT, failing_since INTEGER);
+                    INSERT INTO watches(url, site, title, kind, use_session, interval_min, status, last_block, created_at, next_check_at)
+                    VALUES ('https://a.pt/p', 'a.pt', 'P', 'Price', 0, 120, 'Ok', 'None', 0, 0);
+                    """;
+                command.ExecuteNonQuery();
+            }
+            var store = new WatchStore(path);
+            Assert.False(Assert.Single(store.All()).BaselineFromTab);
+            Assert.True(store.Record(Assert.Single(store.All()).Id, Ok(Now, 9m) with { FromTab = true }, Now.AddHours(2)));
+            Assert.True(Assert.Single(store.All()).BaselineFromTab);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
+
     [Fact] public void Prices_InOrder_WithTheirTimes()
     {
         var id = _store.Add(New(), Now);

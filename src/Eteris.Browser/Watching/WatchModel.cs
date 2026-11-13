@@ -23,12 +23,15 @@ public sealed record PageReading(PriceReading? Price, string? PieceText, bool Pi
 // Uma vigia por criar.
 public sealed record NewWatch(string Url, string Title, WatchKind Kind, string? Selector, bool UseSession, int IntervalMinutes, decimal? TargetPrice);
 
-// Uma vigia guardada. LastPrice e LastText são os da última leitura boa (uma falha não os apaga); Failures conta as
-// verificações falhadas seguidas (ver WatchRules.IsFailure) e LastBlock é o Block da última verificação.
+// Uma vigia guardada. LastPrice e LastText são os da última leitura boa (uma falha não os apaga): a linha de base dos
+// avisos. BaselineFromTab diz se ela veio de uma aba do utilizador (a criação, a leitura passiva) ou do motor escondido.
+// Failures conta as verificações falhadas seguidas (ver WatchRules.IsFailure) e LastBlock é o Block da última verificação.
 public sealed record PageWatch(long Id, string Url, string Site, string Title, WatchKind Kind, string? Selector, bool UseSession,
     int IntervalMinutes, decimal? TargetPrice, bool Paused, WatchStatus Status, int Failures, DateTime CreatedUtc,
     DateTime? LastCheckUtc, DateTime NextCheckUtc, string? LastText, decimal? LastPrice, string? Currency, DateTime? FailingSinceUtc,
-    PageBlock LastBlock);
+    PageBlock LastBlock, bool BaselineFromTab = false);
 
-// O resultado de uma verificação, pronto a gravar. Numa falha, Price, Currency e Text vêm a null.
-public sealed record WatchCheck(DateTime AtUtc, WatchStatus Status, decimal? Price, string? Currency, string? Text, PageBlock Block);
+// O resultado de uma verificação, pronto a gravar. Numa falha, Price, Currency e Text vêm a null; numa leitura que não
+// substitui a linha de base (a aba contra uma linha de base do motor) também. FromTab: lida numa aba do utilizador.
+public sealed record WatchCheck(DateTime AtUtc, WatchStatus Status, decimal? Price, string? Currency, string? Text, PageBlock Block,
+    bool FromTab = false);

@@ -14,6 +14,11 @@ namespace Eteris.Browser.Watching;
 //   página carregou noutro endereço (um salto para o login, o consentimento ou uma verificação anti-robô servida com
 //   200), não é a página vigiada: é uma falha passageira, nunca «Missing».
 // - «Blocked» e «Missing» só mudam com uma leitura boa (a leitura passiva): uma falha deixa-as como estão.
+// - Uma leitura só se compara com uma linha de base da mesma fonte (achado 1): a aba do utilizador tem os cookies dele e
+//   a largura da janela, o motor escondido não tem cookies e tem 1280x900, e podem ler preços ou textos diferentes da
+//   mesma página. A leitura passiva só substitui a linha de base quando não há uma do motor (a vigia ainda só leu na
+//   aba), quando a vigia está bloqueada (só se lê na aba) ou «com a minha sessão»; fora disso só tira a vigia de
+//   «Failing» ou «Missing». A primeira visita do motor depois de uma linha de base da aba também não avisa.
 // - Failures conta as verificações falhadas seguidas (IsFailure) e volta a 0 com uma boa; quem grava (WatchStore) e a
 //   agenda (WatchSchedule.Next) usam a mesma contagem.
 public static class WatchRules
@@ -109,6 +114,8 @@ public static class WatchRules
         if (check.Status == WatchStatus.Blocked && before.Status != WatchStatus.Blocked) return WatchOutcome.BecameBlocked;
         if (check.Status == WatchStatus.Missing && before.Status != WatchStatus.Missing) return WatchOutcome.PieceMissing;
         if (check.Block != PageBlock.None || check.Status is WatchStatus.Failing or WatchStatus.Missing) return WatchOutcome.Nothing;
+        // Fontes diferentes (aba e motor) não se comparam, salvo «com a minha sessão» (o motor também leva os cookies).
+        if (!before.UseSession && check.FromTab != before.BaselineFromTab) return WatchOutcome.Nothing;
 
         if (before.Kind == WatchKind.Change)
         {
@@ -145,15 +152,24 @@ public static class WatchRules
 
     // A leitura passiva (o utilizador abriu a página numa aba): só uma leitura boa se grava — o preço numa vigia de preço,
     // o pedaço com texto numa vigia de mudança. A aba pode estar a meio de carregar, rolada ou num desafio que o utilizador
-    // vai resolver: nada disso conta como falha, desaparecimento ou bloqueio, e a vigia fica como estava (null).
+    // vai resolver: nada disso conta como falha, desaparecimento ou bloqueio, e a vigia fica como estava (null). Contra uma
+    // linha de base do motor, a leitura boa só atualiza o estado: o preço e o texto ficam de fora (TabSetsBaseline).
     public static WatchCheck? Passive(PageWatch w, PageReading? reading, PageBlock block, DateTime nowUtc)
     {
         if (block != PageBlock.None || reading is null || reading.ChallengeMarker) return null;
         var check = ToCheck(w, reading, block, nowUtc);
         if (IsFailure(check)) return null;
         var good = w.Kind == WatchKind.Price ? check.Price is not null : !string.IsNullOrEmpty(check.Text);
-        return good ? check : null;
+        if (!good) return null;
+        check = check with { FromTab = true };
+        return TabSetsBaseline(w) ? check : check with { Price = null, Currency = null, Text = null };
     }
+
+    // A leitura da aba passa a linha de base quando não há uma do motor com que choque: a vigia ainda não leu nada ou só
+    // leu na aba, está bloqueada (o motor já não a visita), ou vai «com a minha sessão».
+    private static bool TabSetsBaseline(PageWatch w)
+        => w.UseSession || w.Status == WatchStatus.Blocked || w.BaselineFromTab
+           || (w.Kind == WatchKind.Price ? w.LastPrice is null : w.LastText is null);
 
     // Uma verificação falhada: conta para Failures (e para o recuo da agenda).
     public static bool IsFailure(WatchCheck check)

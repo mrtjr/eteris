@@ -376,7 +376,8 @@ public partial class MainWindow
 
     // Lê-a ali, sem visita extra ao site — a única leitura das vigias bloqueadas e sem pedaço (decisão 8) — e grava como
     // a ronda do relógio. Só uma leitura boa conta (WatchRules.Passive): a aba do utilizador a meio de carregar ou num
-    // desafio nunca põe a vigia em falha. As vigias em pausa ficam como estão. Nunca na janela privada.
+    // desafio nunca põe a vigia em falha. Contra uma linha de base do motor (sem cookies, outra largura), a leitura da aba
+    // só atualiza o estado e nunca avisa. As vigias em pausa ficam como estão. Nunca na janela privada.
     private async void ReadWatchedPagePassively(ChromiumWebBrowser browser, string url, int httpStatus)
     {
         if (IsPrivate || WebHost(url) is null) return;
