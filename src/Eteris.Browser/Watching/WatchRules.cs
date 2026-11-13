@@ -1,0 +1,149 @@
+using System.Text;
+
+namespace Eteris.Browser.Watching;
+
+// As regras da vigia, sem motor nem disco: normalizar o texto de um pedaço, reconhecer uma visita barrada, transformar
+// uma leitura numa verificação e decidir se essa verificação merece um aviso.
+//
+// - Um desafio anti-robô (ou um salto para uma aplicação) nunca é «mudou» nem «desapareceu»; à 2.ª vez seguida a vigia
+//   fica bloqueada (decisão 8: o Éteris não contorna as proteções; passa a ler só quando o utilizador abre a página).
+// - Uma página que não carregou (erro HTTP, sem rede, tempo esgotado, página vazia) é uma falha passageira: as duas
+//   primeiras seguidas deixam o estado como estava, a 3.ª dá «Failing», e nunca bloqueia nem dá «desapareceu».
+// - O pedaço (ou o preço) que não aparece numa página que carregou dá «Failing»; à 2.ª vez seguida, «Missing».
+// - Failures conta as verificações falhadas seguidas (IsFailure) e volta a 0 com uma boa; quem grava (WatchStore) e a
+//   agenda (WatchSchedule.Next) usam a mesma contagem.
+public static class WatchRules
+{
+    // Títulos das páginas de desafio (sem distinguir maiúsculas); só contam com 403, 429 ou 503.
+    private static readonly string[] ChallengeTitles =
+        ["um momento", "just a moment", "attention required", "verificação de segurança", "are you a robot", "captcha"];
+
+    // Esquemas que não são «o site mandou para uma aplicação»: páginas do próprio motor ou documentos locais.
+    private static readonly string[] EngineSchemes = ["http", "https", "about", "data", "blob", "chrome"];
+
+    // Falhas passageiras seguidas que passam a vigia a «Failing».
+    private const int LoadFailuresBeforeFailing = 3;
+
+    public static string Normalize(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var sb = new StringBuilder(text.Length);
+        var space = false;
+        foreach (var c in text)
+        {
+            // Os invisíveis (espaço de largura zero, junções, BOM, hífen condicional) somem sem deixar espaço.
+            if (c is '​' or '‌' or '‍' or '⁠' or '﻿' or '­') continue;
+            if (char.IsWhiteSpace(c))
+            {
+                space = sb.Length > 0;
+                continue;
+            }
+            if (space) sb.Append(' ');
+            space = false;
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    public static PageBlock Classify(int httpStatus, string requestedUrl, string finalUrl, string title, bool challengeMarker)
+    {
+        if (challengeMarker) return PageBlock.Challenge;
+        if ((httpStatus is 403 or 429 or 503) && LooksLikeChallenge(title)) return PageBlock.Challenge;
+
+        if (Uri.TryCreate(finalUrl, UriKind.Absolute, out var final))
+        {
+            // A página de erro do motor (sem rede, nome que não resolve) é uma falha de carga, não uma aplicação.
+            if (final.Scheme.Equals("chrome-error", StringComparison.OrdinalIgnoreCase)) return PageBlock.HttpError;
+            if (!EngineSchemes.Contains(final.Scheme, StringComparer.OrdinalIgnoreCase)) return PageBlock.AppRedirect;
+        }
+
+        return httpStatus >= 400 ? PageBlock.HttpError : PageBlock.None;
+    }
+
+    public static WatchCheck ToCheck(PageWatch w, PageReading? reading, PageBlock block, DateTime nowUtc)
+    {
+        if (reading?.ChallengeMarker == true) block = PageBlock.Challenge;
+        // Nada lido, ou uma página sem título, sem preço e sem pedaço: a página não carregou.
+        if (block == PageBlock.None && (reading is null || IsEmpty(reading))) block = PageBlock.HttpError;
+
+        if (block != PageBlock.None) return Failed(w, block, nowUtc);
+
+        if (w.Kind == WatchKind.Price)
+        {
+            var price = reading!.Price;
+            if (price is null && reading.PieceFound && PriceText.Parse(reading.PieceText) is { } fromPiece)
+                price = new PriceReading(fromPiece, w.Currency, "texto");
+            if (price is null) return NotFound(w, nowUtc);
+            return new WatchCheck(nowUtc, Good(w), price.Value, price.Currency ?? w.Currency, null, PageBlock.None);
+        }
+
+        if (!reading!.PieceFound) return NotFound(w, nowUtc);
+        return new WatchCheck(nowUtc, Good(w), null, null, Normalize(reading.PieceText), PageBlock.None);
+    }
+
+    public static WatchOutcome Outcome(PageWatch before, WatchCheck check)
+    {
+        if (check.Status == WatchStatus.Blocked && before.Status != WatchStatus.Blocked) return WatchOutcome.BecameBlocked;
+        if (check.Status == WatchStatus.Missing && before.Status != WatchStatus.Missing) return WatchOutcome.PieceMissing;
+        if (check.Block != PageBlock.None || check.Status is WatchStatus.Failing or WatchStatus.Missing) return WatchOutcome.Nothing;
+
+        if (before.Kind == WatchKind.Change)
+        {
+            // A primeira leitura nunca é uma mudança.
+            if (before.LastText is null || check.Text is null) return WatchOutcome.Nothing;
+            return Normalize(before.LastText) == check.Text ? WatchOutcome.Nothing : WatchOutcome.Changed;
+        }
+
+        if (before.LastPrice is not { } old || check.Price is not { } now) return WatchOutcome.Nothing;
+        // Preços em moedas diferentes não se comparam.
+        if (before.Currency is not null && check.Currency is not null
+            && !before.Currency.Equals(check.Currency, StringComparison.OrdinalIgnoreCase)) return WatchOutcome.Nothing;
+
+        if (before.TargetPrice is { } target)
+        {
+            if (old > target && now <= target) return WatchOutcome.ReachedTarget;
+            // Com um alvo, só conta uma descida dentro dele (abaixo do alvo, já atravessado).
+            return now < old && now <= target ? WatchOutcome.PriceDropped : WatchOutcome.Nothing;
+        }
+        return now < old ? WatchOutcome.PriceDropped : WatchOutcome.Nothing;
+    }
+
+    // Uma verificação falhada: conta para Failures (e para o recuo da agenda).
+    public static bool IsFailure(WatchCheck check)
+        => check.Block != PageBlock.None || check.Status is WatchStatus.Failing or WatchStatus.Missing;
+
+    private static bool LooksLikeChallenge(string? title)
+        => !string.IsNullOrEmpty(title) && ChallengeTitles.Any(t => title.Contains(t, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsEmpty(PageReading r)
+        => r.Price is null && !r.PieceFound && string.IsNullOrWhiteSpace(r.Title);
+
+    // Uma leitura boa tira a vigia de «Failing» ou «Missing»; uma bloqueada continua bloqueada (só a leitura passiva a lê).
+    private static WatchStatus Good(PageWatch w) => w.Status == WatchStatus.Blocked ? WatchStatus.Blocked : WatchStatus.Ok;
+
+    private static WatchCheck Failed(PageWatch w, PageBlock block, DateTime nowUtc)
+    {
+        WatchStatus status;
+        if (w.Status == WatchStatus.Blocked) status = WatchStatus.Blocked;
+        else if (block is PageBlock.Challenge or PageBlock.AppRedirect)
+            status = w.LastBlock == block ? WatchStatus.Blocked : WatchStatus.Failing;
+        else
+        {
+            var inARow = w.LastBlock == PageBlock.HttpError ? w.Failures + 1 : 1;
+            status = inARow >= LoadFailuresBeforeFailing ? WatchStatus.Failing : w.Status;
+        }
+        return new WatchCheck(nowUtc, status, null, null, null, block);
+    }
+
+    // O preço ou o pedaço não está numa página que carregou: à 2.ª vez seguida, desapareceu.
+    private static WatchCheck NotFound(PageWatch w, DateTime nowUtc)
+    {
+        var status = w.Status switch
+        {
+            WatchStatus.Blocked => WatchStatus.Blocked,
+            WatchStatus.Failing or WatchStatus.Missing when w.LastBlock == PageBlock.None => WatchStatus.Missing,
+            _ => WatchStatus.Failing,
+        };
+        return new WatchCheck(nowUtc, status, null, null, null, PageBlock.None);
+    }
+}
