@@ -91,7 +91,7 @@ public class PauseWiringTests
     public void TheCalmView_IsAccessible()
     {
         var pause = Source("MainWindow.Pause.cs");
-        Assert.Contains("AutomationProperties.SetName(view, \"Pausa\");", pause);
+        Assert.Contains("AutomationProperties.SetName(view, PauseCapture.ViewName(capturing));", pause);
         Assert.Contains("AutomationProperties.SetLiveSetting(countdown, AutomationLiveSetting.Polite);", pause);
         Assert.Contains("Timeline.SetDesiredFrameRate(breath, 30);", pause);
         Assert.Contains("Motion.Reduced", pause);
@@ -168,6 +168,18 @@ public class PauseWiringTests
         Assert.Contains("|| (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser) || PauseHolds(browser)) return;", webPanels);
         var exit = Regex.Match(Source("MainWindow.Pause.cs"), @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
         Assert.Contains("HoldAfterPause(back.Replay);", exit);
+    }
+
+    // A Pausa não corta a captura (a chamada é do utilizador), mas o ecrã calmo tapa o indicador da barra de abas: diz quais
+    // sites (abas e sites fixados) podem continuar a captar, à vista e no nome de automação.
+    [Fact]
+    public void TheCalmView_SaysWhoMayStillCapture()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        Assert.Contains("var capturing = PauseCapture.Notice(CapturingSites());", pause);
+        Assert.Matches(@"foreach \(var \(tab, browser\) in _browsers\)\s*if \(IsCapturing\(browser\)\)", pause);
+        Assert.Matches(@"foreach \(var \(url, browser\) in _webPanelBrowsers\)\s*if \(IsCapturing\(browser\)\)", pause);
+        Assert.Contains("Text = capturing,", pause);
     }
 
     private static readonly string Root = FindRoot();

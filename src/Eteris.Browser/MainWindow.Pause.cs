@@ -389,6 +389,8 @@ public partial class MainWindow
         var highContrast = SystemParameters.HighContrast;
         var picture = highContrast ? null : PauseBackdrop(Settings.Current.NewTabWallpaper);
         var mini = _miniMode;
+        // A Pausa não corta a câmara, o microfone nem o ecrã de uma chamada; o ecrã calmo não o esconde (PauseCapture).
+        var capturing = PauseCapture.Notice(CapturingSites());
 
         // O texto: branco sobre a paisagem escurecida a 55% (contraste de pelo menos 4,7:1 mesmo sobre um céu branco); sem
         // paisagem, o texto do tema sobre a superfície do tema; em alto contraste, as cores do sistema.
@@ -421,7 +423,7 @@ public partial class MainWindow
         state.ChosenStyle = Focusable("PrimaryPillButton");
 
         var view = new PauseSurface { ClipToBounds = true, Background = Brushes.Transparent, Focusable = false };
-        AutomationProperties.SetName(view, "Pausa");
+        AutomationProperties.SetName(view, PauseCapture.ViewName(capturing));
         KeyboardNavigation.SetTabNavigation(view, KeyboardNavigationMode.Cycle);
         KeyboardNavigation.SetControlTabNavigation(view, KeyboardNavigationMode.Cycle);
         KeyboardNavigation.SetDirectionalNavigation(view, KeyboardNavigationMode.Cycle);
@@ -560,6 +562,24 @@ public partial class MainWindow
         Ink(clock, TextBlock.ForegroundProperty);
         center.Children.Add(clock);
 
+        // Um site que pode continuar com a câmara, o microfone ou o ecrã: à vista, por cima de «Voltar».
+        if (capturing is not null)
+        {
+            var notice = new TextBlock
+            {
+                Text = capturing,
+                FontSize = mini ? 12 : 13.5,
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                MaxWidth = mini ? 360 : 460,
+                Margin = new Thickness(0, mini ? 8 : 18, 0, 0),
+            };
+            Ink(notice, TextBlock.ForegroundProperty);
+            center.Children.Add(notice);
+        }
+
         var back = new Button
         {
             Content = "Voltar",
@@ -602,6 +622,15 @@ public partial class MainWindow
         state.Back = back;
         state.Chips = chips;
         return view;
+    }
+
+    // Os sites desta janela que podem estar a captar (câmara, microfone, ecrã): as abas com motor e os sites fixados.
+    private IEnumerable<string> CapturingSites()
+    {
+        foreach (var (tab, browser) in _browsers)
+            if (IsCapturing(browser)) yield return WebHost(tab.Address) ?? tab.Title;
+        foreach (var (url, browser) in _webPanelBrowsers)
+            if (IsCapturing(browser)) yield return WebHost(browser.Address) ?? WebHost(url) ?? url;
     }
 
     // A paisagem da nova aba (Browser/Wallpapers, como Theme/WallpaperAccent.cs), lida uma vez por imagem a 960 px de
