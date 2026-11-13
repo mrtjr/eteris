@@ -13,6 +13,7 @@
 ### Correções
 
 - Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.
+- Num link que redireciona (um encurtador de links, ou de http para https), o cartão do Espreitar mostra o nome e a imagem do site de destino, cujo texto já mostrava. Antes, sem nome do site na página, aparecia o endereço do encurtador, e uma imagem com endereço relativo podia não aparecer.
 
 ## 0.2.17 — 2026-11-13
 
