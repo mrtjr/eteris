@@ -15,9 +15,11 @@ public class ThemedPagesTests
         Assert.Contains("content=\"light\"", html);
     }
 
+    // Proposta 3: no escuro, a pele comum (Browser/EterisSkin.cs) logo a seguir ao <head>, e mais nada.
     [Fact]
-    public void Dark_LeavesPageUntouched()
-        => Assert.Equal(Page, InternalPages.Themed(Page, light: false));
+    public void Dark_OnlyAddsTheSkin()
+        => Assert.Equal(Page.Replace("<head>", "<head>" + EterisSkin.Style),
+            InternalPages.Themed(Page, light: false, Eteris.Browser.Theme.Accent.IrisStops));
 
     [Theory]
     [InlineData("newtab")]

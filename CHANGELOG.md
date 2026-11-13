@@ -1,5 +1,13 @@
 # Alterações
 
+## 0.2.18 — por publicar
+
+### Aspeto
+
+- As páginas do Éteris (Definições, Histórico, Favoritos, Novidades, nova aba, também a privada, página de erro e as restantes) têm barras de deslocamento finas, sem setas e arredondadas, que seguem o tema claro ou escuro e ficam mais visíveis ao passar o rato. Em alto contraste do Windows, voltam a ser as do sistema.
+- Com os efeitos de animação desligados no Windows, as páginas do Éteris deixam de ter transições e animações.
+- Os botões e os campos das páginas do Éteris mostram um anel visível quando se chega a eles pelo teclado.
+
 ## 0.2.17 — 2026-11-13
 
 A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apaga, apaga-o em todo o sítio onde os dados estão (também no motor de vídeo e no disco), e os textos de privacidade dizem só o que o código faz. Fecha a auditoria de novembro, com dezenas de correções de segurança, privacidade e estabilidade, e traz o «Sair» no menu ⋯, o Google como escolha de motor de pesquisa, os sites que ficavam incompletos com o Escudo ligado (como o ge.globo.com) e os sites que pedem certificado de cliente.
