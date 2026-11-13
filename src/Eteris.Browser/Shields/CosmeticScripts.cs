@@ -158,8 +158,11 @@ public static class CosmeticScripts
           if (list.length && location.origin !== origin) list = [];
           {{HolesCore}}
           var hidden = 0;
+          // Já recolhido só se o display:none for nosso (com !important): o gpt.js põe display:none sem !important no
+          // lugar vazio, e uma regra do site com !important (o Público) mantém-no à vista.
           var hide = function (e) {
-            if (e.style.getPropertyValue && e.style.getPropertyValue('display') === 'none') return;
+            if (e.style.getPropertyValue && e.style.getPropertyValue('display') === 'none'
+              && e.style.getPropertyPriority('display') === 'important') return;
             e.style.setProperty('display', 'none', 'important');
             hidden++;
           };

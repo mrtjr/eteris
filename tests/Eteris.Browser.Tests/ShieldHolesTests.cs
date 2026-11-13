@@ -182,16 +182,20 @@ public class ShieldHolesTests
     // ---- o script inteiro, no Node, sobre um DOM de imitação ---------------------------------------------------------
 
     // Um DOM mínimo: o que o script usa (querySelectorAll, TreeWalker de texto, getComputedStyle com ::before/::after,
-    // createRange, caixas). Um elemento com display:none (inline) deixa de ter caixa, como no motor.
+    // createRange, caixas). Um elemento com display:none (inline) deixa de ter caixa, como no motor — exceto se uma regra
+    // da folha do site com !important ganhar ao inline sem !important (forced), como o Público faz no lugar do anúncio.
     private const string FakeDom = """
-        const hidden = e => { for (let x = e; x; x = x.parentElement) if (x.style.display === 'none') return true; return false; };
+        const hidden = e => { for (let x = e; x; x = x.parentElement) if (x.style.display === 'none' && (x.style.priority === 'important' || !x.forced)) return true; return false; };
         class Text { constructor(v) { this.nodeValue = v; this.parentElement = null; } }
         class El {
           constructor(tag, o = {}) {
             Object.assign(this, { tagName: tag.toUpperCase(), children: [], childNodes: [], parentElement: null, h: o.h ?? 20, w: o.w ?? 300,
               attrs: o.attrs || {}, before: o.before || 'none', after: o.after || 'none', bg: o.bg || 'none', isContentEditable: false,
-              src: o.src || '', currentSrc: o.currentSrc, naturalWidth: o.naturalWidth ?? 0, id: o.id || '', pad: o.pad, border: o.border, cursor: o.cursor });
-            this.style = { display: '', setProperty: (k, v, p) => { if (k === 'display' && p === 'important') this.style.display = v; } };
+              src: o.src || '', currentSrc: o.currentSrc, naturalWidth: o.naturalWidth ?? 0, id: o.id || '', pad: o.pad, border: o.border, cursor: o.cursor, forced: !!o.forced });
+            this.style = { display: o.inline || '', priority: '',
+              getPropertyValue: k => k === 'display' ? this.style.display : '',
+              getPropertyPriority: k => k === 'display' ? this.style.priority : '',
+              setProperty: (k, v, p) => { if (k === 'display' && p === 'important') { this.style.display = v; this.style.priority = p; } } };
           }
           add(...kids) { for (const k of kids) { k.parentElement = this; this.childNodes.push(k); if (k instanceof El) this.children.push(k); } return this; }
           getAttribute(n) { return this.attrs[n] ?? null; }
@@ -243,6 +247,20 @@ public class ShieldHolesTests
               el('article', { h: 340 }, el('img', { id: 'foto', src: 'https://imagens.publico.pt/a.jpg', naturalWidth: 1000, h: 330 }), el('h2', { h: 30 }, 'Presidentes e cargas policiais')),
               el('footer', { h: 247 }, el('div', { h: 19 }, el('a', { attrs: { href: '/publicidade' }, h: 19 }, 'Publicidade')))));
             """, ["https://ad.doubleclick.net/ddm/trackimp/N1;ord=1"]));
+
+    // Prova ao vivo: quando o gpt.js do Google chega à página (vindo da cache, depois de a exceção do site ter sido ligada
+    // e desligada), ele põe display:none sem !important no <ad-placement> vazio, mas a folha do Público tem
+    // «html #banner-and-header > .pubHorz { display: flex !important }» e o lugar fica à vista com 291 px. O script via
+    // «display: none» no inline e dava-o por escondido; só o está quando é dele (com !important).
+    [Fact]
+    public void Script_Publico_AnInlineNoneThatTheSiteCssOverrides_StillCollapses()
+        => Assert.Equal("1 pubHorz0", RunPage("""
+            page(el('body', { h: 13000 },
+              el('div', { id: 'banner-and-header', h: 476 },
+                el('ad-placement', { id: 'pubHorz0', h: 291, before: '"publicidade"', inline: 'none', forced: true }),
+                el('header', { h: 185 }, el('a', { attrs: { href: '/' } }, 'PÚBLICO'))),
+              el('main', { h: 9000 }, el('p', { h: 40 }, 'Texto da notícia'))));
+            """, []));
 
     // Observador: o lugar do anúncio só com um <script> (que não conta como texto) e o rótulo num ::before.
     [Fact]
