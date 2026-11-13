@@ -252,6 +252,12 @@ public class PauseWiringTests
     public void AMutedTab_IsNotPausedByThePause()
         => Assert.Contains("var script = state.Plan.WasMuted(engine) ? MediaInfo.LeavePictureInPictureScript : MediaInfo.PauseMarkScript;", Source("MainWindow.Pause.cs"));
 
+    // As teclas próprias do site fixado (F5, Ctrl+F, Ctrl+P, F12) passam pela mesma barreira da Pausa que as outras: com o
+    // foco do Win32 num site fixado escondido, imprimiam, abriam as ferramentas ou recarregavam por baixo do ecrã calmo.
+    [Fact]
+    public void ThePinnedSiteKeys_StopAtThePause()
+        => Assert.Matches(@"private bool ShortcutFromWebPanel\(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt, bool repeat\)\s*\{\s*(//[^\n]*\n\s*)*if \(_pausedForPage\) return ShortcutFromPage\(virtualKey, ctrl, shift, alt, repeat: repeat\);", Source("MainWindow.WebPanels.cs"));
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

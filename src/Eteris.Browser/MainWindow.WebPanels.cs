@@ -358,6 +358,9 @@ public partial class MainWindow
     // Tecla premida com o foco num site fixado (thread do CEF).
     private bool ShortcutFromWebPanel(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt, bool repeat)
     {
+        // A Pausa decide num só sítio (ShortcutFromPage): Esc e Ctrl+. voltam, o resto é engolido — também as teclas do
+        // painel, que de outro modo imprimiam ou recarregavam o site escondido.
+        if (_pausedForPage) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         if (WebPanelKeys.Resolve(key, ctrl, shift, alt) is not { } command) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
