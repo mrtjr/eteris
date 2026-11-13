@@ -54,6 +54,18 @@ public class AddressBarTests
     }
 
     [Fact]
+    public void VideoEngine_ErrorPage_HasNoPadlock()
+    {
+        // A página de erro do próprio WebView2 (sem rede, nome que não existe) mostra o endereço que falhou: o cadeado e
+        // «Ligação segura» não podem aparecer. O WebView2 di-lo no ContentLoading (IsErrorPage), depois do SourceChanged.
+        var video = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var loading = video[video.IndexOf("core.ContentLoading +=", StringComparison.Ordinal)..];
+        loading = loading[..loading.IndexOf("};", StringComparison.Ordinal)];
+        Assert.Contains("tab.ShowsErrorPage = e.IsErrorPage;", loading);
+        Assert.Contains("UpdateOmniboxChrome()", loading);
+    }
+
+    [Fact]
     public void TypedAddress_IsDropped_WhenTheEngineGoesAwayBeforeLoading()
     {
         // O motor saiu enquanto os scripts do site se registavam (a aba adormeceu, mudou de motor): o endereço escrito não

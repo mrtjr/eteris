@@ -274,6 +274,10 @@ public partial class MainWindow
         core.ContentLoading += (_, e) =>
         {
             committedNavigation = e.IsErrorPage ? null : e.NavigationId;
+            // A página de erro do WebView2 mostra o endereço que falhou, sem cadeado nem «Ligação segura» (como a do
+            // motor principal: BrowserTab.ShowsErrorPage). O SourceChanged, antes deste, já pôs a marca a false.
+            tab.ShowsErrorPage = e.IsErrorPage;
+            if (ReferenceEquals(tab, Tabs.Active)) UpdateOmniboxChrome();
             // Documento novo: o cartão de permissão da página anterior já não é desta (como no FrameLoadStart do motor
             // principal); o pedido dela é recusado.
             DropPermissions(p => ReferenceEquals(p.Tab, tab));
