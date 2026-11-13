@@ -8,7 +8,8 @@ namespace Eteris.Browser.Tests;
 // O ponto «fora de casa» (7 px, no canto do ícone da aba) vê-se com ≥ 3:1 (WCAG 1.4.11) contra os fundos de uma aba, nos
 // dois temas e com todas as cores do Éteris: a moldura (FrameBrush), a aba selecionada (SelectedBrush: lateral, modo
 // compacto, multi-seleção) e a superfície da aba ativa no topo (ChromeSurfaceBrush, que o ApplyTint pinta com
-// #F6F7FB no claro e, no escuro, com SiteTint.Base ou a cor do site até SiteTint.MaxChromeLuminance).
+// #F6F7FB no claro e, no escuro, com SiteTint.Base ou a cor do site até SiteTint.MaxChromeLuminance; com Espaços, com
+// uma pitada da cor do Espaço).
 // Os degraus do IrisBrush não chegam (o violeta sobre a barra escura de um site fica abaixo de 2:1; o ciano sobre o
 // claro também): o ponto usa o HomeDotBrush, o 1.º degrau clareado ou escurecido até ter 3:1 contra todos esses fundos.
 public class PinnedHomeContrastTests
@@ -74,11 +75,13 @@ public class PinnedHomeContrastTests
             .Single(e => (string?)e.Attribute(XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml")) == key).Attribute("Color")!);
         yield return Brush("FrameBrush");
         yield return Brush("SelectedBrush");
-        if (light) yield return Color.FromRgb(0xF6, 0xF7, 0xFB);
-        else
+        Color[] chromes = light ? [Color.FromRgb(0xF6, 0xF7, 0xFB)] : [SiteTint.Base, BrightestDarkChrome()];
+        foreach (var chrome in chromes)
         {
-            yield return SiteTint.Base;
-            yield return BrightestDarkChrome();
+            yield return chrome;
+            // Com Espaços, a barra ganha uma pitada da cor do Espaço à vista (SiteTint.WithWorkspace).
+            foreach (var space in Eteris.Browser.Tabs.TabGroup.Palette)
+                yield return SiteTint.WithWorkspace(chrome, (Color)ColorConverter.ConvertFromString(space), light);
         }
     }
 
