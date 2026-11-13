@@ -2,6 +2,11 @@
 
 ## 0.2.18 — por publicar
 
+### Espreitar
+
+- O resumo do cartão mostra só parágrafos de texto corrido: deixam de aparecer as coordenadas e os dados das caixas de informação, as ligações «editar», as notas de rodapé, as legendas e os menus que a Wikipédia e outros sites metiam no meio do texto.
+- O título aparece sem o nome do site («Europa continental» em vez de «Europa continental – Wikipédia, a enciclopédia livre»; «Título» em vez de «PÚBLICO | Título») e o site aparece pelo nome curto («Wikipédia», não «Wikimedia Foundation, Inc.»).
+
 ### Correções
 
 - Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.

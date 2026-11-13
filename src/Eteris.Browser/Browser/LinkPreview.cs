@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Eteris.Browser.Shields;
@@ -7,10 +8,15 @@ using Eteris.Browser.Shields;
 namespace Eteris.Browser.Browser;
 
 // O que o cartão «Espreitar» mostra de um link: título, site, descrição, imagem (og:image), tempo de leitura e os
-// primeiros parágrafos do artigo.
+// primeiros parágrafos do artigo. FullParagraphs é o artigo inteiro que «Ler tudo aqui» mostra (sem ele, o resumo).
 public sealed record LinkPreviewInfo(string Url, string Title, string Site, string? Description, string? ImageUrl,
-    IReadOnlyList<string> Paragraphs, int Words, string? Byline = null)
+    IReadOnlyList<string> Paragraphs, int Words, string? Byline = null, IReadOnlyList<string>? FullParagraphs = null)
 {
+    public IReadOnlyList<string> FullParagraphs { get; init; } = FullParagraphs ?? Paragraphs;
+
+    // Há mais do que o resumo mostra: mais parágrafos, ou o último do resumo foi cortado.
+    public bool HasMore => !FullParagraphs.SequenceEqual(Paragraphs);
+
     public int ReadingMinutes => LinkPreview.ReadingMinutes(Words);
 
     // «3 min de leitura»; vazio quando não há texto que chegue para contar.
@@ -18,7 +24,7 @@ public sealed record LinkPreviewInfo(string Url, string Title, string Site, stri
 }
 
 // O que uma tecla faz no cartão «Espreitar».
-public enum GlanceAction { None, Close, Open, OpenSideBySide, ReadLater }
+public enum GlanceAction { None, Close, Open, OpenSideBySide, ReadLater, Expand }
 
 // Rolagem do cartão pelo teclado (o foco está na camada, não no ScrollViewer).
 public enum GlanceScroll { None, LineUp, LineDown, PageUp, PageDown, Top, Bottom }
@@ -36,20 +42,57 @@ public static partial class LinkPreview
     public const int MinParagraphChars = 40;
     // A descrição (og:description) há sites que lá metem o artigo inteiro: o cartão mostra só o princípio.
     public const int MaxDescriptionChars = 300;
+    // «Ler tudo aqui»: o artigo inteiro, até este total (o mesmo limite do script na aba escondida).
+    public const int MaxFullChars = 20000;
 
     // Resultado do script na aba escondida: cabeçalho (meta) + artigo (Readability) + texto de recurso.
-    public static string Script => ReaderScripts.WithReadability(ScriptTemplate);
+    public static string Script => ReaderScripts.WithReadability(ScriptTemplate.Replace("__COLLECT_PARAS__", CollectParasScript, StringComparison.Ordinal));
 
+    // Os parágrafos de prosa do artigo: tira do conteúdo o que não é texto corrido (notas de rodapé, ligações «editar»,
+    // tabelas e caixas de informação, figuras, notas) e lê até 60 <p>, cada um inteiro e com os espaços juntos, até
+    // MaxFullChars no total. Função à parte para se testar no Node, com uma árvore falsa.
+    internal const string CollectParasScript = """
+        const collectParas = (root) => {
+          const paras = [];
+          if (!root || typeof root.querySelectorAll !== 'function') return paras;
+          for (const node of Array.from(root.querySelectorAll('sup, .mw-editsection, table, figure, figcaption, .infobox, .navbox, style, script, [role=note]'))) {
+            if (node && typeof node.remove === 'function') node.remove();
+          }
+          let total = 0;
+          for (const p of Array.from(root.querySelectorAll('p'))) {
+            const text = (p.textContent || '').replace(/\s+/g, ' ').trim();
+            if (text.length < 40) continue;
+            if (total + text.length > 20000) break;
+            paras.push(text);
+            total += text.length;
+            if (paras.length >= 60) break;
+          }
+          return paras;
+        };
+        """;
+
+    // O Readability devolve o elemento do conteúdo (serializer: el => el) e guarda as classes que collectParas procura
+    // (sem isso tira-as todas). Sem Readability, os parágrafos vêm de uma cópia do <body>.
     private const string ScriptTemplate = """
         (() => {
           const cap = (text, max) => (text || '').length > max ? (text || '').slice(0, max) : (text || '');
+          __COLLECT_PARAS__
           let article = null;
           try {
             if (typeof Readability === 'function') {
-              const parsed = new Readability(document.cloneNode(true), { serializer: () => '' }).parse();
+              const parsed = new Readability(document.cloneNode(true), {
+                serializer: el => el,
+                classesToPreserve: ['mw-editsection', 'infobox', 'navbox'],
+              }).parse();
               if (parsed && (parsed.textContent || '').trim().length > 0) article = parsed;
             }
           } catch (e) { article = null; }
+          let paras = [];
+          try {
+            paras = collectParas(article && article.content && typeof article.content === 'object'
+              ? article.content
+              : (document.body ? document.body.cloneNode(true) : null));
+          } catch (e) { paras = []; }
           const fallback = () => {
             const bits = [];
             for (const p of document.querySelectorAll('p')) {
@@ -66,15 +109,19 @@ public static partial class LinkPreview
             site: article ? article.siteName : '',
             text: cap(article ? article.textContent : fallback(), 6000),
             words: article ? (article.textContent || '').trim().split(/\s+/).filter(Boolean).length : 0,
+            paras: paras,
+            excerpt: cap(article ? article.excerpt : '', 2000),
           });
         })()
         """;
 
     // Teclado no cartão: Esc fecha, Enter abre, Shift+Enter abre ao lado, Ctrl+Enter guarda para ler mais tarde
-    // (na janela privada não há «Ler mais tarde»). Os botões não recebem foco, por isso estas são as únicas teclas.
+    // (na janela privada não há «Ler mais tarde») e E mostra ou recolhe o artigo inteiro («Ler tudo aqui»). Os botões
+    // não recebem foco, por isso estas são as únicas teclas.
     public static GlanceAction ActionFor(string key, bool shift, bool ctrl, bool isPrivate) => key switch
     {
         "Escape" => GlanceAction.Close,
+        "E" when !shift && !ctrl => GlanceAction.Expand,
         "Return" or "Enter" when ctrl && !shift => isPrivate ? GlanceAction.None : GlanceAction.ReadLater,
         "Return" or "Enter" when shift && !ctrl => GlanceAction.OpenSideBySide,
         "Return" or "Enter" when !shift && !ctrl => GlanceAction.Open,
@@ -162,6 +209,10 @@ public static partial class LinkPreview
     }
 
     // JSON do script → o que o cartão mostra. null quando o JSON não presta.
+    // Parágrafos: os de «paras» que são prosa (IsProse); senão as linhas do «text» que são prosa (o recurso de antes,
+    // sem Readability ou de um script antigo); senão os de «paras» sem o filtro (línguas e páginas onde nada passa, para
+    // não ficar pior do que antes); por fim os <p> do HTML. O cartão mostra os primeiros (MaxParagraphs,
+    // MaxExcerptChars); FullParagraphs leva todos, inteiros, até MaxFullChars.
     public static LinkPreviewInfo? Parse(string? json, string url)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;
@@ -173,23 +224,171 @@ public static partial class LinkPreview
             var head = Text(root, "head");
             var meta = FromHtml(head, url);
             var text = Text(root, "text");
+            var host = HostOf(url);
             var articleTitle = Clean(Text(root, "title"));
-            var title = Pick(meta.Title, articleTitle) ?? HostOf(url);
-            var site = Pick(meta.SiteName, Clean(Text(root, "site"))) ?? HostOf(url);
-            var paragraphs = Paragraphs(text);
-            if (paragraphs.Count == 0) paragraphs = meta.Paragraphs;
+            var articleSite = Clean(Text(root, "site"));
+            var (title, tail) = CleanTitle(Pick(meta.Title, articleTitle) ?? host, meta.SiteName ?? articleSite, host);
+            var site = ShortSite(meta.SiteName, tail, articleSite, host);
+
+            var paras = Lines(Strings(root, "paras")).ToList();
+            var candidates = paras.Where(IsProse).ToList();
+            if (candidates.Count == 0) candidates = Lines(text.Split('\n')).Where(IsProse).ToList();
+            if (candidates.Count == 0) candidates = paras;
+            if (candidates.Count == 0) candidates = [.. meta.Paragraphs];
+            var paragraphs = Excerpt(candidates, MaxParagraphs, MaxExcerptChars);
+            var full = Excerpt(candidates, int.MaxValue, MaxFullChars, cutLast: false);
+
             var words = root.TryGetProperty("words", out var w) && w.ValueKind == JsonValueKind.Number ? (int)w.GetDouble() : 0;
             if (words == 0) words = CountWords(text);
-            var description = meta.Description is { Length: > MaxDescriptionChars } longDescription
-                ? Truncate(longDescription, MaxDescriptionChars)
-                : meta.Description;
+            if (words == 0) words = CountWords(string.Join(' ', full));
+            // A descrição: a do cabeçalho; sem ela, o excerto do Readability, se for prosa.
+            var excerpt = Clean(Text(root, "excerpt"));
+            var description = meta.Description ?? (IsProse(excerpt) ? excerpt : null);
+            if (description is { Length: > MaxDescriptionChars } longDescription) description = Truncate(longDescription, MaxDescriptionChars);
             // Uma descrição igual ao início do artigo repete-se: fica só o artigo.
             if (description is not null && paragraphs.Count > 0 && paragraphs[0].StartsWith(description.TrimEnd('…', '.', ' '), StringComparison.Ordinal))
                 description = null;
-            return new LinkPreviewInfo(url, title, site, description, meta.ImageUrl, paragraphs, words, Clean(Text(root, "byline")));
+            return new LinkPreviewInfo(url, title, site, description, meta.ImageUrl, paragraphs, words, Clean(Text(root, "byline")), full);
         }
         catch (JsonException) { return null; }
     }
+
+    // Uma linha é prosa (e não restos da estrutura da página: coordenadas, ligações «editar», menus, tabelas achatadas)
+    // quando cumpre tudo isto: pelo menos MinParagraphChars e 6 palavras (a regra das palavras não vale nas escritas sem
+    // espaços entre palavras, como o chinês e o japonês); letras em pelo menos 60% dos carateres que não são espaço;
+    // algarismos e símbolos (o que não é letra nem pontuação de texto corrido: «°», «′», «·», «|»…) em no máximo 25%; no
+    // máximo uma «palavra colada» (minúscula seguida de maiúscula dentro da mesma palavra); e acaba em pontuação final
+    // ou tem pelo menos 120 carateres.
+    public static bool IsProse(string? line)
+    {
+        var text = Clean(line);
+        if (text is null || text.Length < MinParagraphChars) return false;
+        int nonSpace = 0, letters = 0, unspaced = 0, digitsAndSymbols = 0;
+        foreach (var rune in text.EnumerateRunes())
+        {
+            if (Rune.IsWhiteSpace(rune)) continue;
+            nonSpace++;
+            var category = Rune.GetUnicodeCategory(rune);
+            if (Rune.IsLetter(rune) || category is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark)
+            {
+                letters++;
+                if (IsUnspacedScript(rune.Value)) unspaced++;
+            }
+            else if (Rune.IsDigit(rune) || !rune.IsBmp || !ProsePunctuation.Contains((char)rune.Value)) digitsAndSymbols++;
+        }
+        var words = text.Split(' ');
+        var unspacedText = letters > 0 && unspaced * 2 >= letters;
+        if (!unspacedText && words.Length < 6) return false;
+        if (letters < nonSpace * 0.6) return false;
+        if (digitsAndSymbols > nonSpace * 0.25) return false;
+        if (words.Count(IsGlued) > 1) return false;
+        return FinalPunctuation.Contains(text[^1]) || text.Length >= 120;
+    }
+
+    // Pontuação de texto corrido: não conta como símbolo.
+    private const string ProsePunctuation = ".,;:!?…'\"«»“”‘’„()[]-–—/。、，！？：；「」『』（）";
+    private const string FinalPunctuation = ".!?…:»\"”)。！？";
+
+    // Uma minúscula seguida de uma maiúscula dentro da mesma palavra («continentalEditar», «LFuncionamentoEstatuto»).
+    private static bool IsGlued(string word)
+    {
+        for (var i = 1; i < word.Length; i++)
+            if (char.IsLower(word[i - 1]) && char.IsUpper(word[i])) return true;
+        return false;
+    }
+
+    // Escritas sem espaços entre palavras: chinês (Han), japonês (hiragana, katakana), tailandês, laosiano, khmer, birmanês.
+    private static bool IsUnspacedScript(int c)
+        => c is (>= 0x3040 and <= 0x30FF) or (>= 0x3400 and <= 0x4DBF) or (>= 0x4E00 and <= 0x9FFF) or (>= 0xF900 and <= 0xFAFF)
+            or (>= 0x20000 and <= 0x3134F) or (>= 0x0E00 and <= 0x0EFF) or (>= 0x1780 and <= 0x17FF) or (>= 0x1000 and <= 0x109F);
+
+    // O título sem o nome do site (« – Wikipédia, a enciclopédia livre», «PÚBLICO | »). Corta-se o último segmento, ou
+    // o 1.º, quando fala do site: tem o nome do site ou a marca do anfitrião (o nome antes do sufixo público:
+    // «wikipedia», «publico», «bbc»), sem acentos nem maiúsculas e em palavras inteiras. Se as duas pontas falam do site
+    // («GitHub - cli/cli: GitHub’s official…»), sai a mais curta. Nunca fica vazio. Tail é o segmento cortado.
+    public static (string Title, string? Tail) CleanTitle(string title, string? siteName, string host)
+    {
+        var original = Clean(title) ?? string.Empty;
+        int first = -1, firstLength = 0, last = -1, lastLength = 0;
+        foreach (var separator in TitleSeparators)
+        {
+            var i = original.IndexOf(separator, StringComparison.Ordinal);
+            if (i >= 0 && (first < 0 || i < first)) (first, firstLength) = (i, separator.Length);
+            var j = original.LastIndexOf(separator, StringComparison.Ordinal);
+            if (j > last) (last, lastLength) = (j, separator.Length);
+        }
+        if (first < 0) return (original, null);
+        var names = new[] { Words(siteName), Words(Brand(host)) }.Where(n => string.Concat(n).Length >= 2).ToArray();
+        var lead = original[..first].Trim();
+        var end = original[(last + lastLength)..].Trim();
+        var cutEnd = TalksAboutSite(end, names);
+        var cutLead = TalksAboutSite(lead, names);
+        if (cutEnd && cutLead && lead.Length < end.Length) cutEnd = false;
+        if (cutEnd && original[..last].Trim() is { Length: > 0 } kept) return (kept, end);
+        if (cutLead && original[(first + firstLength)..].Trim() is { Length: > 0 } rest) return (rest, lead);
+        return (original, null);
+    }
+
+    private static readonly string[] TitleSeparators = [" – ", " — ", " | ", " - ", " · ", " :: "];
+
+    // O segmento tem, em palavras seguidas, o nome do site ou a marca («Blog do Zé» → «blogdoze», «El País» → «elpais»).
+    private static bool TalksAboutSite(string segment, string[][] names)
+    {
+        var words = Words(segment);
+        foreach (var name in names)
+        {
+            var wanted = string.Concat(name);
+            for (var i = 0; i < words.Length; i++)
+            {
+                var joined = string.Empty;
+                for (var j = i; j < words.Length && joined.Length < wanted.Length; j++)
+                {
+                    joined += words[j];
+                    if (joined == wanted) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Palavras sem acentos nem maiúsculas, só com letras e algarismos.
+    private static string[] Words(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return [];
+        var plain = new StringBuilder(text.Length);
+        foreach (var c in text.Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark) continue;
+            plain.Append(char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : ' ');
+        }
+        return plain.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    // A marca do anfitrião: o 1.º rótulo do domínio registável («pt.wikipedia.org» → «wikipedia», «www.bbc.co.uk» → «bbc»).
+    private static string Brand(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host) || Uri.CheckHostName(host) is not UriHostNameType.Dns) return string.Empty;
+        var site = PublicSuffix.RegistrableDomain(host);
+        var dot = site.IndexOf('.');
+        return dot > 0 ? site[..dot] : site;
+    }
+
+    // O nome curto do site, pela ordem: og:site_name ou application-name (até 30 carateres); o segmento cortado do título
+    // até à 1.ª vírgula («Wikipédia, a enciclopédia livre» → «Wikipédia», também até 30); o siteName do Readability, se
+    // não for o de uma entidade jurídica («Wikimedia Foundation, Inc.»); o anfitrião sem «www.».
+    public static string ShortSite(string? ogSiteName, string? titleTail, string? readabilitySite, string host)
+    {
+        if (Clean(ogSiteName) is { Length: <= MaxSiteChars } og) return og;
+        if (Clean(titleTail?.Split(',')[0]) is { Length: <= MaxSiteChars } fromTitle) return fromTitle;
+        if (Clean(readabilitySite) is { } article && !LegalEntity().IsMatch(article)) return article;
+        host = host.Trim();
+        return host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+    }
+
+    private const int MaxSiteChars = 30;
+
+    [GeneratedRegex(@"\b(Inc|Ltd|LLC|Lda|S\.?A|GmbH|Foundation|Corporation|Corp)\b")]
+    private static partial Regex LegalEntity();
 
     // Metadados de uma página a partir do HTML (ou só do <head>): Open Graph, Twitter Cards, <title>, meta description,
     // e os primeiros <p> como texto de recurso. Os endereços relativos ficam absolutos em relação à página.
@@ -219,22 +418,28 @@ public static partial class LinkPreview
     // Os primeiros parágrafos legíveis do texto: linhas com pelo menos MinParagraphChars, até MaxParagraphs, num total
     // de MaxExcerptChars (o último é cortado numa palavra, com reticências).
     public static IReadOnlyList<string> Paragraphs(string? text, int max = MaxParagraphs, int maxChars = MaxExcerptChars)
+        => string.IsNullOrWhiteSpace(text) ? [] : Excerpt(Lines(text.Split('\n')), max, maxChars);
+
+    // Linhas limpas (espaços juntos) com pelo menos MinParagraphChars.
+    private static IEnumerable<string> Lines(IEnumerable<string> raw)
+        => raw.Select(Clean).OfType<string>().Where(line => line.Length >= MinParagraphChars);
+
+    // Até max linhas num total de maxChars; a que já não cabe inteira é cortada numa palavra (cutLast, ou quando é a
+    // primeira) ou fica de fora.
+    private static List<string> Excerpt(IEnumerable<string> lines, int max, int maxChars, bool cutLast = true)
     {
         var result = new List<string>();
-        if (string.IsNullOrWhiteSpace(text)) return result;
         var budget = maxChars;
-        foreach (var raw in text.Split('\n'))
+        foreach (var line in lines)
         {
-            var line = Clean(raw);
-            if (line is null || line.Length < MinParagraphChars) continue;
+            if (result.Count >= max) break;
             if (line.Length > budget)
             {
-                if (budget >= MinParagraphChars) result.Add(Truncate(line, budget));
+                if ((cutLast || result.Count == 0) && budget >= MinParagraphChars) result.Add(Truncate(line, budget));
                 break;
             }
             result.Add(line);
             budget -= line.Length;
-            if (result.Count >= max) break;
         }
         return result;
     }
@@ -279,6 +484,11 @@ public static partial class LinkPreview
         var joined = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         return joined.Length == 0 ? null : joined;
     }
+
+    private static IEnumerable<string> Strings(JsonElement root, string name)
+        => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString() ?? string.Empty).ToList()
+            : [];
 
     private static string Text(JsonElement root, string name)
         => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
