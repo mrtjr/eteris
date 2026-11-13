@@ -8,6 +8,7 @@
 - Com os efeitos de animação desligados no Windows, as páginas do Éteris deixam de ter transições e animações.
 - Os botões e os campos das páginas do Éteris mostram um anel visível quando se chega a eles pelo teclado.
 - O modo de leitura deixa de ter barra horizontal: as tabelas e os blocos de código rolam por dentro, e as figuras e os vídeos cabem na coluna. As barras ficam finas e na cor do tema do leitor (escuro, sépia ou claro), e com os efeitos de animação desligados no Windows o leitor também fica sem transições.
+- Nova opção em Definições › Aspeto: «Barras de deslocamento sobrepostas», desligada. Ligada, as páginas web passam a ter barras finas por cima do conteúdo, que aparecem ao rolar ou ao passar o rato; como isso muda o que os sites conseguem medir, fica assinalado em eteris://privacy. Vale da próxima vez que abrir o Éteris. Sem ela, as barras das páginas web continuam as de um Chrome no mesmo computador.
 
 ## 0.2.17 — 2026-11-13
 

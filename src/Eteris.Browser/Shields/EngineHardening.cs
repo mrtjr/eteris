@@ -100,9 +100,10 @@ public static class EngineHardening
     // pt-BR, o Intl dizia pt-PT e o navigator.language pt-BR — uma incoerência que o Chrome não tem (medido,
     // docs/paridade.md #6). Só muda os textos do próprio Chromium (páginas de erro, validação de formulários); a
     // interface do Éteris é dele e continua em português europeu.
-    public static void Configure(CefSharp.CefSettingsBase settings, string? language = null)
+    // overlayScrollbars: a opção «Barras de deslocamento sobrepostas» das Definições (Shields/EngineAppearance.cs).
+    public static void Configure(CefSharp.CefSettingsBase settings, string? language = null, bool overlayScrollbars = false)
     {
-        Apply(settings.CefCommandLineArgs);
+        Apply(settings.CefCommandLineArgs, overlayScrollbars);
         settings.AcceptLanguageList = language ?? PrivacyPreferences.SiteLanguage;
         settings.Locale = settings.AcceptLanguageList;
         StartedWithLanguage = settings.AcceptLanguageList;
@@ -112,7 +113,7 @@ public static class EngineHardening
     public static string StartedWithLanguage { get; private set; } = string.Empty;
 
     // Junta as listas do Éteris às que já estão na linha de comandos (sem repetir nomes).
-    public static void Apply(IDictionary<string, string> args)
+    public static void Apply(IDictionary<string, string> args, bool overlayScrollbars = false)
     {
         Merge(args, "enable-features", Partitioning.Concat(Identity).Concat(LocalNetworkChecks).Select(f => f.Feature));
         Merge(args, "disable-features", AdApis.Concat(NoListeningSockets).Concat(NoGoogleAtStartup).Concat(NoGoogleOnPages).Select(a => a.Feature));
@@ -120,6 +121,8 @@ public static class EngineHardening
         Merge(args, "disable-blink-features", AdBlinkFeatures);
         // As funcionalidades de desempenho, cada uma atrás do seu ajuste (Shields/EnginePerformance.cs).
         EnginePerformance.Apply(args, Infrastructure.PerfTuning.IsOn);
+        // As de aspeto, só com a opção das Definições (Shields/EngineAppearance.cs).
+        EngineAppearance.Apply(args, overlayScrollbars);
         Applied = new Dictionary<string, string>(args);
     }
 

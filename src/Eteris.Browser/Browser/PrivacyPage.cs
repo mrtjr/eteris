@@ -109,6 +109,10 @@ public static class PrivacyPage
         // Afinações de desempenho do motor (fase 2 do plano de desempenho): as que estão na linha de comandos em vigor.
         var tuning = EnginePerformance.ActiveIn(s.EngineArgs).Where(f => !f.Disable).ToList();
         var fingerprint = tuning.Where(f => f.ChangesFingerprint).ToList();
+        // Opções de aspeto do motor (proposta 3: as barras sobrepostas), lidas da linha de comandos em vigor; a linha só
+        // aparece com alguma ligada.
+        var looks = EngineAppearance.ActiveIn(s.EngineArgs);
+        var lookPrint = looks.Where(f => f.ChangesFingerprint).ToList();
 
         return
         [
@@ -231,6 +235,17 @@ public static class PrivacyPage
                           + string.Join(", ", fingerprint.Select(f => EnginePerformance.FeatureName(f.Feature)))
                           + " muda o desenho do canvas, e a impressão digital passa a ser a de um Chrome com o mesmo motor de desenho. Desliga-se com --eteris-sem-ajustes-motor.",
                 tuning.Count == 0 ? null : fingerprint.Count == 0),
+            .. (looks.Count == 0 ? (IEnumerable<Promise>)[] :
+            [
+                new("engine-look", lookPrint.Count > 0 ? "Uma opção de aspeto muda o que os sites medem" : "As opções de aspeto não mudam o que os sites medem",
+                    "Ligado nas Definições › Aspeto: " + string.Join("; ", looks.Select(f => f.What)) + ". "
+                    + (lookPrint.Count > 0
+                        ? "Atenção: com " + string.Join(", ", lookPrint.Select(f => f.Feature)) + " a barra de deslocamento deixa de ocupar largura "
+                          + "(innerWidth − clientWidth passa a 0) e os sites conseguem medi-lo: este computador deixa de se confundir com um Chrome no mesmo Windows. "
+                        : string.Empty)
+                    + "Desliga-se nas Definições e vale da próxima vez que abrir o Éteris.",
+                    lookPrint.Count == 0, Fix: "eteris://settings/#aspeto", FixLabel: "Definições › Aspeto →"),
+            ]),
             new("shield", "Escudo com as listas completas",
                 s.FullShield
                     ? "O motor do Escudo carregou as listas completas (filtros de rede, cosméticos e scriptlets)."
