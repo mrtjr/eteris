@@ -363,7 +363,6 @@ public partial class MainWindow
         TabListPopup.IsOpen = false;
         LinkStatusBubble.Visibility = Visibility.Collapsed;
         HideLinkBubble();
-        PostponeClientCertificate();
         // A barra de procura guarda o texto procurado; os menus de contexto e as dicas (o cartão da aba traz o título).
         CloseFind();
         CloseTransientPopups();
@@ -396,6 +395,9 @@ public partial class MainWindow
         // A confirmação de outra janela em curso (esta trancou pela inatividade a meio dela): como as outras, o botão desligado
         // e «A confirmar com o Windows…»; a resposta chega a todas as trancadas.
         if (s_unlocking is not null) ShowPrivateLockStatus(PrivateLockText.Confirming, canUnlock: false);
+        // O diálogo do certificado de cliente aberto fecha e o pedido volta à fila: só com o cartão já posto (fechar um diálogo
+        // modal ativa logo a janela dona) e antes do foco (até ele fechar, a janela está desligada).
+        PostponeClientCertificate();
         EnableCoveredChrome(false);
         UpdateOverlayVisibility();
         if (_pause is { } paused)

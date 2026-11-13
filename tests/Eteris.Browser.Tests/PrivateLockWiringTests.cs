@@ -161,7 +161,12 @@ public class PrivateLockWiringTests
     [Fact]
     public void AnOpenCertificateDialog_IsPostponedByTheLock()
     {
-        Assert.Contains("PostponeClientCertificate();", Body(Source("MainWindow.PrivateLock.cs"), "private void LockPrivateWindow(PrivateLockReason reason)"));
+        // Só com o cartão já posto (fechar um diálogo modal ativa logo a janela dona, e o Activated dela foca o cartão) e antes
+        // do foco (até o diálogo fechar, a janela dona está desligada).
+        var lockBody = Body(Source("MainWindow.PrivateLock.cs"), "private void LockPrivateWindow(PrivateLockReason reason)");
+        var postponed = lockBody.IndexOf("PostponeClientCertificate();", StringComparison.Ordinal);
+        Assert.True(postponed > lockBody.IndexOf("ShowPrivateLockView(state);", StringComparison.Ordinal), "depois do cartão");
+        Assert.True(postponed < lockBody.IndexOf("FocusPrivateLockView();", StringComparison.Ordinal), "antes do foco");
         var postpone = Body(Source("MainWindow.xaml.cs"), "private void PostponeClientCertificate()");
         Assert.Matches(@"if \(!_clientCertificates\.Postpone\(\)\) return;\s*foreach \(var dialog in OwnedWindows\.OfType<ClientCertificateDialog>\(\)\.ToList\(\)\) dialog\.Close\(\);", postpone);
     }
