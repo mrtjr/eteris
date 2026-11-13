@@ -13,6 +13,19 @@ internal sealed class SilentFocusHandler : IFocusHandler
     public void OnTakeFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, bool next) { }
 }
 
+// O recorte ao vivo (ClipWindow) é interativo: o utilizador clica e escreve nele, e esse foco (o clique, que o Windows dá
+// à janela nativa) vale. Mas uma carga — a primeira, «Recarregar», a recarga marcada de 5 em 5 min, um autofocus da página
+// — pede o foco com FocusSourceNavigation, e a janela do recorte, sempre por cima, tirava o teclado à aba ou à barra de
+// endereço onde o utilizador estava a escrever. Esse é recusado.
+internal sealed class ClipFocusHandler : IFocusHandler
+{
+    public static bool Cancels(CefFocusSource source) => source == CefFocusSource.FocusSourceNavigation;
+
+    public void OnGotFocus(IWebBrowser chromiumWebBrowser, IBrowser browser) { }
+    public bool OnSetFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, CefFocusSource source) => Cancels(source);
+    public void OnTakeFocus(IWebBrowser chromiumWebBrowser, IBrowser browser, bool next) { }
+}
+
 // Transferências recusadas; «onRefused» diz a quem criou o motor que houve uma (na thread do CEF).
 internal sealed class SilentDownloadHandler(Action onRefused) : CefSharp.Handler.DownloadHandler
 {

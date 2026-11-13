@@ -16,8 +16,9 @@ namespace Eteris.Browser;
 //   como os sites fixados na barra lateral), com o tratador de pedidos dela (o Escudo).
 // - Não é uma aba: o sono, a pressão de memória e o «Unseen» nunca o veem — fica vivo com a janela principal minimizada.
 // - Sem dona (uma janela com dona minimiza-se com ela): quem o abre fecha-o quando a sua janela fecha (MainWindow.Watch.cs).
-// - Transferências, pedidos de permissão, diálogos de JavaScript e o menu de contexto ficam mudos (Browser/SilentHandlers.cs);
-//   um link aberto noutra janela (com gesto) vai para uma aba do Éteris. O som não é cortado: o pedaço está à vista.
+// - Transferências, pedidos de permissão, diálogos de JavaScript e o menu de contexto ficam mudos, e uma carga nunca pede
+//   o foco (Browser/SilentHandlers.cs); um link aberto noutra janela (com gesto) vai para uma aba do Éteris. O som não é
+//   cortado: o pedaço está à vista.
 // - No máximo ClipLayout.MaxOpen abertos em toda a aplicação; cada um no 1.º lugar livre (ClipLayout.Place).
 public partial class ClipWindow : Window
 {
@@ -77,6 +78,8 @@ public partial class ClipWindow : Window
             PermissionHandler = new SilentPermissionHandler(),
             JsDialogHandler = new SilentDialogHandler(),
             MenuHandler = new SilentMenuHandler(),
+            // Uma carga (a recarga marcada incluída) nunca tira o teclado à janela onde o utilizador está a escrever.
+            FocusHandler = new ClipFocusHandler(),
         };
         if (context is not null) _browser.RequestContext = context;
         _browser.FrameLoadStart += (_, e) =>
