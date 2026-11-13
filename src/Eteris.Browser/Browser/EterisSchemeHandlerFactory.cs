@@ -10,7 +10,38 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 {
     public const string SchemeName = "eteris";
 
+    // INT-07, VAU-09: antes de qualquer rota, quem pede. O documento de topo do separador (ou a navegação em curso,
+    // logo a seguir a um F5) tem de ser uma página interna para molduras e sub-recursos, e a própria página para as
+    // rotas do cofre (InternalPages.Serves); senão 403. As respostas não se deixam embutir noutra origem nem farejar.
+    // Corre numa thread do CEF: nenhuma exceção pode sair daqui (fechava o Éteris).
     public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request)
+    {
+        try
+        {
+            var main = request.ResourceType == ResourceType.MainFrame;
+            var top = InternalPages.TopOf(browser?.Identifier ?? -1, SafeFrame.MainUrl(browser));
+            if (!InternalPages.Serves(top, request.Url, main))
+                return ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
+            var handler = Route(browser!, request);
+            // O ResourceHandler.FromString do CefSharp devolve um ByteArrayResourceHandler, que não aceita cabeçalhos
+            // (medido: as Definições, o Histórico e a nova aba saíam sem eles): os mesmos bytes, com o mesmo tipo, num
+            // ResourceHandler. O VaultResourceHandler herda de ResourceHandler e só junta o Cache-Control a estes Headers.
+            if (handler is ByteArrayResourceHandler bytes)
+                handler = new ResourceHandler(bytes.MimeType, new System.IO.MemoryStream(bytes.Data), autoDisposeStream: true);
+            if (handler is ResourceHandler response)
+            {
+                response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+                response.Headers["X-Content-Type-Options"] = "nosniff";
+            }
+            return handler;
+        }
+        catch (Exception)
+        {
+            return ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
+        }
+    }
+
+    private IResourceHandler Route(IBrowser browser, IRequest request)
     {
         Uri.TryCreate(request.Url, UriKind.Absolute, out var uri);
         if (uri is { Host: "newtab", AbsolutePath: "/wallpaper/coast.jpg" or "/wallpaper/mountains.jpg" or "/wallpaper/coast-live.webm" })

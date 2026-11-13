@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Shields;
 
 namespace Eteris.Browser.Tests;
 
@@ -169,11 +170,11 @@ public class LinkPreviewTests
     public void Parse_RejectsGarbage(string? json) => Assert.Null(LinkPreview.Parse(json, Page));
 
     [Theory]
-    [InlineData("\u0001eteris-glance https://a.pt/artigo", "https://a.pt/artigo")]
-    [InlineData("\u0001eteris-glance http://a.pt/x?y=1 ", "http://a.pt/x?y=1")]
-    public void IsReport_ReadsTheClickedLink(string message, string expected)
+    [InlineData("https://a.pt/artigo", "https://a.pt/artigo")]
+    [InlineData("http://a.pt/x?y=1 ", "http://a.pt/x?y=1")]
+    public void IsReport_ReadsTheClickedLink(string link, string expected)
     {
-        Assert.True(LinkPreview.IsReport(message, out var url));
+        Assert.True(LinkPreview.IsReport(LinkPreview.ReportPrefix + link, out var url));
         Assert.Equal(expected, url);
     }
 
@@ -186,6 +187,30 @@ public class LinkPreviewTests
     [InlineData("\u0001eteris-glance mailto:a@a.pt")]
     [InlineData("\u0001eteris-click -https://a.pt/")]
     public void IsReport_IgnoresEverythingElse(string? message) => Assert.False(LinkPreview.IsReport(message, out _));
+
+    [Fact]
+    public void IsReport_WithoutNonce_IsIgnored()
+    {
+        Assert.False(LinkPreview.IsReport("\u0001eteris-glance https://a.pt/", out _));
+        Assert.True(LinkPreview.IsReport(LinkPreview.ReportPrefix + "https://a.pt/", out var url));
+        Assert.Equal("https://a.pt/", url);
+        // Com o segredo, o endereço continua a ter de ser da web.
+        Assert.False(LinkPreview.IsReport(LinkPreview.ReportPrefix + "javascript:alert(1)", out _));
+        Assert.False(LinkPreview.IsReport(LinkPreview.ReportPrefix + "mailto:a@a.pt", out _));
+        Assert.False(LinkPreview.IsReport(LinkPreview.ReportPrefix, out _));
+        Assert.Contains(PopupPolicy.ActivationNonce, LinkPreview.AltClickScript);
+        Assert.Contains("'use strict';", LinkPreview.AltClickScript);
+        Assert.DoesNotContain(PopupPolicy.ActivationNonce, LinkPreview.Script);
+    }
+
+    [Fact]
+    public void AltClickScriptFor_PutsTheSecretInTheStrictScript()
+    {
+        var script = LinkPreview.AltClickScriptFor("ABC123");
+        Assert.Contains("'\\u0001eteris-glance ABC123 '", script); // escape de JavaScript, não o caráter
+        Assert.DoesNotContain("__NONCE__", script);
+        Assert.StartsWith("(() => {\n  'use strict';", script.Replace("\r\n", "\n"));
+    }
 
     [Fact]
     public void AltClickScript_OnlyReactsToAPlainAltClick()

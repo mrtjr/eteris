@@ -18,7 +18,8 @@ public sealed class PasswordsPageTests : IDisposable
     private string Seed(string origin = "https://github.com", string user = "ana@exemplo.pt", string password = Secret, string? note = "nota-secreta-xyz")
         => _f.Vault.SaveLogin(new LoginItem(string.Empty, origin, user, password, note, default, default, null, null, false, null));
 
-    // Nenhum segredo no HTML inicial: nem a palavra-passe nem a nota; só metadados (site, utilizador) e o token.
+    // Nenhum segredo no HTML inicial nem na lista: nem a palavra-passe nem a nota. Os metadados (site, utilizador) só
+    // vêm por /list (VAU-09); a raiz leva o token.
     [Fact]
     public async Task Page_NoSecretInInitialHtml()
     {
@@ -26,15 +27,35 @@ public sealed class PasswordsPageTests : IDisposable
         Seed("https://conta.exemplo.pt", "bruno", "Outra-Senha-9!", null);
         _f.Vault.AddNeverSave("https://nunca.exemplo.pt");
         var reply = await _f.Get("passwords", "/");
+        var list = await _f.Get("passwords", "/list");
         Assert.Equal("text/html", reply.Mime);
-        Assert.DoesNotContain(Secret, reply.Body);
-        Assert.DoesNotContain("nota-secreta-xyz", reply.Body);
-        Assert.DoesNotContain("Outra-Senha-9!", reply.Body);
-        Assert.Contains("ana@exemplo.pt", reply.Body);
-        Assert.Contains("github.com", reply.Body);
-        Assert.Contains("nunca.exemplo.pt", reply.Body);
+        foreach (var body in new[] { reply.Body, list.Body })
+        {
+            Assert.DoesNotContain(Secret, body);
+            Assert.DoesNotContain("nota-secreta-xyz", body);
+            Assert.DoesNotContain("Outra-Senha-9!", body);
+        }
+        var json = VaultFixture.Json(list);
+        var logins = json["logins"]!.AsArray();
+        Assert.Contains(logins, l => l!["username"]!.GetValue<string>() == "ana@exemplo.pt" && l["host"]!.GetValue<string>() == "github.com");
+        Assert.Contains(json["never"]!.AsArray(), n => n!["host"]!.GetValue<string>() == "nunca.exemplo.pt");
         Assert.Contains(InternalPages.Token, reply.Body);
         Assert.Equal(0, _f.Reauth.Prompts);
+    }
+
+    // VAU-09: a raiz não leva os registos do cofre (vêm por /list, que a fábrica só serve à própria página).
+    [Fact]
+    public async Task Root_HasNoVaultMetadata()
+    {
+        Seed();
+        var list = (await _f.Get("passwords", "/list")).Body;
+        var root = (await _f.Get("passwords", "/")).Body;
+        Assert.Contains("\"logins\":[{", list);
+        Assert.Contains("ana@exemplo.pt", list);
+        Assert.Contains("\"logins\":[]", root);
+        Assert.Contains("\"loading\":true", root);
+        Assert.DoesNotContain("ana@exemplo.pt", root);
+        Assert.DoesNotContain("github.com", root);
     }
 
     // A página é «Palavras-passe», com o estilo das Definições (tema claro incluído) e a CSP sem pedidos de rede.
@@ -249,6 +270,16 @@ public sealed class PasswordsPageTests : IDisposable
         Assert.Equal(2, _f.Reauth.Prompts);
         Assert.False(SettingsPage.CanSetFromPage("pwAskHello", "false"));
         Assert.True(SettingsPage.CanSetFromPage("pwAskHello", "true"));
+    }
+
+    // Auditoria (VAU-07): outra grafia de «false» não é «false»: a definição fica ligada, com ou sem o Windows Hello.
+    [Theory] [InlineData("False")] [InlineData("FALSE")] [InlineData("false%20")]
+    public async Task PasswordHelloSwitch_TurningOff_IsRefusedWhateverTheSpelling(string v)
+    {
+        _f.Host.Current = _f.Host.Current with { PasswordAskHello = true };
+        _f.Reauth.Outcome = ReauthOutcome.Canceled;
+        Assert.Equal("recusado", (await _f.Get("passwords", "/set", "k=pwAskHello&v=" + v)).Body);
+        Assert.True(_f.Host.Current.PasswordAskHello);
     }
 
     // A aba saiu da frente enquanto o Windows perguntava: o pedido é cancelado e nada se mostra.

@@ -1,17 +1,48 @@
 using CefSharp;
+using Eteris.Browser.Browser;
 
 namespace Eteris.Browser.Permissions;
 
-// Pedidos de permissão: decisões lembradas por site; o resto é perguntado na barra do Éteris.
-public sealed class SitePermissionHandler(SitePermissionStore store, Action<string, IReadOnlyCollection<SitePermission>, Action<bool>> ask)
-    : CefSharp.Handler.PermissionHandler
+// Um pedido que o Éteris tem de perguntar ao utilizador. Respond e Drop partilham uma guarda (PermissionAsk.Guard): só a
+// primeira chamada, de qualquer dos dois, chega ao callback do motor. Drop larga o pedido sem resposta do utilizador
+// (Dismiss num pedido, Cancel na multimédia). Source é a página que pede (para saber a aba); EmbeddedIn, o site da
+// página de topo quando o pedido vem de uma moldura de outro site (null: é a própria página); PromptId identifica o
+// pedido que o Chromium pode retirar (OnDismissPermissionPrompt).
+public sealed record PermissionAsk(string Site, IReadOnlyCollection<SitePermission> Kinds, Action<bool> Respond, Action Drop,
+    CefSharp.IWebBrowser? Source = null, string? EmbeddedIn = null, ulong? PromptId = null)
 {
+    // O motor da aba pode já ter saído quando se responde (a aba fechou, a página navegou): nunca rebenta, e só a primeira
+    // resposta conta.
+    public static (Action<bool> Respond, Action Drop) Guard(Action<bool> respond, Action drop)
+    {
+        var answered = 0;
+        return (allowed =>
+        {
+            if (Interlocked.Exchange(ref answered, 1) != 0) return;
+            try { respond(allowed); } catch (Exception) { }
+        }, () =>
+        {
+            if (Interlocked.Exchange(ref answered, 1) != 0) return;
+            try { drop(); } catch (Exception) { }
+        });
+    }
+}
+
+// Pedidos de permissão: decisões lembradas por site; o resto é perguntado na barra do Éteris.
+public sealed class SitePermissionHandler(SitePermissionStore store, Action<PermissionAsk> ask, Action<CefSharp.IWebBrowser>? onCapture = null,
+    Action<ulong>? onDismissed = null) : CefSharp.Handler.PermissionHandler
+{
+    // O Chromium retirou o pedido (a página navegou, a aba fechou) ou acabou de o responder: o cartão do Éteris sai, se ainda
+    // lá estiver. A resposta do próprio Éteris também passa por aqui, mas nessa altura o pedido já saiu da fila.
+    protected override void OnDismissPermissionPrompt(IWebBrowser chromiumWebBrowser, IBrowser browser, ulong promptId,
+        PermissionRequestResult result) => onDismissed?.Invoke(promptId);
+
     protected override bool OnShowPermissionPrompt(IWebBrowser chromiumWebBrowser, IBrowser browser, ulong promptId,
         string requestingOrigin, PermissionRequestType permissionRequestTypes, IPermissionPromptCallback callback)
     {
         var kinds = FromPrompt(permissionRequestTypes);
         var context = browser.GetHost()?.RequestContext;
-        Resolve(requestingOrigin, kinds, allowed =>
+        var (respond, drop) = PermissionAsk.Guard(allowed =>
         {
             using (callback) callback.Continue(allowed ? PermissionRequestResult.Accept : PermissionRequestResult.Deny);
             // Aceitar ou recusar o pedido grava ALLOW/BLOCK nas definições do próprio Chromium, para sempre. O motor só
@@ -21,7 +52,13 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
             if (context is not null)
                 EnginePermissions.Reset(context, requestingOrigin,
                     EnginePermissions.AfterAnswer(kinds, allowed, k => store.Get(PermissionRules.Site(requestingOrigin), k)));
+        }, () =>
+        {
+            using (callback) callback.Continue(PermissionRequestResult.Dismiss);
         });
+        // O Chromium já decide estes pedidos pela página de topo: EmbeddedIn fica null.
+        Resolve(requestingOrigin, kinds, embeddedIn: null, new PermissionAsk(PermissionRules.Site(requestingOrigin), kinds, respond, drop,
+            Source: chromiumWebBrowser, EmbeddedIn: null, PromptId: promptId));
         return true;
     }
 
@@ -35,27 +72,36 @@ public sealed class SitePermissionHandler(SitePermissionStore store, Action<stri
             || requestedPermissions.HasFlag(MediaAccessPermissionType.DesktopAudioCapture)) kinds.Add(SitePermission.ScreenShare);
 
         var browserId = browser.Identifier;
-        Resolve(requestingOrigin, kinds, allowed =>
+        // Quem pede é a origem da moldura; a página de topo pode ser outra (uma moldura de outro site): a decisão
+        // lembrada para o site da moldura não vale então, e o cartão diz onde está embutida.
+        var embeddedIn = PermissionRules.EmbeddedIn(SafeFrame.MainUrl(browser), requestingOrigin);
+        var (respond, drop) = PermissionAsk.Guard(allowed =>
         {
             // Com a câmara, o microfone ou o ecrã a ser usados, a página nunca se esconde com a janela (ajuste e8).
             if (allowed) Tabs.CaptureSessions.Started(browserId);
+            if (allowed) onCapture?.Invoke(chromiumWebBrowser);
             using (callback)
             {
                 if (allowed) callback.Continue(requestedPermissions);
                 else callback.Cancel();
             }
+        }, () =>
+        {
+            using (callback) callback.Cancel();
         });
+        Resolve(requestingOrigin, kinds, embeddedIn, new PermissionAsk(PermissionRules.Site(requestingOrigin), kinds, respond, drop,
+            Source: chromiumWebBrowser, EmbeddedIn: embeddedIn, PromptId: null));
         return true;
     }
 
-    private void Resolve(string origin, IReadOnlyCollection<SitePermission> kinds, Action<bool> respond)
+    private void Resolve(string origin, IReadOnlyCollection<SitePermission> kinds, string? embeddedIn, PermissionAsk request)
     {
         var site = PermissionRules.Site(origin);
-        switch (PermissionRules.Decide(store, site, kinds))
+        switch (PermissionRules.Decide(store, site, kinds, embedded: embeddedIn is not null))
         {
-            case PermissionDecision.Allow: respond(true); break;
-            case PermissionDecision.Deny: respond(false); break;
-            default: ask(site, kinds, respond); break;
+            case PermissionDecision.Allow: request.Respond(true); break;
+            case PermissionDecision.Deny: request.Respond(false); break;
+            default: ask(request); break;
         }
     }
 

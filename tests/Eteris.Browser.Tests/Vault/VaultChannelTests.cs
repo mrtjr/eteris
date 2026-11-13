@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using Eteris.Browser.Vault;
 
@@ -230,6 +231,29 @@ public class VaultChannelTests
     [InlineData("https://exemplo.test/", null)]
     [InlineData(null, "https://exemplo.test/")]
     public void NotEligible(string? frameUrl, string? mainUrl) => Assert.Null(VaultChannel.EligibleOrigin(frameUrl, mainUrl));
+
+    // O endereço do documento diz «https://x.test», mas com Content-Security-Policy: sandbox (ou iframe sandbox) a origem
+    // de segurança é opaca («null»): o script do cofre não entra, nem que o endereço coincida com o da página de topo.
+    [Theory]
+    [InlineData("null", null)]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("https://outro.test", null)]
+    [InlineData("https://x.test", "https://x.test")]
+    [InlineData("https://X.test.", "https://x.test")] // normalizado como a origem do navegador
+    public void EligibleOrigin_OpaqueDocument_IsNotEligible(string? documentOrigin, string? expected)
+        => Assert.Equal(expected, VaultChannel.EligibleOrigin("https://x.test/a", "https://x.test/", documentOrigin));
+
+    [Fact]
+    public void SetUp_ReadsTheDocumentOriginBeforeTheBinding()
+    {
+        var source = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Vault", "VaultChannel.cs"));
+        var origin = source.IndexOf("\"self.origin\"", StringComparison.Ordinal);
+        Assert.True(origin > 0 && origin < source.IndexOf("AddBindingAsync", StringComparison.Ordinal));
+        var script = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Vault", "Scripts", "cofre.js"));
+        var guard = script.IndexOf("self.origin === 'null'", StringComparison.Ordinal);
+        Assert.True(guard > 0 && guard < script.IndexOf("const binding = globalThis[LIGACAO];", StringComparison.Ordinal));
+    }
 
     // ---- Do navegador para o script: só os métodos conhecidos, argumento serializado (nunca concatenado à mão) ----
 

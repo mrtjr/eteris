@@ -3,17 +3,26 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Eteris.Browser.Downloads;
 
-public partial class DownloadEntry(int id, string fullPath, string fileName) : ObservableObject
+public partial class DownloadEntry(int id, string fullPath, string fileName, string? source = null) : ObservableObject
 {
     public int Id { get; } = id;
     public string FullPath { get; } = fullPath;
     public string FileName { get; } = fileName;
+    // Anfitrião de onde vem (o endereço original da transferência); null quando não se sabe.
+    public string? Source { get; } = source;
+    private readonly (string Head, string Tail) _name = DownloadFormat.SplitName(fileName);
+    public string NameHead => _name.Head;
+    public string NameTail => _name.Tail;
+    // Quando a transferência acabou: o painel ignora cliques no segundo seguinte (DownloadRisk.AcceptsClick).
+    public DateTime? CompletedAtUtc { get; private set; }
 
     [ObservableProperty] private long _received;
     [ObservableProperty] private long _total;
     [ObservableProperty] private long _speed;
     [ObservableProperty] private bool _isComplete;
     [ObservableProperty] private bool _isCancelled;
+
+    partial void OnIsCompleteChanged(bool value) => CompletedAtUtc = value ? DateTime.UtcNow : null;
 
     public bool IsActive => !IsComplete && !IsCancelled;
 
@@ -46,9 +55,9 @@ public partial class DownloadsViewModel : ObservableObject
         }
     }
 
-    public void Started(int id, string fullPath, string fileName)
+    public void Started(int id, string fullPath, string fileName, string? source = null)
     {
-        Items.Insert(0, new DownloadEntry(id, fullPath, fileName));
+        Items.Insert(0, new DownloadEntry(id, fullPath, fileName, source));
         Changed();
     }
 

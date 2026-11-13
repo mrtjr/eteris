@@ -17,7 +17,10 @@ public sealed class PageMenuHandler(bool isPrivate, Action<PageContext, int, int
             CanGoBack: browser.CanGoBack,
             CanGoForward: browser.CanGoForward,
             IsPrivate: isPrivate,
-            IsWebPage: SafeFrame.Url(frame)?.StartsWith("http", StringComparison.OrdinalIgnoreCase) == true);
+            IsWebPage: SafeFrame.Url(frame)?.StartsWith("http", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            PageUrl = SafeFrame.Url(frame),
+        };
         var (x, y) = (parameters.XCoord, parameters.YCoord);
         model.Clear();
         show(context, x, y);

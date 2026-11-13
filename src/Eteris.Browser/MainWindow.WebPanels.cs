@@ -146,6 +146,8 @@ public partial class MainWindow
         }
         SidebarTitle.Text = browser.Title is { Length: > 0 } title ? title : panel.Title;
         if (focus && browser.IsBrowserInitialized) Keyboard.Focus(browser);
+        // O pedido de certificado que o site fixado tinha à espera aparece (depois de quem chamou acabar de abrir a barra).
+        Dispatcher.InvokeAsync(() => ShowNextClientCertificate());
     }
 
     // Ao mudar para um separador que não é um site, os motores ficam escondidos (e a página marcada como escondida:
@@ -226,6 +228,9 @@ public partial class MainWindow
             onSession: mobile ? ApplyMobileUserAgent : null);
         _webPanelInjectors[url] = injector;
         var panelHistory = new MainFrameHistory();
+        // A identidade deste painel na fila dos pedidos de certificado (MainWindow.xaml.cs, AskClientCertificate): pergunta
+        // só com o painel à vista na barra lateral (antes disso espera), e volta a poder perguntar quando o utilizador navega.
+        var certificatePage = new object();
         var browser = new ChromiumWebBrowser(url)
         {
             Visibility = Visibility.Hidden,
@@ -245,7 +250,13 @@ public partial class MainWindow
                 userAgent: mobile ? WebPanels.MobileUserAgent : null,
                 // Rede local: o que o site já tem autorizado nas abas vale também na barra lateral.
                 localNetworkAllowed: IsLocalNetworkAllowed,
-                onMainNavigation: nav => Volatile.Write(ref panelHistory.Last, nav)),
+                onMainNavigation: nav =>
+                {
+                    Volatile.Write(ref panelHistory.Last, nav);
+                    if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
+                },
+                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _sidebarOpen && _sidebarPanel?.Url == url,
+                    () => ClientCertificateDialog.FromPanel(url), host, port, rows)),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.
@@ -360,14 +371,14 @@ public partial class MainWindow
     // Numa página de erro, recarregar volta a tentar o endereço que falhou (como nas abas).
     private static void ReloadWebPanel(ChromiumWebBrowser browser, bool ignoreCache)
     {
-        if (ErrorPage.FailedUrl(browser.Address ?? string.Empty) is { Length: > 0 } failed) browser.Load(failed);
+        if (ErrorPage.ReloadTarget(browser.Address ?? string.Empty) is { Length: > 0 } failed) browser.Load(failed);
         else browser.Reload(ignoreCache);
     }
 
     // O endereço do site à vista no painel (o que falhou, quando está na página de erro).
     private static string WebPanelAddress(ChromiumWebBrowser? browser, string url)
         => browser?.Address is not { Length: > 0 } address ? url
-            : ErrorPage.IsErrorPage(address) ? ErrorPage.FailedUrl(address) is { Length: > 0 } failed ? failed : url
+            : ErrorPage.IsErrorPage(address) ? ErrorPage.ReloadTarget(address) is { Length: > 0 } failed ? failed : url
             : address;
 
     private void OnWebPanelFullscreen(ChromiumWebBrowser browser)
@@ -458,9 +469,9 @@ public partial class MainWindow
             case PageCommand.Forward: browser.Forward(); break;
             case PageCommand.Reload: ReloadWebPanel(browser, ignoreCache: false); break;
             case PageCommand.Inspect: browser.GetBrowserHost()?.ShowDevTools(); break;
-            case PageCommand.OpenLinkNewTab: Tabs.NewTab(context.LinkUrl!, activate: false); break;
+            case PageCommand.OpenLinkNewTab when PageLinks.CanOpenLink(context.LinkUrl, context.PageUrl): Tabs.NewTab(context.LinkUrl!, activate: false); break;
             case PageCommand.CopyLink: CopyText(UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
-            case PageCommand.OpenImageNewTab: Tabs.NewTab(context.ImageUrl!, activate: false); break;
+            case PageCommand.OpenImageNewTab when PageLinks.CanOpenImage(context.ImageUrl): Tabs.NewTab(context.ImageUrl!, activate: false); break;
             case PageCommand.CopyImageUrl: CopyText(context.ImageUrl!, "Endereço da imagem copiado"); break;
             case PageCommand.Undo: frame?.Undo(); break;
             case PageCommand.Cut: frame?.Cut(); break;

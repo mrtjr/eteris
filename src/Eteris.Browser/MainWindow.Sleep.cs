@@ -27,6 +27,8 @@ public partial class MainWindow
 
     private void ReleaseChromium(BrowserTab tab)
     {
+        // O cartão de permissão que esta aba tinha aberto sai com o motor (fechar, adormecer, trocar de motor).
+        DropPermissions(p => ReferenceEquals(p.Tab, tab));
         if (_scriptlets.Remove(tab, out var injector)) injector.Dispose();
         ReleaseVaultChannel(tab);
         _sleepHolds.Remove(tab);

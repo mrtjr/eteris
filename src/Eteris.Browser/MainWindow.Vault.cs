@@ -420,6 +420,7 @@ public partial class MainWindow
                 _vaultHasSelection = _vaultList.Selected >= 0;
                 break;
             case VaultKeyAction.Accept:
+                if (!VaultFillPolicy.AcceptsKey(DateTime.UtcNow - _vaultShownAt)) break;
                 AcceptVaultSuggestion();
                 break;
             case VaultKeyAction.Close or VaultKeyAction.CloseAndPass:

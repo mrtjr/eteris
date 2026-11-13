@@ -388,7 +388,8 @@
   };
   const fill = (id, items, make, empty) => {
     const box = $(id); box.textContent = '';
-    if (!items.length) { box.append(el('div', 'empty small', empty)); return; }
+    // Enquanto a lista não chega (/list), nada de «Nenhum … guardado».
+    if (!items.length) { if (!data.loading) box.append(el('div', 'empty small', empty)); return; }
     items.forEach(i => box.append(make(i)));
   };
   const render = () => {
@@ -403,7 +404,15 @@
     $('countDocumentos').textContent = data.docs.length || '';
     $('countViagens').textContent = data.travel.length || '';
   };
-  const refresh = () => ask('list', {}, reply => { if (reply.cards) { data = Object.assign(data, reply); render(); applySignIn(); } });
+  // A página abre sem registos (data.loading): a lista vem sempre por /list, que só responde a esta página.
+  const refresh = () => ask('list', {}, reply => {
+    if (!reply.cards) return;
+    const first = data.loading;
+    data = Object.assign(data, reply); data.loading = false;
+    render(); applySignIn();
+    // A secção pedida no endereço volta a ficar à vista depois de a lista a empurrar.
+    if (first && location.hash) { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); mark(); }
+  });
 
   // Cada interruptor tem o nome da linha (o <b> ao lado) para o leitor de ecrã.
   document.querySelectorAll('.switch input').forEach(input => {
@@ -449,6 +458,7 @@
   render();
   if (location.hash) { const s = document.getElementById(location.hash.slice(1)); if (s) s.scrollIntoView(); }
   mark();
+  refresh();
 </script>
 </body>
 </html>

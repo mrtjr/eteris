@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Browser;
 
 namespace Eteris.Browser.Tests;
@@ -58,4 +59,30 @@ public class ErrorPageTests
     [InlineData(-106, true)]
     public void ShouldShow_IgnoresAbortedLoads(int code, bool expected)
         => Assert.Equal(expected, ErrorPage.ShouldShow(code));
+
+    // INT-05: o parâmetro «url» da página de erro é texto da página; só um endereço da web (ou de ficheiro) volta a abrir.
+    [Theory]
+    [InlineData("https://x.pt/a?b=1")]
+    [InlineData("http://x.pt/")]
+    [InlineData("file:///C:/a.html")]
+    public void ReloadTarget_ReturnsTheFailedWebAddress(string failed)
+        => Assert.Equal(failed, ErrorPage.ReloadTarget(ErrorPage.Url(-105, failed)));
+
+    [Theory]
+    [InlineData("eteris://error/?code=-105&url=javascript:alert(1)")]
+    [InlineData("eteris://error/?code=-105&https=1&url=data:text/html,x")]
+    [InlineData("eteris://error/?code=-105&url=eteris%3A%2F%2Fsettings%2F")]
+    [InlineData("eteris://error/?code=-105")]
+    [InlineData("https://x.pt/")]
+    public void ReloadTarget_RefusesOtherSchemes(string address) => Assert.Null(ErrorPage.ReloadTarget(address));
+
+    [Fact]
+    public void FailedUrl_IsNeverLoaded()
+    {
+        foreach (var file in new[] { "MainWindow.Reload.cs", "MainWindow.xaml.cs", "MainWindow.WebPanels.cs", "MainWindow.Crash.cs", "MainWindow.VideoEngine.cs" })
+            Assert.DoesNotContain("ErrorPage.FailedUrl(", File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", file)));
+        var reload = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Reload.cs"));
+        Assert.Contains("ErrorPage.ReloadTarget(", reload);
+        Assert.DoesNotContain("browser.Load(tab.Address)", reload);   // o F5 carregava o que estivesse em tab.Address
+    }
 }

@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Omnibox;
 
 namespace Eteris.Browser.Tests;
@@ -24,4 +25,19 @@ public class DropTargetTests
     [Fact]
     public void EmptyText_IsNull()
         => Assert.Null(DropTarget.FromText("   ", SearchEngine.DuckDuckGo));
+
+    [Theory]
+    [InlineData("file://srv/a")]
+    [InlineData("eteris://settings/")]
+    [InlineData("about:blank")]
+    [InlineData("file:///C:/x.html")]
+    public void DroppedText_NonWebScheme_IsNotOpened(string text)
+        => Assert.Null(DropTarget.FromText(text, SearchEngine.DuckDuckGo));
+
+    [Fact]
+    public void DropUrls_FileDrop_IsIgnoredWhenTheDragWasTaintedByTheRenderer()
+    {
+        var mouse = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Mouse.cs"));
+        Assert.Contains("!data.GetDataPresent(DropTarget.RendererTaintFormat)", mouse);
+    }
 }

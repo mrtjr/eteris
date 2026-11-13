@@ -98,4 +98,12 @@ public class PopupPolicyTests
         // Sem o segredo do processo (o formato antigo, que qualquer página escrevia) não é um clique.
         Assert.False(PopupPolicy.IsActivationReport("\u0001eteris-click ihttps://a.pt/", out _, out _));
     }
+
+    [Fact]
+    public void NonWebTargets_AreRefused_EvenWithTheShieldOff()
+    {
+        Assert.False(Allow(gesture: true, "data:text/html,<h1>x</h1>", shieldOn: false));
+        Assert.False(Allow(gesture: true, "javascript:alert(1)"));
+        Assert.False(Allow(gesture: true, "file:///C:/x.html", shieldOn: false));
+    }
 }

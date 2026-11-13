@@ -31,7 +31,7 @@ public partial class MainWindow
         // (BitmapImage.UriSource) não via nada disto e saía em claro pelo resolvedor do sistema.
         var token = new object();
         _faviconRequests[tab] = token;
-        var client = new EngineFetchClient(bytes => Dispatcher.InvokeAsync(() => ApplyFavicon(tab, token, site, pageUrl!, bytes)),
+        var client = new EngineFetchClient(bytes => _ = DecodeAndApplyFaviconAsync(tab, token, site, pageUrl!, bytes),
             FaviconHandler.MaxBytes, FaviconHandler.AcceptsResponse);
         _ = Cef.UIThreadTaskFactory.StartNew(() =>
         {
@@ -51,19 +51,23 @@ public partial class MainWindow
         });
     }
 
-    // Já na thread da janela, com os bytes vindos do motor (ou null se o pedido falhou, foi bloqueado ou não serve).
-    private void ApplyFavicon(BrowserTab tab, object token, string site, string pageUrl, byte[]? bytes)
+    // Chamado nas threads do CEF com os bytes vindos do motor (ou null se o pedido falhou, foi bloqueado ou não serve).
+    // A assinatura e as dimensões vêm do cabeçalho e a descodificação corre fora da thread da janela; só o resultado
+    // (já congelado) volta a ela.
+    private async Task DecodeAndApplyFaviconAsync(BrowserTab tab, object token, string site, string pageUrl, byte[]? bytes)
     {
-        // Entretanto a aba pode ter mudado de site ou anunciado outro ícone: só o pedido mais recente conta.
-        if (!_faviconRequests.TryGetValue(tab, out var current) || !ReferenceEquals(current, token)) return;
-        _faviconRequests.Remove(tab);
-        if (site != HistoryStore.SiteIconKey(tab.Address)) return;
-        if (bytes is null)
+        try
         {
-            tab.Favicon = null;
-            return;
+            var image = bytes is null ? null : await Task.Run(() => DecodeSiteIcon(bytes));
+            await Dispatcher.InvokeAsync(() => ApplyFavicon(tab, token, site, pageUrl, image));
         }
+        catch (Exception) { }
+    }
 
+    private static BitmapSource? DecodeSiteIcon(byte[] bytes)
+    {
+        // Só PNG, JPEG, GIF e ICO de tamanho razoável chegam ao descodificador do Windows (que corre neste processo).
+        if (!ImageSniff.Accepts(bytes, ImageSniff.MaxIconSide)) return null;
         try
         {
             using var stream = new MemoryStream(bytes);
@@ -76,11 +80,27 @@ public partial class MainWindow
             image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
             image.EndInit();
             image.Freeze();
-            tab.FaviconSite = site;
-            tab.Favicon = image;
-            RememberFavicon(tab, pageUrl);
+            return image;
         }
-        catch (Exception) { tab.Favicon = null; }
+        catch (Exception) { return null; }
+    }
+
+    // Já na thread da janela, com o ícone descodificado (ou null se o pedido falhou ou o ícone não serve).
+    private void ApplyFavicon(BrowserTab tab, object token, string site, string pageUrl, BitmapSource? image)
+    {
+        // Entretanto a aba pode ter mudado de site ou anunciado outro ícone: só o pedido mais recente conta.
+        if (!_faviconRequests.TryGetValue(tab, out var current) || !ReferenceEquals(current, token)) return;
+        _faviconRequests.Remove(tab);
+        if (site != HistoryStore.SiteIconKey(tab.Address)) return;
+        if (image is null)
+        {
+            tab.Favicon = null;
+            return;
+        }
+
+        tab.FaviconSite = site;
+        tab.Favicon = image;
+        RememberFavicon(tab, pageUrl);
     }
 
     // Pedido feito pelo próprio motor (ícones, imagem do Espreitar). Recebe a resposta nas threads do CEF: só junta

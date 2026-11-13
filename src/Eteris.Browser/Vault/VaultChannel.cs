@@ -329,6 +329,12 @@ public sealed class VaultChannel : IDisposable
         return frame == main ? main : null;
     }
 
+    // Além do endereço, a origem de segurança do documento (self.origin, lida no mundo isolado) tem de ser a mesma: um
+    // documento com Content-Security-Policy: sandbox, ou num iframe sandbox, tem origem opaca («null») apesar de o endereço
+    // ser o do site, e pode correr conteúdo de terceiros.
+    public static string? EligibleOrigin(string? frameUrl, string? browserMainUrl, string? documentOrigin)
+        => EligibleOrigin(frameUrl, browserMainUrl) is { } origin && Origins.Normalize(documentOrigin) == origin ? origin : null;
+
     public static string CallExpression(string method, object? argument)
     {
         if (!s_methods.Contains(method)) throw new ArgumentException("Método do cofre desconhecido.", nameof(method));
@@ -405,6 +411,11 @@ public sealed class VaultChannel : IDisposable
         {
             var world = await DevToolsCalls.Run(() => client.Page.CreateIsolatedWorldAsync(frame.Id, WorldName, grantUniveralAccess: false)).ConfigureAwait(false);
             var contextId = world.ExecutionContextId;
+            // A origem de segurança do documento, lida antes de ligar o que quer que seja: opaca («null») ou diferente da
+            // que o navegador conhece, o script não entra (e o mesmo documento não volta a ser tentado: um novo tem outro LoaderId).
+            var read = await DevToolsCalls.Run(() => client.Runtime.EvaluateAsync("self.origin", contextId: contextId, returnByValue: true, silent: true)).ConfigureAwait(false);
+            if (read.ExceptionDetails is not null) { _contexts.Release(frame.Id, frame.LoaderId); return; }
+            if (EligibleOrigin(frame.Url, SafeFrame.MainUrl(_browser), PageScript.ValueOf(read.Result?.Value) as string) is null) return;
             if (!_contexts.Add(new VaultContext(contextId, frame.Id, frame.LoaderId, origin, isMain))) return;
             await DevToolsCalls.Run(() => client.Runtime.AddBindingAsync(_binding, executionContextId: contextId)).ConfigureAwait(false);
             await DevToolsCalls.Run(() => client.Runtime.EvaluateAsync(VaultScripts.Cofre(_binding, _offers()), contextId: contextId, silent: true)).ConfigureAwait(false);

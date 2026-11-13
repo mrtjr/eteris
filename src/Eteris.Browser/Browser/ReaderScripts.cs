@@ -54,6 +54,12 @@ public static class ReaderScripts
         catch (Exception) { return null; }
     }
 
+    // O leitor corre depois da página, por isso o seu aviso não pode levar o segredo do processo (a página leria-o). Só
+    // vale da aba à vista e com o leitor aberto por ela (BrowserTab.ReaderOpen): uma página sem o leitor, ou uma aba
+    // escondida, já não muda as preferências. Limite: se o leitor for fechado dentro da página (Esc), o Éteris só o
+    // sabe na navegação seguinte; os valores continuam limitados a três temas, 15 a 28 e um booleano.
+    public static bool AcceptsReport(bool tabIsActive, bool readerOpen) => tabIsActive && readerOpen;
+
     public static bool IsCandidate(string url)
         => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
 

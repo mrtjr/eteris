@@ -37,12 +37,14 @@ public partial class MainWindow
 
     private async void ToggleReader()
     {
-        if (ActiveBrowser is not { } browser || Tabs.Active is not { IsReaderable: true }) return;
+        if (ActiveBrowser is not { } browser || Tabs.Active is not { IsReaderable: true } tab) return;
         try
         {
             var prefs = Data.Settings.Current;
             var response = await PageScript.EvaluateAsync(browser, ReaderScripts.ToggleWith(prefs.ReaderTheme, prefs.ReaderSize, prefs.ReaderSerif),
                 TimeSpan.FromSeconds(5), userGesture: true);
+            // «opened» abriu o leitor, qualquer outra resposta (fechou-o, não há artigo) deixa-o fechado.
+            tab.ReaderOpen = response.Success && response.Result as string == "opened";
             if (response.Success && response.Result as string == "none") ShowToast("Não foi possível encontrar o artigo nesta página");
             else if (response.Success) Keyboard.Focus(browser);
         }

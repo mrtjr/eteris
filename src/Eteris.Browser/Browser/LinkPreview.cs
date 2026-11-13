@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Eteris.Browser.Shields;
 
 namespace Eteris.Browser.Browser;
 
@@ -106,7 +107,10 @@ public static partial class LinkPreview
     // espreita. Só links web.
     public static bool DivertsDownload(bool altOnlyHeld, string? url) => altOnlyHeld && url is not null && IsWeb(url);
 
-    public const string ReportPrefix ="\u0001eteris-glance ";
+    // O aviso do Alt+clique leva o segredo do processo (o mesmo dos cliques, PopupPolicy.ActivationNonce): qualquer
+    // página escreve na consola, mas só o nosso script (registado antes dos da página, em modo estrito) o conhece.
+    // Sem ele, uma página abria o cartão «Espreitar» sozinha a cada Alt premido (NAV-05).
+    public static string ReportPrefix { get; } = "\u0001eteris-glance " + PopupPolicy.ActivationNonce + " ";
 
     // O aviso do Alt+clique só conta até este tempo depois de o Alt ter sido premido (ver AltTap.TakeGesture).
     public static readonly TimeSpan GestureWindow = TimeSpan.FromSeconds(3);
@@ -120,10 +124,17 @@ public static partial class LinkPreview
 
     // Alt+clique num link (botão esquerdo, só Alt): a página não navega nem transfere (é o que o Chromium faria com
     // Alt) e o Éteris recebe o endereço para o espreitar. Corre antes dos scripts da página, em captura na janela,
-    // por isso a página não o consegue calar. Só links http(s) com o clique de verdade (isTrusted).
-    public const string AltClickScript = """
+    // por isso a página não o consegue calar, e em modo estrito (sem .caller), por isso não lhe entrega o segredo.
+    // Só links http(s) com o clique de verdade (isTrusted).
+    public static string AltClickScript { get; } = AltClickScriptFor(PopupPolicy.ActivationNonce);
+
+    internal static string AltClickScriptFor(string nonce) => AltClickTemplate.Replace("__NONCE__", nonce, StringComparison.Ordinal);
+
+    private const string AltClickTemplate = """
         (() => {
+          'use strict';
           const debug = console.debug.bind(console);
+          const prefix = '\u0001eteris-glance __NONCE__ ';
           addEventListener('click', e => {
             if (!e.isTrusted || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
             for (const node of (e.composedPath ? e.composedPath() : [e.target])) {
@@ -131,7 +142,7 @@ public static partial class LinkPreview
               if ((node.tagName === 'A' || node.tagName === 'AREA') && node.href && /^https?:/i.test(node.href)) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                debug('\u0001eteris-glance ' + node.href);
+                debug(prefix + node.href);
                 return;
               }
             }

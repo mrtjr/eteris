@@ -49,12 +49,12 @@ public partial class MainWindow
             case PageCommand.Print: browser.Print(); break;
             case PageCommand.ViewSource: Tabs.NewTab("view-source:" + tab.Address); break;
             case PageCommand.Inspect: browser.GetBrowserHost()?.ShowDevTools(null, x, y); break;
-            case PageCommand.OpenLinkNewTab: Tabs.NewTab(context.LinkUrl!, activate: false); break;
+            case PageCommand.OpenLinkNewTab when PageLinks.CanOpenLink(context.LinkUrl, context.PageUrl): Tabs.NewTab(context.LinkUrl!, activate: false); break;
             case PageCommand.PreviewLink: ShowLinkPreview(context.LinkUrl!); break;
-            case PageCommand.OpenLinkSideBySide: OpenSideBySide(Tabs.NewTab(context.LinkUrl!, activate: false)); break;
-            case PageCommand.OpenLinkPrivate: OpenWindow(isPrivate: true, context.LinkUrl); break;
+            case PageCommand.OpenLinkSideBySide when PageLinks.CanOpenLink(context.LinkUrl, context.PageUrl): OpenSideBySide(Tabs.NewTab(context.LinkUrl!, activate: false)); break;
+            case PageCommand.OpenLinkPrivate when PageLinks.CanOpenLink(context.LinkUrl, context.PageUrl): OpenWindow(isPrivate: true, context.LinkUrl); break;
             case PageCommand.CopyLink: CopyText(Shields.UrlCleaner.Clean(context.LinkUrl!), "Endereço do link copiado (sem rastreio)"); break;
-            case PageCommand.OpenImageNewTab: Tabs.NewTab(context.ImageUrl!, activate: false); break;
+            case PageCommand.OpenImageNewTab when PageLinks.CanOpenImage(context.ImageUrl): Tabs.NewTab(context.ImageUrl!, activate: false); break;
             case PageCommand.SaveImage:
                 DownloadHandler.UserRequested(context.ImageUrl!);
                 browser.GetBrowserHost()?.StartDownload(context.ImageUrl!);

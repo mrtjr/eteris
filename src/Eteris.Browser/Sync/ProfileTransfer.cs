@@ -103,13 +103,16 @@ internal static class ProfileTransfer
     // Esta definição do ficheiro baixa a proteção deste computador? Devolve a descrição, ou null.
     public static string? WeakensSetting(UserSettings current, string key, string value)
     {
+        // Julga o valor já convertido pelo With (o que de facto se gravaria), não o texto do ficheiro.
+        if (current.With(key, value) is not { } next) return null;
         var now = SettingValues(current).GetValueOrDefault(key);
-        if (now == value) return null;
-        if (Protections.TryGetValue(key, out var text)) return value == "false" && now == "true" ? text : null;
+        var after = SettingValues(next).GetValueOrDefault(key);
+        if (now == after) return null;
+        if (Protections.TryGetValue(key, out var text)) return after == "false" && now == "true" ? text : null;
         return key switch
         {
-            "suggest" when value == "true" => "Ligar «Sugestões enquanto escreve» (o que escreve na barra vai para o motor de pesquisa)",
-            "dns" when value == "off" => "Desligar o «DNS cifrado»",
+            "suggest" when after == "true" => "Ligar «Sugestões enquanto escreve» (o que escreve na barra vai para o motor de pesquisa)",
+            "dns" when after == "off" => "Desligar o «DNS cifrado»",
             _ => null,
         };
     }

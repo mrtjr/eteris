@@ -231,6 +231,28 @@ public class SettingsPageTests
         Assert.Contains("Nenhuma definição encontrada", html);
     }
 
+    // Auditoria (INT-01): só «true» e «false» exatos, em minúsculas e sem espaços, mudam um interruptor.
+    [Theory] [InlineData("False")] [InlineData("FALSE")] [InlineData(" false ")] [InlineData("True")] [InlineData("0")] [InlineData("")]
+    public void With_OnlyExactTrueAndFalse(string value)
+    {
+        foreach (var key in new[] { "httpsFirst", "cookies", "cleanUrls", "debounce", "bounceForget", "cname", "notifications",
+                     "clearOnExit", "suggest", "pwAskHello", "payAskHello", "pwOffer", "sleepPressure" })
+            Assert.Null(new UserSettings().With(key, value));
+        Assert.False(UserSettings.TryParseSwitch(value, out _));
+    }
+
+    [Theory] [InlineData("true", true)] [InlineData("false", false)]
+    public void TryParseSwitch_AcceptsExactTrueAndFalse(string value, bool expected)
+    {
+        Assert.True(UserSettings.TryParseSwitch(value, out var on));
+        Assert.Equal(expected, on);
+        Assert.False(UserSettings.TryParseSwitch(null!, out _));
+    }
+
+    [Fact]
+    public void With_NeverUsesBoolTryParse()
+        => Assert.DoesNotContain("bool.TryParse", File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Data", "UserSettings.cs")));
+
     [Fact]
     public void Render_EmbedsCurrentChoicesAndToken()
     {

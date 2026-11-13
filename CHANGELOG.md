@@ -2,6 +2,35 @@
 
 ## 0.2.17 — por publicar
 
+### Segurança
+
+- Desligar “Pedir o Windows Hello” ou importar um perfil já não passa sem confirmação quando o valor vem escrito como “False”.
+- O preenchimento de palavras-passe já não entra em páginas que o próprio site isolou (sandbox), onde pode correr conteúdo de terceiros.
+- A lista de palavras-passe ignora o clique numa linha que apareceu debaixo do cursor parado e o Enter no primeiro meio segundo.
+- “Abrir link numa nova aba”, os pop-ups e os links arrastados para a faixa de abas só abrem endereços da web; um endereço data: na barra mostra só o tipo, nunca o conteúdo.
+- Recarregar uma página de erro só volta a abrir endereços http, https ou de ficheiro, e o botão “Continuar sem segurança” passa a ter uma assinatura própria em vez do token das páginas internas.
+- Uma página já não consegue abrir o cartão “Espreitar” quando se prime Alt, nem mudar as preferências do leitor sem o leitor aberto.
+- O painel de transferências mostra sempre a extensão do ficheiro, ignora cliques no primeiro segundo e pede confirmação antes de abrir programas e scripts.
+- Num endereço escrito na barra ou aberto a partir dela, o cadeado só aparece depois de a página chegar: um endereço ainda não carregado, uma página de erro (também a do motor de vídeo) ou texto por enviar já não mostram “Ligação segura”. As abas novas abertas por um pop-up ou por “Abrir link numa nova aba” ainda podem mostrar o cadeado antes de a página chegar.
+- Num endereço com muitos subdomínios, a barra mostra sempre o domínio verdadeiro: corta pela esquerda e destaca-o.
+- As páginas internas do Éteris deixam de responder a molduras, sub-recursos e redirecionamentos de sites, não se deixam embutir em sites e a página das palavras-passe só recebe a lista depois de aberta.
+- Os ícones dos sites e a imagem do Espreitar só são abertos se forem PNG, JPEG, GIF ou ICO de tamanho razoável, e fora da thread da janela; ícones em WebP deixam de aparecer.
+- Uma página no motor de vídeo já não consegue abrir uma página interna do Éteris, um ficheiro local ou um endereço data: na aba: a navegação é cancelada e a aba fica onde está.
+- A janela do certificado de cliente só envia o certificado pelo botão “Enviar certificado”, que ignora cliques no primeiro meio segundo: um duplo clique dado na página já não escolhe nem envia um certificado.
+
+### Privacidade
+
+- A câmara e o microfone lembrados para um site já não valem quando ele está embutido noutro; a partilha de ecrã pergunta sempre; a aba mostra um sinal enquanto há captura.
+- O cartão de permissão ignora cliques no primeiro meio segundo, começa com “Lembrar” desligado para a câmara, o microfone, o ecrã e a localização, e só aparece na aba que pediu.
+- Uma página já não consegue passar a aba para o motor de vídeo com uma mensagem forjada; com o motor com codecs a troca passa a ser sempre pelo botão; no motor de vídeo, as permissões são as do Éteris e o WebRTC segue a mesma política de IP.
+- No motor sem codecs, o primeiro documento de cada aba passa a mostrar o botão “Tocar no motor de vídeo” em vez de trocar de motor sozinho.
+- O cartão da rede local sai quando a aba navega ou fecha, e o site volta a poder perguntar.
+- O sinal de captura da aba acende quando se permite a câmara, o microfone ou a partilha de ecrã (no motor principal) e apaga-se no documento seguinte.
+
+### Compatibilidade
+
+- Os sites que pedem um certificado de cliente (bancos, administração pública, intranets) passam a abrir: o Éteris mostra uma janela com o titular, o emissor e a validade de cada certificado, não envia nenhum sem o utilizador escolher e não guarda a escolha; o motor lembra a resposta para esse servidor (endereço e porta) até fechar o Éteris.
+- Uma página que pede certificados a vários servidores já não empilha janelas: aparece uma de cada vez, a dizer de que aba vem; o pedido de uma aba em segundo plano (ou de um site fixado com a barra lateral fechada) espera até ela ficar à vista, o do Espreitar é recusado sem perguntar, e depois de três recusas seguidas na mesma página a aba deixa de perguntar até o utilizador navegar (um clique, a barra, um favorito ou recarregar).
 ### Conta e sincronização
 
 - **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
