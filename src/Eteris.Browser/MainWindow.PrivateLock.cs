@@ -55,6 +55,8 @@ public partial class MainWindow
         public List<(string Message, ToastAction[] Actions)> Toasts { get; } = [];
         // Começou uma transferência com a janela trancada: o painel das transferências abre ao destrancar.
         public bool DownloadStarted;
+        // A Pausa acabou com a janela trancada: o aviso do regresso sai ao destrancar (ShowPauseReturn, em MainWindow.Pause.cs).
+        public bool PauseReturn;
     }
 
     private PrivateLockState? _privateLock;
@@ -770,7 +772,8 @@ public partial class MainWindow
             if (_pause is { } pausedNow) pausedNow.DownloadStarted = true;
             else DownloadsPopup.IsOpen = true;
         }
-        ShowQueuedToasts(state.Toasts);
+        if (state.PauseReturn && _pause is null) ShowPauseReturn(state.Toasts, _replay.Count);
+        else ShowQueuedToasts(state.Toasts);
 
         // 5. O foco: na Pausa, «Voltar»; senão, a página.
         if (_pause is not null) FocusPauseView();

@@ -406,18 +406,25 @@ public partial class MainWindow
     {
         if (state.Toasts.Count == 0 && replay == 0) return;
         // Com a janela privada trancada (MainWindow.PrivateLock.cs), o aviso do regresso espera pelo desbloqueio, na fila dela
-        // (o ShowToastFor direto passava-lhe à frente).
+        // (o ShowToastFor direto passava-lhe à frente), e sai então por aqui (PauseReturn): com os 10 s, o anúncio e onde
+        // está o «Retomar», com o que houver para retomar nesse momento.
         if (_privateLock is { } locked)
         {
             locked.Toasts.AddRange(state.Toasts);
-            if (replay > 0) locked.Toasts.Add(("A Pausa acabou — nada recomeçou sozinho", [new ToastAction($"Retomar o que tocava ({replay})", ReplayPaused)]));
+            locked.PauseReturn = true;
             return;
         }
+        ShowPauseReturn(state.Toasts, replay);
+    }
+
+    private void ShowPauseReturn(List<(string Message, ToastAction[] Actions)> toasts, int replay)
+    {
+        if (toasts.Count == 0 && replay == 0) return;
         var actions = new List<ToastAction>();
         if (replay > 0) actions.Add(new ToastAction($"Retomar o que tocava ({replay})", ReplayPaused));
-        actions.AddRange(state.Toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions));
-        var message = state.Toasts.Count > 0
-            ? string.Join("\n", state.Toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal))
+        actions.AddRange(toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions));
+        var message = toasts.Count > 0
+            ? string.Join("\n", toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal))
             : "A Pausa acabou — nada recomeçou sozinho";
         var shown = actions.Take(ToastPolicy.MaxActions).ToArray();
         if (replay > 0)

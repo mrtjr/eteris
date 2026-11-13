@@ -244,7 +244,15 @@ public class PrivateLockWiringTests
     {
         var pause = Source("MainWindow.Pause.cs");
         Assert.Matches(@"private void FocusPauseView\(\)\s*\{\s*(//[^\n]*\n\s*)*if \(_privateLock is not null\)\s*\{\s*FocusPrivateLockView\(\);\s*return;\s*\}", pause);
-        Assert.Contains("if (_privateLock is { } locked)", Body(pause, "private void ShowPausedToasts(PauseState state, int replay)"));
+        // O regresso da Pausa numa janela trancada espera pelo desbloqueio e sai então pelo mesmo caminho (ShowPauseReturn):
+        // com os 10 s, o anúncio e «no aviso ou na paleta (Ctrl+K)», que um aviso genérico da fila perdia.
+        var paused = Body(pause, "private void ShowPausedToasts(PauseState state, int replay)");
+        Assert.Matches(@"if \(_privateLock is \{ \} locked\)\s*\{\s*locked\.Toasts\.AddRange\(state\.Toasts\);\s*locked\.PauseReturn = true;\s*return;\s*\}\s*ShowPauseReturn\(state\.Toasts, replay\);", paused);
+        var back = Body(pause, "private void ShowPauseReturn(List<(string Message, ToastAction[] Actions)> toasts, int replay)");
+        Assert.Contains("ShowToastFor(ToastPolicy.PauseReturnShown - ToastFades, message, shown);", back);
+        Assert.Contains("Sync.LiveRegion.Announce(ToastText);", back);
+        Assert.Matches(@"if \(state\.PauseReturn && _pause is null\) ShowPauseReturn\(state\.Toasts, _replay\.Count\);\s*else ShowQueuedToasts\(state\.Toasts\);",
+            Body(Source("MainWindow.PrivateLock.cs"), "private void UnlockPrivateWindow()"));
         var exit = Body(pause, "private void ExitPause()");
         Assert.Matches(@"EnableCoveredChrome\(true\);\s*(//[^\n]*\n\s*)*if \(_privateLock is not null\) EnableCoveredChrome\(false\);", exit);
         // Uma transferência da Pausa numa janela trancada espera pelo desbloqueio, e não abre o painel por cima do cartão.
