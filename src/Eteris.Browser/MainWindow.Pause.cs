@@ -196,8 +196,9 @@ public partial class MainWindow
         _pause = state;
         _pausedForPage = true;
 
-        // 3. Pausar e marcar o que toca (o script só mexe no que está a tocar); 4. calar tudo o que não estava calado, também
-        // o som que não vem de <video>/<audio> (Web Audio, jogos) e o dos iframes de outros sites.
+        // 3. Pausar e marcar o que toca (o script só mexe no que está a tocar; o que o utilizador já tinha silenciado fica como
+        // estava); 4. calar tudo o que não estava calado, também o som que não vem de <video>/<audio> (Web Audio, jogos) e
+        // o dos iframes de outros sites.
         foreach (var engine in state.Plan.Engines.ToList()) _ = MarkForPauseAsync(state, engine);
         foreach (var engine in state.Plan.MutedByPause) SetPauseMute(engine, muted: true);
 
@@ -226,17 +227,20 @@ public partial class MainWindow
         return engines;
     }
 
+    // O que o utilizador já tinha silenciado não se ouve: não se pausa (ficava parado para sempre, fora do «Retomar»), só
+    // sai do Picture-in-Picture.
     private async Task MarkForPauseAsync(PauseState state, FrameworkElement engine)
     {
         var paused = 0;
+        var script = state.Plan.WasMuted(engine) ? MediaInfo.LeavePictureInPictureScript : MediaInfo.PauseMarkScript;
         try
         {
             if (engine is ChromiumWebBrowser browser)
             {
-                var result = await PageScript.EvaluateAsync(browser, MediaInfo.PauseMarkScript, TimeSpan.FromSeconds(2));
+                var result = await PageScript.EvaluateAsync(browser, script, TimeSpan.FromSeconds(2));
                 if (result.Success && result.Result is double count) paused = (int)count;
             }
-            else if (engine is WebView2 { CoreWebView2: { } core } && await VideoPageScript.EvaluateNumberAsync(core, MediaInfo.PauseMarkScript) is { } count)
+            else if (engine is WebView2 { CoreWebView2: { } core } && await VideoPageScript.EvaluateNumberAsync(core, script) is { } count)
                 paused = (int)count;
         }
         catch (Exception) { }

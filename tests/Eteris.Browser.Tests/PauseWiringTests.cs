@@ -246,6 +246,12 @@ public class PauseWiringTests
         Assert.Matches(@"private void ForgetReplay\(FrameworkElement\? engine\)\s*\{\s*if \(engine is null\) return;\s*_replay\.Remove\(engine\);\s*_pause\?\.Plan\.Navigated\(engine\);\s*\}", Source("MainWindow.Pause.cs"));
     }
 
+    // A aba que o utilizador já tinha silenciado não é pausada pela Pausa (só sai do Picture-in-Picture): ficava parada para
+    // sempre, fora do «Retomar».
+    [Fact]
+    public void AMutedTab_IsNotPausedByThePause()
+        => Assert.Contains("var script = state.Plan.WasMuted(engine) ? MediaInfo.LeavePictureInPictureScript : MediaInfo.PauseMarkScript;", Source("MainWindow.Pause.cs"));
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

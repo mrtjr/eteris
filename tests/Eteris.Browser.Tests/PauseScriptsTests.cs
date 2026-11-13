@@ -84,6 +84,20 @@ public class PauseScriptsTests
         Assert.Equal("1", throwing);
     }
 
+    // No que o utilizador já tinha silenciado a Pausa não pausa nada: só sai do Picture-in-Picture.
+    [Fact]
+    public void LeavePictureInPicture_PausesNothing()
+    {
+        var output = Run("""
+            document.pictureInPictureElement = all[0];
+            document.exitPictureInPicture = function () { calls.push('sair-pip'); return Promise.resolve(); };
+            const n = LEAVE;
+            console.log(n + ' | ' + state() + ' | ' + calls.join(','));
+            """.Replace("LEAVE", MediaInfo.LeavePictureInPictureScript));
+        Assert.Equal("0 | a=toca c=parado velha=parado+marca | sair-pip", output);
+        Assert.Equal("0", Run("console.log(" + MediaInfo.LeavePictureInPictureScript + ");"));
+    }
+
     // A marca é o atributo data-eteris-pausa (dataset.eterisPausa), o que a prova ao vivo procura.
     [Fact]
     public void TheMark_IsTheDataAttribute()

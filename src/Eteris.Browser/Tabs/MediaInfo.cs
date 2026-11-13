@@ -68,6 +68,19 @@ public sealed record MediaInfo(MediaState State, bool Audible, string? Title, st
         })()
         """;
 
+    // No que o utilizador já tinha silenciado, a Pausa não pausa nada (não se ouve): só sai do Picture-in-Picture.
+    public const string LeavePictureInPictureScript = """
+        (function () {
+          try {
+            if (document.pictureInPictureElement && document.exitPictureInPicture) {
+              var p = document.exitPictureInPicture();
+              if (p && p.catch) p.catch(function () {});
+            }
+          } catch (e) { }
+          return 0;
+        })()
+        """;
+
     // «Retomar o que tocava» (o botão do aviso, com gesto do utilizador): toca só o que a Pausa marcou e tira a marca.
     public const string ResumeMarkedScript = """
         (function () {

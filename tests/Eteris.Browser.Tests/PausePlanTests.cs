@@ -125,6 +125,21 @@ public class PausePlanTests
         Assert.False(plan.Holds("a"));
     }
 
+    // O que o utilizador já tinha silenciado não se ouve: a Pausa não o pausa (o script de marcar não corre nele), fica como
+    // estava — silenciado e a tocar, se tocava — e, sem pausar nada, não entra no «Retomar».
+    [Fact]
+    public void WhatWasMutedBefore_IsLeftAlone()
+    {
+        var plan = PausePlan<string>.From([E("a", media: MediaState.Playing), E("b", muted: true, media: MediaState.Playing)]);
+        plan.Add(E("m", muted: true));
+        plan.Add(E("n"));
+        Assert.False(plan.WasMuted("a"));
+        Assert.True(plan.WasMuted("b"));
+        Assert.True(plan.WasMuted("m"));
+        Assert.False(plan.WasMuted("n"));
+        Assert.False(plan.WasMuted("x"));
+    }
+
     // A página principal de um motor navegou durante a Pausa: as marcas foram-se com o documento. Deixa de contar como «a
     // tocar» (o «Retomar» não dá o gesto do utilizador a um documento que a Pausa nunca pausou), mas continua calado e
     // recebe o som de volta.

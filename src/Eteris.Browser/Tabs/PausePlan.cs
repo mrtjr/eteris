@@ -64,6 +64,9 @@ public sealed class PausePlan<T> where T : class
     // a Pausa tirou-lhe o «a tocar», e adormecer largava o motor — saía do «Retomar» e perdia o ponto onde ia.
     public bool Holds(T engine) => _playing.Contains(engine, ReferenceEqualityComparer.Instance);
 
+    // Silenciado pelo utilizador antes da Pausa (ou ao nascer durante ela): não se pausa nem se marca.
+    public bool WasMuted(T engine) => _mutedBefore.Contains(engine);
+
     // A página principal navegou: as marcas foram-se com o documento (fica calado e recebe o som de volta).
     public void Navigated(T engine) => _playing.RemoveAll(e => ReferenceEquals(e, engine));
 
