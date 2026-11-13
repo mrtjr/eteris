@@ -20,7 +20,8 @@ public static class WatchScripts
     public static string Read(string? selector) => "(() => {\nconst selector = " + JsonSerializer.Serialize(selector) + ";\n" + ReadBody + "\n})()";
 
     // Corpo async para PageScript.EvaluateAsync(..., asyncBody: true): realça o elemento debaixo do rato (com o texto que
-    // vai ser vigiado) e, num clique, resolve para {"selector","text"} sem mexer na página; Esc resolve para null.
+    // vai ser vigiado) e, num clique, resolve para {"selector","text"} em texto JSON (WatchReadingParser.Pick) sem mexer
+    // na página; Esc resolve para null.
     public static string PickPiece(string tip)
         => "const tipText = " + JsonSerializer.Serialize(tip) + ";\n" + PickerScript.SelectorBuilder + "\n" + PickBody;
 
@@ -89,7 +90,7 @@ public static class WatchScripts
             ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach(t => removeEventListener(t, t === 'click' ? click : block, true));
             removeEventListener('keydown', key, true);
             host.remove();
-            resolve(value);
+            resolve(value === null ? null : JSON.stringify(value));
           };
           // A leitura usa querySelector (o 1.º elemento que o seletor encontra): um pedaço que se repete na página (um preço
           // numa lista) e cujo seletor encontra primeiro outro elemento não pode ser vigiado — seria lido o errado.

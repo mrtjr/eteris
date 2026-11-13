@@ -125,6 +125,18 @@ public static class WatchRules
         return now < old ? WatchOutcome.PriceDropped : WatchOutcome.Nothing;
     }
 
+    // O endereço de uma vigia (na criação e na leitura passiva, que procura pelo endereço exato): sem a âncora (#avaliacoes,
+    // #:~:text=…), que é a mesma página noutro ponto; o fragmento de rota de uma aplicação de uma página (#/…, #!…) é
+    // outra página e fica.
+    public static string PageUrl(string? url)
+    {
+        if (url is null) return "";
+        var hash = url.IndexOf('#');
+        if (hash < 0) return url;
+        var fragment = url.AsSpan(hash + 1);
+        return fragment.StartsWith("/") || fragment.StartsWith("!") ? url : url[..hash];
+    }
+
     // A leitura passiva (o utilizador abriu a página numa aba): só uma leitura boa se grava — o preço numa vigia de preço,
     // o pedaço com texto numa vigia de mudança. A aba pode estar a meio de carregar, rolada ou num desafio que o utilizador
     // vai resolver: nada disso conta como falha, desaparecimento ou bloqueio, e a vigia fica como estava (null).

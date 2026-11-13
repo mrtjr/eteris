@@ -249,6 +249,18 @@ public class WatchRulesTests
         Assert.Equal(WatchOutcome.Changed, WatchRules.Outcome(missing, back));
     }
 
+    // O endereço de uma vigia: a mesma página aberta noutra âncora (#avaliacoes, #:~:text=…) é ela; numa aplicação de uma
+    // página, o fragmento de rota (#/…, #!…) é outra página e fica.
+    [Theory]
+    [InlineData("https://a.pt/p#avaliacoes", "https://a.pt/p")]
+    [InlineData("https://a.pt/p#:~:text=pre%C3%A7o", "https://a.pt/p")]
+    [InlineData("https://a.pt/p#", "https://a.pt/p")]
+    [InlineData("https://a.pt/p?x=1", "https://a.pt/p?x=1")]
+    [InlineData("https://app.exemplo/#/produto/123", "https://app.exemplo/#/produto/123")]
+    [InlineData("https://app.exemplo/#!/produto/123", "https://app.exemplo/#!/produto/123")]
+    [InlineData(null, "")]
+    public void PageUrl_DropsAnchorsButKeepsRoutes(string? url, string expected) => Assert.Equal(expected, WatchRules.PageUrl(url));
+
     // A leitura passiva corre na aba do utilizador, que pode estar a meio de carregar ou a mostrar um desafio: só grava
     // uma leitura boa (o preço numa vigia de preço, o pedaço com texto numa vigia de mudança). Nada mais conta — nunca põe
     // a vigia em «falhou», «desapareceu» nem «bloqueada», nem gasta a hora da próxima verificação.

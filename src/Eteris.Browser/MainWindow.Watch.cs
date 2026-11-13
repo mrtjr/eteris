@@ -165,7 +165,7 @@ public partial class MainWindow
     // não cria nada. A mesma vigia (endereço, tipo e pedaço) não se cria duas vezes: o aviso confirma a que já existe.
     private void CreateWatch(BrowserTab tab, string url, WatchKind kind, string? selector, PageReading? reading)
     {
-        var key = WatchUrl(url);
+        var key = WatchRules.PageUrl(url);
         var title = tab.Title is { Length: > 0 } t && t != url ? t : reading?.Title is { Length: > 0 } r ? r : key;
         var now = DateTime.UtcNow;
         var draft = new PageWatch(0, key, "", title, kind, selector, UseSession: false, WatchSchedule.DefaultIntervalMinutes,
@@ -176,7 +176,12 @@ public partial class MainWindow
             ShowToast(WatchPieceFailed);
             return;
         }
-        if (!AppData.WatchesFor(key).Any(w => w.Kind == kind && w.Selector == selector))
+        if (AppData.WatchesFor(key).FirstOrDefault(w => w.Kind == kind && w.Selector == selector) is { } existing)
+        {
+            // A que já existe e estava em pausa volta a vigiar: o aviso diz «A vigiar…».
+            if (existing.Paused) AppData.PauseWatch(existing.Id, false);
+        }
+        else
         {
             if (AppData.AddWatch(new NewWatch(key, title, kind, selector, UseSession: false, WatchSchedule.DefaultIntervalMinutes, TargetPrice: null), IsPrivate)
                 is not { } id)
@@ -222,7 +227,7 @@ public partial class MainWindow
         for (var attempt = 0; attempt < (settle ? 6 : 1); attempt++)
         {
             if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1));
-            if (browser.IsDisposed || WatchUrl(browser.Address) != WatchUrl(url)) return null;
+            if (browser.IsDisposed || WatchRules.PageUrl(browser.Address) != WatchRules.PageUrl(url)) return null;
             var result = await PageScript.EvaluateAsync(browser, WatchScripts.Read(selector), WatchScriptLimit);
             if (result.Success && result.Result is string json) reading = WatchReadingParser.Parse(json, url);
             if (reading is not null && WatchRules.Settled(kind, reading)) break;
@@ -231,15 +236,7 @@ public partial class MainWindow
     }
 
     private bool StillOn(BrowserTab tab, ChromiumWebBrowser browser, string url)
-        => ReferenceEquals(Tabs.Active, tab) && !browser.IsDisposed && WatchUrl(browser.Address) == WatchUrl(url);
-
-    // O endereço de uma vigia é o da página sem o fragmento (#…): a mesma página aberta noutro ponto continua a ser ela.
-    private static string WatchUrl(string? url)
-    {
-        if (url is null) return "";
-        var hash = url.IndexOf('#');
-        return hash < 0 ? url : url[..hash];
-    }
+        => ReferenceEquals(Tabs.Active, tab) && !browser.IsDisposed && WatchRules.PageUrl(browser.Address) == WatchRules.PageUrl(url);
 
     // ---- A leitura passiva: o utilizador abriu numa aba uma página vigiada ----
 
@@ -251,14 +248,14 @@ public partial class MainWindow
         if (IsPrivate || WebHost(url) is null) return;
         try
         {
-            var key = WatchUrl(url);
+            var key = WatchRules.PageUrl(url);
             // Corre a cada página carregada: a consulta sai do fio da interface e nada mais se faz sem vigias.
             var watches = await Task.Run(() => AppData.WatchesFor(key));
             if (!watches.Any(w => !w.Paused)) return;
             await Task.Delay(TimeSpan.FromSeconds(3));
             foreach (var watch in watches)
             {
-                if (browser.IsDisposed || WatchUrl(browser.Address) != key) return;
+                if (browser.IsDisposed || WatchRules.PageUrl(browser.Address) != key) return;
                 // A vigia fresca: a ronda do relógio pode tê-la gravado (ou o utilizador apagado ou pausado) entretanto.
                 if (AppData.WatchesFor(key).FirstOrDefault(w => w.Id == watch.Id) is not { Paused: false } before) continue;
                 var reading = await ReadTabAsync(browser, url, before.Selector, before.Kind, settle: true);

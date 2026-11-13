@@ -164,6 +164,38 @@ public class WatchReadingParserTests
     [InlineData("""{"selector":7,"text":"R$ 10"}""")]
     public void Pick_RefusesAnythingElse(string? json) => Assert.Null(WatchReadingParser.Pick(json));
 
+    // O seletor resolve com o pedaço já em texto JSON (o PageScript devolve texto; um objeto não tem forma garantida).
+    [Fact]
+    public void PickPiece_ResolvesJsonText()
+    {
+        var stub = """
+            const listeners = {};
+            globalThis.addEventListener = (t, f) => { listeners[t] = f; };
+            globalThis.removeEventListener = () => {};
+            class CSSStyleSheet { replaceSync() {} }
+            globalThis.CSSStyleSheet = CSSStyleSheet;
+            const el = { tagName: 'SPAN', id: 'preco', innerText: 'R$ 1.234,56', getBoundingClientRect: () => ({ left: 0, top: 0, width: 9, height: 9 }),
+                         parentElement: null, classList: [], getAttribute: () => null, hasAttribute: () => false };
+            const node = () => ({ style: {}, append() {}, attachShadow() { return { append() {}, adoptedStyleSheets: [] }; }, remove() {} });
+            globalThis.document = {
+              createElement: node, documentElement: { appendChild() {} }, body: {},
+              elementFromPoint: () => el, querySelector: () => el, querySelectorAll: () => [el],
+            };
+            globalThis.CSS = { escape: s => s };
+            const run = async () => {
+            """ + WatchScripts.PickPiece("Clique") + """
+
+            };
+            const done = run();
+            listeners.mousemove({ clientX: 1, clientY: 1 });
+            listeners.click({ preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {} });
+            done.then(v => console.log(typeof v + ' ' + v));
+            """;
+        var output = NodeRunner.Run(stub).Trim();
+        Assert.StartsWith("string ", output);
+        Assert.NotNull(WatchReadingParser.Pick(output["string ".Length..]));
+    }
+
     [Fact]
     public void Pick_RefusesLongSelectors()
         => Assert.Null(WatchReadingParser.Pick(JsonSerializer.Serialize(new { selector = "#" + new string('a', 500), text = "x" })));
