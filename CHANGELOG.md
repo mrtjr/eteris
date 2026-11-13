@@ -10,6 +10,14 @@
 - **eteris://vigias** lista as vigias com o último preço e a curva, e deixa abrir, pausar e apagar. A janela privada não vigia nem mostra as vigias.
 - **Recortar um pedaço ao vivo**: «Recortar um pedaço ao vivo…» abre uma janela pequena, sempre por cima, só com esse pedaço da página, que pode recarregar sozinho («Recarregar a cada…»). O recorte usa a sua sessão (os seus cookies), e eteris://privacy diz quais recortes recarregam sozinhos.
 
+### Espreitar
+
+- O resumo do cartão mostra só parágrafos de texto corrido: deixam de aparecer as coordenadas e os dados das caixas de informação, as ligações «editar», as notas de rodapé, as legendas e os menus que a Wikipédia e outros sites metiam no meio do texto.
+- O título aparece sem o nome do site («Europa continental» em vez de «Europa continental – Wikipédia, a enciclopédia livre»; «Título» em vez de «PÚBLICO | Título») e o site aparece pelo nome curto («Wikipédia», não «Wikimedia Foundation, Inc.»).
+- Ao lado do nome do site aparece o ícone dele, lido da cache local de ícones (sem pedido novo; também na janela privada, que não escreve nela); sem ícone guardado, aparece a 1.ª letra do site num círculo.
+- Novo botão «Ler tudo aqui» (tecla E): o artigo inteiro rola dentro do cartão, ainda sem JavaScript e sem cookies, com o texto que o Espreitar já tinha lido; «Mostrar menos» (ou E outra vez) volta ao resumo. Só aparece quando há mais do que o resumo mostra.
+- Uma página sem texto nem descrição para resumir diz «Sem resumo para esta página — «Abrir» mostra-a», e o leitor de ecrã ouve os estados do cartão (a espreitar, erro, sem resumo) e, com o resumo pronto, o título, sem perder o foco.
+
 ### Aspeto
 
 - As páginas do Éteris (Definições, Histórico, Favoritos, Novidades, nova aba, também a privada, página de erro e as restantes) têm barras de deslocamento finas, sem setas e arredondadas, que seguem o tema claro ou escuro e ficam mais visíveis ao passar o rato. Em alto contraste do Windows, voltam a ser as do sistema.
@@ -25,6 +33,8 @@
 
 ### Correções
 
+- Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.
+- Num link que redireciona (um encurtador de links, ou de http para https), o cartão do Espreitar mostra o nome e a imagem do site de destino, cujo texto já mostrava. Antes, sem nome do site na página, aparecia o endereço do encurtador, e uma imagem com endereço relativo podia não aparecer.
 - Com o Escudo ligado, o lugar dos anúncios bloqueados deixa de ficar vazio na página: as imagens e as molduras que o Escudo bloqueou e os espaços que ficavam só com «Publicidade», «Anúncio» ou «Pub» (como o bloco no topo do Público ou do Observador) são recolhidos, neste computador e sem pedidos de rede. Num site com o Escudo desligado, a página fica como o site a desenhou.
 - Quando o nome de um site não existe, a página de erro passa a ter o botão principal «Pesquisar «nome»» no motor de pesquisa escolhido; se o nome estiver a uma ou duas letras de um site do histórico ou dos favoritos, pergunta «Queria dizer …?». A comparação é feita neste computador, sem pedidos de rede, e nunca na janela privada.
 - A data da nova aba aparece só com a primeira letra maiúscula («Quinta-feira, 12 de novembro»).
