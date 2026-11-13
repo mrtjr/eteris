@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; frame-src eteris:">
+<meta name="color-scheme" content="dark">
+<title>Vigias</title>
+<style>
+  :root {
+    --bg: #0b0d13; --text: #e9ebf2; --muted: #a3a9b8; --faint: #5e6577;
+    --glass: rgba(22, 25, 35, .72); --line: rgba(255, 255, 255, .08); --row: rgba(255, 255, 255, .04);
+    --iris: linear-gradient(90deg, #8b5cf6, #22d3ee, #34d399, #f472b6);
+    --accent: #8b5cf6; --ok: #34d399; --warn: #fbbf24; --bad: #ff8fa3;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  .glow {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(40vmax 30vmax at 10% -10%, rgba(139, 92, 246, .22), transparent 70%),
+      radial-gradient(40vmax 30vmax at 95% 0%, rgba(52, 211, 153, .12), transparent 70%);
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; backdrop-filter: blur(24px);
+    background: linear-gradient(rgba(11, 13, 19, .92), rgba(11, 13, 19, .75));
+    border-bottom: 1px solid var(--line);
+  }
+  .bar { width: min(860px, 92vw); margin: 0 auto; padding: 28px 0 18px; }
+  h1 { font-size: 30px; font-weight: 300; letter-spacing: -.02em; }
+  h1 b { font-weight: 600; background: var(--iris); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .count { color: var(--faint); font-size: 13px; margin-top: 6px; }
+  .promise { color: var(--muted); font-size: 13px; margin-top: 10px; line-height: 1.5; max-width: 680px; }
+  .promise a { color: var(--text); }
+  main { position: relative; z-index: 1; width: min(860px, 92vw); margin: 0 auto; padding: 18px 0 80px; display: grid; gap: 12px; }
+  .card {
+    display: grid; grid-template-columns: 34px 1fr auto; gap: 6px 14px; align-items: start;
+    background: rgba(255, 255, 255, .025); border: 1px solid var(--line); border-radius: 18px; padding: 16px 16px 14px;
+    transition: opacity .25s, transform .25s;
+  }
+  .card.gone { opacity: 0; transform: translateX(24px); }
+  .card.paused { opacity: .62; }
+  .badge {
+    width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+    background: var(--badge-color, var(--row)); font-size: 14px; font-weight: 700; color: #0b0d13; margin-top: 2px;
+  }
+  .head { min-width: 0; }
+  .title {
+    font-size: 15px; font-weight: 500; color: var(--text); text-decoration: none; display: block;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .title:hover { text-decoration: underline; }
+  .meta { color: var(--faint); font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions { display: flex; gap: 6px; }
+  button {
+    font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer;
+    height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid var(--line); background: var(--row);
+    transition: background .15s, color .15s;
+  }
+  button:hover { background: rgba(255, 255, 255, .09); }
+  button.danger:hover, button.armed { background: rgba(255, 122, 144, .16); color: var(--bad); }
+  .body { grid-column: 2 / 4; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 6px; }
+  .price { font-size: 26px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .piece {
+    font-size: 13.5px; color: var(--muted); border-left: 3px solid var(--line); padding: 2px 0 2px 10px;
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+  .spark { display: block; }
+  .spark polyline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .spark circle { fill: var(--accent); }
+  .facts { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+  .status { grid-column: 2 / 4; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .ok .dot { background: var(--ok); }
+  .failing .dot { background: var(--warn); }
+  .blocked .dot, .missing .dot { background: var(--bad); }
+  .empty { text-align: center; color: var(--muted); margin-top: 14vh; line-height: 1.6; }
+  .empty .orb {
+    width: 84px; height: 84px; margin: 0 auto 22px; border-radius: 50%; background: var(--iris); opacity: .85;
+    filter: blur(1px); box-shadow: 0 0 60px rgba(139, 92, 246, .45);
+  }
+  .empty h3 { font-size: 20px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .empty p { max-width: 520px; margin: 0 auto; }
+  iframe { display: none; }
+
+  /* Tema claro (o servidor acrescenta class="light" ao <html>) */
+  html.light {
+    --bg: #f3f4f9; --text: #1b1f2a; --muted: #535b6e; --faint: #868da0;
+    --glass: rgba(255, 255, 255, .8); --line: rgba(20, 24, 40, .1); --row: rgba(20, 24, 40, .04);
+    --ok: #059669; --warn: #d97706; --bad: #e11d48;
+  }
+  html.light ::selection { background: rgba(139, 92, 246, .25); }
+  html.light header { background: linear-gradient(rgba(243, 244, 249, .95), rgba(243, 244, 249, .82)); }
+  html.light button { background: #fff; }
+  html.light button:hover { background: #eef0f6; }
+  html.light .card { background: rgba(255, 255, 255, .7); }
+</style>
+</head>
+<body data-last-prices="{{LAST_PRICES}}">
+<div class="glow"></div>
+<header>
+  <div class="bar">
+    <h1><b>Vigias</b></h1>
+    <div class="count" id="count"></div>
+    <p class="promise" id="promise"></p>
+  </div>
+</header>
+<main id="list"></main>
+<iframe id="probe" title=""></iframe>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+  let data = JSON.parse(document.getElementById('data').textContent);
+  const list = document.getElementById('list');
+  const probe = document.getElementById('probe');
+  const base = 'eteris://vigias/';
+  let armed = null;
+
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  // Os pedidos à página (lista, pausar, retomar, apagar, abrir) vão por um iframe da mesma origem; a lista nova vem na
+  // resposta e a página volta a desenhar-se com ela.
+  function ask(path, id) {
+    if (!data.token) return;
+    probe.src = `${base}${path}?t=${data.token}${id != null ? `&id=${id}` : ''}&n=${Date.now()}`;
+  }
+  probe.addEventListener('load', () => {
+    const text = probe.contentDocument && probe.contentDocument.body ? probe.contentDocument.body.textContent.trim() : '';
+    if (!text.startsWith('{')) return;
+    try { data = JSON.parse(text); } catch (e) { return; }
+    render();
+  });
+
+  function spark(points) {
+    if (!points || points.length < 2) return null;
+    const ns = 'http://www.w3.org/2000/svg', w = 132, h = 34, pad = 3;
+    const min = Math.min(...points), max = Math.max(...points), span = max - min || 1;
+    const xy = points.map((p, i) => [pad + i * (w - 2 * pad) / (points.length - 1), h - pad - (p - min) * (h - 2 * pad) / span]);
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'spark'); svg.setAttribute('width', w); svg.setAttribute('height', h); svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.setAttribute('aria-hidden', 'true');
+    const line = document.createElementNS(ns, 'polyline');
+    line.setAttribute('points', xy.map(p => p.map(n => n.toFixed(1)).join(',')).join(' '));
+    const last = document.createElementNS(ns, 'circle');
+    last.setAttribute('cx', xy[xy.length - 1][0].toFixed(1)); last.setAttribute('cy', xy[xy.length - 1][1].toFixed(1)); last.setAttribute('r', '3');
+    svg.append(line, last);
+    return svg;
+  }
+
+  function card(w) {
+    const c = el('article', `card ${w.state}${w.paused ? ' paused' : ''}`);
+    const badge = el('span', 'badge', w.letter);
+    badge.setAttribute('aria-hidden', 'true');
+    badge.style.setProperty('--badge-color', w.color);
+    const head = el('div', 'head');
+    const title = el('a', 'title', w.title); title.href = w.url; title.title = w.url;
+    title.addEventListener('click', e => { e.preventDefault(); ask('open', w.id); });
+    const meta = [w.site, w.kind === 'price' ? 'preço' : 'pedaço da página', w.every, w.session ? 'com a sua sessão' : 'sem os seus cookies'];
+    head.append(title, el('div', 'meta', meta.join(' · ')));
+
+    const actions = el('div', 'actions');
+    const open = el('button', null, 'Abrir'); open.addEventListener('click', () => ask('open', w.id));
+    const pause = el('button', null, w.paused ? 'Retomar' : 'Pausar');
+    pause.addEventListener('click', () => ask(w.paused ? 'resume' : 'pause', w.id));
+    const del = el('button', 'danger', 'Apagar');
+    del.addEventListener('click', () => {
+      if (armed !== w.id) { armed = w.id; render(); return; }
+      armed = null;
+      c.classList.add('gone');
+      setTimeout(() => ask('delete', w.id), 220);
+    });
+    if (armed === w.id) { del.classList.add('armed'); del.textContent = 'Clique de novo para apagar'; }
+    actions.append(open, pause, del);
+
+    const body = el('div', 'body');
+    if (w.kind === 'price') {
+      body.append(el('span', 'price', w.price || '—'));
+      const s = spark(w.points); if (s) body.append(s);
+      const facts = [];
+      if (w.low) facts.push(`o mais baixo: ${w.low}`);
+      if (w.target) facts.push(`avisa também ao chegar a ${w.target}`);
+      if (facts.length) body.append(el('span', 'facts', facts.join(' · ')));
+    } else {
+      body.append(el('div', 'piece', w.text != null && w.text !== '' ? `«${w.text}»` : '—'));
+    }
+
+    const status = el('div', 'status');
+    status.append(el('span', 'dot'), el('span', null, w.status));
+    c.append(badge, head, actions, body, status);
+    return c;
+  }
+
+  function render() {
+    document.body.dataset.lastPrices = data.lastPrices || '';
+    list.textContent = '';
+    const n = data.watches.length;
+    document.getElementById('count').textContent = data.isPrivate ? 'Janela privada' : `${n} ${n === 1 ? 'vigia' : 'vigias'} · verificadas só com o Éteris aberto`;
+    const promise = document.getElementById('promise');
+    promise.textContent = '';
+    if (!data.isPrivate && n) {
+      const session = data.watches.some(w => w.session);
+      promise.append(`O Éteris visita cada página de tempos a tempos, com o Escudo ligado e sem os seus cookies${session ? ' (salvo nas vigias «com a sua sessão»)' : ''}, e nunca contorna as proteções dos sites. Os avisos aparecem só dentro do Éteris. `);
+      const more = el('a', null, 'As promessas de privacidade'); more.href = 'eteris://privacy/';
+      promise.append(more);
+    }
+    for (const w of data.watches) list.append(card(w));
+    if (!n) {
+      const empty = el('div', 'empty');
+      empty.append(el('div', 'orb'), el('h3', null, data.isPrivate ? 'Sem vigias na janela privada' : 'Nenhuma vigia'),
+        el('p', null, data.isPrivate
+          ? 'A janela privada não vigia páginas nem mostra as vigias do perfil.'
+          : 'Numa página com um preço, clique com o botão direito e escolha «Vigiar o preço desta página» (ou «Avisar quando um pedaço mudar…»). Também na paleta de comandos (Ctrl+K).'));
+      list.append(empty);
+    }
+  }
+
+  // A lista volta a ler-se de 15 em 15 s (as verificações correm por trás, também com a janela minimizada: a página
+  // fica certa para quando voltar), e logo que volta à vista.
+  setInterval(() => { if (armed === null) ask('list'); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ask('list'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && armed !== null) { armed = null; render(); } });
+
+  render();
+</script>
+</body>
+</html>

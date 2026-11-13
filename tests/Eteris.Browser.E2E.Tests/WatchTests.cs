@@ -3,7 +3,7 @@ namespace Eteris.Browser.E2E.Tests;
 // A vigia lê um preço posto por JavaScript (temporizadores encadeados, requestAnimationFrame) com a janela principal
 // minimizada: o motor da vigia corre numa janela própria fora do ecrã, com o tamanho de uma janela normal. A loja de teste
 // (Shop/) é servida dentro do Éteris em https://loja-eteris.invalid/ (ETERIS_TEST_SHOP_DIR): nada vai à rede.
-// O resultado lê-se em eteris://vigias/ (data-last-prices no <body>), que chega com a Task 7 do plano da etapa A.
+// O resultado lê-se em eteris://vigias/ (data-last-prices no <body>, que a página atualiza de 15 em 15 s).
 [Collection("E2E")]
 public class WatchTests
 {

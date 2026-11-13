@@ -98,6 +98,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         }
 
         if (uri is { Host: "history" }) return History(uri, request.Url);
+        if (uri is { Host: "vigias" }) return Watches(uri, request.Url, browser.Identifier);
         // Palavras-passe e preenchimento automático (Vault/VaultRoutes.cs): recusadas na janela privada.
         if (uri is { Host: "passwords" or "autofill" }) return VaultRoute(uri, request, browser);
         if (uri is { Host: "settings" or "about", AbsolutePath: "/clear" }) return ClearData(uri, request.Url, browser);
@@ -754,6 +755,40 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         return uri.AbsolutePath == "/"
             ? Html(BookmarksPage.Render(AppData.Bookmarks(b => b.All(1000)), AppData.ReadingList(), AppData.SavedSessions()))
             : ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+    }
+
+    // eteris://vigias/: a página e, com o token, a lista (/list) e as ações sobre uma vigia (/pause, /resume, /delete), que
+    // respondem com a lista nova; /open abre a página da vigia (o endereço guardado, nunca um da consulta) numa aba nova
+    // da janela que pediu. A janela privada não lê nem mexe nas vigias do perfil.
+    private IResourceHandler Watches(Uri uri, string url, int browserId)
+    {
+        if (privateContext)
+            return uri.AbsolutePath == "/"
+                ? Html(WatchesPage.Render([], _ => [], DateTime.UtcNow, isPrivate: true))
+                : ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
+        if (uri.AbsolutePath == "/") return Html(WatchesPage.Render(AppData.Watches(), AppData.WatchPrices, DateTime.UtcNow));
+        if (uri.AbsolutePath is not ("/list" or "/pause" or "/resume" or "/delete" or "/open"))
+            return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
+        if (!InternalPages.IsAuthorized(url)) return Text("recusado");
+        if (uri.AbsolutePath != "/list")
+        {
+            if (!long.TryParse(InternalPages.Query(uri, "id"), out var id)) return Text("recusado");
+            switch (uri.AbsolutePath)
+            {
+                case "/pause":
+                case "/resume":
+                    AppData.PauseWatch(id, uri.AbsolutePath == "/pause");
+                    break;
+                case "/delete":
+                    AppData.DeleteWatch(id);
+                    break;
+                default:
+                    if (AppData.Watches().FirstOrDefault(w => w.Id == id) is not { } watch) return Text("recusado");
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => MainWindow.WindowOf(browserId)?.OpenWatchedPage(watch.Url));
+                    return Text("ok");
+            }
+        }
+        return Text(WatchesPage.Data(AppData.Watches(), AppData.WatchPrices, DateTime.UtcNow));
     }
 
     private IResourceHandler History(Uri uri, string url)

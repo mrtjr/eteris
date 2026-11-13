@@ -65,6 +65,7 @@ public class InjectedScriptsSyntaxTests
     [InlineData("bookmarks")]
     [InlineData("welcome")]
     [InlineData("whatsnew")]
+    [InlineData("vigias")]
     public void InternalPageScript_IsValidJavaScript(string page)
     {
         var html = page switch
@@ -75,6 +76,7 @@ public class InjectedScriptsSyntaxTests
             "bookmarks" => BookmarksPage.Render([]),
             "welcome" => WelcomePage.Render(new Eteris.Browser.Data.UserSettings(), []),
             "whatsnew" => WhatsNewPage.Render(SettingsPage.Version),
+            "vigias" => WatchesPage.Render([], _ => [], new DateTime(2026, 12, 1, 12, 0, 0, DateTimeKind.Utc)),
             _ => throw new ArgumentOutOfRangeException(nameof(page)),
         };
         var match = Regex.Match(html, @"<script>(.*?)</script>", RegexOptions.Singleline);

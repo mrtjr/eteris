@@ -61,7 +61,9 @@ public partial class MainWindow
         _watchBusy = true;
         try
         {
-            _watchRunner ??= new WatchRunner(WatchContext, () => new PrivacyRequestHandler(() => ShieldEngine.Current, ShieldOn,
+            // O Escudo vale sempre nas visitas da vigia, mesmo num site onde o utilizador o desligou nas abas (a promessa
+            // de eteris://privacy/ e de eteris://vigias/ di-lo: «com o Escudo ligado»).
+            _watchRunner ??= new WatchRunner(WatchContext, () => new PrivacyRequestHandler(() => ShieldEngine.Current, _ => true,
                 onBlocked: _ => { }, isPrivate: false, localNetworkAllowed: IsLocalNetworkAllowed, chooseCertificate: RefuseClientCertificate));
             foreach (var watch in due)
             {
@@ -104,15 +106,65 @@ public partial class MainWindow
         return true;
     }
 
-    // Os avisos (o aviso interno e o piscar na barra de tarefas) chegam com a Task 7 do plano da etapa A.
+    // ---- Os avisos: só dentro do Éteris (decisão 3) ----
+
+    // Os avisos à espera de a janela voltar ao primeiro plano (um aviso dura segundos: numa janela minimizada ou por trás
+    // de outra perdia-se, ficando só o piscar).
+    private readonly List<(string Notice, string Url)> _pendingWatchNotices = [];
+    private bool _watchNoticesWired;
+
+    // O aviso vai para a janela normal do Éteris que está ativa (senão, esta, a dona da sessão), com «Abrir». Se essa
+    // janela não está ativa, a barra de tarefas pisca e o aviso aparece quando ela voltar. Nada de ícone na bandeja nem
+    // de notificações do Windows.
     private void NotifyWatch(PageWatch before, WatchOutcome outcome, WatchCheck check)
     {
+        if (WatchesPage.Notice(before, outcome, check) is not { } notice) return;
+        var window = NormalWindows().FirstOrDefault(w => w.IsActive && !w._forgetOnCloseDone) ?? this;
+        window.DeliverWatchNotice(notice, before.Url);
+    }
+
+    private void DeliverWatchNotice(string notice, string url)
+    {
+        if (IsActive)
+        {
+            ShowWatchNotice(notice, url);
+            return;
+        }
+        _pendingWatchNotices.Add((notice, url));
+        if (!_watchNoticesWired)
+        {
+            _watchNoticesWired = true;
+            // Depois de a janela acabar de voltar (restaurar, trazer para a frente): o aviso fica a ver-se.
+            Activated += (_, _) => Dispatcher.InvokeAsync(ShowPendingWatchNotices, DispatcherPriority.Background);
+        }
+        WindowAttention.Flash(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+    }
+
+    // Um aviso à espera mostra-se como chegou; vários mostram o último, com quantos mais houve e «Ver vigias».
+    private void ShowPendingWatchNotices()
+    {
+        if (_pendingWatchNotices.Count == 0) return;
+        var (notice, url) = _pendingWatchNotices[^1];
+        var more = _pendingWatchNotices.Count - 1;
+        _pendingWatchNotices.Clear();
+        if (more == 0) ShowWatchNotice(notice, url);
+        else
+            ShowToast($"{notice} (e mais {more} {(more == 1 ? "aviso" : "avisos")} das vigias)",
+                new ToastAction("Abrir", () => Tabs.NewTab(url)), new ToastAction("Ver vigias", () => OpenInternal(WatchesUrl)));
+    }
+
+    private void ShowWatchNotice(string notice, string url) => ShowToast(notice, new ToastAction("Abrir", () => Tabs.NewTab(url)));
+
+    // «Abrir» em eteris://vigias/: a página vigiada numa aba nova desta janela (a leitura passiva lê-a lá).
+    internal void OpenWatchedPage(string url)
+    {
+        if (IsPrivate || WebHost(url) is null) return;
+        Tabs.NewTab(url);
     }
 
     // ---- Os gestos: «Vigiar o preço desta página» e «Avisar quando um pedaço mudar…» (menu da página e paleta) ----
 
-    // A página das vigias (eteris://vigias/) chega com a Task 7 do plano da etapa A.
-    private const string WatchesUrl = "eteris://vigias/";
+    private const string WatchesUrl = WatchesPage.Url;
     private const string WatchPieceTip = "Clique no pedaço a vigiar · Esc para cancelar";
     private const string WatchPieceFailed = "Não foi possível vigiar este pedaço";
     private static readonly TimeSpan WatchScriptLimit = TimeSpan.FromSeconds(5);

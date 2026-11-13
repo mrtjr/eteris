@@ -52,7 +52,12 @@ public static class PrivacyPage
         bool NetworkSandboxed = true,
         bool SandboxRetryPending = false,
         bool FullShield = true,
-        bool HttpsFirst = true);
+        bool HttpsFirst = true)
+    {
+        // As vigias que o Éteris visita sozinho (nem em pausa, nem bloqueadas, nem sem pedaço): o site, o intervalo e se
+        // vão «com a minha sessão». Fora do construtor para os estados já escritos continuarem a valer.
+        public IReadOnlyList<(string Site, int Minutes, bool Session)> Watches { get; init; } = [];
+    }
 
     // «Voltar a ligar» (D6): pede ao arranque seguinte para voltar a tentar o sandbox (precisa do token da página).
     public const string SandboxRetryUrl = "eteris://privacy/sandbox-retry";
@@ -241,7 +246,24 @@ public static class PrivacyPage
                     ? "Os endereços http:// abrem por HTTPS; quando o site não o tem, o Éteris avisa antes de abrir."
                     : "Opcional · desligado: os endereços http:// abrem como foram escritos.",
                 s.HttpsFirst ? true : null, Fix: s.HttpsFirst ? null : "eteris://settings/#privacidade"),
+            WatchesPromise(s),
         ];
+    }
+
+    // As vigias (etapa A): sem vigias a correr, o Éteris não visita nada sozinho; com elas, que sites visita e como. A
+    // «com a minha sessão» só se diz quando alguma vigia a escolheu: a linha promete só o que o código faz.
+    private static Promise WatchesPromise(State s)
+    {
+        const string title = "Vigias: só as que criou";
+        if (s.Watches.Count == 0) return new("watches", title, "Nenhuma vigia: o Éteris não visita sites sozinho.", true);
+        var sites = string.Join(", ", s.Watches.Select(w => w.Site).Distinct(StringComparer.OrdinalIgnoreCase));
+        var withSession = s.Watches.Where(w => w.Session).Select(w => w.Site).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var session = withSession.Count == 0 ? "" : ", salvo onde escolheu «com a minha sessão» (" + string.Join(", ", withSession) + ")";
+        var count = s.Watches.Count == 1 ? "1 vigia" : $"{s.Watches.Count} vigias";
+        return new("watches", title,
+            $"{count} a {sites}: o Éteris visita cada página de tempos a tempos (no mínimo de {Watching.WatchSchedule.MinIntervalMinutes} em {Watching.WatchSchedule.MinIntervalMinutes} min), "
+            + $"com o Escudo ligado e sem os seus cookies{session}. Nunca contorna as proteções dos sites. As visitas não entram no histórico.",
+            true);
     }
 
     // A linha do isolamento das páginas (INF-10): ✔ só com o sandbox em vigor; desligado, diz porquê e, depois do recuo
@@ -348,7 +370,13 @@ public static class PrivacyPage
                 // O motor já não lê o --no-sandbox do Chromium (CommandLineArgsDisabled, INF-09): só o do Éteris conta.
                 engineNoSandbox: false),
             Infrastructure.NetworkSandbox.Enabled, Infrastructure.StartupGuard.Current.ReenableRequested,
-            Shields.ShieldEngine.Cosmetic is not null, settings.HttpsFirst);
+            Shields.ShieldEngine.Cosmetic is not null, settings.HttpsFirst)
+        {
+            // Também na janela privada: a linha diz o que o Éteris faz sozinho, e dizer «nenhuma vigia» ali seria falso.
+            Watches = Data.AppData.Watches()
+                .Where(w => !w.Paused && w.Status is not (Watching.WatchStatus.Blocked or Watching.WatchStatus.Missing))
+                .Select(w => (w.Site, w.IntervalMinutes, w.UseSession)).ToList(),
+        };
     }
 
     // Depois de «Apagar o relatório»: volta à página (sem script, a CSP da página não deixa) e sem repetir o pedido.

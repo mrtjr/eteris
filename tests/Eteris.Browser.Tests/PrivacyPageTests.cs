@@ -18,6 +18,37 @@ public class PrivacyPageTests
 
     private static PrivacyPage.Promise Find(PrivacyPage.State state, string id) => Assert.Single(PrivacyPage.Promises(state), p => p.Id == id);
 
+    // As vigias (etapa A, Task 7): sem vigias, o Éteris não visita nada sozinho; com elas, a linha diz que sites visita, de
+    // quanto em quanto tempo e como, e que nunca contorna as proteções dos sites.
+    [Fact]
+    public void Watches_NoneMeansNoVisits()
+        => Assert.Equal("Nenhuma vigia: o Éteris não visita sites sozinho.", Find(Good(), "watches").Detail);
+
+    [Fact]
+    public void Watches_ListsSitesAndSaysNeverBypasses()
+    {
+        var watches = Find(Good() with { Watches = [("kabum.com.br", 120, false)] }, "watches");
+        Assert.Equal("Vigias: só as que criou", watches.Title);
+        Assert.True(watches.Kept);
+        Assert.Contains("kabum.com.br", watches.Detail);
+        Assert.Contains("Nunca contorna as proteções dos sites", watches.Detail);
+        Assert.Contains("As visitas não entram no histórico.", watches.Detail);
+        Assert.StartsWith("1 vigia a kabum.com.br:", watches.Detail);
+    }
+
+    // «salvo onde escolheu «com a minha sessão»» só aparece quando alguma vigia vai com a sessão: a interface promete só o
+    // que o código faz. Cada site aparece uma vez.
+    [Fact]
+    public void Watches_SessionClauseOnlyWhenChosen()
+    {
+        var without = Find(Good() with { Watches = [("kabum.com.br", 120, false), ("kabum.com.br", 60, false), ("pichau.com.br", 30, false)] }, "watches").Detail;
+        Assert.StartsWith("3 vigias a kabum.com.br, pichau.com.br:", without);
+        Assert.Contains("sem os seus cookies.", without);
+        Assert.DoesNotContain("com a minha sessão", without);
+        var with = Find(Good() with { Watches = [("kabum.com.br", 120, true)] }, "watches").Detail;
+        Assert.Contains("sem os seus cookies, salvo onde escolheu «com a minha sessão» (kabum.com.br).", with);
+    }
+
     // A linha «DNS cifrado» lê o que foi pedido ao motor no arranque (Local State), não o estado em vigor: diz-o (EGR-15).
     [Fact]
     public void Dns_DetailSaysItWasRequested_NotVerified()
@@ -332,7 +363,7 @@ public class PrivacyPageTests
     public void SyncBlock_IsNotAPromise_AndAddsNoNetworkPower()
     {
         string[] ids = ["sandbox", "gpc-header", "gpc-js", "ad-apis", "quiet", "passwords", "no-google", "cookies", "jars", "referrer", "language",
-            "hints", "lan", "bounce", "cname", "webrtc", "dns", "recall", "gpu-cache", "engine-tuning", "shield", "https-first"];
+            "hints", "lan", "bounce", "cname", "webrtc", "dns", "recall", "gpu-cache", "engine-tuning", "shield", "https-first", "watches"];
         foreach (var syncOn in new[] { false, true })
             Assert.Equal(ids, PrivacyPage.Promises(Good() with { SyncOn = syncOn }).Select(p => p.Id));
         var page = PrivacyTemplate();
