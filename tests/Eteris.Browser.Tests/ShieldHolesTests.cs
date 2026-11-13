@@ -182,8 +182,8 @@ public class ShieldHolesTests
         };
         """;
 
-    private static string RunPage(string build, IReadOnlyCollection<string> blocked)
-        => NodeRunner.Run(FakeDom + build + "\nconst collapsed = " + CosmeticScripts.CollapseHoles(blocked).TrimEnd().TrimEnd(';') + ";\n"
+    private static string RunPage(string build, IReadOnlyCollection<string> blocked, bool labels = true)
+        => NodeRunner.Run(FakeDom + build + "\nconst collapsed = " + CosmeticScripts.CollapseHoles(blocked, labels).TrimEnd().TrimEnd(';') + ";\n"
             + "console.log(collapsed + ' ' + document.body.all().filter(e => e.style.display === 'none').map(e => e.id || e.tagName.toLowerCase()).join(','));").Trim();
 
     // O Público como a prova o mediu: o <ad-placement> vazio com «publicidade» num ::before, ao lado do cabeçalho;
@@ -240,6 +240,23 @@ public class ShieldHolesTests
               el('div', { h: 250, bg: 'url(fundo.jpg)', before: '"Pub"' }),
               el('main', { h: 2000 }, el('p', { h: 40 }, 'Notícia'))));
             """, []));
+    }
+
+    // Os bloqueios que chegam depois do carregamento (labels: false): a página só volta a procurar rótulos se recolheu
+    // algum iframe ou imagem — um beacon (new Image()) bloqueado que não está na página não faz percorrer a página toda.
+    // Medido ao vivo: a procura dos rótulos custa 2–15 ms num jornal e ~40 ms numa página de 13 500 elementos.
+    [Fact]
+    public void Script_LateBlocks_SweepTheLabelsOnlyAfterCollapsingSomething()
+    {
+        const string Page = """
+            page(el('body', { h: 3000 },
+              el('div', { id: 'vazio', h: 250, before: '"Publicidade"' }),
+              el('div', { id: 'slot', h: 270 }, el('span', { h: 16 }, 'Anúncio'), el('iframe', { id: 'f', src: 'https://ads.example/ad.html', h: 250 })),
+              el('main', { h: 2000 }, el('p', { h: 40 }, 'Notícia'))));
+            """;
+        Assert.Equal("0", RunPage(Page, ["https://ads.example/beacon.gif"], labels: false));
+        Assert.Equal("3 vazio,slot,f", RunPage(Page, ["https://ads.example/ad.html"], labels: false));
+        Assert.Equal("1 vazio", RunPage(Page, ["https://ads.example/beacon.gif"], labels: true));
     }
 
     [Fact]
@@ -342,8 +359,8 @@ public class ShieldHolesTests
     public void TheTab_KeepsEachAddressOnce_UpToTheLimit_AndForgetsThemWithThePage()
     {
         var tab = new BrowserTab("https://www.publico.pt/");
-        tab.RecordBlockedElement("https://ads.example/1.gif");
-        tab.RecordBlockedElement("https://ads.example/1.gif");
+        Assert.True(tab.RecordBlockedElement("https://ads.example/1.gif"));
+        Assert.False(tab.RecordBlockedElement("https://ads.example/1.gif"));
         Assert.Equal(["https://ads.example/1.gif"], tab.BlockedElements);
 
         for (var i = 0; i < BrowserTab.RememberedBlockedElements + 10; i++) tab.RecordBlockedElement($"https://ads.example/{i}.png");
@@ -378,6 +395,9 @@ public class ShieldHolesTests
 
         var window = Source("MainWindow.xaml.cs");
         Assert.Contains("onBlockedElement: url => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, url))", window);
+        // Um endereço repetido não volta a pôr a página a trabalhar, e o caminho tardio não procura rótulos à toa.
+        Assert.Contains("if (!tab.RecordBlockedElement(url) || !_holesQueued.Add(tab)) return;", shield);
+        Assert.Contains("CosmeticScripts.CollapseHoles(blocked, labels: false)", later);
         Assert.Contains("_ = ApplyGenericCosmeticsAsync(browser, url, tab);", window);
     }
 }

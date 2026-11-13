@@ -95,9 +95,11 @@ public static class CosmeticScripts
         };
         """;
 
-    // O script para a página (só o documento principal: PageScript). Devolve quantos elementos recolheu.
-    public static string CollapseHoles(IReadOnlyCollection<string> blocked) => $$"""
-        (function (list) {
+    // O script para a página (só o documento principal: PageScript). Devolve quantos elementos recolheu. labels: false
+    // nos bloqueios que chegam depois do carregamento — os rótulos só se voltam a procurar se recolheu algum iframe ou img
+    // (a procura percorre a página: 2–15 ms num jornal, ~40 ms numa página de 13 500 elementos, medido ao vivo).
+    public static string CollapseHoles(IReadOnlyCollection<string> blocked, bool labels = true) => $$"""
+        (function (list, sweep) {
           {{HolesCore}}
           var hidden = 0;
           var hide = function (e) {
@@ -112,7 +114,7 @@ public static class CosmeticScripts
             if (Holes.hit(blocked, [e.currentSrc, e.src])) hide(e);
           });
           var body = document.body;
-          if (!body) return hidden;
+          if (!body || (!sweep && hidden === 0)) return hidden;
           var rendered = function (e) { var r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
           var filled = new Set();
           var mark = function (e) { for (; e && !filled.has(e); e = e.parentElement) filled.add(e); };
@@ -152,7 +154,7 @@ public static class CosmeticScripts
           };
           labels.forEach(function (l) { var b = Holes.box(l[0], l[1], dom); if (b) hide(b); });
           return hidden;
-        })({{JsonSerializer.Serialize(blocked)}});
+        })({{JsonSerializer.Serialize(blocked)}}, {{(labels ? "true" : "false")}});
         """;
 
     public static (string[] Classes, string[] Ids) ParseClassesAndIds(string raw)

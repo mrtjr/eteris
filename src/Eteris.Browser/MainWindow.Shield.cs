@@ -144,8 +144,7 @@ public partial class MainWindow
     {
         try
         {
-            tab.RecordBlockedElement(url);
-            if (!_holesQueued.Add(tab)) return;
+            if (!tab.RecordBlockedElement(url) || !_holesQueued.Add(tab)) return;
             try { await Task.Delay(400); }
             finally { _holesQueued.Remove(tab); }
             CollapseHoles(tab);
@@ -159,7 +158,7 @@ public partial class MainWindow
         var url = tab.Address;
         if (WebHost(url) is not { } host || !ShieldOn(host) || SelfTest.IsTestPage(url)) return;
         var blocked = tab.BlockedElements;
-        if (blocked.Count > 0) PageScript.Run(browser, CosmeticScripts.CollapseHoles(blocked));
+        if (blocked.Count > 0) PageScript.Run(browser, CosmeticScripts.CollapseHoles(blocked, labels: false));
     }
 
     private void Shield_Click(object sender, RoutedEventArgs e)

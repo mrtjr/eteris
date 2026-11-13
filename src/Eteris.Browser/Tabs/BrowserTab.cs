@@ -274,11 +274,13 @@ public partial class BrowserTab : ObservableObject
 
     public IReadOnlyList<string> BlockedElements => _blockedElements.ToList();
 
-    public void RecordBlockedElement(string url)
+    // false: o endereço já lá estava (a página já o recebeu).
+    public bool RecordBlockedElement(string url)
     {
-        if (_blockedElements.Contains(url)) return;
+        if (_blockedElements.Contains(url)) return false;
         _blockedElements.Add(url);
         if (_blockedElements.Count > RememberedBlockedElements) _blockedElements.RemoveAt(0);
+        return true;
     }
 
     public void RecordBlocked(string host)
