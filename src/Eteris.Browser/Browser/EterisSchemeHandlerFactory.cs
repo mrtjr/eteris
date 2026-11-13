@@ -148,9 +148,17 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             if (choice.Always && !privateContext) AppData.SetHttpException(choice.Host, true);
             return Html(ErrorPage.ContinueRedirect(choice.Url));
         }
+        if (uri is { Host: "error", AbsolutePath: "/search" })
+        {
+            // «Pesquisar «nome»» da página de erro: só com o nome assinado por ela, no motor escolhido; a pesquisa
+            // substitui este passo no histórico (o «Voltar» regressa à página de erro).
+            if (ErrorPage.ParseSearch(request.Url) is not { } query) return Text("recusado");
+            return Html(ErrorPage.ContinueRedirect(SearchEngine.Preferred.UrlFor(query)));
+        }
         if (ErrorPage.IsErrorPage(request.Url))
             return Html(ErrorPage.Render(ErrorPage.Code(request.Url), ErrorPage.FailedUrl(request.Url) ?? string.Empty,
-                ErrorPage.IsInsecureWarning(request.Url), canRemember: !privateContext, secureDns: Settings.Current.SecureDns != "off"));
+                ErrorPage.IsInsecureWarning(request.Url), canRemember: !privateContext, secureDns: Settings.Current.SecureDns != "off",
+                knownHosts: privateContext ? null : ErrorPage.KnownHosts));
 
         return ResourceHandler.ForErrorMessage("Página interna não encontrada", HttpStatusCode.NotFound);
     }

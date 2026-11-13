@@ -267,6 +267,28 @@ public partial class BrowserTab : ObservableObject
 
     public void RecordCloaked(string label) => _cloaked.Add(label);
 
+    // «Escudo sem buracos» (CosmeticScripts.CollapseHoles): os endereços das imagens e dos iframes do documento principal
+    // que o Escudo bloqueou nesta página, para a página os recolher. Só em memória, cada um uma vez, no máximo
+    // RememberedBlockedElements (saem os mais antigos), e recomeçam com cada página (ResetShield). Cada um fica com a
+    // origem da página de cima no momento do bloqueio e só volta a um documento dessa origem (BlockedElementsFor): a
+    // lista recomeça no pedido da página nova, mas a anterior continua a pedir até ao commit, e um bloqueio dela que
+    // chegue depois não pode ir parar à seguinte.
+    public const int RememberedBlockedElements = 200;
+
+    private readonly List<(string Origin, string Url)> _blockedElements = [];
+
+    public void RecordBlockedElement(string? page, string url)
+    {
+        if (Shields.CosmeticScripts.OriginOf(page) is not { } origin || _blockedElements.Contains((origin, url))) return;
+        _blockedElements.Add((origin, url));
+        if (_blockedElements.Count > RememberedBlockedElements) _blockedElements.RemoveAt(0);
+    }
+
+    public IReadOnlyList<string> BlockedElementsFor(string? page)
+        => Shields.CosmeticScripts.OriginOf(page) is { } origin
+            ? _blockedElements.Where(e => e.Origin == origin).Select(e => e.Url).ToList()
+            : [];
+
     public void RecordBlocked(string host)
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
@@ -306,6 +328,7 @@ public partial class BrowserTab : ObservableObject
         _localNetworkBlocked.Clear();
         _trackingSkips.Clear();
         _cloaked.Clear();
+        _blockedElements.Clear();
         BlockedCount = 0;
     }
 
@@ -313,22 +336,35 @@ public partial class BrowserTab : ObservableObject
     // (back/forward cache) repõe a página tal como estava, sem pedidos novos, por isso repõe-se o que ela tinha.
     public const int RememberedPages = 8;
 
-    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon, string? FaviconSite);
+    // LoadedAt: quando o documento deixado carregou (o commit, em Environment.TickCount64). A cache de páginas repõe esse
+    // documento tal como estava, por isso é a hora de carga, não a de saída, que diz se o site ficou mais protegido
+    // depois de ele correr (Shields/ShieldTightening.cs).
+    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon, string? FaviconSite,
+        long LoadedAt);
 
     private readonly List<LeftPage> _leftPages = [];
 
-    // A página url vai ser substituída: guarda o estado dela e começa a contagem da seguinte do zero. Chamado uma vez
-    // por pedido da página nova (um redirecionamento repete-o): uma contagem já recomeçada não apaga a guardada.
-    public void LeavePage(string? url)
+    // A página url, carregada em loadedAt, vai ser substituída: guarda o estado dela e começa a contagem da seguinte do
+    // zero. Chamado uma vez por pedido da página nova (um redirecionamento repete-o com a mesma hora): uma contagem já
+    // recomeçada não apaga a guardada, mas a hora de carga é sempre a do último documento com esse endereço. Sem ela,
+    // conta como carregada antes de tudo (pelo seguro).
+    public void LeavePage(string? url, long loadedAt = long.MinValue)
     {
         if (url is not null && (BlockedCount > 0 || _leftPages.All(p => p.Url != url)))
         {
             _leftPages.RemoveAll(p => p.Url == url);
-            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite));
+            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite, loadedAt));
             if (_leftPages.Count > RememberedPages) _leftPages.RemoveAt(0);
+        }
+        else if (url is not null && _leftPages.FindLastIndex(p => p.Url == url) is var i and >= 0)
+        {
+            _leftPages[i] = _leftPages[i] with { LoadedAt = loadedAt };
         }
         ResetShield();
     }
+
+    // Quando carregou o último documento deixado com o endereço url; null se a aba não o guardou.
+    public long? LoadedAt(string url) => _leftPages.FindLast(p => p.Url == url)?.LoadedAt;
 
     // Voltou a url pela cache de páginas: repõe a contagem e o ícone dela. false se não há nada guardado.
     public bool ReturnToPage(string url)

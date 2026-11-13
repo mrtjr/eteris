@@ -92,7 +92,8 @@ public class GpuCacheTests
         var code = Source(Path.Combine("Infrastructure", "CefConfigurator.cs"));
         Assert.Contains("var shaderCache = PerfTuning.IsOn(PerfTuning.ShaderCache);", code);
         Assert.Contains("if (shaderCache) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);", code);
-        Assert.Matches(@"Build\([^;]*shaderCache\);", code);
+        // O Build recebe o ajuste (a seguir pode vir a opção das barras sobrepostas, proposta 3).
+        Assert.Matches(@"Build\([^;]*\s+shaderCache(, [^;]*)?\);", code);
     }
 
     [Theory]

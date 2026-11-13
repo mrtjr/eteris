@@ -50,6 +50,10 @@ public sealed record UserSettings
     // Esconder as janelas das capturas de ecrã e do Recall (Infrastructure/CaptureShield.cs). Desligado por omissão,
     // também na janela privada: ligado, as capturas, gravações e partilhas de ecrã mostram um vazio.
     public bool HideFromCapture { get; set; }
+    // Barras de deslocamento sobrepostas nas páginas web (Shields/EngineAppearance.cs): mudam o que os sites medem (a
+    // barra deixa de ocupar largura), por isso vêm desligadas e ficam neste computador (não viajam, como a de cima).
+    // Aplicam-se no arranque do motor.
+    public bool OverlayScrollbars { get; set; }
     // Língua enviada aos sites (Accept-Language e navigator.languages): «pt-PT», «system» ou «en-US», sempre uma só.
     // Por omissão a do Windows (medido, docs/paridade.md #6): pt-PT fixo num Windows pt-BR com fuso de São Paulo era
     // uma combinação rara (13,49 bits no Cover Your Tracks, contra 7,92 do Chrome).
@@ -133,6 +137,7 @@ public sealed record UserSettings
         "bounceForget" when TryParseSwitch(value, out var on) => this with { ForgetBounceTrackers = on },
         "cname" when TryParseSwitch(value, out var on) => this with { UncloakCname = on },
         "hideFromCapture" when TryParseSwitch(value, out var on) => this with { HideFromCapture = on },
+        "overlayScrollbars" when TryParseSwitch(value, out var on) => this with { OverlayScrollbars = on },
         "siteLanguage" when Shields.RequestIdentity.LanguageChoices.Contains(value) => this with { SiteLanguage = value, SiteLanguageChosen = true },
         "theme" when value is "dark" or "light" or "system" => this with { Theme = value },
         "clearOnExit" when TryParseSwitch(value, out var on) => this with { ClearOnExit = on },

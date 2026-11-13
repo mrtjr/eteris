@@ -78,6 +78,10 @@ public class EngineFeatureNamesTests(ITestOutputHelper output)
             .Concat(EngineHardening.NoGoogleOnPages)
             .Select(f => f.Feature).Append("HttpsUpgrades").Append(NetworkSandbox.Feature)
             .Concat(EnginePerformance.Enabled.Select(f => f.Feature))
+            .Concat(EngineAppearance.All.Select(f => f.Feature))
+            .Concat(CefConfigurator.Build("p", overlayScrollbars: true).CefCommandLineArgs.ToDictionary()
+                .Where(a => a.Key is "enable-features" or "disable-features")
+                .SelectMany(a => a.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
             .Concat(onTheCommandLine)
             // As de desempenho levam parâmetros («Nome:param/valor»): procura-se só o nome. As «V8Flag_x» não são
             // base::Feature (o gin passa-as ao V8 como --x): têm o seu teste, mais abaixo.
@@ -147,6 +151,39 @@ public class EngineFeatureNamesTests(ITestOutputHelper output)
     public void EveryV8Flag_IsAFlagOfTheEngine(string engine, string flag)
         => Assert.True(ScanOf(engine).V8Flags.Contains(flag), $"«{flag}» não é uma flag do V8 no libcef.dll ({engine}): o V8 ignorava-a");
 
+    // Proposta 3 («Pele nova»): as funcionalidades de aspeto (Shields/EngineAppearance.cs), com o estado por omissão
+    // que a decisão conta — as barras sobrepostas desligadas (a opção liga-as) e o «flash» ao entrar com o rato ligado —
+    // e a RootScrollbarFollowsBrowserTheme, que fica de fora: vem desligada no motor, por isso não é ela que pinta a barra
+    // da raiz com o tema do Windows (3.3 (3b)).
+    public static IEnumerable<object[]> Appearance() => PerEngine(
+    [
+        ["OverlayScrollbar", 0],
+        ["OverlayScrollbarFlashWhenMouseEnter", 1],
+        ["RootScrollbarFollowsBrowserTheme", 0],
+    ]);
+
+    [Theory]
+    [MemberData(nameof(Appearance))]
+    public void AppearanceFeatures_HaveTheDefaultTheDecisionCountsOn(string engine, string name, int state)
+    {
+        Assert.True(ScanOf(engine).Features.TryGetValue(name, out var found), $"«{name}» não é uma base::Feature do libcef.dll ({engine})");
+        Assert.Equal([state], found);
+        Assert.Equal(name != "RootScrollbarFollowsBrowserTheme", EngineAppearance.All.Any(f => f.Feature == name));
+    }
+
+    // As barras Fluent não existem no motor 156: um nome destes seria ignorado em silêncio (e nunca entra nas listas).
+    private static readonly string[] Absent = ["FluentScrollbar", "FluentOverlayScrollbar"];
+
+    public static IEnumerable<object[]> AbsentNames() => PerEngine(Absent.Select(n => new object[] { n }));
+
+    [Theory]
+    [MemberData(nameof(AbsentNames))]
+    public void FluentScrollbars_AreNotInThisEngine(string engine, string name)
+    {
+        Assert.False(ScanOf(engine).Features.ContainsKey(name), $"«{name}» é afinal uma base::Feature do libcef.dll ({engine})");
+        Assert.DoesNotContain(name, FeatureNames());
+    }
+
     // O próprio teste distingue: estes nomes não são base::Feature do motor (ver Dead).
     public static IEnumerable<object[]> DeadNames() => PerEngine(Dead.Select(n => new object[] { n }));
 
@@ -157,7 +194,7 @@ public class EngineFeatureNamesTests(ITestOutputHelper output)
 
     private static EngineScan Scan(string path)
     {
-        var names = FeatureNames().Concat(Dead).Distinct(StringComparer.Ordinal).ToList();
+        var names = FeatureNames().Concat(Dead).Concat(Absent).Append("RootScrollbarFollowsBrowserTheme").Distinct(StringComparer.Ordinal).ToList();
         var image = File.ReadAllBytes(path);
         var span = image.AsSpan();
         // Flags do V8: o nome com um zero antes (ou no início do ficheiro) e outro depois.

@@ -28,6 +28,7 @@ public static class PrivateSession
         Data.AppData.ForgetPrivateShield();
         Shields.Cname.PrivateCache.Clear();
         Shields.PartitionedCookieJar.Private.Clear();
+        Shields.ShieldTightening.ForgetPrivate();
     }
 
     public static string Done(int windows)

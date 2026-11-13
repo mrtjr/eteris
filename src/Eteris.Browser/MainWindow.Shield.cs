@@ -21,6 +21,11 @@ public partial class MainWindow
     // O Escudo neste site, para esta janela (numa janela privada conta também o que se decidiu nela: AppData).
     private bool ShieldOn(string host) => AppData.IsShieldOn(host, IsPrivate);
 
+    // O Escudo ligado no site da página url (nesta janela). Sem ele o modo rigoroso também não conta: o tratador deixa
+    // passar tudo antes de o ver (PrivacyRequestHandler).
+    private bool ShieldOnAt(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host.Length > 0 && ShieldOn(uri.Host);
+
     private string SiteCosmeticScript(string url)
     {
         if (WebHost(url) is not { } host || !ShieldOn(host) || ShieldEngine.Cosmetic is not { } engine) return string.Empty;
@@ -112,22 +117,68 @@ public partial class MainWindow
     }
 
     // Regras genéricas das listas (##.classe, ###id): aplicadas às classes e ids que existem na página,
-    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde.
-    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde. Depois delas, nas duas
+    // passagens, a página recolhe os buracos que o Escudo deixou (CosmeticScripts.CollapseHoles): os iframe e img
+    // bloqueados desta aba (tab; um painel web não tem) e os lugares só com «Publicidade». Nunca no auto-teste. A página
+    // só recebe os endereços bloqueados que ela própria tem, da origem dela (OwnBlockedAsync; CosmeticScripts).
+    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url, BrowserTab? tab = null)
     {
-        if (ShieldEngine.Cosmetic is not { } engine) return;
         if (WebHost(url) is not { } host || !ShieldOn(host)) return;
+        var holes = !SelfTest.IsTestPage(url);
 
         foreach (var delay in new[] { 0, 2500 })
         {
             if (delay > 0) await Task.Delay(delay);
             if (browser.IsDisposed || browser.GetMainFrame()?.Url != url) return;
-            var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
-            if (!result.Success || result.Result is not string raw) return;
-            var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
-            var css = engine.GenericCss(url, classes, ids);
-            if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
+            if (ShieldEngine.Cosmetic is { } engine)
+            {
+                var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
+                if (!result.Success || result.Result is not string raw) return;
+                var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
+                var css = engine.GenericCss(url, classes, ids);
+                if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
+            }
+            if (holes)
+                PageScript.Run(browser, CosmeticScripts.CollapseHoles(await OwnBlockedAsync(browser, tab?.BlockedElementsFor(url) ?? []), origin: CosmeticScripts.OriginOf(url)));
         }
+    }
+
+    // Dos endereços bloqueados, os que a página tem nos seus iframe e imagens partidas (CosmeticScripts.OwnBlocked).
+    private static async Task<IReadOnlyList<string>> OwnBlockedAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, IReadOnlyList<string> blocked)
+    {
+        if (blocked.Count == 0) return [];
+        var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectElementSources);
+        return result.Success && result.Result is string sources ? CosmeticScripts.OwnBlocked(blocked, sources) : [];
+    }
+
+    // Os bloqueios chegam aos poucos (uma imagem tardia, um iframe de um anúncio que só aparece ao rolar): juntam-se
+    // durante um instante e a página recolhe-os de uma vez. Um endereço repetido também agenda: o elemento que o pede
+    // pode ser novo (a mesma moldura de anúncio numa rota nova de uma SPA, ou ao rolar). Se nenhum endereço bloqueado
+    // for da página (um beacon new Image(), que nunca está nela), só corre a 1.ª chamada, curta, e nada mais.
+    private readonly HashSet<BrowserTab> _holesQueued = [];
+
+    private async void OnBlockedElement(BrowserTab tab, string? page, string url)
+    {
+        try
+        {
+            tab.RecordBlockedElement(page, url);
+            if (!_holesQueued.Add(tab)) return;
+            try { await Task.Delay(400); }
+            finally { _holesQueued.Remove(tab); }
+            await CollapseHolesAsync(tab);
+        }
+        catch (Exception) { }
+    }
+
+    // O documento em vigor no frame principal (não tab.Address, que muda antes do commit): a origem dele escolhe os
+    // endereços, e o script confere-a outra vez.
+    private async Task CollapseHolesAsync(BrowserTab tab)
+    {
+        if (!_browsers.TryGetValue(tab, out var browser) || browser.IsDisposed) return;
+        var url = browser.GetMainFrame()?.Url;
+        if (WebHost(url) is not { } host || !ShieldOn(host) || SelfTest.IsTestPage(url)) return;
+        var own = await OwnBlockedAsync(browser, tab.BlockedElementsFor(url));
+        if (own.Count > 0) PageScript.Run(browser, CosmeticScripts.CollapseHoles(own, labels: false, CosmeticScripts.OriginOf(url)));
     }
 
     private void Shield_Click(object sender, RoutedEventArgs e)
@@ -138,20 +189,61 @@ public partial class MainWindow
 
     private void ShieldObservatory_Click(object sender, RoutedEventArgs e) => OpenObservatory();
 
+    // Com mais proteção, a aba recarrega sem cache: os scripts que a página carregou sem ela voltam a passar pelo Escudo
+    // sem esperar pela limpeza da cache de memória (assíncrona; WatchShieldTightening).
     private void StrictToggle_Click(object sender, RoutedEventArgs e)
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.SetStrict(host, StrictToggle.IsChecked == true, IsPrivate);
-        ReloadActive();
+        var on = StrictToggle.IsChecked == true;
+        AppData.SetStrict(host, on, IsPrivate);
+        ReloadActive(ignoreCache: on);
         FillShieldPopup();
     }
 
     private void ShieldToggle_Click(object sender, RoutedEventArgs e)
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.SetShield(host, ShieldToggle.IsChecked == true, IsPrivate);
-        ReloadActive();
+        var on = ShieldToggle.IsChecked == true;
+        AppData.SetShield(host, on, IsPrivate);
+        ReloadActive(ignoreCache: on);
         UpdateShieldButton();
         FillShieldPopup();
+    }
+
+    // Um site ficou mais protegido (Shields/ShieldTightening.cs; de qualquer janela, da paleta, de «Repor site» ou da
+    // sincronização): as páginas dele abertas nesta janela esvaziam a cache de memória do renderer, que servia sem
+    // pedido os scripts carregados sem proteção. Todas, não só a ativa: a outra aba do site também os servia.
+    private void WatchShieldTightening()
+    {
+        void OnTightened(string host) => Dispatcher.InvokeAsync(() =>
+        {
+            var pages = _browsers.Values.Concat(_webPanelBrowsers.Values);
+            if (_glanceBrowser is { } glance) pages = pages.Append(glance);
+            foreach (var browser in pages.ToList())
+            {
+                if (!browser.IsDisposed && ShieldTightening.Affects(host, browser.Address)) _ = RendererCache.EvictAsync(browser);
+            }
+        });
+        ShieldTightening.Tightened += OnTightened;
+        Closed += (_, _) => ShieldTightening.Tightened -= OnTightened;
+    }
+
+    // Uma página reposta pela cache de Voltar/Avançar, carregada antes de o site dela ficar mais protegido, volta com os
+    // scripts que correram sem proteção: carrega outra vez, sem cache, e o processo dela larga a cache de memória (o
+    // processo de uma página na cache de Voltar/Avançar não estava entre as páginas abertas quando a proteção mudou).
+    // Antes, os scripts do site são atualizados, como no recarregar da barra (MainWindow.Reload.cs).
+    private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    {
+        try
+        {
+            if (!IsReady(browser)) return;
+            _ = RendererCache.EvictAsync(browser);
+            await ScriptsReadyFor(tab, browser, url);
+            if (IsReady(browser)) browser.Reload(ignoreCache: true);
+        }
+        catch (Exception)
+        {
+            // `async void`: uma exceção aqui fechava o Éteris.
+        }
     }
 }

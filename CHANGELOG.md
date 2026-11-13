@@ -22,10 +22,19 @@
 - Novo botão «Ler tudo aqui» (tecla E): o artigo inteiro rola dentro do cartão, ainda sem JavaScript e sem cookies, com o texto que o Espreitar já tinha lido; «Mostrar menos» (ou E outra vez) volta ao resumo. Só aparece quando há mais do que o resumo mostra.
 - Uma página sem texto nem descrição para resumir diz «Sem resumo para esta página — «Abrir» mostra-a», e o leitor de ecrã ouve os estados do cartão (a espreitar, erro, sem resumo) e, com o resumo pronto, o título, sem perder o foco.
 
+### Aspeto
+
+- As páginas do Éteris (Definições, Histórico, Favoritos, Novidades, nova aba, também a privada, página de erro e as restantes) têm barras de deslocamento finas, sem setas e arredondadas, que seguem o tema claro ou escuro e ficam mais visíveis ao passar o rato. Em alto contraste do Windows, voltam a ser as do sistema.
+- Com os efeitos de animação desligados no Windows, as páginas do Éteris deixam de ter transições e animações.
+- Os botões e os campos das páginas do Éteris mostram um anel visível quando se chega a eles pelo teclado.
+- O modo de leitura deixa de ter barra horizontal: as tabelas e os blocos de código rolam por dentro, e as figuras e os vídeos cabem na coluna. As barras ficam finas e na cor do tema do leitor (escuro, sépia ou claro), e com os efeitos de animação desligados no Windows o leitor também fica sem transições.
+- Nova opção em Definições › Aspeto: «Barras de deslocamento sobrepostas», desligada. Ligada, as páginas web passam a ter barras finas por cima do conteúdo, que aparecem ao rolar ou ao passar o rato; como isso muda o que os sites conseguem medir, fica assinalado em eteris://privacy. Vale da próxima vez que abrir o Éteris. Sem ela, as barras das páginas web continuam as de um Chrome no mesmo computador.
+
 ### Privacidade
 
 - eteris://privacy passa a contar as vigias ativas e paradas e os recortes que recarregam sozinhos, e a política de privacidade explica os dois.
 - Apagar o histórico de um período apaga também os preços e textos que as vigias leram nesse período (as vigias ficam). «Esquecer ao fechar» deixa as vigias; só o «Triturar» do site as leva.
+- Voltar a ligar o Escudo num site (tirar a exceção) ou ligar o modo rigoroso protege logo: os scripts de anúncios e rastreadores que as páginas abertas desse site guardaram em memória enquanto estavam sem proteção já não voltam a correr ao recarregar nem numa visita nova (no Público, o script de anúncios do Google continuava a carregar), e voltar atrás para uma página carregada antes da mudança carrega-a outra vez, já protegida. Uma página do site que esteja aberta noutra aba fica como estava até ser recarregada, e o que um site guardou no próprio service worker só sai ao limpar os dados dele.
 
 ### Correções
 
@@ -33,6 +42,12 @@
 - O leitor de ecrã diz o nome de cada linha das listas, e não o nome interno do programa: os comandos da paleta (com a descrição e o atalho), as abas no topo e nas abas verticais (com o estado: fixada, silenciada, a dormir…), a lista «Todas as abas», as sugestões da barra de endereço, os Espaços, a barra lateral, as permissões e o que o site guarda no painel do cadeado, a multimédia, as transferências, os rastreadores bloqueados e os certificados de cliente. Antes dizia, por exemplo, «PaletteCommand { Glyph = …, Title = Nova aba, … }» ou «Eteris.Browser.Tabs.BrowserTab». A paleta, as listas de abas e as sugestões passam também a ter nome («Comandos», «Abas», «Sugestões»).
 - Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.
 - Num link que redireciona (um encurtador de links, ou de http para https), o cartão do Espreitar mostra o nome e a imagem do site de destino, cujo texto já mostrava. Antes, sem nome do site na página, aparecia o endereço do encurtador, e uma imagem com endereço relativo podia não aparecer.
+- Com o Escudo ligado, o lugar dos anúncios bloqueados deixa de ficar vazio na página: as imagens e as molduras que o Escudo bloqueou e os espaços que ficavam só com «Publicidade», «Anúncio» ou «Pub» (como o bloco no topo do Público ou do Observador) são recolhidos, neste computador e sem pedidos de rede. Num site com o Escudo desligado, a página fica como o site a desenhou.
+- Quando o nome de um site não existe, a página de erro passa a ter o botão principal «Pesquisar «nome»» no motor de pesquisa escolhido; se o nome estiver a uma ou duas letras de um site do histórico ou dos favoritos, pergunta «Queria dizer …?». A comparação é feita neste computador, sem pedidos de rede, e nunca na janela privada.
+- A data da nova aba aparece só com a primeira letra maiúscula («Quinta-feira, 12 de novembro»).
+- As boas-vindas deixam de dizer que não há sincronização: dizem que é opcional e cifrada de ponta a ponta.
+- Na página de erro, a dica «Noutros sites funciona?» passa a «Os outros sites abrem? Então o problema é deste endereço, não da ligação.».
+- As páginas do Éteris tratam quem as usa sempre da mesma forma, sem «tu» nem «você» (a nova aba e as Definições ainda tinham frases nos dois registos).
 
 ## 0.2.17 — 2026-11-13
 

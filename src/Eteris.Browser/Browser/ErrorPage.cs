@@ -117,6 +117,26 @@ public static class ErrorPage
         return new InsecureChoice(target.AbsoluteUri, target.Host, always);
     }
 
+    // «Pesquisar «nome»» (proposta 3, arrumações): eteris://error/search com o nome do site e a assinatura dele, feita com
+    // a chave desta sessão e um prefixo próprio (uma assinatura de «Continuar» não serve aqui). A página de erro não leva
+    // o token das outras rotas internas (o endereço dela pode vir de uma página da web); a fábrica só abre o motor
+    // escolhido com um nome assinado aqui.
+    private static string SignSearch(string name)
+        => Convert.ToHexString(HMACSHA256.HashData(ContinueKey, Encoding.UTF8.GetBytes("search\n" + name)));
+
+    public static string SearchUrl(string name) => $"{Prefix}search?q={Uri.EscapeDataString(name)}&s={SignSearch(name)}";
+
+    // O nome a pesquisar, só com a assinatura certa; nulo em tudo o resto.
+    public static string? ParseSearch(string requestUrl)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri) || uri.AbsolutePath != "/search"
+            || !requestUrl.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        if (query["q"] is not { Length: > 0 and <= 253 } name || query["s"] is not { } signature) return null;
+        return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(signature), Encoding.UTF8.GetBytes(SignSearch(name))) ? name : null;
+    }
+
     // Depois de aceitar: a página segue para o http:// e substitui o aviso no histórico (o «Voltar» não o repete).
     public static string ContinueRedirect(string httpUrl)
         => "<!doctype html><html lang=\"pt\"><head><meta charset=\"utf-8\">"
@@ -148,12 +168,25 @@ public static class ErrorPage
             : 0;
 
     // secureDns: o DNS seguro está ligado (o diagnóstico de «nome não resolve» sugere desligá-lo se a rede o bloqueia).
-    public static string Render(int code, string failedUrl, bool insecure = false, bool canRemember = true, bool secureDns = false)
+    // knownHosts (proposta 3, arrumações): quando o nome não resolve, o botão principal passa a ser «Pesquisar «nome»»
+    // (SearchUrl: a fábrica abre o motor escolhido), e «Queria dizer X?» compara o nome com os sites do histórico e dos
+    // favoritos (Typos.Closest, sem rede). knownHosts só é lido nesse caso; a janela privada não o passa (não lê o perfil).
+    public static string Render(int code, string failedUrl, bool insecure = false, bool canRemember = true, bool secureDns = false,
+                                Func<IReadOnlyList<string>>? knownHosts = null)
     {
         if (insecure) return RenderInsecure(code, failedUrl, canRemember);
         var diagnosis = ErrorDiagnosis.For(code, secureDns);
         var retry = failedUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
                     || failedUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+        // O nome do site (sem «www.»): é só isto que vai para o motor de pesquisa, nunca o caminho nem a consulta.
+        var failed = diagnosis.Kind == ErrorKind.NameNotResolved && retry && Uri.TryCreate(failedUrl, UriKind.Absolute, out var parsed)
+                     && parsed.Host.Length > 0 && parsed.HostNameType == UriHostNameType.Dns ? parsed : null;
+        var name = failed is null ? null : failed.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? failed.Host[4..] : failed.Host;
+        var known = name is null || knownHosts is null ? [] : knownHosts();
+        var closest = name is null ? null : Typos.Closest(name, known);
+        // A ligação vai para o site como foi visto (com «www.» se foi assim que se visitou ou guardou): o domínio sem
+        // «www.» nem sempre existe. O texto mostra-o sem «www.».
+        var target = closest is null ? null : known.FirstOrDefault(h => Typos.Normal(h) == closest)?.Trim().TrimEnd('.') ?? closest;
         var data = new
         {
             title = diagnosis.Title,
@@ -168,9 +201,20 @@ public static class ErrorPage
             name = diagnosis.Name,
             tips = diagnosis.Tips,
             details = ErrorDiagnosis.Details(code, failedUrl, SettingsPage.Version, DateTime.Now),
+            search = name is null ? null : new { label = $"Pesquisar «{name}»", url = SearchUrl(name) },
+            suggestion = closest is null ? null : new { host = closest, url = new UriBuilder(failed!) { Host = target }.Uri.AbsoluteUri },
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
+
+    // Os sites conhecidos para o «Queria dizer X?»: os do histórico, pelas visitas, e os dos favoritos. Só o perfil
+    // normal (a fábrica não o chama na janela privada).
+    public static IReadOnlyList<string> KnownHosts()
+        => Data.AppData.TryRead(h => h.TopSites(200)).Select(s => Uri.TryCreate(s.Url, UriKind.Absolute, out var u) ? u.Host : s.Host)
+            .Concat(Data.AppData.Bookmarks(b => b.All(500)).Select(b => Uri.TryCreate(b.Url, UriKind.Absolute, out var u) ? u.Host : string.Empty))
+            .Where(h => h.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     // «Este site não oferece ligação segura» (como o Firefox e o Brave): Voltar é o botão principal; continuar é uma
     // escolha consciente, só desta vez (até fechar o Éteris) ou sempre para este site (nunca na janela privada).

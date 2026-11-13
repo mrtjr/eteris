@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         StartupTrace.Mark("janela.abas");
         WatchSnoozed();
         WatchPages();
+        WatchShieldTightening();
         WatchArchive();
         RestorePlacement(restored?.Placement);
         WatchUpdates();
@@ -212,6 +213,10 @@ public partial class MainWindow : Window
         var mainRequests = 0;
         var mainRequestsAtCommit = 0;
         string? committedUrl = null;
+        // Quando o documento confirmado carregou (Environment.TickCount64): a página deixada leva-a (BrowserTab.LeavePage).
+        // Um documento reposto pela cache de Voltar/Avançar fica com a hora da reposição: se o site ficou mais protegido
+        // entre a carga e a reposição, ele recarrega logo ali; uma mudança depois da reposição é posterior às duas.
+        long committedAt = 0;
         _scriptlets[tab] = injector;
         var browser = new PageBrowser(tab.Address)
         {
@@ -246,7 +251,8 @@ public partial class MainWindow : Window
                 {
                     Interlocked.Increment(ref mainRequests);
                     var leaving = Volatile.Read(ref committedUrl);
-                    Dispatcher.InvokeAsync(() => tab.LeavePage(leaving));
+                    var leavingLoadedAt = Volatile.Read(ref committedAt);
+                    Dispatcher.InvokeAsync(() => tab.LeavePage(leaving, leavingLoadedAt));
                 },
                 isPrivate: IsPrivate,
                 localNetworkAllowed: IsLocalNetworkAllowed,
@@ -278,7 +284,9 @@ public partial class MainWindow : Window
                     });
                 },
                 observatory: tab.Observatory,
-                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows)),
+                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows),
+                // Uma imagem ou um iframe da página que o Escudo bloqueou: a página recolhe-o (MainWindow.Shield.cs).
+                onBlockedElement: (page, url) => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, page, url))),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += () =>
@@ -410,8 +418,10 @@ public partial class MainWindow : Window
             // o que só se faz no fim de um carregamento (que não volta a acontecer) faz-se aqui.
             var requests = Volatile.Read(ref mainRequests);
             var leaving = Volatile.Read(ref committedUrl);
+            var leavingLoadedAt = Volatile.Read(ref committedAt);
             var arriving = e.Url;
             Volatile.Write(ref committedUrl, arriving);
+            Volatile.Write(ref committedAt, Environment.TickCount64);
             tab.Observatory.Commit(arriving);
             // Documento novo: o canal do cofre prepara-o (mundo isolado; MainWindow.Vault.cs).
             VaultPageCommitted(tab, browser);
@@ -420,8 +430,12 @@ public partial class MainWindow : Window
                 var restored = e.TransitionType.HasFlag(TransitionType.ForwardBack);
                 Dispatcher.InvokeAsync(() =>
                 {
-                    tab.LeavePage(leaving);
+                    var loadedAt = tab.LoadedAt(arriving);
+                    tab.LeavePage(leaving, leavingLoadedAt);
                     if (restored && tab.ReturnToPage(arriving)) OnPageRestored(tab, browser, arriving);
+                    // Reposta tal como carregou antes de o site ficar mais protegido (Shields/ShieldTightening.cs); com o
+                    // Escudo outra vez desligado no site, recarregar não bloquearia nada.
+                    if (restored && ShieldTightening.TightenedSince(arriving, loadedAt, IsPrivate) && ShieldOnAt(arriving)) ReloadRestored(tab, browser, arriving);
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
             mainRequestsAtCommit = requests;
@@ -451,7 +465,7 @@ public partial class MainWindow : Window
                 DetectReaderable(tab, browser, url);
                 ApplyHiddenElements(browser, url);
                 CaptureThumbnail(tab, browser, url);
-                _ = ApplyGenericCosmeticsAsync(browser, url);
+                _ = ApplyGenericCosmeticsAsync(browser, url, tab);
                 SettleChainLater(tab);
                 if (SelfTest.IsTestPage(url)) _ = RunSelfTestAsync(tab, browser, url);
                 // Uma página vigiada aberta pelo utilizador: lida ali, sem visita extra (MainWindow.Watch.cs).
