@@ -163,8 +163,9 @@ public partial class MainWindow : Window
     // O diálogo diz de que aba vem o pedido.
     private readonly ClientCertificatePrompts _clientCertificates = new();
 
+    // Na Pausa nenhuma página está à vista (MainWindow.Pause.cs): o pedido espera pelo regresso.
     private Task<string?> AskClientCertificate(BrowserTab tab, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
-        => AskClientCertificate(tab, () => Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab), () => ClientCertificateDialog.FromTab(tab.Title),
+        => AskClientCertificate(tab, () => _pause is null && Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab), () => ClientCertificateDialog.FromTab(tab.Title),
             host, port, rows);
 
     private Task<string?> AskClientCertificate(object page, Func<bool> isOnScreen, Func<string?> from, string host, int port,

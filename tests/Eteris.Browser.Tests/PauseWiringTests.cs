@@ -223,6 +223,18 @@ public class PauseWiringTests
         Assert.Contains("if (state.DownloadStarted) DownloadsPopup.IsOpen = true;", exit);
     }
 
+    // O pedido de certificado de cliente de uma página escondida pela Pausa (a aba ativa, o site fixado aberto) espera, como
+    // o de uma aba fora da vista: o diálogo modal não se abre por cima do ecrã calmo (nem leva o Esc de quem quer voltar);
+    // aparece ao voltar.
+    [Fact]
+    public void AClientCertificateRequest_WaitsForTheReturn()
+    {
+        Assert.Contains("() => _pause is null && Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab)", Source("MainWindow.xaml.cs"));
+        Assert.Contains("() => _pause is null && _sidebarOpen && _sidebarPanel?.Url == url", Source("MainWindow.WebPanels.cs"));
+        var exit = Regex.Match(Source("MainWindow.Pause.cs"), @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Contains("ShowNextClientCertificate();", exit);
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

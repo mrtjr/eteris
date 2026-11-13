@@ -275,6 +275,8 @@ public partial class MainWindow
         LayoutBrowsers();
         if (_sidebarOpen && CurrentWebPanelBrowser is not null && _sidebarPanel is { } panel) ShowWebPanel(panel, focus: false);
         if (state.DownloadStarted) DownloadsPopup.IsOpen = true;
+        // O pedido de certificado de cliente que esperou pela Pausa (a página estava escondida) aparece agora.
+        ShowNextClientCertificate();
 
         // 2. O som, só a quem a Pausa o tirou, que ainda existe e que o utilizador não silenciou à mão entretanto.
         var back = state.Plan.Return(PauseEngines());

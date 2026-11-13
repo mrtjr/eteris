@@ -263,7 +263,7 @@ public partial class MainWindow
                     Volatile.Write(ref panelHistory.Last, nav);
                     if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
                 },
-                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _sidebarOpen && _sidebarPanel?.Url == url,
+                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _pause is null && _sidebarOpen && _sidebarPanel?.Url == url,
                     () => ClientCertificateDialog.FromPanel(url), host, port, rows)),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
