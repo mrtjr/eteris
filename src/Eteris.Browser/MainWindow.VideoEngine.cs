@@ -15,7 +15,7 @@ namespace Eteris.Browser;
 
 // Abas no motor de vídeo (WebView2, o motor do Edge que vem com o Windows): para os sites que só têm vídeo em
 // H.264/AAC, formatos patenteados que o motor principal não traz. A aba continua a ser uma aba do Éteris — mesma
-// barra, mesmo bloqueador, mesma sessão —; só o motor por baixo muda. Ver Tabs/VideoEngine.cs. Com o motor com codecs
+// barra, mesmo bloqueador, mesmo pedido de privacidade —; só o motor por baixo muda (e o perfil: é outro, com a sua pasta). Ver Tabs/VideoEngine.cs. Com o motor com codecs
 // da plataforma (Tabs/PlatformCodecs.cs) o motor principal toca-os e isto fica só para quando ele responde «não».
 //
 // Usa o controlo WebView2 (janela nativa) e não o WebView2CompositionControl: este último precisa da projeção do
@@ -40,8 +40,9 @@ public partial class MainWindow
     private static Task<CoreWebView2Environment> VideoEnvironment()
         => s_videoEnvironment ??= CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
-            userDataFolder: Path.Combine(AppPaths.Root, "video-engine"),
-            options: new CoreWebView2EnvironmentOptions(VideoEngine.BrowserArguments(Settings.Current.BlockAutoplay), language: "pt-PT"));
+            userDataFolder: AppPaths.VideoEngine,
+            options: new CoreWebView2EnvironmentOptions(VideoEngine.BrowserArguments(Settings.Current.BlockAutoplay),
+                language: VideoEngine.Language(EngineHardening.StartedWithLanguage)) { IsCustomCrashReportingEnabled = true });
 
     private WebView2? ActiveVideo
         => Tabs.Active is { } tab && _videoViews.TryGetValue(tab, out var view) ? view : null;
@@ -129,10 +130,15 @@ public partial class MainWindow
         if (!_videoViews.TryGetValue(tab, out var still) || !ReferenceEquals(still, view)) return;
         var core = view.CoreWebView2;
         ConfigureVideoPrivacy(core);
-        WireVideoView(tab, view, core, environment);
+        // Os sites cuja cosmética já está registada nesta aba: o mesmo conjunto aqui e nas navegações (WireVideoView).
+        var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        WireVideoView(tab, view, core, environment, cosmeticHosts);
         if (tab.IsMuted || TestSwitches.Mute) core.IsMuted = true;
         if (resumeAt > 1) await ResumeAtAsync(core, resumeAt);
-        await EnsureVideoCosmeticsAsync(core, url, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        await EnsureVideoCosmeticsAsync(core, url, cosmeticHosts);
+        // O GPC visível ao JavaScript e a lista de dispositivos sem nomes, antes dos scripts da página (o cabeçalho
+        // Sec-GPC vai em WireVideoView).
+        await VideoPageScript.AddEarlyAsync(core, PrivacySignals.SessionScript);
         core.Navigate(VideoUrl(url));
     }
 
@@ -156,7 +162,7 @@ public partial class MainWindow
 
     private const int ShieldCacheLimit = 4096;
 
-    private void WireVideoView(BrowserTab tab, WebView2 view, CoreWebView2 core, CoreWebView2Environment environment)
+    private void WireVideoView(BrowserTab tab, WebView2 view, CoreWebView2 core, CoreWebView2Environment environment, HashSet<string> cosmeticHosts)
     {
         string? mainNavigation = null;
         // O endereço da página, guardado na navegação: ler core.Source (COM) a cada pedido custava tempo na thread da
@@ -164,7 +170,6 @@ public partial class MainWindow
         var pageUrl = core.Source;
         var pageHost = WebHost(pageUrl);
         var decisions = new Dictionary<(string Page, string Request), bool>();
-        var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // O documento atual já deu um título? Um ficheiro de vídeo aberto diretamente não dá (nem o DocumentTitleChanged
         // dispara): sem isto ficava o título da página anterior, na aba e no histórico.
         var titled = false;
@@ -191,6 +196,8 @@ public partial class MainWindow
         core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
         core.WebResourceRequested += (_, e) =>
         {
+            // O pedido de privacidade (GPC) sai em todos os pedidos, também nos que o bloqueador deixa passar.
+            foreach (var (name, value) in PrivacySignals.Headers) e.Request.Headers.SetHeader(name, value);
             var context = e.ResourceContext;
             if (context == CoreWebView2WebResourceContext.Document && players.Count > 0
                 && players.TryGetValue(VideoEngine.WithoutFragment(e.Request.Uri), out var playerMime))
@@ -217,6 +224,12 @@ public partial class MainWindow
             if (Uri.TryCreate(requestUrl, UriKind.Absolute, out var request)) tab.RecordBlocked(request.Host);
         };
 
+        // Notificações: recusadas, como no motor principal (o WebView2 perguntaria com uma caixa do Edge).
+        core.PermissionRequested += (_, e) =>
+        {
+            if (e.PermissionKind == CoreWebView2PermissionKind.Notifications) e.State = CoreWebView2PermissionState.Deny;
+        };
+
         core.NavigationStarting += (_, e) =>
         {
             // O motor de vídeo só mostra a web. Uma navegação para fora dela pedida pela página fica cancelada e a aba onde
@@ -229,6 +242,7 @@ public partial class MainWindow
                     Dispatcher.InvokeAsync(() => SwitchToNormalEngine(tab, target));
                 return;
             }
+            NoteVideoForgetPending(e.Uri);
             mainNavigation = e.Uri;
             pageUrl = e.Uri;
             pageHost = WebHost(e.Uri);
@@ -362,6 +376,14 @@ public partial class MainWindow
         };
     }
 
+    // Um site com «Esquecer ao fechar» abriu numa aba do motor de vídeo de uma janela normal: fica pendente para a
+    // varredura do arranque (AppData.VideoForgetPending), caso a limpeza à saída não chegue a acontecer.
+    private void NoteVideoForgetPending(string url)
+    {
+        if (IsPrivate || SiteScope.SiteOf(url) is not { } site || !AppData.IsForgetOnClose(site)) return;
+        AppData.VideoForgetPending.Add(site);
+    }
+
     // Voltar/Avançar de uma aba do motor de vídeo: o histórico dele e, na 1.ª entrada, o regresso ao motor principal.
     private static void UpdateVideoHistory(BrowserTab tab, CoreWebView2 core)
     {
@@ -379,14 +401,25 @@ public partial class MainWindow
         await VideoPageScript.AddEarlyAsync(core, script);
     }
 
-    // Retomar o vídeo onde estava no motor principal: um script de uso único, no primeiro «loadedmetadata».
-    private static Task ResumeAtAsync(CoreWebView2 core, double seconds)
+    // Retomar o vídeo onde estava no motor principal: um script de uso único, no primeiro «loadedmetadata» da página de
+    // topo (Tabs/VideoEngine.cs, ResumeScript). Sai do registo depois da primeira navegação que chegou a ter documento
+    // (uma que acabou em transferência desviada para o leitor não conta: é o documento seguinte que precisa dele; uma
+    // página de erro conta, para o script não ficar à espera da página seguinte); ficando, cada página seguinte da aba
+    // saltava o primeiro vídeo para o mesmo segundo.
+    private static async Task ResumeAtAsync(CoreWebView2 core, double seconds)
     {
-        var at = seconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
-        var script = "(() => { const at = " + at + "; let done = false;"
-            + " addEventListener('loadedmetadata', e => { const v = e.target;"
-            + " if (done || !(v instanceof HTMLMediaElement) || !(v.duration > at)) return; done = true; v.currentTime = at; }, true); })();";
-        return VideoPageScript.AddEarlyAsync(core, script);
+        if (await VideoPageScript.AddEarlyAsync(core, VideoEngine.ResumeScript(seconds)) is not { } id) return;
+        ulong? committed = null;
+        void Loading(object? sender, CoreWebView2ContentLoadingEventArgs e) => committed = e.NavigationId;
+        async void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (committed != e.NavigationId) return;
+            core.ContentLoading -= Loading;
+            core.NavigationCompleted -= Completed;
+            await VideoPageScript.RemoveEarlyAsync(core, id);
+        }
+        core.ContentLoading += Loading;
+        core.NavigationCompleted += Completed;
     }
 
     // O motor principal avisou que o vídeo desta página não toca nele (Tabs/VideoEngine.cs, VideoReport).
@@ -530,9 +563,13 @@ public partial class MainWindow
         if (Tabs.Active is not { } tab || !tab.UsesVideoEngine) return;
         if (WebHost(tab.Address) is { } host)
         {
-            AppData.SetVideoSite(host, false);
+            // Na janela privada o perfil não se toca: o site lembrado fica, e o `optedOut` em memória tem prioridade.
             if (IsPrivate) _privateVideoOptOut.Add(TrackerBlocker.RegistrableDomain(host.ToLowerInvariant()));
-            else AppData.SetVideoOptOut(host, true);
+            else
+            {
+                AppData.SetVideoSite(host, false);
+                AppData.SetVideoOptOut(host, true);
+            }
         }
         SwitchToNormalEngine(tab, tab.Address);
         ShowToast("Este site volta a abrir no motor principal");
@@ -642,5 +679,129 @@ public partial class MainWindow
     private void SetVideoMuted(BrowserTab tab)
     {
         if (_videoViews.TryGetValue(tab, out var view) && view.CoreWebView2 is { } core) core.IsMuted = tab.IsMuted || TestSwitches.Mute;
+    }
+
+    // ---------- Limpezas no perfil do motor de vídeo ----------
+    // «Apagar dados», «Triturar», «Esquecer ao fechar» e os sites de salto chegam também ao que o WebView2 guardou no
+    // perfil normal («eteris»). As janelas privadas usam o modo InPrivate do WebView2: nada no disco, nada a limpar.
+
+    // «Apagar dados» (chamado fora do fio da interface): as caixas marcadas, no perfil inteiro do WebView2. False se o
+    // perfil existe e não foi possível abri-lo ou apagar.
+    internal static async Task<bool> ClearVideoEngineAsync(ClearDataRequest request)
+    {
+        var kinds = VideoEngine.DataKinds(request.History, request.Cookies, request.Cache);
+        if (kinds == 0) return true;
+        var done = await Application.Current.Dispatcher.InvokeAsync(() => WithVideoProfileAsync(core => core.Profile.ClearBrowsingDataAsync(kinds))).Task.Unwrap();
+        // Os dados dos sites saíram todos do perfil do motor de vídeo: nenhum fica pendente para a varredura do arranque,
+        // salvo os sites com «esquecer» que ainda têm uma aba aberta nesse motor (no fio da interface: lê as janelas).
+        if (done && request.Cookies)
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                AppData.VideoForgetPending.Clear();
+                MarkOpenVideoForgetSites();
+            });
+        return done;
+    }
+
+    // Os sites com «esquecer» das abas do motor de vídeo abertas nas janelas normais voltam a ficar pendentes, depois de
+    // uma limpeza que lhes tirou a marca (fio da interface).
+    private static void MarkOpenVideoForgetSites()
+    {
+        foreach (var site in VideoEngine.ForgetSitesOf(NormalWindows().SelectMany(w => w._videoViews.Keys).Select(t => t.Address), AppData.IsForgetOnClose))
+            AppData.VideoForgetPending.Add(site);
+    }
+
+    // Uma aba viva do motor de vídeo de uma janela normal (o perfil «eteris»), ou nulo. Uma vista a fechar ou caída
+    // pode lançar ao ler o CoreWebView2: conta como não haver aba viva.
+    private static CoreWebView2? LiveVideoCore()
+    {
+        try { return NormalWindows().SelectMany(w => w._videoViews.Values).Select(v => v.CoreWebView2).FirstOrDefault(c => c is not null); }
+        catch (Exception) { return null; }
+    }
+
+    // Corre a ação no perfil normal do motor de vídeo, no fio da interface: numa aba viva dele ou, sem nenhuma, num
+    // controlador escondido criado só para isto. Sem a pasta do motor de vídeo (nunca foi usado) não há nada a limpar e
+    // o runtime do WebView2 não arranca. Devolve false com qualquer falha e ao fim de VideoEngine.CleanupLimit (um
+    // runtime que não responde não deixa «A apagar…» nem a volta dos sites de salto penduradas).
+    private static async Task<bool> WithVideoProfileAsync(Func<CoreWebView2, Task> action)
+    {
+        if (!Directory.Exists(AppPaths.VideoEngine)) return true;
+        using var limit = new CancellationTokenSource();
+        var work = RunInVideoProfileAsync(action, limit.Token);
+        if (await Task.WhenAny(work, Task.Delay(VideoEngine.CleanupLimit)) == work) return await work;
+        limit.Cancel();
+        return false;
+    }
+
+    // O trabalho de WithVideoProfileAsync; nunca lança. expired: o tempo-limite passou e a limpeza já respondeu.
+    private static async Task<bool> RunInVideoProfileAsync(Func<CoreWebView2, Task> action, CancellationToken expired)
+    {
+        if (LiveVideoCore() is { } live)
+        {
+            try
+            {
+                await action(live);
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
+        CoreWebView2Environment environment;
+        try { environment = await VideoEnvironment(); }
+        catch (Exception)
+        {
+            // Como em InitializeVideoViewAsync: a próxima tentativa volta a criar o ambiente.
+            s_videoEnvironment = null;
+            return false;
+        }
+        CoreWebView2Controller? controller = null;
+        try
+        {
+            var options = environment.CreateCoreWebView2ControllerOptions();
+            options.ProfileName = "eteris";
+            options.IsInPrivateModeEnabled = false;
+            // HWND_MESSAGE: a documentação do WebView2 aceita-o como pai de um WebView que nunca se vê — não depende de
+            // haver uma janela aberta.
+            try { controller = await environment.CreateCoreWebView2ControllerAsync(new IntPtr(-3), options); }
+            catch (Exception)
+            {
+                // O ambiente pode ter deixado de servir (o runtime saiu ou foi atualizado): a próxima tentativa cria outro.
+                s_videoEnvironment = null;
+                return false;
+            }
+            // Chegou depois do tempo-limite: a limpeza já respondeu «não foi possível»; fecha-se (finally) sem apagar.
+            if (expired.IsCancellationRequested) return false;
+            ConfigureVideoPrivacy(controller.CoreWebView2);
+            await action(controller.CoreWebView2);
+            return true;
+        }
+        catch (Exception) { return false; }
+        finally
+        {
+            try { controller?.Close(); }
+            catch (Exception) { }
+        }
+    }
+
+    // «Triturar», «Esquecer ao fechar» e os sites de salto no motor de vídeo: os cookies do site e dos subdomínios (a
+    // regra do Triturar, SiteScope.CookieBelongs) e o armazenamento das origens dadas (uma que falhe não impede as
+    // outras). Devolve quantos cookies apagou e se ficou tudo apagado: Complete é false se o perfil do motor de vídeo
+    // existe e não se abriu (ou passou o tempo-limite) ou se o motor recusou alguma origem — quem chama di-lo no aviso.
+    private static async Task<(int Cookies, bool Complete)> ClearVideoSiteAsync(string site, IReadOnlyList<string> origins)
+    {
+        var deleted = 0;
+        var refused = 0;
+        var reached = await WithVideoProfileAsync(async core =>
+        {
+            var manager = core.CookieManager;
+            foreach (var cookie in (await manager.GetCookiesAsync(null)).Where(c => SiteScope.CookieBelongs(c.Domain, site)))
+            {
+                manager.DeleteCookie(cookie);
+                deleted++;
+            }
+            foreach (var origin in origins)
+                if (!await VideoPageScript.ClearOriginAsync(core, origin)) refused++;
+        });
+        return (deleted, reached && refused == 0);
     }
 }

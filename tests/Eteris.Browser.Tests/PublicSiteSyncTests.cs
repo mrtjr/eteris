@@ -1,5 +1,8 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using Eteris.Browser.Omnibox;
+using Eteris.Browser.Shields;
+using Eteris.Browser.Updates;
 using Eteris.Sync.Model;
 
 namespace Eteris.Browser.Tests;
@@ -39,6 +42,23 @@ public class PublicSiteSyncTests
             Read("src", "Eteris.Browser", "Browser", "settings.html"));
         foreach (var text in new[] { Read("src", "Eteris.Browser", "Browser", "settings.html"), Read("README.md"), Read("docs", "paridade.md") })
             Assert.DoesNotContain("nada vai para a Google", text);
+    }
+
+    // §4 da política («Ligações que o Éteris faz por si») nomeia todos os que o Éteris chama sozinho, nas duas línguas.
+    [Fact]
+    public void Policy_Section4_NamesEveryoneTheAppCallsOnItsOwn()
+    {
+        var policy = Flat(File.ReadAllText(Path.Combine(RepoRoot(), "docs", "site", "privacidade.html")));
+        var at = policy.IndexOf("id=\"en\"", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        foreach (var half in new[] { policy[..at], policy[at..] })
+        {
+            foreach (var host in FilterLists.Sources.Values.Select(u => new Uri(u).Host).Distinct()) Assert.Contains(host, half);
+            Assert.Contains(UpdateService.RepoUrl["https://".Length..], half);
+            foreach (var provider in SecureDns.Providers.Values) Assert.Contains(provider.Name, half);
+            Assert.Contains(SearchEngine.DuckDuckGo.Name, half);
+            Assert.Contains(SearchEngine.Brave.Name, half);
+        }
     }
 
     private static string Flat(string text) => Regex.Replace(text, @"\s+", " ");

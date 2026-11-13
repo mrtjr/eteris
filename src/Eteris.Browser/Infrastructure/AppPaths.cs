@@ -44,6 +44,10 @@ public static class AppPaths
 
     public static string Filters => Path.Combine(Root, "filters");
 
+    // A pasta de dados do motor de vídeo (WebView2). Só existe depois de uma aba ter aberto nesse motor: sem ela,
+    // nenhuma limpeza arranca o runtime (MainWindow.VideoEngine.cs, WithVideoProfileAsync).
+    public static string VideoEngine => Path.Combine(Root, "video-engine");
+
     // Só no arranque, antes de qualquer leitura (--user-data-dir).
     public static void UseRoot(string root) => Root = LongForm(Normalize(root));
 

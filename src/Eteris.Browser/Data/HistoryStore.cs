@@ -231,9 +231,7 @@ public sealed class HistoryStore
             }
             transaction.Commit();
         }
-        using var checkpoint = connection.CreateCommand();
-        checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-        checkpoint.ExecuteNonQuery();
+        CheckpointWithRetry(connection);
         return (count, urls.ToList());
     }
 
@@ -267,6 +265,80 @@ public sealed class HistoryStore
         return origins;
     }
 
+    // Reescreve o ficheiro só com o que está vivo (VACUUM) e esvazia o -wal: o que versões anteriores apagaram sem
+    // secure_delete deixa de se ler no ficheiro. Demora com um histórico grande: nunca na thread da janela.
+    public bool Compact()
+    {
+        try
+        {
+            using var connection = Open();
+            using (var vacuum = connection.CreateCommand())
+            {
+                vacuum.CommandText = "VACUUM;";
+                vacuum.ExecuteNonQuery();
+            }
+            return Checkpoint(connection);
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    // A compactação para o que versões anteriores deixaram: corre uma só vez (o eteris.db não usa o user_version; o do
+    // cofre é de outro ficheiro). Se a base estiver ocupada não marca, e repete na saída seguinte.
+    public bool CompactOnce()
+    {
+        try
+        {
+            using (var connection = Open())
+            using (var read = connection.CreateCommand())
+            {
+                read.CommandText = "PRAGMA user_version;";
+                if (Convert.ToInt64(read.ExecuteScalar()) >= 1) return false;
+            }
+            if (!Compact()) return false;
+            using var mark = Open();
+            using var set = mark.CreateCommand();
+            set.CommandText = "PRAGMA user_version = 1;";
+            set.ExecuteNonQuery();
+            return true;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    // Passa o registo antecipado (-wal) para a base e esvazia-o. Devolve false quando a base estava ocupada (um leitor
+    // ainda precisa do -wal) ou a espera de 1 s acabou.
+    internal static bool Checkpoint(SqliteConnection connection)
+    {
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            command.CommandTimeout = 1;
+            using var reader = command.ExecuteReader();
+            return reader.Read() && reader.GetInt32(0) == 0;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    // Até 3 tentativas, 50 ms entre elas, enquanto vier ocupado; se continuar ocupado segue: o checkpoint automático do
+    // SQLite acaba o trabalho.
+    private static void CheckpointWithRetry(SqliteConnection connection)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (Checkpoint(connection)) return;
+            if (attempt < 2) Thread.Sleep(50);
+        }
+    }
+
     private void DeleteHistory(string sql, params (string Name, object Value)[] parameters)
     {
         using var connection = Open();
@@ -280,9 +352,7 @@ public sealed class HistoryStore
         command.ExecuteNonQuery();
         transaction.Commit();
         // O que se apagou não fica à espera no ficheiro do registo antecipado (-wal): passa já para a base e o -wal esvazia.
-        using var checkpoint = connection.CreateCommand();
-        checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-        checkpoint.ExecuteNonQuery();
+        CheckpointWithRetry(connection);
     }
 
     public IReadOnlyList<TopSite> TopSites(int limit)
@@ -333,6 +403,7 @@ public sealed class HistoryStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        SqliteSetup.SecureDelete(connection);
         // Com WAL, NORMAL só sincroniza o disco nos checkpoints: uma falha de energia pode perder as últimas visitas,
         // nunca corromper a base.
         using var command = connection.CreateCommand();

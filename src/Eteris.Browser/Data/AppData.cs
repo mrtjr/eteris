@@ -126,7 +126,13 @@ public static class AppData
 
     public static void CloseHistory()
     {
-        if (LazyWriter.IsValueCreated) LazyWriter.Value.Dispose();
+        if (!LazyWriter.IsValueCreated) return;
+        LazyWriter.Value.Dispose();
+        // O escritor já esvaziou a fila e a tarefa dele parou: a compactação única (para o que versões anteriores
+        // apagaram sem secure_delete) corre agora, ao sair, e nunca no arranque. Se a base estiver ocupada, repete na
+        // saída seguinte. Espera no máximo 3 s pela compactação de um «Apagar tudo» que ainda esteja a correr (nunca
+        // correm as duas): passado esse tempo, a única fica para a saída seguinte e o fecho segue.
+        LazyWriter.Value.RunAsideNow(h => h.CompactOnce(), TimeSpan.FromSeconds(3));
     }
 
     private static readonly RetryLazy<HiddenElementsStore> LazyHidden = Db("LazyHidden", () => new HiddenElementsStore(AppPaths.Database));
@@ -271,6 +277,31 @@ public static class AppData
         catch (Exception) { }
     }
 
+    // «Esquecer» o histórico desde sinceUtc (DateTime.MinValue = desde sempre). Desde sempre, compacta-se o ficheiro
+    // depois (VACUUM), quando o apagar já está escrito: numa tarefa à parte (HistoryWriter.RunAside), fora da thread da
+    // janela e da de rede e fora da fila do escritor — quem lê o histórico não fica à espera da compactação.
+    public static void ForgetSince(DateTime sinceUtc)
+    {
+        TryWrite(h => h.DeleteSince(sinceUtc));
+        // As «Feitas» do período também: «Apagar histórico» e «Esquecer» mostravam-nas ainda no Radar.
+        try { LazyDone.Value?.DeleteSince(sinceUtc); }
+        catch (Exception) { }
+        // O relatório de privacidade: os domínios dos dias do período saem, os totais ficam. Grava-se antes o que está
+        // pendente no livro, para que também isso perca o domínio.
+        FlushShieldStats();
+        try { LazyPrivacyEvents.Value?.ForgetSubjectsSince(sinceUtc == DateTime.MinValue ? DateOnly.MinValue : DateOnly.FromDateTime(sinceUtc.ToLocalTime())); }
+        catch (Exception) { }
+        if (sinceUtc == DateTime.MinValue) _ = LazyWriter.Value.RunAside(h => h.Compact());
+    }
+
+    // «Triturar» um site: o domínio dele sai do relatório de privacidade (a contagem fica sem domínio).
+    public static void ForgetPrivacySubject(string site)
+    {
+        FlushShieldStats();
+        try { LazyPrivacyEvents.Value?.ForgetSubject(site); }
+        catch (Exception) { }
+    }
+
     public static IReadOnlyList<T> TryRead<T>(Func<HistoryStore, IReadOnlyList<T>> read)
     {
         FlushHistory();
@@ -349,7 +380,17 @@ public static class AppData
 
     private static readonly RetryLazy<SavedSessionsStore> LazySessions = Db("LazySessions", () => new SavedSessionsStore(AppPaths.Database));
 
-    private static readonly RetryLazy<DoneTabsStore> LazyDone = Db("LazyDone", () => new DoneTabsStore(AppPaths.Database));
+    private static readonly RetryLazy<DoneTabsStore> LazyDone = Db("LazyDone", () =>
+    {
+        var store = new DoneTabsStore(AppPaths.Database);
+        // A poda de 30 dias faz-se ao abrir (e não só ao acrescentar), fora da thread da janela.
+        _ = Task.Run(() =>
+        {
+            try { store.Prune(DateTime.UtcNow); }
+            catch (Exception) { }
+        });
+        return store;
+    });
 
     // Devolve false quando não ficou gravado (base de dados indisponível): quem fecha a aba a seguir tem de o saber.
     public static bool MarkDone(string url, string title)
@@ -418,7 +459,29 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    private static readonly RetryLazy<ArchivedTabsStore> LazyArchived = Db("LazyArchived", () => new ArchivedTabsStore(AppPaths.Database));
+    private static readonly RetryLazy<ArchivedTabsStore> LazyArchived = Db("LazyArchived", () =>
+    {
+        var store = new ArchivedTabsStore(AppPaths.Database);
+        // A poda de 90 dias faz-se ao abrir (e não só ao arquivar), fora da thread da janela.
+        _ = Task.Run(() =>
+        {
+            try { store.Prune(DateTime.UtcNow); }
+            catch (Exception) { }
+        });
+        return store;
+    });
+
+    // «Triturar» um site: some também das listas Feitas, Arquivo e Adiadas (cada uma no seu try: uma que falhe não
+    // deixa as outras com o site).
+    public static void ForgetSiteTabs(string site)
+    {
+        try { LazyDone.Value?.DeleteSite(site); }
+        catch (Exception) { }
+        try { LazyArchived.Value?.DeleteSite(site); }
+        catch (Exception) { }
+        try { LazySnoozed.Value?.DeleteSite(site); }
+        catch (Exception) { }
+    }
 
     public static bool ArchiveTab(string url, string title, string? name, DateTime lastActiveUtc, DateTime nowUtc)
     {
@@ -583,6 +646,16 @@ public static class AppData
 
     public static IReadOnlyList<string> ForgetOnCloseSites() => LazyForget.Value?.All() ?? [];
 
+    // Os sites com «Esquecer ao fechar» que podem ter alguma coisa por apagar no perfil do motor de vídeo: marcados
+    // quando uma aba desse motor abre o site, quando se liga o «esquecer» num site que já lá abriu e antes de cada
+    // limpeza do site nesse motor; desmarcados quando ela apaga tudo. A varredura do arranque só abre o perfil do motor
+    // de vídeo (que pode arrancar o WebView2 a frio) para estes (MainWindow.Forget.cs). Fora da pasta video-engine, que
+    // «Apagar ao fechar» apaga inteira.
+    // Preguiçoso: AppPaths.Root só fica certo depois do --user-data-dir.
+    private static readonly Lazy<SiteSetFile> LazyVideoForgetPending = new(() => new SiteSetFile(System.IO.Path.Combine(AppPaths.Root, "video-por-esquecer.txt")));
+
+    public static SiteSetFile VideoForgetPending => LazyVideoForgetPending.Value;
+
     public static void SetForgetOnClose(string host, bool on)
     {
         try
@@ -591,6 +664,8 @@ public static class AppData
             else LazyForget.Value?.Remove(host);
         }
         catch (Exception) { }
+        // Sem «esquecer» a varredura do arranque já não o visita: o nome não fica no ficheiro dos pendentes.
+        if (!on) VideoForgetPending.Remove(SiteScope.OfHost(host));
     }
 
     // A permissão guardada do site (null: nunca respondeu), para quem não tem janela: os pedidos sem aba

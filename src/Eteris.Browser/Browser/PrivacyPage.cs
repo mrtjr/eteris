@@ -6,7 +6,8 @@ namespace Eteris.Browser.Browser;
 
 // eteris://privacy/ — o que o Éteris promete, cada promessa com ✔/✘ lido do estado em vigor (a linha de comandos que
 // o motor recebeu, as preferências que o Chromium aceitou, os cabeçalhos que o tratador de pedidos põe, a afinidade das
-// janelas no Windows) e, quando dá, confirmado ao vivo pelo JavaScript da própria página.
+// janelas no Windows) e, quando dá, confirmado ao vivo pelo JavaScript da própria página; o DNS cifrado é a exceção: lê-se o
+// que foi pedido ao motor no arranque (Local State), não o estado em vigor.
 public static class PrivacyPage
 {
     public const string Url = "eteris://privacy/";
@@ -116,7 +117,7 @@ public static class PrivacyPage
                 gpcHeader ? "Cada pedido leva o cabeçalho «Sec-GPC: 1» (Global Privacy Control). O antigo «DNT: 1» já não vai: o Chrome e o Brave não o enviam e só servia para o distinguir." : "Os pedidos saem sem o cabeçalho Sec-GPC.",
                 gpcHeader),
             new("gpc-js", "O pedido é visível ao JavaScript dos sites",
-                s.GpcScript ? "navigator.globalPrivacyControl vale true em todas as páginas — é aí que os avisos de cookies e o Consent Mode o leem."
+                s.GpcScript ? "navigator.globalPrivacyControl vale true nas páginas; na 1.ª página de uma aba nova chega depois dos primeiros scripts dela (o cabeçalho Sec-GPC vai sempre) — é aí que os avisos de cookies e o Consent Mode o leem."
                     : "O script do GPC não está registado.",
                 s.GpcScript, Live: "gpc"),
             new("ad-apis", "Sem as APIs de anúncios do Chromium",
@@ -124,11 +125,12 @@ public static class PrivacyPage
                     ? "Topics, Protected Audience (FLEDGE), Attribution Reporting, Shared Storage e Fenced Frames estão desligados no motor."
                     : "Ainda ligadas no motor: " + string.Join(", ", missingAds) + ".",
                 missingAds.Count == 0, Live: "ads"),
-            new("quiet", "Nada sai do computador sem um pedido seu",
+            new("quiet", "Sem tráfego de fundo da Google nem do Chromium",
                 !quiet ? "O motor arrancou sem os interruptores que cortam o tráfego de fundo."
                     : !s.LeakCheckOff ? "A verificação de fugas do Chromium está ligada: cada palavra-passe enviada a um site ia também, com hash, para passwordsleakcheck-pa.googleapis.com."
                     : formsToGoogle.Count > 0 ? "Ainda ligado no motor: " + string.Join(", ", formsToGoogle) + " (os formulários das páginas iam para o servidor de previsões da Google)."
-                    : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com).",
+                    : "Sem atualizações automáticas de componentes da Google nem tráfego de fundo do Chromium. Nem os formulários: a palavra-passe que envia a um site não vai para a verificação de fugas da Google (passwordsleakcheck-pa.googleapis.com) e os formulários das páginas não vão para o servidor de previsões dela (content-autofill.googleapis.com)."
+                      + " O que o Éteris pede sozinho: procura atualizações no GitHub depois de abrir e descarrega as listas do Escudo no 1.º arranque e de 7 em 7 dias (ublockorigin.github.io e easylist-downloads.adblockplus.org).",
                 quiet && formsQuiet),
             new("passwords", "As suas palavras-passe não vão para ninguém",
                 !s.ChromiumPasswordsOff ? "O gestor de palavras-passe e o preenchimento automático do Chromium não ficaram desligados no perfil (credentials_enable_service, autofill.profile_enabled, autofill.credit_card_enabled)."
@@ -204,7 +206,10 @@ public static class PrivacyPage
                     : "As chamadas de vídeo funcionam, mas os sites não descobrem os endereços da sua rede — e o WebRTC já não deixa a porta mDNS à escuta neste computador.",
                 s.WebRtcProtected && webRtcFixed && webRtcQuiet),
             new("dns", "DNS cifrado",
-                s.SecureDns is { } dns ? $"Os nomes dos sites vão cifrados para {dns}." : "Opcional · desligado: os nomes dos sites vão para o DNS do sistema.",
+                s.SecureDns is { } dns
+                    ? $"Pedido ao motor no arranque: os nomes dos sites vão cifrados para {dns}. O Éteris não lê o estado em vigor no motor; "
+                      + "num PC gerido (domínio, Entra ID ou controlo parental) o Chromium pode desligar o DNS cifrado."
+                    :"Opcional · desligado: os nomes dos sites vão para o DNS do sistema.",
                 s.SecureDns is null ? null : true, Fix: s.SecureDns is null ? "eteris://settings/#privacidade" : null),
             new("recall", "Escondido do Recall e das capturas de ecrã",
                 !s.HideFromCapture ? "Opcional · desligado: com ele ligado as capturas, gravações e partilhas de ecrã mostram um vazio."
@@ -317,6 +322,12 @@ public static class PrivacyPage
     // enviado. Não é uma promessa (nada nele se mede) e não faz pedidos.
     public static object SyncBlock => new { title = SyncBlockTitle, goes = SyncGoes, sees = SyncSees, key = SyncKey, local = SyncLocal };
 
+    // O bloco «Nas abas do motor de vídeo» de eteris://privacy/#motor-de-video: o que essas abas (WebView2) têm e não têm.
+    // Como o da sincronização, não é uma promessa (não entra na contagem) e é sempre igual.
+    public const string VideoEngineBlockTitle = "Nas abas do motor de vídeo";
+
+    public static object VideoEngineBlock => new { title = VideoEngineBlockTitle, note = Tabs.VideoEngine.PrivacyNote };
+
     private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
 
     public static State Current()
@@ -325,7 +336,7 @@ public static class PrivacyPage
         var settings = Data.Settings.Current;
         var bounces = MainWindow.Bounces;
         var args = Environment.GetCommandLineArgs();
-        return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.ScriptFor("https://example.com/") is not null,
+        return new(EngineHardening.Applied, PrivacySignals.Headers, PrivacySignals.SessionScriptRegistered != false,
             PrivacyPreferences.ThirdPartyCookiesBlocked, PrivacyPreferences.WebRtcIpProtected, PrivacyPreferences.SecureDnsProvider,
             EngineHardening.StartedWithLanguage, settings.HideFromCapture, visible, hidden,
             settings.SkipTrackingRedirects, settings.ForgetBounceTrackers, bounces.Cleared, bounces.PendingCount,
@@ -398,6 +409,7 @@ public static class PrivacyPage
             }),
             report = ReportJson(events, today ?? DateOnly.FromDateTime(DateTime.Today)),
             sync = SyncBlock,
+            video = VideoEngineBlock,
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }

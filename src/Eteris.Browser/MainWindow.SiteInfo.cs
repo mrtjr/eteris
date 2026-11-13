@@ -247,7 +247,8 @@ public partial class MainWindow
         ShowToast($"{Permissions.PermissionText.Name(kind)}: o site voltará a perguntar");
     }
 
-    // Apaga cookies (do contexto desta janela) e armazenamento local da origem; depois recarrega.
+    // Apaga cookies (do contexto desta janela) e armazenamento do site (domínio registável e subdomínios, como o
+    // Triturar); depois recarrega. Não fecha abas nem toca no histórico nem nas permissões.
     private async void SiteInfoClear_Click(object sender, RoutedEventArgs e)
     {
         if (Tabs.Active is not { } tab || ActiveBrowser is not { } browser) return;
@@ -255,12 +256,50 @@ public partial class MainWindow
         SiteInfoPopup.IsOpen = false;
         try
         {
-            var context = PrivateContext ?? Cef.GetGlobalRequestContext();
-            await context.GetCookieManager(null).DeleteCookiesAsync(info.Origin + "/");
-            using var client = browser.GetDevToolsClient();
-            await DevToolsCalls.Run(() => client.Storage.ClearDataForOriginAsync(info.Origin, "all"));
-            ShowToast($"Dados de {info.Host} apagados");
-            ReloadActive();
+            if (Data.SiteScope.SiteOf(tab.Address) is not { } site)
+            {
+                // Uma página que não é da web: só a origem dela.
+                using var own = browser.GetDevToolsClient();
+                await DevToolsCalls.Run(() => own.Storage.ClearDataForOriginAsync(info.Origin, "all"));
+                ShowToast($"Dados de {info.Host} apagados");
+                if (ReferenceEquals(Tabs.Active, tab)) ReloadActive();
+                return;
+            }
+
+            var (deleted, hosts, cookiesFailed) = await DeleteSiteCookiesAsync(CookieContext.GetCookieManager(null), site);
+            var origins = Data.SiteScope.Origins(site, [tab.Address, .. hosts.SelectMany(h => new[] { "https://" + h + "/", "http://" + h + "/" })]);
+            var storage = true;
+            try
+            {
+                using var client = browser.GetDevToolsClient();
+                foreach (var origin in origins)
+                {
+                    // Uma origem recusada pelo motor não impede as outras, mas o aviso di-lo.
+                    try { await DevToolsCalls.Run(() => client.Storage.ClearDataForOriginAsync(origin, "all")); }
+                    catch (Exception) { storage = false; }
+                }
+            }
+            catch (Exception) { storage = false; }
+            // O perfil do motor de vídeo, com a regra do Triturar (MainWindow.Forget.cs): numa janela normal, com uma aba
+            // viva desse motor, para um site que lá abriu ou para um site pendente (video-por-esquecer.txt). Uma limpeza
+            // completa tira-o do ficheiro; as abas desse motor ainda abertas de sites com «esquecer» voltam a marcá-los.
+            var videoFailed = false;
+            if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: Data.AppData.VideoForgetPending.Contains(site),
+                    VideoEngine.MayHoldData(site, Data.AppData.IsVideoSite(site) || Data.AppData.IsVideoSite(site, platformCodecs: true), Data.AppData.IsVideoOptOut(site))))
+            {
+                var video = await ClearVideoSiteAsync(site, origins);
+                if (video.Complete)
+                {
+                    Data.AppData.VideoForgetPending.Remove(site);
+                    MarkOpenVideoForgetSites();
+                }
+                deleted += video.Cookies;
+                videoFailed = !video.Complete;
+            }
+            ShowToast(Data.SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed));
+            // A espera pelo motor de vídeo (até 15 s a frio) deixa mudar de aba: só se recarrega a aba limpa, e só se
+            // ainda for a ativa (não há recarregar por aba; a outra recarrega-se à mão).
+            if (ReferenceEquals(Tabs.Active, tab)) ReloadActive();
         }
         catch (Exception ex)
         {

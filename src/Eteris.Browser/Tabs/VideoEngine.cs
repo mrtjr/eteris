@@ -317,12 +317,48 @@ public static class VideoEngine
     public static bool OpensInVideoEngine(string site, bool remembered, bool optedOut, bool mainHasCodecs = false)
         => !optedOut && (remembered || (!mainHasCodecs && KnownH264Sites.Contains(site)));
 
+    // O site pode ter deixado dados no perfil do motor de vídeo: abriu lá (lembrado, ou da lista embutida) ou o
+    // utilizador mandou-o voltar ao motor principal (o botão tira-o dos lembrados e põe-no nos excluídos; o que o
+    // WebView2 guardou continua lá). Decide se o Triturar e companhia abrem o perfil do WebView2 sem aba viva dele.
+    // O tempo máximo de uma limpeza no perfil do motor de vídeo (arrancar o runtime a frio, abrir o controlador
+    // escondido e apagar): passado isto a limpeza responde «não foi possível» e nada fica pendurado.
+    public static readonly TimeSpan CleanupLimit = TimeSpan.FromSeconds(15);
+
+    public static bool MayHoldData(string site, bool remembered, bool optedOut)
+        => remembered || optedOut || KnownH264Sites.Contains(site);
+
+    // Uma limpeza de site (Triturar, Esquecer ao fechar, sites de salto) abre o perfil do motor de vídeo? Com uma aba viva
+    // dele, sempre (é barato); e sempre para um site marcado como pendente. Sem isso: o Triturar, o temporizador e a
+    // saída seguem MayHoldData; a varredura do arranque (o que ficou por esquecer ao sair, a cada arranque) não — senão
+    // arrancava o WebView2 a frio, até 15 s, a cada arranque, mesmo sem nada para apagar.
+    public static bool ClearsSite(bool liveCore, bool startupSweep, bool pending, bool mayHoldData)
+        => liveCore || pending || (!startupSweep && mayHoldData);
+
+    // Os sites com «esquecer» das abas do motor de vídeo ainda abertas (os endereços delas), sem repetidos: voltam a ficar
+    // pendentes depois de uma limpeza que tirou a marca (AppData.VideoForgetPending). Uma aba aberta pode pôr cookies sem
+    // nova navegação, e só a navegação marca o site.
+    public static IReadOnlyList<string> ForgetSitesOf(IEnumerable<string?> addresses, Func<string, bool> forgetOnClose)
+        => addresses.Select(Data.SiteScope.SiteOf).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Where(forgetOnClose).ToList();
+
+    // As caixas de «Apagar dados» no WebView2: cookies e dados de sites → tudo o que é do site (cookies e todo o
+    // armazenamento); cache → a cache do disco; histórico → o histórico próprio do WebView2 e o das transferências
+    // (inteiros, seja qual for o período: não se veem em lado nenhum). 0: nada a apagar.
+    public static CoreWebView2BrowsingDataKinds DataKinds(bool history, bool cookies, bool cache)
+    {
+        CoreWebView2BrowsingDataKinds kinds = 0;
+        if (cookies) kinds |= CoreWebView2BrowsingDataKinds.AllSite;
+        if (cache) kinds |= CoreWebView2BrowsingDataKinds.DiskCache;
+        if (history) kinds |= CoreWebView2BrowsingDataKinds.BrowsingHistory | CoreWebView2BrowsingDataKinds.DownloadHistory;
+        return kinds;
+    }
+
     // Argumentos do motor do Edge: sem SmartScreen (enviaria os endereços visitados à Microsoft), sem a interface
     // do Office nos PDFs, sem tráfego de fundo, sem pings de auditoria de links e sem o «component updater» (no
     // diagnóstico descarregou componentes sem ação do utilizador). Com «bloquear reprodução automática», a mesma
     // política do motor principal. Fixos por pasta de dados: aplicam-se ao arrancar, como no motor principal.
     // WebRTC: a mesma política de IP do motor principal (Shields/EngineHardening.cs), com os dois nomes do interruptor —
-    // o Edge instalado pode ser anterior à mudança de nome; o Chromium ignora o que não conhece.
+    // o WebView2 instalado pode ser anterior à mudança de nome; o Chromium ignora o que não conhece. Medido que o
+    // WebView2 158.0.4370.16 aceita o interruptor (sem candidatos ICE nem pedido ao STUN, docs/paridade.md §7).
     public const string BaseArguments =
         "--disable-features=msSmartScreenProtection,msWebOOUI,msPdfOOUI --disable-background-networking --no-pings --disable-component-update"
         + " --" + Shields.EngineHardening.WebRtcPolicySwitch + "=" + Shields.EngineHardening.WebRtcPolicy
@@ -330,6 +366,20 @@ public static class VideoEngine
 
     public static string BrowserArguments(bool blockAutoplay)
         => blockAutoplay ? BaseArguments + " --autoplay-policy=document-user-activation-required" : BaseArguments;
+
+    // A língua do WebView2 é a do motor principal (a 1.ª da lista Accept-Language com que ele arrancou); sem ela, pt-PT.
+    public static string Language(string started)
+        => started.Split(',')[0].Trim() is { Length: > 0 } first ? first : "pt-PT";
+
+    // O que estas abas têm e não têm em relação ao motor principal (eteris://privacy/ e o Escudo dizem-no). Não é uma
+    // promessa medida: «o que o próprio WebView2 pede à Microsoft» está por medir.
+    public const string PrivacyNote =
+        "As abas no motor de vídeo (WebView2, da Microsoft) têm as listas do Escudo, o pedido de privacidade (GPC), a prevenção de rastreio estrita do WebView2 e as notificações recusadas. "
+        + "Não têm o DNS cifrado, o filtro de cookies de terceiros do Éteris, o referrer reduzido nem o bloqueio da rede local, e o que o próprio WebView2 pede à Microsoft ainda não foi medido.";
+
+    public const string ShieldCookiesLine = "·  Cookies de terceiros: prevenção de rastreio do motor de vídeo (não o filtro do Éteris)";
+    public const string ShieldWebRtcLine = "·  WebRTC: política pedida ao motor de vídeo";
+    public const string ShieldDnsLine = "·  DNS do sistema: o DNS cifrado não chega ao motor de vídeo";
 
     // Só os endereços web passam para o motor de vídeo; as páginas internas (eteris://) ficam no motor principal.
     public static bool CanHost(string? url)
@@ -440,6 +490,17 @@ public static class VideoEngine
     // A posição do vídeo da página do motor principal só vale para essa mesma página. Um ficheiro de média que chega
     // como transferência (o desvio do DownloadHandler) ou uma navegação para um site de vídeo trocam de motor com a
     // página ANTERIOR ainda à vista: o #t= dela ia parar ao ficheiro novo (medido: um .aac abria em #t=2).
+    // Retomar o vídeo no motor de vídeo onde estava no motor principal: no primeiro «loadedmetadata» da página de topo
+    // (a posição vem do documento de topo, PositionScript), uma só vez. O registo sai depois do primeiro documento
+    // (MainWindow.VideoEngine.cs, ResumeAtAsync); a guarda do topo impede que os iframes desse documento saltem.
+    public static string ResumeScript(double seconds)
+    {
+        var at = seconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        return "(() => { if (window !== top) return; const at = " + at + "; let done = false;"
+            + " addEventListener('loadedmetadata', e => { const v = e.target;"
+            + " if (done || !(v instanceof HTMLMediaElement) || !(v.duration > at)) return; done = true; v.currentTime = at; }, true); })();";
+    }
+
     public static bool ResumesFrom(string? shownAddress, string target)
         => shownAddress is not null && string.Equals(WithoutFragment(shownAddress), WithoutFragment(target), StringComparison.Ordinal);
 

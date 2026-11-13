@@ -73,6 +73,30 @@ public sealed class ReviewForgetShredTests : IDisposable
         Assert.Contains("o armazenamento ficou por apagar", SiteScope.ShredDone(0, 0, storage: false));
     }
 
+    // Os cookies que o motor não deixou ler ou apagar e o perfil do motor de vídeo que não se abriu também se dizem:
+    // a limpeza nunca estreita o âmbito em silêncio. Só o armazenamento em falta continua com a frase de antes.
+    [Fact]
+    public void ShredDone_SaysWhenCookiesOrTheVideoEngineWereLeft()
+    {
+        Assert.Equal("0 cookies e 0 entradas do histórico apagados — o armazenamento ficou por apagar (o motor não estava pronto)",
+            SiteScope.ShredDone(0, 0, storage: false));
+        Assert.Equal("2 cookies e 1 entrada do histórico apagados — não foi possível apagar todos os cookies",
+            SiteScope.ShredDone(2, 1, storage: true, cookiesFailed: true));
+        Assert.Equal("0 cookies e 0 entradas do histórico apagados — não foi possível apagar todos os cookies, o armazenamento e os dados do motor de vídeo",
+            SiteScope.ShredDone(0, 0, storage: false, cookiesFailed: true, videoEngineFailed: true));
+        Assert.Equal("3 cookies e 1 entrada do histórico apagados — não foi possível apagar os dados do motor de vídeo",
+            SiteScope.ShredDone(3, 1, storage: true, videoEngineFailed: true));
+    }
+
+    // A contagem antes de triturar: sem resposta do motor não diz «nenhum cookie».
+    [Fact]
+    public void ShredSummary_SaysWhenTheCookiesCouldNotBeCounted()
+    {
+        var text = SiteScope.ShredSummary("exemplo.pt", -1, 0);
+        Assert.Contains("os cookies (não foi possível contá-los)", text);
+        Assert.DoesNotContain("nenhum cookie", text);
+    }
+
     // Histórico do site numa só passagem: conta, endereços e apagar; o resto fica.
     [Fact]
     public void History_TakeSite_DeletesCountsAndReturnsTheUrls()

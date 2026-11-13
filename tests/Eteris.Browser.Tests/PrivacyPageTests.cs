@@ -3,6 +3,7 @@ using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Shields;
+using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser.Tests;
 
@@ -16,6 +17,37 @@ public class PrivacyPageTests
         SecureDns: null, Language: "pt-PT", HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
 
     private static PrivacyPage.Promise Find(PrivacyPage.State state, string id) => Assert.Single(PrivacyPage.Promises(state), p => p.Id == id);
+
+    // A linha «DNS cifrado» lê o que foi pedido ao motor no arranque (Local State), não o estado em vigor: diz-o (EGR-15).
+    [Fact]
+    public void Dns_DetailSaysItWasRequested_NotVerified()
+    {
+        var dns = Find(Good() with { SecureDns = "Quad9" }, "dns");
+        Assert.True(dns.Kept);
+        Assert.Equal("Pedido ao motor no arranque: os nomes dos sites vão cifrados para Quad9. O Éteris não lê o estado em vigor no motor; "
+            + "num PC gerido (domínio, Entra ID ou controlo parental) o Chromium pode desligar o DNS cifrado.", dns.Detail);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
+
+    // O título diz o que cobre (o motor), não promete «nada»: o Éteris faz duas ligações sozinho e o detalhe di-las.
+    [Fact]
+    public void Quiet_TitleNamesWhatItCovers_AndTheDetailNamesUpdatesAndLists()
+    {
+        var quiet = Find(Good(), "quiet");
+        Assert.Equal("Sem tráfego de fundo da Google nem do Chromium", quiet.Title);
+        Assert.True(quiet.Kept);
+        foreach (var host in FilterLists.Sources.Values.Select(u => new Uri(u).Host).Distinct()) Assert.Contains(host, quiet.Detail);
+        foreach (var s in new[] { "GitHub", "de 7 em 7 dias", "passwordsleakcheck-pa.googleapis.com", "content-autofill.googleapis.com" }) Assert.Contains(s, quiet.Detail);
+        var settings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        Assert.DoesNotContain("só consulta a cache do Windows", settings);
+        Assert.Contains("Com o DNS cifrado ligado pergunta o nome ao mesmo fornecedor, cifrado; na janela privada sem DNS cifrado só lê a cache do Windows.", settings);
+    }
 
     [Fact]
     public void Promises_WithTheRealEngineConfiguration_AreKept()
@@ -203,6 +235,21 @@ public class PrivacyPageTests
         Assert.Contains("href=\"eteris://privacy/#sincronizacao\"", Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html"));
     }
 
+    // Um bloco de explicação, como o da sincronização: não é uma promessa medida nem entra na contagem.
+    [Fact]
+    public void VideoEngineBlock_SaysWhatDoesNotApply_AndIsNotAPromise()
+    {
+        Assert.Equal("Nas abas do motor de vídeo", PrivacyPage.VideoEngineBlockTitle);
+        foreach (var s in new[] { "WebView2", "Microsoft", "GPC", "DNS cifrado", "cookies de terceiros", "rede local" }) Assert.Contains(s, VideoEngine.PrivacyNote);
+        Assert.DoesNotContain("Edge", VideoEngine.PrivacyNote);
+        Assert.Contains("\"video\":{\"title\":", PrivacyPage.Render(Good()));
+        Assert.DoesNotContain(PrivacyPage.Promises(Good()), p => p.Id.Contains("video", StringComparison.Ordinal));
+        var page = PrivacyTemplate();
+        Assert.True(page.IndexOf("<section id=\"motor-de-video\"", StringComparison.Ordinal) > page.IndexOf("id=\"list\"", StringComparison.Ordinal));
+        Assert.Matches(@"\.textContent = data\.video\.title;", page);
+        Assert.Matches(@"\.textContent = data\.video\.note;", page);
+    }
+
     // INF-10, PRO-09: o isolamento das páginas, o motor completo do Escudo e o HTTPS primeiro estão à vista.
     [Theory]
     [InlineData(Isolation.On, true, null)] [InlineData(Isolation.OffBySwitch, false, "--eteris-no-sandbox")]
@@ -309,6 +356,19 @@ public class PrivacyPageTests
         Assert.True(Find(Good(), "gpc-header").Kept);
         Assert.False(Find(Good() with { Headers = [("DNT", "1")] }, "gpc-header").Kept);
         Assert.False(Find(Good() with { Headers = [("Sec-GPC", "1"), ("DNT", "1")] }, "gpc-header").Kept);
+    }
+
+    [Fact]
+    public void GpcJs_FollowsTheLastRegistration_NotAConstant()
+    {
+        Assert.False(Find(Good() with { GpcScript = false }, "gpc-js").Kept);
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "PrivacyPage.cs"));
+        Assert.Contains("PrivacySignals.SessionScriptRegistered != false", page);
+        Assert.DoesNotContain("PrivacySignals.ScriptFor(\"https://example.com/\") is not null", page);
+        var injector = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Shields", "ScriptletInjector.cs"));
+        Assert.Contains("AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript, runImmediately: true)", injector);
+        Assert.Contains("PrivacySignals.SessionScriptRegistered = true;", injector);
+        Assert.Contains("PrivacySignals.SessionScriptRegistered = false;", injector);
     }
 
     [Fact]

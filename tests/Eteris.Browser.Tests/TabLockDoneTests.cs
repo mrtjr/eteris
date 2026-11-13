@@ -126,4 +126,36 @@ public sealed class TabLockDoneTests : IDisposable
         Assert.Empty(TabRadar.Rows(vm.Tabs, vm.Active, vm.RecentlyClosed, RadarScope.Done, RadarSort.Recent, ""));
         Assert.Contains("Feito", TabRadar.Status(0, RadarScope.Done, ""));
     }
+
+    [Fact]
+    public void DoneStore_DeleteSince_RemovesOnlyThePeriod()
+    {
+        var store = new DoneTabsStore(_db);
+        store.Add("https://antes.pt/", "Antes", Now.AddHours(-3));
+        store.Add("https://depois.pt/", "Depois", Now.AddMinutes(-5));
+        store.DeleteSince(Now.AddHours(-1));
+        Assert.Equal(["Antes"], store.Since(Now.AddDays(-1)).Select(t => t.Title));
+        store.DeleteSince(DateTime.MinValue);
+        Assert.Empty(store.Since(Now.AddDays(-1)));
+    }
+
+    [Fact]
+    public void DoneStore_DeleteSite_RemovesOnlyTheSite()
+    {
+        var store = new DoneTabsStore(_db);
+        store.Add("https://www.exemplo.pt/a", "Do site", Now);
+        store.Add("https://malexemplo.pt/", "Outro", Now);
+        store.DeleteSite("exemplo.pt");
+        Assert.Equal(["Outro"], store.Since(Now.AddDays(-1)).Select(t => t.Title));
+    }
+
+    [Fact]
+    public void DoneStore_Prune_RunsWithoutNewAdds()
+    {
+        var store = new DoneTabsStore(_db);
+        store.Add("https://velha.pt/", "Velha", Now.AddDays(-31));
+        store.Add("https://nova.pt/", "Nova", Now.AddDays(-29));
+        new DoneTabsStore(_db).Prune(Now);
+        Assert.Equal(["Nova"], store.Since(Now.AddDays(-60)).Select(t => t.Title));
+    }
 }

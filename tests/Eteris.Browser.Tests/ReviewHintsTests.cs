@@ -29,7 +29,7 @@ public class ReviewHintsTests
         Assert.DoesNotContain("getHighEntropyValues", PrivacySignals.SessionScript);
         Assert.StartsWith(PrivacySignals.GpcScript, PrivacySignals.SessionScript);
         var injector = Read("src", "Eteris.Browser", "Shields", "ScriptletInjector.cs");
-        Assert.Contains("AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript)", injector);
+        Assert.Contains("AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript, runImmediately: true)", injector);
         // Antes do onSession: a vista móvel de um site fixado põe os metadados dela por cima.
         Assert.True(injector.IndexOf("ReducedClientHints.Apply(created)", StringComparison.Ordinal)
                     < injector.IndexOf("onSession(created)", StringComparison.Ordinal));

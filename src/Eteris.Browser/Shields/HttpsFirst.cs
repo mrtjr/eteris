@@ -65,6 +65,15 @@ public sealed class HttpsFirst(Func<string, bool>? isException = null, Func<Date
         => Uri.TryCreate(secureUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
            && _upgraded.TryGetValue(Key(uri.AbsoluteUri, isPrivate), out var at) && _clock() - at <= UpgradeWindow;
 
+    // O endereço que a sonda leva: a sonda é a única saída por http:// antes de o utilizador aceitar o aviso, e por isso
+    // leva só o anfitrião e a porta — nunca o caminho, os parâmetros, o fragmento nem credenciais (que um endereço com
+    // `http://utilizador:senha@…` traria). Não se usa GetLeftPart(Authority), que manteria o utilizador e a senha. Um
+    // endereço que não seja absoluto devolve-se como veio.
+    public static string ProbeUrl(string original)
+        => Uri.TryCreate(original, UriKind.Absolute, out var uri)
+            ? new UriBuilder(Uri.UriSchemeHttp, uri.IdnHost, uri.Port).Uri.AbsoluteUri
+            : original;
+
     // A resposta da sondagem ao http:// (pedido HEAD sem cookies, pelo próprio motor) quando o https:// subido não
     // respondeu a tempo: o site responde por http:// — o aviso aparece já, como depois de uma falha. Um
     // redirecionamento para o https:// do mesmo site quer dizer que o site fala HTTPS e só está lento: continua-se à

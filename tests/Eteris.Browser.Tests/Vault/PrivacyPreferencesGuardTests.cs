@@ -48,7 +48,7 @@ public class PrivacyPreferencesGuardTests
         args ?? new(CefConfigurator.Build("p").CefCommandLineArgs), PrivacySignals.Headers, GpcScript: true, ThirdPartyCookiesBlocked: true,
         WebRtcProtected: true, SecureDns: null, Language: "pt-PT", HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
 
-    // «Nada sai do computador sem um pedido seu» passa a dizer também os formulários, lidos do estado real.
+    // «Sem tráfego de fundo da Google nem do Chromium» passa a dizer também os formulários, lidos do estado real.
     [Fact]
     public void QuietPromise_CoversFormsSentToSites()
     {

@@ -74,6 +74,7 @@ public sealed class SavedSessionsStore
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        SqliteSetup.SecureDelete(connection);
         return connection;
     }
 }

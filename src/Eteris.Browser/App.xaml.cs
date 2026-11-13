@@ -125,7 +125,6 @@ public partial class App : Application
         StartupGuard.Current.Flush();
         StartupRescue.Healthy(now: true);
         Data.AppData.FlushShieldStats();
-        Data.AppData.CloseHistory();
         if (Data.Settings.Current.ClearOnExit)
         {
             try { Cef.GetGlobalCookieManager().DeleteCookiesAsync(string.Empty, string.Empty).Wait(TimeSpan.FromSeconds(3)); }
@@ -137,6 +136,9 @@ public partial class App : Application
         // Uma palavra-passe copiada há menos de 60 s sai da área de transferência (se ainda lá estiver).
         try { Vault.SecureClipboard.ClearPendingOnExit(); }
         catch (Exception) { }
+        // O histórico fecha depois das limpezas de privacidade: a compactação única (AppData.CloseHistory) pode demorar
+        // com um histórico grande e não as pode atrasar; pela de um «Apagar tudo» ainda a correr, espera no máximo 3 s.
+        Data.AppData.CloseHistory();
         try
         {
             // Algum browser ainda vivo (nenhum, hoje: abas, Glance e painéis libertam-se no Closed das janelas) liberta-se
@@ -148,6 +150,15 @@ public partial class App : Application
             // Caches da GPU no disco (ajuste e3): com o motor fechado, que as tem abertas. Com «Apagar ao fechar», depois de
             // «Apagar dados › cache» e depois de uma janela privada (Infrastructure/ProfileCleanup.cs).
             if (ProfileCleanup.ShouldRemoveGpuCaches(Data.Settings.Current.ClearOnExit)) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);
+            // «Apagar cookies e dados de sites ao fechar»: o armazenamento dos sites (Local Storage, IndexedDB…) e o ficheiro
+            // dos cookies, também com o motor já fechado; e a pasta inteira do motor de vídeo (WebView2), cujas abas já
+            // fecharam com as janelas. Os processos do WebView2 ainda podem estar a fechar: tenta-se durante até 2 s. O
+            // arranque seguinte repete-o como garantia.
+            if (Data.Settings.Current.ClearOnExit)
+            {
+                ProfileCleanup.RemoveSiteData(AppPaths.Profile);
+                ProfileCleanup.Retry(() => ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine), ProfileCleanup.VideoEngineExitAttempts, ProfileCleanup.VideoEngineExitPause);
+            }
         }
         finally
         {

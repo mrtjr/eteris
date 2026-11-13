@@ -36,6 +36,7 @@ public sealed record ClearDataRequest(bool History, bool Cookies, bool Cache, Da
         if (outcome.CookiesFailed) failed.Add("os cookies");
         if (outcome.CacheFailed) failed.Add("a cache");
         if (outcome.StorageFailed > 0) failed.Add(outcome.StorageFailed == 1 ? "os dados de 1 site" : $"os dados de {outcome.StorageFailed} sites");
+        if (outcome.CookieSitesUnknown) failed.Add("o armazenamento dos sites que só tinham cookies");
         if (outcome.VideoEngineFailed) failed.Add("os dados do motor de vídeo");
         var cleared = new List<string>();
         if (History) cleared.Add("histórico");
@@ -58,7 +59,9 @@ public sealed record ClearDataRequest(bool History, bool Cookies, bool Cache, Da
 }
 
 // O que o motor não conseguiu apagar num «Apagar dados»: StorageFailed conta as origens (sites) cujo armazenamento ficou.
-public sealed record ClearOutcome(bool CookiesFailed = false, bool CacheFailed = false, int StorageFailed = 0, bool VideoEngineFailed = false)
+// CookieSitesUnknown: o motor não deixou ler os cookies, e os sites que só se conheciam por eles ficaram com o armazenamento.
+public sealed record ClearOutcome(bool CookiesFailed = false, bool CacheFailed = false, int StorageFailed = 0, bool VideoEngineFailed = false,
+    bool CookieSitesUnknown = false)
 {
-    public bool Failed => CookiesFailed || CacheFailed || StorageFailed > 0 || VideoEngineFailed;
+    public bool Failed => CookiesFailed || CacheFailed || StorageFailed > 0 || VideoEngineFailed || CookieSitesUnknown;
 }

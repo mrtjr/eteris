@@ -20,7 +20,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - Painel semanal na nova aba: rastreadores bloqueados por dia e estimativa do que foi poupado.
 - Observatório do site (Ctrl+Shift+U): quem está a observar a página, ao vivo, agrupado por empresa, com «Porque é que isto passou?» e bloquear um domínio só nesse site; no cadeado, «O que este site sabe de ti».
 - `eteris://privacy/`: relatório dos últimos 7 e 30 dias (só números, neste computador, apagáveis), promessas verificadas no estado real e um auto-teste local do que um site vê.
-- DNS cifrado, links sem rastreio, modo rigoroso por site, notificações recusadas sem perguntar, apagar dados ao fechar.
+- DNS cifrado e apagar dados ao fechar (opcionais), links sem rastreio, modo rigoroso por site, notificações recusadas sem perguntar.
 
 **Palavras-passe e preenchimento automático**
 - Gestor de palavras-passe e preenchimento automático próprios (`eteris://passwords/`, `eteris://autofill/`), com o gestor do Chromium desligado: o cofre fica cifrado neste computador e só sai dele cifrado, se ligar a sincronização; mostrar, copiar e exportar pedem o Windows Hello.
@@ -49,7 +49,7 @@ Descarrega `EterisBrowser-win-Setup.exe` do [último release](https://github.com
 - Centro de multimédia (♫) com tudo o que toca; janela flutuante sempre por cima (Ctrl+Shift+M).
 
 **Ler e ver**
-- Espreitar um link (Alt+clique): título, imagem, tempo de leitura e primeiros parágrafos num cartão, sem abrir aba nem deixar rasto.
+- Espreitar um link (Alt+clique): título, imagem, tempo de leitura e primeiros parágrafos num cartão, sem abrir aba nem deixar rasto no histórico (a página é pedida ao site).
 - Modo de leitura (F9) com temas escuro, sépia e claro, «Ouvir» em voz alta (vozes locais) e lista «Ler mais tarde».
 - Barra lateral (Ctrl+Shift+B) com Notas, Para ler, Favoritos, Histórico e sites fixados que abrem dentro da barra.
 - Notas ao lado da página (Ctrl+Shift+E), código QR da página, escurecer sites, links para um destaque.

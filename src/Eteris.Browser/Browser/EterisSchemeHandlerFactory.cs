@@ -692,15 +692,21 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         // As origens do histórico inteiro, seja qual for o período (cookies e armazenamento saem por inteiro), lidas antes
         // de apagar o histórico. Numa janela privada a limpeza é a do contexto dela: o histórico do perfil não conta.
         IReadOnlyList<string> historyOrigins = request.Cookies && !privateContext ? AppData.TryRead(h => h.Origins()) : [];
-        if (request.History)
+        // O histórico do perfil (e as «Feitas», o relatório e os sites de salto) também não se apaga a partir dela: a
+        // janela privada não grava histórico.
+        if (request.History && !privateContext)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
-            AppData.TryWrite(h => h.DeleteSince(since));
+            AppData.ForgetSince(since);
             MainWindow.ForgetBounceVisits(since);
         }
         // As caches da GPU (shaders, programas WebGL) só se apagam com o motor fechado: ao sair (ajuste e3).
         if (request.Cache) Infrastructure.ProfileCleanup.RemoveGpuCachesAtExit();
         var outcome = request.Cookies || request.Cache ? await MainWindow.ClearEngineDataAsync(browserId, request, historyOrigins).ConfigureAwait(false) : new ClearOutcome();
+        // O perfil do motor de vídeo (WebView2), com as mesmas caixas. As janelas privadas usam o modo InPrivate do
+        // WebView2: nada no disco, e nunca se toca no perfil normal a partir delas. Sem a pasta do motor de vídeo não se
+        // arranca o runtime (MainWindow.WithVideoProfileAsync).
+        if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request).ConfigureAwait(false)) outcome = outcome with { VideoEngineFailed = true };
         return request.Report(outcome);
     }
 
@@ -763,7 +769,7 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             case "/clear" when HistoryPage.IsAuthorized(url)
                                && HistoryPage.RangeStart(HistoryPage.Query(uri, "range") ?? "", DateTime.Now) is { } start:
                 var from = start == DateTime.MinValue ? start : start.ToUniversalTime();
-                AppData.TryWrite(h => h.DeleteSince(from));
+                AppData.ForgetSince(from);
                 MainWindow.ForgetBounceVisits(from);
                 break;
             case "/" or "/clear":

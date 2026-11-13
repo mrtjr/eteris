@@ -12,6 +12,33 @@ public class PageMenuTests
     private static List<PageCommand?> Commands(PageContext ctx)
         => PageMenu.Build(ctx, "DuckDuckGo").Select(i => i?.Command).ToList();
 
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
+    }
+
+    [Fact]
+    public void PrivateWindow_DoesNotOfferReadLater()
+    {
+        Assert.Contains(PageCommand.ReadLater, Commands(Ctx()));
+        Assert.DoesNotContain(PageCommand.ReadLater, Commands(Ctx(isPrivate: true)));
+    }
+
+    [Fact]
+    public void PrivateWindow_NeverWritesTheReadingListNorTheVideoSites()
+    {
+        string Src(string name) => File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", name)).Replace("\r\n", "\n");
+        Assert.Contains("private void SaveForLater()\n    {\n        if (IsPrivate) return;", Src("MainWindow.PageMenu.cs"));
+        // No ficheiro o ícone está escrito como sequência de escape (barra, u, E7BC): daí a barra dupla na expressão.
+        Assert.Matches(@"if \(!IsPrivate\)\s+yield return new\(""\\uE7BC"", AppData\.IsSavedForLater\(", Src("MainWindow.Palette.cs"));
+        var badge = Src("MainWindow.VideoEngine.cs");
+        badge = badge[badge.IndexOf("private void VideoEngineBadge_Click", StringComparison.Ordinal)..];
+        badge = badge[..badge.IndexOf("SwitchToNormalEngine(", StringComparison.Ordinal)];
+        Assert.Contains("else\n            {\n                AppData.SetVideoSite(host, false);\n                AppData.SetVideoOptOut(host, true);\n            }", badge);
+    }
+
     [Fact]
     public void PlainPage_HasNavigationAndTools()
     {

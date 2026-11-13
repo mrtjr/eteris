@@ -1,5 +1,7 @@
 using System.IO;
+using System.Text;
 using Eteris.Browser.Data;
+using Microsoft.Data.Sqlite;
 
 namespace Eteris.Browser.Tests;
 
@@ -271,5 +273,87 @@ public sealed class HistoryStoreTests : IDisposable
         _store.Record("https://a.pt/2", "A2", T0);
         _store.Record("http://b.pt:8080/", "B", T0);
         Assert.Equal(["http://b.pt:8080", "https://a.pt"], _store.Origins().Order(StringComparer.Ordinal));
+    }
+
+    private static bool FileHas(string path, string marker)
+        => File.Exists(path) && File.ReadAllBytes(path).AsSpan().IndexOf(Encoding.UTF8.GetBytes(marker)) >= 0;
+
+    private bool OnDisk(string marker)
+    {
+        SqliteConnection.ClearAllPools();
+        return FileHas(_path, marker) || FileHas(_path + "-wal", marker);
+    }
+
+    [Theory]
+    [InlineData("since")]
+    [InlineData("visit")]
+    [InlineData("site")]
+    public void Delete_LeavesNoTraceInTheFile(string how)
+    {
+        var marker = "zq7" + Guid.NewGuid().ToString("N");
+        for (var i = 0; i < 50; i++) _store.Record($"https://outro{i}.example/", "Outro", T0.AddMinutes(-i - 1));
+        _store.Record($"https://{marker}.example/caminho", "Titulo " + marker, T0);
+        Assert.True(OnDisk(marker));
+        switch (how)
+        {
+            case "since": _store.DeleteSince(T0); break;
+            case "visit": _store.DeleteVisit(_store.Visits(1)[0].Id); break;
+            default: Assert.Equal(1, _store.TakeSite(marker + ".example").Count); break;
+        }
+        Assert.False(OnDisk(marker));
+    }
+
+    // O que versões anteriores apagaram sem secure_delete sai com uma compactação, uma só vez.
+    [Fact]
+    public void CompactOnce_ClearsOldResidue_AndRunsOnce()
+    {
+        var marker = "zq7" + Guid.NewGuid().ToString("N");
+        for (var i = 0; i < 50; i++) _store.Record($"https://outro{i}.example/", "Outro", T0.AddMinutes(-i - 1));
+        _store.Record($"https://{marker}.example/", "Antigo", T0);
+        SqliteConnection.ClearAllPools();
+        using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _path, Pooling = false }.ToString()))
+        {
+            raw.Open();
+            using var delete = raw.CreateCommand();
+            delete.CommandText = "DELETE FROM history WHERE url LIKE '%" + marker + "%'";
+            Assert.Equal(1, delete.ExecuteNonQuery());
+        }
+        Assert.True(OnDisk(marker));
+        Assert.True(_store.CompactOnce());
+        Assert.False(OnDisk(marker));
+        Assert.False(_store.CompactOnce());
+        Assert.Equal(50, _store.Visits(100).Count);
+    }
+
+    [Fact]
+    public void Checkpoint_ReportsBusy_WhileAReaderHoldsTheLog()
+    {
+        _store.Record("https://a.pt/", "A", T0);
+        var text = new SqliteConnectionStringBuilder { DataSource = _path, Pooling = false }.ToString();
+        using var writer = new SqliteConnection(text);
+        writer.Open();
+        using (var reader = new SqliteConnection(text))
+        {
+            reader.Open();
+            using var transaction = reader.BeginTransaction(deferred: true);
+            using (var read = reader.CreateCommand()) { read.Transaction = transaction; read.CommandText = "SELECT count(*) FROM history"; read.ExecuteScalar(); }
+            using (var write = writer.CreateCommand()) { write.CommandText = "DELETE FROM history"; write.ExecuteNonQuery(); }
+            Assert.False(HistoryStore.Checkpoint(writer));
+        }
+        Assert.True(HistoryStore.Checkpoint(writer));
+    }
+
+    [Fact]
+    public void EveryStoreWithAddresses_OpensWithSecureDelete()
+    {
+        foreach (var name in new[] { "HistoryStore", "DoneTabsStore", "ArchivedTabsStore", "SnoozedTabsStore", "SavedSessionsStore", "PrivacyEventsStore" })
+            Assert.Contains("SqliteSetup.SecureDelete(connection);", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data", name + ".cs")));
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 }

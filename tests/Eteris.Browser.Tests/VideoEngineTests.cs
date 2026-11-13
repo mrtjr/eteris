@@ -1,4 +1,5 @@
 using System.IO;
+using Eteris.Browser.Infrastructure;
 using Eteris.Browser.Permissions;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
@@ -328,5 +329,199 @@ public class VideoEngineTests
     {
         const string url = "https://www.w3schools.com/html/mov_bbb.mp4";
         Assert.Equal(VideoEngine.PageTitle(null, url), VideoEngine.MainEngineTitle("w3schools.com/html/mov_bbb.mp4", url));
+    }
+
+    [Fact]
+    public void DataKinds_MapTheClearDataBoxes()
+    {
+        Assert.Equal(CoreWebView2BrowsingDataKinds.AllSite, VideoEngine.DataKinds(history: false, cookies: true, cache: false));
+        Assert.Equal(CoreWebView2BrowsingDataKinds.DiskCache, VideoEngine.DataKinds(false, false, true));
+        Assert.Equal(CoreWebView2BrowsingDataKinds.BrowsingHistory | CoreWebView2BrowsingDataKinds.DownloadHistory, VideoEngine.DataKinds(true, false, false));
+        Assert.Equal((CoreWebView2BrowsingDataKinds)0, VideoEngine.DataKinds(false, false, false));
+    }
+
+    [Fact]
+    public void MayHoldData_OnlyForSitesThatOpenedInTheVideoEngine()
+    {
+        Assert.True(VideoEngine.MayHoldData("twitch.tv", remembered: false, optedOut: false));
+        Assert.True(VideoEngine.MayHoldData("exemplo.pt", remembered: true, optedOut: false));
+        // O botão «Motor de vídeo» tira o site dos lembrados e põe-no nos excluídos: os dados dele continuam no WebView2.
+        Assert.True(VideoEngine.MayHoldData("exemplo.pt", remembered: false, optedOut: true));
+        Assert.False(VideoEngine.MayHoldData("exemplo.pt", remembered: false, optedOut: false));
+    }
+
+    // Depois de uma limpeza que tira a marca de pendente (Apagar dados, o cadeado), as abas do motor de vídeo ainda
+    // abertas de um site com «esquecer» voltam a marcá-lo: os cookies que ponham depois, sem nova navegação, ficavam fora
+    // da varredura do arranque se o Éteris fosse morto.
+    [Fact]
+    public void ForgetSitesOf_TheOpenVideoTabsOfForgetSites()
+    {
+        var forget = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "twitch.tv", "exemplo.pt" };
+        Assert.Equal(["twitch.tv"], VideoEngine.ForgetSitesOf(
+            ["https://www.twitch.tv/canal", "https://clips.twitch.tv/x", "https://outro.pt/", "about:blank", null, ""], forget.Contains));
+        Assert.Empty(VideoEngine.ForgetSitesOf([], forget.Contains));
+    }
+
+    [Fact]
+    public void ClearingTheVideoProfile_KeepsTheOpenForgetSitesPending()
+    {
+        string Src(params string[] parts) => File.ReadAllText(Path.Combine([RepoRoot(), "src", "Eteris.Browser", .. parts]));
+        var video = Src("MainWindow.VideoEngine.cs");
+        var clear = video[video.IndexOf("internal static async Task<bool> ClearVideoEngineAsync(", StringComparison.Ordinal)..];
+        clear = clear[..clear.IndexOf("    }", StringComparison.Ordinal)];
+        var cleared = clear.IndexOf("AppData.VideoForgetPending.Clear();", StringComparison.Ordinal);
+        var marked = clear.IndexOf("MarkOpenVideoForgetSites();", StringComparison.Ordinal);
+        Assert.True(cleared > 0 && marked > cleared);
+        // Lê as janelas e as abas: no fio da interface.
+        Assert.Contains("Dispatcher.InvokeAsync(() =>", clear[..cleared]);
+        // Só as janelas normais (a privada usa o InPrivate do WebView2).
+        Assert.Contains("VideoEngine.ForgetSitesOf(NormalWindows().SelectMany(w => w._videoViews.Keys).Select(t => t.Address), AppData.IsForgetOnClose)", video);
+    }
+
+    [Fact]
+    public void EveryCleanup_ReachesTheVideoEngineProfile()
+    {
+        string Src(params string[] parts) => File.ReadAllText(Path.Combine([RepoRoot(), "src", "Eteris.Browser", .. parts]));
+        Assert.Equal(Path.Combine(AppPaths.Root, "video-engine"), AppPaths.VideoEngine);
+        Assert.Contains("userDataFolder: AppPaths.VideoEngine", Src("MainWindow.VideoEngine.cs"));
+        Assert.Contains("if (!Directory.Exists(AppPaths.VideoEngine)) return true;", Src("MainWindow.VideoEngine.cs"));
+        // Janela normal: com uma aba viva no motor de vídeo limpa-se sempre; sem ela, só os sites que lá podem ter dados
+        // (na varredura do arranque, só os pendentes: ForgetLeftoversTests).
+        Assert.Contains("if (!IsPrivate && VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep,", Src("MainWindow.Forget.cs"));
+        Assert.Contains("VideoEngine.MayHoldData(site, AppData.IsVideoSite(site) || AppData.IsVideoSite(site, platformCodecs: true), AppData.IsVideoOptOut(site))))", Src("MainWindow.Forget.cs"));
+        Assert.Contains("await ClearVideoSiteAsync(site, origins)", Src("MainWindow.Forget.cs"));
+        Assert.Contains("if (!privateContext && !await MainWindow.ClearVideoEngineAsync(request).ConfigureAwait(false))", Src("Browser", "EterisSchemeHandlerFactory.cs"));
+        // O DevTools do WebView2 só pelo canal (SandboxRulesTests).
+        Assert.Contains("\"Storage.clearDataForOrigin\"", Src("Browser", "VideoPageScript.cs"));
+        Assert.Contains("VideoPageScript.ClearOriginAsync(core, origin)", Src("MainWindow.VideoEngine.cs"));
+        Assert.Contains("ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine);", Src("Infrastructure", "CefConfigurator.cs"));
+        var exit = Src("App.xaml.cs");
+        Assert.True(exit.IndexOf("ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine)", StringComparison.Ordinal) > exit.IndexOf("CefConfigurator.Shutdown();", StringComparison.Ordinal));
+    }
+
+    // Uma limpeza do motor de vídeo nunca fica pendurada: tempo-limite, controlador tardio fechado, ambiente reposto
+    // quando o controlador não se cria, e as origens recusadas chegam ao aviso.
+    [Fact]
+    public void VideoProfileCleanup_HasATimeLimit_AndSaysWhatStayed()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        Assert.Equal(TimeSpan.FromSeconds(15), VideoEngine.CleanupLimit);
+        Assert.Contains("await Task.WhenAny(work, Task.Delay(VideoEngine.CleanupLimit))", code);
+        Assert.Contains("if (expired.IsCancellationRequested) return false;", code);
+        var create = code.IndexOf("controller = await environment.CreateCoreWebView2ControllerAsync(", StringComparison.Ordinal);
+        var reset = code.IndexOf("s_videoEnvironment = null;", create, StringComparison.Ordinal);
+        Assert.True(create > 0 && reset > create);
+        Assert.Contains("if (!await VideoPageScript.ClearOriginAsync(core, origin)) refused++;", code);
+        Assert.Contains("if (!video.Complete) videoFailed = true;", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
+    }
+
+    // PRO-04, EGR-03, EGR-14: as abas do motor de vídeo levam o GPC, a língua do motor principal, a política do WebRTC e as
+    // notificações recusadas, e os relatórios de falha ficam no computador.
+    [Fact]
+    public void BrowserArguments_CarryTheWebRtcPolicy()
+        => Assert.Contains("--webrtc-ip-handling-policy=disable_non_proxied_udp", VideoEngine.BrowserArguments(blockAutoplay: false));
+
+    [Theory]
+    [InlineData("en-US,en", "en-US")]
+    [InlineData("pt-PT", "pt-PT")]
+    [InlineData("", "pt-PT")]
+    public void Language_IsTheOneTheMainEngineStartedWith(string started, string expected) => Assert.Equal(expected, VideoEngine.Language(started));
+
+    [Fact]
+    public void VideoTabs_CarryGpcTheSiteLanguageAndLocalCrashReports()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var handler = code.IndexOf("core.WebResourceRequested += (_, e) =>", StringComparison.Ordinal);
+        var gpc = code.IndexOf("foreach (var (name, value) in PrivacySignals.Headers) e.Request.Headers.SetHeader(name, value);", StringComparison.Ordinal);
+        Assert.True(handler > 0 && gpc > handler && gpc < code.IndexOf("var context = e.ResourceContext;", StringComparison.Ordinal));
+        var script = code.IndexOf("await VideoPageScript.AddEarlyAsync(core, PrivacySignals.SessionScript);", StringComparison.Ordinal);
+        Assert.True(script > 0 && script < code.IndexOf("core.Navigate(VideoUrl(url));", StringComparison.Ordinal));
+        Assert.Contains("language: VideoEngine.Language(EngineHardening.StartedWithLanguage)", code);
+        Assert.DoesNotContain("language: \"pt-PT\"", code);
+        Assert.Contains("IsCustomCrashReportingEnabled = true", code);
+        Assert.Contains("CoreWebView2PermissionKind.Notifications", code);
+        Assert.Contains("CoreWebView2PermissionState.Deny", code);
+        Assert.Contains("tab?.UsesVideoEngine == true", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Shield.cs")));
+    }
+
+    // Medido (docs/paridade.md §7, 2026-11-12, WebView2 158.0.4370.16): sem o Page.enable, o Page.addScriptToEvaluateOnNewDocument
+    // devolve um identificador mas o script nunca corre; com ele, corre antes dos scripts da página.
+    [Fact]
+    public void EarlyScripts_EnableThePageDomainFirst()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "VideoPageScript.cs"));
+        var enable = code.IndexOf("CallDevToolsProtocolMethodAsync(\"Page.enable\", \"{}\")", StringComparison.Ordinal);
+        var add = code.IndexOf("CallDevToolsProtocolMethodAsync(\"Page.addScriptToEvaluateOnNewDocument\"", StringComparison.Ordinal);
+        Assert.True(enable > 0 && add > enable);
+    }
+
+    // Retomar o vídeo (revisão final do plano 6): com o Page.enable o script corre de facto, por isso não pode ficar
+    // registado — cada documento e cada iframe seguintes da aba saltavam o primeiro vídeo para o mesmo segundo. Corre
+    // só na página de topo, só no primeiro vídeo, e sai do registo depois da primeira navegação com documento.
+    [Fact]
+    public void ResumeScript_SeeksTheFirstMediaOfTheTopPageOnly()
+    {
+        var output = RunResume("""
+            const top = run(true);
+            const frame = run(false);
+            print([top.join(','), frame.join(',')].join('\n'));
+            """);
+        var lines = output.Split('\n');
+        Assert.Equal("42.5,0", lines[0]); // o 1.º vídeo salta para 42,5 s; o 2.º fica no início
+        Assert.Equal("0,0", lines[1]); // num iframe o script não faz nada
+    }
+
+    [Fact]
+    public void ResumeScript_IsInvariantAndUnregisteredAfterTheFirstDocument()
+    {
+        Assert.Contains("const at = 42.5;", VideoEngine.ResumeScript(42.5));
+        Assert.Contains("window !== top", VideoEngine.ResumeScript(10));
+        Assert.Equal("7", Eteris.Browser.Browser.VideoPageScript.ScriptId("""{"identifier":"7"}"""));
+        Assert.Null(Eteris.Browser.Browser.VideoPageScript.ScriptId("{}"));
+        Assert.Null(Eteris.Browser.Browser.VideoPageScript.ScriptId("não é json"));
+        var channel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "VideoPageScript.cs"));
+        Assert.Contains("\"Page.removeScriptToEvaluateOnNewDocument\"", channel);
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var resume = code[code.IndexOf("private static async Task ResumeAtAsync(", StringComparison.Ordinal)..];
+        resume = resume[..resume.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("VideoEngine.ResumeScript(seconds)", resume);
+        Assert.Contains("VideoPageScript.RemoveEarlyAsync(core, id)", resume);
+        Assert.Contains("committed != e.NavigationId", resume);
+    }
+
+    // A cosmética do Escudo regista-se uma vez por site e por aba: o arranque da aba e as navegações partilham o conjunto
+    // (antes o 1.º site ficava registado duas vezes, e agora os scripts correm de facto).
+    [Fact]
+    public void VideoCosmetics_ShareOneSetPerTab()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        Assert.DoesNotContain("EnsureVideoCosmeticsAsync(core, url, new HashSet<string>(StringComparer.OrdinalIgnoreCase))", code);
+        Assert.Contains("await EnsureVideoCosmeticsAsync(core, url, cosmeticHosts);", code);
+    }
+
+    private static string RunResume(string body)
+    {
+        var setup = """
+            class HTMLMediaElement { constructor(duration) { this.duration = duration; this.currentTime = 0; } }
+            const print = s => process.stdout.write(String(s));
+            const run = isTop => {
+              const listeners = [];
+              const self = {};
+              const win = { addEventListener: (type, fn) => listeners.push([type, fn]) };
+              win.top = isTop ? win : self;
+              const media = [new HTMLMediaElement(120), new HTMLMediaElement(120)];
+              new Function('window', 'top', 'addEventListener', 'HTMLMediaElement', SCRIPT)(win, win.top, win.addEventListener, HTMLMediaElement);
+              for (const m of media) for (const [type, fn] of listeners) if (type === 'loadedmetadata') fn({ target: m });
+              return media.map(m => m.currentTime);
+            };
+            """.Replace("SCRIPT", System.Text.Json.JsonSerializer.Serialize(VideoEngine.ResumeScript(42.5)));
+        return NodeRunner.Run(setup + "\n" + body);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 }

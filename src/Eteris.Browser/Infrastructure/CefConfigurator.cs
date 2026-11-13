@@ -100,6 +100,8 @@ public static class CefConfigurator
         if (Data.Settings.Current.ClearOnExit)
         {
             ProfileCleanup.RemoveSiteData(AppPaths.Profile);
+            // O perfil do motor de vídeo (WebView2), que ainda não arrancou: o que a saída não conseguiu apagar.
+            ProfileCleanup.RemoveVideoEngineData(AppPaths.VideoEngine);
             // A garantia no arranque, como para os dados dos sites; só com o ajuste ligado (regra R-2: sem ele, nada de
             // novo antes da 1.ª página). A limpeza ao sair (App.OnExit) apaga-as sempre.
             if (shaderCache) ProfileCleanup.RemoveGpuCaches(AppPaths.Profile);

@@ -333,6 +333,21 @@ Correções R0 no `main` (sem motor novo), medidas no Release do `main` com um p
 | **Soma indicativa** | **101,0** | **93,7** | 91,5–97,4 | 66,3–73,8 | 68,2 | |
 | Veredicto CYT | «unique» | «unique» | «unique» | «randomized» | «unique» | |
 
+**GPC e lista de dispositivos no 1.º documento de cada aba — por medir (registado em 2026-11-12, commit
+«Auditoria 6 (PRO-03)», o que traz o `runImmediately`).** O `SessionScript` (`navigator.globalPrivacyControl` e
+`enumerateDevices` sem nomes) passou a registar-se com `runImmediately: true`, para correr também nos contextos que já
+existem quando o registo chega. **Não foi medido ao vivo** (a medição precisa do Éteris real, com o CEF, e não foi
+possível no ambiente desta tarefa); não se afirma nenhum resultado. O texto da linha «O pedido é visível ao JavaScript
+dos sites», em `eteris://privacy/`, é por isso o prudente («na 1.ª página de uma aba nova chega depois dos primeiros
+scripts dela; o cabeçalho `Sec-GPC` vai sempre») e fica assim até a medição estar feita. Como medir: uma página local
+cujo **primeiro** `<script>` põe no título `navigator.globalPrivacyControl` e os rótulos de
+`await navigator.mediaDevices.enumerateDevices()`; abri-la (1) por clique do meio num link (aba nova), (2) por reposição
+de sessão («Continuar onde parei») e (3), como controlo, navegando na mesma aba; abrir também `eteris://privacy/` pelo
+menu (aba nova) e ler a linha acima. Registar em cada caso `true` ou `undefined` e rótulos vazios ou não. Se os três
+casos derem `true` e rótulos vazios, o texto passa a «vale true em todas as páginas»; se a aba nova ainda der
+`undefined`, mantém-se o texto prudente e o remédio completo (aba em `about:blank` ou GPC no motor, `docs/motor.md`
+FP1) pede medição própria.
+
 A sonda própria continua com o mesmo identificador em todos os sites (`c3e25442` em example.com, wikipedia.org e
 coveryourtracks.eff.org; era `0648fb12`): o critério de «empate» com o Brave (identificador diferente por site e por
 sessão) só chega com o ruído em canvas/WebGL/áudio (F1 por scripts, F2 no motor). Limites que ficam: um iframe de
@@ -341,7 +356,7 @@ workers dão a versão real do Windows e do Chromium (`GetUserAgentMetadata` no 
 
 ## 7. Tráfego sem ação do utilizador — medido (2026-11-08)
 
-A promessa do Éteris é «nada sai do computador sem um pedido seu». Medido com um proxy HTTP local que **regista todos
+A promessa do Éteris é «sem tráfego de fundo da Google nem do Chromium». Medido com um proxy HTTP local que **regista todos
 os pedidos (CONNECT incluídos) e não encaminha nenhum** (responde 502), passado ao motor só por argumento
 (`--proxy-server=http://127.0.0.1:8897`, nada no Windows), num perfil de teste novo: 60 s com a nova aba, depois 60 s
 com uma página local servida em `127.0.0.1` (o laço local não passa pelo proxy, por isso tudo o que aparece no registo
@@ -372,9 +387,11 @@ local (0.2.10, mesma sessão: os 2 acima); no 2.º arranque do mesmo perfil, **0
 a página. Com um proxy que encaminha, a pesquisa na Google, o example.com e `eteris://privacy/` (✔ na promessa nova)
 funcionam como antes. O que o relógio de rede fazia deixa de existir: o aviso «o relógio do computador está errado»
 nas páginas de erro de certificado passa a vir só da data da compilação do motor, como no Chromium sem rede.
-
 Fora desta medição: a procura de atualizações do Éteris instalado (Velopack → GitHub, depois da 1.ª página) não passa
 pelo motor (usa o proxy do Windows, não o argumento) e não acontece numa compilação de teste, que não está instalada.
+A descarga das listas do Escudo num perfil novo (1.º arranque e de 7 em 7 dias) também não passa pelo proxy do motor
+(`HttpClient`) e ficou fora da medição; por isso a promessa não diz «nada sai do computador» e `eteris://privacy/` nomeia
+as duas ligações (atualizações e listas).
 
 **Formulários (0.2.13; `docs/palavras-passe.md`, A0).** Com o mesmo método, numa página local
 com um início de sessão, uma morada e um cartão enviados (dados inventados): o motor mandava o par utilizador/palavra-
@@ -383,7 +400,7 @@ início de sessão, apesar de `credentials_enable_service=false` — a verifica�
 Corte: `profile.password_manager_leak_detection=false` nas preferências do perfil, lida de volta; e, preventivo (0
 pedidos medidos), `--disable-features=AutofillServerCommunication` contra o servidor de previsões de formulários
 (`content-autofill.googleapis.com`). Depois: **0 pedidos** no proxy e 0 linhas `googleapis` no NetLog. A promessa
-«Nada sai do computador sem um pedido seu» em `eteris://privacy/` diz também os formulários.
+«Sem tráfego de fundo da Google nem do Chromium» em `eteris://privacy/` diz também os formulários.
 
 **Sincronização (0.2.13).** Por omissão está desligada e a promessa fica exatamente como medida
 acima: o arranque não faz pedido nenhum à Google (montar o serviço e ler o estado só leem o disco; testes
@@ -399,6 +416,30 @@ e as ações do utilizador, por um cliente próprio que só fala com `oauth2.goo
 (`GoogleSyncTests.HttpClient_OnlyReachesGoogleOAuthAndDrive`, varrimento `SyncLibrary_HttpOnlyInTheGoogleFolder…` e
 `BrowserSyncFolder_HttpOnlyThroughTheGoogleClient`). Prova ao vivo com a pasta de teste: a 1.ª escrita chega 31,6 s
 depois de abrir; a medição com o Drive real e o proxy fica para a fase «Prova».
+
+**Motor de vídeo (WebView2, da Microsoft) — medido a 2026-11-12, runtime 158.0.4370.16, commit `9bc2d6b` (Task 12 do plano 6).**
+Método: uma sonda descartável, fora do repositório (um programa .NET com o mesmo pacote `Microsoft.Web.WebView2` 1.0.4314.35 e
+um perfil temporário, apagado no fim), que liga o código do Éteris por `<Compile Include>` — `VideoEngine.BrowserArguments`,
+`VideoEngine.Language`, `PrivacySignals`, `VideoPageScript.AddEarlyAsync` — e repete a linha do `Sec-GPC` de `WireVideoView`.
+- *Tráfego parado.* Com `--proxy-server=http://127.0.0.1:<porta>` acrescentado aos argumentos do motor de vídeo (o proxy regista
+  a 1.ª linha de cada ligação e responde 502; nada é encaminhado) e uma aba em `about:blank` parada 60 s: **0 pedidos**. O proxy
+  funcionava (controlo: uma navegação a `http://eteris-controlo.invalid/` chegou-lhe como `GET`). Fica por medir: 60 s a tocar
+  vídeo, um site com DRM (servidor de licenças) e o 1.º arranque de um perfil novo com a aba já numa página.
+- *Política do WebRTC.* Uma página em `127.0.0.1` cria um `RTCPeerConnection` com um STUN local (UDP em `127.0.0.1`, que responde
+  ao pedido com o endereço de origem). Com `--webrtc-ip-handling-policy=disable_non_proxied_udp`: **0 candidatos** e 0 pacotes
+  STUN recebidos. Sem o interruptor (controlo): um candidato `host` (mDNS) e um `srflx`, e 1 pacote STUN. O WebView2 instalado
+  aceita o interruptor; só se testou esta versão do runtime, e com um STUN externo (o da Google) não se
+  testou (seria tráfego para fora).
+- *GPC e língua.* O servidor local recebeu `Sec-GPC: 1` em todos os pedidos (documento, `favicon.ico` e `fetch`) e
+  `Accept-Language: en-US,en;q=0.9` com a língua `en-US`; a página mostrou `navigator.globalPrivacyControl === true`,
+  `navigator.language === "en-US"`. **Mas só depois de acertar `VideoPageScript.AddEarlyAsync`**: sem `Page.enable` antes de
+  `Page.addScriptToEvaluateOnNewDocument`, o DevTools devolvia o identificador do script e a página via
+  `navigator.globalPrivacyControl === undefined` (o mesmo marcador registado por `AddScriptToExecuteOnDocumentCreatedAsync`
+  corria), tanto num controlador escondido como no controlo WPF numa janela visível. Com o `Page.enable` o script corre. Isto
+  vale também para a cosmética do Escudo e a retoma do vídeo, que usam o mesmo canal.
+- *DNS cifrado.* **Por medir:** testar `dns_over_https` em `video-engine\EBWebView\Local State` pede uma captura da porta 53
+  (permissões de administrador), que não se fez; a frase da `PrivacyNote` («Não têm o DNS cifrado») fica como está.
+- Decisão do dono, por tomar: juntar a linha «Motor de vídeo» à §4 de `docs/site/privacidade.html` (não se tocou na política).
 
 ## 8. Pedidos sem aba: a fuga do Escudo — medido (2026-11-08)
 

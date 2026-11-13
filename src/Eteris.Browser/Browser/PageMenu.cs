@@ -93,7 +93,7 @@ public static class PageMenu
             items.Add(new(PageCommand.Reload, "", "Recarregar", "Ctrl+R"));
             items.Add(null);
             items.Add(new(PageCommand.Print, "", "Imprimir…", "Ctrl+P"));
-            if (ctx.IsWebPage) items.Add(new(PageCommand.ReadLater, "\uE7BC", "Ler mais tarde"));
+            if (ctx.IsWebPage && !ctx.IsPrivate) items.Add(new(PageCommand.ReadLater, "\uE7BC", "Ler mais tarde"));
             if (ctx.IsWebPage) items.Add(new(PageCommand.SavePdf, "", "Guardar como PDF"));
             items.Add(new(PageCommand.ViewSource, "", "Ver código-fonte", "Ctrl+U"));
             if (ctx.IsWebPage) items.Add(new(PageCommand.HideElement, "", "Esconder um elemento…"));

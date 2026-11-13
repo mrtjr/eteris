@@ -52,7 +52,6 @@ public static class ProfileCleanup
         return removed;
     }
 
-    // «Apagar cookies e dados de sites ao fechar»: garantia no arranque seguinte, mesmo que o fecho tenha falhado.
     // Versões antigas deixavam o «component updater» do Chrome descarregar o módulo Widevine (DRM) da Google.
     // Já não é descarregado; apaga-se o que tiver ficado no perfil. Devolve true se havia alguma coisa.
     public static bool RemoveDownloadedWidevine(string profileRoot)
@@ -68,21 +67,60 @@ public static class ProfileCleanup
         catch (UnauthorizedAccessException) { return false; }
     }
 
-    public static void RemoveSiteData(string profileRoot)
+    // «Apagar cookies e dados de sites ao fechar»: corre ao sair (App.OnExit, depois de o motor fechar, que tem estas
+    // pastas abertas enquanto vive) e outra vez no arranque seguinte (CefConfigurator.Prepare), como garantia mesmo que o
+    // fecho tenha falhado. Devolve o que ficou por apagar: o nome de cada pasta de dados de sites e «Network/Cookies» (e o
+    // journal) que continuem a existir depois da tentativa; vazio quando saiu tudo (ou quando não há perfil).
+    public static IReadOnlyList<string> RemoveSiteData(string profileRoot)
     {
+        var stayed = new List<string>();
         var dir = Path.Combine(profileRoot, "Default");
-        if (!Directory.Exists(dir)) return;
+        if (!Directory.Exists(dir)) return stayed;
         foreach (var folder in SiteDataFolders)
         {
-            try { if (Directory.Exists(Path.Combine(dir, folder))) Directory.Delete(Path.Combine(dir, folder), recursive: true); }
+            var path = Path.Combine(dir, folder);
+            try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+            if (Directory.Exists(path)) stayed.Add(folder);
         }
         foreach (var file in CookieFiles)
         {
-            try { File.Delete(Path.Combine(dir, "Network", file)); }
+            var path = Path.Combine(dir, "Network", file);
+            try { File.Delete(path); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+            if (File.Exists(path)) stayed.Add("Network/" + file);
+        }
+        return stayed;
+    }
+
+    // «Apagar cookies e dados de sites ao fechar» no motor de vídeo: a pasta de dados do WebView2 inteira (cookies,
+    // armazenamento, cache e o histórico próprio do WebView2), ao sair e no arranque seguinte, sempre com o WebView2
+    // fechado. Devolve true se a pasta já não existe (ou nunca existiu); false se ficou (um processo do WebView2 ainda a
+    // fechar segura ficheiros: o arranque seguinte acaba o trabalho).
+    public static bool RemoveVideoEngineData(string folder)
+    {
+        try { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return !Directory.Exists(folder);
+    }
+
+    // Ao sair, os processos do WebView2 fecham depois das janelas e podem ainda segurar ficheiros da pasta: tenta-se
+    // algumas vezes, com pausas curtas (no máximo 8 × 250 ms = 2 s, e só com «Apagar ao fechar»). Se mesmo assim ficar,
+    // o arranque seguinte (CefConfigurator.Prepare) acaba o trabalho.
+    public const int VideoEngineExitAttempts = 8;
+    public static readonly TimeSpan VideoEngineExitPause = TimeSpan.FromMilliseconds(250);
+
+    // Corre a tentativa até ela dar true, no máximo `times` vezes, com uma pausa entre elas. Devolve o último resultado.
+    public static bool Retry(Func<bool> attempt, int times, TimeSpan pause)
+    {
+        for (var i = 1; ; i++)
+        {
+            if (attempt()) return true;
+            if (i >= times) return false;
+            if (pause > TimeSpan.Zero) Thread.Sleep(pause);
         }
     }
 

@@ -58,7 +58,7 @@ public class PublicTextsTests
     // R12: a 0.2.16 é a última versão publicada, com a data da publicação, logo seguida da 0.2.15; por cima dela só podem
     // estar secções por publicar, e a história fica como estava.
     [Fact]
-    public void Changelog_LeadsWith0215_AndKeepsHistoryUntouched()
+    public void Changelog_LeadsWithTheCurrentVersion_AndKeepsHistoryUntouched()
     {
         var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
         var headings = log.Split('\n').Where(l => l.StartsWith("## ", StringComparison.Ordinal)).ToList();
@@ -253,6 +253,9 @@ public class PublicTextsTests
         foreach (var h in WhatsNewPage.Highlights)
             Assert.DoesNotMatch(@"\bEdge\b", h.Title + " " + h.Detail);
         Assert.DoesNotMatch(@"\bEdge\b", ChangelogEntry());
+        var log = Read("CHANGELOG.md").Replace("\r\n", "\n");
+        var current = log[..log.IndexOf("## 0.2.16", StringComparison.Ordinal)];
+        Assert.DoesNotMatch(@"\bEdge\b", current);
     }
 
     private static readonly Regex Address = new(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", RegexOptions.Compiled);

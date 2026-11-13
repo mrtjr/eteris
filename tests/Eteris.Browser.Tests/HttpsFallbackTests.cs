@@ -70,6 +70,22 @@ public class HttpsFallbackTests
         Assert.DoesNotContain("sem aviso nem recuo", configurator);
     }
 
+    [Theory]
+    [InlineData("http://u:p@loja.example/conta/repor?token=SEGREDO#x", "http://loja.example/")]
+    [InlineData("http://antigo.example:8080/a/b?c=d", "http://antigo.example:8080/")]
+    [InlineData("http://ANTIGO.example", "http://antigo.example/")]
+    public void ProbeUrl_DropsPathQueryAndCredentials(string original, string probe)
+        => Assert.Equal(probe, HttpsFirst.ProbeUrl(original));
+
+    [Fact]
+    public void Handler_ProbesOnlyTheOrigin()
+    {
+        var handler = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Shields", "PrivacyRequestHandler.cs"));
+        Assert.Contains("probe.Url = HttpsFirst.ProbeUrl(original);", handler);
+        Assert.DoesNotContain("probe.Url = original;", handler);
+        Assert.Contains("HttpsFirst.ProbeSaysInsecure(status, location, original)", handler);
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

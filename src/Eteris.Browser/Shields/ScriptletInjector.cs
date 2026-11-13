@@ -21,7 +21,10 @@ namespace Eteris.Browser.Shields;
 //  - os mais antigos só saem com a aba parada (Tidy, no fim do carregamento).
 // Limite medido: antes da 1.ª navegação de um browser ainda não há renderer, e o DevTools só responde depois do commit
 // dela (esperar 300 ms antes de navegar não adiantou nada e atrasava a aba nova). O 1.º documento de cada aba nasce
-// por isso sem os scripts precoces, como antes; a partir do 2.º, todos os têm.
+// por isso sem os scripts precoces, como antes; a partir do 2.º, todos os têm. O GPC e a lista de dispositivos
+// registam-se agora com runImmediately (corre também nos contextos já criados), mas isso NÃO foi medido ao vivo: não
+// se sabe se chegam ao 1.º script de uma aba nova (docs/paridade.md §6, «por medir»), e a página de privacidade diz o
+// limite por prudência.
 // onSession corre uma vez, quando a sessão DevTools nasce: por exemplo, a vista móvel de um site fixado
 // (Emulation.setUserAgentOverride).
 // hostExtra(url) dá o resto do script do site e hostKey(url) o que o decide (por exemplo, o modo escuro ligado).
@@ -122,8 +125,23 @@ public sealed class ScriptletInjector(Func<string, bool> isProtected, Func<strin
         if (onSession is not null) _queue = _queue.ContinueWith(_ => Quietly(() => onSession(created))).Unwrap();
         // O GPC visível ao JavaScript vale em todas as páginas, com ou sem escudo: registado uma vez por sessão e nunca
         // retirado, não depende do script de cada site nem da corrida de cada navegação. A lista de dispositivos sem
-        // permissão (PrivacySignals.DevicesScript) vai no mesmo registo.
-        _queue = _queue.ContinueWith(_ => Quietly(() => DevToolsCalls.Run(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript)))).Unwrap();
+        // permissão (PrivacySignals.DevicesScript) vai no mesmo registo. Com runImmediately (o 4.º parâmetro do CefSharp
+        // 156) corre também nos contextos que já existem quando o registo chega; o script é idempotente (define a
+        // propriedade e embrulha enumerateDevices). O resultado fica em PrivacySignals.SessionScriptRegistered.
+        _queue = _queue.ContinueWith(_ => Quietly(async () =>
+        {
+            try
+            {
+                await DevToolsCalls.Run(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(PrivacySignals.SessionScript, runImmediately: true));
+                PrivacySignals.SessionScriptRegistered = true;
+            }
+            catch (Exception)
+            {
+                // Uma aba que fechou a meio do registo não conta como falha: o injetor dela já está libertado.
+                if (!_disposed) PrivacySignals.SessionScriptRegistered = false;
+                throw;
+            }
+        })).Unwrap();
         if (!string.IsNullOrEmpty(baseScript))
             _queue = _queue.ContinueWith(_ => Quietly(() => DevToolsCalls.Run(() => created.Page.AddScriptToEvaluateOnNewDocumentAsync(baseScript)))).Unwrap();
         return true;

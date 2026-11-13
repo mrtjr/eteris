@@ -31,6 +31,13 @@ public static class SiteScope
     public static string CookieUrl(string cookieDomain, string path)
         => "https://" + cookieDomain.Trim().TrimStart('.') + (path.StartsWith('/') ? path : "/" + path);
 
+    // Os cookies a apagar de um site (o domínio e os subdomínios, pela mesma regra do Triturar), pela ordem dada: o
+    // endereço para o CookieManager, o nome e o anfitrião (sem o ponto inicial, em minúsculas).
+    public static IReadOnlyList<(string Url, string Name, string Host)> CookieDeletions(IEnumerable<(string Domain, string Path, string Name)> cookies, string site)
+        => cookies.Where(c => CookieBelongs(c.Domain, site))
+            .Select(c => (CookieUrl(c.Domain, c.Path), c.Name, c.Domain.Trim().TrimStart('.').ToLowerInvariant()))
+            .ToList();
+
     // As origens (esquema://host[:porta]) do site vistas nos endereços dados — abas abertas, histórico — mais as duas
     // óbvias (com e sem www, em https e http): é por origem que o armazenamento se apaga. Um IP ou um nome sem ponto
     // (localhost) não tem «www.»: essa origem nem é válida para o motor.
@@ -93,10 +100,13 @@ public static class SiteScope
     // trancadas ou têm nota, que se perdem com elas.
     public static string ShredSummary(string site, int cookies, int history, bool isPrivate = false, int closingTabs = -1, int locked = 0, int noted = 0)
     {
-        var parts = new List<string> { cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies" };
+        // cookies < 0: o motor não os deixou contar (não se diz «nenhum»).
+        var parts = new List<string> { cookies < 0 ? "os cookies (não foi possível contá-los)" : cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies" };
         if (!isPrivate)
             parts.Add(history == 0 ? "nenhuma entrada do histórico" : history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico");
         parts.Add("o armazenamento do site (local, bases de dados, cache e trabalhadores)");
+        // As listas do Radar (Feitas, Arquivo, Adiadas) são do perfil: só a janela normal as tem.
+        if (!isPrivate) parts.Add("as abas feitas, arquivadas e adiadas deste site");
         parts.Add(isPrivate ? "as permissões dadas nesta janela" : "as permissões dadas");
         // Um endereço IP (ou localhost) não tem subdomínios.
         var bare = System.Net.IPAddress.TryParse(site.Trim('[', ']'), out _) || !site.Contains('.');
@@ -131,12 +141,85 @@ public static class SiteScope
     }
 
     // O aviso depois de apagar. storage: o armazenamento foi mesmo apagado (precisa de uma página viva do contexto).
-    public static string ShredDone(int cookies, int history, bool storage, bool isPrivate = false)
+    // cookiesFailed: o motor não deixou ler ou apagar os cookies; videoEngineFailed: o perfil do motor de vídeo existe
+    // e não se abriu. Só o armazenamento em falta mantém a frase de sempre; o resto diz «não foi possível apagar».
+    public static string ShredDone(int cookies, int history, bool storage, bool isPrivate = false, bool cookiesFailed = false, bool videoEngineFailed = false)
     {
         var cookieText = cookies == 1 ? "1 cookie" : $"{cookies} cookies";
         var text = isPrivate
             ? cookieText + (cookies == 1 ? " apagado" : " apagados")
             : $"{cookieText} e {(history == 1 ? "1 entrada do histórico" : $"{history} entradas do histórico")} apagados";
-        return storage ? text : text + " — o armazenamento ficou por apagar (o motor não estava pronto)";
+        if (!cookiesFailed && !videoEngineFailed)
+            return storage ? text : text + " — o armazenamento ficou por apagar (o motor não estava pronto)";
+        var stayed = new List<string>();
+        if (cookiesFailed) stayed.Add("todos os cookies");
+        if (!storage) stayed.Add("o armazenamento");
+        if (videoEngineFailed) stayed.Add("os dados do motor de vídeo");
+        var names = stayed.Count == 1 ? stayed[0] : string.Join(", ", stayed[..^1]) + " e " + stayed[^1];
+        return text + " — não foi possível apagar " + names;
+    }
+
+    // O resultado da varredura do arranque para um site (MainWindow.Forget.cs, ForgetLeftoversAsync).
+    public sealed record Leftover(string Site, int Cookies, int History, bool Storage, bool CookiesFailed = false, bool VideoEngineFailed = false)
+    {
+        // O armazenamento por fazer só conta num site de que se apagou alguma coisa: sem página viva do motor principal
+        // (a aba ativa no motor de vídeo, abas a dormir) falhava em todos os sites, em cada arranque, sem nada que se
+        // saiba ter ficado.
+        public bool Failed => CookiesFailed || VideoEngineFailed || (!Storage && Cookies + History > 0);
+    }
+
+    // O aviso da varredura do arranque: os sites esquecidos e, primeiro, os que ficaram com alguma coisa por apagar (o
+    // aviso começa então por «Não foi»). Nada apagado e nada falhado: sem aviso (é o caso de quase todos os arranques).
+    public static string? LeftoversDone(IReadOnlyList<Leftover> results)
+    {
+        var failed = results.Where(r => r.Failed).ToList();
+        var forgotten = results.Where(r => !r.Failed && r.Cookies + r.History > 0).Select(r => r.Site).ToList();
+        if (failed.Count == 0)
+        {
+            if (forgotten.Count == 0) return null;
+            return forgotten.Count == 1 ? $"{forgotten[0]} foi esquecido (tinha ficado por apagar ao sair)"
+                : $"{forgotten.Count} sites esquecidos (tinham ficado por apagar ao sair): {string.Join(", ", forgotten)}";
+        }
+        if (failed.Count == 1 && forgotten.Count == 0) return LeftoverFailed(failed[0]);
+        var text = $"Não foi possível esquecer tudo de {Join(failed.Select(r => r.Site).ToList())} ({(failed.Count == 1 ? "tinha" : "tinham")} ficado por apagar ao sair)";
+        return forgotten.Count == 0 ? text : text + $"; {Join(forgotten)} {(forgotten.Count == 1 ? "foi esquecido" : "foram esquecidos")}";
+    }
+
+    // Um só site com falha, numa frase: o que ficou por apagar e, se houve, o que saiu (sem contagens a zero). O
+    // armazenamento por fazer só conta quando se apagou alguma coisa (Leftover.Failed).
+    private static string LeftoverFailed(Leftover r)
+    {
+        var stayed = new List<string>();
+        if (r.CookiesFailed) stayed.Add("todos os cookies");
+        if (!r.Storage && r.Cookies + r.History > 0) stayed.Add("o armazenamento");
+        if (r.VideoEngineFailed) stayed.Add("os dados do motor de vídeo");
+        var gone = new List<string>();
+        if (r.Cookies > 0) gone.Add(r.Cookies == 1 ? "1 cookie" : $"{r.Cookies} cookies");
+        if (r.History > 0) gone.Add(r.History == 1 ? "1 entrada do histórico" : $"{r.History} entradas do histórico");
+        var agreed = gone.Count switch
+        {
+            0 => "",
+            2 => "; " + Join(gone) + " apagados",
+            _ when r.Cookies > 0 => "; " + gone[0] + (r.Cookies == 1 ? " apagado" : " apagados"),
+            _ => "; " + gone[0] + (r.History == 1 ? " apagada" : " apagadas"),
+        };
+        return $"Não foi possível apagar {Join(stayed)} de {r.Site} (tinha ficado por apagar ao sair{agreed})";
+    }
+
+    private static string Join(List<string> names) => names.Count == 1 ? names[0] : string.Join(", ", names[..^1]) + " e " + names[^1];
+
+    // O aviso do cadeado › «Apagar cookies e dados deste site»: quantos cookies saíram e, se o armazenamento não
+    // pôde ser apagado, di-lo.
+    // cookiesFailed: o motor recusou apagar algum cookie; videoEngineFailed: o perfil do motor de vídeo não se abriu ou
+    // recusou alguma origem. Uma falha começa por «Não foi» e diz o que ficou.
+    public static string SiteDataCleared(string site, int cookies, bool storage, bool cookiesFailed = false, bool videoEngineFailed = false)
+    {
+        var cookieText = cookies == 0 ? "nenhum cookie" : cookies == 1 ? "1 cookie" : $"{cookies} cookies";
+        if (storage && !cookiesFailed && !videoEngineFailed) return $"Dados de {site} apagados ({cookieText})";
+        var stayed = new List<string>();
+        if (cookiesFailed) stayed.Add("todos os cookies");
+        if (!storage) stayed.Add("o armazenamento");
+        if (videoEngineFailed) stayed.Add("os dados do motor de vídeo");
+        return $"Não foi possível apagar {Join(stayed)} de {site} ({cookieText} {(cookies > 1 ? "apagados" : "apagado")})";
     }
 }

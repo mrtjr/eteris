@@ -123,6 +123,26 @@ public sealed class ForgetSiteTests : IDisposable
     }
 
     [Fact]
+    public void ShredSummary_SaysTheDoneArchivedAndSnoozedTabsGo()
+    {
+        Assert.Contains("as abas feitas, arquivadas e adiadas deste site", SiteScope.ShredSummary("exemplo.pt", 1, 1));
+        Assert.DoesNotContain("arquivadas", SiteScope.ShredSummary("exemplo.pt", 1, 1, isPrivate: true));
+    }
+
+    [Fact]
+    public void Forget_ClearsEveryWindowAndTheClosedOnes()
+    {
+        var palette = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Palette.cs"));
+        var body = palette[palette.IndexOf("private void Forget(int minutes)", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("ShowToast(", StringComparison.Ordinal)];
+        Assert.Contains("NormalWindows()", body);
+        Assert.Contains("s_closedWindows.Clear();", body);
+        Assert.Contains("AppData.ForgetSince(", body);
+        Assert.Contains("s_closedWindows.RemoveWhere(", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Undo.cs")));
+        Assert.Contains("AppData.ForgetSiteTabs(site);", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
+    }
+
+    [Fact]
     public void ShredSummary_SaysWhatGoes()
     {
         var text = SiteScope.ShredSummary("exemplo.pt", 12, 1);
@@ -170,5 +190,93 @@ public sealed class ForgetSiteTests : IDisposable
         Assert.True(store.Contains("www.alice.github.io"));
         Assert.False(store.Contains("bob.github.io"));
         Assert.Equal(["alice.github.io"], store.All());
+    }
+
+    [Fact]
+    public void CookieDeletions_TakeDomainAndSubdomainCookiesOfTheSite()
+    {
+        var plan = SiteScope.CookieDeletions(
+            [(".exemplo.pt", "/", "sid"), ("accounts.exemplo.pt", "/login", "a"), ("www.exemplo.pt", "/", "h"), (".outro.pt", "/", "x"), (".malexemplo.pt", "/", "y")],
+            "exemplo.pt");
+        Assert.Equal(
+            [("https://exemplo.pt/", "sid", "exemplo.pt"), ("https://accounts.exemplo.pt/login", "a", "accounts.exemplo.pt"), ("https://www.exemplo.pt/", "h", "www.exemplo.pt")],
+            plan);
+    }
+
+    [Fact]
+    public void SiteDataCleared_CountsTheCookies()
+    {
+        Assert.Equal("Dados de exemplo.pt apagados (3 cookies)", SiteScope.SiteDataCleared("exemplo.pt", 3, storage: true));
+        Assert.Equal("Dados de exemplo.pt apagados (1 cookie)", SiteScope.SiteDataCleared("exemplo.pt", 1, storage: true));
+        // Revisão final do plano 6: uma falha começa por «Não foi» e diz o que ficou (o armazenamento, cookies que o
+        // motor recusou, os dados do motor de vídeo).
+        Assert.Equal("Não foi possível apagar o armazenamento de exemplo.pt (nenhum cookie apagado)", SiteScope.SiteDataCleared("exemplo.pt", 0, storage: false));
+        Assert.Equal("Não foi possível apagar todos os cookies e os dados do motor de vídeo de exemplo.pt (1 cookie apagado)",
+            SiteScope.SiteDataCleared("exemplo.pt", 1, storage: true, cookiesFailed: true, videoEngineFailed: true));
+        Assert.Equal("Não foi possível apagar os dados do motor de vídeo de exemplo.pt (4 cookies apagados)",
+            SiteScope.SiteDataCleared("exemplo.pt", 4, storage: true, videoEngineFailed: true));
+    }
+
+    // O cadeado chega ao motor de vídeo com a regra do Triturar e conta as origens que o motor recusou.
+    [Fact]
+    public void LockPanel_ReachesTheVideoEngine_AndCountsRefusedOrigins()
+    {
+        var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
+        Assert.Contains("var (deleted, hosts, cookiesFailed) = await DeleteSiteCookiesAsync(", panel);
+        Assert.Contains("catch (Exception) { storage = false; }", panel[panel.IndexOf("foreach (var origin in origins)", StringComparison.Ordinal)..]);
+        // Um site pendente (video-por-esquecer.txt) abre sempre o motor de vídeo, como no Triturar; uma limpeza completa
+        // tira-o do ficheiro, e as abas desse motor ainda abertas de sites com «esquecer» voltam a marcá-los.
+        Assert.Contains("VideoEngine.ClearsSite(LiveVideoCore() is not null, startupSweep: false, pending: Data.AppData.VideoForgetPending.Contains(site),", panel);
+        var clear = panel.IndexOf("var video = await ClearVideoSiteAsync(site, origins);", StringComparison.Ordinal);
+        var done = panel.IndexOf("if (video.Complete)", StringComparison.Ordinal);
+        var removed = panel.IndexOf("Data.AppData.VideoForgetPending.Remove(site);", StringComparison.Ordinal);
+        var marked = panel.IndexOf("MarkOpenVideoForgetSites();", StringComparison.Ordinal);
+        Assert.True(clear > 0 && done > clear && removed > done && marked > removed);
+        Assert.Contains("SiteScope.SiteDataCleared(site, deleted, storage, cookiesFailed, videoFailed)", panel);
+    }
+
+    // A limpeza pode esperar até 15 s pelo motor de vídeo a frio: se entretanto mudaste de aba, a que passou a ativa não
+    // é recarregada (a aba do site só se recarrega se ainda for a ativa; não há recarregar por aba).
+    [Fact]
+    public void LockPanel_ReloadsOnlyTheTabItCleared()
+    {
+        var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
+        var click = panel[panel.IndexOf("private async void SiteInfoClear_Click(", StringComparison.Ordinal)..];
+        click = click[..click.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("if (Tabs.Active is not { } tab || ActiveBrowser is not { } browser) return;", click);
+        var reloads = click.Split("ReloadActive();").Length - 1;
+        var guarded = click.Split("if (ReferenceEquals(Tabs.Active, tab)) ReloadActive();").Length - 1;
+        Assert.Equal(2, reloads);
+        Assert.Equal(reloads, guarded);
+    }
+
+    [Fact]
+    public void LockPanel_ClearsTheWholeSite_LikeShred()
+    {
+        var panel = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.SiteInfo.cs"));
+        Assert.DoesNotContain("DeleteCookiesAsync(info.Origin + \"/\")", panel);
+        Assert.Contains("DeleteSiteCookiesAsync(", panel);
+        Assert.Contains("SiteScope.SiteDataCleared(", panel);
+        Assert.Contains("await DeleteSiteCookiesAsync(manager, site)", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs")));
+    }
+
+    // Os cookies que o motor não deixou apagar e o perfil do motor de vídeo que não se abriu chegam ao aviso, e um site
+    // de salto com alguma coisa por apagar fica à espera da volta seguinte; a contagem sem resposta não diz «nenhum».
+    [Fact]
+    public void SiteCleanup_ReportsTheCookiesAndTheVideoEngineThatStayed()
+    {
+        var forget = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs"));
+        Assert.Contains("catch (Exception) { cookiesFailed = true; }", forget);
+        Assert.Contains("SiteScope.ShredDone(result.Cookies, result.History, result.Storage, IsPrivate, result.CookiesFailed, result.VideoEngineFailed)", forget);
+        Assert.Contains("catch (Exception) { return -1; }", forget);
+        var bounce = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Bounce.cs"));
+        Assert.Contains("if (!done.Storage || done.CookiesFailed || done.VideoEngineFailed) continue;", bounce);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 }
