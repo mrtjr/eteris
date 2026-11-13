@@ -156,6 +156,43 @@ public class ShieldTighteningTests
         Assert.False(ShieldTightening.TightenedSince(page, tab.LoadedAt(page)));
     }
 
+    // Uma mudança numa janela privada só vale nas janelas privadas e é esquecida quando a sessão privada termina
+    // (PrivateSession.End): o nome do site não fica em memória, e um Voltar numa janela normal não recarrega por causa
+    // dela. Uma mudança numa janela normal vale também nas privadas (que seguem a escolha normal sem uma delas).
+    [Fact]
+    public void TightenedSince_APrivateChangeStaysPrivateAndIsForgotten()
+    {
+        var host = "t" + Guid.NewGuid().ToString("N") + ".example";
+        var page = "https://www." + host + "/artigo";
+        var loaded = Environment.TickCount64;
+        ShieldTightening.Changed(host, wasProtected: false, isProtected: true, isPrivate: true);
+        Assert.False(ShieldTightening.TightenedSince(page, loaded, isPrivate: false));
+        Assert.False(ShieldTightening.TightenedSince(page, null, isPrivate: false));
+        Assert.True(ShieldTightening.TightenedSince(page, loaded, isPrivate: true));
+        ShieldTightening.ForgetPrivate();
+        Assert.False(ShieldTightening.TightenedSince(page, loaded, isPrivate: true));
+
+        var normal = "t" + Guid.NewGuid().ToString("N") + ".example";
+        var normalPage = "https://" + normal + "/";
+        ShieldTightening.Changed(normal, wasProtected: false, isProtected: true);
+        Assert.True(ShieldTightening.TightenedSince(normalPage, loaded, isPrivate: true));
+        ShieldTightening.ForgetPrivate();
+        Assert.True(ShieldTightening.TightenedSince(normalPage, loaded, isPrivate: true));
+        Assert.True(ShieldTightening.TightenedSince(normalPage, loaded, isPrivate: false));
+    }
+
+    // As portas da janela privada marcam a mudança como privada, e a janela pergunta pela dela.
+    [Fact]
+    public void PrivateChanges_AreMarkedPrivate()
+    {
+        var data = Source("Data", "AppData.cs");
+        Assert.Contains("ShieldTightening.Changed(host, was, on, isPrivate: true);",
+            Body(data, "public static void SetShield(string host, bool on, bool isPrivate)"));
+        Assert.Contains("ShieldTightening.Changed(host, was, on, isPrivate: true);",
+            Body(data, "public static void SetStrict(string host, bool on, bool isPrivate)"));
+        Assert.Contains("ShieldTightening.TightenedSince(arriving, loadedAt, IsPrivate)", Source("MainWindow.xaml.cs"));
+    }
+
     // Cada commit guarda a hora em que o documento carregou (no mesmo sítio do endereço confirmado), e a página deixada
     // leva a hora dela: o pedido da página nova e o commit sem pedido passam-na a LeavePage.
     [Fact]
@@ -177,7 +214,7 @@ public class ShieldTighteningTests
         var leave = main.IndexOf("tab.LeavePage(leaving, leavingLoadedAt);", StringComparison.Ordinal);
         Assert.True(loadedAt > 0 && leave > loadedAt);
         // O endereço que chegou, não o da aba (que pode ainda não ter mudado quando isto corre).
-        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, loadedAt) && ShieldOnAt(arriving)) ReloadRestored(tab, browser, arriving);", main);
+        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, loadedAt, IsPrivate) && ShieldOnAt(arriving)) ReloadRestored(tab, browser, arriving);", main);
         var reload = Body(Source("MainWindow.Shield.cs"),
             "private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)");
         Assert.Contains("RendererCache.EvictAsync(browser)", reload);

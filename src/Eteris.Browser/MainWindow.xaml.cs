@@ -429,7 +429,7 @@ public partial class MainWindow : Window
                     if (restored && tab.ReturnToPage(arriving)) OnPageRestored(tab, browser, arriving);
                     // Reposta tal como carregou antes de o site ficar mais protegido (Shields/ShieldTightening.cs); com o
                     // Escudo outra vez desligado no site, recarregar não bloquearia nada.
-                    if (restored && ShieldTightening.TightenedSince(arriving, loadedAt) && ShieldOnAt(arriving)) ReloadRestored(tab, browser, arriving);
+                    if (restored && ShieldTightening.TightenedSince(arriving, loadedAt, IsPrivate) && ShieldOnAt(arriving)) ReloadRestored(tab, browser, arriving);
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
             mainRequestsAtCommit = requests;

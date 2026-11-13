@@ -15,16 +15,20 @@ public static class ShieldTightening
     // O anfitrião cujo site ficou mais protegido; pode chegar de qualquer thread (a sincronização aplica fora da janela).
     public static event Action<string>? Tightened;
 
-    // Quando cada site ficou mais protegido pela última vez (Environment.TickCount64), nesta sessão.
+    // Quando cada site ficou mais protegido pela última vez (Environment.TickCount64), nesta sessão. As mudanças feitas
+    // numa janela privada ficam à parte: só valem lá e saem com a sessão privada (ForgetPrivate, em PrivateSession.End).
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> s_tightenedAt = new(StringComparer.Ordinal);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> s_privateTightenedAt = new(StringComparer.Ordinal);
 
     // Quem muda a proteção de um site chama isto: só uma mudança real para mais proteção avisa.
-    public static void Changed(string host, bool wasProtected, bool isProtected)
+    public static void Changed(string host, bool wasProtected, bool isProtected, bool isPrivate = false)
     {
         if (!isProtected || wasProtected) return;
-        s_tightenedAt[SiteOf(host)] = Environment.TickCount64;
+        (isPrivate ? s_privateTightenedAt : s_tightenedAt)[SiteOf(host)] = Environment.TickCount64;
         Tightened?.Invoke(host);
     }
+
+    public static void ForgetPrivate() => s_privateTightenedAt.Clear();
 
     // A página está no site (o mesmo domínio registável, como a exceção do Escudo: Data/ShieldExceptionStore.cs).
     public static bool Affects(string host, string? pageUrl)
@@ -33,8 +37,13 @@ public static class ShieldTightening
     // Voltar/Avançar pela cache de páginas repõe o documento tal como estava, sem pedidos (medido: o gpt.js da reprodução
     // local corria com googletag.apiReady true). Se o site dele ficou mais protegido depois de ele carregar (loadedAt;
     // null = a aba não o guardou), mesmo que tenha sido deixado só depois disso, a página tem de carregar outra vez.
-    public static bool TightenedSince(string? pageUrl, long? loadedAt)
-        => PageSite(pageUrl) is { } site && s_tightenedAt.TryGetValue(site, out var at) && (loadedAt is not { } loaded || at >= loaded);
+    // Numa janela privada contam também as mudanças feitas lá (uma janela privada segue a escolha normal sem uma delas).
+    public static bool TightenedSince(string? pageUrl, long? loadedAt, bool isPrivate = false)
+        => PageSite(pageUrl) is { } site
+            && (After(s_tightenedAt, site, loadedAt) || (isPrivate && After(s_privateTightenedAt, site, loadedAt)));
+
+    private static bool After(System.Collections.Concurrent.ConcurrentDictionary<string, long> marks, string site, long? loadedAt)
+        => marks.TryGetValue(site, out var at) && (loadedAt is not { } loaded || at >= loaded);
 
     private static string SiteOf(string host) => TrackerBlocker.RegistrableDomain(host.ToLowerInvariant());
 

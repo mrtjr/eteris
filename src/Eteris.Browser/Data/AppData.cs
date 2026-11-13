@@ -30,7 +30,7 @@ public static class AppData
         }
         var was = IsShieldOn(host, isPrivate: true);
         PrivateShield[host] = on;
-        Shields.ShieldTightening.Changed(host, was, on);
+        Shields.ShieldTightening.Changed(host, was, on, isPrivate: true);
     }
 
     public static bool IsStrict(string host, bool isPrivate) => isPrivate && PrivateStrict.TryGetValue(host, out var on) ? on : IsStrict(host);
@@ -44,7 +44,7 @@ public static class AppData
         }
         var was = IsStrict(host, isPrivate: true);
         PrivateStrict[host] = on;
-        Shields.ShieldTightening.Changed(host, was, on);
+        Shields.ShieldTightening.Changed(host, was, on, isPrivate: true);
     }
 
     public static IReadOnlyList<string> HiddenElements(string host, bool isPrivate)
