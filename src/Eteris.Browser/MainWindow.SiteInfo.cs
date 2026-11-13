@@ -99,7 +99,7 @@ public partial class MainWindow
     private void FillSiteInfo()
     {
         var tab = Tabs.Active;
-        var info = SiteInfo.Describe(tab?.Address ?? string.Empty);
+        var info = SiteInfo.Describe(tab?.Address ?? string.Empty, failed: tab?.ShowsErrorPage == true);
         SiteInfoTitle.Text = info.Title;
         SiteInfoHost.Text = info.Host;
         SiteInfoDetail.Text = info.Detail;

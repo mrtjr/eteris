@@ -10,6 +10,19 @@ public sealed class DownloadsTests : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     [Fact]
+    public void Name_SplitsSoTheExtensionIsNeverTrimmed()
+    {
+        Assert.Equal(("Fatura_novembro_2026_documento_comple", "to.pdf.exe"), DownloadFormat.SplitName("Fatura_novembro_2026_documento_completo.pdf.exe"));
+        Assert.Equal(("", "curto.pdf"), DownloadFormat.SplitName("curto.pdf"));
+        Assert.Equal(("sem", "extensao"), DownloadFormat.SplitName("semextensao"));
+        var wide = DownloadFormat.SplitName(new string('W', 80) + ".zip");
+        Assert.Equal("WWWWWW.zip", wide.Tail);
+        Assert.Equal(74, wide.Head.Length);
+        // U+202E inverte a leitura: um ficheiro «Fatura» + U+202E + «fdp.exe» lia-se «Faturaexe.pdf». Os caracteres de formato e de controlo saem.
+        Assert.Equal(("Fat", "urafdp.exe"), DownloadFormat.SplitName("Fatura\u202Efdp.exe"));
+    }
+
+    [Fact]
     public void UniquePath_FreeName_IsKept()
         => Assert.Equal(Path.Combine(_dir, "relatório.pdf"), DownloadPaths.Unique(_dir, "relatório.pdf"));
 

@@ -4,8 +4,32 @@
 
 A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apaga, apaga-o em todo o sítio onde os dados estão, e os textos de privacidade dizem só o que o código faz.
 
+### Segurança
+
+- Desligar “Pedir o Windows Hello” ou importar um perfil já não passa sem confirmação quando o valor vem escrito como “False”.
+- O preenchimento de palavras-passe já não entra em páginas que o próprio site isolou (sandbox), onde pode correr conteúdo de terceiros.
+- A lista de palavras-passe ignora o clique numa linha que apareceu debaixo do cursor parado e o Enter no primeiro meio segundo.
+- “Abrir link numa nova aba”, os pop-ups e os links arrastados para a faixa de abas só abrem endereços da web; um endereço data: na barra mostra só o tipo, nunca o conteúdo.
+- Recarregar uma página de erro só volta a abrir endereços http, https ou de ficheiro, e o botão “Continuar sem segurança” passa a ter uma assinatura própria em vez do token das páginas internas.
+- Uma página já não consegue abrir o cartão “Espreitar” quando se prime Alt, nem mudar as preferências do leitor sem o leitor aberto.
+- O painel de transferências mostra sempre a extensão do ficheiro, ignora cliques no primeiro segundo e pede confirmação antes de abrir programas e scripts.
+- Num endereço escrito na barra ou aberto a partir dela, o cadeado só aparece depois de a página chegar: um endereço ainda não carregado, uma página de erro (também a do motor de vídeo) ou texto por enviar já não mostram “Ligação segura”. As abas novas abertas por um pop-up ou por “Abrir link numa nova aba” ainda podem mostrar o cadeado antes de a página chegar.
+- Num endereço com muitos subdomínios, a barra mostra sempre o domínio verdadeiro: corta pela esquerda e destaca-o.
+- As páginas internas do Éteris deixam de responder a molduras, sub-recursos e redirecionamentos de sites, não se deixam embutir em sites e a página das palavras-passe só recebe a lista depois de aberta.
+- Os ícones dos sites e a imagem do Espreitar só são abertos se forem PNG, JPEG, GIF ou ICO de tamanho razoável, e fora da thread da janela; ícones em WebP deixam de aparecer.
+- Uma página no motor de vídeo já não consegue abrir uma página interna do Éteris, um ficheiro local ou um endereço data: na aba: a navegação é cancelada e a aba fica onde está.
+- A janela do certificado de cliente só envia o certificado pelo botão “Enviar certificado”, que ignora cliques no primeiro meio segundo: um duplo clique dado na página já não escolhe nem envia um certificado.
+- As Novidades deixam de anunciar o isolamento das páginas numa publicação que saia sem ele: dizem que essa versão corre sem isolamento.
+- Um atalho alterado já não consegue passar interruptores ao motor (proxy, porta de depuração, `--no-sandbox`).
+
 ### Privacidade
 
+- A câmara e o microfone lembrados para um site já não valem quando ele está embutido noutro; a partilha de ecrã pergunta sempre; a aba mostra um sinal enquanto há captura.
+- O cartão de permissão ignora cliques no primeiro meio segundo, começa com “Lembrar” desligado para a câmara, o microfone, o ecrã e a localização, e só aparece na aba que pediu.
+- Uma página já não consegue passar a aba para o motor de vídeo com uma mensagem forjada; com o motor com codecs a troca passa a ser sempre pelo botão; no motor de vídeo, as permissões são as do Éteris e o WebRTC segue a mesma política de IP.
+- No motor sem codecs, o primeiro documento de cada aba passa a mostrar o botão “Tocar no motor de vídeo” em vez de trocar de motor sozinho.
+- O cartão da rede local sai quando a aba navega ou fecha, e o site volta a poder perguntar.
+- O sinal de captura da aba acende quando se permite a câmara, o microfone ou a partilha de ecrã (no motor principal) e apaga-se no documento seguinte.
 - «Apagar cookies e dados deste site», no cadeado, apaga agora os cookies do domínio e dos subdomínios (os de `.exemplo.pt` também) e o armazenamento das origens do site, com a mesma regra do «Triturar»; antes só apagava os da página aberta. O aviso diz quantos cookies saíram.
 - «Apagar cookies e dados de sites ao fechar» apaga agora o armazenamento dos sites (Local Storage, IndexedDB, Service Workers…) e o ficheiro dos cookies já ao fechar o Éteris, com o motor acabado de fechar; antes só o fazia no arranque seguinte, e os dados ficavam no disco entretanto. A limpeza do arranque mantém-se como garantia.
 - O que se apaga do histórico deixa de se poder ler no ficheiro `eteris.db`: o Éteris passa a apagar com `secure_delete` (o texto apagado é substituído por zeros) no histórico, nas «Feitas», no Arquivo, nas «Adiadas», nas sessões guardadas e no relatório de privacidade — os favoritos, a lista «Para ler», a sessão das abas abertas e as notas não estão incluídos —, compacta o ficheiro depois de «Apagar tudo» (ao lado das escritas do histórico: a barra de endereço, a paleta e a barra lateral não esperam pela compactação em si, só, até 2 segundos, por uma visita que entre enquanto ela corre) e uma vez ao sair do Éteris (depois das outras limpezas da saída; se a compactação de um «Apagar tudo» ainda estiver a correr, o fecho espera por ela no máximo 3 segundos e esta fica para a saída seguinte), para limpar o que as versões anteriores deixaram, e repete o esvaziamento do registo antecipado quando a base está ocupada. Antes, endereços e títulos apagados podiam continuar legíveis no ficheiro.
@@ -26,10 +50,26 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 - Agora que os scripts registados nas abas do motor de vídeo correm de facto, a retoma do vídeo (o segundo onde estava no motor principal) passa a aplicar-se só ao primeiro vídeo da primeira página da aba, e nunca num iframe: o registo sai depois dessa página; antes, cada página seguinte da aba saltaria o primeiro vídeo para o mesmo segundo. A cosmética do Escudo regista-se uma só vez por site em cada aba. Fica por confirmar ao vivo, numa aba do motor de vídeo: a retoma, e a cosmética do Escudo, que passa a esconder de facto banners e pop-ups nessas abas e que, registada para um site, pode continuar nessa aba depois de desligares o Escudo nele, até a aba fechar.
 - As Novidades separam os destaques da versão em curso dos das versões anteriores com uma divisória «Versões anteriores» (a etiqueta «Versão» já não cobre destaques de outras versões). O destaque «Janela minimizada não gasta» deixa de citar os números «6,47% → 0,59% de um núcleo» até a prova 6 de `build/perf/README.md` ser repetida na publicação final. O README diz que o Espreitar não deixa rasto no histórico (a página é pedida ao site) e marca o DNS cifrado e o apagar dados ao fechar como opcionais.
 - A promessa «DNS cifrado», em `eteris://privacy/`, diz agora que foi pedido ao motor no arranque e que o Éteris não lê o estado em vigor: num PC gerido (domínio, Entra ID ou controlo parental) o Chromium pode desligar o DNS cifrado. A linha mantém o ✔ com esta ressalva; a medição num PC gerido ainda não foi feita.
+- eteris://privacy/ passa a conferir o isolamento das páginas (com o motivo quando está desligado e a forma de o voltar a ligar), o motor completo do Escudo e o HTTPS primeiro.
+- As variáveis de teste da porta de depuração, do silêncio e do rastro do arranque deixam de valer no perfil normal, e a via de teste da confirmação do Windows deixa de ir no binário publicado.
+
+### Compatibilidade
+
+- Os sites que pedem um certificado de cliente (bancos, administração pública, intranets) passam a abrir: o Éteris mostra uma janela com o titular, o emissor e a validade de cada certificado, não envia nenhum sem o utilizador escolher e não guarda a escolha; o motor lembra a resposta para esse servidor (endereço e porta) até fechar o Éteris.
+- Uma página que pede certificados a vários servidores já não empilha janelas: aparece uma de cada vez, a dizer de que aba vem; o pedido de uma aba em segundo plano (ou de um site fixado com a barra lateral fechada) espera até ela ficar à vista, o do Espreitar é recusado sem perguntar, e depois de três recusas seguidas na mesma página a aba deixa de perguntar até o utilizador navegar (um clique, a barra, um favorito ou recarregar).
 
 ### Conta e sincronização
 
 - **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
+- Notas: uma alteração vinda de outro computador que chega enquanto está a escrever já não é esmagada pela sua edição seguinte; as duas fundem-se.
+- Um ficheiro posto no Drive por quem não tem a chave já não consegue gastar gigabytes de memória: cada tipo de ficheiro tem um tamanho máximo, conferido antes de o ler.
+- Preencher uma palavra-passe num computador que ainda não recebeu a alteração feita noutro já não repõe a antiga em todos.
+- Se o estado da sincronização não se conseguir ler ao abrir, o Éteris diz-no e não o substitui por um vazio quando se carrega em «Ligar»; «Recomeçar sem o estado antigo» põe o ficheiro de lado e este computador volta a entrar na conta.
+- Quando outro computador da conta desliga uma proteção (HTTPS primeiro, DNS cifrado, o Escudo ou o modo estrito num site), o estado da sincronização passa a dizê-lo.
+- Um pedido à Google que esgota o prazo no início de sessão já não desaparece como se tivesse carregado em «Cancelar»: a barra diz «Sem ligação à Google. Tente de novo.»
+- O Drive às vezes responde ao limite de pedidos com um 403 (em vez do 429): o Éteris espera e repete, em vez de falhar a ronda.
+- Uma sincronização que falha por um erro inesperado diz-no nas Definições e deixa um registo local sem dados (`sync\sync.log`, que sai ao «Sair deste computador»), em vez de falhar calada; as Definições dizem também quando há alterações de outro aparelho por ler. Um lote com conteúdo malformado, ou um registo de chaves sem a chave embrulhada, é recusado em vez de fazer cair a ronda.
+- Definições › Sincronização › O que passa entre PCs diz agora que uma linha desligada continua guardada, cifrada, neste computador, e deixa de falar de pastas de favoritos (que não existem).
 
 ### Pesquisa
 
@@ -37,6 +77,12 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 
 ### Correções
 
+- **Sites que ficavam incompletos com o Escudo ligado** (por exemplo, o ge.globo.com e o g1.globo.com: só cinco notícias, sem a coluna das classificações nem o resto da página). Um pedido bloqueado pelo Escudo passa a falhar como num bloqueador de extensão (`ERR_BLOCKED_BY_CLIENT`) e não como um pedido cancelado, que deixava o código desses sites à espera. Os rastreadores continuam bloqueados e nada sai para a rede; como a página agora carrega por inteiro, o contador do Escudo pode mostrar mais bloqueios nesses sites.
+- O Éteris volta a procurar atualizações de 6 em 6 horas e depois de uma falha; uma sessão aberta durante dias já não fica sem saber de uma versão nova.
+- Abrir o Éteris (ou um link) enquanto ele ainda está a fechar já não se perde: o novo lançamento espera e abre.
+- Se o Éteris não conseguir abrir duas vezes seguidas, à terceira oferece procurar e instalar uma versão corrigida antes de arrancar o motor.
+- Com dois utilizadores do Windows a usar o Éteris ao mesmo tempo, a lista de atalhos e os links voltam a funcionar para os dois.
+- Um «Local State» só de leitura já não impede o Éteris de abrir, e o ficheiro deixa de ser reescrito em todos os arranques.
 - «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
 - Uma conversão escrita com algarismos de outro alfabeto (ou uma conta colada com milhares de parênteses) na barra de endereço já não fecha o Éteris.
 - Escrever no filtro das abas verticais já não muda de aba nem deixa a janela sem aba ativa: só o Enter salta para o primeiro resultado.
@@ -47,6 +93,7 @@ A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apa
 - Se a base de dados do perfil estiver danificada, o Éteris guarda-a à parte, começa uma nova e avisa, em vez de mostrar favoritos e histórico vazios sem explicação; se estiver só ocupada, volta a tentar.
 - Fechar uma janela já não deixa o temporizador do sono das abas a correr até o Éteris sair (a janela fechada ficava na memória).
 - Abas e janelas fechadas (as privadas incluídas) deixam de ficar na memória do Éteris até ele sair.
+- Um erro inesperado já não fecha o Éteris sem dizer nada: fica registado neste computador (só o tipo e a pilha, nunca endereços) e uma falha do motor ao arrancar mostra a causa.
 
 ## 0.2.16 — 2026-11-12
 

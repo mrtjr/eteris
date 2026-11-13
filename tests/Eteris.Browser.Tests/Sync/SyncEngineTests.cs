@@ -52,6 +52,59 @@ public class SyncEngineTests
 {
     private static JsonObject Bookmark(string title) => new() { ["title"] = title };
 
+    // Auditoria, SYN-05: um lote que passa na autenticação mas tem conteúdo malformado (de um aparelho da conta com
+    // defeito) é recusado, não lançado: a ronda não cai.
+    [Theory]
+    [InlineData("""[{"c":"bookmarks","i":"x","k":"https://x.pt/","v":"1234567890123456789012345-0000-n"}]""")]
+    [InlineData("""[{"c":"notes","i":"x","k":"notes","v":"1762560000000-0000-n","d":{"text":"t","parents":[1]}}]""")]
+    [InlineData("null")]
+    public async Task BatchWithAMalformedRecord_IsRefused_NotThrown(string records)
+    {
+        using var lab = new SyncLab();
+        var d = await lab.DevicesAsync("A", "B");
+        var (a, b) = (d[0], d[1]);
+        var keys = KeyRing.Open(lab.Secret, KeyEnvelope.Parse(lab.Cloud.Files[SyncPaths.Keys(lab.Secret.ChainId)]));
+        var context = SyncPaths.BatchContext(a.Device.Id, 1);
+        var sealedBatch = SealedFile.Seal(keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, a.ChainId, 1, context,
+            Encoding.UTF8.GetBytes($$"""{"device":"{{a.Device.Id}}","seq":1,"records":{{records}}}"""));
+        await lab.Cloud.WriteAsync(SyncPaths.Batch(a.ChainId, a.Device.Id, 1), sealedBatch);
+
+        var result = await b.PullAsync();
+        Assert.Contains("recusado", result.Pending[a.Device.Id]);
+        // Recusado pelo conteúdo (e não por o selo à mão não abrir): o mesmo selo com records bem formados lê-se (ver o controlo).
+        Assert.Matches("Conteúdo incompleto|HLC inválido", result.Pending[a.Device.Id]);
+        Assert.Equal(0, b.State.Read.GetValueOrDefault(a.Device.Id));
+        Assert.Equal(string.Empty, b.Notes);
+    }
+
+    [Fact]
+    public async Task BatchSealedByHand_WithWellFormedRecords_IsRead()
+    {
+        using var lab = new SyncLab();
+        var d = await lab.DevicesAsync("A", "B");
+        var (a, b) = (d[0], d[1]);
+        var keys = KeyRing.Open(lab.Secret, KeyEnvelope.Parse(lab.Cloud.Files[SyncPaths.Keys(lab.Secret.ChainId)]));
+        var context = SyncPaths.BatchContext(a.Device.Id, 1);
+        var sealedBatch = SealedFile.Seal(keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, a.ChainId, 1, context,
+            Encoding.UTF8.GetBytes($$"""{"device":"{{a.Device.Id}}","seq":1,"records":[]}"""));
+        await lab.Cloud.WriteAsync(SyncPaths.Batch(a.ChainId, a.Device.Id, 1), sealedBatch);
+        var result = await b.PullAsync();
+        Assert.False(result.Pending.ContainsKey(a.Device.Id));
+        Assert.Equal(1, b.State.Read.GetValueOrDefault(a.Device.Id));
+    }
+
+    // Auditoria, SYN-05: um registo de chaves sem a DEK embrulhada não é autêntico: não é uma falha.
+    [Fact]
+    public async Task KeysWithoutTheWrappedKey_AreNotAuthentic_NotACrash()
+    {
+        using var lab = new SyncLab();
+        var d = await lab.DevicesAsync("A", "B");
+        var b = d[1];
+        await lab.Cloud.WriteAsync(SyncPaths.Keys(b.ChainId), Encoding.UTF8.GetBytes($$"""{"format":2,"chain":"{{b.ChainId}}","generation":1,"created":0}"""));
+        var result = await b.PullAsync();
+        Assert.False(result.NeedsUpdate);
+    }
+
     [Fact]
     public async Task ThreeDevices_ConcurrentEdits_Converge()
     {

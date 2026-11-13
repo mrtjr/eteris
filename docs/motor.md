@@ -28,7 +28,8 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
   dois perfis de teste na mesma pasta). Ignorada pela versão instalada. Ver `docs/sincronizacao.md`.
 - `ETERIS_TEST_REAUTH=aceitar|recusar`: a confirmação com o Windows do cofre de palavras-passe (Windows Hello ou
   palavra-passe do Windows) responde sozinha, sem janela, para as provas ao vivo não precisarem do PIN de ninguém.
-  Ignorada pela versão instalada. Ver `docs/palavras-passe.md`.
+  Ignorada pela versão instalada; só numa compilação com a via de teste (a publicação não a traz) e só num perfil de
+  teste (`--user-data-dir`). Ver `docs/palavras-passe.md`.
 
 ## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
 
@@ -110,11 +111,22 @@ site a ver a pergunta), pergunta `MediaSource.isTypeSupported` para `avc1.640028
   avisos do WatchScript só contam se o motor respondeu «não» — cada aviso leva no fim `no` quando a página ouviu «não»
   a H.264/AAC ou quando o próprio script, com o `isTypeSupported` original guardado no arranque, ouve «não»
   (`VideoReport.EngineSaidNo`). Um MP4 estragado, um leitor parado ou o leitor do Vimeo num iframe já não mandam para
-  o WebView2. O DRM continua a ser só uma pergunta;
+  o WebView2. Mesmo com `no`, **a troca nunca é automática**: fica o botão «Tocar no motor de vídeo» (auditoria 3,
+  MOT-06). O DRM continua a ser só uma pergunta;
 - «não» a algum (sem descodificação por hardware, controlador básico, máquina virtual; Windows N sem o Media Feature
   Pack): tudo como no motor sem codecs. Sinal novo para o caso medido sem GPU: o FFmpeg descarta em silêncio a faixa
   H.264 de um MP4 progressivo e só se ouve o som — um `<video>` de MP4/MOV/M3U8 com metadados, `videoWidth` 0 e o motor
   a dizer «não» ao `avc1` dá `format`, e a aba troca.
+
+**Avisos com segredo (auditoria 3, MOT-06).** Qualquer página escreve na consola: o aviso do WatchScript leva o segredo
+do processo (`PopupPolicy.ActivationNonce`, o mesmo dos cliques), num script estrito registado antes dos scripts da
+página; sem ele (o formato antigo, `\u0001eteris-media razão…`) não conta. O script tardio (1.º documento de cada aba)
+corre depois da página e por isso nunca leva o segredo: o aviso dele usa `\u0001eteris-media-late` e só mostra o
+botão. Limite que fica: no motor **sem** codecs, qualquer página consegue provocar a troca com um vídeo H.264 a sério
+que falha — é o sinal que a deteção procura. No motor de vídeo, as permissões (câmara, microfone, localização,
+notificações, área de transferência, várias transferências) passam pela loja e pelo cartão do Éteris
+(`VideoEngine.PermissionOf`; o WebView2 não as guarda no perfil dele), e o WebRTC segue a mesma política de IP do
+motor principal (`--webrtc-ip-handling-policy` e `--force-webrtc-ip-handling-policy` = `disable_non_proxied_udp`).
 
 ### Como publicar
 
@@ -145,13 +157,21 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
    para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
    falhar, e no fim leva `eteris-build.json` (versão, modo, commit, o CefSharp com o SHA256 das montagens e
-   `google_oauth`, se levou o login Google, nunca o `client_id`).
+   `google_oauth`, se levou o login Google, nunca o `client_id`; e, desde a 0.2.17, `runtime_manifest_sha256`, as
+   versões das ferramentas em `tools` (`dotnet_sdk`, `rustc`, `vpk`) e `files`, a lista de tudo o que ficou em `publish\`
+   com o SHA256 de cada ficheiro). Recusa um ficheiro na pasta do motor que não conste do manifesto («fora do manifesto»).
+   O `pack.ps1` recusa uma publicação com `dirty`, sem `files` ou com um ficheiro trocado, em falta ou a mais
+   (CAD-08), e o `release.ps1` sobe a marca para a release como `eteris-build.json`. O `build\cef-codecs\build.ps1 -Steps
+   Check` também recusa um FFmpeg que não seja o do código-fonte oferecido e alterações na árvore do motor fora dos patches.
    Nos dois modos recusa também binários publicados com o caminho do perfil de quem compila (`docs/sandbox.md`,
    «Como publicar com o sandbox», passo 3).
    `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.13). Confirmar que `publish\libcef.dll` tem o SHA256
    do `manifest.json`, que não há `bootstrap.exe`/`bootstrapc.exe` com esse nome (o bootstrap vai como
    `Eteris.Browser.exe`) e as verificações que o CI fazia (`eteris_shields.dll`, ≥ 10 listas em `Shields\lists`,
    `Shields\resources\scriptlets.json`, `licenses\FFmpeg-LICENSE.txt` e `FFmpeg-SOURCE.txt`).
+   **Prova da marca da Web (desde a 0.2.17, antes do pacote):** com a publicação a correr, transferir um ficheiro na
+   janela normal e na privada e correr `Get-Content <ficheiro> -Stream Zone.Identifier`; esperado `ZoneId=3`. Sem a
+   marca, o SmartScreen e o Office deixam de avisar ao abrir o que veio da Internet: não empacotar.
 3. `vpk download github --repoUrl https://github.com/mrtjr/eteris --outputDir Releases` (o repositório é público: não
    precisa de token) — o pacote delta tem
    de partir do pacote `full` **publicado**: a pasta `Releases` não pode ter um `full` local da mesma versão que não
@@ -200,7 +220,9 @@ Google (`pack.ps1 -NoSandbox -SemLogin`: o `google-oauth.json` nunca está no re
 (`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
 antes da 0.2.9. Só serve para tags com `global.json` (as tags até à v0.2.16 não o têm): o fluxo corre os passos de
 hoje sobre a árvore da tag e o `setup-dotnet` lê dela a versão do SDK, por isso numa tag sem ele o job pára logo a
-seguir ao checkout e publica-se a partir de uma tag nova. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
+seguir ao checkout e publica-se a partir de uma tag nova. Cada etiqueta ensaia este caminho no CI (trabalho `ensaio` do
+`release.yml`: o mesmo `publish.ps1` e `pack.ps1`, sem envio), para ele não se descobrir partido no dia da emergência; as
+Novidades dessa publicação dizem que corre sem isolamento (eteris://whatsnew/). Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
 dono e o CI descarregá-lo e verificá-lo pelo SHA256 do manifesto; um runner próprio com o checkout em `C:\cef`.
 
 **Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem
@@ -461,4 +483,5 @@ errados** e tempo da tecla até à página final **≤ ~120 ms** (o Brave: 0 err
 | T6d | Resto da revisão: (2) a aba nova é disposta logo a seguir a ser criada (`UpdateLayout`), porque o CefSharp 156 redimensiona sempre a janela do CEF pelo `ActualWidth` no fim da criação (`OnAfterBrowserCreated`) e, antes da 1.ª disposição, isso dava 0×0 e desfazia o `BirthSize`; (3) o «som» só se vê no documento principal (`MediaInfo.Script`): comentários e limite corrigidos, e um iframe de outro site com ar de leitor (≥ 200×150, `autoplay`/ecrã inteiro) passa a arrefecer a página; Web Audio continua por ver (limite documentado); (9) os painéis web da barra lateral minimizam antes de esconder no WPF, como as abas; frase do T5 sobre o 0×0 corrigida | Medição ao vivo pendente (dono a usar o PC): no T4, registar o tamanho da janela do CEF da aba nova. Testes: `WarmTabsTests` (`PlayingVideoScript_AnEmbeddedPlayerFromAnotherSiteCountsAsPlaying`) |
 | FP1 | **Por fazer na próxima compilação do motor** (medição de impressão digital, `docs/paridade.md` #6): `libcef/browser/media_access_query.cc:353-359`, `CheckMediaAccessPermission` responde sempre «sim» (`// Always allowed here.`), e o Chromium usa essa resposta para decidir se `enumerateDevices` mostra os nomes e os `deviceId` dos dispositivos. Patch: responder «sim» só às origens a que o utilizador deu câmara/microfone (as decisões do Éteris estão em `Permissions/SitePermissionHandler.cs`; o CEF pode perguntar ao cliente, ou guardar as origens aceites em `RequestMediaAccessPermission`). Até lá, paliativo por script (`PrivacySignals.DevicesScript`, registado com o GPC em todas as páginas): uma entrada por tipo, sem nome nem ID, até haver permissão ou um `getUserMedia` aceite. Limites do paliativo: na 1.ª página de uma aba nova o script pode chegar depois dos primeiros scripts da página (F2; por medir); um iframe de outro site (processo próprio) a quem a página delega `camera`/`microphone` pelo atributo `allow` não recebe o script e continua a ver os nomes; sem `allow` o próprio Chromium já os esconde | Página (example.com, wikipedia.org): 8 dispositivos com nome e `deviceId` persistente → **3 entradas vazias** (`audioinput`, `videoinput`, `audiooutput`), igual ao Chrome. Iframe de outro site com `allow="camera; microphone"`: continua com nomes (patch do motor) |
 | FP2 | **Por fazer na próxima compilação do motor**: dicas do cliente reduzidas no próprio Chromium (`GetUserAgentMetadata` do cliente de conteúdo da CEF / `embedder_support::GetUserAgentMetadata`: Windows `10.0.0`, versão `<maior>.0.0.0`). Hoje a redução vem dos metadados da sessão DevTools de cada aba (`Shields/ReducedClientHints.cs`), que cobrem a página, os frames do mesmo processo, os workers dedicados e os cabeçalhos, mas não os service workers nem os shared workers (não pertencem à aba) | Worker dedicado: `19.0.0`/`156.0.8078.80` → **`10.0.0`/`156.0.0.0`** (igual à página). Shared worker e service worker (o que o CreepJS lê): continuam `19.0.0`/`156.0.8078.80` |
-| MOT-01 | Prova ao vivo dos certificados de cliente (auditoria, 2026-11-12, motor 156.0.15, sem `OnSelectClientCertificate` no `PrivacyRequestHandler`): servidor https em 127.0.0.1 que pede certificado de cliente sem o exigir, um certificado de cliente de teste na loja pessoal do Windows, perfil de teste. Resultado **C**: o motor corta a ligação TLS logo a seguir ao pedido do certificado, não aparece nenhuma janela de escolha e nenhum certificado é enviado (40 s de espera, janela normal e privada); a aba fica parada sem título. Não se confirmou o envio sozinho do certificado: a gravidade fica baixa, e o que falta é compatibilidade (os sites que pedem certificado de cliente não abrem). Não provado: o site fixado na barra lateral. A escolha explícita do Éteris é a Task 17 do plano 3 da auditoria | sites com certificado de cliente parados → por corrigir |
+| MOT-01 | Prova ao vivo dos certificados de cliente (auditoria, 2026-11-12, motor 156.0.15, sem `OnSelectClientCertificate` no `PrivacyRequestHandler`): servidor https em 127.0.0.1 que pede certificado de cliente sem o exigir, um certificado de cliente de teste na loja pessoal do Windows, perfil de teste. Resultado **C**: o motor corta a ligação TLS logo a seguir ao pedido do certificado, não aparece nenhuma janela de escolha e nenhum certificado é enviado (40 s de espera, janela normal e privada); a aba fica parada sem título. Não se confirmou o envio sozinho do certificado: a gravidade fica baixa, e o que falta é compatibilidade (os sites que pedem certificado de cliente não abrem). Não provado: o site fixado na barra lateral. Corrigido na 0.2.17: o `PrivacyRequestHandler` trata sempre `OnSelectClientCertificate` (devolve `true`) e só envia o certificado que o utilizador escolher no diálogo do Éteris (titular, emissor e validade; «Não enviar» por omissão, nada lembrado), nas abas, nos sites fixados e no Espreitar; sem diálogo, com proxy ou sem certificados instalados responde «nenhum». Por provar ao vivo: o diálogo nas três janelas, «Não enviar» (o `s_server` sem certificado) e «Enviar certificado» (com o CN de teste) — a confiança no certificado do servidor de teste pede a confirmação do Windows e o diálogo é uma janela modal que só se clica com acesso ao ecrã | sites com certificado de cliente parados → corrigido |
+| MOT-06 | Motor de vídeo (auditoria 3): os avisos do WatchScript levam o segredo do processo e só o script precoce (estrito, antes da página) o conhece; o tardio usa `eteris-media-late` e só oferece; com codecs a troca nunca é automática (fica o botão); o WebView2 arranca com a política de IP do WebRTC do motor principal (os dois nomes do interruptor) e os pedidos de permissão (câmara, microfone, localização, notificações, área de transferência, várias transferências) passam pela loja e pelo cartão do Éteris, sem ficar no perfil do WebView2. Limite conhecido: no motor de vídeo, os erros de certificado mostram a página do próprio WebView2 (não a do Éteris) | Página local (127.0.0.1) com o aviso forjado (sem segredo, com segredo falso, com o prefixo tardio): **0 trocas, 0 sites lembrados**; vídeo «MP4» que falha no motor sem codecs: continua a trocar (~0,55 s); candidatos ICE no motor de vídeo (canal de dados, sem servidores): sem os interruptores **1 `typ host`** (`….local`), com eles **0**; localização recusada e lembrada no Éteris: recusada logo no motor de vídeo, sem a interface do WebView2 |

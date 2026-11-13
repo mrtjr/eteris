@@ -1,5 +1,7 @@
 using System.IO;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Permissions;
+using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 using Microsoft.Web.WebView2.Core;
 
@@ -8,18 +10,73 @@ namespace Eteris.Browser.Tests;
 public class VideoEngineTests
 {
     [Theory]
-    [InlineData("\u0001eteris-media format", true)]
-    [InlineData("\u0001eteris-media patented-only", true)]
-    [InlineData("\u0001eteris-media drm weak top", true)]
-    [InlineData("\u0001eteris-media frame-player weak top", true)]
-    [InlineData("\u0001eteris-media outra", false)]
-    [InlineData("\u0001eteris-media format forte top", false)]
-    [InlineData("\u0001eteris-media format strong top extra", false)]
-    [InlineData("\u0001eteris-media format strong top no", true)]
-    [InlineData("\u0001eteris-media format strong top no extra", false)]
-    [InlineData("eteris-media format", false)]
-    [InlineData(null, false)]
-    public void IsReport_OnlyKnownReasons(string? message, bool expected) => Assert.Equal(expected, VideoEngine.IsReport(message));
+    [InlineData("format", true)]
+    [InlineData("patented-only", true)]
+    [InlineData("drm weak top", true)]
+    [InlineData("frame-player weak top", true)]
+    [InlineData("outra", false)]
+    [InlineData("format forte top", false)]
+    [InlineData("format strong top extra", false)]
+    [InlineData("format strong top no", true)]
+    [InlineData("format strong top no extra", false)]
+    public void IsReport_OnlyKnownReasons(string body, bool expected)
+        => Assert.Equal(expected, VideoEngine.IsReport(VideoEngine.ReportPrefix + body));
+
+    // MOT-06: qualquer página escreve na consola; só o aviso com o segredo do processo (o do script precoce) conta. O
+    // formato antigo, sem segredo, deixou de valer.
+    [Fact]
+    public void Parse_WithoutTheSecret_IsNull()
+    {
+        Assert.Null(VideoEngine.Parse("\u0001eteris-media format strong top no"));
+        Assert.Null(VideoEngine.Parse("\u0001eteris-media 00000000000000000000000000000000 format strong top no"));
+        Assert.NotNull(VideoEngine.Parse(VideoEngine.ReportPrefix + "format strong top no"));
+        Assert.False(VideoEngine.IsReport("eteris-media format"));
+        Assert.False(VideoEngine.IsReport(null));
+        Assert.Contains(PopupPolicy.ActivationNonce, VideoEngine.WatchScript);
+        Assert.DoesNotContain(PopupPolicy.ActivationNonce, VideoEngine.LateWatchScript);
+        Assert.Contains("'use strict';", VideoEngine.WatchScript);
+    }
+
+    // O script tardio corre depois da página: não leva o segredo, e o aviso dele só oferece o botão.
+    [Fact]
+    public void LateReports_NeverSwitchAlone()
+    {
+        var late = VideoEngine.Parse(VideoEngine.LateReportPrefix + "format strong top")!;
+        Assert.True(late.Late);
+        Assert.Equal(VideoEngine.Decision.Offer, VideoEngine.Decide(late, optedOut: false));
+    }
+
+    // Com codecs no motor principal, a troca é sempre pelo botão (decisão do dono, MOT-06).
+    [Fact]
+    public void Decide_WithCodecs_NeverSwitchesAlone()
+    {
+        foreach (var reason in new[] { "format", "patented-only" })
+            Assert.Equal(VideoEngine.Decision.Offer,
+                VideoEngine.Decide(new VideoEngine.VideoReport(reason, true, false, EngineSaidNo: true), false, mainHasCodecs: true));
+    }
+
+    [Fact]
+    public void EdgeEngine_KeepsTheWebRtcIpPolicy()
+    {
+        var arguments = VideoEngine.BrowserArguments(blockAutoplay: false);
+        Assert.Contains("--webrtc-ip-handling-policy=disable_non_proxied_udp", arguments);
+        Assert.Contains("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", arguments);
+    }
+
+    // No motor de vídeo, os pedidos de permissão passam pela loja e pelo cartão do Éteris; o resto fica com o WebView2.
+    [Theory]
+    [InlineData(CoreWebView2PermissionKind.Camera, SitePermission.Camera)]
+    [InlineData(CoreWebView2PermissionKind.Microphone, SitePermission.Microphone)]
+    [InlineData(CoreWebView2PermissionKind.Geolocation, SitePermission.Location)]
+    [InlineData(CoreWebView2PermissionKind.Notifications, SitePermission.Notifications)]
+    [InlineData(CoreWebView2PermissionKind.ClipboardRead, SitePermission.Clipboard)]
+    [InlineData(CoreWebView2PermissionKind.MultipleAutomaticDownloads, SitePermission.MultipleDownloads)]
+    public void VideoEngine_PermissionsUseTheEterisStore(CoreWebView2PermissionKind kind, SitePermission expected)
+        => Assert.Equal(expected, VideoEngine.PermissionOf(kind));
+
+    [Fact]
+    public void VideoEngine_OtherPermissionsStayWithTheEngine()
+        => Assert.Null(VideoEngine.PermissionOf(CoreWebView2PermissionKind.UnknownPermission));
 
     [Theory]
     [InlineData("format strong top", "format", true, false)]
@@ -42,7 +99,7 @@ public class VideoEngineTests
     [InlineData("patented-only", true, false, false, VideoEngine.Decision.None)]
     [InlineData("frame-player", false, false, false, VideoEngine.Decision.None)]   // o leitor do Vimeo toca no motor principal
     [InlineData("drm", true, false, false, VideoEngine.Decision.Offer)]            // DRM: continua a ser uma pergunta
-    [InlineData("format", true, false, true, VideoEngine.Decision.Switch)]         // sem GPU: o motor disse «não»
+    [InlineData("format", true, false, true, VideoEngine.Decision.Offer)]          // sem GPU: o motor disse «não» — só o botão (MOT-06)
     [InlineData("format", false, false, true, VideoEngine.Decision.Offer)]
     [InlineData("frame-player", false, false, true, VideoEngine.Decision.Offer)]
     [InlineData("format", true, true, true, VideoEngine.Decision.Offer)]           // o utilizador mandou o site voltar
@@ -201,6 +258,46 @@ public class VideoEngineTests
     [InlineData("about:blank", false)]
     [InlineData(null, false)]
     public void OnlyWebAddressesGoToTheVideoEngine(string? url, bool expected) => Assert.Equal(expected, VideoEngine.CanHost(url));
+
+    // Uma navegação para fora da web (eteris://, file://, data:, javascript:) pedida por uma página no motor de vídeo é
+    // cancelada e a aba fica onde está: antes passava para o motor principal com esse endereço como carregamento do
+    // navegador, e um site abria o aviso do Éteris (eteris://error/…) com ligações «Continuar» assinadas.
+    [Theory]
+    [InlineData("eteris://error/?code=-7&https=1&url=http://alvo/", true, false)]
+    [InlineData("eteris://error/?code=-7&https=1&url=http://alvo/", false, false)]
+    [InlineData("eteris://settings", true, true)]
+    [InlineData("eteris://newtab", false, true)]
+    [InlineData("file:///C:/Windows/win.ini", true, false)]
+    [InlineData("file://servidor/partilha/a.html", true, false)]
+    [InlineData("data:text/html,<script>alert(1)</script>", true, false)]
+    [InlineData("javascript:alert(1)", true, false)]
+    [InlineData("about:blank", true, false)]
+    [InlineData("https://www.twitch.tv/", true, false)]
+    [InlineData("http://a.pt/", false, true)]
+    public void NonWebNavigation_FromAVideoPage_NeverSwitchesEngines(string target, bool userInitiated, bool redirected)
+        => Assert.False(VideoEngine.LeavesForMainEngine(target, "https://www.twitch.tv/canal", userInitiated, redirected));
+
+    [Fact]
+    public void NonWebNavigation_SwitchesOnlyWhenThePageCouldOpenIt()
+    {
+        // A mesma regra dos links (Browser/PageLinks.cs): eteris:// só de uma página interna, file:// só de um file://,
+        // e sempre pelo utilizador, sem redirecionamento.
+        Assert.True(VideoEngine.LeavesForMainEngine("file:///C:/b.html", "file:///C:/a.html", userInitiated: true, redirected: false));
+        Assert.False(VideoEngine.LeavesForMainEngine("file:///C:/b.html", "file:///C:/a.html", userInitiated: false, redirected: false));
+        Assert.False(VideoEngine.LeavesForMainEngine("file:///C:/b.html", "file:///C:/a.html", userInitiated: true, redirected: true));
+        Assert.False(VideoEngine.LeavesForMainEngine("eteris://settings", null, userInitiated: true, redirected: false));
+    }
+
+    [Fact]
+    public void VideoView_NonWebNavigation_GoesThroughTheRule()
+    {
+        var source = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var start = source[source.IndexOf("core.NavigationStarting +=", StringComparison.Ordinal)..];
+        start = start[..start.IndexOf("mainNavigation = e.Uri;", StringComparison.Ordinal)];
+        Assert.Contains("e.Cancel = true;", start);
+        Assert.Contains("VideoEngine.LeavesForMainEngine(e.Uri, core.Source, e.IsUserInitiated, e.IsRedirected)", start);
+        Assert.DoesNotContain("StartsWith(\"about:\"", start);
+    }
     [Theory]
     [InlineData(null, "https://www.w3schools.com/html/mov_bbb.mp4", "mov_bbb.mp4")]
     [InlineData("", "https://www.w3schools.com/html/mov_bbb.mp4?x=1#t=3", "mov_bbb.mp4")]

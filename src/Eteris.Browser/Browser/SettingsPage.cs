@@ -23,7 +23,7 @@ public static class SettingsPage
            ?? "0.0.0";
 
     public sealed record About(string Chromium, string CefSharp, bool FullEngine, IReadOnlyList<Shields.ListSummary> Lists,
-        string UpdateStatus, bool CanCheck);
+        string UpdateStatus, bool CanCheck, int Crashes = 0);
 
     public static string ListsLine(IReadOnlyList<Shields.ListSummary> lists, DateTime nowUtc)
     {
@@ -96,6 +96,10 @@ public static class SettingsPage
             cefsharp = about?.CefSharp,
             shield = about is null ? null : (about.FullEngine ? "uBlock Origin (adblock-rust) · " : "lista mínima · ") + ListsLine(about.Lists, DateTime.UtcNow),
             updateStatus = about?.UpdateStatus,
+            // O registo de falhas (Infrastructure/CrashLog.cs): só aparece com falhas registadas.
+            crashLog = about is { Crashes: > 0 }
+                ? $"{about.Crashes} {(about.Crashes == 1 ? "falha registada" : "falhas registadas")}, só com o tipo e a pilha: {Path.Combine(AppPaths.Root, CrashLog.FileName)}"
+                : null,
             canCheck = about?.CanCheck ?? false,
             token = InternalPages.Token,
             version = Version,

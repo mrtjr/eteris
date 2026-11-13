@@ -51,7 +51,7 @@ public partial class MainWindow
 
     private static IEnumerable<string> DropUrls(IDataObject data)
     {
-        if (data.GetDataPresent(DataFormats.FileDrop) && data.GetData(DataFormats.FileDrop) is string[] files)
+        if (!data.GetDataPresent(DropTarget.RendererTaintFormat) && data.GetDataPresent(DataFormats.FileDrop) && data.GetData(DataFormats.FileDrop) is string[] files)
             return files.Select(DropTarget.FromFile);
         if (data.GetDataPresent(DataFormats.UnicodeText) && data.GetData(DataFormats.UnicodeText) is string text
             && DropTarget.FromText(text, Engine) is { } url)

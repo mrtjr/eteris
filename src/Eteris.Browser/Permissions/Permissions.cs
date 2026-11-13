@@ -61,12 +61,32 @@ public static class PermissionRules
     public static bool AutoDeny(IReadOnlyCollection<SitePermission> kinds, bool blockNotificationPrompts)
         => blockNotificationPrompts && kinds.Count > 0 && kinds.All(k => k == SitePermission.Notifications);
 
-    public static PermissionDecision Decide(SitePermissionStore store, string site, IReadOnlyCollection<SitePermission> kinds)
+    // A câmara e o microfone decidem-se pelo par «página de topo + origem que pede»: o que ficou lembrado vale para o
+    // site quando é ele a página, não quando está embutido noutro (embedded: só uma recusa lembrada vale, o resto
+    // pergunta). A partilha de ecrã nunca fica lembrada: o que lá esteja guardado (versões anteriores) não conta (MOT-04).
+    public static PermissionDecision Decide(SitePermissionStore store, string site, IReadOnlyCollection<SitePermission> kinds, bool embedded = false)
     {
         if (kinds.Count == 0) return PermissionDecision.Deny;
-        var remembered = kinds.Select(k => store.Get(site, k)).ToList();
+        var remembered = kinds.Select(k => k == SitePermission.ScreenShare ? null : store.Get(site, k)).ToList();
         if (remembered.Any(r => r == false)) return PermissionDecision.Deny;
+        if (embedded) return PermissionDecision.Ask;
         return remembered.All(r => r == true) ? PermissionDecision.Allow : PermissionDecision.Ask;
+    }
+
+    // Embutido noutro site, ou a partilha de ecrã, não se lembra: o «Permitir» vale só para este pedido.
+    public static bool CanRemember(IReadOnlyCollection<SitePermission> kinds, bool embedded)
+        => !embedded && !kinds.Contains(SitePermission.ScreenShare);
+
+    // O site da página de topo, quando é outro que não o da origem que pede (null: é a própria página). Na dúvida (sem
+    // endereço de topo, ou sem anfitrião), pergunta-se: «outra página».
+    public const string UnknownTopPage = "outra página";
+
+    public static string? EmbeddedIn(string? topUrl, string requestingOrigin)
+    {
+        if (string.IsNullOrWhiteSpace(topUrl) || !Uri.TryCreate(topUrl, UriKind.Absolute, out var top) || top.Host.Length == 0)
+            return UnknownTopPage;
+        var topSite = Site(topUrl);
+        return string.Equals(topSite, Site(requestingOrigin), StringComparison.OrdinalIgnoreCase) ? null : topSite;
     }
 }
 

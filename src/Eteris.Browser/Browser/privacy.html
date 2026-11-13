@@ -132,7 +132,7 @@
        seus dados» das Definições vem para aqui). HTML estático para a âncora funcionar ao abrir; o texto vem dos dados. -->
   <section id="sincronizacao" class="sync" aria-labelledby="s-title">
     <h2 id="s-title"></h2>
-    <div class="card"><p id="s-goes"></p><p id="s-sees"></p><p id="s-key"></p></div>
+    <div class="card"><p id="s-goes"></p><p id="s-sees"></p><p id="s-key"></p><p id="s-local"></p></div>
   </section>
 
   <h2>Promessas</h2>
@@ -153,6 +153,7 @@
   // Nas abas do motor de vídeo: o que têm e o que não têm.
   document.getElementById('v-title').textContent = data.video.title;
   document.getElementById('v-note').textContent = data.video.note;
+  document.getElementById('s-local').textContent = data.sync.local;
   // Verificações feitas aqui mesmo, pelo JavaScript da página (o mesmo que um site veria).
   const live = {
     gpc: () => navigator.globalPrivacyControl === true
@@ -198,7 +199,7 @@
     text.append(b, span);
     if (note) { const small = document.createElement('span'); small.className = 'live'; small.textContent = note; text.append(small); }
     row.append(mark, text);
-    if (p.fix) { const a = document.createElement('a'); a.href = p.fix; a.textContent = state === null ? 'Ligar →' : 'Definições →'; row.append(a); }
+    if (p.fix) { const a = document.createElement('a'); a.href = p.fix; a.textContent = p.fixLabel || (state === null ? 'Ligar →' : 'Definições →'); row.append(a); }
     list.append(row);
   }
   const score = document.getElementById('score');

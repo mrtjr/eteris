@@ -152,5 +152,10 @@ public sealed class ProfileWithVault(ILocalProfileReader plain, VaultSyncProfile
 
     public string Fingerprint(string collection, SecretItem item) => vault.Fingerprint(collection, item);
 
-    public string? TakeNotice() => vault.TakeNotice();
+    // O aviso do perfil (por exemplo, uma proteção que baixou noutro computador) e o do cofre, por esta ordem.
+    public string? TakeNotice()
+    {
+        var parts = new[] { (plain as ILocalNotices)?.TakeNotice(), vault.TakeNotice() }.Where(n => n is not null);
+        return parts.Any() ? string.Join(' ', parts) : null;
+    }
 }

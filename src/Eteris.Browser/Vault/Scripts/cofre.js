@@ -354,6 +354,8 @@
   if (Object.prototype.hasOwnProperty.call(globalThis, '__cofre')) return undefined;
 
   // A ligação sai logo do objeto global: nem dentro do mundo isolado fica à vista.
+  // Documento com origem opaca (CSP sandbox, iframe sandbox): o cofre não entra; a ligação sai do global e fica por aí.
+  if (self.origin === 'null') { delete globalThis[LIGACAO]; return undefined; }
   const binding = globalThis[LIGACAO];
   delete globalThis[LIGACAO];
   if (typeof binding !== 'function') return undefined;

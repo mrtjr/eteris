@@ -15,6 +15,13 @@ permissão de que o serviço precisa) — ver «Como publicar com o sandbox», a
 Velopack, «Revisão da 0.2.12») ficam como histórico: o sandbox ficou pronto para a 0.2.12, mas a 0.2.12 e a 0.2.13
 saíram sem ele.
 
+Continua fora do sandbox a descodificação de imagens de sites: os ícones e a imagem do Espreitar (`og:image`) são
+descodificados pelo Windows (WIC) no processo principal, que não está fechado. Por isso só entram PNG, JPEG, GIF e ICO,
+reconhecidos pela assinatura e com as dimensões lidas do cabeçalho dentro do limite (512 px nos ícones, 4096 px no
+Espreitar; um PNG ou bitmap embutido num ICO conta pelo cabeçalho dele), e a descodificação corre fora da thread da
+janela (`Browser/ImageSniff.cs`). Os ícones e as `og:image` em WebP deixam de aparecer. A saída a prazo é expor o
+`CefBrowserHost::DownloadImage` no patch de `build/cefsharp`, para a descodificação ficar no processo do motor.
+
 ## Como publicar com o sandbox (desde a 0.2.14, por omissão)
 
 `build/publish.ps1` publica com o sandbox; `-NoSandbox` fica para emergências (é o que a publicação pelo CI sem codecs
@@ -790,7 +797,12 @@ scripts em `scratchpad\rede\live-*.ps1`):
 **Proxy com o serviço de rede no AppContainer (D9).** Só por argumentos do motor na linha de comandos do Éteris (nada
 nas definições do Windows): um proxy HTTP de teste em Python (`127.0.0.1:8899`, regista cada pedido; responde ele
 próprio a anfitriões `*.test`, que não existem no DNS, e encaminha o resto; `CONNECT` para HTTPS) e um PAC servido em
-`127.0.0.1:8898` (`PROXY 127.0.0.1:8899` para tudo menos `127.0.0.1`/`localhost`). Cópia `sbx-rede` com a ACL (2/2),
+`127.0.0.1:8898` (`PROXY 127.0.0.1:8899` para tudo menos `127.0.0.1`/`localhost`). **Desde a 0.2.17 o motor ignora os interruptores do Chromium postos na linha de comandos do
+Éteris (`CommandLineArgsDisabled`, INF-09); as provas abaixo repetem-se com `--eteris-proxy=<proxy>` e
+`--eteris-proxy-pac=<PAC>`, que só valem com `--user-data-dir` (`StartupArgs.TestProxy`) e põem o `--proxy-server` e o
+`--proxy-pac-url` nos argumentos do próprio Éteris. A prova ao vivo com a publicação com sandbox (o bootstrap continua
+a arrancar, `chrome://sandbox` igual, `--no-sandbox` já sem efeito) está por fazer: se o bootstrap deixar de arrancar com
+esta definição, reverter o commit.** Cópia `sbx-rede` com a ACL (2/2),
 perfil novo por caso; `chrome://sandbox` em todos: **Network Service no AppContainer** `S-1-15-2-373877586-…`
 (integridade Default), renderers Lockdown/Untrusted, GPU Limited/Low.
 
@@ -817,6 +829,16 @@ O proxy em `127.0.0.1` funciona a partir do AppContainer.
 `GET http://clients2.google.com/time/1/current?cup2key=…` (o relógio de rede do Chromium) e um `CONNECT
 www.google.com:443`, apesar do `disable-background-networking` e do `disable-component-update`. Fica para o `main`
 (candidato: `NetworkTimeServiceQuerying` no `disable-features` e procurar a origem do `www.google.com`).
+
+**Arranques falhados que não são do sandbox (INF-04, 0.2.17).** A rede de segurança acima só existe com o sandbox
+possível; sem ele (publicação de emergência, um PC onde o sandbox não arranca) um Éteris que cai ao arrancar caía de novo
+em todos os arranques, sem forma de ir buscar a versão que o corrige. Numa **instalação** (e só nela), o `Program.Main`
+conta cada arranque no ficheiro `startup-rescue.json` (`{"Pending":N}`, na pasta do perfil), depois da instância única e
+antes do motor; a 1.ª página (ou um fecho normal) apaga-o. À 3.ª tentativa seguida (`StartupRescue.FailedStartsToRescue` =
+2 falhadas antes) o Éteris pergunta se se procura já uma versão corrigida; com «Sim» descarrega-a e instala-a (a lista
+assinada de sempre, `UpdateService.RescueAsync`) e reabre, com «Não» arranca normalmente. Custa uma leitura e uma escrita
+de um ficheiro pequeno antes da 1.ª página, só numa instalação: é a exceção à regra R-2 que o dono tem de aceitar (feita
+à mão, sem o `JsonSerializer`, e medida em «Medição do marcador» abaixo).
 
 ## Passo A — resultado (2026-11-07): feito
 
@@ -893,6 +915,42 @@ pop-ups, abas, ecrã dividido.
 
 Custo contínuo: enquanto o CefSharp oficial não aceitar a alteração do passo C, cada atualização do motor (ver
 `docs/paridade.md`, #3) obriga a recompilar a versão própria do CefSharp.
+
+## Páginas internas (eteris://) — quem pode pedir (auditoria 3: INT-07, VAU-09)
+
+O modelo tem três camadas:
+
+1. **Esquema isolado no processo da página.** `eteris` é registado como «display isolated»: uma página da web não o
+   pede diretamente (medido: uma moldura `eteris://` direta numa página web fica vazia). Um redirecionamento do
+   servidor (302) passava ao lado desta regra — ver a prova abaixo.
+2. **Token.** As ações (`/set`, `/delete`, `/list` do cofre…) exigem o token aleatório da sessão
+   (`InternalPages.Token`), que só as páginas internas recebem.
+3. **Porta no processo do navegador (novo).** A fábrica do esquema (`EterisSchemeHandlerFactory.Create`) pergunta quem
+   pede antes de qualquer rota: `InternalPages.Serves(topo, pedido, frame principal)`. Abrir uma página (frame
+   principal, caminho `/`) vale sempre; molduras e sub-recursos só quando o documento de topo do separador é uma página
+   interna; as rotas do cofre (`eteris://passwords/…`, `eteris://autofill/…`) só para a própria página. O resto recebe
+   403. Logo a seguir a uma navegação (um F5) o frame principal ainda não tem endereço na thread de rede: vale então a
+   navegação em curso, anotada pelo `PrivacyRequestHandler` (`InternalPages.NoteNavigation`/`TopOf`).
+   `OnBeforeBrowse` cancela os redirecionamentos para `eteris://` e as molduras `eteris://` numa página que não é interna
+   (`InternalPages.BlocksNavigation`). As respostas levam `X-Frame-Options: SAMEORIGIN` (as páginas leem as rotas em
+   iframes ocultos da mesma origem: `DENY` partia-as) e `X-Content-Type-Options: nosniff`.
+
+O tipo de recurso é declarado pelo processo da página: a porta trava molduras e sub-recursos, não um processo
+comprometido que diga «MainFrame». Por isso a raiz de `eteris://passwords` e `eteris://autofill` deixou de levar
+registos (sites, utilizadores, cartões mascarados): a página abre vazia (`loading`) e pede-os por `/list`.
+
+**Prova antes da correção (2026-11-12, perfil de teste, servidor em 127.0.0.1, lida por CDP):**
+
+| Observação | Antes | Depois |
+|---|---|---|
+| `<iframe src="eteris://settings/">` numa página web mostra as Definições? | não (o esquema isolado trava-o) | não |
+| `<iframe src="/salto">` com `302 → eteris://settings/` mostra as Definições? | **sim** (a página das Definições abriu dentro do site) | não |
+| Clique num link `/salto` (`302 → eteris://settings/`) leva a aba às Definições? | **sim** | não (a aba fica no site) |
+
+Com dois «sim», o INT-07 mantém a severidade média (não é só defesa em profundidade). Depois da correção, também
+recusados: `302 → eteris://passwords/` e `302 → eteris://passwords/list` numa moldura, `<img>` direto e por 302 para
+`eteris://newtab/wallpaper/coast.jpg` numa página web, e — com o token certo — uma moldura
+`eteris://passwords/list?t=…` posta nas Definições (403).
 
 ## Regras para o código
 

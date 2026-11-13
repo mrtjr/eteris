@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Permissions;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 using Microsoft.Web.WebView2.Core;
@@ -231,11 +232,14 @@ public partial class MainWindow
 
         core.NavigationStarting += (_, e) =>
         {
-            // Páginas internas do Éteris só existem no motor principal.
+            // O motor de vídeo só mostra a web. Uma navegação para fora dela pedida pela página fica cancelada e a aba onde
+            // está (VideoEngine.LeavesForMainEngine); as páginas internas abrem-se pela barra (LoadInVideoView).
             if (!VideoEngine.CanHost(e.Uri))
             {
                 e.Cancel = true;
-                if (!e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) Dispatcher.InvokeAsync(() => SwitchToNormalEngine(tab, e.Uri));
+                var target = e.Uri;
+                if (VideoEngine.LeavesForMainEngine(e.Uri, core.Source, e.IsUserInitiated, e.IsRedirected))
+                    Dispatcher.InvokeAsync(() => SwitchToNormalEngine(tab, target));
                 return;
             }
             NoteVideoForgetPending(e.Uri);
@@ -264,7 +268,10 @@ public partial class MainWindow
             // Na troca para o motor de vídeo o endereço da aba já é o novo: o ícone do site anterior sai pelo site dele.
             else tab.ForgetFaviconOfOtherSite(address);
             tab.IsReaderable = false;
+            tab.ReaderOpen = false;
             tab.Address = address;
+            tab.PendingAddress = null;
+            tab.ShowsErrorPage = false;
         };
         core.DocumentTitleChanged += (_, _) =>
         {
@@ -278,11 +285,24 @@ public partial class MainWindow
         // A navegação chegou a ter documento (e não é uma página de erro): um ficheiro de média aberto diretamente acaba
         // «abortado» mas conta como visita (Data/HistoryVisit.cs).
         ulong? committedNavigation = null;
-        core.ContentLoading += (_, e) => committedNavigation = e.IsErrorPage ? null : e.NavigationId;
+        core.ContentLoading += (_, e) =>
+        {
+            committedNavigation = e.IsErrorPage ? null : e.NavigationId;
+            // A página de erro do WebView2 mostra o endereço que falhou, sem cadeado nem «Ligação segura» (como a do
+            // motor principal: BrowserTab.ShowsErrorPage). O SourceChanged, antes deste, já pôs a marca a false.
+            tab.ShowsErrorPage = e.IsErrorPage;
+            if (ReferenceEquals(tab, Tabs.Active)) UpdateOmniboxChrome();
+            // Documento novo: o cartão de permissão da página anterior já não é desta (como no FrameLoadStart do motor
+            // principal); o pedido dela é recusado.
+            DropPermissions(p => ReferenceEquals(p.Tab, tab));
+        };
         core.NavigationCompleted += (_, e) =>
         {
             FinishVideoSwitch(tab);
             tab.IsLoading = false;
+            // A navegação pedida acabou (com ou sem commit): a barra mostra só o endereço confirmado.
+            tab.PendingAddress = null;
+            if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
             UpdateVideoHistory(tab, core);
             var url = core.Source;
             // Sem título do documento (ficheiro de vídeo aberto diretamente): o nome do ficheiro, como no Chrome.
@@ -304,6 +324,42 @@ public partial class MainWindow
         {
             if (e.ProcessFailedKind is CoreWebView2ProcessFailedKind.BrowserProcessExited or CoreWebView2ProcessFailedKind.RenderProcessExited)
                 Dispatcher.InvokeAsync(() => OnPageCrashed(tab));
+        };
+        // Permissões (MOT-06): os tipos que o motor principal também pede (VideoEngine.PermissionOf) decidem-se pela loja
+        // do Éteris e pelo cartão, preso a esta aba — o WebView2 não guarda nada no perfil dele, por isso a decisão fica
+        // no cadeado. Os outros ficam com a interface do próprio WebView2. Uma moldura de outro site só usa uma recusa
+        // lembrada; o resto pergunta, sem «Lembrar» (PermissionRules, MOT-04).
+        core.PermissionRequested += (_, e) =>
+        {
+            e.SavesInProfile = false;
+            if (VideoEngine.PermissionOf(e.PermissionKind) is not { } kind) return;
+            var site = PermissionRules.Site(e.Uri);
+            var embeddedIn = PermissionRules.EmbeddedIn(core.Source, e.Uri);
+            switch (PermissionRules.Decide(SitePermissions, site, [kind], embedded: embeddedIn is not null))
+            {
+                case PermissionDecision.Allow:
+                    e.State = CoreWebView2PermissionState.Allow;
+                    e.Handled = true;
+                    return;
+                case PermissionDecision.Deny:
+                    e.State = CoreWebView2PermissionState.Deny;
+                    e.Handled = true;
+                    return;
+            }
+            var deferral = e.GetDeferral();
+            // Só a primeira resposta conta, e nunca rebenta (a aba pode já ter fechado: o WebView2 saiu).
+            var (respond, drop) = PermissionAsk.Guard(allowed =>
+            {
+                e.State = allowed ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
+                e.Handled = true;
+                deferral.Complete();
+            }, () =>
+            {
+                e.State = CoreWebView2PermissionState.Deny;
+                e.Handled = true;
+                deferral.Complete();
+            });
+            AskPermission(new PermissionAsk(site, [kind], respond, drop, EmbeddedIn: embeddedIn), tab);
         };
         // Janelas novas abrem como abas do Éteris, com a mesma regra dos pop-ups do motor principal.
         core.NewWindowRequested += (_, e) =>
@@ -415,6 +471,8 @@ public partial class MainWindow
     {
         if (!Tabs.Tabs.Contains(tab) || _videoViews.ContainsKey(tab) || !VideoEngine.CanHost(url)) return;
         tab.Address = url;
+        tab.PendingAddress = null;
+        tab.ShowsErrorPage = false;
         tab.UsesVideoEngine = true;
         tab.VideoOffer = null;
         if (tab.IsSleeping || !_browsers.ContainsKey(tab)) tab.Crossing.EnterVideo(null);
@@ -446,6 +504,8 @@ public partial class MainWindow
         if (!_videoSwitching.Contains(tab) || !Tabs.Tabs.Contains(tab)) return;
         if (resumeAt > 1 && VideoEngine.IsDirectMedia(url)) url = VideoEngine.WithTimeFragment(url, resumeAt);
         tab.Address = url;
+        tab.PendingAddress = null;
+        tab.ShowsErrorPage = false;
         CreateVideoView(tab, resumeAt);
         // Recurso: se o motor de vídeo não pintar em 5 s, a troca acaba na mesma (fica o branco do fundo).
         _ = Dispatcher.InvokeAsync(async () =>
@@ -464,7 +524,7 @@ public partial class MainWindow
             if (await Task.WhenAny(read, Task.Delay(300)) != read) return null;
             var entries = await read;
             // Na página de erro (ou no aviso do «HTTPS primeiro») conta o endereço que falhou, como na omnibox.
-            var urls = entries.Select(entry => ErrorPage.IsErrorPage(entry.Url) ? ErrorPage.FailedUrl(entry.Url) ?? entry.Url : entry.Url).ToList();
+            var urls = entries.Select(entry => ErrorPage.ReloadTarget(entry.Url) ?? entry.Url).ToList();
             return EngineCrossing.BackTarget(urls, entries.FindIndex(entry => entry.IsCurrent), switchingTo);
         }
         catch (Exception) { return null; }
@@ -490,6 +550,8 @@ public partial class MainWindow
         ReleaseVideoView(tab);
         tab.UsesVideoEngine = false;
         tab.Address = url;
+        tab.PendingAddress = null;
+        tab.ShowsErrorPage = false;
         if (!tab.IsSleeping && !_browsers.ContainsKey(tab)) CreateBrowser(tab);
         LayoutBrowsers();
     }
@@ -522,6 +584,7 @@ public partial class MainWindow
 
     private void ReleaseVideoView(BrowserTab tab)
     {
+        DropPermissions(p => ReferenceEquals(p.Tab, tab));
         _videoSwitching.Remove(tab);
         if (!_videoViews.Remove(tab, out var view)) return;
         BrowserHost.Children.Remove(view);
@@ -602,7 +665,8 @@ public partial class MainWindow
             return true;
         }
         url = VideoUrl(url);
-        tab.Address = url;
+        // Só o motor confirma o endereço (SourceChanged); NavigationCompleted desfaz o pedido se nada chegou.
+        tab.PendingAddress = url;
         if (view.CoreWebView2 is { } core) core.Navigate(url);
         Keyboard.Focus(view);
         return true;

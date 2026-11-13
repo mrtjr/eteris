@@ -52,7 +52,7 @@ public sealed class DownloadHandler(DownloadsViewModel downloads, Dispatcher dis
         var (id, url) = (downloadItem.Id, downloadItem.OriginalUrl);
         dispatcher.InvokeAsync(() =>
         {
-            downloads.Started(id, path, Path.GetFileName(path));
+            downloads.Started(id, path, Path.GetFileName(path), SourceHost(url));
             onStarted(chromiumWebBrowser, url);
         });
         return true;
@@ -67,6 +67,10 @@ public sealed class DownloadHandler(DownloadsViewModel downloads, Dispatcher dis
         else _callbacks[id] = callback;
         dispatcher.InvokeAsync(() => downloads.Update(id, received, total, speed, complete, cancelled));
     }
+
+    // O anfitrião de onde vem a transferência, para a pergunta de «abrir um programa»; null se o endereço não o tem.
+    internal static string? SourceHost(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host.Length > 0 ? uri.Host : null;
 
     public void Cancel(int id)
     {

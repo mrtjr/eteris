@@ -16,6 +16,11 @@ public static class CefConfigurator
         var settings = new CefSettings
         {
             CachePath = profilePath,
+            // O motor deixa de ler os interruptores do Chromium e da CEF postos na linha de comandos do Éteris (um atalho
+            // alterado com --remote-debugging-port, --proxy-server ou --no-sandbox): só vale o que o Éteris decide, pelos
+            // CefCommandLineArgs e pelas definições (INF-09). Só o proxy das provas tem interruptores próprios, só com um
+            // perfil de teste (StartupArgs.TestProxy).
+            CommandLineArgsDisabled = true,
             // Locale: a língua dos sites (EngineHardening.Configure, mais abaixo).
             LogSeverity = LogSeverity.Disable,
         };
@@ -133,6 +138,8 @@ public static class CefConfigurator
         if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
         var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox,
             shaderCache);
+        // O proxy das provas ao vivo (--eteris-proxy, --eteris-proxy-pac): só com um perfil de teste.
+        foreach (var (name, value) in StartupArgs.TestProxy(args, AppPaths.IsCustomProfile)) settings.CefCommandLineArgs[name] = value;
         // Só nas medições de desempenho (ETERIS_TEST_HOST_RULES; nunca numa instalação): nomes de teste para 127.0.0.1.
         PerfDiagnostics.ConfigureEngine(settings);
         StartupTrace.Mark("cef.settings");
@@ -177,7 +184,9 @@ public static class CefConfigurator
             try
             {
                 var settings = prepare();
-                Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null);
+                // Um Cef.Initialize que devolve falso (perfil bloqueado, ficheiros do motor em falta) lança com o código de saída,
+                // para o arranque dizer a causa em vez de seguir sem motor.
+                if (!Cef.Initialize(settings, performDependencyCheck: _dependencyCheck, browserProcessHandler: null)) throw new EngineStartException((int)Cef.GetExitCode());
                 StartupTrace.Mark("cef.initialize");
                 ready();
             }
@@ -189,6 +198,19 @@ public static class CefConfigurator
         // STA, como o fio da interface onde o Cef.Initialize corria: as esperas numa thread STA recebem as mensagens COM.
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
+    }
+
+    // O texto que o App.OnStartup mostra quando o arranque falha: a causa, nunca a mensagem da exceção (pode trazer
+    // caminhos e endereços), e onde ficaram os detalhes.
+    public static string StartFailureText(Exception ex)
+    {
+        var cause = ex switch
+        {
+            EngineStartException engine => $"O motor do Éteris não arrancou (código {engine.ExitCode}).",
+            UnauthorizedAccessException or System.IO.IOException => "O Éteris não consegue escrever na pasta do perfil.",
+            _ => $"O Éteris não conseguiu arrancar ({ex.GetType().Name}).",
+        };
+        return $"{cause} Os detalhes ficaram em {CrashLog.FileName}, na pasta do perfil.";
     }
 
     // Espera pelo fim do Cef.Initialize (já acabou, ou nunca foi para outra thread: não espera).

@@ -108,7 +108,12 @@ internal static class SyncService
                     Arm();
                 },
                 // Só nomes opacos do transporte e o tipo da falha (nunca dados): para o diagnóstico com um depurador.
-                Log = m => System.Diagnostics.Debug.WriteLine("[sincronização] " + m),
+                // Textos fixos e o tipo da falha: o registo local (SyncLog) e, para um depurador, a saída de depuração.
+                Log = m =>
+                {
+                    System.Diagnostics.Debug.WriteLine("[sincronização] " + m);
+                    SyncLog.Write(m);
+                },
             };
             // Observa primeiro e avisa depois: as janelas refrescam as barras a partir de Changed e têm de já encontrar o
             // aviso pendente (o agendador para quando é preciso entrar, por isso pode não haver outra mudança).
@@ -291,8 +296,9 @@ internal static class SyncService
                     if (PausedAfterRound()) Schedule.Stop();
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                SyncLog.Write($"O agendador falhou ({e.GetType().Name}).");
                 // Uma ronda que falhou também conta como a 1.ª (corra bem ou mal).
                 _firstRoundDone = true;
                 lock (Gate) Schedule.Done(Now(), ok: false);
@@ -335,7 +341,8 @@ internal static class SyncService
             // Um apagar por acabar que ainda não acabou: a sincronização continua desligada, e diz porquê (e que pode
             // tentar de novo ou ligar sem acabar de apagar).
             ok = false;
-            Say("delete", e.Message);
+            // Com o estado por ler, o texto já está no aviso do agente (StateUnreadableText): não se repete aqui.
+            if (!agent.Status.StateUnreadable) Say("delete", e.Message);
         }
         catch (Exception e)
         {
@@ -360,10 +367,32 @@ internal static class SyncService
     {
         if (Agent() is not { } agent) return;
         Hook();
-        agent.BeginCloudDeletion();
+        try { agent.BeginCloudDeletion(); }
+        catch (SyncUserException e)
+        {
+            // Com o estado por ler, nada se apaga: a mensagem diz porquê (e a página oferece pôr o ficheiro de lado).
+            Say("delete", e.Message);
+            return;
+        }
         lock (Gate) Schedule.Stop();
         Arm();
         Act("delete", a => a.FinishCloudDeletionAsync());
+    }
+
+    // «Recomeçar sem o estado antigo»: com o estado da sincronização por ler (StateUnreadable), põe o ficheiro de lado
+    // (sync.state.ilegivel, que sai com «apagar a chave») e este computador fica como um computador novo, desligado.
+    // false = não havia nada a pôr de lado, ou não foi possível (a mensagem fica na área «signout»).
+    internal static bool SetAsideState()
+    {
+        if (Agent() is not { Status.StateUnreadable: true } agent) return false;
+        try { File.Move(StatePath, StatePath + DpapiSyncStore.AsideSuffix, overwrite: true); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Say("signout", "Não foi possível pôr o ficheiro de lado. Feche os outros programas que o estejam a usar e tente outra vez.");
+            return false;
+        }
+        agent.ReloadState();
+        return true;
     }
 
     // «Tentar de novo» depois de um apagar do Drive que não acabou (já decidido: sem outra confirmação).
@@ -385,6 +414,9 @@ internal static class SyncService
         // de «Sair» segue (os tokens da Google saem) e a mensagem fica para a página (área «signout»).
         try { Agent()?.SignOut(forgetKey); }
         catch (SyncUserException e) { Say("signout", e.Message); }
+        // O registo local sai em qualquer «Sair deste computador» (com ou sem «apagar a chave»): é um diagnóstico da sincronização
+        // que acabou aqui. O menu ⋯ e as Definições chamam-no por SignOutHere, que depois tira os tokens da Google.
+        SyncLog.Delete();
         lock (Gate) Schedule.Stop();
         Arm();
     }
@@ -882,6 +914,20 @@ internal static class SyncService
         return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
+    // O que ficou à espera numa ronda «bem sucedida»: alterações de aparelhos que este computador ainda não conseguiu ler e
+    // itens do cofre que ficaram de fora. null = nada à espera.
+    public static string? WaitingText(SyncStatus status)
+    {
+        var parts = new List<string>();
+        // Só com a sincronização ligada: parada, em pausa ou a escolher a conta, o que ficou da última ronda já não é notícia.
+        if (status.Phase != SyncPhase.On) return null;
+        if (status.PendingDevices > 0)
+            parts.Add($"Há alterações de {status.PendingDevices} {(status.PendingDevices == 1 ? "aparelho" : "aparelhos")} que este computador ainda não conseguiu ler; o Éteris tenta outra vez na próxima ronda.");
+        if (status.SecretErrors == 1) parts.Add("1 item do cofre ficou de fora desta ronda (não abriu ou não se pôde cifrar).");
+        else if (status.SecretErrors > 1) parts.Add($"{status.SecretErrors} itens do cofre ficaram de fora desta ronda (não abriram ou não se puderam cifrar).");
+        return parts.Count == 0 ? null : string.Join(' ', parts);
+    }
+
     public static object StatusData(SyncStatus? status, long nowMs) => status is null
         ? new { phase = "off" }
         : new
@@ -892,7 +938,9 @@ internal static class SyncService
             lastText = status.LastSuccessMs > 0 ? "Sincronizado " + Ago(status.LastSuccessMs, nowMs) + "." : null,
             error = status.Error,
             needsSignIn = status.NeedsSignIn,
-            notice = status.Notice,
+            pendingDevices = status.PendingDevices,
+            secretErrors = status.SecretErrors,
+            notice = new[] { status.Notice, WaitingText(status) }.Where(t => !string.IsNullOrEmpty(t)) is var texts && texts.Any() ? string.Join(' ', texts) : null,
             // O kit de recuperação sem o segredo (as palavras só pela rota do kit, depois da confirmação do Windows):
             // a impressão digital, «saved», «pending» ou «stale», a recusa e quantos computadores se conhecem.
             kit = status.Kit is { } k
@@ -914,6 +962,8 @@ internal static class SyncService
             chainReplaced = status.ChainReplaced,
             // A pausa da troca de chave: a página mostra a caixa do identificador do kit novo em vez de «Ligar outra vez».
             rekeyPending = status.RekeyPending,
+            // O estado guardado não se leu: a página oferece «Recomeçar sem o estado antigo».
+            stateUnreadable = status.StateUnreadable,
             mayAutoPair = status.MayAutoPair,
             // O que o computador novo mostra (o cartão e o alerta): a página decide só por isto.
             guest = GuestKind(GuestPairingModel.From(status).Kind),
@@ -956,9 +1006,13 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or System.Security.Cryptography.CryptographicException)
         {
-            return null;
+            // Existe e não se leu: não é «não existe» (SyncStateUnreadableException): o agente não o substitui por um vazio.
+            throw new SyncStateUnreadableException("O estado da sincronização não se leu.", e);
         }
     }
+
+    // O sufixo do ficheiro que «Recomeçar sem o estado antigo» põe de lado (SyncService.SetAsideState).
+    internal const string AsideSuffix = ".ilegivel";
 
     public void Save(SavedSync saved)
     {
@@ -979,5 +1033,11 @@ internal sealed class DpapiSyncStore(string path, Eteris.Sync.Google.ISecretProt
     // «Sair» com «apagar a chave»: o ficheiro e o temporário saem. Se o Windows não deixar apagar agora (preso por outro
     // processo, sem permissão), fica marcado para apagar e esvaziado no que der: a abertura seguinte não retoma com a
     // chave que a pessoa mandou apagar. Só lança (IOException) se nem isso foi possível.
-    public void Delete() => SecretFile.Delete(path);
+    public void Delete()
+    {
+        // O ficheiro posto de lado pode ter a chave: sai com «apagar a chave», da mesma maneira (marcado para apagar e
+        // esvaziado se estiver preso). Só lança (IOException) quando nem isso foi possível, como o próprio estado.
+        try { SecretFile.Delete(path + AsideSuffix); }
+        finally { SecretFile.Delete(path); }
+    }
 }

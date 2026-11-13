@@ -154,7 +154,7 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
     private async Task<VaultReply> PasswordsAsync(VaultRequest r)
     {
         if (r.IsPrivate) return r.Path == "/" ? VaultReply.Html(PrivatePage(PrivateMessage, r.Host)) : VaultReply.Refused;
-        if (r.Path == "/") return VaultReply.Html(Browser.PasswordsPage.Render(PasswordsData()));
+        if (r.Path == "/") return VaultReply.Html(Browser.PasswordsPage.Render(PasswordsShell()));
         if (!r.Authorized) return VaultReply.Refused;
         switch (r.Path)
         {
@@ -248,16 +248,23 @@ public sealed partial class VaultRoutes(VaultService vault, ReauthGate gate, IVa
     }
 
     // A página só recebe metadados: site, utilizador, datas. A palavra-passe e a nota vêm só em /reveal.
-    private object PasswordsData()
+    private object PasswordsData() => PasswordsData(shell: false);
+
+    // VAU-09: a raiz (o HTML inicial) vai sem registos — sem sites, utilizadores nem «nunca guardar»; a página pede-os
+    // logo a seguir por /list, que a fábrica do esquema só serve à própria página (InternalPages.Serves).
+    private object PasswordsShell() => PasswordsData(shell: true);
+
+    private object PasswordsData(bool shell)
     {
-        var logins = VisibleLogins();
-        var icons = host.Icons(logins.Where(l => !Origins.IsAndroid(l.Origin)).Select(l => l.Origin + "/"));
+        var logins = shell ? [] : VisibleLogins();
+        var icons = shell ? new Dictionary<string, string>() : host.Icons(logins.Where(l => !Origins.IsAndroid(l.Origin)).Select(l => l.Origin + "/"));
         var settings = host.Settings;
         return new
         {
             token = Browser.InternalPages.Token,
+            loading = shell,
             logins = logins.Select(l => LoginJson(l, icons)),
-            never = vault.NeverSaveSites().Select(n => new { origin = n.Origin, host = Origins.DisplayHost(n.Origin) ?? n.Origin }).OrderBy(n => n.host, StringComparer.Ordinal),
+            never = (shell ? [] : vault.NeverSaveSites()).Select(n => new { origin = n.Origin, host = Origins.DisplayHost(n.Origin) ?? n.Origin }).OrderBy(n => n.host, StringComparer.Ordinal),
             pwOffer = settings.PasswordOffer,
             pwSuggest = settings.PasswordSuggestions,
             pwAskHello = settings.PasswordAskHello,

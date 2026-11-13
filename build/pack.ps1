@@ -49,6 +49,33 @@ if ($build.commit) {
   if (-not $head) { throw "publish\ é do commit $(Short $build.commit) e não consigo ler o HEAD (git rev-parse HEAD): sem ele não sei se é a publicação do commit que vai ser a release; corra o pack.ps1 no repositório, com o git no PATH, ou publique de novo com build\publish.ps1" }
   if ($head -ne $build.commit) { throw "publish\ é do commit $(Short $build.commit) e o HEAD é $(Short $head): publique de novo com build\publish.ps1 a partir do commit que vai ser a release" }
 }
+# A marca diz o que foi publicado (CAD-08): sem alterações por gravar e com a lista dos ficheiros de publish\ e o SHA256 de
+# cada um. Uma pasta mexida depois de publicar (um ficheiro trocado, apagado ou posto lá) não se empacota.
+if ([bool]$build.dirty) { throw "publish\ foi publicada com alterações por gravar (dirty): faça commit e publique de novo com build\publish.ps1" }
+if (-not $build.files) { throw "publish\eteris-build.json sem a lista de ficheiros (files): publique de novo com build\publish.ps1" }
+$publishDir = Join-Path $root "publish"
+# SHA256 em hexadecimal minúsculo, pelo .NET (como o release.ps1): no Windows PowerShell 5.1 lançado a partir do
+# PowerShell 7 (o runner do GitHub) o módulo do cmdlet de hash não carrega (ReleaseScriptTests).
+function Sha256Lower([string]$Path) {
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $stream = [System.IO.File]::OpenRead($Path)
+  try { ([System.BitConverter]::ToString($sha.ComputeHash($stream))).Replace("-", "").ToLowerInvariant() }
+  finally { $stream.Dispose(); $sha.Dispose() }
+}
+$listed = @{}
+foreach ($entry in @($build.files)) {
+  $relative = [string]$entry.path
+  $listed[$relative] = $true
+  $file = Join-Path $publishDir ($relative -replace '/', '\')
+  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "falta $relative em publish\ (files): a pasta foi mexida depois de publicar; publique de novo com build\publish.ps1" }
+  if ((Sha256Lower $file) -ne ([string]$entry.sha256).ToLowerInvariant()) { throw "$relative não bate com a marca (files): a pasta foi mexida depois de publicar; publique de novo com build\publish.ps1" }
+}
+$publishPrefix = (Resolve-Path -LiteralPath $publishDir).Path.TrimEnd('\') + '\'
+foreach ($file in Get-ChildItem -LiteralPath $publishDir -File -Recurse) {
+  $relative = $file.FullName.Substring($publishPrefix.Length) -replace '\\', '/'
+  if ($relative -eq "eteris-build.json") { continue }
+  if (-not $listed.ContainsKey($relative)) { throw "$relative não está na marca (files): foi posto em publish\ depois de publicar; publique de novo com build\publish.ps1" }
+}
 # "Eteris" com E acentuado, escrito por código para não depender da codificação com que o ficheiro é lido
 $title = "$([char]0xC9)teris"
 # packId diferente da pasta de dados (%LocalAppData%\Eteris): o Velopack apaga a pasta de instalação ao desinstalar

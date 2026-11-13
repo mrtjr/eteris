@@ -41,6 +41,7 @@ ajuda quem lê o código antigo, «(até à 0.2.14: …)».
 | Tokens, conta e estado da sincronização cifrados com DPAPI no perfil | `src/Eteris.Browser/Sync/Dpapi.cs` | pronto |
 | O perfil do Éteris para a sincronização (ler e aplicar) | `Sync/BrowserProfile.cs`, `MainWindow.Sync.cs` | pronto |
 | O serviço no navegador (agente, agendador, estado para a interface) | `Sync/SyncService.cs` | pronto |
+| Registo local das falhas inesperadas da sincronização: hora, texto fixo e tipo da falha (nunca dados, nomes nem caminhos; no máximo 64 KiB); sai em qualquer «Sair deste computador» (com ou sem «apagar a chave») | `<perfil>\sync\sync.log`, `Sync/SyncLog.cs` | pronto (0.2.17; o dono ainda confirma que cabe no que o Éteris promete guardar) |
 | Definições › **Sincronização** (sempre que há `google-oauth.json`) | `settings.html`, `SettingsPage.cs` | pronta |
 | A conta no menu do navegador (nome, e-mail, avatar, estado da sincronização, pedidos) | `MainWindow.BrowserMenu.cs` | pronta |
 | Exportar / importar o perfil cifrado num ficheiro `.eteris` (o cofre só com a caixa e o Windows Hello) | `Sync/ProfileTransfer.cs` | pronto |
@@ -71,6 +72,8 @@ quando o utilizador carregar em «Ligar a sincronização»). Exportar/importar 
 | Cookies, transferências, zoom por site, permissões, leitura para mais tarde, sessões guardadas | não | — |
 
 O que é de cada computador fica: as abas, o zoom por site, as permissões dadas a sites, a barra lateral.
+
+**Proteções que descem.** Uma alteração que vem da conta e baixa a proteção deste computador (desligar «HTTPS primeiro», o «DNS cifrado» e outras proteções das Definições, o Escudo ou o modo estrito num site, uma exceção ao HTTPS) aplica-se como as outras (reter deixava este computador diferente da conta), mas deixa um aviso no estado da sincronização (Definições › Sincronização): «Noutro computador da conta baixou-se a proteção: …». Ao remover um aparelho, o aviso manda rever também as proteções. **Limite conhecido:** o aviso só se vê nas Definições; não há notificação na janela.
 
 ## Os fluxos
 
@@ -156,7 +159,7 @@ O que é de cada computador fica: as abas, o zoom por site, as permissões dadas
   emparelhamento (com a chave da sessão), no estado do aparelho e nos lotes (com a chave da conta); o `0-request` leva só
   a hora. Os outros computadores veem o nome novo na ronda seguinte.
 - **Alterações** nos dois sentidos, com conflitos resolvidos por HLC (ganha a última ronda que as enviou) e lápides
-  (o apagado não volta). O que o utilizador muda a meio de uma ronda que traz outra versão fica e segue na seguinte.
+  (o apagado não volta). O que o utilizador muda a meio de uma ronda que traz outra versão fica e segue na seguinte. Se uma versão das notas vinda de outro computador ficou por aplicar (o utilizador estava a escrever) e ele volta a mudar as notas antes da ronda seguinte, as duas edições fundem-se a três, a partir do texto da última ronda. Preencher uma palavra-passe (a «última utilização» do item) não é uma alteração do item: não marca uma ronda e não repõe no Drive a versão que este computador ainda não atualizou.
 - **Aparelhos**: lista nas Definições › Sincronização › Mais opções (nome, «este computador», quando sincronizou, «·
   recebe pagamentos e documentos») com **«Remover»** (duas vezes, para confirmar). Remover faz **nova cadeia**: segredo
   e chaves novos, tudo recifrado, a cadeia antiga apagada, e um kit de recuperação novo (o antigo deixa de valer, em
@@ -662,7 +665,7 @@ Windows Hello, os interruptores «Pedir o Windows Hello…» (são deste PC) e a
 - O que isto dá, além da cifra do ficheiro: o estado do motor, os instantâneos, a base do `ProfileSync`, os lotes
   pendentes e o `.eteris` **nunca têm um segredo nem um site em claro**, mesmo dentro da DPAPI; o bloco selado é
   incompressível (nenhum canal lateral de compressão ao lado dos títulos que os sites escolhem); e um aparelho com uma
-  linha desligada recebe os selos dessa linha e **nunca os abre**.
+  linha desligada recebe os selos dessa linha e guarda-os sem os usar nem mostrar (só os abre para os voltar a selar se fizer uma «nova cadeia»).
 - O motor guarda no estado do aparelho (protegido por DPAPI, nunca no transporte) as chaves dos selos da cadeia atual,
   só para voltar a selar os registos que o próprio aparelho escreveu quando outro faz «nova cadeia» (a cadeia antiga já
   não existe quando ele dá por isso).
@@ -681,7 +684,7 @@ da conta e a deste computador vai para o histórico. Apagar deixa uma lápide (c
 
 | Linha | Coleções | Por omissão | O que diz |
 |---|---|---|---|
-| Favoritos | `bookmarks` | ligado | Os favoritos |
+| Favoritos | `bookmarks` | ligado | Os favoritos (endereço e título) |
 | Espaços | `spaces` | ligado | Nome, cor e emoji; as abas de cada Espaço ficam em cada computador |
 | Definições | `settings` | ligado | Só as que fazem sentido noutro computador |
 | Decisões do Escudo | `shield` | ligado | Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site |
@@ -705,8 +708,9 @@ enviar e de aplicar essas coleções aqui e **não apaga nada**, nem aqui nem na
 outra vez faz a primeira junção só dessa linha (`SavedSync.Joined`). Texto do topo (`SyncChoices.Intro`): «Tudo é
 cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca
 lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que
-recebe: desligar uma linha não apaga nada. Quem perder o kit de recuperação e todos os computadores perde estes dados:
-não há «esqueci-me do kit».»
+envia e o que aplica: desligar uma linha não apaga nada, e o que os outros enviam dessa linha fica guardado aqui cifrado
+(a chave da conta abre-o em qualquer computador ligado). Quem perder o kit de recuperação e todos os computadores perde
+estes dados: não há «esqueci-me do kit».»
 
 **Emparelhamento, nova cadeia e exportar.**
 

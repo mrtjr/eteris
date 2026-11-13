@@ -6,7 +6,8 @@ using Eteris.Browser.Theme;
 namespace Eteris.Browser.Browser;
 
 // Ações das páginas eteris:// (apagar histórico, mudar definições) levam um token aleatório desta sessão.
-// O esquema é "display isolated": nenhum site o consegue abrir, e o token impede pedidos forjados de outras origens.
+// O esquema é "display isolated" (um site não o pede diretamente), o token impede pedidos forjados de outras origens e,
+// desde a auditoria 3, a fábrica só responde a quem é página interna (Serves; ver docs/sandbox.md, «Páginas internas»).
 public static class InternalPages
 {
     public static readonly string Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -44,6 +45,53 @@ public static class InternalPages
             : $"document.documentElement.style.setProperty('--iris', '{IrisCss(stops)}'); document.documentElement.style.setProperty('--accent', '{Accent.Hex(stops[0])}'); document.documentElement.style.setProperty('--accent-2', '{Accent.Hex(stops[1])}');";
 
     private static string IrisCss(IReadOnlyList<Color> stops) => "linear-gradient(90deg, " + string.Join(", ", stops.Select(Accent.Hex)) + ")";
+
+    // ---- Quem pede (INT-07, VAU-09) ----
+    // O token trava pedidos forjados, mas uma página web conseguia embutir as páginas internas (um 302 para eteris://
+    // numa moldura) e ler o que a raiz das palavras-passe trazia. A porta fica agora também no processo do navegador:
+    // a fábrica do esquema pergunta quem é o documento de topo do separador. O tipo de recurso é declarado pelo processo
+    // da página: a porta trava molduras e sub-recursos, não um processo comprometido que diga «MainFrame» — por isso a
+    // raiz do cofre não leva registos (vêm por /list).
+
+    // Uma página do Éteris (eteris://…), lida como o Route a lê (Uri, não prefixos de texto).
+    public static bool IsInternal(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == EterisSchemeHandlerFactory.SchemeName && uri.Host.Length > 0;
+
+    // Os anfitriões do cofre: as rotas deles (a lista, mostrar, copiar…) só respondem à própria página.
+    private static bool IsVaultHost(string host) => host is "passwords" or "autofill";
+
+    // Responde-se a este pedido? Abrir uma página (o frame principal, caminho «/») vale sempre; no cofre, o resto só
+    // para a própria página; outro pedido do frame principal vale (as ações continuam a exigir o token); molduras e
+    // sub-recursos só quando o documento de topo é uma página interna.
+    public static bool Serves(string? topUrl, string requestUrl, bool mainFrameRequest)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var request) || request.Scheme != EterisSchemeHandlerFactory.SchemeName) return false;
+        if (mainFrameRequest && request.AbsolutePath == "/") return true;
+        if (IsVaultHost(request.Host))
+            return Uri.TryCreate(topUrl, UriKind.Absolute, out var top) && top.Scheme == EterisSchemeHandlerFactory.SchemeName
+                   && string.Equals(top.Host, request.Host, StringComparison.OrdinalIgnoreCase);
+        if (mainFrameRequest) return true;
+        return IsInternal(topUrl);
+    }
+
+    // OnBeforeBrowse: um redirecionamento para eteris:// (o 302 de um site) e uma moldura eteris:// numa página que não
+    // é interna são cancelados. Abrir uma página interna pela barra, um favorito ou um link interno continua.
+    public static bool BlocksNavigation(string? topUrl, string targetUrl, bool isMainFrame, bool isRedirect)
+        => IsInternal(targetUrl) && (isRedirect || (!isMainFrame && !IsInternal(topUrl)));
+
+    // Logo depois de uma navegação (um F5, sobretudo) o frame principal ainda não tem endereço na thread de rede (""):
+    // vale então a navegação em curso, anotada pelo PrivacyRequestHandler quando o pedido da página sai.
+    private const int MaxNotes = 4096;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> Navigations = new();
+
+    public static void NoteNavigation(int browserId, string url)
+    {
+        if (Navigations.Count > MaxNotes) Navigations.Clear();
+        Navigations[browserId] = url;
+    }
+
+    public static string? TopOf(int browserId, string? mainUrl)
+        => !string.IsNullOrEmpty(mainUrl) ? mainUrl : Navigations.TryGetValue(browserId, out var url) ? url : mainUrl;
 
     public static bool LightTheme => Theme.ThemeManager.Current == Theme.AppTheme.Light;
 

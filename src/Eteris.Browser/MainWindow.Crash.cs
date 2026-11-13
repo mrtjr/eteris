@@ -10,7 +10,7 @@ public partial class MainWindow
     {
         if (!_browsers.TryGetValue(tab, out var browser) || browser.IsDisposed) return;
         tab.IsLoading = false;
-        var failed = ErrorPage.IsErrorPage(tab.Address) ? ErrorPage.FailedUrl(tab.Address) ?? tab.Address : tab.Address;
+        var failed = ErrorPage.ReloadTarget(tab.Address) ?? tab.Address;
         browser.Load(ErrorPage.Url(ErrorPage.RendererCrashed, failed));
     }
 }

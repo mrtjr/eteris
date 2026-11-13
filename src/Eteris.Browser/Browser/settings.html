@@ -501,6 +501,7 @@
           <div class="item" id="syncOffItem" hidden>
             <div class="label"><b id="syncOffTitle">A sincronização está desligada neste computador</b><span id="syncOffText">Ligue-a para os dados deste computador se juntarem aos da sua conta.</span></div>
             <button class="action" id="syncStart">Ligar a sincronização</button>
+            <button class="action" id="syncStateReset" hidden>Recomeçar sem o estado antigo</button>
           </div>
           <div class="item syncalert" id="syncRekeyItem" hidden>
             <div class="label"><b>A conta mudou de chave noutro computador</b><span id="syncRekeyText"></span>
@@ -679,6 +680,9 @@
         <div class="item">
           <div class="label"><b>Escudo</b><span id="shield"></span></div>
         </div>
+        <div class="item" id="crashItem" hidden>
+          <div class="label"><b>Registo de falhas</b><span id="crashLog"></span></div>
+        </div>
         <div class="item">
           <div class="label"><b>Motor</b><span id="engineInfo"></span></div>
           <a class="link" href="eteris://credits/">Créditos e licenças →</a>
@@ -697,6 +701,7 @@
   document.getElementById('version').textContent = 'Versão ' + data.version;
   document.getElementById('updateStatus').textContent = data.updateStatus || '';
   document.getElementById('shield').textContent = data.shield || '';
+  if (data.crashLog) { document.getElementById('crashLog').textContent = data.crashLog; document.getElementById('crashItem').hidden = false; }
   document.getElementById('engineInfo').textContent = data.chromium ? `Chromium ${data.chromium} · CefSharp ${data.cefsharp}` : '';
   const check = document.getElementById('checkUpdate');
   const status = document.getElementById('updateStatus');
@@ -1394,6 +1399,7 @@
         : 'Ligue-a para os dados deste computador se juntarem aos da sua conta.';
       $('syncStart').textContent = deleteStuck ? 'Ligar sem acabar de apagar' : phase === 'stopped' ? 'Ligar outra vez' : 'Ligar a sincronização';
       $('syncStart').dataset.anyway = deleteStuck ? '1' : '';
+      show('syncStateReset', !!s.stateUnreadable);
       // A apagar do Drive: «Ligar» espera que acabe (com o apagar interrompido, «Ligar» acaba-o primeiro). «Apagar…» fica
       // ativo (tem o foco depois de confirmar; carregar outra vez só volta a tentar acabar).
       $('syncStart').disabled = !!s.deleting && !!s.running;
@@ -1647,6 +1653,7 @@
     // «Entrar com o Google», «Cancelar» (à espera do início de sessão) ou «Ligar» (pasta de teste).
     googleButton.addEventListener('click', () => askGoogle(googleButton.dataset.state === 'waiting' ? 'sync-google-cancel' : 'sync-google'));
     $('syncStart').addEventListener('click', () => askGoogle('sync-start', $('syncStart').dataset.anyway ? '&anyway=1' : ''));
+    $('syncStateReset').addEventListener('click', () => askGoogle('sync-state-reset'));
     // «Tentar de novo» (um apagar do Drive que não acabou): volta a tentar já; o foco fica na nota que diz o resultado.
     $('syncDeleteRetry').addEventListener('click', () => {
       note($('syncDeleteNote'), 'A apagar os dados do Éteris do Google Drive…');

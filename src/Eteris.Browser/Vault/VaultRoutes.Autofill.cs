@@ -14,7 +14,7 @@ public sealed partial class VaultRoutes
     private async Task<VaultReply> AutofillAsync(VaultRequest r)
     {
         if (r.IsPrivate) return r.Path == "/" ? VaultReply.Html(PrivatePage(PrivateMessage, r.Host)) : VaultReply.Refused;
-        if (r.Path == "/") return VaultReply.Html(Browser.AutofillPage.Render(AutofillData()));
+        if (r.Path == "/") return VaultReply.Html(Browser.AutofillPage.Render(AutofillShell()));
         if (!r.Authorized) return VaultReply.Refused;
         var collection = r.Q("c") switch
         {
@@ -65,11 +65,19 @@ public sealed partial class VaultRoutes
     }
 
     // Os dados da página: só metadados e números mascarados.
-    private object AutofillData()
+    private object AutofillData() => AutofillData(shell: false);
+
+    // VAU-09: a raiz (o HTML inicial) vai sem registos — cartões, IBAN, moradas, documentos e viagens vêm logo a seguir
+    // por /list, que a fábrica do esquema só serve à própria página (InternalPages.Serves).
+    private object AutofillShell() => AutofillData(shell: true);
+
+    private IEnumerable<VaultEntry> Listed(VaultCollection collection, bool shell) => shell ? [] : Visible(collection);
+
+    private object AutofillData(bool shell)
     {
         var settings = host.Settings;
         var now = DateTimeOffset.UtcNow;
-        var cards = Visible(VaultCollection.Cards).Select(e =>
+        var cards = Listed(VaultCollection.Cards, shell).Select(e =>
         {
             int month = Int(e.Meta, "expMonth") ?? 0, year = Int(e.Meta, "expYear") ?? 0;
             return new
@@ -83,14 +91,14 @@ public sealed partial class VaultRoutes
                 nickname = Text(e.Meta, "nickname"),
             };
         }).ToList();
-        var ibans = Visible(VaultCollection.Ibans).Select(e => new { id = e.Id, masked = Text(e.Meta, "masked"), nickname = Text(e.Meta, "nickname") }).ToList();
-        var contacts = Visible(VaultCollection.Contacts).Select(e => vault.GetContact(e.Id)).OfType<ContactItem>().Select(c => new
+        var ibans = Listed(VaultCollection.Ibans, shell).Select(e => new { id = e.Id, masked = Text(e.Meta, "masked"), nickname = Text(e.Meta, "nickname") }).ToList();
+        var contacts = Listed(VaultCollection.Contacts, shell).Select(e => vault.GetContact(e.Id)).OfType<ContactItem>().Select(c => new
         {
             id = c.Id, label = c.Label, summary = c.Summary, givenName = c.GivenName, familyName = c.FamilyName, organization = c.Organization,
             street = c.Street, number = c.Number, complement = c.Complement, neighborhood = c.Neighborhood, city = c.City, region = c.Region,
             postalCode = c.PostalCode, country = c.Country, email = c.Email, phone = c.Phone,
         }).ToList();
-        var docs = Visible(VaultCollection.IdDocs).Select(e =>
+        var docs = Listed(VaultCollection.IdDocs, shell).Select(e =>
         {
             var type = IdDocItem.ParseType(Text(e.Meta, "type")) ?? IdDocType.NationalId;
             var expires = Text(e.Meta, "expires");
@@ -107,7 +115,7 @@ public sealed partial class VaultRoutes
                           && d < DateOnly.FromDateTime(now.UtcDateTime),
             };
         }).ToList();
-        var travel = Visible(VaultCollection.Travel).Select(e =>
+        var travel = Listed(VaultCollection.Travel, shell).Select(e =>
         {
             var vehicle = Text(e.Meta, "type") == "vehicle";
             return new
@@ -125,6 +133,7 @@ public sealed partial class VaultRoutes
         return new
         {
             token = Browser.InternalPages.Token,
+            loading = shell,
             cards, ibans, contacts, docs, travel,
             docTypes = new[] { IdDocType.Passport, IdDocType.DriverLicense, IdDocType.NationalId, IdDocType.TaxId }
                 .Select(t => new { code = IdDocItem.TypeCode(t), name = IdDocItem.TypeName(t, null), pt = IdDocItem.TypeName(t, "PT"), br = IdDocItem.TypeName(t, "BR") }),

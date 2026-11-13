@@ -9,6 +9,7 @@ using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
 using Eteris.Browser.Data;
 using Eteris.Browser.Infrastructure;
+using Eteris.Browser.Omnibox;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
 
@@ -56,6 +57,8 @@ public partial class MainWindow : Window
         Tabs.KeepsAwake = tab => IsCapturingTab(tab) || tab.Media == MediaState.Playing || IsHeld(tab, DateTime.UtcNow)
                                  || _split?.PaneOf(tab) is not null;
         StateChanged += (_, _) => OnWindowStateChanged();
+        // Os pedidos de certificado ainda à espera respondem «não enviar» quando a janela fecha (o CEF tem sempre resposta).
+        Closed += (_, _) => _clientCertificates.Close();
         SourceInitialized += (_, _) =>
         {
             WindowEffects.Apply(this, BorderColor, darkMode: !UsesLight);
@@ -140,6 +143,8 @@ public partial class MainWindow : Window
         {
             OnSplitTabRemoved(tab);
             tab.PropertyChanged -= OnTabPropertyChanged;
+            // Os pedidos de certificado que a aba deixou na fila são recusados (e nada fica preso a ela).
+            _clientCertificates.Forget(tab);
             // Foi para a reserva de outro Espaço sem adormecer (trancada ou com som): o motor fica, escondido.
             if (!tab.IsSleeping && Tabs.WorkspaceOf(tab) is { IsCurrent: false }) continue;
             ReleaseBrowser(tab);
@@ -147,6 +152,47 @@ public partial class MainWindow : Window
 
 
         UpdateTabWidth();
+    }
+
+    // MOT-01: o site pede um certificado de cliente. O diálogo é do Éteris, modal sobre esta janela (nunca o motor, nunca o
+    // primeiro da lista) e o Éteris não guarda nada. Vem da thread de rede do CEF; a janela responde na sua thread.
+    // Um diálogo de cada vez, os outros em fila; o pedido de uma aba fora da vista espera até ela aparecer; a página que
+    // já recusou três vezes seguidas é recusada sem perguntar até o utilizador navegar (Shields/ClientCertificatePrompts.cs).
+    // O diálogo diz de que aba vem o pedido.
+    private readonly ClientCertificatePrompts _clientCertificates = new();
+
+    private Task<string?> AskClientCertificate(BrowserTab tab, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+        => AskClientCertificate(tab, () => Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab), () => ClientCertificateDialog.FromTab(tab.Title),
+            host, port, rows);
+
+    private Task<string?> AskClientCertificate(object page, Func<bool> isOnScreen, Func<string?> from, string host, int port,
+        IReadOnlyList<ClientCertificateRow> rows)
+        => Dispatcher.InvokeAsync(() =>
+        {
+            var answer = _clientCertificates.Ask(page, host, port, rows, from(), isOnScreen);
+            ShowNextClientCertificate();
+            return answer;
+        }).Task.Unwrap();
+
+    // O Espreitar não pergunta nada: o pedido de certificado é recusado.
+    private static Task<string?> RefuseClientCertificate(string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+        => Task.FromResult<string?>(null);
+
+    private void ShowNextClientCertificate()
+    {
+        if (_clientCertificates.Next() is not { } request) return;
+        Dispatcher.InvokeAsync(() =>
+        {
+            // A janela fechou entretanto: o pedido já foi recusado (ClientCertificatePrompts.Close), sem diálogo.
+            if (!ReferenceEquals(_clientCertificates.Showing, request)) return;
+            string? answer = null;
+            try { answer = ClientCertificateDialog.Ask(this, request.Host, request.Port, request.Rows, request.From); }
+            finally
+            {
+                _clientCertificates.Answered(request, answer);
+                ShowNextClientCertificate();
+            }
+        });
     }
 
     private void CreateBrowser(BrowserTab tab)
@@ -211,6 +257,9 @@ public partial class MainWindow : Window
                 {
                     Volatile.Write(ref mainHistory.Last, nav);
                     OnMainNavigation(tab, nav);
+                    // O utilizador navegou (não a página sozinha): a aba volta a poder perguntar por certificados. Chega antes
+                    // do pedido de certificado do documento novo (este sai no aperto de mão, depois do OnBeforeBrowse).
+                    if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(tab));
                 },
                 onCloaked: (host, target) =>
                 {
@@ -223,14 +272,18 @@ public partial class MainWindow : Window
                         tab.RecordBlocked(label);
                     });
                 },
-                observatory: tab.Observatory),
+                observatory: tab.Observatory,
+                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows)),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += () =>
         {
             if (browser.Address is not string address) return;
-            // Na página de erro a omnibox continua a mostrar o endereço que falhou.
-            if (ErrorPage.IsErrorPage(address)) address = ErrorPage.FailedUrl(address) ?? address;
+            // Na página de erro a omnibox continua a mostrar o endereço que falhou, mas sem cadeado nem «Ligação segura»
+            // no cartão: o que está à vista é a página do Éteris (BrowserTab.ShowsErrorPage).
+            tab.ShowsErrorPage = ErrorPage.IsErrorPage(address);
+            // Sem alvo válido fica o próprio eteris://error/…: a barra não mostra texto escolhido pela página.
+            address = ErrorPage.ReloadTarget(address) ?? address;
             var hostChanged = !SameHost(tab.Address, address);
             if (hostChanged)
             {
@@ -242,11 +295,15 @@ public partial class MainWindow : Window
             if (!string.Equals(tab.Address, address, StringComparison.Ordinal))
             {
                 tab.IsReaderable = false;
+                tab.ReaderOpen = false;
                 tab.VideoOffer = null;
             }
             // «Esquecer ao fechar»: ir para outro site também é sair do anterior.
             if (hostChanged) NoteSiteLeft(tab.Address, address);
             tab.Address = address;
+            // O motor confirmou: o que foi pedido deixa de estar pendente.
+            tab.PendingAddress = null;
+            tab.PendingLoadStarted = false;
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             // Nunca a partir da página de erro ou do aviso do «HTTPS primeiro»: o endereço que lá aparece é o que falhou
@@ -285,8 +342,10 @@ public partial class MainWindow : Window
                 return;
             }
             if (ReaderScripts.ParseReport(e.Message) is not { } reader) return;
+            // O leitor corre depois da página (sem segredo): só vale da aba ativa e com o leitor aberto por ela.
             Dispatcher.InvokeAsync(() =>
             {
+                if (!ReaderScripts.AcceptsReport(ReferenceEquals(tab, Tabs.Active), tab.ReaderOpen)) return;
                 Data.Settings.Set("readerTheme", reader.Theme);
                 Data.Settings.Set("readerSize", reader.Size.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 Data.Settings.Set("readerSerif", reader.Serif ? "true" : "false");
@@ -312,6 +371,13 @@ public partial class MainWindow : Window
             // A meio da troca para o motor de vídeo, o estado da aba já é o dele.
             if (_videoViews.ContainsKey(tab)) return;
             tab.IsLoading = e.IsLoading;
+            // A carga do endereço pedido acabou sem commit (204, transferência, Esc, erro): a barra volta ao da página.
+            if (AddressBar.ClearsPending(e.IsLoading, tab.PendingLoadStarted))
+            {
+                tab.PendingAddress = null;
+                tab.PendingLoadStarted = false;
+                if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
+            }
             if (!e.IsLoading) NudgeMediaPoll(tab);
             tab.Crossing.MainHistoryChanged(e.CanGoBack);
             tab.CanGoBack = e.CanGoBack;
@@ -325,6 +391,9 @@ public partial class MainWindow : Window
             if (!e.Frame.IsMain) return;
             // Documento novo: a captura autorizada ao anterior acabou com ele (Tabs/UnseenWindow.cs, ajuste e8).
             CaptureSessions.Ended(e.Browser.Identifier);
+            Dispatcher.InvokeAsync(() => tab.IsCapturing = false);
+            // Página nova: o cartão de permissão da anterior já não é desta página.
+            Dispatcher.InvokeAsync(() => DropPermissions(p => ReferenceEquals(p.Tab, tab)));
             // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01).
             if (SandboxFallback.IsWebContent(e.Url)) StartupGuard.Current.WebContentCommitted();
             ResetUnstoredEnginePermissions(e.Browser, e.Url, permissionStore);
@@ -481,6 +550,9 @@ public partial class MainWindow : Window
         UpdateVideoEngineBadge();
         ApplyTint();
         RevealActiveTab();
+        // O cartão de permissão de uma aba só aparece com ela à vista (e o pedido de certificado que ela tem à espera).
+        ShowNextPermission();
+        ShowNextClientCertificate();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)

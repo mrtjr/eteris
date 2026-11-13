@@ -15,6 +15,10 @@ public static class WhatsNewPage
     // sandbox por omissão: uma versão de recuo sem ele tira-o (WhatsNewTests.Highlights_AnnounceTheSandboxOnlyWhen…).
     public const string SandboxTitle = "Páginas isoladas (sandbox)";
 
+    // O que as Novidades dizem numa publicação sem sandbox (a de emergência pelo CI, ou um PC sem ele): em vez do anúncio
+    // do isolamento, o aviso de que esta versão corre sem ele (CAD-05, PRO-09).
+    public const string NoSandboxTitle = "Esta versão corre sem isolamento das páginas";
+
     // Destaques do desempenho da 0.2.14, com os números da medição contra a 0.2.13 (docs/paridade.md, «Medição da
     // 0.2.14»). Os dois últimos só aparecem enquanto o ajuste respetivo estiver ligado por omissão no PerfTuning (e8, a
     // janela que não se vê; e13, o sono com pouca memória): desligar um deles por omissão obriga a tirar o destaque
@@ -108,9 +112,19 @@ public static class WhatsNewPage
     // 0.2.14). Numa versão futura, a âncora passa a ser o 1.º destaque da versão anterior.
     public static int NewCount => Highlights.TakeWhile(h => h.Title != SandboxTitle).Count();
 
-    public static string Render(string version)
+    // Os destaques para este arranque: sem sandbox, o anúncio do isolamento das páginas dá lugar ao aviso de que esta versão
+    // corre sem ele (os outros e a ordem não mudam).
+    public static IReadOnlyList<Highlight> HighlightsFor(bool sandbox)
+        => sandbox
+            ? Highlights
+            : [.. Highlights.Select(h => h.Title != SandboxTitle ? h
+                : new Highlight("⚠", NoSandboxTitle, "Publicação de emergência: nesta versão as páginas correm sem sandbox, como até à 0.2.13. A versão seguinte volta a trazê-lo."))];
+
+    public static string Render(string version) => Render(version, sandbox: true);
+
+    public static string Render(string version, bool sandbox)
     {
-        var data = new { version, older = NewCount, items = Highlights.Select(h => new { icon = h.Icon, title = h.Title, detail = h.Detail, keys = h.Keys }) };
+        var data = new { version, older = NewCount, items = HighlightsFor(sandbox).Select(h => new { icon = h.Icon, title = h.Title, detail = h.Detail, keys = h.Keys }) };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
 }

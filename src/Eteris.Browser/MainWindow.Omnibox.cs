@@ -23,7 +23,8 @@ public partial class MainWindow
     {
         if (!_omniboxEdited)
         {
-            var text = Tabs.Active?.Address is { } a && !NewTabPage.IsNewTab(a) ? a : string.Empty;
+            var shown = Tabs.Active is { } current ? AddressBar.Text(current.Address, current.PendingAddress) : string.Empty;
+            var text = NewTabPage.IsNewTab(shown) ? string.Empty : shown;
             if (!Omnibox.IsKeyboardFocusWithin) SetOmniboxText(text);
             else if (Omnibox.Text != text)
             {
@@ -54,21 +55,49 @@ public partial class MainWindow
         Omnibox.Foreground = showDisplay ? Brushes.Transparent : (Brush)FindResource("TextBrush");
         if (showDisplay)
         {
-            var display = UrlDisplay.Split(Omnibox.Text);
-            DisplayHost.Text = display.Host;
-            DisplayRest.Text = display.Rest;
+            // O domínio registável nunca sai da vista: se o nome não cabe, cortam-se os subdomínios pela esquerda; o caminho
+            // é cortado no fim pelo TextTrimming. Com a barra ainda sem largura (0) não se ajusta nada.
+            var parts = UrlDisplay.Parts(Omnibox.Text);
+            if (OmniboxDisplay.ActualWidth > 0)
+            {
+                // Reserva a reticência com que o TextTrimming fecha o caminho cortado, para ela não comer o fim do domínio.
+                var reserve = 1 + (parts.Rest.Length > 0 ? MeasureOmniboxText("…") : 0);
+                parts = UrlDisplay.Fit(parts, OmniboxDisplay.ActualWidth - reserve, MeasureOmniboxText);
+            }
+            DisplaySub.Text = parts.Subdomains;
+            DisplayHost.Text = parts.Domain;
+            DisplayRest.Text = parts.Rest;
         }
 
-        var site = SiteInfo.Describe(Tabs.Active?.Address ?? Omnibox.Text);
-        SiteIcon.Text = focused || empty ? "" : site.Kind switch
+        // O cadeado só segue o endereço confirmado pelo motor: pedido por carregar, texto por enviar e página de erro não o têm.
+        var active = Tabs.Active;
+        var showsError = active?.ShowsErrorPage == true;
+        var kind = AddressBar.Icon(active?.Address, active?.PendingAddress, showsError, _omniboxEdited, focused, empty);
+        SiteIcon.Text = kind switch
         {
+            null => "",
             ConnectionKind.Secure => "",
             ConnectionKind.Insecure => "",
             ConnectionKind.Internal => "",
             _ => "",
         };
-        SiteInfoButton.ToolTip = focused || empty ? null : $"{site.Title} — ver detalhes do site";
+        var site = SiteInfo.Describe(active?.Address ?? Omnibox.Text, failed: showsError);
+        SiteInfoButton.ToolTip = focused || empty ? null
+            : active?.PendingAddress is not null || _omniboxEdited ? "Ainda não carregou — ver detalhes do site"
+            : $"{site.Title} — ver detalhes do site";
         SiteInfoButton.IsHitTestVisible = !focused && !empty;
+    }
+
+    // A largura do texto na fonte e no tamanho da barra (o mesmo tipo de letra para subdomínios, domínio e caminho).
+    private double MeasureOmniboxText(string text)
+        => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection,
+                new Typeface(OmniboxDisplay.FontFamily, OmniboxDisplay.FontStyle, OmniboxDisplay.FontWeight, OmniboxDisplay.FontStretch),
+                OmniboxDisplay.FontSize, Brushes.Black, VisualTreeHelper.GetDpi(this).PixelsPerDip).WidthIncludingTrailingWhitespace;
+
+    // A janela mudou de largura: o que cabe na barra muda com ela.
+    private void OmniboxDisplay_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged) UpdateOmniboxChrome();
     }
 
     private void Go(string input, bool newTab = false)
@@ -102,12 +131,23 @@ public partial class MainWindow
             return;
         }
         if (ActiveBrowser is not { } browser || Tabs.Active is not { } tab) return;
-        tab.Address = url;
+        // Só o motor confirma o endereço (AddressChanged): até lá a aba continua na página anterior.
+        tab.PendingAddress = url;
+        tab.PendingLoadStarted = false;
         SetOmniboxText(url);
         Keyboard.Focus(browser);
         UpdateOmniboxChrome();
         await ScriptsReadyFor(tab, browser, url);
-        if (!browser.IsDisposed) browser.Load(url);
+        // O motor saiu entretanto (a aba adormeceu ou mudou de motor): nada vai carregar, o pedido deixa de estar pendente.
+        if (browser.IsDisposed)
+        {
+            tab.PendingAddress = null;
+            tab.PendingLoadStarted = false;
+            if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
+            return;
+        }
+        tab.PendingLoadStarted = true;
+        browser.Load(url);
     }
 
     private void FocusOmnibox()

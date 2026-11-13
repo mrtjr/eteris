@@ -70,6 +70,15 @@ public class ReaderScriptsTests
     }
 
     [Fact]
+    public void Report_FromTabWithoutReader_IsIgnored()
+    {
+        Assert.False(ReaderScripts.AcceptsReport(tabIsActive: true, readerOpen: false));
+        Assert.False(ReaderScripts.AcceptsReport(tabIsActive: false, readerOpen: true));
+        Assert.True(ReaderScripts.AcceptsReport(tabIsActive: true, readerOpen: true));
+        Assert.Contains("ReaderScripts.AcceptsReport(", System.IO.File.ReadAllText(System.IO.Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.xaml.cs")));
+    }
+
+    [Fact]
     public void Detect_UsesFirefoxIsProbablyReaderable()
     {
         Assert.Contains("function isProbablyReaderable(", ReaderScripts.Detect);

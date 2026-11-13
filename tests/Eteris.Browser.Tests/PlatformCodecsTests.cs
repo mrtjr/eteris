@@ -68,8 +68,9 @@ public class PlatformCodecsTests
     [InlineData(true, "h264 aac", "twitch.tv", false, "format strong top", VideoEngine.Decision.None)]
     // Compilação própria sem GPU: o MP4 H.264 tocava só o som — a sonda diz «não» e tudo volta a ser como sem codecs.
     [InlineData(true, "- aac", "twitch.tv", true, "format strong top no", VideoEngine.Decision.Switch)]
-    // Compilação própria antes da sonda: a lista não abre, mas o aviso do motor que disse «não» troca.
-    [InlineData(true, null, "twitch.tv", false, "format strong top no", VideoEngine.Decision.Switch)]
+    // Compilação própria antes da sonda: sem resposta, o motor conta como tendo codecs — a lista não abre e o aviso do
+    // motor que disse «não» só mostra o botão (com codecs a troca nunca é automática, MOT-06).
+    [InlineData(true, null, "twitch.tv", false, "format strong top no", VideoEngine.Decision.Offer)]
     public void EngineChoice_EndToEnd(bool ownRuntime, string? probe, string site, bool opensInVideoEngine, string report,
         VideoEngine.Decision decision)
     {

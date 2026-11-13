@@ -157,6 +157,19 @@ public class HttpsWarningTests : IDisposable
         Assert.Null(ErrorPage.ParseContinue(ErrorPage.ContinueUrl("file:///c:/x", always: false)));
     }
 
+    // INT-05: o botão leva a sua própria assinatura (HMAC do endereço), não o token das rotas das páginas internas.
+    [Fact]
+    public void ContinueUrl_CarriesItsOwnSignature_NotTheSessionToken()
+    {
+        var once = ErrorPage.ContinueUrl("http://velho.pt/a", always: false);
+        Assert.DoesNotContain(InternalPages.Token, once);
+        Assert.NotNull(ErrorPage.ParseContinue(once));
+        Assert.Null(ErrorPage.ParseContinue(once.Replace("velho.pt", "outro.pt")));
+        Assert.Null(ErrorPage.ParseContinue(once + "&always=1"));
+        Assert.Null(ErrorPage.ParseContinue("eteris://error/continue?url=http%3A%2F%2Fvelho.pt%2Fa&t=" + InternalPages.Token));
+        Assert.DoesNotContain("InternalPages.Token", File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "ErrorPage.cs")));
+    }
+
     [Fact]
     public void ContinueRedirect_ReplacesTheWarningWithTheSite()
     {

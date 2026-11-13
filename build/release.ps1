@@ -189,7 +189,14 @@ try {
   [System.IO.File]::WriteAllText($keys, $headKeys + "`n", (New-Object System.Text.UTF8Encoding $false))
   if ((Run-Sign @("verify", $keys, $signedIndex, "$signedIndex.sig")) -ne 0) { throw "assinatura inválida para as chaves de update-keys.txt do commit $(Short $commit): o releases.win.json de $tag não é o que foi assinado, ou a chave não está comitada" }
 
-  # 7. Publicar.
+  # 7. A marca da publicação (o que foi publicado: ferramentas, SHA256 dos ficheiros, do motor) fica na release como
+  # registo (CAD-08), se esta máquina a tiver e for a do commit da etiqueta (conferido no passo 1).
+  if (Test-Path -LiteralPath $buildInfo) {
+    & gh release upload $tag $buildInfo --repo $Repo --clobber
+    if ($LASTEXITCODE -ne 0) { throw "não consegui subir o eteris-build.json para $tag (gh release upload)" }
+  }
+
+  # 8. Publicar.
   & gh release edit $tag --repo $Repo --draft=false
   if ($LASTEXITCODE -ne 0) { throw "não consegui publicar $tag (gh release edit --draft=false)" }
   Write-Host "$tag publicada."

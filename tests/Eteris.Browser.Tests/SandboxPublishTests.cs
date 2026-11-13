@@ -281,14 +281,92 @@ public class SandboxPublishTests
         Assert.True(said("update-keys.txt"), "o pack.ps1 não recusou por falta da chave; saída: " + output);
     }
 
+    // CAD-08: a marca eteris-build.json diz o que foi publicado (a lista de ficheiros com o SHA256) e o pack.ps1 confere-o.
+    // O google-oauth.json falso tem o conteúdo «{}»; o seu SHA256 é este.
+    private const string EmptyJsonSha256 = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
+
+    private static string Mark(string extra) => "{ \"version\": \"9.9.9\", \"sandbox\": true, \"google_oauth\": true" + extra + " }";
+
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_RefusesADirtyMark()
+    {
+        var (said, output) = await RunPackAsync(Mark(", \"dirty\": true"), file: true, "", head: null);
+        Assert.True(said("por gravar (dirty)"), "o pack.ps1 não recusou uma publicação suja; saída: " + output);
+    }
+
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_RefusesAMarkWithoutTheFileList()
+    {
+        var (said, output) = await RunPackAsync(Mark(", \"dirty\": false"), file: true, "", head: null);
+        Assert.True(said("sem a lista de ficheiros (files)"), "o pack.ps1 não recusou uma marca sem files; saída: " + output);
+    }
+
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_RefusesAChangedFile()
+    {
+        var zeros = new string('0', 64);
+        var (said, output) = await RunPackAsync(Mark(", \"dirty\": false, \"files\": [ { \"path\": \"google-oauth.json\", \"sha256\": \"" + zeros + "\" } ]"),
+                                                file: true, "", head: null);
+        Assert.True(said("google-oauth.json"), "a recusa diz que ficheiro; saída: " + output);
+        Assert.True(said("bate com a marca"), "a recusa diz porquê; saída: " + output);
+    }
+
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_RefusesAFileThatIsNotInTheMark()
+    {
+        var (said, output) = await RunPackAsync(Mark(", \"dirty\": false, \"files\": [ { \"path\": \"google-oauth.json\", \"sha256\": \"" + EmptyJsonSha256 + "\" } ]"),
+                                                file: true, "", head: null, extraFile: "a-mais.dll");
+        Assert.True(said("a-mais.dll"), "a recusa diz que ficheiro; saída: " + output);
+        Assert.True(said("na marca (files)"), "a recusa diz porquê; saída: " + output);
+    }
+
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_RefusesAFileMissingFromTheFolder()
+    {
+        var (said, output) = await RunPackAsync(Mark(", \"dirty\": false, \"files\": [ { \"path\": \"google-oauth.json\", \"sha256\": \"" + EmptyJsonSha256 + "\" }, { \"path\": \"em-falta.dll\", \"sha256\": \"" + EmptyJsonSha256 + "\" } ]"),
+                                                file: true, "", head: null);
+        Assert.True(said("em-falta.dll"), "a recusa diz que ficheiro; saída: " + output);
+        Assert.True(said("(files)"), "a recusa diz de onde vem; saída: " + output);
+    }
+
+    [Fact]
+    public async Task Pack_RunOnAFakePublish_AcceptsAMatchingMark()
+    {
+        // Passa tudo o que o pack.ps1 confere e só falha no vpk (que não está no PATH deste processo).
+        var (said, output) = await RunPackAsync(Mark(", \"dirty\": false, \"files\": [ { \"path\": \"google-oauth.json\", \"sha256\": \"" + EmptyJsonSha256 + "\" } ]"),
+                                                file: true, "", head: null);
+        Assert.False(said("(files)"), "o pack.ps1 recusou a marca certa; saída: " + output);
+        Assert.False(said("(dirty)"), "o pack.ps1 recusou a marca certa; saída: " + output);
+        Assert.True(said("vpk"), "o pack.ps1 não chegou ao vpk; saída: " + output);
+    }
+
+    [Fact]
+    public void Publish_RefusesRuntimeFilesOutsideTheManifest_AndRecordsWhatItPublished()
+    {
+        var publish = Read("build", "publish.ps1");
+        var mark = publish[publish.IndexOf("$build = [ordered]@{", StringComparison.Ordinal)..];
+        foreach (var field in new[] { "runtime_manifest_sha256", "dotnet_sdk", "rustc", "vpk" }) Assert.Contains(field, mark);
+        Assert.Matches(@"\bfiles\s+=", mark);
+        Assert.Contains("fora do manifesto", publish);
+        // O troço entre a cópia do login Google e a marca não leva «throw » nem «exit » (nem em comentários): os testes que
+        // fixam a ordem da marca procuram o último «throw ».
+        var copy = publish.IndexOf("Copy-Item -LiteralPath $GoogleOAuthJson", StringComparison.Ordinal);
+        var stretch = publish[copy..publish.LastIndexOf("\"eteris-build.json\"", StringComparison.Ordinal)];
+        Assert.DoesNotContain("throw ", stretch);
+        Assert.DoesNotContain("exit ", stretch);
+        // A lista de ficheiros calcula-se depois da cópia, para levar o google-oauth.json.
+        Assert.True(publish.IndexOf("$publishFiles", StringComparison.Ordinal) > copy);
+    }
+
     // Corre o pack.ps1 verdadeiro numa cópia com uma pasta publish\ falsa: só a marca «mark» e, com «file», um
     // publish\google-oauth.json (vazio, feito aqui). O PATH do processo fica só com o sistema (e, com «head», uma pasta
     // onde só há um git.cmd falso que responde «head»): o vpk nunca corre daqui. Confirma que recusou sem empacotar e
     // devolve uma função que diz se o pack.ps1 escreveu um texto, e a saída para as mensagens de falha. Com «codePage»,
     // corre por um cmd.exe que muda primeiro a página de códigos da consola (chcp) e escreve a nova. Com «key», a cópia
-    // leva um src\Eteris.Browser\Updates\update-keys.txt com uma linha de chave (falsa: o pack.ps1 só vê se há uma).
+    // leva um src\Eteris.Browser\Updates\update-keys.txt com uma linha de chave (falsa: o pack.ps1 só vê se há uma). Com
+    // «extraFile», um ficheiro a mais em publish\ (o conteúdo é «x»).
     private static async Task<(Func<string, bool> Said, string Output)> RunPackAsync(string mark, bool file, string switches, string? head,
-                                                                                     int? codePage = null, bool key = true)
+                                                                                     int? codePage = null, bool key = true, string? extraFile = null)
     {
         var dir = Directory.CreateTempSubdirectory("eteris-pack-");
         try
@@ -299,6 +377,7 @@ public class SandboxPublishTests
             File.Copy(Path.Combine(Root(), "build", "pack.ps1"), script);
             File.WriteAllText(Path.Combine(dir.FullName, "publish", "eteris-build.json"), mark);
             if (file) File.WriteAllText(Path.Combine(dir.FullName, "publish", "google-oauth.json"), "{}");
+            if (extraFile is not null) File.WriteAllText(Path.Combine(dir.FullName, "publish", extraFile), "x");
             if (key)
             {
                 var updates = Directory.CreateDirectory(Path.Combine(dir.FullName, "src", "Eteris.Browser", "Updates")).FullName;

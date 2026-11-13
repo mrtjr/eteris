@@ -92,6 +92,21 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private bool _isReaderable;
 
+    // O leitor foi aberto nesta aba (ToggleReader recebeu «opened»): só então o aviso do leitor conta (ReaderScripts.AcceptsReport).
+    // Não é observável nem guardado; apaga-se ao mudar de página.
+    public bool ReaderOpen { get; set; }
+
+    // O endereço pedido (escrito na barra, ou um link aberto por ela) e ainda não confirmado pelo motor: Address só muda
+    // quando a página chega (MOT-10, NAV-14). Não são observáveis nem guardados na sessão.
+    public string? PendingAddress { get; set; }
+
+    // A carga do endereço pendente já começou (browser.Load chamado): só a partir daí o fim de uma carga o desfaz
+    // (AddressBar.ClearsPending), não o fim da carga da página anterior.
+    public bool PendingLoadStarted { get; set; }
+
+    // O que o motor mostra é a página de erro do Éteris (eteris://error/…), não o site: o cartão do cadeado diz-o.
+    public bool ShowsErrorPage { get; set; }
+
     // A aba usa o motor de vídeo (WebView2) em vez do motor principal — ver Tabs/VideoEngine.cs.
     [ObservableProperty]
     private bool _usesVideoEngine;
@@ -146,6 +161,12 @@ public partial class BrowserTab : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private bool _isMuted;
+
+    // A página tem a câmara, o microfone ou o ecrã autorizados e em uso (até ao documento seguinte): a aba mostra um sinal
+    // (MainWindow.Permissions.cs, MOT-04).
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
+    [ObservableProperty]
+    private bool _isCapturing;
 
     public string? AudioGlyph => AudioIndicator.Glyph(IsAudible, IsMuted);
 
@@ -271,6 +292,7 @@ public partial class BrowserTab : ObservableObject
             if (IsSleeping) parts.Add("A dormir (memória libertada)");
             if (IsMuted) parts.Add("Som silenciado");
             else if (IsAudible) parts.Add("A tocar som");
+            if (IsCapturing) parts.Add("A usar a câmara, o microfone ou o ecrã");
             if (BlockedCount > 0) parts.Add(BlockedCount == 1 ? "1 rastreador bloqueado" : $"{BlockedCount} rastreadores bloqueados");
             return string.Join(" · ", parts);
         }

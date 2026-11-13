@@ -468,4 +468,23 @@ public sealed class SyncChoicesTests : IDisposable
         Assert.Contains("SyncChoices.Receives(_agent?.AccountSecrets == true)", bar);
         Assert.DoesNotContain("PairingBarModel.DefaultReceives", bar);
     }
+
+    // Auditoria, SYN-13: os textos do tópico dizem o que o código faz (uma linha desligada não se envia nem se aplica, mas o que
+    // os outros enviam fica guardado cifrado aqui; os favoritos não têm pastas) e o documento diz o mesmo.
+    [Fact]
+    public void TopicTexts_MatchTheCode()
+    {
+        Assert.DoesNotContain("escolhe o que recebe", SyncChoices.Intro);
+        Assert.Contains("Cada computador escolhe o que envia e o que aplica", SyncChoices.Intro);
+        Assert.Contains("fica guardado aqui cifrado", SyncChoices.Intro);
+        Assert.Contains("desligar uma linha não apaga nada", SyncChoices.Intro);
+        var rows = SyncChoices.Rows(SyncGroups.DefaultCollections);
+        Assert.Equal("Os favoritos (endereço e título)", rows.Single(r => r.Id == "bookmarks").Text);
+        var root = GoogleSyncTests.FindRoot();
+        var doc = string.Join(' ', File.ReadAllText(Path.Combine(root, "docs", "sincronizacao.md")).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        Assert.Contains(SyncChoices.Intro, doc, StringComparison.Ordinal);
+        Assert.DoesNotContain("Os favoritos e as pastas", doc, StringComparison.Ordinal);
+        Assert.DoesNotContain("**nunca os abre**", doc, StringComparison.Ordinal);
+        Assert.DoesNotContain("o código outra vez antes de juntar", File.ReadAllText(Path.Combine(root, "src", "Eteris.Sync", "Pairing", "Pairing.cs")), StringComparison.Ordinal);
+    }
 }

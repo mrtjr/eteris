@@ -9,8 +9,9 @@ namespace Eteris.Browser.Browser;
 public sealed record AddressField(string Key, string Label, string Placeholder = "", bool Wide = false);
 
 // eteris://autofill/ — Pagamentos, Informações de contacto, Documentos de identificação e Viagens (docs/palavras-passe.md,
-// B3). O HTML inicial leva os números só mascarados («Visa •••• 1111», «PT50 •••• 0154»); o número completo chega por
-// /reveal depois da reautenticação. As rotas estão em Vault/VaultRoutes.Autofill.cs.
+// B3). O HTML inicial não leva registos (VAU-09); a lista chega por /list, que só responde à própria página, com os
+// números só mascarados («Visa •••• 1111», «PT50 •••• 0154»); o número completo chega por /reveal depois da
+// reautenticação. As rotas estão em Vault/VaultRoutes.Autofill.cs.
 public static class AutofillPage
 {
     public const string Url = Vault.VaultPages.AutofillUrl;

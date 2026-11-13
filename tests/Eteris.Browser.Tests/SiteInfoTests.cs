@@ -56,4 +56,14 @@ public class SiteInfoTests
     [InlineData(SitePermission.Notifications, "Notificações")]
     public void PermissionName_IsShortLabel(SitePermission kind, string name)
         => Assert.Equal(name, PermissionText.Name(kind));
+
+    [Fact]
+    public void ErrorPage_IsNeverSecure()
+    {
+        var info = SiteInfo.Describe("https://expirado.example/", failed: true);
+        Assert.NotEqual(ConnectionKind.Secure, info.Kind);
+        Assert.Equal("Não foi possível abrir este site", info.Title);
+        Assert.DoesNotContain("encriptadas", info.Detail);
+        Assert.Equal("expirado.example", info.Host);
+    }
 }

@@ -75,4 +75,17 @@ public class CefCodecsRuntimeTests
         Assert.Contains("sha256", publish);
         Assert.Contains("cf671c072925b27823a61181152f4f288e8e4306", publish);
     }
+
+    // CAD-08: antes de compilar, o Check recusa uma árvore do motor com alterações fora dos patches e um FFmpeg que não é o
+    // do código-fonte oferecido (licenses/FFmpeg-SOURCE.txt).
+    [Fact]
+    public void Check_RefusesChangesOutsideThePatches()
+    {
+        var script = File.ReadAllText(Path.Combine(Root(), "build", "cef-codecs", "build.ps1"));
+        Assert.Contains("status --porcelain --untracked-files=no", script);
+        Assert.Matches(@"\$FfmpegCommit\s*=\s*'9db86ce5b5b454dfc96c435f9f0723012980c37f'", script);
+        Assert.Contains("alteracoes fora dos patches", script);
+        Assert.True(script.All(char.IsAscii), "build/cef-codecs/build.ps1 continua so com ASCII");
+        Assert.Contains("9db86ce5b5b454dfc96c435f9f0723012980c37f", File.ReadAllText(Path.Combine(Root(), "licenses", "FFmpeg-SOURCE.txt")));
+    }
 }

@@ -19,8 +19,9 @@ public static class Kdf
     public static string Base64Url(ReadOnlySpan<byte> data)
         => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    public static byte[] FromBase64Url(string text)
+    public static byte[] FromBase64Url(string? text)
     {
+        if (text is null) throw new FormatException("Base64 em falta.");
         var s = text.Replace('-', '+').Replace('_', '/');
         return Convert.FromBase64String(s.PadRight(s.Length + (4 - s.Length % 4) % 4, '='));
     }

@@ -23,6 +23,11 @@ public static class SecretSchemas
     private const SecretFieldType I = SecretFieldType.Integer;
     private const SecretFieldType B = SecretFieldType.Boolean;
 
+    // A «última utilização» viaja dentro do selo mas não entra na impressão: preencher um item não conta como alterá-lo
+    // (senão um computador que ainda não recebeu a palavra-passe nova repunha a antiga em todos). Segue com a alteração
+    // seguinte do item.
+    public const string LastUsedField = "used";
+
     public static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, SecretFieldType>> Fields =
         new Dictionary<string, IReadOnlyDictionary<string, SecretFieldType>>(StringComparer.Ordinal)
         {
@@ -103,7 +108,7 @@ public static class SecretSchemas
         var known = new JsonObject();
         if (Fields.TryGetValue(collection, out var fields))
             foreach (var name in fields.Keys)
-                if (data[name] is { } value) known[name] = value.DeepClone();
+                if (name != LastUsedField && data[name] is { } value) known[name] = value.DeepClone();
         return CanonicalJson.Of(known);
     }
 }

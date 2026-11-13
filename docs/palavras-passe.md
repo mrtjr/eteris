@@ -146,8 +146,15 @@ repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-pas
   Documentos na sincronização (ou a escolha da conta) e ver o kit de recuperação — sempre, nunca com a janela de
   graça**; aprovar um computador novo e gerar um kit novo — só com segredos em jogo, também nunca com a janela de graça
   (0.2.15; ver «Reautenticação» no fim).
-- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; a versão
-  instalada ignora-a, como as outras `ETERIS_TEST_*` (`TestSwitches.ReauthFor`).
+- **Limite assumido:** os interruptores `pwAskHello` e `payAskHello` vivem em claro no `settings.json` do perfil, e a
+  reautenticação ao desligá-los é uma porta da interface (`Vault/WindowsReauth.cs:10`), não uma cifra: um programa do
+  mesmo utilizador altera o ficheiro sem passar por ela. Só valem «true» e «false» exatos (`UserSettings.TryParseSwitch`):
+  «False», «FALSE» e « false » são recusados nas rotas `/set` e na importação de perfil, em vez de desligarem o interruptor
+  sem pedir o Windows.
+- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; só numa
+  compilação com a via de teste (a publicação não a traz: `build/publish.ps1` desliga a constante `ETERIS_TEST_HOOKS` e
+  confere o binário) e só num perfil de teste (`--user-data-dir`); a versão instalada ignora-a, como as outras
+  `ETERIS_TEST_*` (`TestSwitches.ReauthFor`, `ReauthForProfile`).
 
 Testes: `Vault/WindowsReauthTests` (graça de 5 min por janela sem renovação; bloqueio, suspensão e fecho; «sempre»
 sem graça; recusa; cancelamento quando a aba sai da frente; conta sem proteção; pedidos simultâneos; política D-5;
@@ -546,8 +553,11 @@ CPF, cartão com CVC; os dois campos de rastreio escondidos (opacidade 0 e fora 
   delas**; Tab, ou Enter sem escolha, fecham a lista e seguem para a página (enviar o formulário continua a funcionar);
   as letras seguem para a página (filtram a lista); Ctrl e Alt nunca são da lista. Com a lista fechada num campo com
   sugestões, ↓ abre-a com a primeira escolhida.
-- **Rato:** um clique numa linha preenche; um clique nos primeiros **300 ms** da lista não conta (cliques roubados). O
-  clique não ativa a camada (`WM_MOUSEACTIVATE` → `MA_NOACTIVATE`): o foco do teclado fica no campo da página, que não
+- **Rato:** um clique numa linha preenche; um clique nos primeiros **500 ms** da lista não conta (cliques roubados), e o
+  **Enter** também espera esses 500 ms. Se a lista nasceu por baixo do cursor, o clique nessa linha só conta depois de o
+  cursor ter saído dela (pelo menos 4 píxeis do ecrã desde que a lista apareceu) e voltado: uma lista que aparece
+  debaixo de um cursor parado (o rótulo do campo clicado duas vezes) não preenche. O clique
+  não ativa a camada (`WM_MOUSEACTIVATE` → `MA_NOACTIVATE`): o foco do teclado fica no campo da página, que não
   recebe um `blur`. Só um rato que se mexe escolhe uma linha: a lista a aparecer por baixo de um cursor parado não tira
   a escolha feita com as setas (encontrado na prova ao vivo).
 - **Preencher** (`FillVaultLoginAsync`): (1) a aba à vista na janela ativa, o mesmo documento (`VaultChannel.IsCurrent`:
@@ -567,7 +577,7 @@ Testes: `Vault/SuggestionTests` (`SuggestionGeometryTests`: por baixo, largura m
 `VaultKeysTests`: nada com a lista fechada, ↓ abre só num campo com sugestões, setas, Enter com e sem escolha, Esc, Tab,
 letras e atalhos para a página; `VaultFillPolicyTests`: exatas primeiro e o mesmo site marcado, `http`/`https` e o
 aviso, `localhost` seguro, domínios parecidos sem nada, filtro pelo prefixo, onde se sugere, aba escondida, janela
-inativa, documento que saiu, outro site, a pergunta com os dois nomes, os 300 ms, o Windows Hello pelo interruptor),
+inativa, documento que saiu, outro site, a pergunta com os dois nomes, os 500 ms, o cursor parado, o Enter imediato, o Windows Hello pelo interruptor),
 `Vault/CofreFillTests` (no Node: setter nativo por cima do da instância, foco, `input` e `change` a borbulhar; recusa
 o que não tem valor nativo; o plano só com os campos do início de sessão visíveis; sem utilizador só a palavra-passe),
 `VaultChannelGuardTests` (o script só escreve na zona «preencher»).
@@ -891,8 +901,10 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
 
 - **Chave local e impressão gravadas com cada item** (`VaultStore`: colunas `sync_key` e `sync_print`, com
   `K_sync = HKDF(chave do cofre, "Eteris.Cofre:sync")`): `sync_key = HMAC(K_sync, coleção ‖ chave natural)` e
-  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar, «última
-  utilização»), por isso a sincronização compara o cofre **sem decifrar nada**. Um cofre de antes (sem as colunas)
+  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar), por isso a
+  sincronização compara o cofre **sem decifrar nada**. A «última utilização» não entra na impressão (`SecretSchemas.LastUsedField`):
+  preencher não conta como alterar o item; a utilização segue com a alteração seguinte e, ao aplicar um item recebido, fica a mais
+  recente das duas. Um cofre de antes (sem as colunas)
   ganha-as ao abrir; os itens dele ganham a chave e a impressão na primeira leitura. Nenhuma das duas diz o site, o
   utilizador ou o conteúdo, e são de cada computador (outra chave do cofre, outras chaves locais).
 - **Formato da sincronização** (`Vault/VaultSyncMap.cs`): cada item vai com os nomes de `SecretSchemas`; a chave
@@ -916,7 +928,9 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
   repor a pasta inteira). Mudar o cofre neste computador marca uma ronda
   para 10 s depois (`VaultService.Changed` → `SyncService.Touch`), como os favoritos.
 - **Nunca sobe:** o histórico local, os candidatos por guardar, a chave do cofre, a janela de graça, os «Pedir o Windows
-  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre não muda a impressão).
+  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre ou preencher não muda a impressão:
+  `ReadingOrUsingTheVault_ChangesNothingThatSyncs`, `AutofillOnAStaleDevice_DoesNotRevertAPasswordChangedElsewhere` e
+  `OldPrints_AreNotSentAsLocalChanges_AfterTheUpgrade`).
 
 Testes: `Vault/VaultSyncProfileTests` — só chaves e impressões opacas, estáveis ao reabrir; as sete coleções de ida e
 volta para outro computador **sem eco**, com chaves locais diferentes, servindo depois as sugestões, o cartão e «nunca
@@ -1079,9 +1093,10 @@ O que mudou depois da revisão de segurança e de experiência (testes em `Vault
 - **Só com gesto.** A lista abre sozinha só depois de um botão do rato (ou toque) confiável no próprio campo ou da tecla
   Tab; um `campo.focus()` da página manda o foco com `gesture:false` e a lista só abre com ↓. O `generate` só sai
   depois de um gesto. `scroll`, `input` e `submit` sintéticos (`isTrusted=false`) não contam.
-- **Contra cliques roubados.** A lista fecha quando o campo se mexe (como no Chrome e no Firefox); o guarda de 300 ms
+- **Contra cliques roubados.** A lista fecha quando o campo se mexe (como no Chrome e no Firefox); o guarda de 500 ms
   recomeça sempre que a lista aparece ou muda de linhas; o clique só escolhe se o botão desceu na própria linha depois
-  do guarda. As teclas da lista são só da aba do campo (um site fixado, a outra metade do ecrã ou a barra de endereço
+  do guarda e, se a lista nasceu debaixo do cursor, depois de o cursor ter saído da linha (4 píxeis do ecrã); o Enter
+  também espera o guarda. As teclas da lista são só da aba do campo (um site fixado, a outra metade do ecrã ou a barra de endereço
   esquecem o foco do cofre).
 - **Campos escondidos.** Um campo conta como visível com opacidade efetiva ≥ 0,9, pelo menos 10×10 px, texto com cor,
   a maior parte de cinco pontos de amostra no próprio campo (um rótulo dele só não tapa se for transparente) e, num

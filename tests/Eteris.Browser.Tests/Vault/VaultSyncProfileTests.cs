@@ -190,7 +190,7 @@ public sealed class VaultSyncProfileTests : IDisposable
     }
 
     [Fact]
-    public void ReadingTheVault_ChangesNothingThatSyncs_TheLastUseDoes()
+    public void ReadingOrUsingTheVault_ChangesNothingThatSyncs()
     {
         var v = Vault("v");
         var id = v.SaveLogin(Login("Inventada-1!"));
@@ -201,10 +201,12 @@ public sealed class VaultSyncProfileTests : IDisposable
         _ = v.GetLogin(id);
         _ = v.Logins();
         Assert.Equal(before, Prints(p));
-        // A «última utilização» (só gravada numa janela normal: MainWindow.RecordVaultUse pergunta à VaultWindowPolicy) sobe.
+        // A «última utilização» (só gravada numa janela normal: MainWindow.RecordVaultUse pergunta à VaultWindowPolicy) fica
+        // gravada mas não conta: segue com a alteração seguinte do item (SYN-03).
         _now = _now.AddMinutes(1);
         v.MarkUsed(VaultCollection.Logins, id);
-        Assert.NotEqual(before, Prints(p));
+        Assert.Equal(before, Prints(p));
+        Assert.NotNull(v.GetLogin(id)!.Used);
         var src = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Vault.cs"));
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(src, @"\.MarkUsed\("));
     }
@@ -407,6 +409,97 @@ public sealed class VaultSyncProfileTests : IDisposable
         await Rounds();
         Assert.Single(current.Logins());
         Assert.Single(b.Logins());
+    }
+
+    // Dois aparelhos pela pasta local, cada um com o seu cofre real e o seu estado guardado (para os testes de SYN-03).
+    private (SyncAgent Agent, VaultService Vault, MemoryStore Store, VaultSyncProfile Profile) Pair(string name, string folder, Func<long> now, MemoryStore? store = null, VaultService? vault = null)
+    {
+        vault ??= Vault(name);
+        store ??= new MemoryStore();
+        var profile = Profile(vault);
+        SyncAgent? agent = null;
+        agent = new SyncAgent(() => new FolderTransport(folder), new ProfileWithVault(new MemoryProfile(), profile, () => agent?.EnabledCollections),
+            store, name, now, (_, ct) => Task.Delay(5, ct));
+        return (agent, vault, store, profile);
+    }
+
+    // Auditoria, SYN-03: preencher num computador que ainda não recebeu a palavra-passe nova não a repõe a antiga em todos.
+    [Fact]
+    public async Task AutofillOnAStaleDevice_DoesNotRevertAPasswordChangedElsewhere()
+    {
+        long now = 1_762_560_000_000;
+        var folder = Path.Combine(_root, "pasta");
+        var a = Pair("A", folder, () => now);
+        a.Vault.SaveLogin(Login("Antiga-1"));
+        await a.Agent.StartAsync();
+        var b = Pair("B", folder, () => now);
+        await b.Agent.StartAsync();
+        await b.Agent.JoinWithCodeAsync(a.Agent.RevealKit()!.Words);
+        async Task Settle(params SyncAgent[] agents)
+        {
+            for (var i = 0; i < 3; i++)
+                foreach (var agent in agents) Assert.True(await agent.RunAsync());
+        }
+        await Settle(a.Agent, b.Agent);
+        Assert.Equal("Antiga-1", b.Vault.GetLogin(b.Vault.Logins().Single().Id)!.Password);
+
+        // O A muda a palavra-passe e sincroniza; o B (sem ronda) preenche com ela.
+        _now = _now.AddMinutes(5);
+        now += 1000;
+        var idA = a.Vault.Logins().Single().Id;
+        a.Vault.SaveLogin(Login("Nova-2") with { Id = idA });
+        Assert.True(await a.Agent.RunAsync());
+        now += 1000;
+        b.Vault.MarkUsed(VaultCollection.Logins, b.Vault.Logins().Single().Id);
+        await Settle(b.Agent, a.Agent);
+        Assert.Equal("Nova-2", a.Vault.GetLogin(a.Vault.Logins().Single().Id)!.Password);
+        var onB = b.Vault.GetLogin(b.Vault.Logins().Single().Id)!;
+        Assert.Equal("Nova-2", onB.Password);
+        Assert.NotNull(onB.Used);
+    }
+
+    // Auditoria, SYN-03: as impressões gravadas antes da correção (calculadas com a «última utilização») não viram
+    // alterações locais depois dela: regravam-se na primeira ronda, sem enviar nada.
+    [Fact]
+    public async Task OldPrints_AreNotSentAsLocalChanges_AfterTheUpgrade()
+    {
+        long now = 1_762_560_000_000;
+        var folder = Path.Combine(_root, "pasta");
+        var a = Pair("A", folder, () => now);
+        a.Vault.SaveLogin(Login("Inventada-1"));
+        await a.Agent.StartAsync();
+        var b = Pair("B", folder, () => now);
+        await b.Agent.StartAsync();
+        await b.Agent.JoinWithCodeAsync(a.Agent.RevealKit()!.Words);
+        async Task Settle(params SyncAgent[] agents)
+        {
+            for (var i = 0; i < 3; i++)
+                foreach (var agent in agents) Assert.True(await agent.RunAsync());
+        }
+        await Settle(a.Agent, b.Agent);
+        var before = a.Store.Load()!.Engine!.Records.Values.Single(r => r.Collection == Collections.Logins).Version;
+
+        // Um cofre de antes da correção: a impressão gravada é outra (a de quando «used» entrava na conta).
+        SqliteConnection.ClearAllPools();
+        using (var c = new SqliteConnection("Data Source=" + Path.Combine(_root, "B", VaultStore.FileName) + ";Pooling=False"))
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "UPDATE items SET sync_print = $p";
+            cmd.Parameters.AddWithValue("$p", Enumerable.Repeat((byte)0x5A, 32).ToArray());
+            cmd.ExecuteNonQuery();
+        }
+        var stale = Prints(b.Profile);
+        var saved = b.Store.Load()!;
+        var item = b.Profile.Read(null).Items.Single();
+        saved.Baseline![ProfileSync.Id(item.Collection, item.Key)] = ProfileSync.Canonical(item.Collection, item.Data)!;
+        b.Store.Save(saved);
+
+        var again = Pair("B", folder, () => now, b.Store, b.Vault);
+        await Settle(again.Agent, a.Agent);
+        Assert.Equal(before, a.Store.Load()!.Engine!.Records.Values.Single(r => r.Collection == Collections.Logins).Version);
+        Assert.NotEqual(stale, Prints(again.Profile));
+        Assert.Single(b.Vault.Logins());
     }
 
     // Dois computadores pela pasta local, com o cofre real: guardar num aparece no outro, apagar some, mudar nos dois

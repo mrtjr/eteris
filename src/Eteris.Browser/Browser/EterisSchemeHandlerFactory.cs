@@ -10,7 +10,38 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
 {
     public const string SchemeName = "eteris";
 
+    // INT-07, VAU-09: antes de qualquer rota, quem pede. O documento de topo do separador (ou a navegação em curso,
+    // logo a seguir a um F5) tem de ser uma página interna para molduras e sub-recursos, e a própria página para as
+    // rotas do cofre (InternalPages.Serves); senão 403. As respostas não se deixam embutir noutra origem nem farejar.
+    // Corre numa thread do CEF: nenhuma exceção pode sair daqui (fechava o Éteris).
     public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request)
+    {
+        try
+        {
+            var main = request.ResourceType == ResourceType.MainFrame;
+            var top = InternalPages.TopOf(browser?.Identifier ?? -1, SafeFrame.MainUrl(browser));
+            if (!InternalPages.Serves(top, request.Url, main))
+                return ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
+            var handler = Route(browser!, request);
+            // O ResourceHandler.FromString do CefSharp devolve um ByteArrayResourceHandler, que não aceita cabeçalhos
+            // (medido: as Definições, o Histórico e a nova aba saíam sem eles): os mesmos bytes, com o mesmo tipo, num
+            // ResourceHandler. O VaultResourceHandler herda de ResourceHandler e só junta o Cache-Control a estes Headers.
+            if (handler is ByteArrayResourceHandler bytes)
+                handler = new ResourceHandler(bytes.MimeType, new System.IO.MemoryStream(bytes.Data), autoDisposeStream: true);
+            if (handler is ResourceHandler response)
+            {
+                response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+                response.Headers["X-Content-Type-Options"] = "nosniff";
+            }
+            return handler;
+        }
+        catch (Exception)
+        {
+            return ResourceHandler.ForErrorMessage("Pedido recusado", HttpStatusCode.Forbidden);
+        }
+    }
+
+    private IResourceHandler Route(IBrowser browser, IRequest request)
     {
         Uri.TryCreate(request.Url, UriKind.Absolute, out var uri);
         if (uri is { Host: "newtab", AbsolutePath: "/wallpaper/coast.jpg" or "/wallpaper/mountains.jpg" or "/wallpaper/coast-live.webm" })
@@ -82,7 +113,13 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             if (!privateContext && InternalPages.IsAuthorized(request.Url)) AppData.ClearPrivacyReport();
             return Html(PrivacyPage.ReportClearedRedirect);
         }
-        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
+        if (uri is { Host: "privacy", AbsolutePath: "/sandbox-retry" })
+        {
+            // «Voltar a ligar» o sandbox: nunca a partir da janela privada e só com o token da página; volta à página.
+            if (!privateContext && InternalPages.IsAuthorized(request.Url)) Infrastructure.StartupGuard.Current.Reenable();
+            return Html(PrivacyPage.SandboxRetryRedirect);
+        }
+        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version, Infrastructure.CefConfigurator.SandboxSupported && Infrastructure.SandboxInfo.Available != 0));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
                 Sync.SignInEntry.OffersNow(privateContext)));
@@ -455,6 +492,10 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             case "/sync-pair-confirm":
                 Sync.SyncService.Agent()?.ConfirmPairing();
                 break;
+            case "/sync-state-reset":
+                // «Recomeçar sem o estado antigo»: o estado da sincronização não se leu; põe o ficheiro de lado.
+                Sync.SyncService.SetAsideState();
+                break;
             case "/sync-pair-cancel":
                 Sync.SyncService.Agent()?.CancelPairing();
                 break;
@@ -611,7 +652,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
     private static SettingsPage.About AboutInfo() => new(
         Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,
         Shields.FilterLists.ForApp().Summary(), Updates.UpdateService.Status,
-        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready));
+        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready),
+        Infrastructure.CrashLog.Count(System.IO.Path.Combine(Infrastructure.AppPaths.Root, Infrastructure.CrashLog.FileName)));
 
     private static IResourceHandler Html(string html)
         => ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme), Encoding.UTF8, false, "text/html");
