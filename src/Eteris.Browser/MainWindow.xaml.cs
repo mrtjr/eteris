@@ -156,8 +156,9 @@ public partial class MainWindow : Window
 
     // MOT-01: o site pede um certificado de cliente. O diálogo é do Éteris, modal sobre esta janela (nunca o motor, nunca o
     // primeiro da lista) e o Éteris não guarda nada. Vem da thread de rede do CEF; a janela responde na sua thread.
-    // Um diálogo de cada vez, os outros em fila; uma aba fora da vista e a página que já recusou três vezes seguidas são
-    // recusadas sem perguntar (Shields/ClientCertificatePrompts.cs). O diálogo diz de que aba vem o pedido.
+    // Um diálogo de cada vez, os outros em fila; o pedido de uma aba fora da vista espera até ela aparecer; a página que
+    // já recusou três vezes seguidas é recusada sem perguntar até o utilizador navegar (Shields/ClientCertificatePrompts.cs).
+    // O diálogo diz de que aba vem o pedido.
     private readonly ClientCertificatePrompts _clientCertificates = new();
 
     private Task<string?> AskClientCertificate(BrowserTab tab, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
@@ -256,9 +257,9 @@ public partial class MainWindow : Window
                 {
                     Volatile.Write(ref mainHistory.Last, nav);
                     OnMainNavigation(tab, nav);
-                    // Navegação nova (não um redirecionamento): a aba volta a poder perguntar por certificados. Chega antes
+                    // O utilizador navegou (não a página sozinha): a aba volta a poder perguntar por certificados. Chega antes
                     // do pedido de certificado do documento novo (este sai no aperto de mão, depois do OnBeforeBrowse).
-                    if (!nav.IsRedirect) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(tab));
+                    if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(tab));
                 },
                 onCloaked: (host, target) =>
                 {
@@ -549,8 +550,9 @@ public partial class MainWindow : Window
         UpdateVideoEngineBadge();
         ApplyTint();
         RevealActiveTab();
-        // O cartão de permissão de uma aba só aparece com ela à vista.
+        // O cartão de permissão de uma aba só aparece com ela à vista (e o pedido de certificado que ela tem à espera).
         ShowNextPermission();
+        ShowNextClientCertificate();
     }
 
     private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)

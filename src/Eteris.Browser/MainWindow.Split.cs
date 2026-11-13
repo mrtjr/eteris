@@ -115,6 +115,8 @@ public partial class MainWindow
     private void OnSplitChanged()
     {
         UpdateSplitBadge();
+        // A outra metade passou a estar à vista: o pedido de certificado que ela tinha à espera aparece.
+        ShowNextClientCertificate();
         ScheduleSessionSave();
     }
 

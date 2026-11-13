@@ -146,6 +146,8 @@ public partial class MainWindow
         }
         SidebarTitle.Text = browser.Title is { Length: > 0 } title ? title : panel.Title;
         if (focus && browser.IsBrowserInitialized) Keyboard.Focus(browser);
+        // O pedido de certificado que o site fixado tinha à espera aparece (depois de quem chamou acabar de abrir a barra).
+        Dispatcher.InvokeAsync(() => ShowNextClientCertificate());
     }
 
     // Ao mudar para um separador que não é um site, os motores ficam escondidos (e a página marcada como escondida:
@@ -227,7 +229,7 @@ public partial class MainWindow
         _webPanelInjectors[url] = injector;
         var panelHistory = new MainFrameHistory();
         // A identidade deste painel na fila dos pedidos de certificado (MainWindow.xaml.cs, AskClientCertificate): pergunta
-        // só com o painel à vista na barra lateral, e volta a poder perguntar a cada navegação nova.
+        // só com o painel à vista na barra lateral (antes disso espera), e volta a poder perguntar quando o utilizador navega.
         var certificatePage = new object();
         var browser = new ChromiumWebBrowser(url)
         {
@@ -251,7 +253,7 @@ public partial class MainWindow
                 onMainNavigation: nav =>
                 {
                     Volatile.Write(ref panelHistory.Last, nav);
-                    if (!nav.IsRedirect) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
+                    if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
                 },
                 chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _sidebarOpen && _sidebarPanel?.Url == url,
                     () => ClientCertificateDialog.FromPanel(url), host, port, rows)),

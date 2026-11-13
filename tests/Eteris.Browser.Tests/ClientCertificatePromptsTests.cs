@@ -1,4 +1,5 @@
 using System.IO;
+using CefSharp;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tests.Sync;
 
@@ -51,26 +52,85 @@ public class ClientCertificatePromptsTests
     }
 
     [Fact]
-    public void PageOffScreen_IsRefusedSilently_OnArrivalAndWhenItsTurnComes()
+    public void PageOffScreen_WaitsUntilItIsShown_WithoutBlockingTheOthers()
     {
+        // Recusar em silêncio partia o site até reiniciar (o motor guarda o «sem certificado» por servidor:porta): o
+        // pedido de uma aba em segundo plano fica à espera até ela aparecer.
         var prompts = new ClientCertificatePrompts();
         var hidden = new Page { OnScreen = false };
-        var arrival = Ask(prompts, hidden);
-        Assert.True(arrival.IsCompleted);
-        Assert.Null(Value(arrival));
+        var background = Ask(prompts, hidden, "banco.pt");
+        Assert.False(background.IsCompleted);
         Assert.Null(prompts.Next());
 
         var visible = new Page();
-        var shownTask = Ask(prompts, visible, "a.banco.pt");
-        var waiting = Ask(prompts, visible, "b.banco.pt");
-        var shown = prompts.Next()!;
-        // A aba saiu da vista enquanto esperava: a vez dela chega e é recusada sem diálogo.
-        visible.OnScreen = false;
+        var front = Ask(prompts, visible, "intranet.pt");
+        var shown = prompts.Next();
+        Assert.NotNull(shown);
+        Assert.Equal("intranet.pt", shown.Host);
         prompts.Answered(shown, null);
-        Assert.Null(Value(shownTask));
+        Assert.Null(Value(front));
         Assert.Null(prompts.Next());
-        Assert.True(waiting.IsCompleted);
-        Assert.Null(Value(waiting));
+        Assert.False(background.IsCompleted);
+
+        // A aba fica à vista: a vez dela chega.
+        hidden.OnScreen = true;
+        var later = prompts.Next();
+        Assert.NotNull(later);
+        Assert.Equal("banco.pt", later.Host);
+        prompts.Answered(later, "AB");
+        Assert.Equal("AB", Value(background));
+    }
+
+    [Fact]
+    public void Navigated_RefusesWhatTheOldDocumentLeftWaiting()
+    {
+        var prompts = new ClientCertificatePrompts();
+        var hidden = new Page { OnScreen = false };
+        var old = Ask(prompts, hidden);
+        prompts.Navigated(hidden);
+        Assert.Null(Value(old));
+        hidden.OnScreen = true;
+        Assert.Null(prompts.Next());
+    }
+
+    [Theory]
+    [InlineData(true, false, TransitionType.LinkClicked, true)]
+    [InlineData(false, false, TransitionType.Explicit, true)]
+    [InlineData(false, false, TransitionType.AutoBookmark, true)]
+    [InlineData(false, false, TransitionType.Generated, true)]
+    [InlineData(false, false, TransitionType.LinkClicked, false)]
+    [InlineData(false, false, TransitionType.LinkClicked | TransitionType.ClientRedirect, false)]
+    [InlineData(false, false, TransitionType.Reload, false)]
+    [InlineData(false, false, TransitionType.LinkClicked | TransitionType.ForwardBack, false)]
+    [InlineData(true, true, TransitionType.LinkClicked, false)]
+    [InlineData(false, true, TransitionType.Explicit, false)]
+    public void OnlyTheUsersNavigation_ResetsTheRefusals(bool userGesture, bool isRedirect, TransitionType transition, bool expected)
+        // Uma página que o utilizador recusou três vezes não volta a perguntar com location.href, um 204 ou um
+        // location.reload(): só um clique, a barra, um favorito (ou o recarregar da barra, chamado à parte) repõem.
+        => Assert.Equal(expected, ClientCertificatePrompts.ResetsRefusals(userGesture, isRedirect, transition));
+
+    [Fact]
+    public void EveryRequest_IsAlwaysAnswered()
+    {
+        // O invariante do callback do CEF: o que quer que aconteça entretanto, fechar a janela responde a tudo.
+        var random = new Random(7);
+        var prompts = new ClientCertificatePrompts();
+        var pages = Enumerable.Range(0, 4).Select(_ => new Page()).ToList();
+        var asked = new List<Task<string?>>();
+        for (var step = 0; step < 400; step++)
+        {
+            var page = pages[random.Next(pages.Count)];
+            switch (random.Next(6))
+            {
+                case 0: case 1: asked.Add(Ask(prompts, page, $"s{step}.pt")); break;
+                case 2: if (prompts.Next() is { } shown) prompts.Answered(shown, random.Next(3) == 0 ? "AB" : null); break;
+                case 3: page.OnScreen = !page.OnScreen; break;
+                case 4: prompts.Navigated(page); break;
+                case 5: if (random.Next(10) == 0) prompts.Forget(page); break;
+            }
+        }
+        prompts.Close();
+        Assert.All(asked, t => Assert.True(t.IsCompleted));
     }
 
     [Fact]
@@ -168,7 +228,15 @@ public class ClientCertificatePromptsTests
         var window = Source("MainWindow.xaml.cs");
         Assert.Contains("readonly ClientCertificatePrompts _clientCertificates = new();", window);
         Assert.Contains("chooseCertificate: (host, port, rows) => AskClientCertificate(tab, ", window);
-        Assert.Contains("_clientCertificates.Navigated(tab)", window);
+        // Só a navegação do utilizador repõe as recusas (também nos sites fixados); o recarregar da barra também.
+        const string reset = "if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition))";
+        Assert.Contains(reset + " Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(tab));", window);
+        Assert.Contains(reset + " Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));", Source("MainWindow.WebPanels.cs"));
+        Assert.Contains("_clientCertificates.Navigated(tab);", Source("MainWindow.Reload.cs"));
+        // O pedido à espera de uma aba (ou site fixado) fora da vista sai quando ela aparece.
+        Assert.Matches(@"ShowNextPermission\(\);\s*ShowNextClientCertificate\(\);", window);
+        Assert.Contains("ShowNextClientCertificate()", Source("MainWindow.WebPanels.cs"));
+        Assert.Contains("ShowNextClientCertificate()", Source("MainWindow.Split.cs"));
         Assert.Contains("_clientCertificates.Close()", window);
         Assert.Contains("_clientCertificates.Forget(tab)", window);
         Assert.Contains("IsTabOnScreen(tab)", window[window.IndexOf("private Task<string?> AskClientCertificate(", StringComparison.Ordinal)..]);

@@ -30,7 +30,7 @@
 ### Compatibilidade
 
 - Os sites que pedem um certificado de cliente (bancos, administração pública, intranets) passam a abrir: o Éteris mostra uma janela com o titular, o emissor e a validade de cada certificado, não envia nenhum sem o utilizador escolher e não guarda a escolha; o motor lembra a resposta para esse servidor (endereço e porta) até fechar o Éteris.
-- Uma página que pede certificados a vários servidores já não empilha janelas: aparece uma de cada vez, a dizer de que aba vem; os pedidos de abas que não estão à vista e do Espreitar são recusados sem perguntar, e depois de três recusas seguidas a aba deixa de perguntar até à navegação seguinte.
+- Uma página que pede certificados a vários servidores já não empilha janelas: aparece uma de cada vez, a dizer de que aba vem; o pedido de uma aba em segundo plano (ou de um site fixado com a barra lateral fechada) espera até ela ficar à vista, o do Espreitar é recusado sem perguntar, e depois de três recusas seguidas na mesma página a aba deixa de perguntar até o utilizador navegar (um clique, a barra, um favorito ou recarregar).
 ### Conta e sincronização
 
 - **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
