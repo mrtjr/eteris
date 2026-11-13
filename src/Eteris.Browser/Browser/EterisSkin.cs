@@ -8,7 +8,8 @@ namespace Eteris.Browser.Browser;
 //     valores da proposta (.22 e .26) ficavam abaixo de 2:1 em repouso.
 //   - Nenhuma página interna usa scrollbar-color nem scrollbar-width: no Chromium 121 e seguintes, qualquer das duas
 //     desliga o ::-webkit-scrollbar do elemento (EterisSkinTests garante-o em todas as páginas e no leitor).
-//   - Um anel de foco visível em todos os controlos (:focus-visible).
+//   - Um anel de foco visível em todos os controlos (:focus-visible), com especificidade zero (:where): uma página que
+//     já desenha o seu foco (input { outline: none } e a borda íris do Histórico) fica com ele, sem dois anéis.
 //   - «Reduzir movimento» do Windows (Efeitos de animação desligados): sem transições nem animações.
 //   - Alto contraste do Windows (forced-colors): as barras voltam a ser as do sistema.
 //   - Os raios --r-* ficam disponíveis; a migração dos raios das páginas é do ciclo do «sistema visual».
@@ -27,7 +28,7 @@ public static class EterisSkin
         ::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 999px;
                                     border: 2px solid transparent; background-clip: padding-box; }
         ::-webkit-scrollbar-thumb:hover { background-color: var(--sb-thumb-hover); }
-        :focus-visible { outline: 2px solid var(--accent, #22d3ee); outline-offset: 2px; }
+        :where(:focus-visible) { outline: 2px solid var(--accent, #22d3ee); outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
                                    transition-duration: .01ms !important; scroll-behavior: auto !important; }

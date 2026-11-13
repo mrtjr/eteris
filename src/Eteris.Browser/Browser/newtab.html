@@ -25,6 +25,11 @@
     --plain-sky: #ccddf4;
     --plain-ground: #e7edf5;
   }
+  /* Com paisagem (ou na janela privada) a nova aba é escura também no tema claro: o polegar das barras fica o claro da
+     pele (Browser/EterisSkin.cs), que se vê na fotografia. Sem paisagem, no claro, fica o escuro da pele. */
+  html.light:has(> body:not([data-wallpaper="none"])), html.light:has(> body.private) {
+    --sb-thumb: rgba(233, 235, 242, .40); --sb-thumb-hover: rgba(233, 235, 242, .58);
+  }
 
   *, *::before, *::after { box-sizing: border-box; }
   body {

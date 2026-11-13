@@ -99,16 +99,17 @@ public class ErrorDiagnosisTests
         Assert.DoesNotContain(ErrorDiagnosis.For(-105).Tips, t => t.Contains("Noutros sites funciona"));
     }
 
-    // O nome não resolve: o botão principal é «Pesquisar «nome»» no motor escolhido (só com o nome do site, nunca o
-    // caminho nem a consulta), e «Queria dizer X?» só com um site do histórico ou dos favoritos a 2 letras ou menos.
+    // O nome não resolve: o botão principal é «Pesquisar «nome»», por uma ação interna assinada (eteris://error/search,
+    // só com o nome do site, nunca o caminho nem a consulta) que abre o motor escolhido; e «Queria dizer X?» só com um
+    // site do histórico ou dos favoritos a 2 letras ou menos.
     [Fact]
     public void NameNotResolved_OffersToSearchTheName_AndASuggestionFromHistory()
     {
-        var data = Data(ErrorPage.Render(-105, "https://www.publico.ptt/desporto?id=7", engine: Omnibox.SearchEngine.Brave,
-            knownHosts: () => ["github.com", "publico.pt"]));
+        var data = Data(ErrorPage.Render(-105, "https://www.publico.ptt/desporto?id=7", knownHosts: () => ["github.com", "publico.pt"]));
         var search = data.GetProperty("search");
         Assert.Equal("Pesquisar «publico.ptt»", search.GetProperty("label").GetString());
-        Assert.Equal("https://search.brave.com/search?q=publico.ptt", search.GetProperty("url").GetString());
+        Assert.Equal(ErrorPage.SearchUrl("publico.ptt"), search.GetProperty("url").GetString());
+        Assert.Equal("publico.ptt", ErrorPage.ParseSearch(search.GetProperty("url").GetString()!));
         var suggestion = data.GetProperty("suggestion");
         Assert.Equal("publico.pt", suggestion.GetProperty("host").GetString());
         Assert.Equal("https://publico.pt/desporto?id=7", suggestion.GetProperty("url").GetString());
@@ -117,11 +118,10 @@ public class ErrorDiagnosisTests
     [Fact]
     public void NameNotResolved_WithoutHistory_OrFarFromIt_HasNoSuggestion()
     {
-        Assert.Equal(JsonValueKind.Null, Data(ErrorPage.Render(-105, "https://publico.ptt/", engine: Omnibox.SearchEngine.DuckDuckGo))
-            .GetProperty("suggestion").ValueKind);
-        var far = Data(ErrorPage.Render(-105, "https://exemplo.pt/", engine: Omnibox.SearchEngine.DuckDuckGo, knownHosts: () => ["publico.pt"]));
+        Assert.Equal(JsonValueKind.Null, Data(ErrorPage.Render(-105, "https://publico.ptt/")).GetProperty("suggestion").ValueKind);
+        var far = Data(ErrorPage.Render(-105, "https://exemplo.pt/", knownHosts: () => ["publico.pt"]));
         Assert.Equal(JsonValueKind.Null, far.GetProperty("suggestion").ValueKind);
-        Assert.Equal("https://duckduckgo.com/?q=exemplo.pt", far.GetProperty("search").GetProperty("url").GetString());
+        Assert.Equal("exemplo.pt", ErrorPage.ParseSearch(far.GetProperty("search").GetProperty("url").GetString()!));
     }
 
     // As outras falhas não pesquisam nem leem o histórico; o aviso do «HTTPS primeiro» também não.
@@ -132,8 +132,7 @@ public class ErrorDiagnosisTests
     public void OtherFailures_NeitherSearchNorReadHistory(int code, bool insecure)
     {
         var read = false;
-        var data = Data(ErrorPage.Render(code, "https://publico.ptt/", insecure, engine: Omnibox.SearchEngine.DuckDuckGo,
-            knownHosts: () => { read = true; return ["publico.pt"]; }));
+        var data = Data(ErrorPage.Render(code, "https://publico.ptt/", insecure, knownHosts: () => { read = true; return ["publico.pt"]; }));
         Assert.False(read);
         Assert.False(data.TryGetProperty("search", out var search) && search.ValueKind != JsonValueKind.Null);
         Assert.False(data.TryGetProperty("suggestion", out var suggestion) && suggestion.ValueKind != JsonValueKind.Null);
@@ -151,7 +150,28 @@ public class ErrorDiagnosisTests
         Assert.Contains("Queria dizer <a id=\"suggestLink\"></a>?", html);
         var factory = File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
         Assert.Contains("knownHosts: privateContext ? null : ErrorPage.KnownHosts", factory);
-        Assert.Contains("engine: SearchEngine.Preferred", factory);
+        // A rota da pesquisa vem antes da página de erro (o endereço dela também começa por eteris://error/) e só abre o
+        // motor escolhido com o nome assinado.
+        var route = factory.IndexOf("ErrorPage.ParseSearch(request.Url)", StringComparison.Ordinal);
+        Assert.True(route > 0 && route < factory.IndexOf("if (ErrorPage.IsErrorPage(request.Url))", StringComparison.Ordinal));
+        Assert.Contains("ErrorPage.ContinueRedirect(SearchEngine.Preferred.UrlFor(query))", factory);
+    }
+
+    // A assinatura é desta sessão e só vale para o nome assinado: um nome trocado, um «Continuar» ou outro caminho não
+    // abrem a pesquisa.
+    [Fact]
+    public void SearchUrl_IsSignedForThisSessionAndThatName()
+    {
+        var url = ErrorPage.SearchUrl("publico.ptt");
+        Assert.StartsWith("eteris://error/search?q=publico.ptt&s=", url);
+        Assert.Equal("publico.ptt", ErrorPage.ParseSearch(url));
+        Assert.Null(ErrorPage.ParseSearch(url.Replace("q=publico.ptt", "q=outro.pt")));
+        Assert.Null(ErrorPage.ParseSearch(url.Replace("/search?", "/continue?")));
+        Assert.Null(ErrorPage.ParseSearch(url[..^4] + "0000"));
+        Assert.Null(ErrorPage.ParseSearch("eteris://error/search?q=publico.ptt"));
+        var signature = ErrorPage.ContinueUrl("http://publico.ptt/", always: false).Split("&s=")[1];
+        Assert.Null(ErrorPage.ParseSearch("eteris://error/search?q=" + Uri.EscapeDataString("http://publico.ptt/") + "&s=" + signature));
+        Assert.Null(ErrorPage.ParseSearch(ErrorPage.SearchUrl("")));
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")

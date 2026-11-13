@@ -54,7 +54,10 @@ public class EterisSkinTests
         var forced = EterisSkin.Css.IndexOf("@media (forced-colors: active)", StringComparison.Ordinal);
         Assert.True(forced > motion);
         Assert.Contains("::-webkit-scrollbar, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-track { all: unset; }", EterisSkin.Css[forced..]);
-        Assert.Contains(":focus-visible { outline: 2px solid var(--accent, #22d3ee); outline-offset: 2px; }", EterisSkin.Css);
+        // Com especificidade zero (:where): uma página que já tem o seu foco (input { outline: none } com a borda íris do
+        // Histórico) fica com ele, sem um segundo anel por cima; as outras ganham o anel.
+        Assert.Contains(":where(:focus-visible) { outline: 2px solid var(--accent, #22d3ee); outline-offset: 2px; }", EterisSkin.Css);
+        Assert.DoesNotMatch(@"(^|[\s}]):focus-visible", EterisSkin.Css);
         foreach (var radius in new[] { "--r-s: 6px", "--r-m: 10px", "--r-l: 14px", "--r-xl: 22px" })
             Assert.Contains(radius, EterisSkin.Css);
     }
@@ -92,6 +95,22 @@ public class EterisSkinTests
             var ratio = Accent.Contrast(shown, background);
             Assert.True(ratio >= 3, $"{page} ({(light ? "claro" : "escuro")}), {token}: {ratio:0.00}:1");
         }
+    }
+
+    // A nova aba com paisagem (ou a privada) é escura também no tema claro: aí o polegar é o claro da pele, que se vê na
+    // fotografia (a prova ao vivo mostrou o polegar escuro perdido na paisagem). Sem paisagem, no claro, fica o da pele.
+    [Fact]
+    public void NewTab_WithAWallpaper_KeepsTheLightThumb()
+    {
+        var html = Template("newtab");
+        var rule = "html.light:has(> body:not([data-wallpaper=\"none\"])), html.light:has(> body.private) {";
+        var at = html.IndexOf(rule, StringComparison.Ordinal);
+        Assert.True(at > 0, "falta a regra do polegar da nova aba com paisagem");
+        var block = html[at..html.IndexOf('}', at)];
+        var (dark, alpha) = Token("--sb-thumb", light: false);
+        Assert.Contains(FormattableString.Invariant($"--sb-thumb: rgba({dark.R}, {dark.G}, {dark.B}, {alpha:.00})"), block);
+        var (hover, hoverAlpha) = Token("--sb-thumb-hover", light: false);
+        Assert.Contains(FormattableString.Invariant($"--sb-thumb-hover: rgba({hover.R}, {hover.G}, {hover.B}, {hoverAlpha:.00})"), block);
     }
 
     [Fact]
