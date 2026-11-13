@@ -1,6 +1,5 @@
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
+using Eteris.Browser.Permissions;
 using Eteris.Browser.Shields;
 
 namespace Eteris.Browser;
@@ -12,6 +11,9 @@ public partial class ClientCertificateDialog : Window
     private sealed record Item(string Text, string Thumbprint);
 
     private string? _chosen;
+    // Até o diálogo aparecer, o botão não aceita cliques (MaxValue: a guarda ainda não começou a contar).
+    private DateTime _shownUtc = DateTime.MaxValue;
+    private DateTime _activatedUtc = DateTime.MinValue;
 
     private ClientCertificateDialog(string host, int port, IReadOnlyList<ClientCertificateRow> rows)
     {
@@ -23,12 +25,12 @@ public partial class ClientCertificateDialog : Window
         foreach (var row in rows)
             List.Items.Add(new Item($"{row.Subject} — emitido por {row.Issuer} — válido até {row.ValidUntil}", row.Thumbprint));
         List.SelectionChanged += (_, _) => SendButton.IsEnabled = List.SelectedItem is Item;
-        List.MouseDoubleClick += (_, e) =>
-        {
-            if (List.SelectedItem is Item && e.OriginalSource is DependencyObject source && ItemsControl.ContainerFromElement(List, source) is not null)
-                Send();
-        };
-        SendButton.Click += (_, _) => Send();
+        // Enviar é só pelo botão, e nunca no meio segundo a seguir a o diálogo aparecer ou voltar a ficar ativo (a guarda
+        // do cartão de permissão, Permissions/PermissionCard.cs): um duplo clique dado na página, com o diálogo a abrir
+        // debaixo do cursor, escolhia e enviava o certificado. Sem duplo clique na lista.
+        Loaded += (_, _) => _shownUtc = DateTime.UtcNow;
+        Activated += (_, _) => _activatedUtc = DateTime.UtcNow;
+        SendButton.Click += (_, _) => { if (PermissionCard.AcceptsClick(_shownUtc, _activatedUtc, DateTime.UtcNow)) Send(); };
         // O Enter fica sempre com o botão por omissão («Não enviar»): enviar o certificado é um clique deliberado.
         CancelButton.Click += (_, _) => Close();
     }

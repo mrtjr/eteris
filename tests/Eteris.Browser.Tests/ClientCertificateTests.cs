@@ -81,4 +81,20 @@ public class ClientCertificateTests
         Assert.Contains("O site fica a saber quem é.", code + xaml);
         Assert.DoesNotContain("Settings", code);
     }
+
+    [Fact]
+    public void Dialog_SendsOnlyOnADeliberateClick()
+    {
+        // Um duplo clique na página (ou um clique no instante em que o diálogo aparece por baixo do cursor) não envia o
+        // certificado: sem duplo clique na lista e o botão com a guarda do cartão de permissão, a contar do momento em
+        // que o diálogo apareceu ou voltou a ficar ativo.
+        var code = Source("ClientCertificateDialog.xaml.cs");
+        Assert.DoesNotContain("MouseDoubleClick", code);
+        Assert.Contains("PermissionCard.AcceptsClick(", code);
+        Assert.Contains("Loaded += ", code);
+        Assert.Contains("Activated += ", code);
+        var send = code[code.IndexOf("SendButton.Click +=", StringComparison.Ordinal)..];
+        send = send[..send.IndexOf(';')];
+        Assert.Contains("AcceptsClick", send);
+    }
 }
