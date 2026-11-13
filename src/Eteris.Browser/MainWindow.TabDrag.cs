@@ -110,6 +110,9 @@ public partial class MainWindow
         var dropped = _dragging;
         // O estado limpa-se antes de largar a captura: largá-la dispara LostMouseCapture, que já não tem nada a cancelar.
         ResetTabDrag();
+        // Sem arrasto, um clique no ícone da fixada ativa fora de casa volta a casa (MainWindow.PinnedHome.cs).
+        if (!dropped) TryGoHomeFromIcon(e);
+        else _homeClick = null;
         if (dropped)
         {
             TabList.ReleaseMouseCapture();

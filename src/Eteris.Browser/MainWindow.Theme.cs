@@ -33,6 +33,8 @@ public partial class MainWindow
     private void ApplyAccent()
     {
         AccentManager.Retint(Resources["AuroraBrush"] as LinearGradientBrush, AccentManager.Stops);
+        // A janela privada é sempre escura: o ponto das abas fixadas fora de casa é o do tema escuro, mesmo com o claro.
+        if (IsPrivate) Resources["HomeDotBrush"] = new SolidColorBrush(Accent.HomeDot(Accent.Gradient(AccentManager.Current)[0], light: false));
         var script = Browser.InternalPages.AccentScript(AccentManager.Stops);
         foreach (var (tab, browser) in _browsers)
             if (tab.Address.StartsWith("eteris://", StringComparison.OrdinalIgnoreCase) && !browser.IsDisposed && browser.IsBrowserInitialized)

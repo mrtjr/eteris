@@ -124,7 +124,7 @@ public static class TabRadar
     {
         var status = new List<string>();
         if (active) status.Add("Em uso");
-        if (tab.IsPinned) status.Add("Fixada");
+        if (tab.IsPinned) status.Add(tab.IsAwayFromHome ? "Fixada · fora de casa" : "Fixada");
         if (tab.IsLocked) status.Add("Trancada");
         if (tab.IsSleeping) status.Add("A dormir");
         if (tab.IsMuted) status.Add("Silenciada");
@@ -140,7 +140,7 @@ public static class TabRadar
     public static RadarRow FromSpace(BrowserTab tab, Workspace space)
     {
         var status = new List<string> { $"No Espaço «{space.Name}»" };
-        if (tab.IsPinned) status.Add("Fixada");
+        if (tab.IsPinned) status.Add(tab.IsAwayFromHome ? "Fixada · fora de casa" : "Fixada");
         if (tab.IsLocked) status.Add("Trancada");
         if (tab.IsSleeping) status.Add("A dormir");
         var site = Site(tab.Address);

@@ -242,4 +242,15 @@ public class PinnedHomeTabTests
         Assert.False(vm.SetHome(vm.Tabs[1], "https://b.pt/"));
         Assert.Null(vm.Tabs[1].Home);
     }
+
+    // O Radar diz «Fixada · fora de casa» (também numa aba de outro Espaço).
+    [Fact]
+    public void TheRadar_SaysAwayFromHome()
+    {
+        var tab = Pinned("https://exemplo.pt/");
+        Assert.Equal("Fixada", TabRadar.FromTab(tab, active: false, duplicates: 1).Status);
+        tab.Address = "https://exemplo.pt/outra";
+        Assert.Equal("Fixada · fora de casa", TabRadar.FromTab(tab, active: false, duplicates: 1).Status);
+        Assert.Equal("No Espaço «Trabalho» · Fixada · fora de casa", TabRadar.FromSpace(tab, new Workspace("Trabalho")).Status);
+    }
 }

@@ -18,6 +18,7 @@ public static class ShortcutSheet
             new("Ctrl+Tab", "Aba seguinte"),
             new("Ctrl+Shift+Tab", "Aba anterior"),
             new("Ctrl+1 … 9", "Ir para a aba"),
+            new("Alt+Home", "Voltar a casa (aba fixada)"),
             new("Clique do meio", "Fechar aba"),
             new("Ctrl+clique · Shift+clique", "Selecionar várias abas (ações em bloco no menu da aba)"),
             new("Arrastar aba à margem", "Ecrã dividido (direita: lado a lado · fundo: empilhado)"),

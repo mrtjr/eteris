@@ -834,6 +834,9 @@ public partial class MainWindow : Window
         if ((ctrl && key == Key.R) || key == Key.F5) return () => ReloadActive();
         if (alt && key == Key.Left) return GoBack;
         if (alt && key == Key.Right) return GoForward;
+        // A casa da aba fixada (MainWindow.PinnedHome.cs): o gesto de «página inicial» do Chrome, do Firefox e do Vivaldi.
+        // Passa a ser do Éteris também com o foco na página.
+        if (alt && !ctrl && !shift && key == Key.Home) return GoHomeActive;
         if (ctrl && key >= Key.D1 && key <= Key.D9) return () => Tabs.SelectByNumber(key - Key.D0);
         if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) return () => Tabs.SelectByNumber(key - Key.NumPad0);
         return null;
@@ -910,6 +913,7 @@ public partial class MainWindow : Window
     private void TabItem_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not BrowserTab tab) return;
+        _homeClick = null;
         FocusFrame();
         if (e.ChangedButton == MouseButton.Middle)
         {
@@ -929,6 +933,9 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            // «Voltar a casa» pelo ícone (MainWindow.PinnedHome.cs): só numa aba que já era a ativa (o 1.º clique numa fixada
+            // de fundo só a ativa); decide-se ao largar, sem arrasto.
+            _homeClick = ReferenceEquals(Tabs.Active, tab) && tab.IsAwayFromHome && IsInsideIconHit(e.OriginalSource as DependencyObject, (FrameworkElement)sender) ? tab : null;
             Tabs.Active = tab;
         }
     }

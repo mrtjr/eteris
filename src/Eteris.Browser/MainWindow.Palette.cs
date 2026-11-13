@@ -80,6 +80,7 @@ public partial class MainWindow
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         yield return new("\uE71D", "Radar de abas", "Encontre, compare ou reabra abas desta janela", "Ctrl+Shift+A", ToggleRadar);
+        foreach (var command in HomeCommands(tab)) yield return command;
         yield return new("\uE708", "Pausa", "Silencia tudo e esconde as páginas — Esc para voltar", "Ctrl+.", TogglePause);
         // O mesmo que o botão do aviso do regresso da Pausa (o aviso só responde ao rato e ao leitor de ecrã).
         if (_replay.Count > 0)
