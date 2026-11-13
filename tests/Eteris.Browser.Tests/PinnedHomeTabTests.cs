@@ -243,6 +243,27 @@ public class PinnedHomeTabTests
         Assert.Null(vm.Tabs[1].Home);
     }
 
+    // O «Anular» de «Usar este endereço como casa» guarda a aba: depois de ela sair da faixa («Feito», fechar) e voltar como
+    // outra (PutBack, reabrir), a aba antiga continua fixada, mas já não é desta janela: não muda nada e não diz «Anulado».
+    // Uma aba guardada noutro Espaço continua a contar.
+    [Fact]
+    public void SetHome_RefusesATabThatLeftTheStrip()
+    {
+        var vm = WithTabs("https://exemplo.pt/", "https://b.pt/");
+        var tab = vm.Tabs[0];
+        vm.TogglePin(tab);
+        tab.Address = "https://exemplo.pt/nova";
+        Assert.True(vm.SetHome(tab, tab.Address));
+        var snapshot = vm.Snapshot(tab);
+        vm.CloseDone(tab);
+        var back = vm.PutBack(snapshot);
+        Assert.False(vm.SetHome(tab, "https://exemplo.pt/"));
+        Assert.Equal("https://exemplo.pt/nova", back.Home);
+
+        vm.NewWorkspace("Trabalho");
+        Assert.True(vm.SetHome(back, "https://exemplo.pt/outra"));
+    }
+
     // O Radar diz «Fixada · fora de casa» (também numa aba de outro Espaço).
     [Fact]
     public void TheRadar_SaysAwayFromHome()

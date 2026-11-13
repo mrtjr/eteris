@@ -402,10 +402,12 @@ public partial class TabsViewModel : ObservableObject
         tab.IsPinned = pin;
     }
 
-    // «Usar este endereço como casa» (e o «Anular» dele): só numa fixada, e sempre sem «utilizador:senha@».
+    // «Usar este endereço como casa» (e o «Anular» dele): só numa fixada desta janela (também guardada noutro Espaço), e
+    // sempre sem «utilizador:senha@». Uma aba que saiu da faixa continua fixada, mas o «Anular» já não muda nada nela: a
+    // que voltou («Feito» anulado, reaberta) é outra.
     public bool SetHome(BrowserTab tab, string? address)
     {
-        if (!tab.IsPinned) return false;
+        if (!tab.IsPinned || WorkspaceOf(tab) is null) return false;
         tab.Home = PinnedHome.Clean(address);
         return true;
     }

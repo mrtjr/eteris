@@ -166,7 +166,8 @@ public class PinnedHomeWiringTests
 
         var palette = Source("MainWindow.Palette.cs");
         Assert.Matches(@"""Radar de abas""[^\n]*\n\s*foreach \(var command in HomeCommands\(tab\)\) yield return command;", palette);
-        Assert.Contains("(\"\\uE718\", \"Fixar esta aba\", \"Fica à esquerda, com casa neste endereço\", null, () => Tabs.TogglePin(tab))", home);
+        // Sem «à esquerda»: com as abas verticais, a fixada vai para o topo.
+        Assert.Contains("(\"\\uE718\", \"Fixar esta aba\", \"Fica no início da lista de abas, com casa neste endereço\", null, () => Tabs.TogglePin(tab))", home);
         Assert.Contains("(\"\\uE77A\", \"Desafixar esta aba\", \"Deixa de ter casa\", null, () => Tabs.TogglePin(tab))", home);
         Assert.Contains("(\"\\uE80F\", \"Voltar a casa\", tab.HomeHint!, \"Alt+Home\", GoHomeActive)", home);
         Assert.Contains("(\"\\uE8EC\", \"Usar este endereço como casa\", $\"A aba passa a voltar a {PinnedHome.Label(tab.Address)}\", null, () => UseAddressAsHome(tab))", home);
@@ -180,7 +181,10 @@ public class PinnedHomeWiringTests
         var home = Source("MainWindow.PinnedHome.cs");
         Assert.Contains("\"Já está na casa desta aba\"", home);
         Assert.Contains("\"Esta aba fixada ainda não tem casa: a primeira página web que abrir passa a sê-lo\"", home);
-        Assert.Contains("\"Só as abas fixadas têm casa: Ctrl+K › «Fixar esta aba»\"", home);
+        // A paleta só tem «Fixar esta aba» numa página web (PinnedHome.CanBeHome): na nova aba e nas páginas do Éteris, o
+        // aviso não manda para um comando que lá não está.
+        Assert.Matches(@"if \(!tab\.IsPinned\)\s*ShowToast\(PinnedHome\.CanBeHome\(tab\.Address\)\s*\? ""Só as abas fixadas têm casa: Ctrl\+K › «Fixar esta aba»""\s*: ""Só as abas fixadas têm casa: abra um site e depois Ctrl\+K › «Fixar esta aba»""\);", home);
+        Assert.Matches(@"if \(PinnedHome\.CanBeHome\(tab\.Address\)\)\s*yield return new\(""\\uE718"", ""Fixar esta aba""", home);
         Assert.Contains("ShowUndoToast($\"A casa desta aba passa a ser {tab.HomeLabel}\", $\"Casa nova: «{tab.HomeLabel}»\"", home);
         Assert.Contains("previous is null ? [] : [previous]", home);
         // Adormecida, acorda já na casa (uma só carga); acordada, pelo LoadUrl (omnibox, motor de vídeo, Voltar).

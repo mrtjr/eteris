@@ -48,7 +48,11 @@ public partial class MainWindow
     private void GoHomeActive()
     {
         if (Tabs.Active is not { } tab) return;
-        if (!tab.IsPinned) ShowToast("Só as abas fixadas têm casa: Ctrl+K › «Fixar esta aba»");
+        // A paleta só tem «Fixar esta aba» numa página web (HomeCommands): na nova aba e nas páginas do Éteris, primeiro o site.
+        if (!tab.IsPinned)
+            ShowToast(PinnedHome.CanBeHome(tab.Address)
+                ? "Só as abas fixadas têm casa: Ctrl+K › «Fixar esta aba»"
+                : "Só as abas fixadas têm casa: abra um site e depois Ctrl+K › «Fixar esta aba»");
         else if (tab.Home is null) ShowToast("Esta aba fixada ainda não tem casa: a primeira página web que abrir passa a sê-lo");
         else if (!tab.IsAwayFromHome) ShowToast("Já está na casa desta aba");
         else GoHome(tab);
@@ -101,7 +105,7 @@ public partial class MainWindow
         if (!tab.IsPinned)
         {
             if (PinnedHome.CanBeHome(tab.Address))
-                yield return new("\uE718", "Fixar esta aba", "Fica à esquerda, com casa neste endereço", null, () => Tabs.TogglePin(tab));
+                yield return new("\uE718", "Fixar esta aba", "Fica no início da lista de abas, com casa neste endereço", null, () => Tabs.TogglePin(tab));
             yield break;
         }
         yield return new("\uE77A", "Desafixar esta aba", "Deixa de ter casa", null, () => Tabs.TogglePin(tab));
