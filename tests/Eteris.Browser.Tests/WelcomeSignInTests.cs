@@ -37,9 +37,10 @@ public class WelcomeSignInTests
     public void Welcome_FooterNoLongerSaysNoAccounts()
     {
         var html = WelcomePage.Render(new UserSettings(), []);
-        Assert.Contains("<b>Sem conta obrigatória.</b> Sem telemetria. Sem sincronização, tudo fica neste computador.", html);
+        // Proposta 3 (arrumações): a sincronização existe, é opcional e cifrada de ponta a ponta.
+        Assert.Contains("<b>Sem conta obrigatória.</b> Sem telemetria. Sincronização opcional, cifrada de ponta a ponta.", html);
         Assert.Contains("Sem conta obrigatória.", html);
-        Assert.Contains("Sem sincronização, tudo fica neste computador.", html);
+        Assert.DoesNotContain("Sem sincronização, tudo fica neste computador.", html);
         Assert.DoesNotContain("Sem contas.", html);
     }
 

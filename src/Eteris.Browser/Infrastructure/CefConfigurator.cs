@@ -11,7 +11,7 @@ public static class CefConfigurator
 
     public static CefSettings Build(string profilePath, bool blockAutoplay = true, bool muteAudio = false, nint sandboxInfo = 0,
                                     int? devToolsPort = null, string? bootstrapExe = null, bool networkSandbox = false,
-                                    bool shaderCache = false)
+                                    bool shaderCache = false, bool overlayScrollbars = false)
     {
         var settings = new CefSettings
         {
@@ -76,7 +76,7 @@ public static class CefConfigurator
         // (NetworkSandbox.Decide). O EngineHardening, a seguir, junta-lhe as funcionalidades dele.
         if (networkSandbox) settings.CefCommandLineArgs["enable-features"] = NetworkSandbox.Feature;
         // Promessas do Éteris na linha de comandos do motor (APIs de anúncios desligadas…): Shields/EngineHardening.cs.
-        Shields.EngineHardening.Configure(settings);
+        Shields.EngineHardening.Configure(settings, overlayScrollbars: overlayScrollbars);
         settings.RegisterScheme(new CefCustomScheme
         {
             SchemeName = EterisSchemeHandlerFactory.SchemeName,
@@ -136,8 +136,9 @@ public static class CefConfigurator
         var networkSandbox = NetworkSandbox.Decide(sandbox != 0, Environment.ProcessPath);
         // O perfil do AppContainer que o Chromium vai criar para este caminho: a desinstalação apaga-o.
         if (networkSandbox) NetworkSandbox.Remember(Environment.ProcessPath);
+        // As barras sobrepostas (Definições › Aspeto) aplicam-se no arranque do motor: mudar a opção vale da próxima vez.
         var settings = Build(AppPaths.Profile, Data.Settings.Current.BlockAutoplay, TestSwitches.Mute, sandbox, TestSwitches.DevToolsPort, bootstrap, networkSandbox,
-            shaderCache);
+            shaderCache, overlayScrollbars: Data.Settings.Current.OverlayScrollbars);
         // O proxy das provas ao vivo (--eteris-proxy, --eteris-proxy-pac): só com um perfil de teste.
         foreach (var (name, value) in StartupArgs.TestProxy(args, AppPaths.IsCustomProfile)) settings.CefCommandLineArgs[name] = value;
         // Só nas medições de desempenho (ETERIS_TEST_HOST_RULES; nunca numa instalação): nomes de teste para 127.0.0.1.

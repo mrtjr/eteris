@@ -152,16 +152,20 @@ public static class ReaderScripts
           const words = (content.textContent || '').trim().split(/\s+/).length;
           const minutes = Math.max(1, Math.round(words / 230));
 
+          // Sem barra horizontal: o texto parte palavras compridas, as tabelas e os blocos de código rolam por dentro, as
+          // figuras e a média cabem na coluna. As barras são finas, sem setas, na cor do tema (nunca as propriedades
+          // normalizadas da cor e da largura da barra, que desligam o ::-webkit-scrollbar), e «reduzir movimento» tira as
+          // transições.
           const css = `
             :host { all: initial; }
-            .wrap { position: fixed; inset: 0; overflow-y: auto; z-index: 2147483647; background: var(--bg); color: var(--fg);
+            .wrap { position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden; z-index: 2147483647; background: var(--bg); color: var(--fg);
                     transition: background .25s, color .25s; font-family: var(--font); }
             .wrap.dark  { --bg: #12141b; --fg: #dfe2ea; --muted: #8b91a3; --line: #262a36; --link: #7dd3fc; --panel: #1b1e28; --hl: rgba(125, 211, 252, .13); }
             .wrap.sepia { --bg: #f4ecd8; --fg: #3b3226; --muted: #8a7b63; --line: #e2d6b9; --link: #9a4d1b; --panel: #ebe1c7; --hl: rgba(154, 77, 27, .12); }
             .wrap.light { --bg: #ffffff; --fg: #1f2328; --muted: #6b7280; --line: #e5e7eb; --link: #2563eb; --panel: #f3f4f6; --hl: rgba(37, 99, 235, .1); }
             .wrap.serif { --font: Charter, "Iowan Old Style", Georgia, Cambria, serif; }
             .wrap.sans  { --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
-            .bar { position: sticky; top: 0; display: flex; justify-content: center; gap: 6px; padding: 14px; z-index: 1;
+            .bar { position: sticky; top: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 14px; z-index: 1;
                    background: linear-gradient(var(--bg) 60%, transparent); font: 13px "Segoe UI", system-ui, sans-serif; }
             .bar button { all: unset; cursor: pointer; padding: 7px 12px; border-radius: 10px; color: var(--muted);
                           background: var(--panel); border: 1px solid var(--line); }
@@ -172,7 +176,10 @@ public static class ReaderScripts
             .site { color: var(--muted); font: 600 12px "Segoe UI", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; margin: 22px 0 10px; }
             h1.title { font-size: 2.05em; line-height: 1.2; margin: 0 0 14px; font-weight: 700; letter-spacing: -.01em; }
             .meta { color: var(--muted); font: 13.5px "Segoe UI", system-ui, sans-serif; padding-bottom: 26px; margin-bottom: 30px; border-bottom: 1px solid var(--line); }
+            .content { overflow-wrap: anywhere; }
             .content img { max-width: 100%; height: auto; border-radius: 10px; margin: 14px 0; display: block; }
+            .content table { display: block; max-width: 100%; overflow-x: auto; }
+            .content figure, .content video, .content iframe, .content svg, .content canvas { max-width: 100%; height: auto; }
             .content a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
             .content h2, .content h3 { line-height: 1.3; margin: 1.8em 0 .6em; }
             .content p { margin: 0 0 1.15em; }
@@ -183,6 +190,14 @@ public static class ReaderScripts
             .speaking { background: var(--hl); box-shadow: 0 0 0 8px var(--hl); border-radius: 4px; transition: background .3s, box-shadow .3s; }
             .listening .content p, .listening .content li, .listening .content h2, .listening .content h3, .listening .content blockquote { cursor: pointer; }
             .bar button.live { color: var(--fg); border-color: var(--link); }
+            ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+            ::-webkit-scrollbar-button { display: none; }
+            ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+            ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+            ::-webkit-scrollbar-thumb:hover { background-color: var(--fg); }
+            @media (prefers-reduced-motion: reduce) {
+              *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+            }
           `;
           const host = document.createElement('div');
           host.id = ID;
@@ -239,7 +254,8 @@ public static class ReaderScripts
               article.querySelectorAll('.speaking').forEach(n => n.classList.remove('speaking'));
               if (!node) return;
               node.classList.add('speaking');
-              node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+              node.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
             };
             const paint = () => {
               listen.textContent = state === 'playing' ? '❚❚  Pausar' : state === 'paused' ? '▶  Continuar' : '▶  Ouvir';

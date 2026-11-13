@@ -11,8 +11,21 @@ public class AccentPagesTests
     private static readonly Color[] Coral = Accent.Gradient(Accent.PaletteColor("coral")!.Value);
 
     [Fact]
-    public void Themed_WithTheOriginalIris_InjectsNothing()
-        => Assert.Equal(Page, InternalPages.Themed(Page, light: false, Accent.IrisStops));
+    public void Themed_WithTheOriginalIris_InjectsOnlyTheSkin()
+        => Assert.Equal(Page.Replace("<head>", "<head>" + EterisSkin.Style), InternalPages.Themed(Page, light: false, Accent.IrisStops));
+
+    // Com a pele presente, a cor continua a ganhar: a pele, os estilos da própria página e depois o #eteris-accent.
+    [Fact]
+    public void Themed_OrdersSkinThenPageStylesThenAccent()
+    {
+        var page = Page.Replace("</head>", "<style id=\"own\">:root { --accent: #fff; }</style></head>");
+        var html = InternalPages.Themed(page, light: true, Coral);
+        var skin = html.IndexOf("id=\"eteris-skin\"", StringComparison.Ordinal);
+        var own = html.IndexOf("id=\"own\"", StringComparison.Ordinal);
+        var accent = html.IndexOf("id=\"eteris-accent\"", StringComparison.Ordinal);
+        Assert.True(skin >= 0 && skin < own && own < accent, $"pele {skin}, página {own}, cor {accent}");
+        Assert.True(accent < html.IndexOf("</head>", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void Themed_WithAnotherAccent_OverridesTheIrisVariable()

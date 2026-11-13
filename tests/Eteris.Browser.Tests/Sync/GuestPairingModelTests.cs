@@ -180,7 +180,7 @@ public class GuestPairingModelTests
     public void ReplacedTexts_ToTheLetter()
     {
         Assert.Equal("A conta de sincronização na nuvem foi apagada ou substituída noutro computador.", GuestPairingModel.ReplacedTitle);
-        Assert.Equal("Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.",
+        Assert.Equal("Se não o fez, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.",
             GuestPairingModel.ReplacedText);
         Assert.Equal("Fui eu — juntar este computador", GuestPairingModel.ReplacedJoin);
         Assert.Equal("Não fui eu", GuestPairingModel.ReplacedNotMe);

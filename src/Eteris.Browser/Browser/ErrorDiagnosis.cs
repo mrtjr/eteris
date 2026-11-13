@@ -63,7 +63,7 @@ public static class ErrorDiagnosis
                 "Verifique se o endereço está bem escrito ou tente pesquisá-lo.", "🔎", "O nome não resolve (DNS)", name,
                 secureDns
                     ? ["Confirme a ortografia do endereço.", "O DNS seguro está ligado: algumas redes bloqueiam-no. Experimente desligá-lo em Definições › Privacidade.", "Se o site é novo ou mudou de nome, pode ainda não existir."]
-                    : ["Confirme a ortografia do endereço.", "Se o site é novo ou mudou de nome, pode ainda não existir.", "Noutros sites funciona? Então o problema é deste nome, não da sua ligação."]),
+                    : ["Confirme a ortografia do endereço.", "Se o site é novo ou mudou de nome, pode ainda não existir.", "Os outros sites abrem? Então o problema é deste endereço, não da ligação."]),
             ErrorKind.Offline => new(ErrorKind.Offline, "Está sem ligação à Internet",
                 "Verifique o Wi-Fi ou o cabo. Enquanto isso, apanhe a luz.", "✦", "Sem rede", name,
                 ["Verifique o Wi-Fi, o cabo ou o modo de avião.", "A página volta a tentar sozinha quando a ligação regressar."]),

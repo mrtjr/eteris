@@ -622,7 +622,7 @@ public class SyncIntegrationTests
     {
         var page = File.ReadAllText(BrowserSrc("Browser", "settings.html"), Encoding.UTF8);
         Assert.Contains("Vários pedidos para entrar na sua conta foram recusados ou ficaram sem resposta, e por isso a barra deixou de abrir sozinha. "
-            + "Se não foi você, alguém tem a sua conta Google: mude a palavra-passe da Google e retire o acesso do Éteris.", page);
+            + "Se não reconhece estes pedidos, alguém tem a sua conta Google: mude a palavra-passe da Google e retire o acesso do Éteris.", page);
         foreach (var needed in new[] { "sync-requests-show", "sync-refuse", "syncQuietRevoke", "Mostrar o pedido na barra", "Retirar o acesso do Éteris", "Não fui eu", "s.pairingQuiet" })
             Assert.Contains(needed, page);
         Assert.DoesNotContain("sync-approve", page);

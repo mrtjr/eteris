@@ -119,6 +119,7 @@ public static class SettingsPage
             dns = settings.SecureDns,
             clearOnExit = settings.ClearOnExit,
             hideFromCapture = settings.HideFromCapture,
+            overlayScrollbars = settings.OverlayScrollbars,
             siteLanguage = settings.SiteLanguage,
             systemLanguage = Shields.RequestIdentity.Language("system"),
             theme = settings.Theme,
