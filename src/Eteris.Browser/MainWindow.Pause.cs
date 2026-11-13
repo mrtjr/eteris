@@ -79,6 +79,20 @@ public partial class MainWindow
         }
     }
 
+    // Os chips do temporizador. Um WrapPanel também não tem par de automação: sem este, o nome «Temporizador da Pausa» nunca
+    // chegava ao leitor de ecrã (só «1 min, botão»).
+    internal sealed class PauseChips : WrapPanel
+    {
+        protected override AutomationPeer OnCreateAutomationPeer() => new PauseChipsPeer(this);
+
+        private sealed class PauseChipsPeer(PauseChips owner) : FrameworkElementAutomationPeer(owner)
+        {
+            protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Group;
+
+            protected override string GetClassNameCore() => "PauseChips";
+        }
+    }
+
     // O que tocava antes da última Pausa desta janela: o aviso e a paleta oferecem retomá-lo (nunca recomeça sozinho).
     private List<FrameworkElement> _replay = [];
 
@@ -490,6 +504,8 @@ public partial class MainWindow
         var maximize = CaptionButton("", "Maximizar", "CaptionButton", Maximize_Click);
         maximize.SetBinding(ContentControl.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = MaximizeButton });
         maximize.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(FrameworkElement.ToolTip)) { Source = MaximizeButton });
+        // O nome vem do estilo CaptionButton (ligado à dica): «Restaurar» com a janela maximizada, e não um «Maximizar» fixo.
+        maximize.ClearValue(AutomationProperties.NameProperty);
         maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
         CaptionButton("", "Fechar", "CloseCaptionButton", CloseWindow_Click);
         var captionCard = new Border
@@ -547,7 +563,7 @@ public partial class MainWindow
         center.Children.Add(breath);
 
         // Os chips do temporizador: «Sem fim · 1 min · 5 min · 15 min», o escolhido marcado.
-        var chips = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, mini ? 8 : 26, 0, 0) };
+        var chips = new PauseChips { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, mini ? 8 : 26, 0, 0) };
         AutomationProperties.SetName(chips, "Temporizador da Pausa");
         foreach (var minutes in PauseTimer.Choices)
         {
