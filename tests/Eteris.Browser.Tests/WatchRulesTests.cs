@@ -321,18 +321,26 @@ public class WatchRulesTests
     // numa largura. Uma leitura nunca se compara com a de outra fonte: só avisa contra uma linha de base da mesma fonte.
     [Fact] public void TabReading_AgainstAnEngineBaseline_IsNothing()
     {
+        // Numa vigia que está bem, a leitura da aba não tem nada a gravar: nem o preço (a linha de base do motor fica, e a
+        // curva não mistura fontes), nem a hora da verificação ou da próxima (quem abre a página muitas vezes adiava as
+        // visitas do motor para sempre, e «verificado há 1 min» mentia sobre um preço que não foi verificado).
         var w = Watch(kind: WatchKind.Price, lastPrice: 100m, status: WatchStatus.Ok);
-        var passive = WatchRules.Passive(w, Reading(price: 90m), PageBlock.None, Now);
+        Assert.Null(WatchRules.Passive(w, Reading(price: 90m), PageBlock.None, Now));
+        var change = Watch(kind: WatchKind.Change, lastText: "Entrar", status: WatchStatus.Ok);
+        Assert.Null(WatchRules.Passive(change, Reading(piece: "Olá, Ana"), PageBlock.None, Now));
+
+        // Numa vigia em falha (ou sem pedaço), a leitura da aba tira-a desse estado — sem preço nem texto, e sem avisar.
+        var failing = w with { Status = WatchStatus.Failing, Failures = 1 };
+        var passive = WatchRules.Passive(failing, Reading(price: 90m), PageBlock.None, Now);
         Assert.NotNull(passive);
         Assert.Equal(WatchStatus.Ok, passive.Status);
-        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(w, passive));
-        // A linha de base do motor fica: a leitura da aba não a substitui (nem entra na curva).
         Assert.Null(passive.Price);
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(failing, passive));
 
-        var change = Watch(kind: WatchKind.Change, lastText: "Entrar", status: WatchStatus.Ok);
-        var greeting = WatchRules.Passive(change, Reading(piece: "Olá, Ana"), PageBlock.None, Now);
+        var missing = change with { Status = WatchStatus.Missing, Failures = 2 };
+        var greeting = WatchRules.Passive(missing, Reading(piece: "Olá, Ana"), PageBlock.None, Now);
         Assert.NotNull(greeting);
-        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(change, greeting));
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(missing, greeting));
         Assert.Null(greeting.Text);
     }
 

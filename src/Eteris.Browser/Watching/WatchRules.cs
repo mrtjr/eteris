@@ -153,7 +153,9 @@ public static class WatchRules
     // A leitura passiva (o utilizador abriu a página numa aba): só uma leitura boa se grava — o preço numa vigia de preço,
     // o pedaço com texto numa vigia de mudança. A aba pode estar a meio de carregar, rolada ou num desafio que o utilizador
     // vai resolver: nada disso conta como falha, desaparecimento ou bloqueio, e a vigia fica como estava (null). Contra uma
-    // linha de base do motor, a leitura boa só atualiza o estado: o preço e o texto ficam de fora (TabSetsBaseline).
+    // linha de base do motor, a leitura boa só tira a vigia de «Failing» ou «Missing» (o preço e o texto ficam de fora,
+    // TabSetsBaseline); numa vigia que já está bem não há nada a gravar (null): gravar mexia na hora da verificação e da
+    // próxima, e quem abre a página muitas vezes adiava as visitas do motor para sempre.
     public static WatchCheck? Passive(PageWatch w, PageReading? reading, PageBlock block, DateTime nowUtc)
     {
         if (block != PageBlock.None || reading is null || reading.ChallengeMarker) return null;
@@ -162,7 +164,8 @@ public static class WatchRules
         var good = w.Kind == WatchKind.Price ? check.Price is not null : !string.IsNullOrEmpty(check.Text);
         if (!good) return null;
         check = check with { FromTab = true };
-        return TabSetsBaseline(w) ? check : check with { Price = null, Currency = null, Text = null };
+        if (TabSetsBaseline(w)) return check;
+        return check.Status == w.Status ? null : check with { Price = null, Currency = null, Text = null };
     }
 
     // A leitura da aba passa a linha de base quando não há uma do motor com que choque: a vigia ainda não leu nada ou só
