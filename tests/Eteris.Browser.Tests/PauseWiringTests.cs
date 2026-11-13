@@ -101,8 +101,15 @@ public class PauseWiringTests
         Assert.Contains("SystemColors.HighlightBrush", pause);
         Assert.Contains("\"Esc ou Ctrl+. para voltar\"", pause);
         Assert.Contains("Radius = 40", pause);
-        // O fim do temporizador nunca acaba a Pausa nem toca som.
-        Assert.DoesNotMatch(@"PauseTimer\.Ended\([^)]*\)\)\s*(ResumeEverywhere|EndPause|ExitPause)", pause);
+        // O fim do temporizador nunca acaba a Pausa nem toca som: nada do que o temporizador e o relógio correm (o refrescar,
+        // com o tique da contagem, e o relógio) sai da Pausa, seja qual for a forma do código.
+        foreach (var method in new[] { "RefreshPauseTimer", "TickPauseClock" })
+        {
+            var body = Regex.Match(pause, @"private void " + method + @"\(PauseState state\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+            Assert.NotEmpty(body);
+            Assert.Contains(method == "RefreshPauseTimer" ? "PauseTimer.Ended(left)" : "clock.Text", body);
+            Assert.DoesNotMatch(@"ResumeEverywhere|ExitPause|EndPause", body);
+        }
         Assert.DoesNotContain("SystemSounds", pause);
     }
 
