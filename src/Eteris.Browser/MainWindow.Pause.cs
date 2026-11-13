@@ -123,6 +123,9 @@ public partial class MainWindow
         var minutes = Settings.Current.PauseMinutes;
         s_pauseMinutes = PauseTimer.IsChoice(minutes) ? minutes : 0;
         s_pauseEndsAt = s_pauseMinutes > 0 ? PauseClock() + TimeSpan.FromMinutes(s_pauseMinutes) : null;
+        // O temporizador é partilhado: as janelas que já estavam em Pausa (esta não estava: aberta durante a Pausa, ou onde
+        // um link de fora a acabou) recomeçam a contagem com esta, como num chip escolhido.
+        foreach (var window in PausedWindows()) window.RefreshPauseTimer(window._pause!);
         // Uma janela aberta durante a Pausa não entra nela (só as que estão abertas agora).
         foreach (var window in Application.Current.Windows.OfType<MainWindow>().ToList())
             if (window.IsLoaded && window._pause is null) window.EnterPause();

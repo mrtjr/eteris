@@ -196,6 +196,16 @@ public class PauseWiringTests
         Assert.Contains("if (repeat && IsPauseToggleKey(key, ctrl, shift, alt)) return true;", code);
     }
 
+    // O temporizador é partilhado: o Ctrl+. numa janela que não está em Pausa (aberta durante ela, ou onde um link de fora a
+    // acabou) recomeça-o, e as janelas já em Pausa mostram o mesmo (sem isto ficavam com «Pronto» e o anel parado).
+    [Fact]
+    public void ANewPause_RefreshesTheWindowsAlreadyPaused()
+    {
+        var everywhere = Regex.Match(Source("MainWindow.Pause.cs"), @"private static void PauseEverywhere\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.NotEmpty(everywhere);
+        Assert.Contains("foreach (var window in PausedWindows()) window.RefreshPauseTimer(window._pause!);", everywhere);
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
