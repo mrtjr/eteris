@@ -286,6 +286,9 @@ public static class AppData
         // As «Feitas» do período também: «Apagar histórico» e «Esquecer» mostravam-nas ainda no Radar.
         try { LazyDone.Value?.DeleteSince(sinceUtc); }
         catch (Exception) { }
+        // E o que as vigias leram no período (as leituras de preço e o último valor das verificadas nele); as vigias ficam.
+        // Aqui, e não em cada caminho: Definições › Apagar dados, eteris://history › Limpar e o «Esquecer» da paleta.
+        DeleteWatchReadingsSince(sinceUtc);
         // O relatório de privacidade: os domínios dos dias do período saem, os totais ficam. Grava-se antes o que está
         // pendente no livro, para que também isso perca o domínio.
         FlushShieldStats();
@@ -457,6 +460,85 @@ public static class AppData
     {
         try { return LazySnoozed.Value?.Due(nowUtc) ?? []; }
         catch (Exception) { return []; }
+    }
+
+    private static readonly RetryLazy<WatchStore> LazyWatches = Db("LazyWatches", () => new WatchStore(AppPaths.Database));
+
+    // As vigias (Watching/). Nunca na janela privada: AddWatch recusa-a antes de abrir a base. Cada envoltório devolve
+    // vazio, null ou false quando a base não leu ou não gravou.
+    public static long? AddWatch(Watching.NewWatch watch, bool isPrivate)
+    {
+        if (isPrivate) return null;
+        try { return LazyWatches.Value?.Add(watch, DateTime.UtcNow); }
+        catch (Exception) { return null; }
+    }
+
+    public static IReadOnlyList<Watching.PageWatch> Watches()
+    {
+        try { return LazyWatches.Value?.All() ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    public static IReadOnlyList<Watching.PageWatch> DueWatches(DateTime nowUtc)
+    {
+        try { return LazyWatches.Value?.Due(nowUtc) ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    public static IReadOnlyList<Watching.PageWatch> WatchesFor(string url)
+    {
+        try { return LazyWatches.Value?.ForUrl(url) ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    // false: a vigia já não existe (apagada a meio da verificação) ou a base não gravou.
+    public static bool RecordWatch(long id, Watching.WatchCheck check, DateTime nextUtc)
+    {
+        try { return LazyWatches.Value?.Record(id, check, nextUtc) == true; }
+        catch (Exception) { return false; }
+    }
+
+    public static bool PauseWatch(long id, bool paused)
+    {
+        try
+        {
+            if (LazyWatches.Value is not { } store) return false;
+            store.SetPaused(id, paused);
+            return true;
+        }
+        catch (Exception) { return false; }
+    }
+
+    public static bool DeleteWatch(long id)
+    {
+        try
+        {
+            if (LazyWatches.Value is not { } store) return false;
+            store.Delete(id);
+            return true;
+        }
+        catch (Exception) { return false; }
+    }
+
+    public static IReadOnlyList<(DateTime AtUtc, decimal Price)> WatchPrices(long id)
+    {
+        try { return LazyWatches.Value?.Prices(id) ?? []; }
+        catch (Exception) { return []; }
+    }
+
+    // Com o histórico (ForgetSince): as leituras de preço do período e o último valor lido das vigias verificadas nele
+    // saem; as vigias ficam (são ferramentas, como os favoritos).
+    public static void DeleteWatchReadingsSince(DateTime sinceUtc)
+    {
+        try { LazyWatches.Value?.DeleteReadingsSince(sinceUtc); }
+        catch (Exception) { }
+    }
+
+    // «Esquecer este site»: as vigias do site saem, com as leituras.
+    public static void DeleteWatchesOfSite(string site)
+    {
+        try { LazyWatches.Value?.DeleteSite(site); }
+        catch (Exception) { }
     }
 
     private static readonly RetryLazy<ArchivedTabsStore> LazyArchived = Db("LazyArchived", () =>

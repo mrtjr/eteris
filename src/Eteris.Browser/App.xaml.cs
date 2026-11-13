@@ -99,6 +99,8 @@ public partial class App : Application
         if (TestSwitches.CrashBeforePaint) TestSwitches.CrashNow();
         // O «servidor» do auto-teste de privacidade (nomes .invalid servidos dentro do Éteris, nada vai à rede).
         Eteris.Browser.Browser.SelfTestSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
+        // A loja de teste da vigia, só nas provas ao vivo (ETERIS_TEST_SHOP_DIR num perfil de teste); senão não se regista.
+        Eteris.Browser.Browser.TestShopSchemeHandlerFactory.Register(Cef.GetGlobalRequestContext());
         StartupTrace.Mark("selftest");
         _ = Shields.PrivacyPreferences.ApplyAsync();
         StartupTrace.Mark("privacidade");

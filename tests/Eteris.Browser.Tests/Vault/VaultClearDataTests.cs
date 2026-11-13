@@ -76,7 +76,9 @@ public sealed class VaultClearDataTests : IDisposable
             Assert.DoesNotContain("EraseVault", text);
             Assert.DoesNotContain("EraseAll", text);
         }
-        Assert.Contains("As palavras-passe guardadas ficam.", File.ReadAllText(Path.Combine(src, "MainWindow.Forget.cs")));
+        // A dica do interruptor «Esquecer ao fechar» (SiteScope.ForgetOnCloseHint, que o cadeado mostra).
+        Assert.Contains("As palavras-passe guardadas e as vigias ficam.", Eteris.Browser.Data.SiteScope.ForgetOnCloseHint("exemplo.pt"));
+        Assert.Contains("SiteScope.ForgetOnCloseHint(site)", File.ReadAllText(Path.Combine(src, "MainWindow.Forget.cs")));
         var factory = File.ReadAllText(Path.Combine(src, "Browser", "EterisSchemeHandlerFactory.cs"));
         Assert.Contains("if (request.Vault)", factory);
     }

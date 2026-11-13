@@ -187,6 +187,13 @@ public partial class MainWindow
             yield return new("", "Esconder um elemento desta página", "Clique num anúncio, banner ou caixa para o fazer desaparecer neste site", null, PickElementToHide);
             if (AppData.HiddenElements(pickHost, IsPrivate).Count is > 0 and var hiddenCount)
                 yield return new("", "Repor elementos escondidos", $"{hiddenCount} escondido(s) em {pickHost}", null, ResetHiddenElements);
+            // As vigias e o recorte (MainWindow.Watch.cs): nunca na janela privada, como no menu da página.
+            if (!IsPrivate)
+            {
+                yield return new("", "Vigiar o preço desta página", "Vigia · só neste computador", null, StartWatchPrice);
+                yield return new("", "Avisar quando um pedaço mudar…", "Vigia · só neste computador", null, StartWatchChange);
+                yield return new("", "Recortar um pedaço ao vivo…", "Vigia · só neste computador", null, StartClip);
+            }
         }
         yield return new("", "Seguir um link pelo teclado", "Letras sobre cada link; escreva-as para o abrir", "Ctrl+Shift+L", ShowLinkHints);
         if (Tabs.Active?.IsReaderable == true)

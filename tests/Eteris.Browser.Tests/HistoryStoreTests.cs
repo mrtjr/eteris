@@ -346,7 +346,7 @@ public sealed class HistoryStoreTests : IDisposable
     [Fact]
     public void EveryStoreWithAddresses_OpensWithSecureDelete()
     {
-        foreach (var name in new[] { "HistoryStore", "DoneTabsStore", "ArchivedTabsStore", "SnoozedTabsStore", "SavedSessionsStore", "PrivacyEventsStore" })
+        foreach (var name in new[] { "HistoryStore", "DoneTabsStore", "ArchivedTabsStore", "SnoozedTabsStore", "SavedSessionsStore", "PrivacyEventsStore", "WatchStore" })
             Assert.Contains("SqliteSetup.SecureDelete(connection);", File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data", name + ".cs")));
     }
 

@@ -5,7 +5,7 @@ namespace Eteris.Browser.Tests;
 
 // Toda a página web passa pelo PrivacyRequestHandler (Escudo, HTTPS primeiro, cabeçalhos de privacidade). Os testes ao
 // vivo (tests/Eteris.Browser.E2E.Tests) provam-no numa aba; este teste fixa que os sítios que criam um browser — a aba,
-// o Espreitar e os painéis web — o levam todos, e que não aparece um quarto sem passar por aqui.
+// o Espreitar, os painéis web e o motor da vigia — o levam todos, e que não aparece um quinto sem passar por aqui.
 public class PageBrowsersTests
 {
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
@@ -33,11 +33,20 @@ public class PageBrowsersTests
                 if (!creator.IsMatch(lines[i])) continue;
                 creators++;
                 var next = string.Join("\n", lines.Skip(i + 1).Take(40));
-                if (!next.Contains("RequestHandler = new PrivacyRequestHandler(", StringComparison.Ordinal))
+                // O motor da vigia recebe o tratador de quem o cria (MainWindow.Watch.cs) e só o embrulha (WatchRunner); o
+                // recorte ao vivo (ClipWindow) recebe-o pronto, também do MainWindow.Watch.cs.
+                var expected = relative == Path.Combine("Watching", "WatchRunner.cs") ? "RequestHandler = new AppRedirectGuard(_requestHandler()"
+                    : relative == "ClipWindow.xaml.cs" ? "RequestHandler = requestHandler,"
+                    : "RequestHandler = new PrivacyRequestHandler(";
+                if (!next.Contains(expected, StringComparison.Ordinal))
                     missing.Add($"{relative}:{i + 1}");
             }
         }
         Assert.True(missing.Count == 0, "browser sem o PrivacyRequestHandler: " + string.Join(", ", missing));
-        Assert.Equal(3, creators);
+        Assert.Equal(5, creators);
+        var watch = File.ReadAllText(Path.Combine(src, "MainWindow.Watch.cs"));
+        Assert.Contains("new WatchRunner(", watch);
+        Assert.Contains("() => new PrivacyRequestHandler(", watch);
+        Assert.Matches(@"var handler = new PrivacyRequestHandler\([^;]*;\s*var clip = new ClipWindow\(url, selector, size, context: null, handler,", watch);
     }
 }
