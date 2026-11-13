@@ -354,8 +354,15 @@ public partial class MainWindow
             ? string.Join("\n", state.Toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal))
             : "A Pausa acabou — nada recomeçou sozinho";
         var shown = actions.Take(ToastPolicy.MaxActions).ToArray();
-        if (replay > 0) ShowToastFor(ToastPolicy.PauseReturnShown - ToastFades, message, shown);
+        if (replay > 0)
+        {
+            ShowToastFor(ToastPolicy.PauseReturnShown - ToastFades, message, shown);
+            // O leitor de ecrã ouve o regresso e onde está o «Retomar» (o aviso não recebe o teclado; a paleta tem a mesma
+            // ação). O nome vale só para este aviso (ShowToastFor tira-o).
+            AutomationProperties.SetName(ToastText, $"{message}. Retomar o que tocava ({replay}): no aviso ou na paleta (Ctrl+K)");
+        }
         else ShowToast(message, shown);
+        Sync.LiveRegion.Announce(ToastText);
     }
 
     // «Retomar o que tocava»: só os elementos que a Pausa marcou, com o gesto do utilizador (o mesmo caminho do tocar/pausar

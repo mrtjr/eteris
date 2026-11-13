@@ -133,10 +133,29 @@ public class PauseWiringTests
         Assert.Contains("ReplayPaused", Source("MainWindow.Palette.cs"));
     }
 
-    // Os botões dos avisos também respondem ao Invoke (leitor de ecrã, UI Automation), uma só vez.
+    // Os botões dos avisos também respondem ao Invoke (leitor de ecrã, UI Automation), uma só vez — e só com o aviso à
+    // vista: o de um aviso já desvanecido (a camada à vista por outra razão, a barra de procura) saía da árvore de
+    // automação e da ordem do Tab, e não corria a ação («Anular» reabria uma aba fechada minutos antes).
     [Fact]
-    public void ToastButtons_AlsoAnswerTheInvoke()
-        => Assert.Matches(@"button\.Click \+= \(_, _\) =>\s*\{\s*if \(ran\) return;", Source("MainWindow.Toast.cs"));
+    public void ToastButtons_AlsoAnswerTheInvoke_OnlyWhileTheToastIsSeen()
+    {
+        var toast = Source("MainWindow.Toast.cs");
+        Assert.Matches(@"button\.Click \+= \(_, _\) =>\s*\{\s*(//[^\n]*\n\s*)*if \(ran \|\| !Toast\.IsHitTestVisible\) return;", toast);
+        Assert.Matches(@"fade\.Completed \+= \(_, _\) =>\s*\{\s*if \(Toast\.Opacity < 0\.01\)\s*\{\s*Toast\.IsHitTestVisible = false;\s*ToastActions\.Visibility = Visibility\.Collapsed;\s*\}\s*\};", toast);
+        Assert.Matches(@"private void HideToastNow\(\)\s*\{[^}]*ToastActions\.Visibility = Visibility\.Collapsed;", toast);
+    }
+
+    // O aviso do regresso é anunciado ao leitor de ecrã (região viva educada), com «Retomar o que tocava (N)» e onde o
+    // encontrar (o aviso não recebe o teclado; a paleta, Ctrl+K, tem a mesma ação).
+    [Fact]
+    public void TheReturnToast_IsAnnounced()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        Assert.Contains("AutomationProperties.SetName(ToastText, $\"{message}. Retomar o que tocava ({replay}): no aviso ou na paleta (Ctrl+K)\");", pause);
+        Assert.Contains("Sync.LiveRegion.Announce(ToastText);", pause);
+        Assert.Contains("ToastText.ClearValue(AutomationProperties.NameProperty);", Source("MainWindow.Toast.cs"));
+        Assert.Matches(@"x:Name=""ToastText""[^>]*AutomationProperties\.LiveSetting=""Polite""", Source("MainWindow.xaml"));
+    }
 
     // Teclado: os botões do ecrã calmo recebem o foco (os PillButton do tema não o recebem) e mostram-no; só a janela ativa
     // recebe o teclado (as outras guardam o foco lógico: um Keyboard.Focus numa janela inativa podia ativá-la).

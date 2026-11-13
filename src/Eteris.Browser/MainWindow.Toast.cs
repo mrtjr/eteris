@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using Eteris.Browser.Tabs;
@@ -47,6 +48,8 @@ public partial class MainWindow
     {
         WireToast();
         ToastText.Text = message;
+        // O nome que o regresso da Pausa deu ao texto para o leitor de ecrã (MainWindow.Pause.cs) não passa a outro aviso.
+        ToastText.ClearValue(AutomationProperties.NameProperty);
         ToastActions.Children.Clear();
         foreach (var action in actions.Take(ToastPolicy.MaxActions))
         {
@@ -66,10 +69,10 @@ public partial class MainWindow
                 ReturnFocusToPage();
             };
             // O Invoke do leitor de ecrã (UI Automation) chega pelo Click; o rato já correu a ação ao premir (e o Click do
-            // rato nem chega: o premir foi consumido). Uma só vez.
+            // rato nem chega: o premir foi consumido). Uma só vez, e só com o aviso à vista.
             button.Click += (_, _) =>
             {
-                if (ran) return;
+                if (ran || !Toast.IsHitTestVisible) return;
                 ran = true;
                 HideToastNow();
                 run();
@@ -113,8 +116,16 @@ public partial class MainWindow
         if (fadeIn) fade.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(start)));
         fade.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(start + hold)));
         fade.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(start + hold + TimeSpan.FromMilliseconds(500))));
-        // Invisível, o aviso deixa de apanhar cliques (a camada continua por cima da página com outras coisas).
-        fade.Completed += (_, _) => { if (Toast.Opacity < 0.01) Toast.IsHitTestVisible = false; };
+        // Invisível, o aviso deixa de apanhar cliques (a camada continua por cima da página com outras coisas), e os botões
+        // saem da árvore de automação e da ordem do Tab (um «Anular» invisível reabria uma aba minutos depois).
+        fade.Completed += (_, _) =>
+        {
+            if (Toast.Opacity < 0.01)
+            {
+                Toast.IsHitTestVisible = false;
+                ToastActions.Visibility = Visibility.Collapsed;
+            }
+        };
         Toast.BeginAnimation(OpacityProperty, fade);
     }
 
@@ -123,6 +134,7 @@ public partial class MainWindow
         Toast.BeginAnimation(OpacityProperty, null);
         Toast.Opacity = 0;
         Toast.IsHitTestVisible = false;
+        ToastActions.Visibility = Visibility.Collapsed;
     }
 
     // Com o rato por cima o aviso fica; ao sair, ainda dá dois segundos para voltar.
