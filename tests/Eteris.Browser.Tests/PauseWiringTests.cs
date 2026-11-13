@@ -311,6 +311,28 @@ public class PauseWiringTests
         Assert.DoesNotContain("PageFrame.IsEnabled", pause);
     }
 
+    // Os recortes ao vivo (ClipWindow: sempre por cima, com o seu motor) também entram na Pausa — «nenhuma página fica à
+    // vista» e «deixa de haver som do Éteris em todas as janelas»: escondem-se, calam-se, pausam o que tocam e não
+    // recarregam; voltam quando já nenhuma janela está em Pausa (Esc, «Voltar», o link de fora na última, a última que
+    // fecha), sem tirar o foco à janela onde se voltou.
+    [Fact]
+    public void LiveClips_JoinThePause()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        var method = (string name) => Regex.Match(pause, @"(private|internal) (static )?void " + name + @"\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Contains("ClipWindow.PauseAll();", method("PauseEverywhere"));
+        Assert.Contains("ClipWindow.ResumeAll();", method("ResumeEverywhere"));
+        Assert.Contains("ClipWindow.ResumeAll();", method("EndPauseHere"));
+        Assert.Matches(@"if \(!PausedWindows\(\)\.Any\(\)\)\s*\{\s*s_pauseEndsAt = null;\s*ClipWindow\.ResumeAll\(\);\s*\}", pause);
+        var clip = Source("ClipWindow.xaml.cs");
+        Assert.Matches(@"private void EnterPause\(\)\s*\{\s*if \(_paused \|\| _closed\) return;\s*_paused = true;\s*_reload\.Stop\(\);", clip);
+        Assert.Contains("_browser.GetBrowserHost()?.SetAudioMuted(true);", clip);
+        Assert.Contains("PageScript.Run(_browser, MediaInfo.PauseMarkScript);", clip);
+        Assert.Contains("Hide();", clip);
+        Assert.Matches(@"ShowActivated = false;\s*Show\(\);", clip);
+        Assert.Contains("if (_reloadMinutes > 0) _reload.Start();", clip);
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

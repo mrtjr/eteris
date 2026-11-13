@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using CefSharp;
 using CefSharp.Wpf.HwndHost;
 using Eteris.Browser.Browser;
+using Eteris.Browser.Tabs;
 using Eteris.Browser.Watching;
 
 namespace Eteris.Browser;
@@ -19,6 +20,7 @@ namespace Eteris.Browser;
 // - Transferências, pedidos de permissão, diálogos de JavaScript e o menu de contexto ficam mudos, e uma carga nunca pede
 //   o foco (Browser/SilentHandlers.cs); um link aberto noutra janela (com gesto) vai para uma aba do Éteris. O som não é
 //   cortado: o pedaço está à vista.
+// - A Pausa (MainWindow.Pause.cs) também o apanha: esconde-se, cala-se, pausa o que toca e não recarrega até voltar.
 // - No máximo ClipLayout.MaxOpen abertos em toda a aplicação; cada um no 1.º lugar livre (ClipLayout.Place).
 public partial class ClipWindow : Window
 {
@@ -48,6 +50,7 @@ public partial class ClipWindow : Window
     private readonly DispatcherTimer _reload;
     private int _reloadMinutes;
     private bool _closed;
+    private bool _paused;
 
     public int Slot { get; }
 
@@ -157,6 +160,43 @@ public partial class ClipWindow : Window
             menu.Item(minutes == _reloadMinutes ? "" : "", minutes == 0 ? "Nunca recarregar sozinho" : $"Recarregar a cada {minutes} min",
                 () => SetReload(minutes));
         menu.OpenBelow(ReloadButton);
+    }
+
+    // A Pausa (MainWindow.Pause.cs: «nenhuma página fica à vista», «deixa de haver som do Éteris»): todos os recortes
+    // abertos escondem-se, calam-se, pausam o que tocam (sem «Retomar»: ao voltar estão à vista e o leitor deles toca outra
+    // vez) e não recarregam. Voltam quando já nenhuma janela está em Pausa.
+    public static void PauseAll()
+    {
+        foreach (var clip in s_open.ToList()) clip.EnterPause();
+    }
+
+    public static void ResumeAll()
+    {
+        foreach (var clip in s_open.ToList()) clip.ExitPause();
+    }
+
+    private void EnterPause()
+    {
+        if (_paused || _closed) return;
+        _paused = true;
+        _reload.Stop();
+        if (!_browser.IsDisposed && _browser.IsBrowserInitialized)
+        {
+            _browser.GetBrowserHost()?.SetAudioMuted(true);
+            PageScript.Run(_browser, MediaInfo.PauseMarkScript);
+        }
+        Hide();
+    }
+
+    // Sem tirar o foco à janela onde se voltou.
+    private void ExitPause()
+    {
+        if (!_paused || _closed) return;
+        _paused = false;
+        if (!_browser.IsDisposed && _browser.IsBrowserInitialized) _browser.GetBrowserHost()?.SetAudioMuted(false);
+        ShowActivated = false;
+        Show();
+        if (_reloadMinutes > 0) _reload.Start();
     }
 
     private void Release()

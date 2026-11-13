@@ -123,7 +123,11 @@ public partial class MainWindow
             _pause = null;
             _pausedForPage = false;
             StopPauseView(state);
-            if (!PausedWindows().Any()) s_pauseEndsAt = null;
+            if (!PausedWindows().Any())
+            {
+                s_pauseEndsAt = null;
+                ClipWindow.ResumeAll();
+            }
         };
     }
 
@@ -148,6 +152,8 @@ public partial class MainWindow
         // Uma janela aberta durante a Pausa não entra nela (só as que estão abertas agora).
         foreach (var window in Application.Current.Windows.OfType<MainWindow>().ToList())
             if (window.IsLoaded && window._pause is null) window.EnterPause();
+        // Os recortes ao vivo (ClipWindow, sempre por cima, sem dona) também: escondidos, calados e sem recarregar.
+        ClipWindow.PauseAll();
     }
 
     // Esc, Ctrl+., «Voltar»: volta em todas as janelas.
@@ -155,6 +161,7 @@ public partial class MainWindow
     {
         foreach (var window in PausedWindows()) window.ExitPause();
         s_pauseEndsAt = null;
+        ClipWindow.ResumeAll();
     }
 
     // Um link que chega de outra aplicação (MainWindow.Forward.cs) é um gesto do utilizador: acaba a Pausa só na janela que o
@@ -162,7 +169,11 @@ public partial class MainWindow
     internal void EndPauseHere()
     {
         ExitPause();
-        if (PausedWindows().Count == 0) s_pauseEndsAt = null;
+        if (PausedWindows().Count == 0)
+        {
+            s_pauseEndsAt = null;
+            ClipWindow.ResumeAll();
+        }
     }
 
     private static bool IsPauseToggleKey(Key key, bool ctrl, bool shift, bool alt) => ctrl && !shift && !alt && key == Key.OemPeriod;
