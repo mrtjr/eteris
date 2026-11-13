@@ -125,6 +125,18 @@ public static class WatchRules
         return now < old ? WatchOutcome.PriceDropped : WatchOutcome.Nothing;
     }
 
+    // A leitura passiva (o utilizador abriu a página numa aba): só uma leitura boa se grava — o preço numa vigia de preço,
+    // o pedaço com texto numa vigia de mudança. A aba pode estar a meio de carregar, rolada ou num desafio que o utilizador
+    // vai resolver: nada disso conta como falha, desaparecimento ou bloqueio, e a vigia fica como estava (null).
+    public static WatchCheck? Passive(PageWatch w, PageReading? reading, PageBlock block, DateTime nowUtc)
+    {
+        if (block != PageBlock.None || reading is null || reading.ChallengeMarker) return null;
+        var check = ToCheck(w, reading, block, nowUtc);
+        if (IsFailure(check)) return null;
+        var good = w.Kind == WatchKind.Price ? check.Price is not null : !string.IsNullOrEmpty(check.Text);
+        return good ? check : null;
+    }
+
     // Uma verificação falhada: conta para Failures (e para o recuo da agenda).
     public static bool IsFailure(WatchCheck check)
         => check.Block != PageBlock.None || check.Status is WatchStatus.Failing or WatchStatus.Missing;

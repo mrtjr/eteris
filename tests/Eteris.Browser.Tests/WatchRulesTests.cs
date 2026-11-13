@@ -249,6 +249,32 @@ public class WatchRulesTests
         Assert.Equal(WatchOutcome.Changed, WatchRules.Outcome(missing, back));
     }
 
+    // A leitura passiva corre na aba do utilizador, que pode estar a meio de carregar ou a mostrar um desafio: só grava
+    // uma leitura boa (o preço numa vigia de preço, o pedaço com texto numa vigia de mudança). Nada mais conta — nunca põe
+    // a vigia em «falhou», «desapareceu» nem «bloqueada», nem gasta a hora da próxima verificação.
+    [Fact] public void Passive_RecordsOnlyGoodReadings()
+    {
+        var w = Watch(lastPrice: 588.22m);
+        Assert.Equal(499.99m, WatchRules.Passive(w, Reading(price: 499.99m), PageBlock.None, Now)?.Price);
+        Assert.Null(WatchRules.Passive(w, Reading(price: 499.99m, marker: true), PageBlock.None, Now));
+        Assert.Null(WatchRules.Passive(w, Reading(price: 499.99m), PageBlock.Challenge, Now));
+        Assert.Null(WatchRules.Passive(w, Reading(price: 499.99m), PageBlock.HttpError, Now));
+        Assert.Null(WatchRules.Passive(w, Reading(pieceFound: false), PageBlock.None, Now));
+        Assert.Null(WatchRules.Passive(w, null, PageBlock.None, Now));
+
+        // Uma bloqueada sem preço na página do utilizador fica como estava (o ToCheck devolvia-a «Blocked», sem falha).
+        var blocked = w with { Status = WatchStatus.Blocked, LastBlock = PageBlock.Challenge, Failures = 2 };
+        Assert.Null(WatchRules.Passive(blocked, Reading(pieceFound: false), PageBlock.None, Now));
+        Assert.Equal(WatchStatus.Blocked, WatchRules.Passive(blocked, Reading(price: 499.99m), PageBlock.None, Now)?.Status);
+
+        var change = Watch(kind: WatchKind.Change, lastText: "Esgotado");
+        Assert.Equal("Em stock", WatchRules.Passive(change, Reading(piece: "Em stock"), PageBlock.None, Now)?.Text);
+        Assert.Null(WatchRules.Passive(change, Reading(piece: "  "), PageBlock.None, Now));
+        Assert.Null(WatchRules.Passive(change, Reading(pieceFound: false), PageBlock.None, Now));
+        var missing = change with { Status = WatchStatus.Missing, Failures = 2 };
+        Assert.Null(WatchRules.Passive(missing, Reading(pieceFound: false), PageBlock.None, Now));
+    }
+
     private static PageWatch Watch(WatchKind kind = WatchKind.Price, decimal? lastPrice = null, string? currency = "BRL",
         WatchStatus status = WatchStatus.Ok, int failures = 0, PageBlock lastBlock = PageBlock.None, decimal? target = null,
         string? lastText = null)

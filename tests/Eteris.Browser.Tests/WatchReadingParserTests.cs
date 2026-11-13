@@ -140,4 +140,31 @@ public class WatchReadingParserTests
         Assert.Contains("const selector = null;", WatchScripts.Read(null));
         Assert.Contains(JsonSerializer.Serialize("Clique «aqui» · Esc"), WatchScripts.PickPiece("Clique «aqui» · Esc"));
     }
+
+    // O pedaço escolhido volta da página (o PageScript devolve o objeto como texto JSON) e a página pode mexer nele: só
+    // passa um seletor que também serviria para esconder elementos (sem chavetas, «;», «<», «@» nem quebras de linha,
+    // até 500 caracteres). Esc (null) e qualquer outra resposta não dão pedaço.
+    [Theory]
+    [InlineData("""{"selector":"#preco","text":"R$ 1.234,56"}""", "#preco", "R$ 1.234,56")]
+    [InlineData("""{"selector":"div.preco > span","text":null}""", "div.preco > span", "")]
+    public void Pick_ReadsSelectorAndText(string json, string selector, string text)
+        => Assert.Equal((selector, text), WatchReadingParser.Pick(json));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("null")]
+    [InlineData("")]
+    [InlineData("estragado")]
+    [InlineData("\"#preco\"")]
+    [InlineData("""{"text":"R$ 10"}""")]
+    [InlineData("""{"selector":"  ","text":"R$ 10"}""")]
+    [InlineData("""{"selector":"#a{color:red}","text":"R$ 10"}""")]
+    [InlineData("""{"selector":"#a;x","text":"R$ 10"}""")]
+    [InlineData("""{"selector":"#a\n#b","text":"R$ 10"}""")]
+    [InlineData("""{"selector":7,"text":"R$ 10"}""")]
+    public void Pick_RefusesAnythingElse(string? json) => Assert.Null(WatchReadingParser.Pick(json));
+
+    [Fact]
+    public void Pick_RefusesLongSelectors()
+        => Assert.Null(WatchReadingParser.Pick(JsonSerializer.Serialize(new { selector = "#" + new string('a', 500), text = "x" })));
 }

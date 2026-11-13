@@ -39,6 +39,25 @@ public static class WatchReadingParser
         }
     }
 
+    // A resposta do WatchScripts.PickPiece ({"selector","text"}, que o PageScript devolve como texto JSON; null com Esc).
+    // A página pode mexer nela: só passa um seletor que também serviria para esconder elementos (HiddenElements).
+    public static (string Selector, string Text)? Pick(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || Text(root, "selector") is not { } selector) return null;
+            if (!Shields.HiddenElements.IsSafeSelector(selector)) return null;
+            return (selector, Text(root, "text") ?? "");
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string? Text(JsonElement root, string name)
         => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
