@@ -186,9 +186,35 @@ public sealed class WatchStore
         return rows;
     }
 
-    // «Limpar dados › histórico»: as leituras do período saem; as vigias ficam (são ferramentas, como os favoritos).
+    // Com o histórico (AppData.ForgetSince): as leituras do período saem e as vigias verificadas nele perdem o que leram
+    // (o último preço, o texto do pedaço, a hora da verificação e a fonte da linha de base); as vigias ficam (são
+    // ferramentas, como os favoritos). A próxima leitura de cada uma é como a primeira: não avisa. Devolve as leituras
+    // apagadas.
     public int DeleteReadingsSince(DateTime sinceUtc)
-        => Execute("DELETE FROM watch_readings WHERE at >= $since", ("$since", Ticks(sinceUtc)));
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        int removed;
+        using (var readings = connection.CreateCommand())
+        {
+            readings.Transaction = transaction;
+            readings.CommandText = "DELETE FROM watch_readings WHERE at >= $since";
+            readings.Parameters.AddWithValue("$since", Ticks(sinceUtc));
+            removed = readings.ExecuteNonQuery();
+        }
+        using (var watches = connection.CreateCommand())
+        {
+            watches.Transaction = transaction;
+            watches.CommandText = """
+                UPDATE watches SET last_price = NULL, last_text = NULL, last_check_at = NULL, baseline_from_tab = 0
+                WHERE last_check_at >= $since
+                """;
+            watches.Parameters.AddWithValue("$since", Ticks(sinceUtc));
+            watches.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return removed;
+    }
 
     // «Esquecer este site»: as vigias do site e dos seus subdomínios (SiteScope, pelo endereço), com as leituras.
     public int DeleteSite(string site)

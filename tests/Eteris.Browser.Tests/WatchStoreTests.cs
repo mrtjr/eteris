@@ -221,6 +221,54 @@ public sealed class WatchStoreTests : IDisposable
         Assert.Equal(2, _store.DeleteReadingsSince(DateTime.MinValue));
     }
 
+    // Achado 7: as vigias ficam (são ferramentas, como os favoritos), mas a linha de uma vigia verificada no período não
+    // guarda o que foi lido nele: o último preço, o texto do pedaço (que pode vir de uma aba com a sessão) e a hora da
+    // verificação saem com as leituras. Uma vigia verificada antes do período fica como estava.
+    [Fact] public void DeleteReadingsSince_ForgetsWhatTheWatchesReadInThePeriod()
+    {
+        var recent = _store.Add(New("https://www.kabum.com.br/produto/1"), Now.AddDays(-3));
+        _store.Record(recent, Ok(Now, 9m) with { FromTab = true }, Now.AddHours(2));
+        var change = _store.Add(new NewWatch("https://www.pichau.com.br/ssd", "SSD", WatchKind.Change, "#estado", false, 120, null), Now.AddDays(-3));
+        _store.Record(change, new WatchCheck(Now, WatchStatus.Ok, null, null, "Olá, Ana — em stock", PageBlock.None), Now.AddHours(2));
+        var old = _store.Add(New("https://www.terabyte.com.br/p"), Now.AddDays(-3));
+        _store.Record(old, Ok(Now.AddDays(-2), 50m), Now.AddHours(2));
+
+        _store.DeleteReadingsSince(Now.AddHours(-1));
+
+        var all = _store.All().ToDictionary(w => w.Id);
+        Assert.Equal(3, all.Count);
+        foreach (var id in new[] { recent, change })
+        {
+            var w = all[id];
+            Assert.Equal(((decimal?)null, (string?)null, (DateTime?)null, false), (w.LastPrice, w.LastText, w.LastCheckUtc, w.BaselineFromTab));
+        }
+        Assert.Equal(((decimal?)50m, (DateTime?)Now.AddDays(-2)), (all[old].LastPrice, all[old].LastCheckUtc));
+    }
+
+    // Achado 6: os três caminhos que apagam o histórico (Definições › Apagar dados, eteris://history › Limpar, «Esquecer
+    // os últimos N minutos» da paleta) passam todos por AppData.ForgetSince, e é lá que as leituras das vigias saem.
+    [Fact] public void ForgetSince_TakesTheWatchReadings()
+    {
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Data", "AppData.cs"));
+        var forget = app[app.IndexOf("public static void ForgetSince(DateTime sinceUtc)", StringComparison.Ordinal)..];
+        forget = forget[..forget.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("DeleteWatchReadingsSince(sinceUtc);", forget);
+
+        var scheme = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
+        Assert.DoesNotContain("DeleteWatchReadingsSince(", scheme);
+        var history = scheme[scheme.IndexOf("case \"/clear\" when HistoryPage.IsAuthorized(url)", StringComparison.Ordinal)..];
+        Assert.Contains("AppData.ForgetSince(from);", history[..history.IndexOf("break;", StringComparison.Ordinal)]);
+    }
+
+    // O painel «Apagar dados» diz o que acontece às vigias com a caixa do histórico.
+    [Fact] public void ClearDataPanel_SaysTheWatchesStay()
+    {
+        var settings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "settings.html"));
+        var box = settings[settings.IndexOf("value=\"history\"", StringComparison.Ordinal)..];
+        box = box[..box.IndexOf("</label>", StringComparison.Ordinal)];
+        Assert.Contains("as vigias ficam; os preços e textos que leram no período saem", box);
+    }
+
     [Fact] public void DeleteSite_RemovesOnlyThatSite()
     {
         _store.Add(New("https://www.kabum.com.br/produto/1"), Now); _store.Add(New("https://loja.kabum.com.br/p"), Now);
@@ -260,14 +308,15 @@ public sealed class WatchStoreTests : IDisposable
     [Fact] public void AppData_AddWatch_RefusesPrivate() => Assert.Null(AppData.AddWatch(New(), isPrivate: true));
 
     // «Limpar dados › histórico» leva as leituras de preço do período (as vigias ficam, como os favoritos), e só a
-    // partir de uma janela normal; «Esquecer este site» leva as vigias do site, também só fora da janela privada.
+    // partir de uma janela normal (por AppData.ForgetSince); «Esquecer este site» leva as vigias do site, também só fora
+    // da janela privada.
     [Fact] public void ClearData_AndForgetSite_ReachTheWatches()
     {
         var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs"));
         var clear = code[code.IndexOf("private static async Task<string> ClearBrowsingDataAsync(", StringComparison.Ordinal)..];
         clear = clear[clear.IndexOf("if (request.History && !privateContext)", StringComparison.Ordinal)..];
         clear = clear[..clear.IndexOf("\n        }", StringComparison.Ordinal)];
-        Assert.Contains("AppData.DeleteWatchReadingsSince(since);", clear);
+        Assert.Contains("AppData.ForgetSince(since);", clear);
 
         var forget = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Forget.cs"));
         var shred = forget[forget.IndexOf("private async Task<ShredResult> ShredSiteAsync(", StringComparison.Ordinal)..];

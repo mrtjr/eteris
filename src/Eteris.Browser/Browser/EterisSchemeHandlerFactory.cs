@@ -698,10 +698,9 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
         if (request.History && !privateContext)
         {
             var since = request.Since == DateTime.MinValue ? request.Since : request.Since.ToUniversalTime();
+            // Também as leituras das vigias do período (AppData.ForgetSince); as vigias ficam.
             AppData.ForgetSince(since);
             MainWindow.ForgetBounceVisits(since);
-            // As leituras de preço das vigias do período; as vigias ficam (são ferramentas, como os favoritos).
-            AppData.DeleteWatchReadingsSince(since);
         }
         // As caches da GPU (shaders, programas WebGL) só se apagam com o motor fechado: ao sair (ajuste e3).
         if (request.Cache) Infrastructure.ProfileCleanup.RemoveGpuCachesAtExit();

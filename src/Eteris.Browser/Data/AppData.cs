@@ -286,6 +286,9 @@ public static class AppData
         // As «Feitas» do período também: «Apagar histórico» e «Esquecer» mostravam-nas ainda no Radar.
         try { LazyDone.Value?.DeleteSince(sinceUtc); }
         catch (Exception) { }
+        // E o que as vigias leram no período (as leituras de preço e o último valor das verificadas nele); as vigias ficam.
+        // Aqui, e não em cada caminho: Definições › Apagar dados, eteris://history › Limpar e o «Esquecer» da paleta.
+        DeleteWatchReadingsSince(sinceUtc);
         // O relatório de privacidade: os domínios dos dias do período saem, os totais ficam. Grava-se antes o que está
         // pendente no livro, para que também isso perca o domínio.
         FlushShieldStats();
@@ -523,7 +526,8 @@ public static class AppData
         catch (Exception) { return []; }
     }
 
-    // «Limpar dados › histórico»: as leituras de preço do período saem, as vigias ficam (são ferramentas, como os favoritos).
+    // Com o histórico (ForgetSince): as leituras de preço do período e o último valor lido das vigias verificadas nele
+    // saem; as vigias ficam (são ferramentas, como os favoritos).
     public static void DeleteWatchReadingsSince(DateTime sinceUtc)
     {
         try { LazyWatches.Value?.DeleteReadingsSince(sinceUtc); }
