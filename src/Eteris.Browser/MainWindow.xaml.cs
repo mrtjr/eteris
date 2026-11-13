@@ -200,6 +200,15 @@ public partial class MainWindow : Window
         });
     }
 
+    // A janela privada trancou com o diálogo aberto (MainWindow.PrivateLock.cs): uma janela própria, sempre por cima do
+    // cartão, com o site, o título da aba e o titular, e que enviava o certificado sem o Windows Hello. Fecha sem resposta e
+    // o pedido volta para a fila (Postpone): reaparece ao destrancar (pelo ShowNextClientCertificate).
+    private void PostponeClientCertificate()
+    {
+        if (!_clientCertificates.Postpone()) return;
+        foreach (var dialog in OwnedWindows.OfType<ClientCertificateDialog>().ToList()) dialog.Close();
+    }
+
     private void CreateBrowser(BrowserTab tab)
     {
         if (TryCreateVideoView(tab)) return;

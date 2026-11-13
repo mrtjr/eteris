@@ -79,7 +79,8 @@ public sealed class ClientCertificatePrompts
     {
         if (!ReferenceEquals(request, Showing))
         {
-            request.Answer.TrySetResult(null);
+            // Adiado (Postpone): continua na fila, à espera de voltar a aparecer.
+            if (!_waiting.Contains(request)) request.Answer.TrySetResult(null);
             return;
         }
         Showing = null;
@@ -87,6 +88,20 @@ public sealed class ClientCertificatePrompts
         else _refusals.Remove(request.Page);
         request.Answer.TrySetResult(thumbprint);
         if (OverLimit(request.Page)) RefuseWaiting(r => ReferenceEquals(r.Page, request.Page));
+    }
+
+    // A janela privada trancou com o diálogo aberto (MainWindow.PrivateLock.cs): o pedido volta para a frente da fila, sem
+    // resposta e sem contar como recusa (o motor guardava o «sem certificado» até reiniciar), e a resposta que o diálogo
+    // fechado ainda dá não conta (Answered). Volta a aparecer pelo Next com a página outra vez à vista. False: nenhum aberto.
+    public bool Postpone()
+    {
+        if (Showing is not { } request) return false;
+        Showing = null;
+        var rest = _waiting.ToList();
+        _waiting.Clear();
+        _waiting.Enqueue(request);
+        foreach (var other in rest) _waiting.Enqueue(other);
+        return true;
     }
 
     // O utilizador navegou nesta aba: volta a poder perguntar, e o que o documento anterior deixou à espera é recusado.

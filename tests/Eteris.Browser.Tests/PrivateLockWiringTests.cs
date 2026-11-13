@@ -155,6 +155,17 @@ public class PrivateLockWiringTests
         Assert.Contains("if (state.DownloadStarted)", unlock);
     }
 
+    // O diálogo do certificado de cliente já aberto (uma janela própria, sempre por cima do cartão, com o site, o título da
+    // aba e o titular, e que podia enviar o certificado sem o Windows Hello) fecha ao trancar, sem resposta: o pedido volta
+    // para a fila (uma recusa ficava no motor até reiniciar) e reaparece ao destrancar.
+    [Fact]
+    public void AnOpenCertificateDialog_IsPostponedByTheLock()
+    {
+        Assert.Contains("PostponeClientCertificate();", Body(Source("MainWindow.PrivateLock.cs"), "private void LockPrivateWindow(PrivateLockReason reason)"));
+        var postpone = Body(Source("MainWindow.xaml.cs"), "private void PostponeClientCertificate()");
+        Assert.Matches(@"if \(!_clientCertificates\.Postpone\(\)\) return;\s*foreach \(var dialog in OwnedWindows\.OfType<ClientCertificateDialog>\(\)\.ToList\(\)\) dialog\.Close\(\);", postpone);
+    }
+
     [Fact]
     public void JsDialogs_AreSuppressedOnlyWhileLocked()
     {

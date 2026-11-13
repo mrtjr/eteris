@@ -357,6 +357,7 @@ public partial class MainWindow
         TabListPopup.IsOpen = false;
         LinkStatusBubble.Visibility = Visibility.Collapsed;
         HideLinkBubble();
+        PostponeClientCertificate();
         // A barra de procura guarda o texto procurado; os menus de contexto e as dicas (o cartão da aba traz o título).
         CloseFind();
         CloseTransientPopups();
