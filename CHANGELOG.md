@@ -49,6 +49,7 @@
 
 ### Correções
 
+- Depois de escrever um endereço na barra e carregar Enter, a barra volta a mostrar o cadeado da ligação segura quando a página chega. Antes ficava com o ícone «ⓘ» de uma página ainda por carregar, até se mudar de aba.
 - Os botões dos avisos no fundo da janela («Anular», «Abrir», «Mostrar na pasta»…) passam a responder também ao leitor de ecrã (UI Automation), e não só ao rato.
 - O leitor de ecrã diz o nome de cada linha das listas, e não o nome interno do programa: os comandos da paleta (com a descrição e o atalho), as abas no topo e nas abas verticais (com o estado: fixada, silenciada, a dormir…), a lista «Todas as abas», as sugestões da barra de endereço, os Espaços, a barra lateral, as permissões e o que o site guarda no painel do cadeado, a multimédia, as transferências, os rastreadores bloqueados e os certificados de cliente. Antes dizia, por exemplo, «PaletteCommand { Glyph = …, Title = Nova aba, … }» ou «Eteris.Browser.Tabs.BrowserTab». A paleta, as listas de abas e as sugestões passam também a ter nome («Comandos», «Abas», «Sugestões»).
 - Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.

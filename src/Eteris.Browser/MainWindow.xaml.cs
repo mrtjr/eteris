@@ -325,10 +325,14 @@ public partial class MainWindow : Window
             }
             // «Esquecer ao fechar»: ir para outro site também é sair do anterior.
             if (hostChanged) NoteSiteLeft(tab.Address, address);
-            tab.Address = address;
-            // O motor confirmou: o que foi pedido deixa de estar pendente.
+            // O motor confirmou: o que foi pedido deixa de estar pendente — antes de o endereço mudar, porque é a mudança do
+            // endereço que refresca a barra (com o pedido ainda pendente ficava com ⓘ em vez do cadeado).
+            var wasPending = tab.PendingAddress is not null;
             tab.PendingAddress = null;
             tab.PendingLoadStarted = false;
+            tab.Address = address;
+            // O mesmo endereço outra vez (recarregar o que já estava aberto) não muda Address nem refresca a barra.
+            if (wasPending && ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             // Nunca a partir da página de erro ou do aviso do «HTTPS primeiro»: o endereço que lá aparece é o que falhou
