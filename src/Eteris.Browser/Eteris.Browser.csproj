@@ -44,6 +44,7 @@
     <EmbeddedResource Include="Browser\Wallpapers\coast-live.webm" />
     <EmbeddedResource Include="Browser\error.html" />
     <EmbeddedResource Include="Browser\history.html" />
+    <EmbeddedResource Include="Browser\watches.html" />
     <EmbeddedResource Include="Browser\settings.html" />
     <EmbeddedResource Include="Browser\bookmarks.html" />
     <EmbeddedResource Include="Browser\welcome.html" />

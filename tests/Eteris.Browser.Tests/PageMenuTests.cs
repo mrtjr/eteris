@@ -6,8 +6,8 @@ namespace Eteris.Browser.Tests;
 public class PageMenuTests
 {
     private static PageContext Ctx(string? link = null, string? image = null, string selection = "", bool editable = false,
-        bool back = true, bool forward = false, bool isPrivate = false)
-        => new(link, image, selection, editable, back, forward, isPrivate);
+        bool back = true, bool forward = false, bool isPrivate = false, bool isWebPage = true)
+        => new(link, image, selection, editable, back, forward, isPrivate, isWebPage);
 
     private static List<PageCommand?> Commands(PageContext ctx)
         => PageMenu.Build(ctx, "DuckDuckGo").Select(i => i?.Command).ToList();
@@ -169,5 +169,38 @@ public class PageMenuTests
         Assert.Contains(PageCommand.CopyImageUrl, commands);
         var handler = File.ReadAllText(Path.Combine(Eteris.Browser.Tests.Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "PageMenuHandler.cs"));
         Assert.Contains("PageUrl = SafeFrame.Url(frame)", handler);
+    }
+    // As vigias e o recorte (etapa A): só numa página web e nunca na janela privada (as vigias nunca se guardam lá).
+    [Fact]
+    public void WebPage_OffersWatchAndClip()
+    {
+        var items = PageMenu.Build(Ctx(isWebPage: true, isPrivate: false), "DuckDuckGo").OfType<PageMenuItem>().Select(i => i.Command).ToList();
+        Assert.Contains(PageCommand.WatchPrice, items);
+        Assert.Contains(PageCommand.WatchChange, items);
+        Assert.Contains(PageCommand.ClipLive, items);
+        // A seguir ao «Esconder um elemento…», pela ordem dos textos.
+        var hide = items.IndexOf(PageCommand.HideElement);
+        Assert.Equal([PageCommand.WatchPrice, PageCommand.WatchChange, PageCommand.ClipLive], items.Skip(hide + 1).Take(3));
+        var labels = PageMenu.Build(Ctx(), "DuckDuckGo").OfType<PageMenuItem>().ToDictionary(i => i.Command, i => i.Label);
+        Assert.Equal("Vigiar o preço desta página", labels[PageCommand.WatchPrice]);
+        Assert.Equal("Avisar quando um pedaço mudar…", labels[PageCommand.WatchChange]);
+        Assert.Equal("Recortar um pedaço ao vivo…", labels[PageCommand.ClipLive]);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void PrivateOrInternal_HasNoWatch(bool isWebPage, bool isPrivate)
+        => Assert.DoesNotContain(PageMenu.Build(Ctx(isWebPage: isWebPage, isPrivate: isPrivate), "DuckDuckGo").OfType<PageMenuItem>(),
+            i => i.Command is PageCommand.WatchPrice or PageCommand.WatchChange or PageCommand.ClipLive);
+
+    // Os gestos da vigia saem logo na janela privada, venham do menu ou da paleta, e a leitura passiva também.
+    [Fact]
+    public void WatchGestures_NeverRunInPrivate()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Watch.cs")).Replace("\r\n", "\n");
+        Assert.Matches(@"private async void StartWatchPrice\(\)\n    \{\n        if \(IsPrivate \|\|", src);
+        Assert.Matches(@"private async void StartWatchChange\(\)\n    \{\n        if \(IsPrivate \|\|", src);
+        Assert.Matches(@"private async void ReadWatchedPagePassively\([^)]*\)\n    \{\n        if \(IsPrivate \|\|", src);
     }
 }

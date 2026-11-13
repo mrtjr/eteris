@@ -7,6 +7,7 @@ public enum PageCommand
     OpenImageNewTab, SaveImage, CopyImageUrl,
     Undo, Cut, Copy, Paste, SelectAll, SearchSelection, HideElement, SavePdf, ReadLater, CopyHighlightLink, PlayInVideoEngine,
     GeneratePassword, FillWith,
+    WatchPrice, WatchChange, ClipLive,
 }
 
 public sealed record PageContext(string? LinkUrl, string? ImageUrl, string Selection, bool IsEditable,
@@ -97,6 +98,13 @@ public static class PageMenu
             if (ctx.IsWebPage) items.Add(new(PageCommand.SavePdf, "", "Guardar como PDF"));
             items.Add(new(PageCommand.ViewSource, "", "Ver código-fonte", "Ctrl+U"));
             if (ctx.IsWebPage) items.Add(new(PageCommand.HideElement, "", "Esconder um elemento…"));
+            // As vigias e o recorte (Watching/, MainWindow.Watch.cs): nunca na janela privada, onde nada se guarda.
+            if (ctx.IsWebPage && !ctx.IsPrivate)
+            {
+                items.Add(new(PageCommand.WatchPrice, "", "Vigiar o preço desta página"));
+                items.Add(new(PageCommand.WatchChange, "", "Avisar quando um pedaço mudar…"));
+                items.Add(new(PageCommand.ClipLive, "", "Recortar um pedaço ao vivo…"));
+            }
             // O vídeo não toca (H.264/AAC, DRM) e a deteção não o apanhou: forçar o motor de vídeo do Windows.
             if (ctx.IsWebPage) items.Add(new(PageCommand.PlayInVideoEngine, "", "Tocar no motor de vídeo"));
         }

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>Loja de teste — preço por temporizadores</title>
+</head>
+<body>
+<!-- A loja da prova do estudo (docs/viabilidade-etapa-a.md): o preço só aparece depois de três temporizadores
+     encadeados de 700 ms. O elemento existe desde o início, com um marcador sem número. -->
+<h1>Teclado mecânico</h1>
+<p>Preço: <span id="preco">—</span></p>
+<script>
+  setTimeout(() => setTimeout(() => setTimeout(() => {
+    document.getElementById('preco').textContent = 'R$ 1.234,56';
+  }, 700), 700), 700);
+</script>
+</body>
+</html>

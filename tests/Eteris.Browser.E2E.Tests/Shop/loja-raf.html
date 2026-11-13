@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>Loja de teste — preço num requestAnimationFrame</title>
+</head>
+<body>
+<!-- A loja da prova do estudo (docs/viabilidade-etapa-a.md): o preço só aparece dentro de dois requestAnimationFrame
+     (num motor que não desenha, nunca aparece). O elemento existe desde o início, vazio. -->
+<h1>Rato sem fios</h1>
+<p>Preço: <span id="preco"></span></p>
+<script>
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.getElementById('preco').textContent = 'R$ 999,90';
+  }));
+</script>
+</body>
+</html>

@@ -174,6 +174,7 @@ public class ClearDataTests
     }
 
     // O CHANGELOG da 0.2.17 nomeia os armazéns com secure_delete; se um armazém o ganhar ou perder, a frase muda com ele.
+    // O WatchStore (as vigias) é posterior à 0.2.17: entra na secção «Por publicar» do CHANGELOG com a Etapa A.
     [Fact]
     public void SecureDelete_ChangelogNamesTheStoresThatHaveIt()
     {
@@ -181,7 +182,7 @@ public class ClearDataTests
         var stores = Directory.GetFiles(data, "*Store.cs")
             .Where(f => File.ReadAllText(f).Contains("SqliteSetup.SecureDelete(connection);", StringComparison.Ordinal))
             .Select(Path.GetFileNameWithoutExtension).Order(StringComparer.Ordinal).ToList();
-        Assert.Equal(["ArchivedTabsStore", "DoneTabsStore", "HistoryStore", "PrivacyEventsStore", "SavedSessionsStore", "SnoozedTabsStore"], stores);
+        Assert.Equal(["ArchivedTabsStore", "DoneTabsStore", "HistoryStore", "PrivacyEventsStore", "SavedSessionsStore", "SnoozedTabsStore", "WatchStore"], stores);
         var log = File.ReadAllText(Path.Combine(RepoRoot(), "CHANGELOG.md"));
         log = log[..log.IndexOf("## 0.2.16", StringComparison.Ordinal)];
         Assert.DoesNotContain("todas as ligações dos armazéns", log);
