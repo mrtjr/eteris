@@ -219,11 +219,14 @@ public partial class MainWindow
 
         core.NavigationStarting += (_, e) =>
         {
-            // Páginas internas do Éteris só existem no motor principal.
+            // O motor de vídeo só mostra a web. Uma navegação para fora dela pedida pela página fica cancelada e a aba onde
+            // está (VideoEngine.LeavesForMainEngine); as páginas internas abrem-se pela barra (LoadInVideoView).
             if (!VideoEngine.CanHost(e.Uri))
             {
                 e.Cancel = true;
-                if (!e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) Dispatcher.InvokeAsync(() => SwitchToNormalEngine(tab, e.Uri));
+                var target = e.Uri;
+                if (VideoEngine.LeavesForMainEngine(e.Uri, core.Source, e.IsUserInitiated, e.IsRedirected))
+                    Dispatcher.InvokeAsync(() => SwitchToNormalEngine(tab, target));
                 return;
             }
             mainNavigation = e.Uri;

@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Permissions;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
@@ -256,6 +257,46 @@ public class VideoEngineTests
     [InlineData("about:blank", false)]
     [InlineData(null, false)]
     public void OnlyWebAddressesGoToTheVideoEngine(string? url, bool expected) => Assert.Equal(expected, VideoEngine.CanHost(url));
+
+    // Uma navegação para fora da web (eteris://, file://, data:, javascript:) pedida por uma página no motor de vídeo é
+    // cancelada e a aba fica onde está: antes passava para o motor principal com esse endereço como carregamento do
+    // navegador, e um site abria o aviso do Éteris (eteris://error/…) com ligações «Continuar» assinadas.
+    [Theory]
+    [InlineData("eteris://error/?code=-7&https=1&url=http://alvo/", true, false)]
+    [InlineData("eteris://error/?code=-7&https=1&url=http://alvo/", false, false)]
+    [InlineData("eteris://settings", true, true)]
+    [InlineData("eteris://newtab", false, true)]
+    [InlineData("file:///C:/Windows/win.ini", true, false)]
+    [InlineData("file://servidor/partilha/a.html", true, false)]
+    [InlineData("data:text/html,<script>alert(1)</script>", true, false)]
+    [InlineData("javascript:alert(1)", true, false)]
+    [InlineData("about:blank", true, false)]
+    [InlineData("https://www.twitch.tv/", true, false)]
+    [InlineData("http://a.pt/", false, true)]
+    public void NonWebNavigation_FromAVideoPage_NeverSwitchesEngines(string target, bool userInitiated, bool redirected)
+        => Assert.False(VideoEngine.LeavesForMainEngine(target, "https://www.twitch.tv/canal", userInitiated, redirected));
+
+    [Fact]
+    public void NonWebNavigation_SwitchesOnlyWhenThePageCouldOpenIt()
+    {
+        // A mesma regra dos links (Browser/PageLinks.cs): eteris:// só de uma página interna, file:// só de um file://,
+        // e sempre pelo utilizador, sem redirecionamento.
+        Assert.True(VideoEngine.LeavesForMainEngine("file:///C:/b.html", "file:///C:/a.html", userInitiated: true, redirected: false));
+        Assert.False(VideoEngine.LeavesForMainEngine("file:///C:/b.html", "file:///C:/a.html", userInitiated: false, redirected: false));
+        Assert.False(VideoEngine.LeavesForMainEngine("file:///C:/b.html", "file:///C:/a.html", userInitiated: true, redirected: true));
+        Assert.False(VideoEngine.LeavesForMainEngine("eteris://settings", null, userInitiated: true, redirected: false));
+    }
+
+    [Fact]
+    public void VideoView_NonWebNavigation_GoesThroughTheRule()
+    {
+        var source = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.VideoEngine.cs"));
+        var start = source[source.IndexOf("core.NavigationStarting +=", StringComparison.Ordinal)..];
+        start = start[..start.IndexOf("mainNavigation = e.Uri;", StringComparison.Ordinal)];
+        Assert.Contains("e.Cancel = true;", start);
+        Assert.Contains("VideoEngine.LeavesForMainEngine(e.Uri, core.Source, e.IsUserInitiated, e.IsRedirected)", start);
+        Assert.DoesNotContain("StartsWith(\"about:\"", start);
+    }
     [Theory]
     [InlineData(null, "https://www.w3schools.com/html/mov_bbb.mp4", "mov_bbb.mp4")]
     [InlineData("", "https://www.w3schools.com/html/mov_bbb.mp4?x=1#t=3", "mov_bbb.mp4")]

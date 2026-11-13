@@ -335,6 +335,13 @@ public static class VideoEngine
     public static bool CanHost(string? url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
 
+    // Uma navegação para fora da web pedida dentro do motor de vídeo (NavigationStarting) é sempre cancelada; só passa
+    // para o motor principal se a página a pudesse abrir como link (Browser/PageLinks.cs: eteris:// só de uma página
+    // interna, file:// só de um file://), pelo utilizador e sem redirecionamento. Uma página web no motor de vídeo nunca
+    // abre assim eteris://error/… (o aviso com ligações «Continuar» assinadas), file:// nem data:.
+    public static bool LeavesForMainEngine(string? target, string? pageUrl, bool userInitiated, bool redirected)
+        => !CanHost(target) && userInitiated && !redirected && Browser.PageLinks.CanOpenLink(target, pageUrl);
+
     // Aberto diretamente, o motor principal transfere estes formatos em vez de os reproduzir (não os conhece sem os
     // codecs patenteados): HLS (.m3u8) e áudio AAC. MP4/MOV entram pelo tipo.
     private static readonly string[] PlayableExtensions = [".m3u8", ".m4a", ".aac"];
