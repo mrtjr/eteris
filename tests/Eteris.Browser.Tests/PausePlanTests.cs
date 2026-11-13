@@ -107,4 +107,21 @@ public class PausePlanTests
         Assert.Equal(["a", "n"], plan.MutedByPause);
         Assert.Equal(["a", "n"], plan.Return([E("a"), E("n"), E("m", muted: true)]).Unmute);
     }
+
+    // O que a Pausa parou não adormece enquanto ela dura (MainWindow.Sleep.cs): sem o «a tocar», a aba de fundo com música
+    // adormecia no minuto seguinte, saía do «Retomar» e perdia o ponto onde ia. Segura-se o que tocava com som (pela
+    // sondagem ou pelo script de marcar); o que sai do plano deixa de ser segurado.
+    [Fact]
+    public void WhatPlayed_IsHeldAwake_UntilItLeavesThePlan()
+    {
+        var plan = PausePlan<string>.From([E("a", media: MediaState.Playing), E("b", muted: true, media: MediaState.Playing), E("c"), E("d")]);
+        plan.Marked("c", 1);
+        Assert.True(plan.Holds("a"));
+        Assert.True(plan.Holds("c"));
+        Assert.False(plan.Holds("b"));
+        Assert.False(plan.Holds("d"));
+        Assert.False(plan.Holds("x"));
+        plan.Forget("a");
+        Assert.False(plan.Holds("a"));
+    }
 }

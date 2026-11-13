@@ -180,6 +180,8 @@ public partial class MainWindow
                 continue;
             }
             if (_sidebarOpen && _sidebarPanel?.Url == url) continue;
+            // O que a Pausa parou (a música na barra) não adormece enquanto ela dura (MainWindow.Pause.cs).
+            if (PauseHolds(_webPanelBrowsers[url])) continue;
             if (!WebPanels.ShouldSleep(WebPanels.Find(_webPanels, url)?.KeepAwake == true, since, nowUtc, threshold)) continue;
             _ = SleepWebPanelUnlessBusyAsync(url);
         }
@@ -201,7 +203,7 @@ public partial class MainWindow
             if (media.Audible || media.State == global::Eteris.Browser.Tabs.MediaState.Playing) return;
             // Entretanto o site pode ter voltado à vista, começado uma chamada, sido largado ou tirado da barra.
             if (!_webPanelBrowsers.TryGetValue(url, out var same) || !ReferenceEquals(same, browser) || !_webPanelHiddenSince.ContainsKey(url)
-                || (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser)) return;
+                || (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser) || PauseHolds(browser)) return;
             ReleaseWebPanelBrowser(url);
         }
         finally { _webPanelsFallingAsleep.Remove(url); }

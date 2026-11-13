@@ -60,6 +60,10 @@ public sealed class PausePlan<T> where T : class
         if (!_playing.Contains(engine, ReferenceEqualityComparer.Instance)) _playing.Add(engine);
     }
 
+    // O que tocava com som (pela sondagem ou pelo script de marcar) fica acordado enquanto a Pausa dura (MainWindow.Sleep.cs):
+    // a Pausa tirou-lhe o «a tocar», e adormecer largava o motor — saía do «Retomar» e perdia o ponto onde ia.
+    public bool Holds(T engine) => _playing.Contains(engine, ReferenceEqualityComparer.Instance);
+
     // Uma aba fechada (ou o motor largado) sai do plano.
     public void Forget(T engine)
     {

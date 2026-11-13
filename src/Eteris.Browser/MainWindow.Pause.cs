@@ -273,11 +273,39 @@ public partial class MainWindow
         // 3. Nada recomeça sozinho: o que tocava fica à espera do «Retomar o que tocava (N)» (aviso e paleta); os avisos que
         // ficaram em fila aparecem com ele.
         _replay = back.Replay.ToList();
+        HoldAfterPause(back.Replay);
         UpdateOverlayVisibility();
         ShowPausedToasts(state, _replay.Count);
         if (IsActive) ReturnFocusToPage();
         else if (ActiveBrowser is { } page) FocusManager.SetFocusedElement(this, page);
         RefreshMediaHub();
+    }
+
+    // ---------- O sono ----------
+
+    // O que a Pausa parou não adormece enquanto ela dura (MainWindow.Sleep.cs, IsHeld; os sites fixados em
+    // MainWindow.WebPanels.cs): a Pausa tirou-lhe o «a tocar» (a sondagem passa a vê-lo pausado), e adormecer largava o
+    // motor — saía do «Retomar o que tocava (N)» e, ao acordar, a página recarregava sem o ponto onde ia.
+    private bool PauseHolds(FrameworkElement engine) => _pause?.Plan.Holds(engine) == true;
+
+    private bool PauseHolds(BrowserTab tab)
+        => _pause is not null && ((_browsers.TryGetValue(tab, out var browser) && PauseHolds(browser))
+                                  || (_videoViews.TryGetValue(tab, out var view) && PauseHolds(view)));
+
+    // Depois de voltar, o que espera pelo «Retomar» fica acordado o tempo de sono das abas a contar de agora (e não do
+    // último uso, que numa aba de fundo com música já passou): como se o utilizador o tivesse pausado agora.
+    private void HoldAfterPause(IEnumerable<FrameworkElement> engines)
+    {
+        var now = DateTime.UtcNow;
+        var until = now + TimeSpan.FromMinutes(Settings.Current.SleepMinutes);
+        foreach (var engine in engines)
+        {
+            var tab = _browsers.FirstOrDefault(p => ReferenceEquals(p.Value, engine)).Key
+                      ?? _videoViews.FirstOrDefault(p => ReferenceEquals(p.Value, engine)).Key;
+            if (tab is not null) _sleepHolds[tab] = until;
+            else if (_webPanelBrowsers.FirstOrDefault(p => ReferenceEquals(p.Value, engine)).Key is { } url && _webPanelHiddenSince.ContainsKey(url))
+                _webPanelHiddenSince[url] = now;
+        }
     }
 
     // ---------- Avisos durante a Pausa ----------

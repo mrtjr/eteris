@@ -154,6 +154,22 @@ public class PauseWiringTests
         Assert.Contains("maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;", Source("MainWindow.Pause.cs"));
     }
 
+    // O que a Pausa parou não adormece (a Pausa tirou-lhe o «a tocar»): nem por tempo, nem por pressão de memória, nem ao
+    // mudar de Espaço (todos passam por IsHeld), nem o site fixado escondido. Depois de voltar, o que espera pelo
+    // «Retomar» fica acordado o tempo de sono das abas a contar do regresso.
+    [Fact]
+    public void WhatThePausePaused_DoesNotFallAsleep()
+    {
+        var sleep = Source("MainWindow.Sleep.cs");
+        Assert.Matches(@"private bool IsHeld\(BrowserTab tab, DateTime nowUtc\)\s*=> PauseHolds\(tab\) \|\|", sleep);
+        Assert.Contains("if (!byUser && (IsCapturing(browser) || tab.Media == MediaState.Playing || PauseHolds(tab))) return;", sleep);
+        var webPanels = Source("MainWindow.WebPanels.cs");
+        Assert.Contains("if (PauseHolds(_webPanelBrowsers[url])) continue;", webPanels);
+        Assert.Contains("|| (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser) || PauseHolds(browser)) return;", webPanels);
+        var exit = Regex.Match(Source("MainWindow.Pause.cs"), @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Contains("HoldAfterPause(back.Replay);", exit);
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
