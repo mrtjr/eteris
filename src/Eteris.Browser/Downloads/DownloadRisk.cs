@@ -14,6 +14,7 @@ public static class DownloadRisk
         ".exe", ".com", ".scr", ".pif", ".cpl", ".msi", ".msix", ".msixbundle", ".appx", ".appxbundle", ".appinstaller",
         ".application", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".jar",
         ".lnk", ".url", ".reg", ".msc", ".scf", ".inf", ".chm", ".dll", ".gadget", ".diagcab", ".iso", ".img", ".vhd", ".vhdx",
+        ".appref-ms", ".settingcontent-ms", ".msp", ".ws", ".wsc", ".sct", ".xll",
     };
 
     // O Windows ignora espaços e pontos no fim do nome («a.exe. » é «a.exe»): a extensão lê-se depois de os tirar.
