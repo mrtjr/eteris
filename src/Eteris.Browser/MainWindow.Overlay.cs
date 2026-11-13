@@ -72,6 +72,9 @@ public partial class MainWindow
         // Mesmos nomes, recursos (tema, estilos) e atalhos que a janela principal.
         NameScope.SetNameScope(_overlay, NameScope.GetNameScope(this));
         _overlay.Resources.MergedDictionaries.Add(Resources);
+        // E a mesma cor do texto (a janela principal herda-a do MainWindow.xaml): sem ela, o texto dos cartões sem cor
+        // própria (o do cartão de permissão) saía preto sobre o fundo escuro.
+        _overlay.SetResourceReference(ForegroundProperty, "TextBrush");
         _overlay.PreviewKeyDown += Window_PreviewKeyDown;
         // O Alt largado com a camada ativa (o cartão do Espreitar aberto por Alt+clique fica com o teclado) também conta:
         // sem isto o «Alt em baixo» ficava preso e o Alt+clique seguinte, já com o cartão fechado, não abria nada.

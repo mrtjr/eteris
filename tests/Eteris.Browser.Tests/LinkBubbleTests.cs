@@ -82,6 +82,17 @@ public class LinkBubbleTests
         Assert.Contains("SyncLinkBubble(show: false);", toast);
     }
 
+    // A camada tem a cor do texto do tema, como a janela principal (MainWindow.xaml: Foreground="{DynamicResource
+    // TextBrush}"): o texto dos cartões que vão para ela sem cor própria (o do cartão de permissão: «site quer usar a
+    // câmara») saía preto sobre o cartão escuro e quase não se lia (prova ao vivo da 0.2.17; já assim na 0.2.16).
+    [Fact]
+    public void Overlay_HasTheThemeTextColour_LikeTheMainWindow()
+    {
+        var window = string.Join('\n', Source("MainWindow.xaml").Split('\n').Take(15));
+        Assert.Contains("Foreground=\"{DynamicResource TextBrush}\"", window);
+        Assert.Contains("_overlay.SetResourceReference(ForegroundProperty, \"TextBrush\");", Source("MainWindow.Overlay.cs"));
+    }
+
     // Regra R-2 do sandbox: a camada cria-se no ContentRendered, antes da 1.ª página; a janela da bolha não nasce aí, mas no
     // 1.º link a mostrar (e só com a camada: no braço «puro» sem ela, a bolha fica na janela principal).
     [Fact]
