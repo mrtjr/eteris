@@ -201,8 +201,9 @@ public class ShieldHolesTests
           content: pseudo === '::before' ? e.before : pseudo === '::after' ? e.after : 'normal',
           backgroundImage: pseudo ? 'none' : e.bg, fontSize: '12px', cursor: e.cursor || 'auto',
           paddingTop: (e.pad ?? 0) + 'px', paddingBottom: (e.pad ?? 0) + 'px', borderTopWidth: (e.border ?? 0) + 'px', borderBottomWidth: (e.border ?? 0) + 'px' });
-        const page = body => {
+        const page = (body, origin = 'https://www.publico.pt') => {
           const html = el('html', { h: 5000 }, body);
+          globalThis.location = { origin };
           globalThis.document = {
             documentElement: html, body,
             querySelectorAll: sel => html.querySelectorAll(sel),
@@ -213,8 +214,8 @@ public class ShieldHolesTests
         };
         """;
 
-    private static string RunPage(string build, IReadOnlyCollection<string> blocked, bool labels = true)
-        => NodeRunner.Run(FakeDom + build + "\nconst collapsed = " + CosmeticScripts.CollapseHoles(blocked, labels).TrimEnd().TrimEnd(';') + ";\n"
+    private static string RunPage(string build, IReadOnlyCollection<string> blocked, bool labels = true, string origin = "https://www.publico.pt")
+        => NodeRunner.Run(FakeDom + build + "\nconst collapsed = " + CosmeticScripts.CollapseHoles(blocked, labels, origin).TrimEnd().TrimEnd(';') + ";\n"
             + "console.log(collapsed + ' ' + document.body.all().filter(e => e.style.display === 'none').map(e => e.id || e.tagName.toLowerCase()).join(','));").Trim();
 
     // O Público como a prova o mediu: o <ad-placement> vazio com «publicidade» num ::before, ao lado do cabeçalho;
@@ -313,6 +314,74 @@ public class ShieldHolesTests
         Assert.Equal("1 vazio", RunPage(Page, ["https://ads.example/beacon.gif"], labels: true));
     }
 
+    // ---- revisão: a página nunca recebe um endereço que não tenha já ---------------------------------------------------
+    // O script corre no mundo da própria página (Runtime.evaluate sem contexto), onde ela pode apanhar o que lá entra
+    // (substituindo String.prototype.indexOf ou Object.create). Antes, os endereços bloqueados do site anterior (A)
+    // chegavam ao seguinte (B) quando A ainda pedia imagens entre o pedido e o commit de B — o pixel de A com o caminho
+    // completo de A na consulta —, e o endereço para onde um iframe de outro site navegava sozinho chegava à página de
+    // cima. Agora: a página diz primeiro que endereços têm os seus iframe e imagens partidas, e só esses, se bloqueados,
+    // voltam; e a lista só se usa num documento da origem para que foi feita.
+
+    [Fact]
+    public void CollectElementSources_TheFramesAndTheBrokenImagesOfThePage()
+        => Assert.Equal("[\"https://ads.example/f.html\",\"https://ads.example/b.gif\",\"https://ads.example/c.gif\",\"https://ads.example/c.gif?x\"]",
+            NodeRunner.Run(FakeDom + """
+                page(el('body', { h: 3000 },
+                  el('iframe', { src: 'https://ads.example/f.html', h: 250 }),
+                  el('iframe', { h: 250 }),
+                  el('img', { src: 'https://ads.example/b.gif', h: 90, naturalWidth: 0 }),
+                  el('img', { currentSrc: 'https://ads.example/c.gif', src: 'https://ads.example/c.gif?x', h: 90, naturalWidth: 0 }),
+                  el('img', { src: 'https://site.pt/foto.jpg', h: 90, naturalWidth: 800 })));
+                """ + "console.log(" + CosmeticScripts.CollectElementSources + ");").Trim());
+
+    [Fact]
+    public void OwnBlocked_OnlyTheBlockedAddressesThePageAlreadyHas()
+    {
+        const string Leak = "https://www.facebook.com/tr?id=1&dl=https%3A%2F%2Fbanco.example%2Fprivado";
+        string[] blocked = [Leak, "https://ads.example/b.gif", "https://ads.example/f.html", "https://ads.example/navegou-sozinho?uid=7"];
+        var sources = JsonSerializer.Serialize(new[] { "https://ads.example/b.gif#x", "https://ads.example/f.html", "https://ads.example/f.html", "https://site.pt/foto.jpg" });
+
+        var own = CosmeticScripts.OwnBlocked(blocked, sources);
+        Assert.Equal(["https://ads.example/b.gif#x", "https://ads.example/f.html"], own);
+        var script = CosmeticScripts.CollapseHoles(own, labels: false, "https://www.publico.pt");
+        Assert.DoesNotContain("facebook", script);
+        Assert.DoesNotContain("navegou-sozinho", script);
+
+        Assert.Empty(CosmeticScripts.OwnBlocked(blocked, null));
+        Assert.Empty(CosmeticScripts.OwnBlocked(blocked, "não é JSON"));
+        Assert.Empty(CosmeticScripts.OwnBlocked(blocked, "{\"a\":1}"));
+        Assert.Empty(CosmeticScripts.OwnBlocked([], sources));
+        Assert.Empty(CosmeticScripts.OwnBlocked(blocked, "[null, 1, \"https://site.pt/foto.jpg\"]"));
+    }
+
+    // Um documento de outra origem (o seguinte, se a página mudou entre as duas chamadas) não usa a lista; os rótulos
+    // continuam a procurar-se.
+    [Fact]
+    public void Script_InADocumentOfAnotherOrigin_TheListIsIgnored()
+    {
+        const string Page = """
+            page(el('body', { h: 3000 },
+              el('div', { id: 'vazio', h: 250, before: '"Publicidade"' }),
+              el('iframe', { id: 'f', src: 'https://ads.example/ad.html', h: 250 }),
+              el('main', { h: 2000 }, el('p', { h: 40 }, 'Notícia'))), 'https://outro.example');
+            """;
+        Assert.Equal("1 vazio", RunPage(Page, ["https://ads.example/ad.html"], origin: "https://www.publico.pt"));
+        Assert.Equal("2 vazio,f", RunPage(Page, ["https://ads.example/ad.html"], origin: "https://outro.example"));
+    }
+
+    [Theory]
+    [InlineData("https://www.publico.pt/desporto?x=1#y", "https://www.publico.pt")]
+    [InlineData("https://WWW.Publico.PT/", "https://www.publico.pt")]
+    [InlineData("http://127.0.0.1:8080/a", "http://127.0.0.1:8080")]
+    [InlineData("https://utilizador:segredo@site.pt/", "https://site.pt")]
+    [InlineData("https://site.pt:443/", "https://site.pt")]
+    [InlineData("eteris://history/", null)]
+    [InlineData("about:blank", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void OriginOf_IsTheOriginThePageSees(string? url, string? expected)
+        => Assert.Equal(expected, CosmeticScripts.OriginOf(url));
+
     [Fact]
     public void CollapseHoles_EmbedsTheAddressesAsJson_AndTheyCannotBreakOut()
     {
@@ -354,10 +423,11 @@ public class ShieldHolesTests
         public bool ShouldBlock(string requestUrl, string? pageUrl, string resourceType) => block;
     }
 
-    private static (PrivacyResourceHandler Handler, List<string> Elements) Handler(bool block = true, bool shieldOn = true)
+    private static (PrivacyResourceHandler Handler, List<string> Elements) Handler(bool block = true, bool shieldOn = true, List<string?>? pages = null)
     {
         var elements = new List<string>();
-        var handler = new PrivacyResourceHandler(() => new Lists(block), _ => shieldOn, _ => { }, null, onBlockedElement: elements.Add);
+        var handler = new PrivacyResourceHandler(() => new Lists(block), _ => shieldOn, _ => { }, null,
+            onBlockedElement: (page, url) => { pages?.Add(page); elements.Add(url); });
         return (handler, elements);
     }
 
@@ -366,7 +436,8 @@ public class ShieldHolesTests
     [Fact]
     public void OnlyImagesAndFramesOfTheMainDocument_AreReported()
     {
-        var (handler, elements) = Handler();
+        var pages = new List<string?>();
+        var (handler, elements) = Handler(pages: pages);
         var main = Frame(main: true);
         var child = Frame(main: false, parent: main);
         var grandchild = Frame(main: false, parent: child);
@@ -380,6 +451,8 @@ public class ShieldHolesTests
         handler.Decide(browser, grandchild, Req("https://ads.example/neto.html", ResourceType.SubFrame));
 
         Assert.Equal(["https://ads.example/b.gif", "https://ads.example/ad.html"], elements);
+        // Com a página de cima no momento do bloqueio: a aba só os entrega a um documento dessa origem.
+        Assert.Equal(["https://www.publico.pt/", "https://www.publico.pt/"], pages);
     }
 
     [Fact]
@@ -401,7 +474,7 @@ public class ShieldHolesTests
     {
         var main = Frame(main: true);
         var handler = new PrivacyResourceHandler(() => new Lists(true), _ => true, _ => { }, null,
-            onBlockedElement: _ => throw new InvalidOperationException("janela a fechar"));
+            onBlockedElement: (_, _) => throw new InvalidOperationException("janela a fechar"));
         Assert.Equal(CefReturnValue.Cancel, handler.Decide(Browser(main), main, Req("https://ads.example/b.gif", ResourceType.Image)));
         Assert.False(PrivacyResourceHandler.InMainDocument(ResourceType.Image, null));
         Assert.False(PrivacyResourceHandler.InMainDocument(ResourceType.SubFrame, Frame(main: true)));
@@ -412,17 +485,46 @@ public class ShieldHolesTests
     [Fact]
     public void TheTab_KeepsEachAddressOnce_UpToTheLimit_AndForgetsThemWithThePage()
     {
-        var tab = new BrowserTab("https://www.publico.pt/");
-        Assert.True(tab.RecordBlockedElement("https://ads.example/1.gif"));
-        Assert.False(tab.RecordBlockedElement("https://ads.example/1.gif"));
-        Assert.Equal(["https://ads.example/1.gif"], tab.BlockedElements);
+        const string Page = "https://www.publico.pt/";
+        var tab = new BrowserTab(Page);
+        tab.RecordBlockedElement(Page, "https://ads.example/1.gif");
+        tab.RecordBlockedElement(Page, "https://ads.example/1.gif");
+        Assert.Equal(["https://ads.example/1.gif"], tab.BlockedElementsFor("https://www.publico.pt/desporto"));
 
-        for (var i = 0; i < BrowserTab.RememberedBlockedElements + 10; i++) tab.RecordBlockedElement($"https://ads.example/{i}.png");
-        Assert.Equal(BrowserTab.RememberedBlockedElements, tab.BlockedElements.Count);
-        Assert.Equal($"https://ads.example/{BrowserTab.RememberedBlockedElements + 9}.png", tab.BlockedElements[^1]);
+        for (var i = 0; i < BrowserTab.RememberedBlockedElements + 10; i++) tab.RecordBlockedElement(Page, $"https://ads.example/{i}.png");
+        var all = tab.BlockedElementsFor(Page);
+        Assert.Equal(BrowserTab.RememberedBlockedElements, all.Count);
+        Assert.Equal($"https://ads.example/{BrowserTab.RememberedBlockedElements + 9}.png", all[^1]);
 
-        tab.LeavePage("https://www.publico.pt/");
-        Assert.Empty(tab.BlockedElements);
+        tab.LeavePage(Page);
+        Assert.Empty(tab.BlockedElementsFor(Page));
+    }
+
+    // Revisão: cada endereço fica com a origem da página de cima no momento do bloqueio, e só volta a um documento dessa
+    // origem. O caso medido: o utilizador vai do banco (A) para outro site (B) enquanto A ainda carrega; a lista recomeça no
+    // pedido de B, mas o pixel de A bloqueado a seguir chega depois — antes, ia parar à página de B.
+    [Fact]
+    public void TheTab_GivesEachAddressOnlyToADocumentOfTheOriginThatHadIt()
+    {
+        const string Bank = "https://banco.example/conta/movimentos";
+        const string Other = "https://outro.example/";
+        const string Pixel = "https://www.facebook.com/tr?id=1&dl=https%3A%2F%2Fbanco.example%2Fconta";
+        var tab = new BrowserTab(Bank);
+        tab.LeavePage(Bank);
+        tab.RecordBlockedElement(Bank, Pixel);
+        tab.RecordBlockedElement(Other, "https://ads.example/b.gif");
+
+        Assert.Equal(["https://ads.example/b.gif"], tab.BlockedElementsFor(Other));
+        Assert.Equal([Pixel], tab.BlockedElementsFor("https://banco.example/"));
+        Assert.Empty(tab.BlockedElementsFor("http://banco.example/"));
+        Assert.Empty(tab.BlockedElementsFor(null));
+        Assert.Empty(tab.BlockedElementsFor("about:blank"));
+
+        // Sem página conhecida no momento do bloqueio, o endereço nunca sai.
+        tab.RecordBlockedElement(null, "https://ads.example/sem-pagina.gif");
+        tab.RecordBlockedElement("", "https://ads.example/vazia.gif");
+        Assert.DoesNotContain("https://ads.example/sem-pagina.gif", tab.BlockedElementsFor(Other));
+        Assert.DoesNotContain("https://ads.example/vazia.gif", tab.BlockedElementsFor(Other));
     }
 
     // ---- a ligação na janela ----------------------------------------------------------------------------------------
@@ -441,17 +543,30 @@ public class ShieldHolesTests
             && generic.IndexOf("CosmeticScripts.CollapseHoles(", StringComparison.Ordinal) > gate);
         Assert.Contains("SelfTest.IsTestPage(url)", generic);
 
-        var later = shield[shield.IndexOf("private void CollapseHoles(BrowserTab tab)", StringComparison.Ordinal)..];
+        var later = shield[shield.IndexOf("private async Task CollapseHolesAsync(BrowserTab tab)", StringComparison.Ordinal)..];
         later = later[..later.IndexOf("\n    }\n", StringComparison.Ordinal)];
         Assert.True(later.IndexOf("!ShieldOn(host)", StringComparison.Ordinal) is > 0 and var gate2
             && later.IndexOf("CosmeticScripts.CollapseHoles(", StringComparison.Ordinal) > gate2);
         Assert.Contains("SelfTest.IsTestPage(", later);
 
         var window = Source("MainWindow.xaml.cs");
-        Assert.Contains("onBlockedElement: url => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, url))", window);
-        // Um endereço repetido não volta a pôr a página a trabalhar, e o caminho tardio não procura rótulos à toa.
-        Assert.Contains("if (!tab.RecordBlockedElement(url) || !_holesQueued.Add(tab)) return;", shield);
-        Assert.Contains("CosmeticScripts.CollapseHoles(blocked, labels: false)", later);
+        Assert.Contains("onBlockedElement: (page, url) => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, page, url))", window);
         Assert.Contains("_ = ApplyGenericCosmeticsAsync(browser, url, tab);", window);
+
+        // Revisão: a página só recebe os endereços bloqueados que ela própria tem (OwnBlockedAsync), da origem do
+        // documento em vigor no frame principal (nunca tab.Address), com a origem para o script a conferir.
+        Assert.Contains("CosmeticScripts.CollapseHoles(await OwnBlockedAsync(browser, tab?.BlockedElementsFor(url) ?? []), origin: CosmeticScripts.OriginOf(url))", generic);
+        Assert.Contains("browser.GetMainFrame()?.Url", later);
+        Assert.DoesNotContain("tab.Address", later);
+        Assert.Contains("await OwnBlockedAsync(browser, tab.BlockedElementsFor(url))", later);
+        Assert.Contains("CosmeticScripts.CollapseHoles(own, labels: false, CosmeticScripts.OriginOf(url))", later);
+        Assert.DoesNotContain("BlockedElements ??", shield);
+        Assert.DoesNotContain("CollapseHoles(blocked", shield);
+
+        // Um endereço repetido volta a agendar a recolha (um lugar novo que a página acrescentou depois, numa rota de uma
+        // SPA ou ao rolar, com o mesmo endereço bloqueado); juntam-se durante 400 ms, e só a 1.ª chamada (os endereços dos
+        // iframe e imagens partidas) corre se nenhum for desta página.
+        Assert.Contains("tab.RecordBlockedElement(page, url);\n            if (!_holesQueued.Add(tab)) return;", shield);
+        Assert.DoesNotContain("if (!tab.RecordBlockedElement(", shield);
     }
 }

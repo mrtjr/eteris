@@ -100,11 +100,60 @@ public static class CosmeticScripts
         };
         """;
 
-    // O script para a página (só o documento principal: PageScript). Devolve quantos elementos recolheu. labels: false
-    // nos bloqueios que chegam depois do carregamento — os rótulos só se voltam a procurar se recolheu algum iframe ou img
-    // (a procura percorre a página: 2–15 ms num jornal, ~40 ms numa página de 13 500 elementos, medido ao vivo).
-    public static string CollapseHoles(IReadOnlyCollection<string> blocked, bool labels = true) => $$"""
-        (function (list, sweep) {
+    // A página nunca recebe um endereço que não tenha já. O script corre no mundo da própria página (Runtime.evaluate),
+    // onde ela pode apanhar o que lá entra (substituindo String.prototype.indexOf ou Object.create): os endereços que o
+    // Escudo bloqueou noutra página (o site anterior, que ainda pedia imagens até ao commit do seguinte) ou para onde um
+    // iframe de outro site navegou sozinho não podem lá chegar. Por isso: (1) a página diz que endereços têm os seus
+    // iframe e imagens partidas (CollectElementSources); (2) o navegador fica só com os desses que bloqueou para a origem
+    // dela (OwnBlocked, BrowserTab.BlockedElementsFor); (3) o CollapseHoles leva só esses, e só os usa num documento dessa
+    // origem (a página pode ter mudado entre as duas chamadas). Uma página hostil que falseie a resposta a (1) consegue
+    // no máximo perguntar se um endereço que já adivinhou foi bloqueado na origem dela.
+    public const string CollectElementSources = """
+        (function () {
+          var out = [];
+          document.querySelectorAll('iframe, img').forEach(function (e) {
+            if (out.length >= 1000 || (e.tagName === 'IMG' && e.naturalWidth > 0)) return;
+            [e.currentSrc, e.src].forEach(function (u) { if (typeof u === 'string' && u.length > 0 && u.length <= 8192) out.push(u); });
+          });
+          return JSON.stringify(out);
+        })()
+        """;
+
+    // Dos endereços que a página tem (o JSON do CollectElementSources), os que o Escudo bloqueou (sem o fragmento),
+    // como a página os tem. Resposta que não seja uma lista de textos: nada.
+    public static IReadOnlyList<string> OwnBlocked(IEnumerable<string> blocked, string? sources)
+    {
+        var bare = blocked.Select(Bare).ToHashSet(StringComparer.Ordinal);
+        if (bare.Count == 0 || string.IsNullOrEmpty(sources)) return [];
+        JsonElement list;
+        try { list = JsonSerializer.Deserialize<JsonElement>(sources); }
+        catch (JsonException) { return []; }
+        if (list.ValueKind != JsonValueKind.Array) return [];
+        return list.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString()!)
+            .Where(url => bare.Contains(Bare(url)))
+            .Distinct(StringComparer.Ordinal)
+            .Take(Tabs.BrowserTab.RememberedBlockedElements)
+            .ToList();
+    }
+
+    private static string Bare(string url) => url.IndexOf('#') is var i and >= 0 ? url[..i] : url;
+
+    // A origem de um endereço http(s) como a página a vê (location.origin): esquema, anfitrião e porta não implícita,
+    // sem utilizador nem palavra-passe. Outro esquema (eteris:, about:, data:): null.
+    public static string? OriginOf(string? url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? $"{uri.Scheme}://{uri.Authority}"
+            : null;
+
+    // O script para a página (só o documento principal: PageScript). Devolve quantos elementos recolheu. blocked: só
+    // endereços que a página já tem (OwnBlocked), usados só num documento da origem origin. labels: false nos bloqueios
+    // que chegam depois do carregamento — os rótulos só se voltam a procurar se recolheu algum iframe ou img (a procura
+    // percorre a página: 2–15 ms num jornal, ~40 ms numa página de 13 500 elementos, medido ao vivo).
+    public static string CollapseHoles(IReadOnlyCollection<string> blocked, bool labels = true, string? origin = null) => $$"""
+        (function (list, sweep, origin) {
+          if (list.length && location.origin !== origin) list = [];
           {{HolesCore}}
           var hidden = 0;
           var hide = function (e) {
@@ -165,7 +214,7 @@ public static class CosmeticScripts
           };
           labels.forEach(function (l) { var b = Holes.box(l[0], l[1], dom); if (b) hide(b); });
           return hidden;
-        })({{JsonSerializer.Serialize(blocked)}}, {{(labels ? "true" : "false")}});
+        })({{JsonSerializer.Serialize(blocked)}}, {{(labels ? "true" : "false")}}, {{JsonSerializer.Serialize(origin)}});
         """;
 
     public static (string[] Classes, string[] Ids) ParseClassesAndIds(string raw)

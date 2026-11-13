@@ -275,7 +275,7 @@ public partial class MainWindow : Window
                 observatory: tab.Observatory,
                 chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows),
                 // Uma imagem ou um iframe da página que o Escudo bloqueou: a página recolhe-o (MainWindow.Shield.cs).
-                onBlockedElement: url => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, url))),
+                onBlockedElement: (page, url) => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, page, url))),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += () =>

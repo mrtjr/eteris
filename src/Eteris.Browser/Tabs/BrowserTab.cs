@@ -267,21 +267,25 @@ public partial class BrowserTab : ObservableObject
 
     // «Escudo sem buracos» (CosmeticScripts.CollapseHoles): os endereços das imagens e dos iframes do documento principal
     // que o Escudo bloqueou nesta página, para a página os recolher. Só em memória, cada um uma vez, no máximo
-    // RememberedBlockedElements (saem os mais antigos), e recomeçam com cada página (ResetShield).
+    // RememberedBlockedElements (saem os mais antigos), e recomeçam com cada página (ResetShield). Cada um fica com a
+    // origem da página de cima no momento do bloqueio e só volta a um documento dessa origem (BlockedElementsFor): a
+    // lista recomeça no pedido da página nova, mas a anterior continua a pedir até ao commit, e um bloqueio dela que
+    // chegue depois não pode ir parar à seguinte.
     public const int RememberedBlockedElements = 200;
 
-    private readonly List<string> _blockedElements = [];
+    private readonly List<(string Origin, string Url)> _blockedElements = [];
 
-    public IReadOnlyList<string> BlockedElements => _blockedElements.ToList();
-
-    // false: o endereço já lá estava (a página já o recebeu).
-    public bool RecordBlockedElement(string url)
+    public void RecordBlockedElement(string? page, string url)
     {
-        if (_blockedElements.Contains(url)) return false;
-        _blockedElements.Add(url);
+        if (Shields.CosmeticScripts.OriginOf(page) is not { } origin || _blockedElements.Contains((origin, url))) return;
+        _blockedElements.Add((origin, url));
         if (_blockedElements.Count > RememberedBlockedElements) _blockedElements.RemoveAt(0);
-        return true;
     }
+
+    public IReadOnlyList<string> BlockedElementsFor(string? page)
+        => Shields.CosmeticScripts.OriginOf(page) is { } origin
+            ? _blockedElements.Where(e => e.Origin == origin).Select(e => e.Url).ToList()
+            : [];
 
     public void RecordBlocked(string host)
     {
