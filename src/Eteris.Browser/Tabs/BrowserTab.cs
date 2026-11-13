@@ -311,33 +311,35 @@ public partial class BrowserTab : ObservableObject
     // (back/forward cache) repõe a página tal como estava, sem pedidos novos, por isso repõe-se o que ela tinha.
     public const int RememberedPages = 8;
 
-    // LeftAt: quando foi deixada (Environment.TickCount64), para saber se o site ficou mais protegido depois disso.
+    // LoadedAt: quando o documento deixado carregou (o commit, em Environment.TickCount64). A cache de páginas repõe esse
+    // documento tal como estava, por isso é a hora de carga, não a de saída, que diz se o site ficou mais protegido
+    // depois de ele correr (Shields/ShieldTightening.cs).
     private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon, string? FaviconSite,
-        long LeftAt);
+        long LoadedAt);
 
     private readonly List<LeftPage> _leftPages = [];
 
-    // A página url vai ser substituída: guarda o estado dela e começa a contagem da seguinte do zero. Chamado uma vez
-    // por pedido da página nova (um redirecionamento repete-o): uma contagem já recomeçada não apaga a guardada, mas o
-    // momento em que foi deixada é sempre o último.
-    public void LeavePage(string? url)
+    // A página url, carregada em loadedAt, vai ser substituída: guarda o estado dela e começa a contagem da seguinte do
+    // zero. Chamado uma vez por pedido da página nova (um redirecionamento repete-o com a mesma hora): uma contagem já
+    // recomeçada não apaga a guardada, mas a hora de carga é sempre a do último documento com esse endereço. Sem ela,
+    // conta como carregada antes de tudo (pelo seguro).
+    public void LeavePage(string? url, long loadedAt = long.MinValue)
     {
-        var now = Environment.TickCount64;
         if (url is not null && (BlockedCount > 0 || _leftPages.All(p => p.Url != url)))
         {
             _leftPages.RemoveAll(p => p.Url == url);
-            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite, now));
+            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite, loadedAt));
             if (_leftPages.Count > RememberedPages) _leftPages.RemoveAt(0);
         }
         else if (url is not null && _leftPages.FindLastIndex(p => p.Url == url) is var i and >= 0)
         {
-            _leftPages[i] = _leftPages[i] with { LeftAt = now };
+            _leftPages[i] = _leftPages[i] with { LoadedAt = loadedAt };
         }
         ResetShield();
     }
 
-    // Quando a página url foi deixada pela última vez; null se a aba não a guardou.
-    public long? LeftAt(string url) => _leftPages.FindLast(p => p.Url == url)?.LeftAt;
+    // Quando carregou o último documento deixado com o endereço url; null se a aba não o guardou.
+    public long? LoadedAt(string url) => _leftPages.FindLast(p => p.Url == url)?.LoadedAt;
 
     // Voltou a url pela cache de páginas: repõe a contagem e o ícone dela. false se não há nada guardado.
     public bool ReturnToPage(string url)

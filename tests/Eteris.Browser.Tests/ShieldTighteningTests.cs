@@ -115,42 +115,90 @@ public class ShieldTighteningTests
     }
 
     // Voltar para uma página guardada na cache de Voltar/Avançar repõe-na tal como estava, sem pedidos (medido: o gpt.js
-    // da reprodução local com googletag.apiReady true). Se foi deixada antes de o site ficar mais protegido, carrega-se
-    // outra vez.
+    // da reprodução local com googletag.apiReady true). Se o documento carregou antes de o site ficar mais protegido,
+    // carrega-se outra vez.
     [Fact]
-    public void TightenedSince_APageLeftBeforeMoreProtection()
+    public void TightenedSince_APageLoadedBeforeMoreProtection()
     {
         var host = "t" + Guid.NewGuid().ToString("N") + ".example";
         var page = "https://www." + host + "/artigo";
-        var left = Environment.TickCount64;
-        Assert.False(ShieldTightening.TightenedSince(page, left));
+        var loaded = Environment.TickCount64;
+        Assert.False(ShieldTightening.TightenedSince(page, loaded));
         Assert.False(ShieldTightening.TightenedSince(page, null));
         ShieldTightening.Changed(host, wasProtected: true, isProtected: false);
-        Assert.False(ShieldTightening.TightenedSince(page, left));
+        Assert.False(ShieldTightening.TightenedSince(page, loaded));
         ShieldTightening.Changed(host, wasProtected: false, isProtected: true);
-        Assert.True(ShieldTightening.TightenedSince(page, left));
-        // Sem registo de quando foi deixada (a aba só guarda as últimas): carrega outra vez, pelo seguro.
+        Assert.True(ShieldTightening.TightenedSince(page, loaded));
+        // Sem registo de quando carregou (a aba só guarda as últimas): carrega outra vez, pelo seguro.
         Assert.True(ShieldTightening.TightenedSince(page, null));
         Assert.False(ShieldTightening.TightenedSince(page, Environment.TickCount64 + 60_000));
         Assert.False(ShieldTightening.TightenedSince("https://outro" + host + "/", null));
         Assert.False(ShieldTightening.TightenedSince("eteris://newtab/", null));
     }
 
+    // Carregada com menos proteção e deixada só depois de a proteção mudar (a outra aba do site, ou a mudança veio das
+    // Definições, da sincronização ou de outra janela, e nenhuma aba recarregou): o documento que a cache de Voltar/Avançar
+    // repõe é o de antes da mudança, por isso também carrega outra vez.
     [Fact]
-    public void Window_ReloadsARestoredPageLeftBeforeMoreProtection()
+    public void TightenedSince_APageLoadedBeforeButLeftAfterMoreProtection()
+    {
+        var host = "t" + Guid.NewGuid().ToString("N") + ".example";
+        var page = "https://www." + host + "/artigo";
+        var tab = new Tabs.BrowserTab(page);
+        var loaded = Environment.TickCount64;
+        ShieldTightening.Changed(host, wasProtected: false, isProtected: true);
+        Thread.Sleep(40);
+        tab.LeavePage(page, loaded);
+        Assert.True(ShieldTightening.TightenedSince(page, tab.LoadedAt(page)));
+        // O documento novo no mesmo endereço (a aba recarregou com a proteção) já não.
+        Thread.Sleep(40);
+        tab.LeavePage(page, Environment.TickCount64);
+        Assert.False(ShieldTightening.TightenedSince(page, tab.LoadedAt(page)));
+    }
+
+    // Cada commit guarda a hora em que o documento carregou (no mesmo sítio do endereço confirmado), e a página deixada
+    // leva a hora dela: o pedido da página nova e o commit sem pedido passam-na a LeavePage.
+    [Fact]
+    public void Window_RemembersWhenEachDocumentLoaded()
     {
         var main = Source("MainWindow.xaml.cs");
-        var leftAt = main.IndexOf("var leftAt = tab.LeftAt(arriving);", StringComparison.Ordinal);
-        var leave = main.IndexOf("tab.LeavePage(leaving);", StringComparison.Ordinal);
-        Assert.True(leftAt > 0 && leave > leftAt);
+        Assert.Equal(2, Regex.Matches(main, @"Volatile\.Read\(ref committedAt\)").Count);
+        Assert.Contains("Volatile.Write(ref committedAt, Environment.TickCount64);", main);
+        Assert.Contains("tab.LeavePage(leaving, leavingLoadedAt)", main);
+        Assert.DoesNotContain("tab.LeavePage(leaving);", main);
+        Assert.DoesNotContain("LeftAt", main);
+    }
+
+    [Fact]
+    public void Window_ReloadsARestoredPageLoadedBeforeMoreProtection()
+    {
+        var main = Source("MainWindow.xaml.cs");
+        var loadedAt = main.IndexOf("var loadedAt = tab.LoadedAt(arriving);", StringComparison.Ordinal);
+        var leave = main.IndexOf("tab.LeavePage(leaving, leavingLoadedAt);", StringComparison.Ordinal);
+        Assert.True(loadedAt > 0 && leave > loadedAt);
         // O endereço que chegou, não o da aba (que pode ainda não ter mudado quando isto corre).
-        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser, arriving);", main);
+        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, loadedAt) && ShieldOnAt(arriving)) ReloadRestored(tab, browser, arriving);", main);
         var reload = Body(Source("MainWindow.Shield.cs"),
             "private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)");
         Assert.Contains("RendererCache.EvictAsync(browser)", reload);
         Assert.Contains("await ScriptsReadyFor(tab, browser, url);", reload);
         Assert.Contains("browser.Reload(ignoreCache: true)", reload);
         Assert.Contains("catch (Exception)", reload);
+    }
+
+    // A proteção do site saiu outra vez depois da mudança (a exceção ligada de novo): com o Escudo desligado no site o
+    // recarregar não bloquearia nada e só perdia o que estava escrito na página. O modo rigoroso não conta sem o Escudo
+    // (o tratador deixa passar tudo antes de o ver: PrivacyRequestHandler).
+    [Fact]
+    public void Window_DoesNotReloadARestoredPageWhenTheShieldIsOffThere()
+    {
+        var shield = Source("MainWindow.Shield.cs");
+        var on = Body(shield, "private bool ShieldOnAt(string url)");
+        Assert.Contains("ShieldOn(uri.Host)", on);
+        var handler = Source("Shields", "PrivacyRequestHandler.cs");
+        var off = handler.IndexOf("!isProtected(page.Host))", StringComparison.Ordinal);
+        var strict = handler.IndexOf("Data.AppData.IsStrict(top.Host, isPrivate)", StringComparison.Ordinal);
+        Assert.True(off > 0 && strict > off);
     }
 
     private static string Source(params string[] parts)

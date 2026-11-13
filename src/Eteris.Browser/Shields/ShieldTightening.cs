@@ -30,11 +30,11 @@ public static class ShieldTightening
     public static bool Affects(string host, string? pageUrl)
         => PageSite(pageUrl) is { } site && site == SiteOf(host);
 
-    // Voltar/Avançar pela cache de páginas repõe a página tal como estava quando foi deixada (leftAt; null = a aba não a
-    // guardou), sem pedidos (medido: o gpt.js da reprodução local corria com googletag.apiReady true). Se o site dela
-    // ficou mais protegido depois disso, a página tem de carregar outra vez.
-    public static bool TightenedSince(string? pageUrl, long? leftAt)
-        => PageSite(pageUrl) is { } site && s_tightenedAt.TryGetValue(site, out var at) && (leftAt is not { } left || at >= left);
+    // Voltar/Avançar pela cache de páginas repõe o documento tal como estava, sem pedidos (medido: o gpt.js da reprodução
+    // local corria com googletag.apiReady true). Se o site dele ficou mais protegido depois de ele carregar (loadedAt;
+    // null = a aba não o guardou), mesmo que tenha sido deixado só depois disso, a página tem de carregar outra vez.
+    public static bool TightenedSince(string? pageUrl, long? loadedAt)
+        => PageSite(pageUrl) is { } site && s_tightenedAt.TryGetValue(site, out var at) && (loadedAt is not { } loaded || at >= loaded);
 
     private static string SiteOf(string host) => TrackerBlocker.RegistrableDomain(host.ToLowerInvariant());
 

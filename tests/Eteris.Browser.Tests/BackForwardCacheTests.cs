@@ -43,20 +43,27 @@ public class BackForwardCacheTests
         Assert.Equal(0, tab.BlockedCount);
     }
 
-    // A cache de páginas repõe a página tal como estava quando foi deixada: o momento fica guardado, para se saber se o
-    // site ficou mais protegido depois disso (Shields/ShieldTightening.cs). Deixá-la outra vez muda-o, mesmo sem bloqueios.
+    // A cache de páginas repõe o documento tal como estava: para saber se correu sem a proteção que o site tem agora
+    // (Shields/ShieldTightening.cs) conta a hora em que ele carregou, não a hora em que foi deixado. Um redirecionamento
+    // repete a mesma hora; um documento novo no mesmo endereço (o recarregar da aba quando a proteção muda) substitui-a.
     [Fact]
-    public void LeavingAPage_RemembersWhen()
+    public void LeavingAPage_RemembersWhenItsDocumentLoaded()
     {
         var tab = new BrowserTab("https://a.pt/");
-        Assert.Null(tab.LeftAt("https://a.pt/"));
-        var before = Environment.TickCount64;
-        tab.LeavePage("https://a.pt/");
-        var first = tab.LeftAt("https://a.pt/");
-        Assert.True(first >= before);
-        Thread.Sleep(40);
-        tab.LeavePage("https://a.pt/");
-        Assert.True(tab.LeftAt("https://a.pt/") > first);
+        Assert.Null(tab.LoadedAt("https://a.pt/"));
+        tab.RecordBlocked("ads.net");
+        tab.LeavePage("https://a.pt/", loadedAt: 100);
+        Assert.Equal(100, tab.LoadedAt("https://a.pt/"));
+        tab.LeavePage("https://a.pt/", loadedAt: 100);
+        Assert.Equal(100, tab.LoadedAt("https://a.pt/"));
+        tab.LeavePage("https://a.pt/", loadedAt: 500);
+        Assert.Equal(500, tab.LoadedAt("https://a.pt/"));
+        tab.RecordBlocked("ads.net");
+        tab.LeavePage("https://a.pt/", loadedAt: 900);
+        Assert.Equal(900, tab.LoadedAt("https://a.pt/"));
+        // Sem a hora de carga, conta como carregada antes de tudo: pelo seguro.
+        tab.LeavePage("https://b.pt/");
+        Assert.Equal(long.MinValue, tab.LoadedAt("https://b.pt/"));
     }
 
     [Fact]

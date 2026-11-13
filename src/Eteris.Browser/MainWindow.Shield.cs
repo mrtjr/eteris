@@ -21,6 +21,11 @@ public partial class MainWindow
     // O Escudo neste site, para esta janela (numa janela privada conta também o que se decidiu nela: AppData).
     private bool ShieldOn(string host) => AppData.IsShieldOn(host, IsPrivate);
 
+    // O Escudo ligado no site da página url (nesta janela). Sem ele o modo rigoroso também não conta: o tratador deixa
+    // passar tudo antes de o ver (PrivacyRequestHandler).
+    private bool ShieldOnAt(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host.Length > 0 && ShieldOn(uri.Host);
+
     private string SiteCosmeticScript(string url)
     {
         if (WebHost(url) is not { } host || !ShieldOn(host) || ShieldEngine.Cosmetic is not { } engine) return string.Empty;
@@ -177,7 +182,7 @@ public partial class MainWindow
         Closed += (_, _) => ShieldTightening.Tightened -= OnTightened;
     }
 
-    // Uma página reposta pela cache de Voltar/Avançar, deixada antes de o site dela ficar mais protegido, volta com os
+    // Uma página reposta pela cache de Voltar/Avançar, carregada antes de o site dela ficar mais protegido, volta com os
     // scripts que correram sem proteção: carrega outra vez, sem cache, e o processo dela larga a cache de memória (o
     // processo de uma página na cache de Voltar/Avançar não estava entre as páginas abertas quando a proteção mudou).
     // Antes, os scripts do site são atualizados, como no recarregar da barra (MainWindow.Reload.cs).
