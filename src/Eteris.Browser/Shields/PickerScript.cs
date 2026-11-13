@@ -4,7 +4,36 @@ namespace Eteris.Browser.Shields;
 // Corre via PageScript.EvaluateAsync(asyncBody: true): o corpo é envolvido numa função async, daí o «return».
 public static class PickerScript
 {
-    public const string Pick = """
+    // stableSelector(el): um seletor curto que volta a encontrar o elemento — o id (se estável e único) ou a etiqueta
+    // com até 2 classes estáveis (ou :nth-of-type), subindo até 5 níveis até ser único. Partilhado com a escolha do
+    // pedaço da vigia (WatchScripts.PickPiece).
+    public const string SelectorBuilder = """
+        function stableSelector(el) {
+          const stable = c => c && c.length < 40 && !/\d{3,}|^(is|has)-|active|hover|focus|open|selected|visible|show/i.test(c);
+          const esc = s => CSS.escape(s);
+          const part = node => {
+            if (node.id && stable(node.id) && document.querySelectorAll('#' + esc(node.id)).length === 1) return { sel: '#' + esc(node.id), unique: true };
+            let sel = node.tagName.toLowerCase();
+            const classes = [...node.classList].filter(stable).slice(0, 2);
+            sel += classes.map(c => '.' + esc(c)).join('');
+            const parent = node.parentElement;
+            if (parent && !classes.length) {
+              const same = [...parent.children].filter(c => c.tagName === node.tagName);
+              if (same.length > 1) sel += `:nth-of-type(${same.indexOf(node) + 1})`;
+            }
+            return { sel, unique: false };
+          };
+          const parts = [];
+          for (let node = el; node && node !== document.body && node !== document.documentElement && parts.length < 5; node = node.parentElement) {
+            const p = part(node);
+            parts.unshift(p.sel);
+            if (p.unique || document.querySelectorAll(parts.join(' > ')).length === 1) break;
+          }
+          return parts.join(' > ');
+        }
+        """;
+
+    public const string Pick = SelectorBuilder + "\n" + """
         return new Promise(resolve => {
           const host = document.createElement('div');
           host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
@@ -27,30 +56,6 @@ public static class PickerScript
           root.append(box, label, tip);
           document.documentElement.appendChild(host);
 
-          const stable = c => c && c.length < 40 && !/\d{3,}|^(is|has)-|active|hover|focus|open|selected|visible|show/i.test(c);
-          const esc = s => CSS.escape(s);
-          const part = el => {
-            if (el.id && stable(el.id) && document.querySelectorAll('#' + esc(el.id)).length === 1) return { sel: '#' + esc(el.id), unique: true };
-            let sel = el.tagName.toLowerCase();
-            const classes = [...el.classList].filter(stable).slice(0, 2);
-            sel += classes.map(c => '.' + esc(c)).join('');
-            const parent = el.parentElement;
-            if (parent && !classes.length) {
-              const same = [...parent.children].filter(c => c.tagName === el.tagName);
-              if (same.length > 1) sel += `:nth-of-type(${same.indexOf(el) + 1})`;
-            }
-            return { sel, unique: false };
-          };
-          const selectorFor = el => {
-            const parts = [];
-            for (let node = el; node && node !== document.body && node !== document.documentElement && parts.length < 5; node = node.parentElement) {
-              const p = part(node);
-              parts.unshift(p.sel);
-              if (p.unique || document.querySelectorAll(parts.join(' > ')).length === 1) break;
-            }
-            return parts.join(' > ');
-          };
-
           let current = null;
           const move = e => {
             const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -58,7 +63,7 @@ public static class PickerScript
             current = el;
             const r = el.getBoundingClientRect();
             Object.assign(box.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
-            label.textContent = selectorFor(el);
+            label.textContent = stableSelector(el);
             Object.assign(label.style, { left: Math.max(0, r.left) + 'px', top: Math.max(0, r.top - 21) + 'px' });
           };
           const block = e => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
@@ -72,7 +77,7 @@ public static class PickerScript
           const click = e => {
             block(e);
             if (!current) return;
-            const sel = selectorFor(current);
+            const sel = stableSelector(current);
             current.style.setProperty('display', 'none', 'important');
             finish(sel);
           };

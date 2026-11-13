@@ -61,6 +61,15 @@ public static partial class PriceText
             : null;
     }
 
+    // A moeda pelo símbolo do texto: «R$» dá BRL e «€» dá EUR; outro símbolo (ou nenhum) não diz a moeda.
+    public static string? CurrencyOf(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        if (text.Contains("R$", StringComparison.Ordinal)) return "BRL";
+        if (text.Contains('€')) return "EUR";
+        return null;
+    }
+
     // Agrupamento pt-PT com «.» e «,» e 2 casas decimais; «BRL» põe «R$ » à frente, «EUR» põe « €» no fim e qualquer
     // outra moeda (ou nenhuma) fica sem símbolo.
     public static string Format(decimal value, string? currency)

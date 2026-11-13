@@ -5,6 +5,7 @@ using Eteris.Browser.Browser;
 using Eteris.Browser.Omnibox;
 using Eteris.Browser.Shields;
 using Eteris.Browser.Tabs;
+using Eteris.Browser.Watching;
 
 namespace Eteris.Browser.Tests;
 
@@ -50,6 +51,10 @@ public class InjectedScriptsSyntaxTests
         { "imagem na imagem (janela escondida)", UnseenWindow.PictureInPictureScript },
         { "codecs da plataforma (sonda)", PlatformCodecs.ProbeScript },
         { "troca de página (1.º fotograma)", Eteris.Browser.Browser.PageScript.Expression(PageSwap.FirstPaintScript, asyncBody: true) },
+        { "vigia (leitura)", WatchScripts.Read("#preco") },
+        { "vigia (leitura sem pedaço)", WatchScripts.Read(null) },
+        { "vigia (leitura, seletor com aspas)", WatchScripts.Read("a[title=\"x'y\"] </script>") },
+        { "vigia (escolher pedaço)", Eteris.Browser.Browser.PageScript.Expression(WatchScripts.PickPiece("Clique no pedaço a vigiar · Esc para cancelar"), asyncBody: true) },
     };
 
     // As páginas internas, como são servidas: o script sem atributos de cada uma.
