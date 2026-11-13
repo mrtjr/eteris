@@ -166,6 +166,14 @@ public class PrivateLockWiringTests
         Assert.Matches(@"if \(!_clientCertificates\.Postpone\(\)\) return;\s*foreach \(var dialog in OwnedWindows\.OfType<ClientCertificateDialog>\(\)\.ToList\(\)\) dialog\.Close\(\);", postpone);
     }
 
+    // A bolha dos links (ajuste e5: uma janela própria por cima da janela, legível por UI Automation) não volta com a janela
+    // trancada nem na Pausa: as páginas continuam a correr, e um link focado por script mandava o endereço dele (o
+    // StatusMessage do CEF, o StatusBarTextChanged do WebView2) para cima do cartão.
+    [Fact]
+    public void TheLinkBubble_StaysHiddenWhileLockedOrPaused()
+        => Assert.Matches(@"^\s*(//[^\n]*\n\s*)*if \(_privateLock is not null \|\| _pause is not null \|\| !ReferenceEquals\(tab, Tabs\.Active\) \|\| text is null\)\s*\{\s*LinkStatusBubble\.Visibility = Visibility\.Collapsed;\s*SyncLinkBubble\(show: false\);\s*return;\s*\}",
+            Body(Source("MainWindow.Toast.cs"), "private void ShowLinkStatus(BrowserTab tab, string? text)"));
+
     [Fact]
     public void JsDialogs_AreSuppressedOnlyWhileLocked()
     {

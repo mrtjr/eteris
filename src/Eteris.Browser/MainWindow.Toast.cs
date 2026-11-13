@@ -10,7 +10,9 @@ public partial class MainWindow
 {
     private void ShowLinkStatus(BrowserTab tab, string? text)
     {
-        if (!ReferenceEquals(tab, Tabs.Active) || text is null)
+        // Com a janela privada trancada (MainWindow.PrivateLock.cs) ou na Pausa, nenhuma página está à vista, mas continuam a
+        // correr: um link focado por script mandava o endereço para a bolha, uma janela própria por cima do cartão.
+        if (_privateLock is not null || _pause is not null || !ReferenceEquals(tab, Tabs.Active) || text is null)
         {
             LinkStatusBubble.Visibility = Visibility.Collapsed;
             SyncLinkBubble(show: false);
