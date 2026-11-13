@@ -121,6 +121,30 @@ public class WatchReadingParserTests
         Assert.False(reading.ChallengeMarker);
     }
 
+    // As páginas de desafio sem iframe «captcha» nem reCAPTCHA também contam (quando nada se leu): o robot check da Amazon
+    // (um formulário com a imagem e o campo do captcha), o Turnstile da Cloudflare (iframe de challenges.cloudflare.com,
+    // .cf-turnstile) e o hCaptcha (.h-captcha). Cada sinal sozinho, num document de faz-de-conta que só o reconhece a ele.
+    [Theory]
+    [InlineData("form[action*=\"captcha\" i]")]
+    [InlineData("input[name*=\"captcha\" i]")]
+    [InlineData("img[src*=\"captcha\" i]")]
+    [InlineData(".h-captcha")]
+    [InlineData(".cf-turnstile")]
+    [InlineData("iframe[src*=\"challenges.cloudflare.com\"]")]
+    public void Read_FlagsChallengeWidgetsWithoutTheWordInAnIframe(string marker)
+    {
+        var stub = """
+            globalThis.document = {
+              title: 'Amazon.com.br',
+              querySelectorAll: q => [],
+              querySelector: q => q.split(',').map(s => s.trim()).includes(MARKER) ? {} : null,
+            };
+            console.log(
+            """.Replace("MARKER", JsonSerializer.Serialize(marker)) + WatchScripts.Read(null) + ");";
+        var reading = WatchReadingParser.Parse(NodeRunner.Run(stub).Trim(), "https://www.amazon.com.br/errors/validateCaptcha");
+        Assert.True(reading.ChallengeMarker);
+    }
+
     // O seletor de pedaços é um só: o «Esconder elemento» e a escolha do pedaço da vigia usam o mesmo construtor.
     [Fact]
     public void BothPickersShareTheSelectorBuilder()

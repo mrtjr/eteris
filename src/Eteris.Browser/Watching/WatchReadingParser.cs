@@ -7,8 +7,9 @@ namespace Eteris.Browser.Watching;
 // preço, sem pedaço —, que o WatchRules conta como página que não carregou; nunca uma exceção.
 //
 // O desafio: «challenge» (a página de desafio: #challenge-form, #cf-challenge-running) conta sempre, mesmo que o pedaço
-// apontado também lá esteja; «captcha» (um reCAPTCHA ou um iframe de CAPTCHA) só conta numa página onde nada se leu,
-// porque também aparece nos formulários (newsletter, avaliações) de páginas de produto normais.
+// apontado também lá esteja; «captcha» (um reCAPTCHA, hCaptcha ou Turnstile, ou um iframe, formulário, campo ou imagem de
+// CAPTCHA) só conta numa página onde nada se leu, porque também aparece nos formulários (newsletter, avaliações) de
+// páginas de produto normais.
 public static class WatchReadingParser
 {
     public static PageReading Parse(string json, string finalUrl)

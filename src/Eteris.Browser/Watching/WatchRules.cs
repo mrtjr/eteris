@@ -7,15 +7,18 @@ namespace Eteris.Browser.Watching;
 //
 // - Um desafio anti-robô (ou um salto para uma aplicação) nunca é «mudou» nem «desapareceu»; à 2.ª vez seguida a vigia
 //   fica bloqueada (decisão 8: o Éteris não contorna as proteções; passa a ler só quando o utilizador abre a página).
+//   Um 429 (demasiados pedidos) ou um 403 (acesso recusado) conta como desafio, tenha o título que tiver.
 // - Uma página que não carregou (erro HTTP, sem rede, tempo esgotado, página vazia) é uma falha passageira: as duas
 //   primeiras seguidas deixam o estado como estava, a 3.ª dá «Failing», e nunca bloqueia nem dá «desapareceu».
-// - O pedaço (ou o preço) que não aparece numa página que carregou dá «Failing»; à 2.ª vez seguida, «Missing».
+// - O pedaço (ou o preço) que não aparece numa página que carregou dá «Failing»; à 2.ª vez seguida, «Missing». Se a
+//   página carregou noutro endereço (um salto para o login, o consentimento ou uma verificação anti-robô servida com
+//   200), não é a página vigiada: é uma falha passageira, nunca «Missing».
 // - «Blocked» e «Missing» só mudam com uma leitura boa (a leitura passiva): uma falha deixa-as como estão.
 // - Failures conta as verificações falhadas seguidas (IsFailure) e volta a 0 com uma boa; quem grava (WatchStore) e a
 //   agenda (WatchSchedule.Next) usam a mesma contagem.
 public static class WatchRules
 {
-    // Títulos das páginas de desafio (sem distinguir maiúsculas); só contam com 403, 429 ou 503.
+    // Títulos das páginas de desafio (sem distinguir maiúsculas); só contam com 503 (o 403 e o 429 já são desafio).
     private static readonly string[] ChallengeTitles =
         ["um momento", "just a moment", "attention required", "verificação de segurança", "are you a robot", "captcha"];
 
@@ -49,7 +52,10 @@ public static class WatchRules
     public static PageBlock Classify(int httpStatus, string requestedUrl, string finalUrl, string title, bool challengeMarker)
     {
         if (challengeMarker) return PageBlock.Challenge;
-        if ((httpStatus is 403 or 429 or 503) && LooksLikeChallenge(title)) return PageBlock.Challenge;
+        // O site recusa a visita (403) ou pede para abrandar (429): é ele a barrar as visitas automáticas, conheça-se ou
+        // não o título (PerimeterX, Akamai, «Too Many Requests»). À 2.ª vez seguida a vigia fica bloqueada.
+        if (httpStatus is 403 or 429) return PageBlock.Challenge;
+        if (httpStatus == 503 && LooksLikeChallenge(title)) return PageBlock.Challenge;
 
         // A página de erro do motor (sem rede, nome que não resolve) é uma falha de carga, não uma aplicação.
         if (IsEngineError(finalUrl)) return PageBlock.HttpError;
@@ -90,11 +96,11 @@ public static class WatchRules
             var price = reading!.Price;
             if (price is null && reading.PieceFound && PriceText.Parse(reading.PieceText) is { } fromPiece)
                 price = new PriceReading(fromPiece, w.Currency, "texto");
-            if (price is null) return NotFound(w, nowUtc);
+            if (price is null) return Elsewhere(w, reading) ? Failed(w, PageBlock.HttpError, nowUtc) : NotFound(w, nowUtc);
             return new WatchCheck(nowUtc, Good(w), price.Value, price.Currency ?? w.Currency, null, PageBlock.None);
         }
 
-        if (!reading!.PieceFound) return NotFound(w, nowUtc);
+        if (!reading!.PieceFound) return Elsewhere(w, reading) ? Failed(w, PageBlock.HttpError, nowUtc) : NotFound(w, nowUtc);
         return new WatchCheck(nowUtc, Good(w), null, null, Normalize(reading.PieceText), PageBlock.None);
     }
 
@@ -152,6 +158,20 @@ public static class WatchRules
     // Uma verificação falhada: conta para Failures (e para o recuo da agenda).
     public static bool IsFailure(WatchCheck check)
         => check.Block != PageBlock.None || check.Status is WatchStatus.Failing or WatchStatus.Missing;
+
+    // A página carregou noutro endereço: outro site ou outro caminho (o login, o consentimento, /errors/validateCaptcha).
+    // O mesmo caminho com outro esquema, sem «www.», com a barra final, com outra consulta ou noutra âncora é a mesma
+    // página. Um endereço que não se lê conta como a mesma (a falta conta como sempre contou).
+    private static bool Elsewhere(PageWatch w, PageReading reading)
+    {
+        if (!Uri.TryCreate(PageUrl(w.Url), UriKind.Absolute, out var watched)
+            || !Uri.TryCreate(PageUrl(reading.FinalUrl), UriKind.Absolute, out var final)) return false;
+        static string Host(Uri u) => u.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? u.Host[4..] : u.Host;
+        static string Path(Uri u) => u.AbsolutePath.TrimEnd('/');
+        return !Host(watched).Equals(Host(final), StringComparison.OrdinalIgnoreCase)
+               || !Path(watched).Equals(Path(final), StringComparison.OrdinalIgnoreCase)
+               || watched.Fragment != final.Fragment;
+    }
 
     private static bool LooksLikeChallenge(string? title)
         => !string.IsNullOrEmpty(title) && ChallengeTitles.Any(t => title.Contains(t, StringComparison.OrdinalIgnoreCase));

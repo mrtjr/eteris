@@ -14,8 +14,10 @@ public static class WatchScripts
     // - itemprop: o content (ou o texto) de cada [itemprop="price"]; meta: product:price:amount e og:price:amount;
     // - currency: a moeda que a página declara à parte (itemprop="priceCurrency", product:price:currency);
     // - sel: o texto do pedaço apontado (selFound diz se o seletor encontrou o elemento; um seletor inválido não encontra);
-    // - challenge: a página de desafio (#challenge-form, #cf-challenge-running); captcha: um reCAPTCHA ou um iframe de
-    //   CAPTCHA, que também aparece em formulários de páginas normais (o parser só o conta quando nada se leu).
+    // - challenge: a página de desafio (#challenge-form, #cf-challenge-running); captcha: um reCAPTCHA, um hCaptcha, um
+    //   Turnstile (iframe de challenges.cloudflare.com, .cf-turnstile), um iframe, formulário, campo ou imagem de CAPTCHA
+    //   (o robot check da Amazon), que também aparecem em formulários de páginas normais (o parser só os conta quando
+    //   nada se leu).
     // Uma expressão (não um corpo async): corre com PageScript.EvaluateAsync sem asyncBody.
     public static string Read(string? selector) => "(() => {\nconst selector = " + JsonSerializer.Serialize(selector) + ";\n" + ReadBody + "\n})()";
 
@@ -50,7 +52,8 @@ public static class WatchScripts
           } catch (e) { }
         }
         const challenge = !!document.querySelector('#challenge-form, #cf-challenge-running');
-        const captcha = !!document.querySelector('iframe[src*="captcha" i], [class*="g-recaptcha"]');
+        const captcha = !!document.querySelector('iframe[src*="captcha" i], [class*="g-recaptcha"], form[action*="captcha" i], '
+          + 'input[name*="captcha" i], img[src*="captcha" i], .h-captcha, .cf-turnstile, iframe[src*="challenges.cloudflare.com"]');
         return JSON.stringify({ ld, itemprop, meta, currency, sel, selFound, title: cap(document.title || '', 500), challenge, captcha });
         """;
 

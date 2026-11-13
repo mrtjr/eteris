@@ -25,11 +25,76 @@ public class WatchRulesTests
         => Assert.Equal(expected, WatchRules.Classify(status, requested, final, title, marker));
 
     [Theory]
-    [InlineData(403, "Acesso negado", PageBlock.HttpError)]                      // 403 sem sinal de desafio
+    [InlineData(403, "Acesso negado", PageBlock.Challenge)]                      // 403: o site recusa a visita (achado 9)
+    [InlineData(503, "Em manutenção", PageBlock.HttpError)]                      // 503 sem sinal de desafio: passageiro
     [InlineData(429, "Attention Required! | Cloudflare", PageBlock.Challenge)]
     [InlineData(200, "Just a moment...", PageBlock.None)]                        // título só conta com 403/429/503
     public void Classify_ChallengeTitleNeedsAChallengeCode(int status, string title, PageBlock expected)
         => Assert.Equal(expected, WatchRules.Classify(status, "https://a.pt/p", "https://a.pt/p", title, false));
+
+    // Um site que responde 429 (demasiados pedidos) ou 403 (acesso recusado) barra as visitas automáticas, tenha ou não
+    // um título de desafio conhecido (PerimeterX, Akamai: «Access Denied»): à 2.ª vez seguida a vigia fica bloqueada e o
+    // motor deixa de a visitar (decisão 8), em vez de voltar todos os dias.
+    [Theory]
+    [InlineData(429, "Too Many Requests")]
+    [InlineData(429, "")]
+    [InlineData(403, "Access to this page has been denied")]
+    [InlineData(403, "Access Denied")]
+    public void Classify_RateLimitAndForbidden_AreBarriers(int status, string title)
+        => Assert.Equal(PageBlock.Challenge, WatchRules.Classify(status, "https://a.pt/p", "https://a.pt/p", title, false));
+
+    [Fact] public void TwoForbiddenInARow_Block()
+    {
+        var w = Watch(kind: WatchKind.Price, lastPrice: 588.22m, status: WatchStatus.Ok);
+        var first = WatchRules.ToCheck(w, Reading(price: null, pieceFound: false, title: "Access Denied"),
+            WatchRules.Classify(403, w.Url, w.Url, "Access Denied", false), Now);
+        Assert.Equal(WatchStatus.Failing, first.Status);
+        var w2 = After(w, first);
+        var second = WatchRules.ToCheck(w2, Reading(price: null, pieceFound: false, title: "Access Denied"),
+            WatchRules.Classify(403, w.Url, w.Url, "Access Denied", false), Now);
+        Assert.Equal(WatchStatus.Blocked, second.Status);
+        Assert.Equal(WatchOutcome.BecameBlocked, WatchRules.Outcome(w2, second));
+    }
+
+    // Uma página que carregou noutro endereço (o robot check da Amazon em /errors/validateCaptcha, servido com 200; um
+    // salto para o login ou para o consentimento) não é a página vigiada: sem o preço ou o pedaço é uma falha
+    // passageira, nunca «o pedaço desapareceu» (Review Focus 3), e a vigia continua na agenda.
+    [Theory]
+    [InlineData("https://www.pichau.com.br/errors/validateCaptcha?amzn=1")]
+    [InlineData("https://www.pichau.com.br/login?next=%2Fssd")]
+    [InlineData("https://consent.pichau.com.br/?continue=https%3A%2F%2Fwww.pichau.com.br%2Fssd")]
+    [InlineData("https://outro-site.pt/")]
+    public void RedirectedPageWithoutThePiece_IsNeverMissing(string finalUrl)
+    {
+        foreach (var kind in new[] { WatchKind.Price, WatchKind.Change })
+        {
+            var w = Watch(kind: kind, lastPrice: kind == WatchKind.Price ? 588.22m : null, lastText: kind == WatchKind.Change ? "Esgotado" : null);
+            for (var visit = 0; visit < 5; visit++)
+            {
+                var check = WatchRules.ToCheck(w, Reading(price: null, pieceFound: false, title: "Amazon.com.br", finalUrl: finalUrl), PageBlock.None, Now);
+                Assert.NotEqual(WatchStatus.Missing, check.Status);
+                Assert.NotEqual(WatchOutcome.PieceMissing, WatchRules.Outcome(w, check));
+                Assert.Equal(PageBlock.HttpError, check.Block);
+                w = After(w, check);
+            }
+        }
+    }
+
+    // A mesma página com outro esquema, sem «www.», com a barra final ou com outra consulta continua a ser ela: o preço
+    // que falta lá conta como falta (à 2.ª vez seguida, desapareceu).
+    [Theory]
+    [InlineData("https://www.pichau.com.br/ssd")]
+    [InlineData("http://www.pichau.com.br/ssd")]
+    [InlineData("https://pichau.com.br/ssd/")]
+    [InlineData("https://www.pichau.com.br/ssd?utm_source=x")]
+    [InlineData("https://www.pichau.com.br/ssd#avaliacoes")]
+    public void SamePageWithoutThePiece_StillCountsAsAMiss(string finalUrl)
+    {
+        var w = Watch(kind: WatchKind.Price, lastPrice: 588.22m);
+        var first = WatchRules.ToCheck(w, Reading(price: null, pieceFound: false, finalUrl: finalUrl), PageBlock.None, Now);
+        Assert.Equal((WatchStatus.Failing, PageBlock.None), (first.Status, first.Block));
+        Assert.Equal(WatchStatus.Missing, WatchRules.ToCheck(After(w, first), Reading(price: null, pieceFound: false, finalUrl: finalUrl), PageBlock.None, Now).Status);
+    }
 
     // Uma página de erro do motor (sem rede, nome que não resolve) não é «o site manda para uma aplicação».
     [Fact] public void Classify_EngineErrorPageIsALoadFailure()
@@ -296,7 +361,17 @@ public class WatchRulesTests
             LastPrice: lastPrice, Currency: currency, FailingSinceUtc: null, LastBlock: lastBlock);
 
     private static PageReading Reading(decimal? price = null, string? currency = "BRL", string? piece = null, bool pieceFound = true,
-        string title = "SSD", bool marker = false)
+        string title = "SSD", bool marker = false, string finalUrl = "https://www.pichau.com.br/ssd")
         => new(price is { } p ? new PriceReading(p, currency, "ld") : null, pieceFound ? piece ?? "" : null, pieceFound, title,
-            "https://www.pichau.com.br/ssd", marker);
+            finalUrl, marker);
+
+    // A vigia como o WatchStore a deixa depois de gravar a verificação.
+    private static PageWatch After(PageWatch w, WatchCheck check) => w with
+    {
+        Status = check.Status,
+        LastBlock = check.Block,
+        Failures = WatchRules.IsFailure(check) ? w.Failures + 1 : 0,
+        LastPrice = check.Price ?? w.LastPrice,
+        LastText = check.Text ?? w.LastText,
+    };
 }
