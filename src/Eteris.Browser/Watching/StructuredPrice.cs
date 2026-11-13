@@ -64,31 +64,37 @@ public static class StructuredPrice
         return null;
     }
 
-    // O preço mais baixo das ofertas (Offer.price, AggregateOffer.lowPrice ou priceSpecification.price).
+    // O preço mais baixo das ofertas. Cada oferta dá um só preço: o price, senão o lowPrice (AggregateOffer), e só sem
+    // nenhum dos dois o da priceSpecification — que também traz portes, taxas de pagamento e preços de sócio, e não pode
+    // passar à frente do preço da oferta.
     private static PriceReading? FromOffers(JsonElement offers, string? hint)
     {
         PriceReading? best = null;
         foreach (var offer in Items(offers))
-        {
-            if (offer.ValueKind != JsonValueKind.Object) continue;
-            var currency = Text(offer, "priceCurrency");
-            var candidates = new List<(JsonElement Value, string? Currency)>();
-            if (offer.TryGetProperty("price", out var price)) candidates.Add((price, currency));
-            if (offer.TryGetProperty("lowPrice", out var low)) candidates.Add((low, currency));
-            if (offer.TryGetProperty("priceSpecification", out var specs))
-                foreach (var spec in Items(specs))
-                    if (spec.ValueKind == JsonValueKind.Object && spec.TryGetProperty("price", out var specPrice))
-                        candidates.Add((specPrice, Text(spec, "priceCurrency") ?? currency));
-
-            foreach (var (value, declared) in candidates)
-            {
-                var (amount, raw) = Amount(value);
-                if (amount is not { } v || v <= 0) continue;
-                if (best is null || v < best.Value)
-                    best = new PriceReading(v, Code(declared) ?? PriceText.CurrencyOf(raw) ?? hint, "ld");
-            }
-        }
+            if (OfferPrice(offer, hint) is { } reading && (best is null || reading.Value < best.Value)) best = reading;
         return best;
+    }
+
+    private static PriceReading? OfferPrice(JsonElement offer, string? hint)
+    {
+        if (offer.ValueKind != JsonValueKind.Object) return null;
+        var currency = Text(offer, "priceCurrency");
+        foreach (var name in (string[])["price", "lowPrice"])
+            if (offer.TryGetProperty(name, out var value) && Reading(value, currency, hint) is { } reading) return reading;
+
+        PriceReading? best = null;
+        if (offer.TryGetProperty("priceSpecification", out var specs))
+            foreach (var spec in Items(specs))
+                if (spec.ValueKind == JsonValueKind.Object && spec.TryGetProperty("price", out var value)
+                    && Reading(value, Text(spec, "priceCurrency") ?? currency, hint) is { } reading
+                    && (best is null || reading.Value < best.Value)) best = reading;
+        return best;
+    }
+
+    private static PriceReading? Reading(JsonElement value, string? declared, string? hint)
+    {
+        var (amount, raw) = Amount(value);
+        return amount is { } v && v > 0 ? new PriceReading(v, Code(declared) ?? PriceText.CurrencyOf(raw) ?? hint, "ld") : null;
     }
 
     private static PriceReading? FromTexts(IReadOnlyList<string> texts, string? hint, string source)

@@ -91,10 +91,19 @@ public static class WatchScripts
             host.remove();
             resolve(value);
           };
+          // A leitura usa querySelector (o 1.º elemento que o seletor encontra): um pedaço que se repete na página (um preço
+          // numa lista) e cujo seletor encontra primeiro outro elemento não pode ser vigiado — seria lido o errado.
           const click = e => {
             block(e);
             if (!current) return;
-            finish({ selector: stableSelector(current), text: textOf(current).slice(0, 4000) });
+            const selector = stableSelector(current);
+            let same = false;
+            try { same = document.querySelector(selector) === current; } catch (err) { }
+            if (!same) {
+              tip.textContent = 'Este pedaço repete-se na página e não dá para o vigiar sozinho · escolha outro ou Esc para cancelar';
+              return;
+            }
+            finish({ selector, text: textOf(current).slice(0, 4000) });
           };
           const key = e => { if (e.key === 'Escape') { block(e); finish(null); } };
           addEventListener('mousemove', move, true);

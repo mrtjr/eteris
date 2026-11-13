@@ -34,6 +34,16 @@ public class StructuredPriceTests
         Assert.Equal(90m, StructuredPrice.From(["""{"@type":"Product","offers":[{"price":"90"},{"price":"100"}]}"""], [], [], null)!.Value);
     }
 
+    // A priceSpecification também traz portes, taxas de pagamento e preços de sócio: só conta quando a oferta não tem
+    // price nem lowPrice, senão os portes (9,90) passavam pelo preço.
+    [Fact]
+    public void PriceSpecification_OnlyWhenTheOfferHasNoPrice()
+    {
+        Assert.Equal(588.22m, StructuredPrice.From(["""{"@type":"Product","offers":{"price":"588.22","priceSpecification":{"@type":"DeliveryChargeSpecification","price":"9.90"}}}"""], [], [], null)!.Value);
+        Assert.Equal(500m, StructuredPrice.From(["""{"@type":"Product","offers":{"lowPrice":"500","priceSpecification":[{"price":"1"}]}}"""], [], [], null)!.Value);
+        Assert.Equal(70m, StructuredPrice.From(["""{"@type":"Product","offers":[{"price":"80"},{"priceSpecification":{"price":"70"}}]}"""], [], [], null)!.Value);
+    }
+
     // «0.00» numa página esgotada não é um preço (seria uma descida falsa).
     [Fact]
     public void ZeroPrices_AreIgnored()
