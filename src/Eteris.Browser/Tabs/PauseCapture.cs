@@ -8,6 +8,9 @@ public static class PauseCapture
 {
     private const string What = "continuar a usar a câmara, o microfone ou o ecrã";
 
+    // O que o ecrã calmo de outra janela diz de uma janela privada com captura (o site só se nomeia na própria).
+    public const string PrivateWindow = "uma janela privada";
+
     // null: nenhum site a captar. Os sites pela ordem dada, sem repetir (sem distinguir maiúsculas).
     public static string? Notice(IEnumerable<string> sites)
     {

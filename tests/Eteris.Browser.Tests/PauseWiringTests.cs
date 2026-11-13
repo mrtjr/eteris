@@ -202,7 +202,9 @@ public class PauseWiringTests
     public void TheCalmView_SaysWhoMayStillCapture()
     {
         var pause = Source("MainWindow.Pause.cs");
-        Assert.Contains("var capturing = PauseCapture.Notice(CapturingSites());", pause);
+        // De todas as janelas (a chamada pode estar noutra, atrás desta); o site de uma janela privada só se nomeia nela.
+        Assert.Contains("var capturing = PauseCapture.Notice(CapturingSitesEverywhere());", pause);
+        Assert.Matches(@"ReferenceEquals\(window, this\) \|\| !window\.IsPrivate \? window\.CapturingSites\(\)\s*: window\.CapturingSites\(\)\.Any\(\) \? \[PauseCapture\.PrivateWindow\] : \[\]", pause);
         Assert.Matches(@"foreach \(var \(tab, browser\) in _browsers\)\s*if \(IsCapturing\(browser\)\)", pause);
         Assert.Matches(@"foreach \(var \(url, browser\) in _webPanelBrowsers\)\s*if \(IsCapturing\(browser\)\)", pause);
         Assert.Contains("Text = capturing,", pause);

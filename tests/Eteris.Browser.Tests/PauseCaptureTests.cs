@@ -31,6 +31,12 @@ public class PauseCaptureTests
         Assert.Equal("a.pt e mais 3 sites podem continuar a usar a câmara, o microfone ou o ecrã", PauseCapture.Notice(["a.pt", "b.pt", "c.pt", "d.pt"]));
     }
 
+    // Uma janela privada com captura aparece assim no ecrã calmo das outras janelas (sem o site).
+    [Fact]
+    public void APrivateWindow_IsNotNamedBySite()
+        => Assert.Equal("a.pt e uma janela privada podem continuar a usar a câmara, o microfone ou o ecrã",
+            PauseCapture.Notice(["a.pt", PauseCapture.PrivateWindow, PauseCapture.PrivateWindow]));
+
     // O leitor de ecrã ouve-o com o nome do ecrã calmo.
     [Fact]
     public void TheViewName_CarriesTheNotice()

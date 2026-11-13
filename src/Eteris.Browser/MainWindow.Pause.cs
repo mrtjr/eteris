@@ -485,7 +485,7 @@ public partial class MainWindow
         var picture = highContrast ? null : PauseBackdrop(Settings.Current.NewTabWallpaper);
         var mini = _miniMode;
         // A Pausa não corta a câmara, o microfone nem o ecrã de uma chamada; o ecrã calmo não o esconde (PauseCapture).
-        var capturing = PauseCapture.Notice(CapturingSites());
+        var capturing = PauseCapture.Notice(CapturingSitesEverywhere());
 
         // O texto: branco sobre a paisagem escurecida a 55% (contraste de pelo menos 4,7:1 mesmo sobre um céu branco); sem
         // paisagem, o texto do tema sobre a superfície do tema; em alto contraste, as cores do sistema.
@@ -720,6 +720,13 @@ public partial class MainWindow
         state.Chips = chips;
         return view;
     }
+
+    // De todas as janelas abertas (a chamada pode estar noutra, atrás desta): a Pausa é de todas. O site de uma janela
+    // privada só se nomeia no ecrã calmo dela; nas outras aparece «uma janela privada».
+    private IEnumerable<string> CapturingSitesEverywhere()
+        => Application.Current.Windows.OfType<MainWindow>().SelectMany(window =>
+            ReferenceEquals(window, this) || !window.IsPrivate ? window.CapturingSites()
+            : window.CapturingSites().Any() ? [PauseCapture.PrivateWindow] : []);
 
     // Os sites desta janela que podem estar a captar (câmara, microfone, ecrã): as abas com motor e os sites fixados.
     private IEnumerable<string> CapturingSites()
