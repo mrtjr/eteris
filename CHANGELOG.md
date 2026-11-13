@@ -9,6 +9,10 @@
 - As vigias visitam a página num motor escondido, **sem os seus cookies** e sem imagens, de 2 em 2 horas (mais devagar quando falha), e só com o Éteris aberto. Os avisos aparecem dentro do Éteris, nunca do sistema. Um site que recusa visitas automáticas (desafio, 403 ou 429 duas vezes seguidas) fica «bloqueado»: o Éteris não contorna proteções e passa a ler o preço só quando abrir a página.
 - **eteris://vigias** lista as vigias com o último preço e a curva, e deixa abrir, pausar e apagar. A janela privada não vigia nem mostra as vigias.
 - **Recortar um pedaço ao vivo**: «Recortar um pedaço ao vivo…» abre uma janela pequena, sempre por cima, só com esse pedaço da página, que pode recarregar sozinho («Recarregar a cada…»). O recorte usa a sua sessão (os seus cookies), e eteris://privacy diz quais recortes recarregam sozinhos.
+- **Pausa (Ctrl+.)**: pelo menu ⋯, pela paleta ou com Ctrl+., o Éteris cala e pausa o som e o vídeo de todas as janelas abertas (também as privadas, a janela flutuante, o ecrã dividido e os sites fixados na barra lateral) e esconde as páginas atrás de um ecrã calmo: a paisagem da nova aba desfocada, um anel que respira (4 s a inspirar, 6 s a expirar), um temporizador opcional (sem fim, 1, 5 ou 15 min, o último escolhido fica lembrado) e «Voltar». Esc ou Ctrl+. voltam.
+- Ao voltar fica tudo como estava, mas nada recomeça sozinho: o aviso «Retomar o que tocava (N)» (também na paleta) toca outra vez só o que a Pausa parou, e as abas que estavam silenciadas continuam silenciadas. O fim do temporizador só diz «Pronto. Volte quando quiser.»: não acaba a Pausa nem toca som. Com os «Efeitos de animação» do Windows desligados ou em alto contraste, o anel fica parado.
+- Durante a Pausa as páginas continuam a correr como as abas de fundo (o correio e o chat continuam a receber mensagens) e as transferências continuam; os avisos do Éteris esperam pelo regresso. Um link aberto a partir de outra aplicação acaba a Pausa na janela que o recebe. A Pausa não fica guardada: fechar o Éteris durante ela faz o arranque seguinte normal, e a janela privada não regista nada.
+- O Ctrl+. passa a ser do Éteris também com o foco na página, como no Vivaldi: no vscode.dev e no github.dev, o «Quick fix» deixa de responder a esse atalho.
 
 ### Espreitar
 
@@ -25,6 +29,7 @@
 
 ### Correções
 
+- Os botões dos avisos no fundo da janela («Anular», «Abrir», «Mostrar na pasta»…) passam a responder também ao leitor de ecrã (UI Automation), e não só ao rato.
 - Depois de mudar a disposição das barras (abas no topo, abas verticais, modo compacto, ecrã inteiro, modo foco), o véu do Espreitar, a barra de procura, a de permissões e os avisos ficam colados ao topo da página. Antes guardavam as alturas do arranque: com as abas verticais, os 42 px de cima da página ficavam por cobrir (e clicáveis) e a barra de procura aparecia 42 px abaixo; no sentido inverso, ficava por cima da barra de ferramentas.
 - Num link que redireciona (um encurtador de links, ou de http para https), o cartão do Espreitar mostra o nome e a imagem do site de destino, cujo texto já mostrava. Antes, sem nome do site na página, aparecia o endereço do encurtador, e uma imagem com endereço relativo podia não aparecer.
 

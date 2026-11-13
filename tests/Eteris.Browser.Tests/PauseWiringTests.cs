@@ -106,6 +106,31 @@ public class PauseWiringTests
         Assert.DoesNotContain("SystemSounds", pause);
     }
 
+    // Ao voltar nada recomeça sozinho: o aviso «Retomar o que tocava (N)» corre o script com gesto do utilizador, como o
+    // tocar/pausar da central de multimédia (no motor de vídeo, pelo canal único), dura 10 s, e a mesma ação fica na
+    // paleta (o aviso só responde ao rato e ao leitor de ecrã).
+    [Fact]
+    public void Resume_IsOfferedNeverAutomatic_WithAUserGesture()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        Assert.Contains("PageScript.EvaluateAsync(browser, MediaInfo.ResumeMarkedScript, userGesture: true)", pause);
+        Assert.Contains("VideoPageScript.EvaluateNumberAsync(core, MediaInfo.ResumeMarkedScript, userGesture: true)", pause);
+        Assert.Contains("$\"Retomar o que tocava ({", pause);
+        Assert.Contains("ToastPolicy.PauseReturnShown", pause);
+        Assert.Equal(TimeSpan.FromSeconds(10), Eteris.Browser.Tabs.ToastPolicy.PauseReturnShown);
+        // Só a quem o utilizador escolhe: o regresso nunca corre o script de retomar por conta própria.
+        var exit = Regex.Match(pause, @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.NotEmpty(exit);
+        Assert.DoesNotContain("ResumeMarkedScript", exit);
+        Assert.DoesNotContain("ReplayPaused()", exit);
+        Assert.Contains("ReplayPaused", Source("MainWindow.Palette.cs"));
+    }
+
+    // Os botões dos avisos também respondem ao Invoke (leitor de ecrã, UI Automation), uma só vez.
+    [Fact]
+    public void ToastButtons_AlsoAnswerTheInvoke()
+        => Assert.Matches(@"button\.Click \+= \(_, _\) =>\s*\{\s*if \(ran\) return;", Source("MainWindow.Toast.cs"));
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

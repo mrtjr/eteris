@@ -66,6 +66,9 @@ public static class ToastPolicy
 
     public static TimeSpan Hold(int actions) => actions > 0 ? TimeSpan.FromSeconds(6) : TimeSpan.FromMilliseconds(1900);
 
+    // O aviso «Retomar o que tocava (N)» ao voltar da Pausa (MainWindow.Pause.cs): desaparece em 10 s.
+    public static readonly TimeSpan PauseReturnShown = TimeSpan.FromSeconds(10);
+
     // «Feito: «Um título muito comprido…»» — o nome da aba no rótulo da anulação, cortado para caber na paleta.
     public static string Quote(string title, int max = 48)
         => "«" + (title.Length <= max ? title : title[..(max - 1)].TrimEnd() + "…") + "»";

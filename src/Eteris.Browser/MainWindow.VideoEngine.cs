@@ -589,6 +589,7 @@ public partial class MainWindow
         _videoSwitching.Remove(tab);
         if (!_videoViews.Remove(tab, out var view)) return;
         _pause?.Plan.Forget(view);
+        _replay.Remove(view);
         BrowserHost.Children.Remove(view);
         view.Dispose();
     }

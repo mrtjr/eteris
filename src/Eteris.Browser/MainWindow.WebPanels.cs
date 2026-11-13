@@ -408,6 +408,7 @@ public partial class MainWindow
         if (_webPanelInjectors.Remove(url, out var injector)) injector.Dispose();
         if (!_webPanelBrowsers.Remove(url, out var browser)) return;
         _pause?.Plan.Forget(browser);
+        _replay.Remove(browser);
         if (ReferenceEquals(_findPanel, browser)) CloseFind();
         SidebarWebHost.Children.Remove(browser);
         PageScript.Release(browser);

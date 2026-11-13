@@ -36,6 +36,15 @@ public partial class MainWindow
             QueuePausedToast(message, actions);
             return;
         }
+        ShowToastFor(ToastPolicy.Hold(Math.Min(actions.Length, ToastPolicy.MaxActions)), message, actions);
+    }
+
+    // O aparecer e o desvanecer do aviso (FadeToast), que contam no tempo à vista.
+    private static readonly TimeSpan ToastFades = TimeSpan.FromMilliseconds(160 + 500);
+
+    // Com «hold»: quanto tempo fica à vista (sem contar o aparecer e o desvanecer).
+    private void ShowToastFor(TimeSpan hold, string message, ToastAction[] actions)
+    {
         WireToast();
         ToastText.Text = message;
         ToastActions.Children.Clear();
@@ -45,19 +54,32 @@ public partial class MainWindow
             var button = new Button { Content = action.Label, Style = (Style)FindResource("PillButton"), Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(8, 0, 0, 0) };
             // Ao premir (não ao largar): a camada não está ativa e o primeiro clique numa janela inativa pode perder
             // o «largar» para a ativação — o «Anular» não pode falhar à primeira.
+            var ran = false;
             button.PreviewMouseLeftButtonDown += (_, e) =>
             {
                 e.Handled = true;
+                if (ran) return;
+                ran = true;
                 HideToastNow();
                 run();
                 // O clique ativou a camada: o teclado volta para a página.
+                ReturnFocusToPage();
+            };
+            // O Invoke do leitor de ecrã (UI Automation) chega pelo Click; o rato já correu a ação ao premir (e o Click do
+            // rato nem chega: o premir foi consumido). Uma só vez.
+            button.Click += (_, _) =>
+            {
+                if (ran) return;
+                ran = true;
+                HideToastNow();
+                run();
                 ReturnFocusToPage();
             };
             ToastActions.Children.Add(button);
         }
         ToastActions.Visibility = ToastActions.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         Toast.IsHitTestVisible = ToastActions.Children.Count > 0;
-        FadeToast(ToastPolicy.Hold(ToastActions.Children.Count), fadeIn: true);
+        FadeToast(hold, fadeIn: true);
     }
 
     // Avisos sobre ficheiros do perfil (sessão por gravar, ficheiro danificado…): um ShowToast simples dura 1,9 s e o

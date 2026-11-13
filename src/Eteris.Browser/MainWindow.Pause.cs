@@ -75,6 +75,9 @@ public partial class MainWindow
         }
     }
 
+    // O que tocava antes da última Pausa desta janela: o aviso e a paleta oferecem retomá-lo (nunca recomeça sozinho).
+    private List<FrameworkElement> _replay = [];
+
     // A mesma Pausa lida no fio do CEF (ShortcutFromPage): nenhuma tecla vai para uma página escondida.
     private volatile bool _pausedForPage;
 
@@ -155,6 +158,7 @@ public partial class MainWindow
     private void EnterPause()
     {
         if (_pause is not null || !IsLoaded) return;
+        _replay = [];
         // 1. O que estava aberto por cima da página fecha (a camada fica escondida durante a Pausa: OverlayNeeded).
         ClosePalette();
         CloseBrowserMenu();
@@ -264,9 +268,11 @@ public partial class MainWindow
         var back = state.Plan.Return(PauseEngines());
         foreach (var engine in back.Unmute) SetPauseMute(engine, muted: false);
 
-        // 3. Nada recomeça sozinho; os avisos que ficaram em fila aparecem agora.
+        // 3. Nada recomeça sozinho: o que tocava fica à espera do «Retomar o que tocava (N)» (aviso e paleta); os avisos que
+        // ficaram em fila aparecem com ele.
+        _replay = back.Replay.ToList();
         UpdateOverlayVisibility();
-        ShowPausedToasts(state);
+        ShowPausedToasts(state, _replay.Count);
         ReturnFocusToPage();
         RefreshMediaHub();
     }
@@ -275,14 +281,41 @@ public partial class MainWindow
 
     private void QueuePausedToast(string message, ToastAction[] actions) => _pause!.Toasts.Add((message, actions));
 
-    // Os avisos que chegaram durante a Pausa, num só (o lugar do aviso é um): as mensagens por ordem, sem repetir, e as ações
-    // dos mais recentes até ao máximo de um aviso.
-    private void ShowPausedToasts(PauseState state)
+    // O aviso do regresso, um só (o lugar do aviso é um): «Retomar o que tocava (N)» primeiro, durante 10 s, e os avisos que
+    // chegaram durante a Pausa — as mensagens por ordem, sem repetir, e as ações dos mais recentes até ao máximo de um aviso.
+    private void ShowPausedToasts(PauseState state, int replay)
     {
-        if (state.Toasts.Count == 0) return;
-        var message = string.Join("\n", state.Toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal));
-        var actions = state.Toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions).Take(ToastPolicy.MaxActions).ToArray();
-        ShowToast(message, actions);
+        if (state.Toasts.Count == 0 && replay == 0) return;
+        var actions = new List<ToastAction>();
+        if (replay > 0) actions.Add(new ToastAction($"Retomar o que tocava ({replay})", ReplayPaused));
+        actions.AddRange(state.Toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions));
+        var message = state.Toasts.Count > 0
+            ? string.Join("\n", state.Toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal))
+            : "A Pausa acabou — nada recomeçou sozinho";
+        var shown = actions.Take(ToastPolicy.MaxActions).ToArray();
+        if (replay > 0) ShowToastFor(ToastPolicy.PauseReturnShown - ToastFades, message, shown);
+        else ShowToast(message, shown);
+    }
+
+    // «Retomar o que tocava»: só os elementos que a Pausa marcou, com o gesto do utilizador (o mesmo caminho do tocar/pausar
+    // da central de multimédia; no motor de vídeo, pelo canal único). Uma só vez.
+    private void ReplayPaused()
+    {
+        var engines = _replay;
+        _replay = [];
+        foreach (var engine in engines) _ = ReplayAsync(engine);
+    }
+
+    private static async Task ReplayAsync(FrameworkElement engine)
+    {
+        try
+        {
+            if (engine is ChromiumWebBrowser browser)
+                await PageScript.EvaluateAsync(browser, MediaInfo.ResumeMarkedScript, userGesture: true);
+            else if (engine is WebView2 { CoreWebView2: { } core })
+                await VideoPageScript.EvaluateNumberAsync(core, MediaInfo.ResumeMarkedScript, userGesture: true);
+        }
+        catch (Exception) { }
     }
 
     // ---------- O ecrã calmo ----------

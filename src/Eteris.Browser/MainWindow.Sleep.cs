@@ -34,6 +34,7 @@ public partial class MainWindow
         _sleepHolds.Remove(tab);
         if (!_browsers.Remove(tab, out var browser)) return;
         _pause?.Plan.Forget(browser);
+        _replay.Remove(browser);
         ForgetCnameQuota(browser);
         PageScript.Release(browser);
         // Quente: está tapada pela aba à vista, pode ir já.
