@@ -517,7 +517,7 @@
             <button class="action" type="button" id="syncRekeyAbandon">Não tenho o identificador: juntar outra vez</button>
           </div>
           <div class="item syncalert" id="syncReplacedItem" hidden>
-            <div class="label"><b>A conta de sincronização na nuvem foi apagada ou substituída noutro computador.</b><span>Se não foi você, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.</span>
+            <div class="label"><b>A conta de sincronização na nuvem foi apagada ou substituída noutro computador.</b><span>Se não o fez, alguém pode ter entrado na sua conta Google: mude a palavra-passe da Google e use «Retirar o acesso do Éteris». Os dados deste computador estão intactos.</span>
               <span class="syncnote">Se juntar este computador, as palavras-passe e os outros dados dele passam a ser enviados para a conta que está agora na nuvem.</span>
               <span class="syncnote" id="syncReplacedNote" role="status" hidden></span></div>
             <div class="stack"><button class="action" id="syncReplacedJoin">Fui eu — juntar este computador</button><button class="action" id="syncReplacedNotMe">Não fui eu</button></div>
@@ -1174,7 +1174,7 @@
       const item = document.createElement('div'); item.className = 'item syncalert';
       const label = document.createElement('div'); label.className = 'label';
       const text = document.createElement('span');
-      text.textContent = 'Vários pedidos para entrar na sua conta foram recusados ou ficaram sem resposta, e por isso a barra deixou de abrir sozinha. Se não foi você, alguém tem a sua conta Google: mude a palavra-passe da Google e retire o acesso do Éteris.';
+      text.textContent = 'Vários pedidos para entrar na sua conta foram recusados ou ficaram sem resposta, e por isso a barra deixou de abrir sozinha. Se não reconhece estes pedidos, alguém tem a sua conta Google: mude a palavra-passe da Google e retire o acesso do Éteris.';
       label.append(text);
       const buttons = document.createElement('div'); buttons.className = 'stack';
       const revoke = document.createElement('button'); revoke.className = 'action'; revoke.id = 'syncQuietRevoke';

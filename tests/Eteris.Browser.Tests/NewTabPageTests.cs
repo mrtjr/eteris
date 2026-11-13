@@ -150,6 +150,20 @@ public class NewTabPageTests
         Assert.Contains("\"resume\":[]", html);
     }
 
+    // Proposta 3 (arrumações): a data só com a 1.ª letra maiúscula, feita no Éteris; a página deixa de capitalizar cada
+    // palavra («Quinta-Feira, 12 De Novembro») e, se ficar aberta depois da meia-noite, faz o mesmo no JavaScript.
+    [Fact]
+    public void Date_StartsWithACapitalAndTheRestStaysLowercase()
+    {
+        Assert.Equal("Quinta-feira, 12 de novembro", NewTabPage.DateLine(new DateTime(2026, 11, 12, 15, 0, 0)));
+        Assert.Equal("Domingo, 1 de março", NewTabPage.DateLine(new DateTime(2026, 3, 1, 9, 0, 0)));
+        var html = NewTabPage.Render([], SearchEngine.DuckDuckGo, new DateTime(2026, 11, 12, 15, 0, 0));
+        Assert.Contains("\"date\":\"Quinta-feira, 12 de novembro\"", html);
+        Assert.Contains("\"day\":20261112", html);
+        Assert.DoesNotContain("text-transform: capitalize", html);
+        Assert.Contains("dayOf(now) === data.day ? data.date : capital(", html);
+    }
+
     [Fact]
     public void Tip_ChangesDailyAndHidesWhenTurnedOffOrPrivate()
     {

@@ -10,6 +10,14 @@
 - O modo de leitura deixa de ter barra horizontal: as tabelas e os blocos de código rolam por dentro, e as figuras e os vídeos cabem na coluna. As barras ficam finas e na cor do tema do leitor (escuro, sépia ou claro), e com os efeitos de animação desligados no Windows o leitor também fica sem transições.
 - Nova opção em Definições › Aspeto: «Barras de deslocamento sobrepostas», desligada. Ligada, as páginas web passam a ter barras finas por cima do conteúdo, que aparecem ao rolar ou ao passar o rato; como isso muda o que os sites conseguem medir, fica assinalado em eteris://privacy. Vale da próxima vez que abrir o Éteris. Sem ela, as barras das páginas web continuam as de um Chrome no mesmo computador.
 
+### Correções
+
+- Quando o nome de um site não existe, a página de erro passa a ter o botão principal «Pesquisar «nome»» no motor de pesquisa escolhido; se o nome estiver a uma ou duas letras de um site do histórico ou dos favoritos, pergunta «Queria dizer …?». A comparação é feita neste computador, sem pedidos de rede, e nunca na janela privada.
+- A data da nova aba aparece só com a primeira letra maiúscula («Quinta-feira, 12 de novembro»).
+- As boas-vindas deixam de dizer que não há sincronização: dizem que é opcional e cifrada de ponta a ponta.
+- Na página de erro, a dica «Noutros sites funciona?» passa a «Os outros sites abrem? Então o problema é deste endereço, não da ligação.».
+- As páginas do Éteris tratam quem as usa sempre da mesma forma, sem «tu» nem «você» (a nova aba e as Definições ainda tinham frases nos dois registos).
+
 ## 0.2.17 — 2026-11-13
 
 A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apaga, apaga-o em todo o sítio onde os dados estão (também no motor de vídeo e no disco), e os textos de privacidade dizem só o que o código faz. Fecha a auditoria de novembro, com dezenas de correções de segurança, privacidade e estabilidade, e traz o «Sair» no menu ⋯, o Google como escolha de motor de pesquisa, os sites que ficavam incompletos com o Escudo ligado (como o ge.globo.com) e os sites que pedem certificado de cliente.

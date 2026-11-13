@@ -105,7 +105,7 @@
   .brand-mark::after { content: ""; width: 17px; height: 17px; background: #111b2b; border-radius: inherit; }
   .header-clock { text-align: right; text-shadow: 0 1px 8px #000; }
   .clock { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
-  .date { color: var(--secondary); font-size: 11px; text-transform: capitalize; }
+  .date { color: var(--secondary); font-size: 11px; }
   .top-actions { gap: 8px; }
 
   .tool-button, .focus-controls button, .focus-controls select, .tip button {
@@ -541,13 +541,13 @@
         </summary>
         <div class="panel-body">
           <div class="timer" id="timer" aria-live="off">25:00</div>
-          <div class="focus-status" id="focusStatus" aria-live="polite">Escolhe uma duração para começar.</div>
+          <div class="focus-status" id="focusStatus" aria-live="polite">Escolha uma duração para começar.</div>
           <div class="focus-controls">
             <select id="focusDuration" aria-label="Duração"><option value="15">15 min</option><option value="25" selected>25 min</option><option value="50">50 min</option></select>
             <button id="focusStart" type="button">Iniciar</button>
             <button id="focusReset" type="button" aria-label="Reiniciar temporizador">↺</button>
           </div>
-          <div class="focus-hint">Mantém esta aba aberta durante a sessão.</div>
+          <div class="focus-hint">Mantenha esta aba aberta durante a sessão.</div>
         </div>
       </details>
     </div>
@@ -570,7 +570,11 @@
 <script>
   const data = JSON.parse(document.getElementById('data').textContent);
   const clock = document.getElementById('clock'), calendarDate = document.getElementById('calendarDate');
-  const tick = () => { const now = new Date(); clock.textContent = now.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); calendarDate.textContent = now.toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}); };
+  // A data vem do Éteris («Quinta-feira, 12 de novembro»: só a 1.ª letra maiúscula); depois da meia-noite, com a página
+  // ainda aberta, faz-se aqui com a mesma regra.
+  const capital = text => text.charAt(0).toLocaleUpperCase('pt-PT') + text.slice(1);
+  const dayOf = d => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  const tick = () => { const now = new Date(); clock.textContent = now.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); calendarDate.textContent = dayOf(now) === data.day ? data.date : capital(now.toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'})); };
   tick(); setInterval(tick,1000);
   const greet = document.getElementById('greet');
   if (data.private) {
@@ -744,7 +748,7 @@
     if (!term) return;
     const address = typedAddress(term);
     if (address === null) {
-      q.setCustomValidity('Escreve um endereço Web válido.');
+      q.setCustomValidity('Escreva um endereço Web válido.');
       q.reportValidity();
       return;
     }
@@ -829,11 +833,11 @@
 
     let description = 'Animação local e sem som. Pausa quando a aba deixa de estar visível.';
     if (liveUnavailable) {
-      description = 'A animação não iniciou. Seleciona Ao vivo para tentar novamente.';
+      description = 'A animação não iniciou. Selecione Ao vivo para tentar novamente.';
     } else if (reducedMotion.matches) {
       description = live
-        ? 'O fundo está animado por escolha tua. Seleciona Imagem para voltar à versão estática.'
-        : 'O Windows prefere movimento reduzido. Podes escolher Ao vivo só para este fundo.';
+        ? 'O fundo está animado porque o escolheu. Selecione Imagem para voltar à versão estática.'
+        : 'O Windows prefere movimento reduzido. Pode escolher Ao vivo só para este fundo.';
     }
     if (motionHelp.textContent !== description) motionHelp.textContent = description;
   }
@@ -1098,13 +1102,13 @@
   const paintTimer=()=>{timer.textContent=Math.floor(remainingSeconds/60).toString().padStart(2,'0')+':'+Math.max(0,remainingSeconds%60).toString().padStart(2,'0'); document.getElementById('focusSummary').textContent = timerId ? timer.textContent + ' restantes' : 'Temporizador local'; };
   const stopTimer=()=>{if(timerId)clearInterval(timerId);timerId=0;endAt=0;};
   const updateTimer=()=>{remainingSeconds=Math.max(0,Math.ceil((endAt-Date.now())/1000));paintTimer();if(remainingSeconds<=0){stopTimer();duration.disabled=false;finished=true;focusPanel.classList.remove('active');focusStatus.textContent='Sessão concluída. Boa pausa!';startButton.textContent='Recomeçar';}};
-  duration.addEventListener('change',()=>{remainingSeconds=Number(duration.value)*60;finished=false;stopTimer();paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Um pequeno espaço para te concentrares.';startButton.textContent='Iniciar';});
+  duration.addEventListener('change',()=>{remainingSeconds=Number(duration.value)*60;finished=false;stopTimer();paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Um pequeno espaço para se concentrar.';startButton.textContent='Iniciar';});
   startButton.addEventListener('click',()=>{
-    if(timerId){remainingSeconds=Math.max(0,Math.ceil((endAt-Date.now())/1000));stopTimer();duration.disabled=false;paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Pausado. Retoma quando estiveres pronto.';startButton.textContent='Continuar';return;}
+    if(timerId){remainingSeconds=Math.max(0,Math.ceil((endAt-Date.now())/1000));stopTimer();duration.disabled=false;paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Em pausa. Retome quando quiser.';startButton.textContent='Continuar';return;}
     if(finished||remainingSeconds<=0){remainingSeconds=Number(duration.value)*60;finished=false;}
-    duration.disabled=true;endAt=Date.now()+remainingSeconds*1000;timerId=setInterval(updateTimer,250);focusPanel.classList.add('active');focusStatus.textContent='O teu tempo é teu. Respira e começa.';startButton.textContent='Pausar';updateTimer();
+    duration.disabled=true;endAt=Date.now()+remainingSeconds*1000;timerId=setInterval(updateTimer,250);focusPanel.classList.add('active');focusStatus.textContent='Este tempo é seu. Respire e comece.';startButton.textContent='Pausar';updateTimer();
   });
-  document.getElementById('focusReset').addEventListener('click',()=>{stopTimer();duration.disabled=false;remainingSeconds=Number(duration.value)*60;finished=false;paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Um pequeno espaço para te concentrares.';startButton.textContent='Iniciar';});
+  document.getElementById('focusReset').addEventListener('click',()=>{stopTimer();duration.disabled=false;remainingSeconds=Number(duration.value)*60;finished=false;paintTimer();focusPanel.classList.remove('active');focusStatus.textContent='Um pequeno espaço para se concentrar.';startButton.textContent='Iniciar';});
   paintTimer();
   const focusMode=document.getElementById('focusMode'),setFocusMode=active=>{
     document.body.classList.toggle('focus-mode',active);focusMode.setAttribute('aria-pressed',active?'true':'false');focusMode.textContent=active?'Sair do foco':'Foco';
