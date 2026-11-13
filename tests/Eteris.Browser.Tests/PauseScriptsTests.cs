@@ -59,6 +59,31 @@ public class PauseScriptsTests
         Assert.Equal("0 0", output);
     }
 
+    // Um vídeo em Picture-in-Picture: a janela flutuante do Chromium (sempre por cima) ficava sobre o ecrã calmo. A Pausa sai
+    // dela (sem a voltar a abrir no regresso: isso pedia um gesto do utilizador); sem PiP não chama nada; e uma página
+    // onde sair falha não rebenta o script.
+    [Fact]
+    public void PauseMark_LeavesPictureInPicture()
+    {
+        var output = Run("""
+            document.pictureInPictureElement = all[0];
+            document.exitPictureInPicture = function () { calls.push('sair-pip'); return Promise.resolve(); };
+            const n = PAUSE;
+            console.log(n + ' | ' + calls.join(','));
+            """.Replace("PAUSE", MediaInfo.PauseMarkScript));
+        Assert.Equal("1 | q:video,audio,pause:a,sair-pip", output);
+        Assert.Equal("1 | q:video,audio,pause:a", Run("const n = " + MediaInfo.PauseMarkScript + ";\nconsole.log(n + ' | ' + calls.join(','));"));
+        var failing = Run("""
+            document.pictureInPictureElement = all[0];
+            document.exitPictureInPicture = function () { return Promise.reject(new Error('x')); };
+            const n = PAUSE;
+            setTimeout(() => console.log(n + ' | ' + state()), 0);
+            """.Replace("PAUSE", MediaInfo.PauseMarkScript));
+        Assert.Equal("1 | a=parado+marca c=parado velha=parado", failing);
+        var throwing = Run("document.pictureInPictureElement = all[0];\ndocument.exitPictureInPicture = function () { throw new Error('x'); };\nconsole.log(" + MediaInfo.PauseMarkScript + ");");
+        Assert.Equal("1", throwing);
+    }
+
     // A marca é o atributo data-eteris-pausa (dataset.eterisPausa), o que a prova ao vivo procura.
     [Fact]
     public void TheMark_IsTheDataAttribute()
