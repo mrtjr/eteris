@@ -129,7 +129,7 @@ public partial class MainWindow
         // A aba pode ter fechado ou adormecido enquanto o motor arrancava.
         if (!_videoViews.TryGetValue(tab, out var still) || !ReferenceEquals(still, view)) return;
         var core = view.CoreWebView2;
-        ConfigureVideoPrivacy(core);
+        ConfigureVideoPrivacy(core, IsPrivate);
         // Os sites cuja cosmética já está registada nesta aba: o mesmo conjunto aqui e nas navegações (WireVideoView).
         var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         WireVideoView(tab, view, core, environment, cosmeticHosts);
@@ -148,9 +148,13 @@ public partial class MainWindow
     private string VideoUrl(string url)
         => Data.Settings.Current.HttpsFirst && ShieldEngine.Https.Secure(url, IsPrivate) is { } secure ? secure : url;
 
-    private static void ConfigureVideoPrivacy(CoreWebView2 core)
+    private static void ConfigureVideoPrivacy(CoreWebView2 core, bool isPrivate)
     {
         var settings = core.Settings;
+        // Na janela privada, sem ferramentas de programador («Inspecionar» sai do menu): o WebView2 não as deixa fechar por
+        // fora, e a janela delas (de topo, com o endereço no título e o DOM) ficava por cima do cartão da janela trancada
+        // (MainWindow.PrivateLock.cs).
+        if (isPrivate) settings.AreDevToolsEnabled = false;
         settings.IsPasswordAutosaveEnabled = false;
         settings.IsGeneralAutofillEnabled = false;
         settings.IsReputationCheckingRequired = false; // SmartScreen: mandaria os endereços à Microsoft
@@ -774,7 +778,7 @@ public partial class MainWindow
             }
             // Chegou depois do tempo-limite: a limpeza já respondeu «não foi possível»; fecha-se (finally) sem apagar.
             if (expired.IsCancellationRequested) return false;
-            ConfigureVideoPrivacy(controller.CoreWebView2);
+            ConfigureVideoPrivacy(controller.CoreWebView2, isPrivate: false);
             await action(controller.CoreWebView2);
             return true;
         }

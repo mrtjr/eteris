@@ -174,6 +174,17 @@ public class PrivateLockWiringTests
         => Assert.Matches(@"^\s*(//[^\n]*\n\s*)*if \(_privateLock is not null \|\| _pause is not null \|\| !ReferenceEquals\(tab, Tabs\.Active\) \|\| text is null\)\s*\{\s*LinkStatusBubble\.Visibility = Visibility\.Collapsed;\s*SyncLinkBubble\(show: false\);\s*return;\s*\}",
             Body(Source("MainWindow.Toast.cs"), "private void ShowLinkStatus(BrowserTab tab, string? text)"));
 
+    // O motor de vídeo (WebView2) não tem maneira de fechar as ferramentas de programador por fora, e a janela delas (de topo,
+    // com o endereço no título e o DOM) ficava por cima do cartão: na janela privada, nem se abrem («Inspecionar» sai do menu).
+    [Fact]
+    public void TheVideoEngine_HasNoDevToolsInPrivateWindows()
+    {
+        var code = Source("MainWindow.VideoEngine.cs");
+        Assert.Contains("ConfigureVideoPrivacy(core, IsPrivate);", code);
+        Assert.Contains("ConfigureVideoPrivacy(controller.CoreWebView2, isPrivate: false);", code);
+        Assert.Matches(@"if \(isPrivate\) settings\.AreDevToolsEnabled = false;", Body(code, "private static void ConfigureVideoPrivacy(CoreWebView2 core, bool isPrivate)"));
+    }
+
     [Fact]
     public void JsDialogs_AreSuppressedOnlyWhileLocked()
     {
