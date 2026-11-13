@@ -50,6 +50,8 @@ public partial class MainWindow
         public TextBlock? Clock;
         public Button? Back;
         public Panel? Chips;
+        public Style? ChipStyle;
+        public Style? ChosenStyle;
         // A respiração foi pedida (o anel respira quando a janela se vê) e está a correr.
         public bool Breathes;
         public bool Breathing;
@@ -273,7 +275,8 @@ public partial class MainWindow
         _replay = back.Replay.ToList();
         UpdateOverlayVisibility();
         ShowPausedToasts(state, _replay.Count);
-        ReturnFocusToPage();
+        if (IsActive) ReturnFocusToPage();
+        else if (ActiveBrowser is { } page) FocusManager.SetFocusedElement(this, page);
         RefreshMediaHub();
     }
 
@@ -324,7 +327,10 @@ public partial class MainWindow
     {
         if (_pause?.Back is not { } back) return;
         if (_overlay is { IsActive: true }) Activate();
-        Keyboard.Focus(back);
+        // Só a janela ativa recebe o teclado; as outras guardam «Voltar» como foco lógico (volta para lá quando forem
+        // ativadas). Um Keyboard.Focus numa janela inativa podia ativá-la e tirar o primeiro plano à janela onde se carregou.
+        if (IsActive) Keyboard.Focus(back);
+        else FocusManager.SetFocusedElement(this, back);
     }
 
     private void ShowPauseView(PauseState state)
@@ -364,6 +370,27 @@ public partial class MainWindow
             else if (picture is not null) element.SetValue(property, Brushes.White);
             else element.SetResourceReference(property, "TextBrush");
         }
+
+        // Os PillButton do tema não recebem o foco (para não o tirarem à página): aqui recebem-no e mostram-no com um anel
+        // do contraste do texto.
+        Style Focusable(string basedOn)
+        {
+            var ring = new FrameworkElementFactory(typeof(Border));
+            ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+            ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(19));
+            ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-4));
+            if (highContrast) ring.SetValue(Border.BorderBrushProperty, SystemColors.HighlightBrush);
+            else if (picture is not null) ring.SetValue(Border.BorderBrushProperty, Brushes.White);
+            else ring.SetResourceReference(Border.BorderBrushProperty, "TextBrush");
+            var visual = new Style();
+            visual.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate { VisualTree = ring }));
+            var style = new Style(typeof(Button), (Style)FindResource(basedOn));
+            style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
+            style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, visual));
+            return style;
+        }
+        state.ChipStyle = Focusable("PillButton");
+        state.ChosenStyle = Focusable("PrimaryPillButton");
 
         var view = new PauseSurface { ClipToBounds = true, Background = Brushes.Transparent, Focusable = false };
         AutomationProperties.SetName(view, "Pausa");
@@ -407,6 +434,7 @@ public partial class MainWindow
         var maximize = CaptionButton("", "Maximizar", "CaptionButton", Maximize_Click);
         maximize.SetBinding(ContentControl.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = MaximizeButton });
         maximize.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(FrameworkElement.ToolTip)) { Source = MaximizeButton });
+        maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
         CaptionButton("", "Fechar", "CloseCaptionButton", CloseWindow_Click);
         var captionCard = new Border
         {
@@ -507,7 +535,7 @@ public partial class MainWindow
         var back = new Button
         {
             Content = "Voltar",
-            Style = (Style)FindResource("PrimaryPillButton"),
+            Style = state.ChosenStyle,
             Padding = mini ? new Thickness(16, 5, 16, 5) : new Thickness(24, 8, 24, 8),
             FontSize = mini ? 12.5 : 14,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -650,7 +678,7 @@ public partial class MainWindow
             foreach (var chip in chips.Children.OfType<Button>())
             {
                 var chosen = chip.Tag is int minutes && minutes == s_pauseMinutes;
-                chip.Style = (Style)FindResource(chosen ? "PrimaryPillButton" : "PillButton");
+                chip.Style = chosen ? state.ChosenStyle : state.ChipStyle;
                 AutomationProperties.SetName(chip, PauseTimer.Label((int)chip.Tag) + (chosen ? ", escolhido" : string.Empty));
             }
         var text = PauseTimer.Remaining(left);

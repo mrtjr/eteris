@@ -13,11 +13,13 @@ public static class TestSwitches
 
     public static bool MuteFor(string? value, bool customProfile) => customProfile && IsOn(value);
 
-    // ETERIS_TEST_SEM_MOVIMENTO=1: «reduzir movimento» ligado (Theme/Motion.cs), para provar ao vivo o anel parado da Pausa
-    // sem mexer nos «Efeitos de animação» do Windows. Só num perfil de teste e numa cópia não instalada.
-    public static bool ReducedMotion => ReducedMotionFor(Environment.GetEnvironmentVariable("ETERIS_TEST_SEM_MOVIMENTO"), IsInstalled, AppPaths.IsCustomProfile);
+    // ETERIS_TEST_SEM_MOVIMENTO=1|0: «reduzir movimento» ligado (=1) ou desligado (=0) à força (Theme/Motion.cs), para provar ao
+    // vivo o anel parado e o anel a respirar da Pausa sem mexer nos «Efeitos de animação» do Windows. Sem ela (ou com outro
+    // valor), manda o Windows. Só num perfil de teste e numa cópia não instalada.
+    public static bool? ReducedMotion => ReducedMotionFor(Environment.GetEnvironmentVariable("ETERIS_TEST_SEM_MOVIMENTO"), IsInstalled, AppPaths.IsCustomProfile);
 
-    public static bool ReducedMotionFor(string? value, bool installed, bool customProfile) => !installed && customProfile && IsOn(value);
+    public static bool? ReducedMotionFor(string? value, bool installed, bool customProfile)
+        => installed || !customProfile ? null : value?.Trim() switch { "1" => true, "0" => false, _ => null };
 
     // ETERIS_TEST_DEVTOOLS_PORT=<porta>: DevTools do motor em 127.0.0.1 para os testes ao vivo lerem chrome://sandbox
     // e o estado das páginas por CDP (nunca ligado sem esta variável, nem com o perfil normal: uma porta de depuração sem

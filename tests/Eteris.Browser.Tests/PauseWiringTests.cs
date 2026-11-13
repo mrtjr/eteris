@@ -131,6 +131,29 @@ public class PauseWiringTests
     public void ToastButtons_AlsoAnswerTheInvoke()
         => Assert.Matches(@"button\.Click \+= \(_, _\) =>\s*\{\s*if \(ran\) return;", Source("MainWindow.Toast.cs"));
 
+    // Teclado: os botões do ecrã calmo recebem o foco (os PillButton do tema não o recebem) e mostram-no; só a janela ativa
+    // recebe o teclado (as outras guardam o foco lógico: um Keyboard.Focus numa janela inativa podia ativá-la).
+    [Fact]
+    public void TheCalmView_TakesTheKeyboard_OnlyInTheActiveWindow()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        Assert.Contains("new Setter(UIElement.FocusableProperty, true)", pause);
+        Assert.Contains("new Setter(FrameworkElement.FocusVisualStyleProperty,", pause);
+        Assert.Matches(@"if \(IsActive\) Keyboard\.Focus\(back\);\s*else FocusManager\.SetFocusedElement\(this, back\);", pause);
+        Assert.Matches(@"if \(IsActive\) ReturnFocusToPage\(\);\s*else if \(ActiveBrowser is \{ \} page\) FocusManager\.SetFocusedElement\(this, page\);", pause);
+    }
+
+    // O rato também: os botões laterais (voltar/avançar) não mexem na aba escondida. E a janela flutuante, que não tem
+    // maximizar, também não o ganha no ecrã calmo.
+    [Fact]
+    public void SideMouseButtons_AndTheMiniWindow_RespectThePause()
+    {
+        Assert.Matches(@"private void OnSideMouseButton\(object sender, MouseButtonEventArgs e\)\s*\{\s*(//[^
+]*
+\s*)*if \(_pause is not null\) return;", Source("MainWindow.Mouse.cs"));
+        Assert.Contains("maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;", Source("MainWindow.Pause.cs"));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

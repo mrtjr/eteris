@@ -22,16 +22,20 @@ public class MotionTests
         Assert.True(Motion.IsReduced(clientAreaAnimation: false, highContrast: true));
     }
 
-    // O gancho das provas ao vivo (ETERIS_TEST_SEM_MOVIMENTO=1), para provar o anel parado sem mexer nas definições do
-    // Windows: só num perfil de teste e numa cópia não instalada.
+    // O gancho das provas ao vivo (ETERIS_TEST_SEM_MOVIMENTO), para provar o anel parado e o anel a respirar sem mexer nas
+    // definições do Windows: =1 força «reduzir movimento», =0 força o movimento; só num perfil de teste e numa cópia não
+    // instalada. Sem a variável, manda o Windows.
     [Fact]
-    public void TheTestHook_ForcesReducedMotion_OnlyInATestProfileNotInstalled()
+    public void TheTestHook_ForcesEitherWay_OnlyInATestProfileNotInstalled()
     {
         Assert.True(Motion.IsReduced(clientAreaAnimation: true, highContrast: false, forced: true));
+        Assert.False(Motion.IsReduced(clientAreaAnimation: false, highContrast: false, forced: false));
+        Assert.True(Motion.IsReduced(clientAreaAnimation: false, highContrast: false, forced: null));
         Assert.True(TestSwitches.ReducedMotionFor("1", installed: false, customProfile: true));
-        Assert.False(TestSwitches.ReducedMotionFor("1", installed: false, customProfile: false));
-        Assert.False(TestSwitches.ReducedMotionFor("1", installed: true, customProfile: true));
         Assert.False(TestSwitches.ReducedMotionFor("0", installed: false, customProfile: true));
-        Assert.False(TestSwitches.ReducedMotionFor(null, installed: false, customProfile: true));
+        Assert.Null(TestSwitches.ReducedMotionFor("1", installed: false, customProfile: false));
+        Assert.Null(TestSwitches.ReducedMotionFor("0", installed: true, customProfile: true));
+        Assert.Null(TestSwitches.ReducedMotionFor("talvez", installed: false, customProfile: true));
+        Assert.Null(TestSwitches.ReducedMotionFor(null, installed: false, customProfile: true));
     }
 }
