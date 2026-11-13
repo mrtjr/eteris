@@ -58,6 +58,26 @@ public static class WatchReadingParser
         }
     }
 
+    // O tamanho do pedaço escolhido (o «rect» da mesma resposta, em px CSS), para o recorte ao vivo; null sem ele. Os números
+    // vêm da página: quem os usa (ClipLayout.Size) trata os que não fazem sentido.
+    public static System.Windows.Size? PickSize(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("rect", out var rect) || rect.ValueKind != JsonValueKind.Object) return null;
+            if (!rect.TryGetProperty("w", out var w) || w.ValueKind != JsonValueKind.Number) return null;
+            if (!rect.TryGetProperty("h", out var h) || h.ValueKind != JsonValueKind.Number) return null;
+            return new System.Windows.Size(Math.Max(0, w.GetDouble()), Math.Max(0, h.GetDouble()));
+        }
+        catch (Exception e) when (e is JsonException or FormatException)
+        {
+            return null;
+        }
+    }
+
     private static string? Text(JsonElement root, string name)
         => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 

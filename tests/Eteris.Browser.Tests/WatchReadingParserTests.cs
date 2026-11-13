@@ -194,6 +194,8 @@ public class WatchReadingParserTests
         var output = NodeRunner.Run(stub).Trim();
         Assert.StartsWith("string ", output);
         Assert.NotNull(WatchReadingParser.Pick(output["string ".Length..]));
+        // O retângulo do pedaço (px CSS) segue na mesma resposta, para o tamanho do recorte ao vivo.
+        Assert.Equal(new System.Windows.Size(9, 9), WatchReadingParser.PickSize(output["string ".Length..]));
     }
 
     [Fact]

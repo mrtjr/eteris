@@ -20,10 +20,14 @@ public static class WatchScripts
     public static string Read(string? selector) => "(() => {\nconst selector = " + JsonSerializer.Serialize(selector) + ";\n" + ReadBody + "\n})()";
 
     // Corpo async para PageScript.EvaluateAsync(..., asyncBody: true): realça o elemento debaixo do rato (com o texto que
-    // vai ser vigiado) e, num clique, resolve para {"selector","text"} em texto JSON (WatchReadingParser.Pick) sem mexer
-    // na página; Esc resolve para null.
-    public static string PickPiece(string tip)
-        => "const tipText = " + JsonSerializer.Serialize(tip) + ";\n" + PickerScript.SelectorBuilder + "\n" + PickBody;
+    // vai ser vigiado) e, num clique, resolve para {"selector","text","rect":{x,y,w,h}} em texto JSON (WatchReadingParser.Pick
+    // e PickSize; o retângulo, em px CSS, dá o tamanho do recorte ao vivo) sem mexer na página; Esc resolve para null.
+    // «repeated» é a dica de um pedaço que se repete na página (o recorte diz «recortar» em vez de «vigiar»).
+    public static string PickPiece(string tip, string? repeated = null)
+        => "const tipText = " + JsonSerializer.Serialize(tip) + ";\nconst repeatedText = " + JsonSerializer.Serialize(repeated ?? RepeatedPiece)
+           + ";\n" + PickerScript.SelectorBuilder + "\n" + PickBody;
+
+    private const string RepeatedPiece = "Este pedaço repete-se na página e não dá para o vigiar sozinho · escolha outro ou Esc para cancelar";
 
     private const string ReadBody = """
         const cap = (s, n) => typeof s === 'string' ? s.slice(0, n) : null;
@@ -101,10 +105,11 @@ public static class WatchScripts
             let same = false;
             try { same = document.querySelector(selector) === current; } catch (err) { }
             if (!same) {
-              tip.textContent = 'Este pedaço repete-se na página e não dá para o vigiar sozinho · escolha outro ou Esc para cancelar';
+              tip.textContent = repeatedText;
               return;
             }
-            finish({ selector, text: textOf(current).slice(0, 4000) });
+            const r = current.getBoundingClientRect();
+            finish({ selector, text: textOf(current).slice(0, 4000), rect: { x: r.left, y: r.top, w: r.width, h: r.height } });
           };
           const key = e => { if (e.key === 'Escape') { block(e); finish(null); } };
           addEventListener('mousemove', move, true);

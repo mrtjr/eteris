@@ -57,10 +57,15 @@ public static class TestSwitches
     // - ETERIS_TEST_WATCH=<endereço>[TAB<seletor>]: cria essa vigia de preço ao arrancar, se ainda não houver uma para o endereço.
     // - ETERIS_TEST_WATCH_SECONDS=<n>: o relógio da vigia passa de 1 min a n s (no máximo 60) e a próxima verificação vem n s
     //   depois, sem o mínimo de 30 min nem o recuo.
+    // - ETERIS_TEST_CLIP=<endereço>TAB<seletor>: abre um recorte ao vivo desse pedaço ao arrancar (o gesto do menu precisa
+    //   do rato para apontar o pedaço).
     public static string? ShopDir => ShopDirFor(Environment.GetEnvironmentVariable("ETERIS_TEST_SHOP_DIR"), IsInstalled, AppPaths.IsCustomProfile);
 
     public static (string Url, string? Selector)? WatchSeed
         => WatchSeedFor(Environment.GetEnvironmentVariable("ETERIS_TEST_WATCH"), IsInstalled, AppPaths.IsCustomProfile);
+
+    public static (string Url, string Selector)? ClipSeed
+        => ClipSeedFor(Environment.GetEnvironmentVariable("ETERIS_TEST_CLIP"), IsInstalled, AppPaths.IsCustomProfile);
 
     public static int? WatchSeconds => WatchSecondsFor(Environment.GetEnvironmentVariable("ETERIS_TEST_WATCH_SECONDS"), IsInstalled, AppPaths.IsCustomProfile);
 
@@ -84,6 +89,9 @@ public static class TestSwitches
         var selector = parts.Length > 1 && parts[1].Trim() is { Length: > 0 } s ? s : null;
         return (url, selector);
     }
+
+    public static (string Url, string Selector)? ClipSeedFor(string? value, bool installed, bool customProfile)
+        => WatchSeedFor(value, installed, customProfile) is (var url, { } selector) ? (url, selector) : null;
 
     public static int? WatchSecondsFor(string? value, bool installed, bool customProfile)
         => !installed && customProfile

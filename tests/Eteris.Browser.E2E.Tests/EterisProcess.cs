@@ -115,6 +115,24 @@ public sealed class EterisProcess : IAsyncDisposable
 
     private const int SwMinimize = 6;
 
+    // Fecha a janela principal deste processo (como o «X») e diz se o processo saiu dentro do prazo.
+    public async Task<bool> CloseMainWindowAsync(TimeSpan timeout)
+    {
+        _process.Refresh();
+        if (_process.HasExited) return true;
+        _process.CloseMainWindow();
+        using var wait = new CancellationTokenSource(timeout);
+        try
+        {
+            await _process.WaitForExitAsync(wait.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool ShowWindow(nint window, int command);
 

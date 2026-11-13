@@ -55,6 +55,10 @@ public class InjectedScriptsSyntaxTests
         { "vigia (leitura sem pedaço)", WatchScripts.Read(null) },
         { "vigia (leitura, seletor com aspas)", WatchScripts.Read("a[title=\"x'y\"] </script>") },
         { "vigia (escolher pedaço)", Eteris.Browser.Browser.PageScript.Expression(WatchScripts.PickPiece("Clique no pedaço a vigiar · Esc para cancelar"), asyncBody: true) },
+        { "recorte (escolher pedaço)", Eteris.Browser.Browser.PageScript.Expression(WatchScripts.PickPiece("Clique no pedaço a recortar · Esc para cancelar",
+            "Este pedaço repete-se na página e não dá para o recortar sozinho · escolha outro ou Esc para cancelar"), asyncBody: true) },
+        { "recorte (isolar)", ClipScripts.Isolate("#preco") },
+        { "recorte (isolar, seletor com aspas)", ClipScripts.Isolate("a[title=\"x'y\"] </script>") },
     };
 
     // As páginas internas, como são servidas: o script sem atributos de cada uma.

@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using CefSharp;
@@ -30,6 +31,7 @@ public partial class MainWindow
     {
         if (!_ownsSession || IsPrivate || _watchTimer is not null) return;
         SeedTestWatch();
+        OpenTestClip();
         var cancel = _watchCancel = new CancellationTokenSource();
         var period = TestSwitches.WatchSeconds is { } seconds ? TimeSpan.FromSeconds(Math.Min(seconds, 60)) : TimeSpan.FromMinutes(1);
         _watchTimer = new DispatcherTimer(period, DispatcherPriority.Background, (_, _) => _ = CheckDueWatchesAsync(cancel.Token), Dispatcher);
@@ -50,6 +52,16 @@ public partial class MainWindow
         if (AppData.WatchesFor(seed.Url).Count > 0) return;
         AppData.AddWatch(new NewWatch(seed.Url, seed.Url, WatchKind.Price, seed.Selector, UseSession: false,
             WatchSchedule.MinIntervalMinutes, TargetPrice: null), IsPrivate);
+    }
+
+    // O recorte das provas ao vivo (ETERIS_TEST_CLIP), aberto uma vez por processo com o tamanho mínimo.
+    private static bool s_testClipOpened;
+
+    private void OpenTestClip()
+    {
+        if (s_testClipOpened || TestSwitches.ClipSeed is not { } seed) return;
+        s_testClipOpened = true;
+        OpenClip(seed.Url, seed.Selector, ClipLayout.Size(0, 0, SystemParameters.WorkArea));
     }
 
     // Um lote: as vigias com a hora chegada, uma de cada vez. Um tique a meio de um lote não começa outro.
@@ -207,9 +219,70 @@ public partial class MainWindow
         catch (Exception) { }
     }
 
-    // O recorte ao vivo (a janela pequena sempre por cima) chega com a Task 8 do plano da etapa A.
-    private void StartClip()
+    // ---- O recorte ao vivo: «Recortar um pedaço ao vivo…» (menu da página e paleta) ----
+
+    private const string ClipPieceTip = "Clique no pedaço a recortar · Esc para cancelar";
+    private const string ClipPieceRepeated = "Este pedaço repete-se na página e não dá para o recortar sozinho · escolha outro ou Esc para cancelar";
+    private static readonly string ClipLimitReached = $"Já tem {ClipLayout.MaxOpen} recortes abertos — feche um primeiro";
+
+    // Os recortes abertos a partir desta janela: fecham com ela (sem dona, um recorte aberto manteria o Éteris a correr
+    // depois de a última janela fechar — e nada corre com o Éteris fechado).
+    private readonly List<ClipWindow> _clips = [];
+    private bool _clipsWired;
+
+    // O utilizador aponta um pedaço da aba; abre uma ClipWindow com ele. No máximo ClipLayout.MaxOpen em toda a aplicação
+    // (contados antes de apontar e outra vez depois); nunca na janela privada.
+    private async void StartClip()
     {
+        if (IsPrivate || _picking || ActiveBrowser is not { } browser || Tabs.Active is not { } tab || WebHost(tab.Address) is null) return;
+        if (!ClipLayout.CanOpen(ClipWindow.OpenCount))
+        {
+            ShowToast(ClipLimitReached);
+            return;
+        }
+        var url = tab.Address;
+        try
+        {
+            if (await PickWatchPieceAsync(browser, ClipPieceTip, ClipPieceRepeated) is not { } piece || !StillOn(tab, browser, url)) return;
+            if (!ClipLayout.CanOpen(ClipWindow.OpenCount))
+            {
+                ShowToast(ClipLimitReached);
+                return;
+            }
+            OpenClip(url, piece.Selector, ClipLayout.Size(piece.Size?.Width ?? 0, piece.Size?.Height ?? 0, SystemParameters.WorkArea));
+        }
+        catch (Exception) { }
+    }
+
+    // O motor do recorte vê a sessão (o contexto global, como os sites fixados na barra lateral) e tem o Escudo do site,
+    // como as abas.
+    private ClipWindow? OpenClip(string url, string selector, Size size)
+    {
+        if (IsPrivate || !ClipLayout.CanOpen(ClipWindow.OpenCount)) return null;
+        var handler = new PrivacyRequestHandler(() => ShieldEngine.Current, ShieldOn, onBlocked: _ => ShieldStats.CountBlocked(persist: true),
+            localNetworkAllowed: IsLocalNetworkAllowed, chooseCertificate: RefuseClientCertificate);
+        var clip = new ClipWindow(url, selector, size, context: null, handler, OpenFromClip);
+        _clips.Add(clip);
+        clip.Closed += (_, _) => _clips.Remove(clip);
+        if (!_clipsWired)
+        {
+            _clipsWired = true;
+            Closed += (_, _) =>
+            {
+                foreach (var open in _clips.ToList()) open.Close();
+            };
+        }
+        clip.Show();
+        return clip;
+    }
+
+    // «Abrir a página» (ou um link aberto noutra janela, com gesto): numa aba nova desta janela, trazida para a frente.
+    private void OpenFromClip(string url)
+    {
+        if (!IsLoaded || WebHost(url) is null) return;
+        if (WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(this);
+        Tabs.NewTab(url);
+        Activate();
     }
 
     // Cria a vigia com a leitura que o utilizador acabou de ver como primeira leitura (sem visita extra ao site, e a
@@ -251,17 +324,20 @@ public partial class MainWindow
     }
 
     // O seletor de pedaços na aba (o mesmo construtor de seletores do «Esconder um elemento»). Esc ou o tempo esgotado
-    // não fazem nada; uma resposta que não serve (a página pode mexer nela) diz que não foi possível.
-    private async Task<(string Selector, string Text)?> PickWatchPieceAsync(ChromiumWebBrowser browser)
+    // não fazem nada; uma resposta que não serve (a página pode mexer nela) diz que não foi possível. Devolve também o
+    // tamanho do pedaço (px CSS), que o recorte ao vivo usa.
+    private async Task<(string Selector, string Text, Size? Size)?> PickWatchPieceAsync(ChromiumWebBrowser browser, string tip = WatchPieceTip,
+        string? repeated = null)
     {
         _picking = true;
         try
         {
             Keyboard.Focus(browser);
-            var response = await PageScript.EvaluateAsync(browser, WatchScripts.PickPiece(WatchPieceTip), TimeSpan.FromMinutes(3),
+            var response = await PageScript.EvaluateAsync(browser, WatchScripts.PickPiece(tip, repeated), TimeSpan.FromMinutes(3),
                 userGesture: true, asyncBody: true);
             if (!response.Success || response.Result is null) return null;
-            if (WatchReadingParser.Pick(response.Result as string) is { } piece) return piece;
+            var json = response.Result as string;
+            if (WatchReadingParser.Pick(json) is { } piece) return (piece.Selector, piece.Text, WatchReadingParser.PickSize(json));
             ShowToast(WatchPieceFailed);
             return null;
         }

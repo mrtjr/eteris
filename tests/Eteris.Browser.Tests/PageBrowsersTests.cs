@@ -33,18 +33,20 @@ public class PageBrowsersTests
                 if (!creator.IsMatch(lines[i])) continue;
                 creators++;
                 var next = string.Join("\n", lines.Skip(i + 1).Take(40));
-                // O motor da vigia recebe o tratador de quem o cria (MainWindow.Watch.cs) e só o embrulha (WatchRunner).
-                var expected = relative == Path.Combine("Watching", "WatchRunner.cs")
-                    ? "RequestHandler = new AppRedirectGuard(_requestHandler()"
+                // O motor da vigia recebe o tratador de quem o cria (MainWindow.Watch.cs) e só o embrulha (WatchRunner); o
+                // recorte ao vivo (ClipWindow) recebe-o pronto, também do MainWindow.Watch.cs.
+                var expected = relative == Path.Combine("Watching", "WatchRunner.cs") ? "RequestHandler = new AppRedirectGuard(_requestHandler()"
+                    : relative == "ClipWindow.xaml.cs" ? "RequestHandler = requestHandler,"
                     : "RequestHandler = new PrivacyRequestHandler(";
                 if (!next.Contains(expected, StringComparison.Ordinal))
                     missing.Add($"{relative}:{i + 1}");
             }
         }
         Assert.True(missing.Count == 0, "browser sem o PrivacyRequestHandler: " + string.Join(", ", missing));
-        Assert.Equal(4, creators);
+        Assert.Equal(5, creators);
         var watch = File.ReadAllText(Path.Combine(src, "MainWindow.Watch.cs"));
         Assert.Contains("new WatchRunner(", watch);
         Assert.Contains("() => new PrivacyRequestHandler(", watch);
+        Assert.Matches(@"var handler = new PrivacyRequestHandler\([^;]*;\s*var clip = new ClipWindow\(url, selector, size, context: null, handler,", watch);
     }
 }
