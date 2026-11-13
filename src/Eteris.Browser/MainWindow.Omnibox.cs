@@ -138,7 +138,14 @@ public partial class MainWindow
         Keyboard.Focus(browser);
         UpdateOmniboxChrome();
         await ScriptsReadyFor(tab, browser, url);
-        if (browser.IsDisposed) return;
+        // O motor saiu entretanto (a aba adormeceu ou mudou de motor): nada vai carregar, o pedido deixa de estar pendente.
+        if (browser.IsDisposed)
+        {
+            tab.PendingAddress = null;
+            tab.PendingLoadStarted = false;
+            if (ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
+            return;
+        }
         tab.PendingLoadStarted = true;
         browser.Load(url);
     }

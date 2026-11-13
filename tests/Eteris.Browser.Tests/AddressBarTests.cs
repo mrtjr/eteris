@@ -54,6 +54,15 @@ public class AddressBarTests
     }
 
     [Fact]
+    public void TypedAddress_IsDropped_WhenTheEngineGoesAwayBeforeLoading()
+    {
+        // O motor saiu enquanto os scripts do site se registavam (a aba adormeceu, mudou de motor): o endereço escrito não
+        // fica preso na barra como se ainda estivesse a carregar.
+        var omnibox = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.Omnibox.cs"));
+        Assert.Matches(@"await ScriptsReadyFor\(tab, browser, url\);\s*(//[^\n]*\s*)?if \(browser\.IsDisposed\)\s*\{\s*tab\.PendingAddress = null;", omnibox);
+    }
+
+    [Fact]
     public void VideoEngine_EveryAddressWrite_ClearsTheErrorPageMark()
     {
         // Passar da página de erro para o motor de vídeo (ou de volta) não deixa a marca de «página de erro» agarrada.
