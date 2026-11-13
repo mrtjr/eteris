@@ -54,7 +54,7 @@ public class PrivateSessionTests
         [
             "Shields.ShieldEngine.Https.ForgetPrivate();", "Shields.LocalNetworkGrants.ForgetPrivate();", "Permissions.PermissionGrants.ForgetPrivate();",
             "Shields.SiteRules.ForgetPrivate();", "Data.AppData.ForgetPrivateShield();", "Shields.Cname.PrivateCache.Clear();",
-            "Shields.PartitionedCookieJar.Private.Clear();",
+            "Shields.PartitionedCookieJar.Private.Clear();", "Shields.ShieldTightening.ForgetPrivate();",
         ];
         var session = Source("Tabs/PrivateSession.cs");
         var window = Source("MainWindow.Private.cs");

@@ -165,7 +165,7 @@ public partial class MainWindow
                 $"{TrackerBlocker.RegistrableDomain(host)} · {tab!.BlockedCount} bloqueados nesta página", null, () =>
                 {
                     AppData.SetShield(host, !on, IsPrivate);
-                    ReloadActive();
+                    ReloadActive(ignoreCache: !on);
                     UpdateShieldButton();
                 });
             yield return new("\uEA18", "Observatório do site", "Quem está a observar esta página, ao vivo, por empresa", "Ctrl+Shift+U", OpenObservatory);
