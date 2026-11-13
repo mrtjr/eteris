@@ -260,12 +260,23 @@ public static partial class LinkPreview
             var description = meta.Description ?? (IsProse(excerpt) ? excerpt : null);
             if (description is { Length: > MaxDescriptionChars } longDescription) description = Truncate(longDescription, MaxDescriptionChars);
             // Uma descrição igual ao início do artigo repete-se: fica só o artigo.
-            if (description is not null && paragraphs.Count > 0 && paragraphs[0].StartsWith(description.TrimEnd('…', '.', ' '), StringComparison.Ordinal))
-                description = null;
+            if (description is not null && full.Count > 0 && RepeatsStart(full[0], description)) description = null;
             return new LinkPreviewInfo(url, title, site, description, meta.ImageUrl, paragraphs, words, Clean(Text(root, "byline")), full);
         }
         catch (JsonException) { return null; }
     }
+
+    // A descrição é o princípio do parágrafo, comparados pelas palavras (sem acentos, maiúsculas nem pontuação) e sem
+    // as chamadas de nota («[1]», «[nota 2]»): o excerto do Readability é o 1.º parágrafo ainda com elas, e o
+    // collectParas tira-as.
+    private static bool RepeatsStart(string paragraph, string description)
+    {
+        var start = string.Join(' ', Words(NoteMark().Replace(description, " ")));
+        return start.Length > 0 && string.Join(' ', Words(NoteMark().Replace(paragraph, " "))).StartsWith(start, StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"\[[^\[\]]{1,24}\]")]
+    private static partial Regex NoteMark();
 
     // Uma linha é prosa (e não restos da estrutura da página: coordenadas, ligações «editar», menus, tabelas achatadas)
     // quando cumpre tudo isto: pelo menos MinParagraphChars e 6 palavras (a regra das palavras não vale nas escritas sem

@@ -431,4 +431,21 @@ public class LinkPreviewTests
         Assert.Contains("excerpt: ", script);
         Assert.DoesNotContain("__COLLECT_PARAS__", script);
     }
+
+    // Prova ao vivo (Wikipédia «Continente»): sem descrição no cabeçalho, o excerto do Readability é o 1.º parágrafo com
+    // as chamadas de nota («[1]») que o collectParas tira; continua a ser o mesmo parágrafo e não se repete.
+    [Fact]
+    public void Parse_ExcerptWithNoteMarks_IsNotRepeated()
+    {
+        const string first = "Continente é uma grande massa de terra cercada por água. Na gigantesca massa de água salgada (formada principalmente pelos oceanos) pela qual são cobertos cerca de 75% da superfície terrestre, é muito fácil notar aqui e ali o aparecimento de territórios contínuos muito extensos.";
+        const string excerpt = "Continente é uma grande massa de terra cercada por água.[1] Na gigantesca massa de água salgada (formada principalmente pelos oceanos)[2] pela qual são cobertos cerca de 75% da superfície terrestre, é muito fácil notar aqui e ali o aparecimento de territórios contínuos muito extensos.";
+        var json = JsonSerializer.Serialize(new { head = "", excerpt, paras = new[] { first, "Outro parágrafo, com texto suficiente para contar como prosa no cartão." } });
+        var info = LinkPreview.Parse(json, "https://pt.wikipedia.org/wiki/Continente")!;
+        Assert.Null(info.Description);
+        Assert.Equal(first, info.Paragraphs[0]);
+        // Uma descrição do cabeçalho cortada a 300 carateres, com notas, também não se repete.
+        var head = $"<meta name=\"description\" content=\"{excerpt}{excerpt}\">";
+        var info2 = LinkPreview.Parse(JsonSerializer.Serialize(new { head, paras = new[] { first + " " + first } }), "https://pt.wikipedia.org/wiki/Continente")!;
+        Assert.Null(info2.Description);
+    }
 }
