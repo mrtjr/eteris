@@ -251,6 +251,8 @@ public partial class MainWindow
         ShowPauseView(state);
         EnableCoveredChrome(false);
         UpdateOverlayVisibility();
+        // O cartão de uma janela privada trancada deixa de oferecer «Pausar tudo» (MainWindow.PrivateLock.cs).
+        RefreshPrivateLockActivity();
     }
 
     // Os controlos que o ecrã calmo tapa (a barra de título com as abas, a de ferramentas, as abas verticais) continuavam na
@@ -269,7 +271,7 @@ public partial class MainWindow
     // O teclado volta para onde estava, se ainda se vê e é desta janela (não uma página: essa é o ReturnFocusToPage).
     private bool FocusCanReturnTo(PauseState state, UIElement element)
         => element is { IsVisible: true, IsEnabled: true, Focusable: true } and not (ChromiumWebBrowser or WebView2)
-           && ReferenceEquals(Window.GetWindow(element), this) && state.View?.IsAncestorOf(element) != true;
+           && ReferenceEquals(Window.GetWindow(element), this) && state.View?.IsAncestorOf(element) != true && _privateLock is null;
 
     private List<PauseEngine<FrameworkElement>> PauseEngines()
     {
@@ -331,6 +333,12 @@ public partial class MainWindow
         // tamanho já dado; depois StackPages), e o site fixado aberto na barra lateral.
         LayoutBrowsers();
         if (_sidebarOpen && CurrentWebPanelBrowser is not null && _sidebarPanel is { } panel) ShowWebPanel(panel, focus: false);
+        // Com a janela privada trancada (MainWindow.PrivateLock.cs), o painel das transferências espera pelo desbloqueio.
+        if (_privateLock is { } lockedNow && state.DownloadStarted)
+        {
+            lockedNow.DownloadStarted = true;
+            state.DownloadStarted = false;
+        }
         if (state.DownloadStarted) DownloadsPopup.IsOpen = true;
         // O pedido de certificado de cliente que esperou pela Pausa (a página estava escondida) aparece agora.
         ShowNextClientCertificate();
@@ -347,6 +355,8 @@ public partial class MainWindow
         ShowPausedToasts(state, _replay.Count);
         // 4. O teclado volta para onde estava (a barra de endereço, as Notas); senão, para a página.
         EnableCoveredChrome(true);
+        // Trancada, os controlos continuam tapados pelo cartão.
+        if (_privateLock is not null) EnableCoveredChrome(false);
         if (state.FocusBefore is { } before && FocusCanReturnTo(state, before))
         {
             if (IsActive) Keyboard.Focus(before);
@@ -395,11 +405,26 @@ public partial class MainWindow
     private void ShowPausedToasts(PauseState state, int replay)
     {
         if (state.Toasts.Count == 0 && replay == 0) return;
+        // Com a janela privada trancada (MainWindow.PrivateLock.cs), o aviso do regresso espera pelo desbloqueio, na fila dela
+        // (o ShowToastFor direto passava-lhe à frente), e sai então por aqui (PauseReturn): com os 10 s, o anúncio e onde
+        // está o «Retomar», com o que houver para retomar nesse momento.
+        if (_privateLock is { } locked)
+        {
+            locked.Toasts.AddRange(state.Toasts);
+            locked.PauseReturn = true;
+            return;
+        }
+        ShowPauseReturn(state.Toasts, replay);
+    }
+
+    private void ShowPauseReturn(List<(string Message, ToastAction[] Actions)> toasts, int replay)
+    {
+        if (toasts.Count == 0 && replay == 0) return;
         var actions = new List<ToastAction>();
         if (replay > 0) actions.Add(new ToastAction($"Retomar o que tocava ({replay})", ReplayPaused));
-        actions.AddRange(state.Toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions));
-        var message = state.Toasts.Count > 0
-            ? string.Join("\n", state.Toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal))
+        actions.AddRange(toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions));
+        var message = toasts.Count > 0
+            ? string.Join("\n", toasts.Select(t => t.Message).Distinct(StringComparer.Ordinal))
             : "A Pausa acabou — nada recomeçou sozinho";
         var shown = actions.Take(ToastPolicy.MaxActions).ToArray();
         if (replay > 0)
@@ -448,6 +473,12 @@ public partial class MainWindow
 
     private void FocusPauseView()
     {
+        // Trancada (MainWindow.PrivateLock.cs), o teclado fica no cartão, por cima da vista calma.
+        if (_privateLock is not null)
+        {
+            FocusPrivateLockView();
+            return;
+        }
         if (_pause?.Back is not { } back) return;
         if (_overlay is { IsActive: true }) Activate();
         // Só a janela ativa recebe o teclado; as outras guardam «Voltar» como foco lógico (volta para lá quando forem
@@ -464,6 +495,9 @@ public partial class MainWindow
         Grid.SetRowSpan(view, 3);
         Grid.SetColumnSpan(view, 1);
         Panel.SetZIndex(view, 1000);
+        // Numa janela privada trancada (MainWindow.PrivateLock.cs) fica escondida debaixo do cartão: o aviso de captura dela
+        // nomeia o site.
+        if (_privateLock is not null) view.Visibility = Visibility.Hidden;
         ((Grid)RootBorder.Child).Children.Add(view);
         RefreshPauseTimer(state);
         TickPauseClock(state);
@@ -496,26 +530,10 @@ public partial class MainWindow
             else element.SetResourceReference(property, "TextBrush");
         }
 
-        // Os PillButton do tema não recebem o foco (para não o tirarem à página): aqui recebem-no e mostram-no com um anel
-        // do contraste do texto.
-        Style Focusable(string basedOn)
-        {
-            var ring = new FrameworkElementFactory(typeof(Border));
-            ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
-            ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(19));
-            ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-4));
-            if (highContrast) ring.SetValue(Border.BorderBrushProperty, SystemColors.HighlightBrush);
-            else if (picture is not null) ring.SetValue(Border.BorderBrushProperty, Brushes.White);
-            else ring.SetResourceReference(Border.BorderBrushProperty, "TextBrush");
-            var visual = new Style();
-            visual.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate { VisualTree = ring }));
-            var style = new Style(typeof(Button), (Style)FindResource(basedOn));
-            style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
-            style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, visual));
-            return style;
-        }
-        state.ChipStyle = Focusable("PillButton");
-        state.ChosenStyle = Focusable("PrimaryPillButton");
+        // O anel do foco: a cor de realce do sistema em alto contraste, branco sobre a paisagem, o texto do tema sem ela.
+        var ringBrush = highContrast ? SystemColors.HighlightBrush : picture is not null ? Brushes.White : null;
+        state.ChipStyle = FocusableButtonStyle("PillButton", ringBrush);
+        state.ChosenStyle = FocusableButtonStyle("PrimaryPillButton", ringBrush);
 
         var view = new PauseSurface { ClipToBounds = true, Background = Brushes.Transparent, Focusable = false };
         AutomationProperties.SetName(view, PauseCapture.ViewName(capturing));
@@ -543,41 +561,7 @@ public partial class MainWindow
             view.Children.Add(new Rectangle { Fill = Brushes.Black, Opacity = 0.55, IsHitTestVisible = false });
         }
 
-        // Os botões da janela continuam a funcionar (o ecrã calmo tapa a barra de título e a de ferramentas). O resto da
-        // faixa de cima continua a servir para arrastar a janela (WindowChrome).
-        var caption = new StackPanel { Orientation = Orientation.Horizontal, Height = 34 };
-        Button CaptionButton(string glyph, string name, string style, RoutedEventHandler click)
-        {
-            var button = new Button { Content = glyph, ToolTip = name, Style = (Style)FindResource(style) };
-            AutomationProperties.SetName(button, name);
-            WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-            button.Click += click;
-            caption.Children.Add(button);
-            return button;
-        }
-        CaptionButton("", "Minimizar", "CaptionButton", Minimize_Click);
-        var maximize = CaptionButton("", "Maximizar", "CaptionButton", Maximize_Click);
-        maximize.SetBinding(ContentControl.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = MaximizeButton });
-        maximize.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(FrameworkElement.ToolTip)) { Source = MaximizeButton });
-        // O nome vem do estilo CaptionButton (ligado à dica): «Restaurar» com a janela maximizada, e não um «Maximizar» fixo.
-        maximize.ClearValue(AutomationProperties.NameProperty);
-        maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
-        CaptionButton("", "Fechar", "CloseCaptionButton", CloseWindow_Click);
-        var captionCard = new Border
-        {
-            Child = caption,
-            CornerRadius = new CornerRadius(0, 0, 0, 10),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        if (highContrast)
-        {
-            captionCard.Background = SystemColors.WindowBrush;
-            foreach (var button in caption.Children.OfType<Button>()) button.Foreground = SystemColors.WindowTextBrush;
-        }
-        else captionCard.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
-        Panel.SetZIndex(captionCard, 1);
-        view.Children.Add(captionCard);
+        view.Children.Add(BuildCaptionCard(mini, highContrast));
 
         var center = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
 
@@ -721,6 +705,64 @@ public partial class MainWindow
         return view;
     }
 
+    // Os PillButton do tema não recebem o foco (para não o tirarem à página): nos ecrãs que tapam a janela (a Pausa, a tranca
+    // das janelas privadas) recebem-no e mostram-no com um anel do contraste do texto (ringBrush; null = o TextBrush do tema).
+    private Style FocusableButtonStyle(string basedOn, Brush? ringBrush)
+    {
+        var ring = new FrameworkElementFactory(typeof(Border));
+        ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(19));
+        ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-4));
+        if (ringBrush is not null) ring.SetValue(Border.BorderBrushProperty, ringBrush);
+        else ring.SetResourceReference(Border.BorderBrushProperty, "TextBrush");
+        var visual = new Style();
+        visual.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate { VisualTree = ring }));
+        var style = new Style(typeof(Button), (Style)FindResource(basedOn));
+        style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
+        style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, visual));
+        return style;
+    }
+
+    // Os botões da janela (minimizar, maximizar ou restaurar, fechar) nos ecrãs que tapam a barra de título e a de
+    // ferramentas (a Pausa, a tranca das janelas privadas): continuam a funcionar. O resto da faixa de cima continua a
+    // servir para arrastar a janela (WindowChrome).
+    private Border BuildCaptionCard(bool mini, bool highContrast)
+    {
+        var caption = new StackPanel { Orientation = Orientation.Horizontal, Height = 34 };
+        Button CaptionButton(string glyph, string name, string style, RoutedEventHandler click)
+        {
+            var button = new Button { Content = glyph, ToolTip = name, Style = (Style)FindResource(style) };
+            AutomationProperties.SetName(button, name);
+            WindowChrome.SetIsHitTestVisibleInChrome(button, true);
+            button.Click += click;
+            caption.Children.Add(button);
+            return button;
+        }
+        CaptionButton("", "Minimizar", "CaptionButton", Minimize_Click);
+        var maximize = CaptionButton("", "Maximizar", "CaptionButton", Maximize_Click);
+        maximize.SetBinding(ContentControl.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = MaximizeButton });
+        maximize.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(FrameworkElement.ToolTip)) { Source = MaximizeButton });
+        // O nome vem do estilo CaptionButton (ligado à dica): «Restaurar» com a janela maximizada, e não um «Maximizar» fixo.
+        maximize.ClearValue(AutomationProperties.NameProperty);
+        maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
+        CaptionButton("", "Fechar", "CloseCaptionButton", CloseWindow_Click);
+        var captionCard = new Border
+        {
+            Child = caption,
+            CornerRadius = new CornerRadius(0, 0, 0, 10),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        if (highContrast)
+        {
+            captionCard.Background = SystemColors.WindowBrush;
+            foreach (var button in caption.Children.OfType<Button>()) button.Foreground = SystemColors.WindowTextBrush;
+        }
+        else captionCard.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        Panel.SetZIndex(captionCard, 1);
+        return captionCard;
+    }
+
     // De todas as janelas abertas (a chamada pode estar noutra, atrás desta): a Pausa é de todas. O site de uma janela
     // privada só se nomeia no ecrã calmo dela; nas outras aparece «uma janela privada».
     private IEnumerable<string> CapturingSitesEverywhere()
@@ -782,11 +824,11 @@ public partial class MainWindow
         BreatheWhileSeen(state);
     }
 
-    // Uma animação eterna só corre enquanto se vê (ForeverAnimationRulesTests): com a janela minimizada sai, e volta a
-    // começar (a inspirar) quando a janela se volta a ver.
+    // Uma animação eterna só corre enquanto se vê (ForeverAnimationRulesTests): com a janela minimizada (ou trancada, com a
+    // vista calma escondida debaixo do cartão) sai, e volta a começar (a inspirar) quando a janela se volta a ver.
     private void BreatheWhileSeen(PauseState state)
     {
-        var run = state.Breathes && WindowState != WindowState.Minimized;
+        var run = state.Breathes && WindowState != WindowState.Minimized && _privateLock is null;
         if (run == state.Breathing || state.RingScale is not { } scale || state.Breath is not { } words) return;
         state.Breathing = run;
         if (!run)

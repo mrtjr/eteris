@@ -26,6 +26,7 @@ public class InjectedScriptsSyntaxTests
         { "multimédia (pausar)", MediaInfo.PauseScript },
         { "pausa (pausar e marcar)", MediaInfo.PauseMarkScript },
         { "pausa (retomar o que tocava)", MediaInfo.ResumeMarkedScript },
+        { "tranca (sair de todo o Picture-in-Picture)", MediaInfo.LeaveAllPictureInPictureScript },
         { "abas quentes (vídeo a tocar)", WarmTabs.PlayingVideoScript },
         { "sono (pergunta antes de adormecer)", SleepProbe.Script },
         { "áudio", AudioIndicator.AudibleScript },

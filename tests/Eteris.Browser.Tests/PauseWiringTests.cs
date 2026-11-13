@@ -40,7 +40,7 @@ public class PauseWiringTests
         Assert.Matches(@"private bool ShouldShow\(BrowserTab tab, FrameworkElement page\)\s*\{\s*// [^\n]*\n\s*if \(_pause is not null\) return false;", Source("MainWindow.Split.cs"));
         var webPanels = Source("MainWindow.WebPanels.cs");
         Assert.Contains("if (_pause is not null)", webPanels);
-        Assert.Contains("SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen && _pause is null);", webPanels);
+        Assert.Contains("SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen && _pause is null && _privateLock is null);", webPanels);
         var pause = Source("MainWindow.Pause.cs");
         Assert.Contains("HideWebPanels();", pause);
         Assert.Contains("LayoutBrowsers();", pause);

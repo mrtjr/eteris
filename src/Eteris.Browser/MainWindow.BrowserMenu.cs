@@ -288,6 +288,7 @@ public partial class MainWindow
         Row("\uE8A7", "Nova janela", () => OpenWindow(isPrivate: false), "Ctrl+N");
         Row("\uE72E", "Nova janela privada", () => OpenWindow(isPrivate: true), "Ctrl+Shift+N");
         if (PrivateWindows().Count > 0) Row("\uE711", "Terminar sessão privada", OfferEndPrivateSession);
+        if (PrivateWindows().Count > 0) Row("\uE72E", "Trancar janelas privadas", LockPrivateWindowsNow, "Ctrl+Alt+L");
         if (Tabs.RecentlyClosed.Count > 0)
             Row("\uE7A7", "Reabrir aba fechada", () => Tabs.ReopenClosed(), "Ctrl+Shift+T");
 

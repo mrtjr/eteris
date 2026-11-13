@@ -141,6 +141,12 @@ public partial class MainWindow
                 continue;
             }
             _webPanelHiddenSince.Remove(other);
+            // A janela privada trancada (MainWindow.PrivateLock.cs): fica escondido até destrancar.
+            if (_privateLock is not null)
+            {
+                HideWebPanel(view);
+                continue;
+            }
             // A Pausa (MainWindow.Pause.cs): fica escondido até voltar (os sites fixados mudaram noutra janela, por exemplo).
             if (_pause is not null)
             {
@@ -250,6 +256,8 @@ public partial class MainWindow
             }),
             DownloadHandler = DownloadHandler,
             PermissionHandler = PermissionHandler,
+            // Numa janela privada trancada, os diálogos do site não aparecem (Browser/PrivateLockDialogHandler.cs).
+            JsDialogHandler = IsPrivate ? new PrivateLockDialogHandler(() => _lockedForPage) : null,
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, ShieldOn,
                 onBlocked: _ => ShieldStats.CountBlocked(persist: true),
                 // O processo do site morreu: a página de erro (com «Tentar novamente») em vez de um retângulo vazio.
@@ -265,7 +273,7 @@ public partial class MainWindow
                     Dispatcher.InvokeAsync(() => ForgetReplay(_webPanelBrowsers.GetValueOrDefault(url)));
                     if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
                 },
-                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _pause is null && _sidebarOpen && _sidebarPanel?.Url == url,
+                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _pause is null && _sidebarOpen && _sidebarPanel?.Url == url && _privateLock is null,
                     () => ClientCertificateDialog.FromPanel(url), host, port, rows)),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
@@ -330,7 +338,7 @@ public partial class MainWindow
             Dispatcher.InvokeAsync(() =>
             {
                 if (browser.IsDisposed) return;
-                SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen && _pause is null);
+                SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen && _pause is null && _privateLock is null);
                 JoinPause(browser, muted: false);
             });
         };
@@ -361,6 +369,8 @@ public partial class MainWindow
         // A Pausa decide num só sítio (ShortcutFromPage): Esc e Ctrl+. voltam, o resto é engolido — também as teclas do
         // painel, que de outro modo imprimiam ou recarregavam o site escondido.
         if (_pausedForPage) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
+        // A janela privada trancada (MainWindow.PrivateLock.cs) também decide lá: só o Ctrl+. passa.
+        if (_lockedForPage) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         if (WebPanelKeys.Resolve(key, ctrl, shift, alt) is not { } command) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));

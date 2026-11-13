@@ -29,8 +29,9 @@ public class WhatsNewTests
     }
 
     // 0.2.18: a Pausa à frente (Ctrl+., na folha de atalhos), curta e só com o que o código faz — cala e pausa o som e o
-    // vídeo de todas as janelas, esconde as páginas, e nada recomeça sozinho ao voltar. A divisória «Versões anteriores»
-    // fica logo a seguir, antes do 1.º destaque da 0.2.17.
+    // vídeo de todas as janelas, esconde as páginas, e nada recomeça sozinho ao voltar. A seguir, as abas fixadas com
+    // casa e as janelas privadas trancadas; a divisória «Versões anteriores» fica depois dos destaques da 0.2.18
+    // (NewCount), antes do 1.º da 0.2.17.
     [Fact]
     public void Highlights_LeadWithThePauseIn0218()
     {
@@ -41,10 +42,46 @@ public class WhatsNewTests
         Assert.Contains("todas as janelas", pause.Detail);
         Assert.Contains("esconde as páginas", pause.Detail);
         Assert.Contains("Nada recomeça sozinho", pause.Detail);
-        Assert.Equal(1, WhatsNewPage.NewCount);
+        Assert.Equal("Abas fixadas com casa", WhatsNewPage.Highlights[1].Title);
         Assert.Equal("Sites completos com o Escudo", WhatsNewPage.PreviousVersionFirstTitle);
         foreach (var s in new[] { "IA", "sempre", "nunca", "Edge", "notifica" })
             Assert.DoesNotContain(s, pause.Title + " " + pause.Detail, StringComparison.Ordinal);
+    }
+
+    // 0.2.18: as abas fixadas com casa logo a seguir à Pausa (Alt+Home, na folha de atalhos): só o que o código faz — o
+    // ponto no ícone fora de casa, e o clique no ícone da aba aberta ou Alt+Home volta lá.
+    [Fact]
+    public void Highlights_PinnedHomeFollowsThePause()
+    {
+        var home = WhatsNewPage.Highlights[1];
+        Assert.Equal("Abas fixadas com casa", home.Title);
+        Assert.Equal("Alt+Home", home.Keys);
+        Assert.True(home.Detail.Length <= 180, home.Detail);
+        Assert.Contains("ponto", home.Detail);
+        Assert.Contains("Alt+Home", home.Detail);
+        Assert.Contains("aba aberta", home.Detail);
+        foreach (var s in new[] { "IA", "sempre", "nunca", "Edge", "sincroniz" })
+            Assert.DoesNotContain(s, home.Title + " " + home.Detail, StringComparison.Ordinal);
+        Assert.InRange(WhatsNewPage.NewCount, 2, 8);
+    }
+
+    // 0.2.18: as janelas privadas trancadas logo a seguir às abas fixadas com casa (Ctrl+Alt+L, na folha de atalhos): curto,
+    // honesto (conveniência, não cifra) e sem prometer mais do que o código faz.
+    [Fact]
+    public void Highlights_TheLockedPrivateWindowsFollowTheHome()
+    {
+        var titles = WhatsNewPage.Highlights.Select(h => h.Title).ToList();
+        var at = titles.IndexOf("Janelas privadas trancadas");
+        Assert.Equal(titles.IndexOf("Abas fixadas com casa") + 1, at);
+        Assert.True(at < WhatsNewPage.NewCount, "na versão em curso");
+        var tranca = WhatsNewPage.Highlights[at];
+        Assert.Equal("Ctrl+Alt+L", tranca.Keys);
+        Assert.True(tranca.Detail.Length <= 180, tranca.Detail);
+        Assert.Contains("Windows Hello", tranca.Detail);
+        Assert.Contains("não cifra", tranca.Detail);
+        foreach (var s in new[] { "IA", "sempre", "nunca", "Edge" })
+            Assert.DoesNotContain(s, tranca.Title + " " + tranca.Detail, StringComparison.Ordinal);
+        Assert.Equal(3, WhatsNewPage.NewCount);
     }
 
     // 0.2.17: cinco destaques à frente, curtos, que só prometem o que o CHANGELOG da 0.2.17 diz — os sites completos com o
@@ -56,7 +93,7 @@ public class WhatsNewTests
     public void Highlights_LeadWithTheShieldFixSignOutGoogleCleanupsAndCertificatesIn0217()
     {
         string[] titles = ["Sites completos com o Escudo", "«Sair» no menu", "Google como motor de pesquisa", "Limpezas que chegam a todo o lado", "Certificados de cliente"];
-        var news = WhatsNewPage.Highlights.Skip(1).Take(titles.Length).ToList();
+        var news = WhatsNewPage.Highlights.Skip(WhatsNewPage.NewCount).Take(titles.Length).ToList();
         Assert.Equal(titles, news.Select(h => h.Title));
         Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
         Assert.Contains("ge.globo.com", news[0].Detail);
@@ -66,7 +103,7 @@ public class WhatsNewTests
         Assert.Contains("DuckDuckGo", news[2].Detail);
         Assert.Contains("motor de vídeo", news[3].Detail);
         Assert.Contains("nenhum é enviado sem o escolher", news[4].Detail);
-        Assert.Equal("Todas as janelas voltam", WhatsNewPage.Highlights[1 + titles.Length].Title);
+        Assert.Equal("Todas as janelas voltam", WhatsNewPage.Highlights[WhatsNewPage.NewCount + titles.Length].Title);
         Assert.All(news, h =>
         {
             foreach (var s in new[] { "sandbox", "isolad", "sempre", "Edge" })
@@ -83,7 +120,7 @@ public class WhatsNewTests
     public void Highlights_LeadWithWindowsSleepClearDataAndSignedUpdatesIn0216()
     {
         string[] titles = ["Todas as janelas voltam", "Abas que não perdem trabalho", "Limpar dados apaga mesmo", "Atualizações conferidas"];
-        var news = WhatsNewPage.Highlights.Skip(6).Take(titles.Length).ToList();
+        var news = WhatsNewPage.Highlights.Skip(WhatsNewPage.NewCount + 5).Take(titles.Length).ToList();
         Assert.Equal(titles, news.Select(h => h.Title));
         Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
         Assert.Contains("janelas normais", news[0].Detail);
@@ -115,7 +152,7 @@ public class WhatsNewTests
     public void Highlights_LeadWithOneSignInIn0215()
     {
         string[] titles = ["Um login e pronto", "Computador novo, aprovado com um número", "Kit de recuperação em 24 palavras", "Sair só deste computador"];
-        var news = WhatsNewPage.Highlights.Skip(10).Take(titles.Length).ToList();
+        var news = WhatsNewPage.Highlights.Skip(WhatsNewPage.NewCount + 9).Take(titles.Length).ToList();
         Assert.Equal(titles, news.Select(h => h.Title));
         Assert.All(news, h => Assert.True(h.Detail.Length <= 180, h.Title));
         Assert.Contains("Entre com o Google", news[0].Detail);
@@ -128,7 +165,7 @@ public class WhatsNewTests
     [Fact]
     public void Highlights_0215_PromiseOnlyWhatShips()
     {
-        var news = WhatsNewPage.Highlights.Skip(10).Take(4).ToList();
+        var news = WhatsNewPage.Highlights.Skip(WhatsNewPage.NewCount + 9).Take(4).ToList();
         var kit = Assert.Single(news, h => h.Title.StartsWith("Kit de recuperação", StringComparison.Ordinal));
         Assert.Contains("Windows Hello", kit.Detail);
         Assert.Equal(24, Eteris.Sync.Crypto.RecoveryCode.WordCount);
@@ -155,12 +192,13 @@ public class WhatsNewTests
     // contam-se a partir do destaque do sandbox, para uma versão nova não obrigar a renumerar).
     // 0.2.16: os 4 destaques novos vêm à frente dos 4 da 0.2.15, e o do sandbox passa ao índice 8.
     // 0.2.17: os 5 destaques novos vêm à frente dos 4 da 0.2.16, e o do sandbox passa ao índice 13.
-    // 0.2.18: a Pausa vem à frente dos 5 da 0.2.17, e o do sandbox passa ao índice 14.
+    // 0.2.18: a Pausa vem à frente dos 5 da 0.2.17, e o do sandbox passa ao índice 14; com a casa das fixadas, 15 (a conta
+    // passa a partir do NewCount: 5 da 0.2.17, 4 da 0.2.16 e 4 da 0.2.15).
     [Fact]
     public void Highlights_LeadWithOneSignInThenTheSandboxAndPerformanceThenSyncPasswordsAndFormsThenTheMenuKeyboardThenNothingToGoogleThenStartupThenTheEngineVideo_AndAreShort()
     {
         var at = WhatsNewPage.Highlights.ToList().FindIndex(h => h.Title == WhatsNewPage.SandboxTitle);
-        Assert.Equal(14, at);
+        Assert.Equal(WhatsNewPage.NewCount + 13, at);
         var rest = WhatsNewPage.Highlights.Skip(at).ToList();
         Assert.Equal(WhatsNewPage.SandboxTitle, rest[0].Title);
         Assert.Equal(WhatsNewPage.LighterTitle, rest[1].Title);

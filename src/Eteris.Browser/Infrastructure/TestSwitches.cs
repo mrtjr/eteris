@@ -106,6 +106,50 @@ public static class TestSwitches
            && int.TryParse(value?.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
            && seconds is >= 1 and <= 86400 ? seconds : null;
 
+    // A tranca das janelas privadas (MainWindow.PrivateLock.cs), nas provas ao vivo. As três só valem num perfil de teste
+    // (--user-data-dir), numa cópia não instalada e numa compilação com ETERIS_TEST_HOOKS (sem a constante, null): a
+    // publicação não as leva (build/publish.ps1 confere a 1.ª no binário). NENHUMA destranca.
+    // - ETERIS_TEST_TRANCA_RESPOSTA=cancelar|indisponivel: o verificador da tranca passa a ser o de teste, que nunca abre
+    //   janela nenhuma e responde «cancelado» (com o Windows Hello) ou «falhou» (com a palavra-passe do Windows). Outro valor
+    //   (aceitar, 1, sim…) é ignorado e fica o Windows a sério. O ETERIS_TEST_REAUTH do cofre nunca é lido pela tranca.
+    // - ETERIS_TEST_TRANCA_BLOQUEIO=<s> (1 a 600): uma só vez por processo, <s> segundos depois de a janela privada aberta
+    //   mais recentemente carregar a 1.ª página, simula «o Windows bloqueou» (sem o bloquear): só tranca.
+    // - ETERIS_TEST_TRANCA_PARADA=<s> (5 a 3600): com «Trancar depois de parada» ligado, o prazo passa de minutos a estes
+    //   segundos e o relógio a tiques de 1 s. Só encurta o prazo.
+#if ETERIS_TEST_HOOKS
+    public static Vault.PrivateUnlockTestMode? PrivateUnlockTest
+        => PrivateUnlockTestFor(Environment.GetEnvironmentVariable("ETERIS_TEST_TRANCA_RESPOSTA"), IsInstalled, AppPaths.IsCustomProfile);
+
+    public static int? LockAfterSeconds
+        => LockAfterSecondsFor(Environment.GetEnvironmentVariable("ETERIS_TEST_TRANCA_BLOQUEIO"), IsInstalled, AppPaths.IsCustomProfile);
+
+    public static int? IdleSeconds
+        => IdleSecondsFor(Environment.GetEnvironmentVariable("ETERIS_TEST_TRANCA_PARADA"), IsInstalled, AppPaths.IsCustomProfile);
+#else
+    public static Vault.PrivateUnlockTestMode? PrivateUnlockTest => null;
+
+    public static int? LockAfterSeconds => null;
+
+    public static int? IdleSeconds => null;
+#endif
+
+    public static Vault.PrivateUnlockTestMode? PrivateUnlockTestFor(string? value, bool installed, bool customProfile)
+        => installed || !customProfile ? null : value?.Trim().ToLowerInvariant() switch
+        {
+            "cancelar" => Vault.PrivateUnlockTestMode.Cancel,
+            "indisponivel" => Vault.PrivateUnlockTestMode.Unavailable,
+            _ => null,
+        };
+
+    public static int? LockAfterSecondsFor(string? value, bool installed, bool customProfile) => Seconds(value, installed, customProfile, 1, 600);
+
+    public static int? IdleSecondsFor(string? value, bool installed, bool customProfile) => Seconds(value, installed, customProfile, 5, 3600);
+
+    private static int? Seconds(string? value, bool installed, bool customProfile, int min, int max)
+        => !installed && customProfile
+           && int.TryParse(value?.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+           && seconds >= min && seconds <= max ? seconds : null;
+
     // Instalação do Velopack: o Update.exe está na pasta de cima (%LOCALAPPDATA%\<pacote>\current\Eteris.Browser.exe).
     // Com o sandbox, o AppContext.BaseDirectory é a pasta do Eteris.App.dll, a mesma do bootstrap (current\).
     // É a única regra de instalação: a pasta de teste da sincronização (Sync.SyncService.TestFolder), o ETERIS_TEST_REAUTH

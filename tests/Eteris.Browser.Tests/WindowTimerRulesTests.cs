@@ -21,6 +21,8 @@ public class WindowTimerRulesTests
         ["_sleepTimer"] = "Closed += (_, _) => _sleepTimer.Stop();",
         // O relógio da vigia pára no Closed, com o lote a meio cancelado e o motor largado (MainWindow.Watch.cs).
         ["_watchTimer"] = "_watchTimer.Stop();",
+        // A inatividade de uma janela privada (MainWindow.PrivateLock.cs) pára no Closed, com o contador das privadas.
+        ["_privateIdleTimer"] = "_privateIdleTimer?.Stop();",
     };
 
     // De disparo único, ou que param sozinhos quando o trabalho acaba.

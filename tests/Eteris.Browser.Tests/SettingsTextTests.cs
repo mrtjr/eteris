@@ -47,6 +47,31 @@ public class SettingsTextTests
             Assert.DoesNotContain(old, text);
     }
 
+    // A tranca das janelas privadas em Privacidade e segurança, logo a seguir a «Esconder o Éteris do Windows Recall e de
+    // capturas»: o interruptor e o tempo (escondido com o interruptor desligado), com o texto honesto de PrivateLockText.
+    [Fact]
+    public void ThePrivateLock_IsInPrivacy()
+    {
+        var settings = Page("settings.html");
+        var capture = settings.IndexOf("data-key=\"hideFromCapture\"", StringComparison.Ordinal);
+        var lockAt = settings.IndexOf("data-key=\"privateLock\"", StringComparison.Ordinal);
+        var minutes = settings.IndexOf("<div class=\"seg\" data-key=\"privateLockMinutes\">", StringComparison.Ordinal);
+        Assert.True(capture > 0 && lockAt > capture && minutes > lockAt, "a tranca vem a seguir a hideFromCapture");
+        Assert.True(lockAt < settings.IndexOf("Apagar dados de navegação", StringComparison.Ordinal));
+        foreach (var value in new[] { "5", "15", "60", "0" })
+            Assert.Contains($"<button data-value=\"{value}\">", settings[minutes..settings.IndexOf("</div>", minutes, StringComparison.Ordinal)]);
+        Assert.Contains("id=\"privateLockMinutesItem\"", settings);
+        Assert.Contains("<b>" + Eteris.Browser.Tabs.PrivateLockText.SettingsTitle + "</b><span>" + Eteris.Browser.Tabs.PrivateLockText.SettingsDetail + "</span>", settings);
+        Assert.Contains("<b>" + Eteris.Browser.Tabs.PrivateLockText.MinutesTitle + "</b><span>" + Eteris.Browser.Tabs.PrivateLockText.MinutesDetail + "</span>", settings);
+        Assert.Contains("não uma cifra", settings);
+        // O tempo só se vê com o interruptor ligado (no carregamento e ao mudá-lo) e lê o valor atual como os outros.
+        Assert.Contains("privateLockMinutes: String(data.privateLockMinutes)", settings);
+        Assert.Matches(@"getElementById\('privateLockMinutesItem'\)\.hidden = !", settings);
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "SettingsPage.cs"));
+        Assert.Contains("privateLock = settings.PrivateLock", page);
+        Assert.Contains("privateLockMinutes = settings.PrivateLockMinutes", page);
+    }
+
     private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);

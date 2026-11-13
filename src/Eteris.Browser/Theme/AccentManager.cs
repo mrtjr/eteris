@@ -18,6 +18,9 @@ public static class AccentManager
     public static Color Current { get; private set; } = Accent.IrisStops[0];
     public static Color[] Stops { get; private set; } = (Color[])Accent.IrisStops.Clone();
 
+    // O ponto «fora de casa» das abas fixadas (Accent.HomeDot), lido pelo HomeDotBrush.
+    public static Color HomeDot { get; private set; } = Accent.HomeDot(Accent.IrisStops[0], light: false);
+
     public static event Action? Changed;
 
     // Amostra da paisagem da nova aba (ligada pela janela, que tem as imagens); null enquanto não houver.
@@ -27,15 +30,19 @@ public static class AccentManager
     {
         var baseColor = Accent.Resolve(choice, () => WallpaperSampler?.Invoke(), ReadWindowsAccent);
         var stops = Accent.Gradient(baseColor, light);
-        if (stops.SequenceEqual(Stops) && baseColor == Current) return;
+        // O ponto das abas fixadas depende também do tema, mesmo quando os degraus não mudam com ele.
+        var dot = Accent.HomeDot(stops[0], light);
+        if (stops.SequenceEqual(Stops) && baseColor == Current && dot == HomeDot) return;
         Current = baseColor;
         Stops = stops;
+        HomeDot = dot;
         var resources = Application.Current?.Resources;
         if (resources is not null)
         {
             resources["IrisBrush"] = Recolored(resources["IrisBrush"] as LinearGradientBrush, stops);
             resources["AccentInkBrush"] = Frozen(new SolidColorBrush(Accent.TextOn(baseColor)));
             resources["AccentSelectionBrush"] = Frozen(new SolidColorBrush(baseColor));
+            resources["HomeDotBrush"] = Frozen(new SolidColorBrush(dot));
         }
         Changed?.Invoke();
     }

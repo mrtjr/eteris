@@ -80,6 +80,7 @@ public partial class MainWindow
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         yield return new("\uE71D", "Radar de abas", "Encontre, compare ou reabra abas desta janela", "Ctrl+Shift+A", ToggleRadar);
+        foreach (var command in HomeCommands(tab)) yield return command;
         yield return new("\uE708", "Pausa", "Silencia tudo e esconde as páginas — Esc para voltar", "Ctrl+.", TogglePause);
         // O mesmo que o botão do aviso do regresso da Pausa (o aviso só responde ao rato e ao leitor de ecrã).
         if (_replay.Count > 0)
@@ -124,6 +125,9 @@ public partial class MainWindow
         if (PrivateWindows().Count > 0)
             yield return new("", "Terminar sessão privada", "Fecha todas as janelas privadas e apaga o que ficou nelas (pede confirmação)",
                 null, OfferEndPrivateSession);
+        // A tranca das janelas privadas (MainWindow.PrivateLock.cs), de qualquer janela.
+        if (PrivateWindows().Count > 0)
+            yield return new("", "Trancar janelas privadas", "Esconde as abas privadas até desbloquear com o Windows Hello (não é uma cifra)", "Ctrl+Alt+L", LockPrivateWindowsNow);
         if (SelectedTabs is { Count: >= 2 } selected)
         {
             var count = TabSelection.Count(selected.Count);
@@ -323,9 +327,10 @@ public partial class MainWindow
                 }))
             .ToList();
 
-        // …e as das outras janelas (só do mesmo tipo: privadas com privadas).
+        // …e as das outras janelas (só do mesmo tipo: privadas com privadas; nunca as de uma janela privada trancada, que uma
+        // janela privada aberta depois não pode destapar: MainWindow.PrivateLock.cs).
         var otherWindows = query.Length == 0 ? [] : Application.Current.Windows.OfType<MainWindow>()
-            .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate)
+            .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate && w._privateLock is null)
             .SelectMany(w => w.Tabs.Tabs.Select(t => new PaletteCommand("", t.DisplayTitle,
                 "Mudar para esta aba · outra janela · " + (WebHost(t.Address) ?? "Éteris"), null, () => FocusTabIn(w, t))))
             .ToList();

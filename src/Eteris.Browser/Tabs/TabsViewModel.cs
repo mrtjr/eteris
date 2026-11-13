@@ -90,6 +90,9 @@ public partial class TabsViewModel : ObservableObject
                 if (meta.Seen is { } seen && seen is >= 0 and <= MaxUnixMilliseconds)
                     tab.LastActiveUtc = DateTimeOffset.FromUnixTimeMilliseconds(seen).UtcDateTime;
             }
+            // A casa das fixadas (também sem metas, numa sessão antiga): a gravada, senão o endereço restaurado. Fora do
+            // bloco dos metas, porque fixar já pôs o endereço (talvez fora de casa) como casa.
+            if (tab.IsPinned) tab.Home = PinnedHome.Restore(metas is not null && i < metas.Count ? metas[i]?.Home : null, tab.Address);
             if (!tab.IsPinned && groupIds is not null && i < groupIds.Count && groupIds[i] >= 0 && groupIds[i] < restoredGroups.Count)
                 tab.Group = restoredGroups[groupIds[i]];
             tabs.Add(tab);
@@ -177,6 +180,7 @@ public partial class TabsViewModel : ObservableObject
         var tab = new BrowserTab(snapshot.Address) { Title = snapshot.Title, IsPinned = snapshot.Pinned, IsSleeping = !activate };
         tab.SetIdentity(snapshot.Meta.Name, snapshot.Meta.Emoji, snapshot.Meta.Color, snapshot.Meta.Note);
         tab.IsLocked = snapshot.Meta.Locked;
+        if (tab.IsPinned) tab.Home = PinnedHome.Restore(snapshot.Meta.Home, tab.Address);
         var placeholder = Tabs.Count == 1 && Browser.NewTabPage.IsNewTab(Tabs[0].Address) ? Tabs[0] : null;
         var index = Math.Clamp(snapshot.Index, 0, Tabs.Count);
         Tabs.Insert(index, tab);
@@ -327,12 +331,12 @@ public partial class TabsViewModel : ObservableObject
         return (ids, groups.Select(g => new Data.SessionGroup(g.Name, g.ColorIndex, g.IsCollapsed)).ToList());
     }
 
-    // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa.
+    // Para gravar a sessão: nome próprio, emoji e cor de cada aba, pela ordem da faixa (e a casa, só nas fixadas).
     public List<Data.SessionTabMeta> MetaSnapshot() => MetaSnapshotOf(Tabs, Active);
 
     public static List<Data.SessionTabMeta> MetaSnapshotOf(IReadOnlyList<BrowserTab> tabs, BrowserTab? active)
         => tabs.Select(t => new Data.SessionTabMeta(t.CustomTitle, t.Emoji, t.ColorIndex, t.Note, t.IsLocked,
-            UnixMs(ReferenceEquals(t, active) ? DateTime.UtcNow : t.LastActiveUtc))).ToList();
+            UnixMs(ReferenceEquals(t, active) ? DateTime.UtcNow : t.LastActiveUtc), t.IsPinned ? t.Home : null)).ToList();
 
     private static long UnixMs(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
 
@@ -396,6 +400,16 @@ public partial class TabsViewModel : ObservableObject
         var target = PinnedCount;
         if (from != target) Tabs.Move(from, target);
         tab.IsPinned = pin;
+    }
+
+    // «Usar este endereço como casa» (e o «Anular» dele): só numa fixada desta janela (também guardada noutro Espaço), e
+    // sempre sem «utilizador:senha@». Uma aba que saiu da faixa continua fixada, mas o «Anular» já não muda nada nela: a
+    // que voltou («Feito» anulado, reaberta) é outra.
+    public bool SetHome(BrowserTab tab, string? address)
+    {
+        if (!tab.IsPinned || WorkspaceOf(tab) is null) return false;
+        tab.Home = PinnedHome.Clean(address);
+        return true;
     }
 
     public void CloseOthers(BrowserTab keep)

@@ -10,6 +10,9 @@ public partial class BrowserTab : ObservableObject
     [NotifyPropertyChangedFor(nameof(Host))]
     [NotifyPropertyChangedFor(nameof(MediaSubline))]
     [NotifyPropertyChangedFor(nameof(MediaHeadline))]
+    [NotifyPropertyChangedFor(nameof(IsAwayFromHome))]
+    [NotifyPropertyChangedFor(nameof(HomeHint))]
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     [ObservableProperty]
     private string _address;
 
@@ -38,6 +41,67 @@ public partial class BrowserTab : ObservableObject
     private string? _note;
 
     public bool HasNote => Note is not null;
+
+    // ---------- Casa das abas fixadas (Tabs/PinnedHome.cs) ----------
+    // O endereço em que a aba foi fixada: fora dele, o ícone mostra um ponto e «Voltar a casa» (clique no ícone da aba
+    // aberta, Alt+Home, menu da aba, paleta) leva-a lá. Só uma fixada tem casa; desafixar esquece-a. Fica na sessão deste
+    // computador (SessionTabMeta.Home), nunca na sincronização. Só é escrita ao fixar, pela adoção da 1.ª página web,
+    // pela chegada a casa (http→https, www.) e por TabsViewModel.SetHome; nenhum caminho de rede a escreve.
+    [NotifyPropertyChangedFor(nameof(IsAwayFromHome))]
+    [NotifyPropertyChangedFor(nameof(HomeLabel))]
+    [NotifyPropertyChangedFor(nameof(HomeHint))]
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
+    [ObservableProperty]
+    private string? _home;
+
+    // Uma âncora (#…) na mesma página não conta como sair, nem a página de erro do Éteris (o endereço fica no que falhou).
+    public bool IsAwayFromHome => IsPinned && Home is not null && !PinnedHome.Same(Home, Address);
+
+    public string? HomeLabel => Home is { } home ? PinnedHome.Label(home) : null;
+
+    public string? HomeHint => HomeLabel is { } label ? $"Voltar a {label}" : null;
+
+    // «Voltar a casa» pedido e a página ainda não chegou: só em memória. A 1.ª página diferente da casa que chegar
+    // desarma-a e, se for a casa em https ou com/sem www., passa a ser a casa (PinnedHome.IsRedirectOfHome). A chegada à
+    // própria casa não a desarma (a troca de motor escreve o endereço pedido antes de o motor o confirmar); o fim da carga
+    // pedida (ou um Esc) desarma.
+    public bool HomeLandingPending { get; private set; }
+
+    public void BeginGoingHome() => HomeLandingPending = Home is not null;
+
+    // Uma aba que não está fixada nunca tem casa.
+    partial void OnHomeChanged(string? value)
+    {
+        if (value is not null && !IsPinned) Home = null;
+    }
+
+    partial void OnIsPinnedChanged(bool value)
+    {
+        // A casa é o endereço confirmado pelo motor (Address), nunca o pedido (PendingAddress). Desafixar esquece-a.
+        if (value) Home ??= PinnedHome.Clean(Address);
+        else
+        {
+            Home = null;
+            HomeLandingPending = false;
+        }
+    }
+
+    // O fim da carga da página anterior, enquanto o pedido da casa ainda não começou (LoadUrl espera pelos scripts da
+    // página), não conta.
+    partial void OnIsLoadingChanged(bool value)
+    {
+        if (!value && (PendingAddress is null || PendingLoadStarted)) HomeLandingPending = false;
+    }
+
+    private void FollowHome(string address)
+    {
+        if (HomeLandingPending && Home is { } home && !PinnedHome.Same(home, address))
+        {
+            HomeLandingPending = false;
+            if (PinnedHome.IsRedirectOfHome(home, address)) Home = PinnedHome.Clean(address);
+        }
+        Home = PinnedHome.Adopt(IsPinned, Home, address);
+    }
 
     // Faz parte da multi-seleção (Ctrl/Shift+clique) — Tabs/TabSelection.cs.
     [ObservableProperty]
@@ -156,6 +220,8 @@ public partial class BrowserTab : ObservableObject
     private bool _isAudible;
 
     [NotifyPropertyChangedFor(nameof(StatusLine))]
+    [NotifyPropertyChangedFor(nameof(IsAwayFromHome))]
+    [NotifyPropertyChangedFor(nameof(HomeHint))]
     [ObservableProperty]
     private bool _isPinned;
 
@@ -312,6 +378,8 @@ public partial class BrowserTab : ObservableObject
         {
             var parts = new List<string>();
             if (IsPinned) parts.Add("Fixada");
+            // O leitor de ecrã (HelpText das listas de abas) e o cartão dizem-no sem depender da cor do ponto.
+            if (IsAwayFromHome) parts.Add($"Fora de casa (Alt+Home volta a {HomeLabel})");
             if (IsLocked) parts.Add("Trancada");
             if (IsSleeping) parts.Add("A dormir (memória libertada)");
             if (IsMuted) parts.Add("Som silenciado");
@@ -400,6 +468,7 @@ public partial class BrowserTab : ObservableObject
     partial void OnAddressChanged(string? oldValue, string newValue)
     {
         ThumbnailVersion++;
+        FollowHome(newValue);
         // O nome próprio era desta página/site: ao mudar de site a aba volta a chamar-se pelo título da página.
         if (!TabIdentity.KeepsIdentity(oldValue ?? string.Empty, newValue)) SetIdentity(null, null, null);
         // Só uma página de outro site apaga a miniatura: numa navegação dentro do mesmo site (pushState, #âncora)

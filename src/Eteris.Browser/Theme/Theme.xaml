@@ -17,6 +17,8 @@
     <!-- Tinta do texto por cima da cor do Éteris e cor lisa da seleção: o AccentManager substitui-as com a cor -->
     <SolidColorBrush x:Key="AccentInkBrush" Color="#0B0D13" />
     <SolidColorBrush x:Key="AccentSelectionBrush" Color="#8B5CF6" />
+    <!-- O ponto «fora de casa» das abas fixadas (Accent.HomeDot): o AccentManager substitui-o com a cor e o tema -->
+    <SolidColorBrush x:Key="HomeDotBrush" Color="#A783F8" />
 
     <Style x:Key="IconButton" TargetType="Button">
         <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />

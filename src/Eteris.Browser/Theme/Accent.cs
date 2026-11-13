@@ -87,6 +87,30 @@ public static class Accent
         return result;
     }
 
+    // O ponto «fora de casa» das abas fixadas (7 px, no canto do ícone): o 1.º degrau da faixa, clareado no escuro ou
+    // escurecido no claro (o mesmo matiz) até ter 3:1 contra todos os fundos de uma aba do tema — a moldura, a aba
+    // selecionada e a superfície da aba ativa (no escuro, até à cor de um site com SiteTint.MaxChromeLuminance; no claro,
+    // #F6F7FB). Os degraus da faixa só garantem a moldura.
+    public static Color HomeDot(Color stop, bool light)
+    {
+        Color[] backgrounds = light
+            ? [LightFrame, Color.FromRgb(0xE1, 0xE5, 0xF2), Color.FromRgb(0xF6, 0xF7, 0xFB)]
+            : [DarkFrame, Color.FromRgb(0x2A, 0x2F, 0x45), SiteTint.Base, BrightestDarkChrome];
+        var (h, s, l) = ToHsl(stop);
+        var step = light ? -0.02 : 0.02;
+        var result = stop;
+        for (var i = 0; i < 60 && backgrounds.Min(b => Contrast(result, b)) < MinContrast; i++)
+        {
+            l = Math.Clamp(l + step, 0, 1);
+            result = FromHsl(h, s, l);
+        }
+        return result;
+    }
+
+    // O cinzento mais claro que a barra pode ter no tema escuro (a cor de um site, limitada a SiteTint.MaxChromeLuminance).
+    private static readonly Color BrightestDarkChrome = Enumerable.Range(0, 256).Select(v => Color.FromRgb((byte)v, (byte)v, (byte)v))
+        .Last(c => SiteTint.Luminance(c) <= SiteTint.MaxChromeLuminance);
+
     // Texto por cima de uma pílula com a cor de destaque: grafite ou branco, o que contrastar mais.
     public static Color TextOn(Color accent)
         => Contrast(accent, Color.FromRgb(0x0B, 0x0D, 0x13)) >= Contrast(accent, Colors.White)

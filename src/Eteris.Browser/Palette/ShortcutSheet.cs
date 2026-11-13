@@ -18,6 +18,7 @@ public static class ShortcutSheet
             new("Ctrl+Tab", "Aba seguinte"),
             new("Ctrl+Shift+Tab", "Aba anterior"),
             new("Ctrl+1 … 9", "Ir para a aba"),
+            new("Alt+Home", "Voltar a casa (aba fixada)"),
             new("Clique do meio", "Fechar aba"),
             new("Ctrl+clique · Shift+clique", "Selecionar várias abas (ações em bloco no menu da aba)"),
             new("Arrastar aba à margem", "Ecrã dividido (direita: lado a lado · fundo: empilhado)"),
@@ -62,6 +63,7 @@ public static class ShortcutSheet
         new("Janelas e página", [
             new("Ctrl+N", "Nova janela"),
             new("Ctrl+Shift+N", "Nova janela privada"),
+            new("Ctrl+Alt+L", Tabs.PrivateLockText.ShortcutAction),
             new("Ctrl+P", "Imprimir"),
             new("Ctrl+U", "Ver código-fonte"),
             new("F12", "Ferramentas de programador"),

@@ -96,6 +96,7 @@ public partial class MainWindow : Window
         WatchUnseen();
         WatchMiniBar();
         WatchPause();
+        WatchPrivateLock();
         WatchOmniboxMenu();
         SetUpSideFilter();
         WatchWorkspaces();
@@ -166,7 +167,7 @@ public partial class MainWindow : Window
 
     // Na Pausa nenhuma página está à vista (MainWindow.Pause.cs): o pedido espera pelo regresso.
     private Task<string?> AskClientCertificate(BrowserTab tab, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
-        => AskClientCertificate(tab, () => _pause is null && Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab), () => ClientCertificateDialog.FromTab(tab.Title),
+        => AskClientCertificate(tab, () => _pause is null && Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab) && _privateLock is null, () => ClientCertificateDialog.FromTab(tab.Title),
             host, port, rows);
 
     private Task<string?> AskClientCertificate(object page, Func<bool> isOnScreen, Func<string?> from, string host, int port,
@@ -197,6 +198,15 @@ public partial class MainWindow : Window
                 ShowNextClientCertificate();
             }
         });
+    }
+
+    // A janela privada trancou com o diálogo aberto (MainWindow.PrivateLock.cs): uma janela própria, sempre por cima do
+    // cartão, com o site, o título da aba e o titular, e que enviava o certificado sem o Windows Hello. Fecha sem resposta e
+    // o pedido volta para a fila (Postpone): reaparece ao destrancar (pelo ShowNextClientCertificate).
+    private void PostponeClientCertificate()
+    {
+        if (!_clientCertificates.Postpone()) return;
+        foreach (var dialog in OwnedWindows.OfType<ClientCertificateDialog>().ToList()) dialog.Close();
     }
 
     private void CreateBrowser(BrowserTab tab)
@@ -235,6 +245,8 @@ public partial class MainWindow : Window
                 fullscreen => Dispatcher.InvokeAsync(() => OnPageFullscreen(tab, fullscreen))),
             DownloadHandler = DownloadHandler,
             FindHandler = NewFindHandler(),
+            // Numa janela privada trancada, os diálogos da página não aparecem (Browser/PrivateLockDialogHandler.cs).
+            JsDialogHandler = IsPrivate ? new PrivateLockDialogHandler(() => _lockedForPage) : null,
             RequestContext = PrivateContext,
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(
@@ -313,10 +325,14 @@ public partial class MainWindow : Window
             }
             // «Esquecer ao fechar»: ir para outro site também é sair do anterior.
             if (hostChanged) NoteSiteLeft(tab.Address, address);
-            tab.Address = address;
-            // O motor confirmou: o que foi pedido deixa de estar pendente.
+            // O motor confirmou: o que foi pedido deixa de estar pendente — antes de o endereço mudar, porque é a mudança do
+            // endereço que refresca a barra (com o pedido ainda pendente ficava com ⓘ em vez do cadeado).
+            var wasPending = tab.PendingAddress is not null;
             tab.PendingAddress = null;
             tab.PendingLoadStarted = false;
+            tab.Address = address;
+            // O mesmo endereço outra vez (recarregar o que já estava aberto) não muda Address nem refresca a barra.
+            if (wasPending && ReferenceEquals(tab, Tabs.Active)) SyncOmnibox();
             if (hostChanged || browser.ZoomLevel == 0) ApplySiteZoom(browser, address);
             // Site lembrado como «só H.264» (o Twitch, por exemplo): a aba passa para o motor de vídeo.
             // Nunca a partir da página de erro ou do aviso do «HTTPS primeiro»: o endereço que lá aparece é o que falhou
@@ -583,7 +599,8 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title) or nameof(BrowserTab.IsPinned)
             or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.CustomTitle)
-            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)) ScheduleSessionSave();
+            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)
+            or nameof(BrowserTab.Home)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
         // Uma aba quente que começa a tocar som arrefece já (Tabs/WarmTabs.cs).
         if (e.PropertyName is nameof(BrowserTab.IsAudible) or nameof(BrowserTab.Media) && _warmPages.Count > 0) ReviewWarmPages();
@@ -733,6 +750,12 @@ public partial class MainWindow : Window
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         e.Handled = true;
+        // A tranca das janelas privadas (MainWindow.PrivateLock.cs) vem antes de tudo, também da Pausa: só o cartão recebe teclas.
+        if (_privateLock is not null)
+        {
+            e.Handled = HandlePrivateLockKey(key, ctrl, shift, alt, e.IsRepeat);
+            return;
+        }
         AltKeyDown(key, ctrl, shift);
 
         // A Pausa (MainWindow.Pause.cs) vem antes de tudo: Esc e Ctrl+. voltam; Tab, Enter e Espaço seguem para o ecrã calmo.
@@ -790,7 +813,13 @@ public partial class MainWindow : Window
     {
         // A exceção: Ctrl+Alt+1…9 e Ctrl+Alt+←/→ mudam de Espaço — mas só com o Alt da esquerda físico (o AltGr é
         // Ctrl+Alt da direita para o Windows, e AltGr+2 tem de continuar a escrever «@»).
-        if (ctrl && alt) return WorkspaceShortcut.Resolve(key, shift, IsLeftAltDown()) is { } move ? () => RunWorkspaceShortcut(move) : null;
+        if (ctrl && alt)
+        {
+            // Trancar as janelas privadas (MainWindow.PrivateLock.cs): só com o Alt da esquerda (o AltGr+L escreve «ł») e
+            // só com uma janela privada aberta (lido de um contador, porque isto também corre no fio do CEF).
+            if (PrivateLockPolicy.IsLockKey(key, shift, IsLeftAltDown()) && s_privateWindowsOpen > 0) return LockPrivateWindowsNow;
+            return WorkspaceShortcut.Resolve(key, shift, IsLeftAltDown()) is { } move ? () => RunWorkspaceShortcut(move) : null;
+        }
         // Alt+F e Alt+E, como no Chrome e no Brave.
         if (alt && !ctrl && !shift && key is Key.F or Key.E) return () => ToggleBrowserMenu(byKeyboard: true);
         if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) return ToggleShortcuts;
@@ -833,6 +862,9 @@ public partial class MainWindow : Window
         if ((ctrl && key == Key.R) || key == Key.F5) return () => ReloadActive();
         if (alt && key == Key.Left) return GoBack;
         if (alt && key == Key.Right) return GoForward;
+        // A casa da aba fixada (MainWindow.PinnedHome.cs): o gesto de «página inicial» do Chrome, do Firefox e do Vivaldi.
+        // Passa a ser do Éteris também com o foco na página.
+        if (alt && !ctrl && !shift && key == Key.Home) return GoHomeActive;
         if (ctrl && key >= Key.D1 && key <= Key.D9) return () => Tabs.SelectByNumber(key - Key.D0);
         if (ctrl && key >= Key.NumPad1 && key <= Key.NumPad9) return () => Tabs.SelectByNumber(key - Key.NumPad0);
         return null;
@@ -854,6 +886,12 @@ public partial class MainWindow : Window
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
+        // Trancada (MainWindow.PrivateLock.cs): nenhuma tecla vai para a página escondida; o Ctrl+. continua a ser a Pausa.
+        if (_lockedForPage)
+        {
+            if (!repeat && IsPauseToggleKey(key, ctrl, shift, alt)) Dispatcher.InvokeAsync(TogglePause);
+            return true;
+        }
         // A Pausa (MainWindow.Pause.cs): a página está escondida e nenhuma tecla vai para ela; Esc e Ctrl+. voltam.
         if (_pausedForPage)
         {
@@ -909,6 +947,7 @@ public partial class MainWindow : Window
     private void TabItem_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not BrowserTab tab) return;
+        _homeClick = null;
         FocusFrame();
         if (e.ChangedButton == MouseButton.Middle)
         {
@@ -928,6 +967,9 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            // «Voltar a casa» pelo ícone (MainWindow.PinnedHome.cs): só numa aba que já era a ativa (o 1.º clique numa fixada
+            // de fundo só a ativa); decide-se ao largar, sem arrasto.
+            _homeClick = ReferenceEquals(Tabs.Active, tab) && tab.IsAwayFromHome && IsInsideIconHit(e.OriginalSource as DependencyObject, (FrameworkElement)sender) ? tab : null;
             Tabs.Active = tab;
         }
     }

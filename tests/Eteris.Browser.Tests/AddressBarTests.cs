@@ -53,6 +53,26 @@ public class AddressBarTests
         Assert.DoesNotContain("tab.Address = url;", load);
     }
 
+    // Prova ao vivo do ciclo 5: depois de um endereço escrito na barra (ou de «voltar a casa»), a barra ficava com ⓘ em vez
+    // do cadeado. O AddressChanged escrevia tab.Address (que refresca a barra) com o pedido ainda pendente
+    // (AddressBar.Icon → Unknown) e só depois o limpava, sem voltar a refrescar; o fim da carga já não o fazia, porque o
+    // PendingLoadStarted também tinha sido limpo.
+    [Fact]
+    public void EngineCommit_ClearsThePendingBeforeTheAddress_AndRefreshesTheBar()
+    {
+        var code = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "MainWindow.xaml.cs"));
+        var block = code[code.IndexOf("browser.AddressChanged += () =>", StringComparison.Ordinal)..];
+        block = block[..block.IndexOf("browser.ConsoleMessage +=", StringComparison.Ordinal)];
+        var pending = block.IndexOf("tab.PendingAddress = null;", StringComparison.Ordinal);
+        var started = block.IndexOf("tab.PendingLoadStarted = false;", StringComparison.Ordinal);
+        var address = block.IndexOf("tab.Address = address;", StringComparison.Ordinal);
+        Assert.True(pending >= 0 && started >= 0 && address >= 0);
+        Assert.True(pending < address, "o pendente tem de sair antes de o endereço refrescar a barra");
+        Assert.True(started < address);
+        // O mesmo endereço outra vez (recarregar o que já estava aberto) não muda Address: a barra refresca-se à mesma.
+        Assert.Matches(@"tab\.Address = address;\s*(//[^\n]*\s*)*if \(wasPending && ReferenceEquals\(tab, Tabs\.Active\)\) SyncOmnibox\(\);", block);
+    }
+
     [Fact]
     public void VideoEngine_ErrorPage_HasNoPadlock()
     {

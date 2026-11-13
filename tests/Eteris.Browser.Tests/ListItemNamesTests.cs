@@ -107,6 +107,9 @@ public class ListItemNamesTests
         { "MainWindow.xaml#TabList", "fresh-tab", "Nova aba", "" },
         { "MainWindow.xaml#TabList", "untitled-tab", "exemplo.pt", "" },
         { "MainWindow.xaml#SideTabList", "tab", "Exemplo de página", "Fixada · Som silenciado" },
+        // A aba fixada fora de casa diz o estado e o atalho sem depender da cor do ponto (Tabs/PinnedHome.cs).
+        { "MainWindow.xaml#TabList", "away-tab", "Exemplo de página", "Fixada · Fora de casa (Alt+Home volta a exemplo.pt/pagina)" },
+        { "MainWindow.xaml#SideTabList", "away-tab", "Exemplo de página", "Fixada · Fora de casa (Alt+Home volta a exemplo.pt/pagina)" },
         { "MainWindow.xaml#TabListMenuList", "radar", "Exemplo de página", "exemplo.pt" },
         { "MainWindow.xaml#SuggestionList", "suggestion", "gatos persas", "Pesquisar no DuckDuckGo" },
         { "MainWindow.xaml#SpaceStrip", "space", "Trabalho · 0 abas", null },
@@ -198,6 +201,7 @@ public class ListItemNamesTests
     {
         "palette" => new PaletteCommand("\uE710", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", () => { }),
         "tab" => Tab(t => { t.Title = "Exemplo de página"; t.IsPinned = true; t.IsMuted = true; }),
+        "away-tab" => Tab(t => { t.Title = "Exemplo de página"; t.IsPinned = true; t.Address = "https://www.exemplo.pt/outra"; }),
         "fresh-tab" => new BrowserTab("about:blank"),
         "untitled-tab" => Tab(t => t.Title = ""),
         "radar" => new RadarRow(Tab(t => t.Title = "Exemplo de página"), null, "Exemplo de página", "https://exemplo.pt/",

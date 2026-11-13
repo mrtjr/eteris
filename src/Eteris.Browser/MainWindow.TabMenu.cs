@@ -53,6 +53,7 @@ public partial class MainWindow
             .Item("", "Feito", () => MarkTabDone(tab))
             .Item("", "Adiar até…", () => OpenSnoozeMenu(tab, (UIElement)sender), enabled: !IsPrivate && !Browser.NewTabPage.IsNewTab(tab.Address))
             .Item("", tab.IsPinned ? "Desafixar aba" : "Fixar aba", () => Tabs.TogglePin(tab))
+            .With(menu => AddHomeItems(menu, tab))
             .Item("", "Duplicar", () => Tabs.NewTab(tab.Address))
             .Item(tab.IsMuted ? "" : "", tab.IsMuted ? "Reativar o som" : "Silenciar aba", () => ToggleMute(tab))
             .Item("", "Recarregar", () =>

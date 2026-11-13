@@ -154,6 +154,9 @@ $dotnetDll = Join-Path $publishDir $(if ($NoSandbox) { "Eteris.Browser.dll" } el
 $latin1 = [Text.Encoding]::GetEncoding(28591)
 $hookName = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('ETERIS_TEST_REAUTH'))
 if ($latin1.GetString([IO.File]::ReadAllBytes($dotnetDll)).Contains($hookName)) { throw "O binário publicado traz a via de teste da reautenticação (ETERIS_TEST_REAUTH): o dotnet publish tem de levar -p:EterisTestHooks=false" }
+# O mesmo para a resposta de teste da tranca das janelas privadas (ETERIS_TEST_TRANCA_RESPOSTA, Vault/PrivateUnlock.cs).
+$lockHookName = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('ETERIS_TEST_TRANCA_RESPOSTA'))
+if ($latin1.GetString([IO.File]::ReadAllBytes($dotnetDll)).Contains($lockHookName)) { throw "O binário publicado traz a via de teste da tranca das janelas privadas (ETERIS_TEST_TRANCA_RESPOSTA): o dotnet publish tem de levar -p:EterisTestHooks=false" }
 
 # Nenhum binário nosso publicado leva o caminho do perfil de quem compila (o nome do utilizador do Windows), nos dois
 # modos: Eteris.Browser.dll (o .NET sem sandbox, a DLL cliente nativa com ele), Eteris.App.dll, eteris_shields.dll, o

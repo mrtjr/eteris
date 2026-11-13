@@ -56,7 +56,8 @@ public partial class MainWindow
             ResizeMode = ResizeMode.NoResize,
             ShowInTaskbar = false,
             ShowActivated = false,
-            Title = Title,
+            // Um título fixo: o da página do momento em que nascia ficava legível por GetWindowText de qualquer programa.
+            Title = "Éteris",
             FontFamily = FontFamily,
             UseLayoutRounding = UseLayoutRounding,
             DataContext = DataContext,
@@ -225,9 +226,11 @@ public partial class MainWindow
     private bool _overlayHidePending;
 
     // Na Pausa a camada fica escondida (barra de procura, permissões, avisos, janela flutuante): nada por cima do ecrã calmo.
+    // Com a janela privada trancada também (MainWindow.PrivateLock.cs): nada por cima do cartão.
     private bool OverlayNeeded()
         => _pause is null && _overlayRoot is not null && WindowState != WindowState.Minimized
-           && _overlayRoot.Children.OfType<UIElement>().Any(c => c.Visibility == Visibility.Visible && c.Opacity > 0.01);
+           && _overlayRoot.Children.OfType<UIElement>().Any(c => c.Visibility == Visibility.Visible && c.Opacity > 0.01)
+           && _privateLock is null;
 
     private void SyncOverlayBounds()
     {
@@ -255,6 +258,12 @@ public partial class MainWindow
         if (_pause is not null)
         {
             FocusPauseView();
+            return;
+        }
+        // Trancada (MainWindow.PrivateLock.cs): o teclado fica no cartão.
+        if (_privateLock is not null)
+        {
+            FocusPrivateLockView();
             return;
         }
         if (_overlay is { IsActive: true }) Activate();

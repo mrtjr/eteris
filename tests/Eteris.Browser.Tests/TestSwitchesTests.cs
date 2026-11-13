@@ -32,7 +32,8 @@ public class TestSwitchesTests
             .Distinct().Order(StringComparer.Ordinal).ToList();
         Assert.Equal(["ETERIS_DEMO_UPDATE", "ETERIS_TEST_AJUSTES", "ETERIS_TEST_CLIP", "ETERIS_TEST_CONTADORES", "ETERIS_TEST_CRASH_BEFORE_PAINT",
             "ETERIS_TEST_DEVTOOLS_PORT", "ETERIS_TEST_ENERGIA", "ETERIS_TEST_HOST_RULES", "ETERIS_TEST_MUTE", "ETERIS_TEST_PRESSAO", "ETERIS_TEST_PURO",
-            "ETERIS_TEST_REAUTH", "ETERIS_TEST_SEM_MOVIMENTO", "ETERIS_TEST_SHOP_DIR", "ETERIS_TEST_SYNC_FOLDER", "ETERIS_TEST_WATCH", "ETERIS_TEST_WATCH_SECONDS",
+            "ETERIS_TEST_REAUTH", "ETERIS_TEST_SEM_MOVIMENTO", "ETERIS_TEST_SHOP_DIR", "ETERIS_TEST_SYNC_FOLDER", "ETERIS_TEST_TRANCA_BLOQUEIO",
+            "ETERIS_TEST_TRANCA_PARADA", "ETERIS_TEST_TRANCA_RESPOSTA", "ETERIS_TEST_WATCH", "ETERIS_TEST_WATCH_SECONDS",
             "ETERIS_TRACE_GC_AT", "ETERIS_TRACE_STARTUP"], found);
         var switches = Source(Path.Combine("Infrastructure", "TestSwitches.cs"));
         Assert.Matches(@"DevToolsPort\s*=>\s*DevToolsPortFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_DEVTOOLS_PORT""\),\s*AppPaths\.IsCustomProfile\)", switches);
@@ -76,6 +77,48 @@ public class TestSwitchesTests
         Assert.Null(TestSwitches.ClipSeedFor("https://loja-eteris.invalid/p\t#preco", installed: true, customProfile: true));
         Assert.Null(TestSwitches.ClipSeedFor("https://loja-eteris.invalid/p\t#preco", installed: false, customProfile: false));
         Assert.Null(TestSwitches.ClipSeedFor("ftp://loja/p\t#preco", installed: false, customProfile: true));
+    }
+
+    // A tranca das janelas privadas (MainWindow.PrivateLock.cs): os três ganchos só valem num perfil de teste e numa cópia não
+    // instalada, e nenhum destranca — a resposta só sabe «cancelado» e «indisponível» (qualquer outro valor é ignorado e fica
+    // o Windows a sério); o bloqueio simulado só tranca; a inatividade em segundos só encurta o prazo.
+    [Fact]
+    public void PrivateLockSwitches_OnlyInATestProfileNeverInstalledAndNeverUnlock()
+    {
+        Assert.Equal(Eteris.Browser.Vault.PrivateUnlockTestMode.Cancel, TestSwitches.PrivateUnlockTestFor("cancelar", installed: false, customProfile: true));
+        Assert.Equal(Eteris.Browser.Vault.PrivateUnlockTestMode.Cancel, TestSwitches.PrivateUnlockTestFor(" Cancelar ", installed: false, customProfile: true));
+        Assert.Equal(Eteris.Browser.Vault.PrivateUnlockTestMode.Unavailable, TestSwitches.PrivateUnlockTestFor("indisponivel", installed: false, customProfile: true));
+        foreach (var value in new[] { "aceitar", "1", "sim", "", null })
+            Assert.Null(TestSwitches.PrivateUnlockTestFor(value, installed: false, customProfile: true));
+        Assert.Null(TestSwitches.PrivateUnlockTestFor("cancelar", installed: true, customProfile: true));
+        Assert.Null(TestSwitches.PrivateUnlockTestFor("cancelar", installed: false, customProfile: false));
+
+        Assert.Equal(20, TestSwitches.LockAfterSecondsFor("20", installed: false, customProfile: true));
+        Assert.Equal(600, TestSwitches.LockAfterSecondsFor("600", installed: false, customProfile: true));
+        foreach (var value in new[] { "0", "601", "x", "", null })
+            Assert.Null(TestSwitches.LockAfterSecondsFor(value, installed: false, customProfile: true));
+        Assert.Null(TestSwitches.LockAfterSecondsFor("20", installed: true, customProfile: true));
+        Assert.Null(TestSwitches.LockAfterSecondsFor("20", installed: false, customProfile: false));
+
+        Assert.Null(TestSwitches.IdleSecondsFor("4", installed: false, customProfile: true));
+        Assert.Equal(5, TestSwitches.IdleSecondsFor("5", installed: false, customProfile: true));
+        Assert.Equal(3600, TestSwitches.IdleSecondsFor("3600", installed: false, customProfile: true));
+        Assert.Null(TestSwitches.IdleSecondsFor("3601", installed: false, customProfile: true));
+        Assert.Null(TestSwitches.IdleSecondsFor("20", installed: true, customProfile: true));
+        Assert.Null(TestSwitches.IdleSecondsFor("20", installed: false, customProfile: false));
+
+        // Só numa compilação com ETERIS_TEST_HOOKS (a publicação não os leva), e a tranca nunca lê o ETERIS_TEST_REAUTH.
+        var switches = Source(Path.Combine("Infrastructure", "TestSwitches.cs"));
+        foreach (var name in new[] { "ETERIS_TEST_TRANCA_RESPOSTA", "ETERIS_TEST_TRANCA_BLOQUEIO", "ETERIS_TEST_TRANCA_PARADA" })
+        {
+            var at = switches.IndexOf("\"" + name + "\"", StringComparison.Ordinal);
+            Assert.True(at > 0, name);
+            Assert.True(switches.LastIndexOf("#if ETERIS_TEST_HOOKS", at, StringComparison.Ordinal) > switches.LastIndexOf("#endif", at, StringComparison.Ordinal), name);
+        }
+        var unlock = Source(Path.Combine("Vault", "PrivateUnlock.cs"));
+        Assert.True(unlock.IndexOf("#if ETERIS_TEST_HOOKS", StringComparison.Ordinal) is var hooks && hooks >= 0
+                    && hooks < unlock.IndexOf("class TestPrivateUnlockVerifier", StringComparison.Ordinal));
+        Assert.Contains("'ETERIS_TEST_TRANCA_RESPOSTA'", File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "build", "publish.ps1")));
     }
 
     [Fact]

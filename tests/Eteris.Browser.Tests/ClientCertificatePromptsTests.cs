@@ -205,6 +205,38 @@ public class ClientCertificatePromptsTests
         Assert.Null(prompts.Next());
     }
 
+    // A janela privada trancou com o diálogo aberto (MainWindow.PrivateLock.cs): o pedido volta para a frente da fila, sem
+    // resposta e sem contar como recusa (uma recusa ficava no motor até reiniciar), e o diálogo fecha. A resposta que o
+    // diálogo fechado ainda dá (null) não muda nada; o pedido volta a aparecer quando a página está outra vez à vista.
+    [Fact]
+    public void Postpone_PutsTheShownRequestBackFirst_WithoutAnsweringOrCountingARefusal()
+    {
+        var prompts = new ClientCertificatePrompts();
+        var page = new Page();
+        var shownTask = Ask(prompts, page, "a.banco.pt");
+        var other = Ask(prompts, page, "b.banco.pt");
+        var shown = prompts.Next()!;
+        Assert.True(prompts.Postpone());
+        Assert.Null(prompts.Showing);
+        prompts.Answered(shown, null);
+        Assert.False(shownTask.IsCompleted);
+        Assert.False(other.IsCompleted);
+        page.OnScreen = false;
+        Assert.Null(prompts.Next());
+        Assert.False(prompts.Postpone());
+        page.OnScreen = true;
+        var again = prompts.Next();
+        Assert.Same(shown, again);
+        // Sem recusa contada: três recusas depois ainda é preciso perguntar outra vez para chegar ao limite.
+        prompts.Answered(again!, null);
+        prompts.Answered(prompts.Next()!, null);
+        Assert.Null(Value(shownTask));
+        Assert.Null(Value(other));
+        var third = Ask(prompts, page, "c.banco.pt");
+        Assert.False(third.IsCompleted);
+        Assert.NotNull(prompts.Next());
+    }
+
     [Fact]
     public void Forget_RefusesWhatAClosedTabLeftInTheQueue()
     {
