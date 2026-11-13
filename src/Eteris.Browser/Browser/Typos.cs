@@ -41,7 +41,7 @@ public static class Typos
         return previous[b.Length];
     }
 
-    private static string Normal(string host)
+    public static string Normal(string host)
     {
         var name = host.Trim().TrimEnd('.').ToLowerInvariant();
         return name.StartsWith("www.", StringComparison.Ordinal) ? name[4..] : name;

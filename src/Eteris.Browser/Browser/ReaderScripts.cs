@@ -165,7 +165,7 @@ public static class ReaderScripts
             .wrap.light { --bg: #ffffff; --fg: #1f2328; --muted: #6b7280; --line: #e5e7eb; --link: #2563eb; --panel: #f3f4f6; --hl: rgba(37, 99, 235, .1); }
             .wrap.serif { --font: Charter, "Iowan Old Style", Georgia, Cambria, serif; }
             .wrap.sans  { --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
-            .bar { position: sticky; top: 0; display: flex; justify-content: center; gap: 6px; padding: 14px; z-index: 1;
+            .bar { position: sticky; top: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 14px; z-index: 1;
                    background: linear-gradient(var(--bg) 60%, transparent); font: 13px "Segoe UI", system-ui, sans-serif; }
             .bar button { all: unset; cursor: pointer; padding: 7px 12px; border-radius: 10px; color: var(--muted);
                           background: var(--panel); border: 1px solid var(--line); }

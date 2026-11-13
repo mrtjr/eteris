@@ -115,6 +115,26 @@ public class ErrorDiagnosisTests
         Assert.Equal("https://publico.pt/desporto?id=7", suggestion.GetProperty("url").GetString());
     }
 
+    // Revisão: a ligação vai para o site como foi visto (com «www.» se foi assim que se visitou ou se guardou), não para
+    // o domínio sem «www.», que em alguns sites (públicos, universidades) nem existe; o texto mostra-o sem «www.».
+    [Theory]
+    [InlineData("https://www.exmple.gov.pt/a?b=1", "www.example.gov.pt", "https://www.example.gov.pt/a?b=1")]
+    [InlineData("https://exmple.gov.pt/", "www.example.gov.pt", "https://www.example.gov.pt/")]
+    [InlineData("https://www.publico.ptt/", "publico.pt", "https://publico.pt/")]
+    public void NameNotResolved_TheSuggestionGoesToTheHostAsItWasSeen(string failed, string known, string expected)
+    {
+        var suggestion = Data(ErrorPage.Render(-105, failed, knownHosts: () => ["github.com", known])).GetProperty("suggestion");
+        Assert.Equal(known.StartsWith("www.", StringComparison.Ordinal) ? known[4..] : known, suggestion.GetProperty("host").GetString());
+        Assert.Equal(expected, suggestion.GetProperty("url").GetString());
+    }
+
+    [Fact]
+    public void KnownHosts_TakeTheHostOfTheVisitedAddress_NotTheGroupWithoutWww()
+    {
+        var code = File.ReadAllText(Path.Combine(Sync.GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Browser", "ErrorPage.cs"));
+        Assert.Contains("h.TopSites(200)).Select(s => Uri.TryCreate(s.Url, UriKind.Absolute, out var u) ? u.Host : s.Host)", code);
+    }
+
     [Fact]
     public void NameNotResolved_WithoutHistory_OrFarFromIt_HasNoSuggestion()
     {

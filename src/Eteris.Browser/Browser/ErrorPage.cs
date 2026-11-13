@@ -182,7 +182,11 @@ public static class ErrorPage
         var failed = diagnosis.Kind == ErrorKind.NameNotResolved && retry && Uri.TryCreate(failedUrl, UriKind.Absolute, out var parsed)
                      && parsed.Host.Length > 0 && parsed.HostNameType == UriHostNameType.Dns ? parsed : null;
         var name = failed is null ? null : failed.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? failed.Host[4..] : failed.Host;
-        var closest = name is null || knownHosts is null ? null : Typos.Closest(name, knownHosts());
+        var known = name is null || knownHosts is null ? [] : knownHosts();
+        var closest = name is null ? null : Typos.Closest(name, known);
+        // A ligação vai para o site como foi visto (com «www.» se foi assim que se visitou ou guardou): o domínio sem
+        // «www.» nem sempre existe. O texto mostra-o sem «www.».
+        var target = closest is null ? null : known.FirstOrDefault(h => Typos.Normal(h) == closest)?.Trim().TrimEnd('.') ?? closest;
         var data = new
         {
             title = diagnosis.Title,
@@ -198,7 +202,7 @@ public static class ErrorPage
             tips = diagnosis.Tips,
             details = ErrorDiagnosis.Details(code, failedUrl, SettingsPage.Version, DateTime.Now),
             search = name is null ? null : new { label = $"Pesquisar «{name}»", url = SearchUrl(name) },
-            suggestion = closest is null ? null : new { host = closest, url = new UriBuilder(failed!) { Host = closest }.Uri.AbsoluteUri },
+            suggestion = closest is null ? null : new { host = closest, url = new UriBuilder(failed!) { Host = target }.Uri.AbsoluteUri },
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
@@ -206,7 +210,7 @@ public static class ErrorPage
     // Os sites conhecidos para o «Queria dizer X?»: os do histórico, pelas visitas, e os dos favoritos. Só o perfil
     // normal (a fábrica não o chama na janela privada).
     public static IReadOnlyList<string> KnownHosts()
-        => Data.AppData.TryRead(h => h.TopSites(200)).Select(s => s.Host)
+        => Data.AppData.TryRead(h => h.TopSites(200)).Select(s => Uri.TryCreate(s.Url, UriKind.Absolute, out var u) ? u.Host : s.Host)
             .Concat(Data.AppData.Bookmarks(b => b.All(500)).Select(b => Uri.TryCreate(b.Url, UriKind.Absolute, out var u) ? u.Host : string.Empty))
             .Where(h => h.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)

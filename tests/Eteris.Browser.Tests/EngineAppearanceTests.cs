@@ -102,6 +102,9 @@ public class EngineAppearanceTests
         Assert.Contains("<b>Barras de deslocamento sobrepostas (finas, por cima do conteúdo)</b>", item);
         Assert.Contains("muda o que os sites conseguem medir", item);
         Assert.Contains("Aplica-se da próxima vez que abrir o Éteris.", item);
+        // Revisão: com «kb» o interruptor fica no Tab e o aria-label chega ao leitor de ecrã (.switch input é display:none;
+        // .switch.kb input fica focável, invisível, com o anel no desenho do interruptor).
+        Assert.Contains("<label class=\"switch kb\"><input type=\"checkbox\" data-key=\"overlayScrollbars\" aria-label=\"Barras de deslocamento sobrepostas\">", html);
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")

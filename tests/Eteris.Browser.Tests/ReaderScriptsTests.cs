@@ -92,6 +92,9 @@ public class ReaderScriptsTests
     {
         var css = ReaderCss();
         Assert.Matches(@"\.wrap \{[^}]*overflow-y: auto; overflow-x: hidden;", css);
+        // Revisão: o .wrap corta o transbordo, por isso a barra (A−, A+, temas, serifa, Ouvir, velocidade, Sair) parte em
+        // duas linhas numa janela estreita em vez de ficar com «Sair» fora de alcance.
+        Assert.Matches(@"\.bar \{[^}]*display: flex; flex-wrap: wrap;", css);
         Assert.Contains(".content { overflow-wrap: anywhere; }", css);
         Assert.Contains(".content table { display: block; max-width: 100%; overflow-x: auto; }", css);
         Assert.Contains(".content figure, .content video, .content iframe, .content svg, .content canvas { max-width: 100%; height: auto; }", css);
