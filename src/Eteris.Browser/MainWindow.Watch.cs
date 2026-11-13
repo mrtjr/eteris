@@ -263,7 +263,13 @@ public partial class MainWindow
             localNetworkAllowed: IsLocalNetworkAllowed, chooseCertificate: RefuseClientCertificate);
         var clip = new ClipWindow(url, selector, size, context: null, handler, OpenFromClip);
         _clips.Add(clip);
-        clip.Closed += (_, _) => _clips.Remove(clip);
+        // «Esquecer ao fechar»: o recorte conta como página aberta do site (MainWindow.Forget.cs); ao fechar, o site volta a
+        // ser verificado como quando se fecha uma aba (a janela a fechar trata dos seus no Closing).
+        clip.Closed += (_, _) =>
+        {
+            _clips.Remove(clip);
+            if (!_forgetOnCloseDone) ScheduleForgetFor([clip.Address]);
+        };
         if (!_clipsWired)
         {
             _clipsWired = true;

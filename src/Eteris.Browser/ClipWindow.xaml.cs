@@ -42,6 +42,9 @@ public partial class ClipWindow : Window
 
     public int Slot { get; }
 
+    // O endereço recortado («Esquecer ao fechar» conta-o como página aberta do site).
+    public string Address => _url;
+
     // «size» é o tamanho da página dentro da janela (ClipLayout.Size); a janela junta-lhe a barra e a borda.
     public ClipWindow(string url, string selector, Size size, IRequestContext? context, IRequestHandler requestHandler, Action<string> openInTab)
     {
@@ -114,8 +117,9 @@ public partial class ClipWindow : Window
         var address = _browser.Address;
         var result = await PageScript.EvaluateAsync(_browser, "return " + ClipScripts.Isolate(_selector) + ";", IsolateLimit, asyncBody: true);
         if (_closed || _browser.IsDisposed || _browser.Address != address) return;
-        // Sem o pedaço (a página mudou, ou ainda não o pôs ao fim de ~10 s), a janela mostra a página como está — e di-lo.
-        Caption.Text = result.Success && result.Result is string ? _site : _site + " · pedaço não encontrado: a mostrar a página";
+        // Sem o pedaço (a página mudou, ainda não o pôs ao fim de ~10 s, ou esconde-o nesta largura), a janela mostra a
+        // página como está — e di-lo.
+        Caption.Text = result.Success && result.Result is string ? _site : _site + " · o pedaço não aparece: a mostrar a página";
     }
 
     // Volta sempre ao endereço recortado (um link seguido dentro do recorte não fica).

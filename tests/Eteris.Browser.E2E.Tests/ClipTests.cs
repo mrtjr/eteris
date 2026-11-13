@@ -31,8 +31,10 @@ public class ClipTests
             })()
             """, TimeSpan.FromSeconds(30), "document.querySelector('#preco')?.outerHTML");
 
-        // Vivo com a janela principal minimizada: à vista e com fotogramas a correr.
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        // Vivo com a janela principal minimizada: à vista e com fotogramas a correr, depois de pelo menos uma ronda da
+        // pressão de memória (MemoryPressure.Interval, 15 s) com o sinal simulado ligado.
+        await Task.Delay(TimeSpan.FromSeconds(20));
+        Assert.True(await clip.EvaluateAsync<bool>("document.querySelector('#preco').hasAttribute('data-eteris-recorte')"));
         Assert.Equal("visible", await clip.EvaluateAsync<string>("document.visibilityState"));
         var frames = await clip.EvaluateAsync<int>("""
             new Promise(done => { let n = 0; const tick = () => { n++; }; const id = setInterval(() => requestAnimationFrame(tick), 16);

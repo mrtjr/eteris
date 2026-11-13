@@ -152,7 +152,8 @@ public partial class MainWindow
     private static IEnumerable<string> AddressesOf(MainWindow window)
         => window.Tabs.Tabs.Select(t => t.Address)
             .Concat(window.Tabs.Workspaces.Where(s => !s.IsCurrent).SelectMany(s => s.StoredTabs.Select(t => t.Address)))
-            .Concat(window._webPanels.Select(p => p.Url));
+            .Concat(window._webPanels.Select(p => p.Url))
+            .Concat(window._clips.Select(c => c.Address));
 
     private IRequestContext CookieContext => PrivateContext ?? Cef.GetGlobalRequestContext();
 

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using Eteris.Browser.Watching;
@@ -85,6 +86,69 @@ public class ClipLayoutTests
     {
         const string selector = "a[title=\"x'y\"] </script>";
         Assert.Contains(JsonSerializer.Serialize(selector), ClipScripts.Isolate(selector));
+    }
+
+    // O script na página (Node, com um DOM de brincar): o pedaço vai para a origem da janela com um translate no html e
+    // o script devolve o tamanho dele; um pedaço com 0×0 (a página esconde-o nesta largura) desfaz tudo e devolve null —
+    // a janela mostra a página e di-lo, em vez de ficar em branco.
+    private static string RunIsolate(double left, double top, double width, double height)
+    {
+        var stub = $$"""
+            const styles = [];
+            const node = () => ({ style: {}, textContent: '', isConnected: true, remove() { this.isConnected = false; } });
+            const el = { isConnected: true, parentElement: null, setAttribute() {}, removeAttribute() {},
+                         getBoundingClientRect: () => ({ left: {{left}}, top: {{top}}, width: {{width}}, height: {{height}} }) };
+            globalThis.window = globalThis;
+            globalThis.scrollX = 0; globalThis.scrollY = 0;
+            globalThis.addEventListener = () => {}; globalThis.removeEventListener = () => {};
+            globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+            globalThis.document = {
+              querySelector: () => el, querySelectorAll: () => [],
+              documentElement: {}, head: { append(...nodes) { styles.push(...nodes); } },
+              createElement: node,
+            };
+            (
+            """ + ClipScripts.Isolate("#preco") + """
+            ).then(v => { console.log(JSON.stringify({ result: v, styles: styles.filter(s => s.isConnected).map(s => s.textContent) })); process.exit(0); });
+            """;
+        return NodeRunner.Run(stub).Trim();
+    }
+
+    [Fact]
+    public void Isolate_MovesThePieceToTheOrigin()
+    {
+        using var output = JsonDocument.Parse(RunIsolate(100, 50, 300, 40));
+        Assert.Equal("""{"w":300,"h":40}""", output.RootElement.GetProperty("result").GetString());
+        var styles = output.RootElement.GetProperty("styles").EnumerateArray().Select(s => s.GetString()).ToList();
+        Assert.Contains(styles, s => s!.Contains("translate(-100px, -50px)", StringComparison.Ordinal));
+        Assert.Contains(styles, s => s!.Contains("visibility: hidden", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Isolate_ZeroSizePiece_ShowsThePage()
+    {
+        using var output = JsonDocument.Parse(RunIsolate(0, 0, 0, 0));
+        Assert.Equal(JsonValueKind.Null, output.RootElement.GetProperty("result").ValueKind);
+        Assert.Empty(output.RootElement.GetProperty("styles").EnumerateArray());
+    }
+
+    // «Esquecer ao fechar»: um recorte aberto conta como página aberta do site (senão o site era esquecido com o recorte
+    // ainda a usar a sessão e a gravar cookies novos), e fechar o recorte volta a verificar o site.
+    [Fact]
+    public void ForgetOnClose_CountsOpenClips()
+    {
+        var src = Path.Combine(FindRoot(), "src", "Eteris.Browser");
+        var forget = File.ReadAllText(Path.Combine(src, "MainWindow.Forget.cs"));
+        Assert.Matches(@"AddressesOf\(MainWindow window\)[\s\S]*?\.Concat\(window\._clips\.Select\(c => c\.Address\)\)", forget);
+        var watch = File.ReadAllText(Path.Combine(src, "MainWindow.Watch.cs"));
+        Assert.Matches(@"clip\.Closed \+= \(_, _\) =>\s*\{\s*_clips\.Remove\(clip\);\s*if \(!_forgetOnCloseDone\) ScheduleForgetFor\(\[clip\.Address\]\);", watch);
+    }
+
+    private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Raiz do repositório não encontrada");
     }
 
     // O seletor de pedaços devolve também o retângulo do pedaço (px CSS), lido à parte do seletor e do texto.

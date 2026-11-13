@@ -6,7 +6,8 @@ namespace Eteris.Browser.Watching;
 public static class ClipScripts
 {
     // Uma expressão (uma promessa): procura o elemento (até ~10 s, a página pode pô-lo por JavaScript) e devolve, em texto
-    // JSON, {"w","h"} em px CSS — ou null se ele não aparecer (a janela mostra então a página inteira, como está).
+    // JSON, {"w","h"} em px CSS — ou null se ele não aparecer ou não tiver tamanho (escondido nesta largura): a janela
+    // mostra então a página inteira, como está.
     // - Esconde o resto: visibility: hidden em tudo menos no elemento (e no que está dentro dele) e no caminho dos
     //   antepassados; os elementos position: fixed (barras, avisos de cookies) ficam escondidos com o resto.
     // - html { overflow: hidden }, sem barras; o elemento fica na origem da janela com um translate no html (não mexe na
@@ -77,7 +78,13 @@ public static class ClipScripts
           },
         };
         place();
+        // Um pedaço sem tamanho (a página esconde-o nesta largura) deixava a janela em branco: desfaz tudo.
         const r = el.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) {
+          window[key].stop();
+          delete window[key];
+          return null;
+        }
         return JSON.stringify({ w: r.width, h: r.height });
         """;
 }
