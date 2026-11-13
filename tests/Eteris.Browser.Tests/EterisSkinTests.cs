@@ -51,16 +51,67 @@ public class EterisSkinTests
         Assert.Contains("transition-duration: .01ms !important", EterisSkin.Css[motion..]);
         Assert.Contains("animation-duration: .01ms !important", EterisSkin.Css[motion..]);
         Assert.Contains("scroll-behavior: auto !important", EterisSkin.Css[motion..]);
-        var forced = EterisSkin.Css.IndexOf("@media (forced-colors: active)", StringComparison.Ordinal);
-        Assert.True(forced > motion);
-        Assert.Contains("::-webkit-scrollbar, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-track { all: unset; }", EterisSkin.Css[forced..]);
         // Com especificidade zero (:where): uma página que já tem o seu foco (input { outline: none } com a borda íris do
-        // Histórico) fica com ele, sem um segundo anel por cima; as outras ganham o anel.
-        Assert.Contains(":where(:focus-visible) { outline: 2px solid var(--accent, #22d3ee); outline-offset: 2px; }", EterisSkin.Css);
+        // Histórico) fica com ele, sem um segundo anel por cima; as outras ganham o anel (sem --accent, o --focus-ring
+        // do tema: FocusRing_HasAtLeastThreeToOneContrast).
+        Assert.Contains(":where(:focus-visible) { outline: 2px solid var(--accent, var(--focus-ring)); outline-offset: 2px; }", EterisSkin.Css);
         Assert.DoesNotMatch(@"(^|[\s}]):focus-visible", EterisSkin.Css);
         foreach (var radius in new[] { "--r-s: 6px", "--r-m: 10px", "--r-l: 14px", "--r-xl: 22px" })
             Assert.Contains(radius, EterisSkin.Css);
     }
+
+    // Alto contraste do Windows (forced-colors): basta uma regra ::-webkit-scrollbar a valer para o Blink desenhar a barra
+    // à mão — com «all: unset» por cima ficava uma calha vazia, sem polegar nem setas (medido no Chrome 157 com
+    // --force-high-contrast). As regras das barras só valem fora do alto contraste; aí ficam as do sistema.
+    [Fact]
+    public void Scrollbars_OnlyOutsideForcedColors()
+    {
+        const string Gate = "@media not (forced-colors: active) {";
+        var gate = EterisSkin.Css.IndexOf(Gate, StringComparison.Ordinal);
+        Assert.True(gate > 0, "as barras têm de estar dentro de " + Gate);
+        var end = EterisSkin.Css.IndexOf("\n}", gate, StringComparison.Ordinal);
+        if (end < 0) end = EterisSkin.Css.Length;
+        var inside = EterisSkin.Css[gate..end];
+        Assert.Equal(Regex.Matches(EterisSkin.Css, "::-webkit-scrollbar").Count, Regex.Matches(inside, "::-webkit-scrollbar").Count);
+        Assert.Equal(6, Regex.Matches(inside, "::-webkit-scrollbar").Count);
+        Assert.DoesNotContain("all: unset", EterisSkin.Css);
+        Assert.DoesNotContain("@media (forced-colors: active)", EterisSkin.Css);
+    }
+
+    // O anel de foco, sem --accent na página (a de erro, o Histórico e as Novidades não o definem, e com a cor íris de
+    // origem o Themed não o injeta): o --focus-ring do tema, com pelo menos 3:1 contra o fundo da página nos dois temas —
+    // e contra o branco do centro da página de erro no claro. O ciano de antes ficava a 1,6:1 no claro.
+    public static TheoryData<string, bool> PagesWithoutAccent()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var page in Templates.Where(p => !Template(p).Contains("--accent", StringComparison.Ordinal)))
+        {
+            data.Add(page, false);
+            data.Add(page, true);
+        }
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(PagesWithoutAccent))]
+    public void FocusRing_HasAtLeastThreeToOneContrast(string page, bool light)
+    {
+        var rule = Regex.Match(EterisSkin.Css, light ? @"html\.light \{([^}]*)\}" : @":root \{([^}]*)\}").Groups[1].Value;
+        var match = Regex.Match(rule, @"--focus-ring:\s*#([0-9a-fA-F]{6})");
+        Assert.True(match.Success, $"--focus-ring em falta ({(light ? "claro" : "escuro")})");
+        var ring = (Color)ColorConverter.ConvertFromString("#" + match.Groups[1].Value);
+        var backgrounds = new List<Color> { Background(page, light) ?? throw new InvalidOperationException($"{page} sem --bg") };
+        if (light && page == "error") backgrounds.Add(Colors.White);
+        foreach (var background in backgrounds)
+        {
+            var ratio = Accent.Contrast(ring, background);
+            Assert.True(ratio >= 3, $"{page} ({(light ? "claro" : "escuro")}) contra {background}: {ratio:0.00}:1");
+        }
+    }
+
+    [Fact]
+    public void FocusRing_CoversThePagesWithoutAccent()
+        => Assert.Equal(["error", "history", "whatsnew"], PagesWithoutAccent().Select(row => (string)row[0]).Distinct().Order());
 
     // Vem antes do <meta charset> da página: só ASCII.
     [Fact]

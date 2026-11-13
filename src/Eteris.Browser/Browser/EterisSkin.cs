@@ -9,9 +9,12 @@ namespace Eteris.Browser.Browser;
 //   - Nenhuma página interna usa scrollbar-color nem scrollbar-width: no Chromium 121 e seguintes, qualquer das duas
 //     desliga o ::-webkit-scrollbar do elemento (EterisSkinTests garante-o em todas as páginas e no leitor).
 //   - Um anel de foco visível em todos os controlos (:focus-visible), com especificidade zero (:where): uma página que
-//     já desenha o seu foco (input { outline: none } e a borda íris do Histórico) fica com ele, sem dois anéis.
+//     já desenha o seu foco (input { outline: none } e a borda íris do Histórico) fica com ele, sem dois anéis. Na cor
+//     de destaque da página (--accent) ou, numa página sem ela (erro, Histórico, Novidades, com a cor íris de origem),
+//     no --focus-ring do tema: ciano no escuro, ciano-escuro no claro (o ciano ficava a 1,6:1 no fundo claro).
 //   - «Reduzir movimento» do Windows (Efeitos de animação desligados): sem transições nem animações.
-//   - Alto contraste do Windows (forced-colors): as barras voltam a ser as do sistema.
+//   - Alto contraste do Windows (forced-colors): as barras voltam a ser as do sistema. As regras ::-webkit-scrollbar só
+//     valem fora dele — basta uma a valer para o Blink desenhar a barra à mão, e com «all: unset» ficava uma calha vazia.
 //   - Os raios --r-* ficam disponíveis; a migração dos raios das páginas é do ciclo do «sistema visual».
 // Só ASCII: vem antes do <meta charset> da página.
 public static class EterisSkin
@@ -20,21 +23,20 @@ public static class EterisSkin
 
     public const string Css = """
         :root { --r-s: 6px; --r-m: 10px; --r-l: 14px; --r-xl: 22px;
-                --sb-thumb: rgba(233, 235, 242, .40); --sb-thumb-hover: rgba(233, 235, 242, .58); }
-        html.light { --sb-thumb: rgba(27, 31, 42, .50); --sb-thumb-hover: rgba(27, 31, 42, .66); }
-        ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
-        ::-webkit-scrollbar-button { display: none; }
-        ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 999px;
-                                    border: 2px solid transparent; background-clip: padding-box; }
-        ::-webkit-scrollbar-thumb:hover { background-color: var(--sb-thumb-hover); }
-        :where(:focus-visible) { outline: 2px solid var(--accent, #22d3ee); outline-offset: 2px; }
+                --sb-thumb: rgba(233, 235, 242, .40); --sb-thumb-hover: rgba(233, 235, 242, .58); --focus-ring: #22d3ee; }
+        html.light { --sb-thumb: rgba(27, 31, 42, .50); --sb-thumb-hover: rgba(27, 31, 42, .66); --focus-ring: #0e7490; }
+        @media not (forced-colors: active) {
+          ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+          ::-webkit-scrollbar-button { display: none; }
+          ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+          ::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 999px;
+                                      border: 2px solid transparent; background-clip: padding-box; }
+          ::-webkit-scrollbar-thumb:hover { background-color: var(--sb-thumb-hover); }
+        }
+        :where(:focus-visible) { outline: 2px solid var(--accent, var(--focus-ring)); outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
                                    transition-duration: .01ms !important; scroll-behavior: auto !important; }
-        }
-        @media (forced-colors: active) {
-          ::-webkit-scrollbar, ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-track { all: unset; }
         }
         """;
 
