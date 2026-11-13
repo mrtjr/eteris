@@ -30,7 +30,8 @@ namespace Eteris.Browser;
 // (OverlayNeeded), os avisos (ShowToast), as transferências, o certificado de cliente, o foco, o teclado (também o da
 // página, no fio do CEF: _lockedForPage) e o rato. Por cima disso, trancada, a janela não diz nada da página: o título é
 // neutro, a árvore de automação só tem o cartão (PrivateLockWindowPeer), a miniatura do Alt+Tab é uma imagem neutra
-// (Infrastructure/IconicThumbnail.cs) e os diálogos das páginas não aparecem (Browser/PrivateLockDialogHandler.cs).
+// (Infrastructure/IconicThumbnail.cs) e os diálogos das páginas não aparecem (nos motores CEF, Browser/PrivateLockDialogHandler.cs;
+// no motor de vídeo, o WebView2 não mostra os de uma vista escondida).
 //
 // Uma camada de conveniência, não uma cifra: as abas continuam na memória do processo e as páginas continuam a correr (a
 // música e a chamada continuam). A tranca não para nada; «Pausar tudo (Ctrl+.)» no cartão entra na Pausa sem destrancar.
@@ -197,6 +198,9 @@ public partial class MainWindow
     // WPF se lê lá.
     private static void EnsurePrivateLockHooks()
     {
+        // Com Windows Hello ou só a palavra-passe, lido já em cada janela privada que abre: o aviso do Ctrl+Alt+L numa janela
+        // normal sai antes de o cartão o ler (e dizia «com o Windows Hello» num PC sem ele).
+        RefreshPrivateLockAvailability();
         if (s_privateLockHooks) return;
         s_privateLockHooks = true;
         SystemEvents.SessionSwitch += (_, e) => OnPrivateLockSessionSwitch(e.Reason);
@@ -387,6 +391,9 @@ public partial class MainWindow
         // 4. O cartão, por cima de tudo (também da vista calma da Pausa, que fica escondida: o aviso de captura dela nomeia o
         // site).
         ShowPrivateLockView(state);
+        // A confirmação de outra janela em curso (esta trancou pela inatividade a meio dela): como as outras, o botão desligado
+        // e «A confirmar com o Windows…»; a resposta chega a todas as trancadas.
+        if (s_unlocking is not null) ShowPrivateLockStatus(PrivateLockText.Confirming, canUnlock: false);
         EnableCoveredChrome(false);
         UpdateOverlayVisibility();
         if (_pause is { } paused)
@@ -411,6 +418,11 @@ public partial class MainWindow
 
         // 8. O relógio da inatividade para.
         _privateIdleTimer?.Stop();
+
+        // 9. A paleta aberta noutra janela privada destrancada (só com abas novas: as trancas automáticas não a trancam)
+        // listava as abas desta, lidas quando se escreveu: volta a ser calculada, já sem elas.
+        foreach (var other in PrivateWindows())
+            if (!ReferenceEquals(other, this) && other._privateLock is null && other.PaletteOpen) other.RefreshPalette();
     }
 
     // Os menus de contexto (da aba, da página, da barra de endereço, da seleção) e as dicas abertas desta janela: cada um é
@@ -692,7 +704,13 @@ public partial class MainWindow
         s_unlockingOwner = this;
         foreach (var window in LockedPrivateWindows()) window.ShowPrivateLockStatus(PrivateLockText.Confirming, canUnlock: false);
         PrivateUnlockResult result;
-        try { result = await PrivateUnlocker.RequestAsync(new WindowInteropHelper(this).Handle, cancel.Token); }
+        try
+        {
+            result = await PrivateUnlocker.RequestAsync(new WindowInteropHelper(this).Handle, cancel.Token);
+            // Uma tranca chegou entre a resposta do Windows e esta continuação (o Win+L logo a seguir ao Hello) e cancelou a
+            // pergunta: a resposta já não destranca nada, nem as janelas que essa tranca acabou de trancar.
+            if (cancel.IsCancellationRequested) result = PrivateUnlockResult.Interrupted;
+        }
         catch (Exception) { result = PrivateUnlockResult.Failed; }
         finally
         {

@@ -271,6 +271,46 @@ public class PrivateLockWiringTests
         Assert.True(cancel >= 0 && cancel < body.IndexOf("foreach", StringComparison.Ordinal));
     }
 
+    // Uma janela que tranca (pela inatividade, que não passa pelo LockPrivateWindows) com a confirmação de outra em curso
+    // nasce como as outras: o botão desligado e «A confirmar com o Windows…» (§2.5.3); a resposta chega a todas.
+    [Fact]
+    public void ALockDuringAConfirmation_ShowsTheConfirmation()
+    {
+        var lockBody = Body(Source("MainWindow.PrivateLock.cs"), "private void LockPrivateWindow(PrivateLockReason reason)");
+        var card = lockBody.IndexOf("ShowPrivateLockView(state);", StringComparison.Ordinal);
+        var confirming = lockBody.IndexOf("if (s_unlocking is not null) ShowPrivateLockStatus(PrivateLockText.Confirming, canUnlock: false);", StringComparison.Ordinal);
+        Assert.True(card > 0 && confirming > card, "o estado da confirmação depois do cartão");
+    }
+
+    // A paleta aberta noutra janela privada (destrancada: só com abas novas, que as trancas automáticas não trancam) listava as
+    // abas desta, lidas quando se escreveu: volta a ser calculada, já sem elas. No LockPrivateWindow, que é também o caminho
+    // da inatividade.
+    [Fact]
+    public void TheLock_RefreshesThePaletteOfTheOtherPrivateWindows()
+        => Assert.Matches(@"foreach \(var other in PrivateWindows\(\)\)\s*if \(!ReferenceEquals\(other, this\) && other\._privateLock is null && other\.PaletteOpen\) other\.RefreshPalette\(\);",
+            Body(Source("MainWindow.PrivateLock.cs"), "private void LockPrivateWindow(PrivateLockReason reason)"));
+
+    // Uma tranca que chega entre a resposta do Windows e a continuação na interface (o Win+L logo a seguir ao Hello) cancelou
+    // a pergunta: a resposta já não destranca nada (nem as janelas que essa tranca acabou de trancar).
+    [Fact]
+    public void ALockAfterTheAnswer_WinsOverTheAnswer()
+    {
+        var unlock = Body(Source("MainWindow.PrivateLock.cs"), "private async void UnlockPrivateWindowsAsync()");
+        var answer = unlock.IndexOf("await PrivateUnlocker.RequestAsync(", StringComparison.Ordinal);
+        var check = unlock.IndexOf("if (cancel.IsCancellationRequested) result = PrivateUnlockResult.Interrupted;", StringComparison.Ordinal);
+        Assert.True(answer > 0 && check > answer && check < unlock.IndexOf("cancel.Dispose();", StringComparison.Ordinal), "lido antes do Dispose");
+    }
+
+    // Com Windows Hello ou só a palavra-passe, lido logo que uma janela privada abre: o aviso do Ctrl+Alt+L numa janela normal
+    // sai antes de o cartão o ler, e dizia «Windows Hello» num PC sem ele.
+    [Fact]
+    public void TheAvailability_IsReadWhenAPrivateWindowOpens()
+    {
+        var hooks = Body(Source("MainWindow.PrivateLock.cs"), "private static void EnsurePrivateLockHooks()");
+        var refresh = hooks.IndexOf("RefreshPrivateLockAvailability();", StringComparison.Ordinal);
+        Assert.True(refresh >= 0 && refresh < hooks.IndexOf("if (s_privateLockHooks) return;", StringComparison.Ordinal));
+    }
+
     // O verificador nunca destranca sozinho: só o resultado Unlocked/UnlockedUnprotected do PrivateUnlock chama o
     // UnlockPrivateWindow, e nenhuma outra coisa (definições, desbloqueio do Windows, janela nova) o faz.
     [Fact]
