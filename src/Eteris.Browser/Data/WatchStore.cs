@@ -143,8 +143,21 @@ public sealed class WatchStore
     public void SetPaused(long id, bool paused)
         => Execute("UPDATE watches SET paused = $p WHERE id = $id", ("$p", paused ? 1 : 0), ("$id", id));
 
+    // Numa só transação: um Record que chegue a meio não deixa uma leitura sem vigia.
     public void Delete(long id)
-        => Execute("DELETE FROM watch_readings WHERE watch_id = $id; DELETE FROM watches WHERE id = $id", ("$id", id));
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        foreach (var sql in new[] { "DELETE FROM watch_readings WHERE watch_id = $id", "DELETE FROM watches WHERE id = $id" })
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = sql;
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
 
     // Os preços lidos (até 90 dias), do mais antigo para o mais novo.
     public IReadOnlyList<(DateTime AtUtc, decimal Price)> Prices(long id)

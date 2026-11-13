@@ -93,6 +93,16 @@ public sealed class WatchStoreTests : IDisposable
         Assert.Empty(_store.All()); Assert.Empty(_store.Prices(id));
     }
 
+    [Fact] public void Delete_TakesTheReadingsWithIt()
+    {
+        var keep = _store.Add(New("https://b.pt/"), Now); _store.Record(keep, Ok(Now, 5m), Now.AddHours(2));
+        var id = _store.Add(New(), Now); _store.Record(id, Ok(Now, 9m), Now.AddHours(2));
+        _store.Delete(id);
+        Assert.Empty(_store.Prices(id));
+        Assert.Single(_store.Prices(keep));
+        Assert.Equal(1, _store.DeleteReadingsSince(DateTime.MinValue));
+    }
+
     // Um id apagado não se reaproveita: a verificação atrasada de uma vigia apagada não cai numa vigia nova.
     [Fact] public void Record_OnDeletedWatch_DoesNotLandOnANewOne()
     {
