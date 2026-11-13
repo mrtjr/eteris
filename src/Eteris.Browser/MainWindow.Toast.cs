@@ -23,6 +23,9 @@ public partial class MainWindow
 
     private bool _toastWired;
 
+    // O aviso do CrashLog.Install (um erro da interface de que o Éteris recuperou); chamado no fio da interface.
+    internal void ShowCrashToast(string message) => ShowToast(message);
+
     // Aviso curto no fundo da janela: aparece, fica ~1,9 s e desvanece. Com ações («Anular», «Abrir», «Mostrar na
     // pasta», até duas) fica 6 s, recebe o rato e não desaparece enquanto o rato estiver por cima.
     private void ShowToast(string message, params ToastAction[] actions)

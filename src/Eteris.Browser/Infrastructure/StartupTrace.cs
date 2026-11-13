@@ -7,17 +7,22 @@ using System.Text;
 
 namespace Eteris.Browser.Infrastructure;
 
-// Medição do arranque e da memória, SÓ com a variável de ambiente ETERIS_TRACE_STARTUP (para os testes de desempenho):
+// Medição do arranque e da memória, SÓ com a variável de ambiente ETERIS_TRACE_STARTUP (para os testes de desempenho;
+// numa instalação só com --user-data-dir, ver ResolveFor):
 // - «1»: escreve em %TEMP%\eteris-trace-<pid>.tsv; outro valor é o caminho do ficheiro ({pid} é trocado pelo processo).
 // - Cada marca (Mark) regista o tempo desde a criação do processo, a thread, a memória privada (commit) e o trabalho do
 //   JIT até ali (métodos compilados e tempo de compilação acumulado).
 // - Fotografias da memória (heap .NET por geração, heaps nativos do Windows, threads, assemblies) a cada 5 s durante
-//   2 min; ETERIS_TRACE_GC_AT=20,60 força um GC completo (compactado) antes da fotografia desses segundos.
+//   2 min; ETERIS_TRACE_GC_AT=20,60 (só conta com o rastro ligado) força um GC completo (compactado) antes da fotografia desses segundos.
 // - Endereço de um objeto do heap .NET (gcprobe), para uma ferramenta externa saber que reserva do processo é o GC.
 // Sem a variável, Mark e Snapshot não fazem nada (uma leitura de campo estático).
 public static partial class StartupTrace
 {
-    private static readonly string? FilePath = Resolve(Environment.GetEnvironmentVariable("ETERIS_TRACE_STARTUP"), Environment.ProcessId);
+    // Só olha para o disco quando a variável existe. O AppPaths.UseRoot ainda não correu quando a 1.ª marca se escreve:
+    // o perfil de teste lê-se dos argumentos (--user-data-dir).
+    private static readonly string? FilePath = Environment.GetEnvironmentVariable("ETERIS_TRACE_STARTUP") is { Length: > 0 } value
+        ? ResolveFor(value, Environment.ProcessId, TestSwitches.IsInstalled, StartupArgs.UserDataDir(Environment.GetCommandLineArgs()) is not null)
+        : null;
     private static readonly Lock Gate = new();
     private static readonly StringBuilder Pending = new();
     private static readonly HashSet<string> Seen = new(StringComparer.Ordinal);
@@ -28,6 +33,11 @@ public static partial class StartupTrace
     private static byte[]? _probe;
 
     public static bool IsOn => FilePath is not null;
+
+    // Numa instalação, só com um perfil de teste (--user-data-dir): com o perfil normal, uma variável esquecida no ambiente
+    // não faz o Éteris instalado escrever o rastro (INF-11).
+    public static string? ResolveFor(string? value, int processId, bool installed, bool customProfile)
+        => installed && !customProfile ? null : Resolve(value, processId);
 
     public static string? Resolve(string? value, int processId) => value?.Trim() switch
     {

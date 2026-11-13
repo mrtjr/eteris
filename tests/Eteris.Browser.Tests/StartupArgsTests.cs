@@ -52,4 +52,23 @@ public class StartupArgsTests
     [InlineData("eteris://autofill/")]
     public void InitialUrl_AllowsSafeInternalPages(string url)
         => Assert.Equal(url, StartupArgs.InitialUrl([url]));
+
+    // INF-09: o proxy das provas passa a ter interruptores próprios, só com um perfil de teste.
+    [Fact]
+    public void TestProxy_OnlyWithATestProfile()
+    {
+        string[] args = ["--eteris-proxy=http://127.0.0.1:8899", "--eteris-proxy-pac=http://127.0.0.1:8898/proxy.pac", "--proxy-server=http://x"];
+        Assert.Empty(StartupArgs.TestProxy(args, customProfile: false));
+        Assert.Equal([("proxy-server", "http://127.0.0.1:8899"), ("proxy-pac-url", "http://127.0.0.1:8898/proxy.pac")], StartupArgs.TestProxy(args, customProfile: true));
+        Assert.Empty(StartupArgs.TestProxy(["--eteris-proxy="], customProfile: true));
+        Assert.Empty(StartupArgs.TestProxy(["--proxy-server=http://x"], customProfile: true));
+    }
+
+    [Fact]
+    public void Prepare_AppliesTheTestProxyAfterTheBuild()
+    {
+        var code = Sync.GoogleSyncTests.Src("Eteris.Browser", "Infrastructure", "CefConfigurator.cs");
+        Assert.Contains("StartupArgs.TestProxy(args, AppPaths.IsCustomProfile)", code);
+        Assert.Contains("settings.CefCommandLineArgs[name] = value;", code);
+    }
 }

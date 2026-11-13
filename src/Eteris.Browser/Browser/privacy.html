@@ -194,7 +194,7 @@
     text.append(b, span);
     if (note) { const small = document.createElement('span'); small.className = 'live'; small.textContent = note; text.append(small); }
     row.append(mark, text);
-    if (p.fix) { const a = document.createElement('a'); a.href = p.fix; a.textContent = state === null ? 'Ligar →' : 'Definições →'; row.append(a); }
+    if (p.fix) { const a = document.createElement('a'); a.href = p.fix; a.textContent = p.fixLabel || (state === null ? 'Ligar →' : 'Definições →'); row.append(a); }
     list.append(row);
   }
   const score = document.getElementById('score');

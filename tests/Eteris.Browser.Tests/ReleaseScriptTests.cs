@@ -205,6 +205,9 @@ public class ReleaseScriptTests
         Assert.True(run.VerifyLine >= 0 && run.VerifyLine < edit, "a verificação vem antes de publicar");
         Assert.Contains("--draft=false", run.Calls[edit]);
         Assert.True(run.SignLine < 0, "sem -Key não se assina nada");
+        // CAD-08: a marca da publicação vai como ficheiro da release, antes de ela se publicar.
+        var upload = run.Line(l => l.Contains("release upload v9.9.9", StringComparison.Ordinal) && l.Contains("eteris-build.json", StringComparison.Ordinal));
+        Assert.True(upload >= 0 && upload < edit, "a marca eteris-build.json sobe antes de publicar");
     }
 
     // C1 (revisão final): o «vpk upload github» não sobe o Releases\releases.win.json desta máquina — gera outro, só com os
@@ -408,6 +411,11 @@ public class ReleaseScriptTests
         var script = File.ReadAllText(Path.Combine(Root(), "build", "release.ps1"));
         Assert.DoesNotContain("Get-FileHash", script);
         Assert.Contains("[System.Security.Cryptography.SHA256]::Create()", script);
+        // O pack.ps1 também corre no CI (SandboxPublishTests): a conferência da marca da publicação (CAD-08) segue a mesma
+        // regra.
+        var pack = File.ReadAllText(Path.Combine(Root(), "build", "pack.ps1"));
+        Assert.DoesNotContain("Get-FileHash", pack);
+        Assert.Contains("[System.Security.Cryptography.SHA256]::Create()", pack);
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")

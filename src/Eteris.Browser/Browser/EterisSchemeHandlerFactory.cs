@@ -82,7 +82,13 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             if (!privateContext && InternalPages.IsAuthorized(request.Url)) AppData.ClearPrivacyReport();
             return Html(PrivacyPage.ReportClearedRedirect);
         }
-        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version));
+        if (uri is { Host: "privacy", AbsolutePath: "/sandbox-retry" })
+        {
+            // «Voltar a ligar» o sandbox: nunca a partir da janela privada e só com o token da página; volta à página.
+            if (!privateContext && InternalPages.IsAuthorized(request.Url)) Infrastructure.StartupGuard.Current.Reenable();
+            return Html(PrivacyPage.SandboxRetryRedirect);
+        }
+        if (uri is { Host: "whatsnew", AbsolutePath: "/" }) return Html(WhatsNewPage.Render(SettingsPage.Version, Infrastructure.CefConfigurator.SandboxSupported && Infrastructure.SandboxInfo.Available != 0));
         if (uri is { Host: "welcome", AbsolutePath: "/" })
             return Html(WelcomePage.Render(Settings.Current, BookmarkImport.Detect(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
                 Sync.SignInEntry.OffersNow(privateContext)));
@@ -615,7 +621,8 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
     private static SettingsPage.About AboutInfo() => new(
         Cef.ChromiumVersion, Cef.CefSharpVersion, Shields.ShieldEngine.Cosmetic is not null,
         Shields.FilterLists.ForApp().Summary(), Updates.UpdateService.Status,
-        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready));
+        Updates.UpdateService.State is not (Updates.UpdateState.Development or Updates.UpdateState.Ready),
+        Infrastructure.CrashLog.Count(System.IO.Path.Combine(Infrastructure.AppPaths.Root, Infrastructure.CrashLog.FileName)));
 
     private static IResourceHandler Html(string html)
         => ResourceHandler.FromString(InternalPages.Themed(html, InternalPages.LightTheme), Encoding.UTF8, false, "text/html");

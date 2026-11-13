@@ -19,9 +19,24 @@
 
 - O Google passa a ser uma das escolhas de motor de pesquisa nas Definições › Pesquisa (o padrão continua a ser o DuckDuckGo). Com ele, as pesquisas vão para a Google, que as pode juntar à sua conta Google se tiver sessão iniciada nela; o que escreve na barra não lhe é enviado enquanto escreve, só a pesquisa feita. As Boas-vindas continuam a oferecer só o DuckDuckGo, o Brave e o Startpage.
 
+### Segurança
+
+- As Novidades deixam de anunciar o isolamento das páginas numa publicação que saia sem ele: dizem que essa versão corre sem isolamento.
+- Um atalho alterado já não consegue passar interruptores ao motor (proxy, porta de depuração, `--no-sandbox`).
+
+### Privacidade
+
+- eteris://privacy/ passa a conferir o isolamento das páginas (com o motivo quando está desligado e a forma de o voltar a ligar), o motor completo do Escudo e o HTTPS primeiro.
+- As variáveis de teste da porta de depuração, do silêncio e do rastro do arranque deixam de valer no perfil normal, e a via de teste da confirmação do Windows deixa de ir no binário publicado.
+
 ### Correções
 
 - **Sites que ficavam incompletos com o Escudo ligado** (por exemplo, o ge.globo.com e o g1.globo.com: só cinco notícias, sem a coluna das classificações nem o resto da página). Um pedido bloqueado pelo Escudo passa a falhar como num bloqueador de extensão (`ERR_BLOCKED_BY_CLIENT`) e não como um pedido cancelado, que deixava o código desses sites à espera. Os rastreadores continuam bloqueados e nada sai para a rede; como a página agora carrega por inteiro, o contador do Escudo pode mostrar mais bloqueios nesses sites.
+- O Éteris volta a procurar atualizações de 6 em 6 horas e depois de uma falha; uma sessão aberta durante dias já não fica sem saber de uma versão nova.
+- Abrir o Éteris (ou um link) enquanto ele ainda está a fechar já não se perde: o novo lançamento espera e abre.
+- Se o Éteris não conseguir abrir duas vezes seguidas, à terceira oferece procurar e instalar uma versão corrigida antes de arrancar o motor.
+- Com dois utilizadores do Windows a usar o Éteris ao mesmo tempo, a lista de atalhos e os links voltam a funcionar para os dois.
+- Um «Local State» só de leitura já não impede o Éteris de abrir, e o ficheiro deixa de ser reescrito em todos os arranques.
 - «Recarregar» no menu de uma aba a dormir (ou F5 logo depois de mudar para ela) já não fecha o Éteris.
 - Uma conversão escrita com algarismos de outro alfabeto (ou uma conta colada com milhares de parênteses) na barra de endereço já não fecha o Éteris.
 - Escrever no filtro das abas verticais já não muda de aba nem deixa a janela sem aba ativa: só o Enter salta para o primeiro resultado.
@@ -32,6 +47,7 @@
 - Se a base de dados do perfil estiver danificada, o Éteris guarda-a à parte, começa uma nova e avisa, em vez de mostrar favoritos e histórico vazios sem explicação; se estiver só ocupada, volta a tentar.
 - Fechar uma janela já não deixa o temporizador do sono das abas a correr até o Éteris sair (a janela fechada ficava na memória).
 - Abas e janelas fechadas (as privadas incluídas) deixam de ficar na memória do Éteris até ele sair.
+- Um erro inesperado já não fecha o Éteris sem dizer nada: fica registado neste computador (só o tipo e a pilha, nunca endereços) e uma falha do motor ao arrancar mostra a causa.
 
 ## 0.2.16 — 2026-11-12
 

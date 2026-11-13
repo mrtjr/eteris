@@ -364,6 +364,68 @@ public class SandboxFallbackTests
         finally { Directory.Delete(dir, true); }
     }
 
+    // INF-10: o estado do isolamento à vista, com o motivo quando está desligado.
+    [Theory]
+    [InlineData(false, false, false, SandboxNotice.None, false, false, Isolation.OffInThisBuild)]
+    [InlineData(true, false, false, SandboxNotice.None, false, false, Isolation.OffInThisBuild)]
+    [InlineData(true, true, false, SandboxNotice.DisabledAfterFailures, false, false, Isolation.OffAfterFailures)]
+    [InlineData(true, true, false, SandboxNotice.RetriedWithoutSandbox, true, false, Isolation.OffRetried)]
+    [InlineData(true, true, false, SandboxNotice.None, true, false, Isolation.OffBySwitch)]
+    [InlineData(true, true, true, SandboxNotice.None, false, true, Isolation.OffBySwitch)]
+    [InlineData(true, true, true, SandboxNotice.None, false, false, Isolation.On)]
+    public void IsolationOf_SaysWhyTheSandboxIsOff(bool supported, bool available, bool active, SandboxNotice notice, bool manualOff, bool engineOff, Isolation expected)
+        => Assert.Equal(expected, SandboxFallback.IsolationOf(supported, available, active, notice, manualOff, engineOff));
+
+    [Fact]
+    public void Reenabled_ClearsTheDisabledState()
+    {
+        var state = SandboxFallback.Reenabled(new() { Starting = true, WithSandbox = false, Failures = 2, DisabledFor = V, Origins = "x", TweaksDisabledFor = V });
+        Assert.False(state.Starting);
+        Assert.Equal(0, state.Failures);
+        Assert.Null(state.DisabledFor);
+        Assert.Null(state.Origins);
+        Assert.Equal(V, state.TweaksDisabledFor);   // os ajustes de desempenho não são desta tarefa
+    }
+
+    [Fact]
+    public void Guard_Reenable_ClearsTheDisabledStateOnDisk()
+    {
+        var dir = TempDir();
+        try
+        {
+            var file = Path.Combine(dir, SandboxFallback.FileName);
+            new StartupGuard(file, () => TimeSpan.Zero).Begin(V, true, false, false);  // caiu
+            new StartupGuard(file, () => TimeSpan.Zero).Begin(V, true, false, false);  // caiu outra vez
+            var third = new StartupGuard(file, () => TimeSpan.Zero);
+            Assert.False(third.Begin(V, true, false, false).UseSandbox);
+            Assert.False(third.ReenableRequested);
+            Assert.True(third.Reenable());
+            Assert.True(third.ReenableRequested);
+            var state = StartupGuard.Read(file);
+            Assert.Null(state.DisabledFor);
+            Assert.Equal(0, state.Failures);
+            Assert.False(state.Starting);
+            third.Healthy(); third.Flush();                   // o fecho não desfaz a reposição
+            Assert.Null(StartupGuard.Read(file).DisabledFor);
+            Assert.True(new StartupGuard(file, () => TimeSpan.Zero).Begin(V, true, false, false).UseSandbox);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Guard_Reenable_WithoutBegin_DoesNothing()
+    {
+        var dir = TempDir();
+        try
+        {
+            var guard = new StartupGuard(Path.Combine(dir, SandboxFallback.FileName), () => TimeSpan.Zero);
+            Assert.False(guard.Reenable());
+            Assert.False(guard.ReenableRequested);
+            Assert.False(File.Exists(Path.Combine(dir, SandboxFallback.FileName)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Fact]
     public void Guard_ChildFailuresEarly_CountEvenAfterTheFirstPage()
     {

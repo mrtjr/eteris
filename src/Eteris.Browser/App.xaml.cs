@@ -10,6 +10,36 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Os tratadores globais de exceções, antes de haver janela (Infrastructure/CrashLog.cs): um erro inesperado fica
+        // registado em falhas.log (só o tipo e a pilha) e, com a janela aberta, o Éteris recupera e avisa.
+        CrashLog.Install(this, System.IO.Path.Combine(AppPaths.Root, CrashLog.FileName), message =>
+            (Windows.OfType<MainWindow>().FirstOrDefault(w => w.IsActive) ?? Windows.OfType<MainWindow>().FirstOrDefault())?.ShowCrashToast(message));
+        try
+        {
+            StartUp(e);
+        }
+        catch (Exception ex)
+        {
+            // Sem Shutdown: o OnExit chamaria o Cef.Shutdown de um motor que não arrancou e, na falha, daria o arranque por
+            // bom (StartupGuard e StartupRescue, mais abaixo), e nem a rede de segurança do sandbox nem a recuperação do
+            // arranque (StartupRescue) a contavam. Assim a falha conta como se o processo tivesse caído e, à segunda, o
+            // Éteris oferece a versão corrigida.
+            if (ex is EngineStartException { IsNormalExit: true })
+            {
+                // O Chromium passou o pedido a outro processo do mesmo perfil e saiu de propósito: não é uma falha.
+                StartupGuard.Current.Healthy();
+                StartupGuard.Current.Flush();
+                StartupRescue.Healthy(now: true);
+                Environment.Exit(0);
+            }
+            CrashLog.WriteStartup(System.IO.Path.Combine(AppPaths.Root, CrashLog.FileName), ex);
+            MessageBox.Show(CefConfigurator.StartFailureText(ex), "Éteris");
+            Environment.Exit(1);
+        }
+    }
+
+    private void StartUp(StartupEventArgs e)
+    {
         StartupTrace.Mark("onstartup");
         // O motor arranca numa thread própria enquanto o resto do arranque e o XAML da janela correm aqui; a janela espera
         // por ele só antes da 1.ª aba (Infrastructure/CefConfigurator.cs).
@@ -46,7 +76,7 @@ public partial class App : Application
         StartupTrace.Mark("janela.show");
         // Depois da 1.ª página (Infrastructure/FirstPaint.cs): nenhuma das duas é precisa para ela.
         FirstPaint.App.SignalAfter(FirstPaint.Fallback);
-        FirstPaint.App.Then(() => _ = UpdateService.CheckAndDownloadAsync());
+        FirstPaint.App.Then(UpdateService.StartSchedule);
         FirstPaint.App.Then(CompositionWarmup.Stop);
         // Sincronização: nada aqui sai para a rede. Só com ela ligada, a primeira ronda fica para 30 s depois.
         FirstPaint.App.Then(Sync.SyncService.AfterFirstPaint);
@@ -57,11 +87,10 @@ public partial class App : Application
             JumpListTasks.Install();
             StartupTrace.Mark("jumplist");
         });
-        _channel = InstanceChannel.Listen(Program.ChannelName, args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
+        // O canal já escuta desde o Program.Main; aqui só se ligam os lançamentos guardados e os seguintes à janela.
+        Program.Inbox.Attach(args => Dispatcher.InvokeAsync(() => Eteris.Browser.MainWindow.OpenForwarded(args)));
         StartupTrace.Mark("onstartup.fim");
     }
-
-    private IDisposable? _channel;
 
     // Logo a seguir ao Cef.Initialize (na thread onde ele correu): o que precisa do contexto global do motor.
     internal static void OnCefReady()
@@ -90,10 +119,11 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _channel?.Dispose();
+        Program.Channel?.Dispose();
         // Fecho normal: este arranque não caiu (rede de segurança do sandbox, Infrastructure/StartupGuard.cs).
         StartupGuard.Current.Healthy();
         StartupGuard.Current.Flush();
+        StartupRescue.Healthy(now: true);
         Data.AppData.FlushShieldStats();
         Data.AppData.CloseHistory();
         if (Data.Settings.Current.ClearOnExit)

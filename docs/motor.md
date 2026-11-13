@@ -28,7 +28,8 @@ da captura e 150 ms depois do fim; `thumb_maxdiff` = maior diferença nessa jane
   dois perfis de teste na mesma pasta). Ignorada pela versão instalada. Ver `docs/sincronizacao.md`.
 - `ETERIS_TEST_REAUTH=aceitar|recusar`: a confirmação com o Windows do cofre de palavras-passe (Windows Hello ou
   palavra-passe do Windows) responde sozinha, sem janela, para as provas ao vivo não precisarem do PIN de ninguém.
-  Ignorada pela versão instalada. Ver `docs/palavras-passe.md`.
+  Ignorada pela versão instalada; só numa compilação com a via de teste (a publicação não a traz) e só num perfil de
+  teste (`--user-data-dir`). Ver `docs/palavras-passe.md`.
 
 ## Resultado (build final, 11 navegações, perfil `profile-motor`, sem som)
 
@@ -145,7 +146,12 @@ Por isso as releases normais publicam-se **localmente**, com o runtime próprio 
    `WindowsSandboxInfo` e o SHA256 do feed, sem `CefSharp.BrowserSubprocess.exe`); recusa também sem a marca dos testes
    para o HEAD atual ou com alterações por gravar. A pasta `publish` é limpa antes, apagada se alguma verificação
    falhar, e no fim leva `eteris-build.json` (versão, modo, commit, o CefSharp com o SHA256 das montagens e
-   `google_oauth`, se levou o login Google, nunca o `client_id`).
+   `google_oauth`, se levou o login Google, nunca o `client_id`; e, desde a 0.2.17, `runtime_manifest_sha256`, as
+   versões das ferramentas em `tools` (`dotnet_sdk`, `rustc`, `vpk`) e `files`, a lista de tudo o que ficou em `publish\`
+   com o SHA256 de cada ficheiro). Recusa um ficheiro na pasta do motor que não conste do manifesto («fora do manifesto»).
+   O `pack.ps1` recusa uma publicação com `dirty`, sem `files` ou com um ficheiro trocado, em falta ou a mais
+   (CAD-08), e o `release.ps1` sobe a marca para a release como `eteris-build.json`. O `build\cef-codecs\build.ps1 -Steps
+   Check` também recusa um FFmpeg que não seja o do código-fonte oferecido e alterações na árvore do motor fora dos patches.
    Nos dois modos recusa também binários publicados com o caminho do perfil de quem compila (`docs/sandbox.md`,
    «Como publicar com o sandbox», passo 3).
    `-NoSandbox` só em emergência (o Éteris corre com `--no-sandbox`, como até à 0.2.13). Confirmar que `publish\libcef.dll` tem o SHA256
@@ -200,7 +206,9 @@ Google (`pack.ps1 -NoSandbox -SemLogin`: o `google-oauth.json` nunca está no re
 (`Tabs/PlatformCodecs.cs`) não encontra o manifesto e o H.264/AAC volta a ir para o motor de vídeo (WebView2), como
 antes da 0.2.9. Só serve para tags com `global.json` (as tags até à v0.2.16 não o têm): o fluxo corre os passos de
 hoje sobre a árvore da tag e o `setup-dotnet` lê dela a versão do SDK, por isso numa tag sem ele o job pára logo a
-seguir ao checkout e publica-se a partir de uma tag nova. Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
+seguir ao checkout e publica-se a partir de uma tag nova. Cada etiqueta ensaia este caminho no CI (trabalho `ensaio` do
+`release.yml`: o mesmo `publish.ps1` e `pack.ps1`, sem envio), para ele não se descobrir partido no dia da emergência; as
+Novidades dessa publicação dizem que corre sem isolamento (eteris://whatsnew/). Alternativas estudadas e não seguidas: guardar o runtime (~370 MB, 238 ficheiros) num armazenamento do
 dono e o CI descarregá-lo e verificá-lo pelo SHA256 do manifesto; um runner próprio com o checkout em `C:\cef`.
 
 **Pré-requisitos (instala o dono):** Windows SDK 10.0.28000 com Debugging Tools for Windows; VS 18 Insiders (já tem
