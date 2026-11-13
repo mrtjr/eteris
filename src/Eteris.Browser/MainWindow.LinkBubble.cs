@@ -54,7 +54,8 @@ public partial class MainWindow
             ShowActivated = false,
             Focusable = false,
             IsHitTestVisible = false,
-            Title = Title,
+            // Um título fixo: o da página do momento em que nascia ficava legível por GetWindowText de qualquer programa.
+            Title = "Éteris",
             FontFamily = FontFamily,
             UseLayoutRounding = UseLayoutRounding,
             Content = LinkStatusBubble,

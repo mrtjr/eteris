@@ -324,9 +324,10 @@ public partial class MainWindow
                 }))
             .ToList();
 
-        // …e as das outras janelas (só do mesmo tipo: privadas com privadas).
+        // …e as das outras janelas (só do mesmo tipo: privadas com privadas; nunca as de uma janela privada trancada, que uma
+        // janela privada aberta depois não pode destapar: MainWindow.PrivateLock.cs).
         var otherWindows = query.Length == 0 ? [] : Application.Current.Windows.OfType<MainWindow>()
-            .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate)
+            .Where(w => !ReferenceEquals(w, this) && w.IsPrivate == IsPrivate && w._privateLock is null)
             .SelectMany(w => w.Tabs.Tabs.Select(t => new PaletteCommand("", t.DisplayTitle,
                 "Mudar para esta aba · outra janela · " + (WebHost(t.Address) ?? "Éteris"), null, () => FocusTabIn(w, t))))
             .ToList();

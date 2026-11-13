@@ -37,6 +37,12 @@ public partial class MainWindow
             QueuePausedToast(message, actions);
             return;
         }
+        // Com a janela privada trancada também (MainWindow.PrivateLock.cs): aparecem ao destrancar.
+        if (_privateLock is not null)
+        {
+            QueueLockedToast(message, actions);
+            return;
+        }
         ShowToastFor(ToastPolicy.Hold(Math.Min(actions.Length, ToastPolicy.MaxActions)), message, actions);
     }
 

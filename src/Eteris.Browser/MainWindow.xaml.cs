@@ -96,6 +96,7 @@ public partial class MainWindow : Window
         WatchUnseen();
         WatchMiniBar();
         WatchPause();
+        WatchPrivateLock();
         WatchOmniboxMenu();
         SetUpSideFilter();
         WatchWorkspaces();
@@ -166,7 +167,7 @@ public partial class MainWindow : Window
 
     // Na Pausa nenhuma página está à vista (MainWindow.Pause.cs): o pedido espera pelo regresso.
     private Task<string?> AskClientCertificate(BrowserTab tab, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
-        => AskClientCertificate(tab, () => _pause is null && Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab), () => ClientCertificateDialog.FromTab(tab.Title),
+        => AskClientCertificate(tab, () => _pause is null && Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab) && _privateLock is null, () => ClientCertificateDialog.FromTab(tab.Title),
             host, port, rows);
 
     private Task<string?> AskClientCertificate(object page, Func<bool> isOnScreen, Func<string?> from, string host, int port,
@@ -235,6 +236,8 @@ public partial class MainWindow : Window
                 fullscreen => Dispatcher.InvokeAsync(() => OnPageFullscreen(tab, fullscreen))),
             DownloadHandler = DownloadHandler,
             FindHandler = NewFindHandler(),
+            // Numa janela privada trancada, os diálogos da página não aparecem (Browser/PrivateLockDialogHandler.cs).
+            JsDialogHandler = IsPrivate ? new PrivateLockDialogHandler(() => _lockedForPage) : null,
             RequestContext = PrivateContext,
             PermissionHandler = PermissionHandler,
             RequestHandler = new PrivacyRequestHandler(
@@ -734,6 +737,12 @@ public partial class MainWindow : Window
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
         e.Handled = true;
+        // A tranca das janelas privadas (MainWindow.PrivateLock.cs) vem antes de tudo, também da Pausa: só o cartão recebe teclas.
+        if (_privateLock is not null)
+        {
+            e.Handled = HandlePrivateLockKey(key, ctrl, shift, alt, e.IsRepeat);
+            return;
+        }
         AltKeyDown(key, ctrl, shift);
 
         // A Pausa (MainWindow.Pause.cs) vem antes de tudo: Esc e Ctrl+. voltam; Tab, Enter e Espaço seguem para o ecrã calmo.
@@ -858,6 +867,12 @@ public partial class MainWindow : Window
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
+        // Trancada (MainWindow.PrivateLock.cs): nenhuma tecla vai para a página escondida; o Ctrl+. continua a ser a Pausa.
+        if (_lockedForPage)
+        {
+            if (!repeat && IsPauseToggleKey(key, ctrl, shift, alt)) Dispatcher.InvokeAsync(TogglePause);
+            return true;
+        }
         // A Pausa (MainWindow.Pause.cs): a página está escondida e nenhuma tecla vai para ela; Esc e Ctrl+. voltam.
         if (_pausedForPage)
         {

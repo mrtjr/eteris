@@ -37,8 +37,10 @@ public partial class MainWindow
     protected override void OnClosing(CancelEventArgs e)
     {
         // Reiniciar para atualizar fecha cada janela à mão: aí não se pergunta nada (a atualização não pode ficar presa).
-        // Com a sessão congelada (encerramento do Windows) as trancadas de todas as janelas já ficaram gravadas.
-        var locked = Updates.UpdateService.RestartRequested || _endingPrivateSession || s_sessionFrozen ? 0 : LockedTabsAtRisk();
+        // Com a sessão congelada (encerramento do Windows) as trancadas de todas as janelas já ficaram gravadas. Uma janela
+        // privada trancada (MainWindow.PrivateLock.cs) fecha sem perguntar: fechar deita tudo fora, que é o que protege (e o
+        // aviso ia para a fila de uma janela trancada).
+        var locked = _privateLock is not null || Updates.UpdateService.RestartRequested || _endingPrivateSession || s_sessionFrozen ? 0 : LockedTabsAtRisk();
         if (locked > 0 && DateTime.UtcNow > _lockedCloseConfirmUntil)
         {
             e.Cancel = true;

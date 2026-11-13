@@ -81,6 +81,24 @@ public sealed record MediaInfo(MediaState State, bool Audible, string? Title, st
         })()
         """;
 
+    // A tranca das janelas privadas (MainWindow.PrivateLock.cs): sai do Picture-in-Picture de vídeo e do de documento (a
+    // janela flutuante do Chromium, sempre por cima, ficava sobre o cartão). Não pausa nada: o vídeo volta para a página
+    // escondida e continua a tocar.
+    public const string LeaveAllPictureInPictureScript = """
+        (function () {
+          try {
+            if (document.pictureInPictureElement && document.exitPictureInPicture) {
+              var p = document.exitPictureInPicture();
+              if (p && p.catch) p.catch(function () {});
+            }
+          } catch (e) { }
+          try {
+            if (window.documentPictureInPicture && window.documentPictureInPicture.window) window.documentPictureInPicture.window.close();
+          } catch (e) { }
+          return 0;
+        })()
+        """;
+
     // «Retomar o que tocava» (o botão do aviso, com gesto do utilizador): toca só o que a Pausa marcou e tira a marca.
     public const string ResumeMarkedScript = """
         (function () {

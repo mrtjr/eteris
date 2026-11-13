@@ -52,6 +52,8 @@ public partial class MainWindow
 
     private void RefreshMediaHub()
     {
+        // O cartão da janela privada trancada diz se a janela continua a tocar (MainWindow.PrivateLock.cs).
+        RefreshPrivateLockActivity();
         var tabs = Tabs.Tabs.Where(t => t.Media != MediaState.None).ToList();
         MediaHost.Visibility = tabs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         MediaLiveDot.Visibility = tabs.Any(t => t.Media == MediaState.Playing && !t.IsMuted) ? Visibility.Visible : Visibility.Collapsed;

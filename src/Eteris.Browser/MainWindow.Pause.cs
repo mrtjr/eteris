@@ -251,6 +251,8 @@ public partial class MainWindow
         ShowPauseView(state);
         EnableCoveredChrome(false);
         UpdateOverlayVisibility();
+        // O cartão de uma janela privada trancada deixa de oferecer «Pausar tudo» (MainWindow.PrivateLock.cs).
+        RefreshPrivateLockActivity();
     }
 
     // Os controlos que o ecrã calmo tapa (a barra de título com as abas, a de ferramentas, as abas verticais) continuavam na
@@ -269,7 +271,7 @@ public partial class MainWindow
     // O teclado volta para onde estava, se ainda se vê e é desta janela (não uma página: essa é o ReturnFocusToPage).
     private bool FocusCanReturnTo(PauseState state, UIElement element)
         => element is { IsVisible: true, IsEnabled: true, Focusable: true } and not (ChromiumWebBrowser or WebView2)
-           && ReferenceEquals(Window.GetWindow(element), this) && state.View?.IsAncestorOf(element) != true;
+           && ReferenceEquals(Window.GetWindow(element), this) && state.View?.IsAncestorOf(element) != true && _privateLock is null;
 
     private List<PauseEngine<FrameworkElement>> PauseEngines()
     {
@@ -331,6 +333,12 @@ public partial class MainWindow
         // tamanho já dado; depois StackPages), e o site fixado aberto na barra lateral.
         LayoutBrowsers();
         if (_sidebarOpen && CurrentWebPanelBrowser is not null && _sidebarPanel is { } panel) ShowWebPanel(panel, focus: false);
+        // Com a janela privada trancada (MainWindow.PrivateLock.cs), o painel das transferências espera pelo desbloqueio.
+        if (_privateLock is { } lockedNow && state.DownloadStarted)
+        {
+            lockedNow.DownloadStarted = true;
+            state.DownloadStarted = false;
+        }
         if (state.DownloadStarted) DownloadsPopup.IsOpen = true;
         // O pedido de certificado de cliente que esperou pela Pausa (a página estava escondida) aparece agora.
         ShowNextClientCertificate();
@@ -347,6 +355,8 @@ public partial class MainWindow
         ShowPausedToasts(state, _replay.Count);
         // 4. O teclado volta para onde estava (a barra de endereço, as Notas); senão, para a página.
         EnableCoveredChrome(true);
+        // Trancada, os controlos continuam tapados pelo cartão.
+        if (_privateLock is not null) EnableCoveredChrome(false);
         if (state.FocusBefore is { } before && FocusCanReturnTo(state, before))
         {
             if (IsActive) Keyboard.Focus(before);
@@ -395,6 +405,14 @@ public partial class MainWindow
     private void ShowPausedToasts(PauseState state, int replay)
     {
         if (state.Toasts.Count == 0 && replay == 0) return;
+        // Com a janela privada trancada (MainWindow.PrivateLock.cs), o aviso do regresso espera pelo desbloqueio, na fila dela
+        // (o ShowToastFor direto passava-lhe à frente).
+        if (_privateLock is { } locked)
+        {
+            locked.Toasts.AddRange(state.Toasts);
+            if (replay > 0) locked.Toasts.Add(("A Pausa acabou — nada recomeçou sozinho", [new ToastAction($"Retomar o que tocava ({replay})", ReplayPaused)]));
+            return;
+        }
         var actions = new List<ToastAction>();
         if (replay > 0) actions.Add(new ToastAction($"Retomar o que tocava ({replay})", ReplayPaused));
         actions.AddRange(state.Toasts.AsEnumerable().Reverse().SelectMany(t => t.Actions));
@@ -448,6 +466,12 @@ public partial class MainWindow
 
     private void FocusPauseView()
     {
+        // Trancada (MainWindow.PrivateLock.cs), o teclado fica no cartão, por cima da vista calma.
+        if (_privateLock is not null)
+        {
+            FocusPrivateLockView();
+            return;
+        }
         if (_pause?.Back is not { } back) return;
         if (_overlay is { IsActive: true }) Activate();
         // Só a janela ativa recebe o teclado; as outras guardam «Voltar» como foco lógico (volta para lá quando forem
@@ -464,6 +488,9 @@ public partial class MainWindow
         Grid.SetRowSpan(view, 3);
         Grid.SetColumnSpan(view, 1);
         Panel.SetZIndex(view, 1000);
+        // Numa janela privada trancada (MainWindow.PrivateLock.cs) fica escondida debaixo do cartão: o aviso de captura dela
+        // nomeia o site.
+        if (_privateLock is not null) view.Visibility = Visibility.Hidden;
         ((Grid)RootBorder.Child).Children.Add(view);
         RefreshPauseTimer(state);
         TickPauseClock(state);
@@ -790,11 +817,11 @@ public partial class MainWindow
         BreatheWhileSeen(state);
     }
 
-    // Uma animação eterna só corre enquanto se vê (ForeverAnimationRulesTests): com a janela minimizada sai, e volta a
-    // começar (a inspirar) quando a janela se volta a ver.
+    // Uma animação eterna só corre enquanto se vê (ForeverAnimationRulesTests): com a janela minimizada (ou trancada, com a
+    // vista calma escondida debaixo do cartão) sai, e volta a começar (a inspirar) quando a janela se volta a ver.
     private void BreatheWhileSeen(PauseState state)
     {
-        var run = state.Breathes && WindowState != WindowState.Minimized;
+        var run = state.Breathes && WindowState != WindowState.Minimized && _privateLock is null;
         if (run == state.Breathing || state.RingScale is not { } scale || state.Breath is not { } words) return;
         state.Breathing = run;
         if (!run)

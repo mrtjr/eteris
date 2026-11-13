@@ -40,7 +40,9 @@ public partial class MainWindow
             DownloadsPopup.SetCurrentValue(Popup.PlacementTargetProperty, DownloadsButton);
             // Na Pausa o painel (um Popup: janela própria, por cima de tudo) não se abre por cima do ecrã calmo: abre ao
             // voltar (MainWindow.Pause.cs), como os avisos.
-            if (_pause is { } paused) paused.DownloadStarted = true;
+            // O mesmo com a janela privada trancada (MainWindow.PrivateLock.cs): abre ao destrancar.
+            if (_privateLock is { } locked) locked.DownloadStarted = true;
+            else if (_pause is { } paused) paused.DownloadStarted = true;
             else DownloadsPopup.IsOpen = true;
 
             // Aba aberta diretamente num link de transferência: não fica uma página branca (como no Chrome).
