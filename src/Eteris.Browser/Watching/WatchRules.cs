@@ -10,6 +10,7 @@ namespace Eteris.Browser.Watching;
 // - Uma página que não carregou (erro HTTP, sem rede, tempo esgotado, página vazia) é uma falha passageira: as duas
 //   primeiras seguidas deixam o estado como estava, a 3.ª dá «Failing», e nunca bloqueia nem dá «desapareceu».
 // - O pedaço (ou o preço) que não aparece numa página que carregou dá «Failing»; à 2.ª vez seguida, «Missing».
+// - «Blocked» e «Missing» só mudam com uma leitura boa (a leitura passiva): uma falha deixa-as como estão.
 // - Failures conta as verificações falhadas seguidas (IsFailure) e volta a 0 com uma boa; quem grava (WatchStore) e a
 //   agenda (WatchSchedule.Next) usam a mesma contagem.
 public static class WatchRules
@@ -124,7 +125,8 @@ public static class WatchRules
     private static WatchCheck Failed(PageWatch w, PageBlock block, DateTime nowUtc)
     {
         WatchStatus status;
-        if (w.Status == WatchStatus.Blocked) status = WatchStatus.Blocked;
+        // Bloqueada e sem pedaço só saem com uma leitura boa: uma falha não as devolve à agenda.
+        if (w.Status is WatchStatus.Blocked or WatchStatus.Missing) status = w.Status;
         else if (block is PageBlock.Challenge or PageBlock.AppRedirect)
             status = w.LastBlock == block ? WatchStatus.Blocked : WatchStatus.Failing;
         else
@@ -140,8 +142,8 @@ public static class WatchRules
     {
         var status = w.Status switch
         {
-            WatchStatus.Blocked => WatchStatus.Blocked,
-            WatchStatus.Failing or WatchStatus.Missing when w.LastBlock == PageBlock.None => WatchStatus.Missing,
+            WatchStatus.Blocked or WatchStatus.Missing => w.Status,
+            WatchStatus.Failing when w.LastBlock == PageBlock.None => WatchStatus.Missing,
             _ => WatchStatus.Failing,
         };
         return new WatchCheck(nowUtc, status, null, null, null, PageBlock.None);

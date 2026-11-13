@@ -162,6 +162,38 @@ public class WatchRulesTests
         Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(w3, third));
     }
 
+    // «Desapareceu» só sai com uma leitura boa: uma falha da leitura passiva não a devolve à agenda, senão a próxima falta
+    // avisava outra vez.
+    [Fact] public void Missing_StaysMissingOnAnyFailure()
+    {
+        var w = Watch(kind: WatchKind.Change, lastText: "Esgotado", status: WatchStatus.Missing, failures: 2);
+        var cases = new[]
+        {
+            (w, WatchRules.ToCheck(w, Reading(pieceFound: false), PageBlock.Challenge, Now)),
+            (w, WatchRules.ToCheck(w, null, PageBlock.None, Now)),
+            (w with { LastBlock = PageBlock.HttpError }, WatchRules.ToCheck(w with { LastBlock = PageBlock.HttpError }, Reading(pieceFound: false), PageBlock.None, Now)),
+            (w with { LastBlock = PageBlock.Challenge }, WatchRules.ToCheck(w with { LastBlock = PageBlock.Challenge }, null, PageBlock.Challenge, Now)),
+        };
+        foreach (var (before, check) in cases)
+        {
+            Assert.Equal(WatchStatus.Missing, check.Status);
+            Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(before, check));
+        }
+    }
+
+    // Numa vigia de preço, uma página que carregou sem preço (esgotado, desenho novo) é uma falta como a do pedaço.
+    [Fact] public void PriceWatch_PriceGoneTwice_IsMissing()
+    {
+        var w = Watch(kind: WatchKind.Price, lastPrice: 588.22m, status: WatchStatus.Ok);
+        var first = WatchRules.ToCheck(w, Reading(price: null, pieceFound: false), PageBlock.None, Now);
+        Assert.Equal((WatchStatus.Failing, PageBlock.None), (first.Status, first.Block));
+        Assert.Equal(WatchOutcome.Nothing, WatchRules.Outcome(w, first));
+        var w2 = w with { Status = WatchStatus.Failing, Failures = 1 };
+        var second = WatchRules.ToCheck(w2, Reading(price: null, pieceFound: false), PageBlock.None, Now);
+        Assert.Equal(WatchStatus.Missing, second.Status);
+        Assert.Equal(WatchOutcome.PieceMissing, WatchRules.Outcome(w2, second));
+    }
+
     [Fact] public void ChallengeThenMissingPiece_IsOnlyAFirstMiss()
     {
         var w = Watch(kind: WatchKind.Change, lastText: "Esgotado", status: WatchStatus.Failing, failures: 1, lastBlock: PageBlock.Challenge);
