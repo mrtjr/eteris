@@ -7,9 +7,11 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Eteris.Sync.Crypto;
 using Eteris.Sync.Engine;
+using Eteris.Sync.Format;
 using Eteris.Sync.Google;
 using Eteris.Sync.Model;
 using Eteris.Sync.Pairing;
+using Eteris.Sync.Transport;
 
 using Stage = Eteris.Browser.Sync.SignInStage;
 
@@ -30,6 +32,76 @@ public class GoogleSyncTests
         var session = new GoogleSession(oauth, new TokenStore(Path.Combine(Path.GetTempPath(), "eteris-sync-tests", Guid.NewGuid().ToString("N") + ".tokens"), new PlainProtector()), Now);
         session.Use(tokens);
         return (new GoogleDriveTransport(http, session.AccessTokenAsync, NoWait), http);
+    }
+
+    // Auditoria, SYN-04: um pedido à Google que esgota o prazo de 60 s (uma TaskCanceledException com TimeoutException por
+    // dentro e a ficha de «Cancelar» por cancelar) não é «Cancelar»: a barra diz «Sem ligação à Google».
+    [Fact]
+    public void SignIn_AnHttpTimeout_IsNotACancel()
+    {
+        var sync = File.ReadAllText(Path.Combine(FindRoot(), "src", "Eteris.Browser", "Sync", "GoogleSync.cs")).Replace("\r\n", "\n");
+        Assert.Contains("catch (OperationCanceledException e) when (cancel.IsCancellationRequested)", sync, StringComparison.Ordinal);
+        Assert.Contains("or System.Net.Sockets.SocketException or OperationCanceledException)", sync, StringComparison.Ordinal);
+    }
+
+    // Auditoria, SYN-07: o Drive também responde 403 (rateLimitExceeded, userRateLimitExceeded) ao limite de pedidos: repete-se
+    // com espera, como o 429. Os outros 403 falham logo.
+    [Fact]
+    public async Task Drive_RateLimit403_IsRetried_OtherForbiddenIsNot()
+    {
+        var google = new FakeGoogle();
+        var (drive, _) = Drive(google);
+        await drive.WriteAsync("eteris/c/keys", [1]);
+        google.FailNext(HttpStatusCode.Forbidden, 2, reason: "userRateLimitExceeded");
+        Assert.Single(await drive.ListAsync("eteris/"));
+        google.FailNext(HttpStatusCode.Forbidden, 1, reason: "rateLimitExceeded");
+        Assert.Single(await drive.ListAsync("eteris/"));
+        google.FailNext(HttpStatusCode.Forbidden);                      // sem motivo de limite: não repete
+        var refused = await Assert.ThrowsAsync<HttpRequestException>(() => drive.ListAsync("eteris/"));
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]   // a resposta diz o tamanho: recusa pelos cabeçalhos
+    [InlineData(true)]    // sem Content-Length: corta a leitura no limite
+    public async Task Drive_AnOversizedFile_IsRefused(bool hideLength)
+    {
+        var google = new FakeGoogle { HideMediaLength = hideLength };
+        var (drive, _) = Drive(google);
+        var keys = "eteris/" + new string('a', 32) + "/keys";
+        google.Put(keys, new byte[SyncPaths.SmallFileBytes + 1]);
+        await Assert.ThrowsAsync<FormatException>(() => drive.ReadAsync(keys));
+        google.Put("eteris/" + new string('b', 32) + "/keys", new byte[SyncPaths.SmallFileBytes]);
+        Assert.Equal(SyncPaths.SmallFileBytes, (await drive.ReadAsync("eteris/" + new string('b', 32) + "/keys"))!.Length);
+    }
+
+    [Fact]
+    public void MaxBytes_ByKindOfFile()
+    {
+        var chain = new string('a', 32);
+        var device = new string('b', 32);
+        Assert.Equal(SyncPaths.SmallFileBytes, SyncPaths.MaxBytes(SyncPaths.Keys(chain)));
+        Assert.Equal(SyncPaths.SmallFileBytes, SyncPaths.MaxBytes(SyncPaths.Rekey(chain, device, device)));
+        Assert.Equal(SyncPaths.SmallFileBytes, SyncPaths.MaxBytes(SyncPaths.Pairing("sessao") + "0-request"));
+        Assert.Equal(SyncPaths.StateFileBytes, SyncPaths.MaxBytes(SyncPaths.State(chain, device)));
+        Assert.Equal(SealedFile.MaxFileBytes, SyncPaths.MaxBytes(SyncPaths.Batch(chain, device, 1)));
+        Assert.Equal(SealedFile.MaxFileBytes, SyncPaths.MaxBytes(SyncPaths.Snapshot(chain, device, 1)));
+        Assert.True(SealedFile.PaddedLength(4 + SealedFile.MaxPlainBytes) + 300 <= SealedFile.MaxFileBytes);
+    }
+
+    [Fact]
+    public async Task FolderTransport_AnOversizedFile_IsRefused()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "eteris-sync-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var transport = new FolderTransport(folder);
+            var keys = SyncPaths.Keys(new string('a', 32));
+            await transport.WriteAsync(keys, new byte[SyncPaths.SmallFileBytes + 1]);
+            await Assert.ThrowsAsync<FormatException>(() => transport.ReadAsync(keys));
+            Assert.Null(await transport.ReadAsync(SyncPaths.Keys(new string('c', 32))));
+        }
+        finally { try { Directory.Delete(folder, recursive: true); } catch (IOException) { } }
     }
 
     [Fact]

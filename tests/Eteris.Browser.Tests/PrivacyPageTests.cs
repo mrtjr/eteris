@@ -185,7 +185,7 @@ public class PrivacyPageTests
             PrivacyPage.SyncSees);
         Assert.Equal("Se ligar a sincronização", PrivacyPage.SyncBlockTitle);
         var page = PrivacyTemplate();
-        foreach (var part in new[] { "title", "goes", "sees", "key" })
+        foreach (var part in new[] { "title", "goes", "sees", "key", "local" })
             Assert.Matches(@"\.textContent = data\.sync\." + part + ";", page);
         Assert.DoesNotContain("innerHTML", page);
         Assert.True(page.IndexOf("<section id=\"sincronizacao\"", StringComparison.Ordinal) < page.IndexOf("<h2>Promessas</h2>", StringComparison.Ordinal));

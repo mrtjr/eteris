@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Eteris.Sync.Model;
 
@@ -94,5 +95,41 @@ public static class Json
     {
         try { return JsonSerializer.Deserialize<T>(json, Options) ?? throw new FormatException("Conteúdo vazio."); }
         catch (JsonException e) { throw new FormatException("Conteúdo ilegível: " + e.Message, e); }
+    }
+
+    // Os lotes e os instantâneos vêm de outros aparelhos da conta: autenticados (quem os escreveu tem a chave), mas um
+    // aparelho com defeito pode deixar campos nulos, um HLC fora do alcance ou «parents» que não são texto. Tudo isso é
+    // «conteúdo incompleto» (FormatException: o lote fica recusado), nunca um NullReferenceException ou um OverflowException
+    // a meio de uma fusão. A validação é toda antes de fundir o primeiro registo: um lote recusado não deixa metade aplicada.
+    public static BatchPayload ParseBatch(ReadOnlySpan<byte> json)
+    {
+        var batch = Parse<BatchPayload>(json);
+        if (batch.Device is null || batch.DeviceName is null) throw Incomplete();
+        Validate(batch.Records, batch.NotesHistory);
+        return batch;
+    }
+
+    public static SnapshotPayload ParseSnapshot(ReadOnlySpan<byte> json)
+    {
+        var snapshot = Parse<SnapshotPayload>(json);
+        if (snapshot.Device is null || snapshot.Covers is null) throw Incomplete();
+        Validate(snapshot.Records, snapshot.NotesHistory);
+        return snapshot;
+    }
+
+    private static FormatException Incomplete() => new("Conteúdo incompleto.");
+
+    private static void Validate(IReadOnlyList<SyncRecord>? records, IReadOnlyList<NotesVersion>? notes)
+    {
+        if (records is null) throw Incomplete();
+        foreach (var record in records)
+        {
+            if (record is null || record.Collection is null || record.Id is null || record.Key is null) throw Incomplete();
+            if (record.Collection == Collections.Notes && record.Data?["parents"] is { } parents
+                && (parents is not JsonArray array || array.Any(n => n is not JsonValue v || !v.TryGetValue<string>(out _))))
+                throw Incomplete();
+        }
+        foreach (var version in notes ?? [])
+            if (version is null || version.Hash is null || version.Parents is null || version.Text is null) throw Incomplete();
     }
 }

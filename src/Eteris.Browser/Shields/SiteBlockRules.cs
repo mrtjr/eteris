@@ -200,14 +200,28 @@ public static class SiteRules
         catch (Exception) { return null; }
     });
 
-    private static readonly Lazy<SiteRuleSet> Rules = new(() =>
+    // O que a carga das regras guardadas deu: uma carga que falhou (a base não abre, ou lança) não é «sem regras», e a
+    // sincronização sabe-o (ReadAll): uma lista que não se leu não se envia como vazia. A carga é uma só por execução do
+    // Éteris: se falhar, o Escudo fica ilegível para a sincronização até o Éteris reiniciar (nada se apaga na conta).
+    private static volatile bool _loadFailed;
+
+    // As regras guardadas, lidas por «all». null ou uma exceção = não se leu (Failed): a lista fica vazia mas marcada.
+    internal static (SiteBlockRules Saved, bool Failed) Load(Func<IReadOnlyList<(string Site, string Domain)>?> all)
     {
         var saved = new SiteBlockRules();
         try
         {
-            foreach (var (site, domain) in Store.Value?.All() ?? []) saved.Add(site, domain);
+            if (all() is not { } rules) return (saved, true);
+            foreach (var (site, domain) in rules) saved.Add(site, domain);
+            return (saved, false);
         }
-        catch (Exception) { }
+        catch (Exception) { return (saved, true); }
+    }
+
+    private static readonly Lazy<SiteRuleSet> Rules = new(() =>
+    {
+        var (saved, failed) = Load(() => Store.Value?.All());
+        _loadFailed = failed;
         return new SiteRuleSet(saved,
             (site, domain) => Quietly(() => Store.Value?.Add(site, domain)),
             (site, domain) => Quietly(() => Store.Value?.Remove(site, domain)),
@@ -259,4 +273,13 @@ public static class SiteRules
     public static void ForgetPrivate() => Rules.Value.ForgetPrivate();
 
     public static IReadOnlyList<(string Site, string Domain)> All() => Rules.Value.All();
+
+    // Para a sincronização: as regras, ou uma IOException se a carga falhou (o Escudo fica ilegível nessa ronda, em vez de
+    // contar como «sem regras» e de as apagar nos outros computadores). Usa as regras em memória, as mesmas que a base.
+    public static IReadOnlyList<(string Site, string Domain)> ReadAll()
+    {
+        _ = Rules.Value;
+        if (_loadFailed) throw new System.IO.IOException("As regras por site não se leram.");
+        return All();
+    }
 }

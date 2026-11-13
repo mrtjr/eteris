@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -15,7 +16,7 @@ internal sealed class FakeGoogle : HttpMessageHandler
     private readonly Dictionary<string, (string Name, byte[] Data, long Modified)> _files = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _uploads = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Challenge, string Redirect)> _codes = new(StringComparer.Ordinal);
-    private readonly Queue<HttpStatusCode> _failures = new();
+    private readonly Queue<(HttpStatusCode Status, string? Reason)> _failures = new();
     private long _clock;
     private int _ids;
 
@@ -68,9 +69,14 @@ internal sealed class FakeGoogle : HttpMessageHandler
         return (hold.Item1.Task, () => hold.Item2.TrySetResult());
     }
 
-    public void FailNext(HttpStatusCode status, int times = 1)
+    // A resposta de «alt=media» não anuncia o tamanho (sem Content-Length): quem lê tem de cortar a leitura no limite.
+    public bool HideMediaLength { get; set; }
+
+    // O pedido seguinte à API do Drive falha com «status»; com «reason», o corpo é o do erro de limite de pedidos da Google
+    // (403 com «usageLimits» e o motivo, por exemplo rateLimitExceeded).
+    public void FailNext(HttpStatusCode status, int times = 1, string? reason = null)
     {
-        for (var i = 0; i < times; i++) _failures.Enqueue(status);
+        for (var i = 0; i < times; i++) _failures.Enqueue((status, reason));
     }
 
     // Como a Google às vezes faz: cria o ficheiro e responde 503 (o próximo envio multipart).
@@ -105,7 +111,16 @@ internal sealed class FakeGoogle : HttpMessageHandler
             hold.Arrived.TrySetResult();
             await hold.Release.Task.WaitAsync(cancellationToken);
         }
-        if (_failures.Count > 0 && uri.Host == "www.googleapis.com") return new HttpResponseMessage(_failures.Dequeue());
+        if (_failures.Count > 0 && uri.Host == "www.googleapis.com")
+        {
+            var (status, reason) = _failures.Dequeue();
+            var failure = new HttpResponseMessage(status);
+            if (reason is not null)
+                failure.Content = new StringContent(
+                    $"{{\"error\":{{\"code\":{(int)status},\"errors\":[{{\"domain\":\"usageLimits\",\"reason\":\"{reason}\"}}]}}}}",
+                    System.Text.Encoding.UTF8, "application/json");
+            return failure;
+        }
 
         if (uri.Host == "oauth2.googleapis.com") return await OAuthAsync(request, uri, cancellationToken);
         if (request.Headers.Authorization?.Parameter != ValidAccessToken)
@@ -157,7 +172,7 @@ internal sealed class FakeGoogle : HttpMessageHandler
                     return new HttpResponseMessage(HttpStatusCode.NoContent);
                 }
                 if (request.Method == HttpMethod.Get && query.GetValueOrDefault("alt") == "media")
-                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(file.Data) };
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = HideMediaLength ? new UnsizedContent(file.Data) : new ByteArrayContent(file.Data) };
             }
         }
         if (path == "/upload/drive/v3/files" && request.Method == HttpMethod.Post)
@@ -287,4 +302,18 @@ internal sealed class FakeGoogle : HttpMessageHandler
 
     private static HttpResponseMessage Json(HttpStatusCode status, JsonNode body)
         => new(status) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+}
+
+// Um corpo que não sabe o seu tamanho (TryComputeLength falso), como uma resposta em blocos: um StreamContent sobre um
+// MemoryStream continuava a anunciar o tamanho.
+internal sealed class UnsizedContent(byte[] data) : HttpContent
+{
+    protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        => stream.WriteAsync(data, 0, data.Length);
+
+    protected override bool TryComputeLength(out long length)
+    {
+        length = 0;
+        return false;
+    }
 }

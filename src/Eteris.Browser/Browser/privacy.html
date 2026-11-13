@@ -132,7 +132,7 @@
        seus dados» das Definições vem para aqui). HTML estático para a âncora funcionar ao abrir; o texto vem dos dados. -->
   <section id="sincronizacao" class="sync" aria-labelledby="s-title">
     <h2 id="s-title"></h2>
-    <div class="card"><p id="s-goes"></p><p id="s-sees"></p><p id="s-key"></p></div>
+    <div class="card"><p id="s-goes"></p><p id="s-sees"></p><p id="s-key"></p><p id="s-local"></p></div>
   </section>
 
   <h2>Promessas</h2>
@@ -148,6 +148,7 @@
   document.getElementById('s-goes').textContent = data.sync.goes;
   document.getElementById('s-sees').textContent = data.sync.sees;
   document.getElementById('s-key').textContent = data.sync.key;
+  document.getElementById('s-local').textContent = data.sync.local;
   // Verificações feitas aqui mesmo, pelo JavaScript da página (o mesmo que um site veria).
   const live = {
     gpc: () => navigator.globalPrivacyControl === true

@@ -71,7 +71,9 @@ public static class GoogleEndpoints
             AutomaticDecompression = DecompressionMethods.All,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
         };
-        var client = new HttpClient(new GoogleOnlyHandler(inner)) { Timeout = TimeSpan.FromSeconds(60) };
+        // MaxResponseContentBufferSize: rede de segurança das respostas lidas por inteiro (listagens, respostas dos envios);
+        // os ficheiros do Drive leem-se por blocos, com o limite de cada tipo (GoogleDriveTransport.ReadAsync).
+        var client = new HttpClient(new GoogleOnlyHandler(inner)) { Timeout = TimeSpan.FromSeconds(60), MaxResponseContentBufferSize = Format.SealedFile.MaxFileBytes };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Eteris-Sync/1");
         return client;
     }

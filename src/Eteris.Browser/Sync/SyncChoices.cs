@@ -16,11 +16,11 @@ internal static class SyncChoices
     public sealed record Row(string Id, string Title, string Text, bool? On, bool Ask);
 
     public const string Intro =
-        "Tudo é cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que recebe: desligar uma linha não apaga nada. Quem perder o kit de recuperação e todos os computadores perde estes dados: não há «esqueci-me do kit».";
+        "Tudo é cifrado neste computador antes de sair. A Google só guarda ficheiros ilegíveis, os tamanhos e as horas, e a chave nunca lá vai. As palavras-passe, os pagamentos e os documentos levam uma segunda cifra própria. Cada computador escolhe o que envia e o que aplica: desligar uma linha não apaga nada, e o que os outros enviam dessa linha fica guardado aqui cifrado (a chave da conta abre-o em qualquer computador ligado). Quem perder o kit de recuperação e todos os computadores perde estes dados: não há «esqueci-me do kit».";
 
     private static readonly IReadOnlyDictionary<string, (string Title, string Text)> Texts = new Dictionary<string, (string, string)>(StringComparer.Ordinal)
     {
-        ["bookmarks"] = ("Favoritos", "Os favoritos e as pastas"),
+        ["bookmarks"] = ("Favoritos", "Os favoritos (endereço e título)"),
         ["spaces"] = ("Espaços", "Nome, cor e emoji; as abas de cada Espaço ficam em cada computador"),
         ["settings"] = ("Definições", "Só as que fazem sentido noutro computador"),
         ["shield"] = ("Decisões do Escudo", "Sites com o Escudo desligado ou estrito, elementos escondidos, bloqueios por site"),
@@ -116,9 +116,12 @@ internal static class SyncChoices
     {
         if (!agent.Enabled || !agent.HasKey) return NotOnHere;
         if (!await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false)) return NotConfirmed($"«{AccountLine}» continua desligado");
-        try { agent.SetAccountSecrets(true); }
+        try
+        {
+            agent.SetAccountSecrets(true);
+            agent.SetCollections(SyncGroups.AccountCollections, true);
+        }
         catch (SyncUserException e) { return e.Message; }
-        agent.SetCollections(SyncGroups.AccountCollections, true);
         return null;
     }
 
@@ -138,13 +141,15 @@ internal static class SyncChoices
         if (groupId == AccountRow)
         {
             if (on) return await ChooseAccountAsync(agent, confirm).ConfigureAwait(false);
-            agent.SetCollections(SyncGroups.AccountCollections, false);
+            try { agent.SetCollections(SyncGroups.AccountCollections, false); }
+            catch (SyncUserException e) { return e.Message; }
             return null;
         }
         if (SyncGroups.Find(groupId) is not { } group) return "Esta linha não existe.";
         if (on && group.AskToEnable && !await confirm(ReauthPurpose.SyncSecrets).ConfigureAwait(false))
             return NotConfirmed($"«{Texts[group.Id].Title}» continua desligado");
-        agent.SetCollections(group.Collections, on);
+        try { agent.SetCollections(group.Collections, on); }
+        catch (SyncUserException e) { return e.Message; }
         return null;
     }
 

@@ -96,8 +96,14 @@ public sealed record KitInfo(string Id, KitState State, long SinceMs, long Snooz
 // O kit em si (o segredo em palavras): só SyncAgent.RevealKit o dá, e só a porta do anfitrião o pede.
 public sealed record RecoveryKitSecret(string Words, string KitId, long SinceMs);
 
+// Um estado que existe mas não se leu (ficheiro ocupado, proteção do Windows ou JSON que falhou) não é «não existe»: o
+// agente recusa ligar, mudar as linhas, mudar o nome ou apagar enquanto o não voltar a ler (SyncAgent.StateUnreadableText),
+// para não o substituir por um vazio.
+public sealed class SyncStateUnreadableException(string message, Exception? inner = null) : Exception(message, inner);
+
 public interface ISyncStore
 {
+    // null = não há estado. Lança SyncStateUnreadableException se existe e não se leu.
     SavedSync? Load();
     void Save(SavedSync saved);
     void Delete();
@@ -175,6 +181,12 @@ public sealed record SyncStatus(SyncPhase Phase, bool Running, long LastSuccessM
     // escrever o identificador do kit novo (SyncAgent.ConfirmRekeyAsync) ou se desistir (SyncAgent.AbandonRekey).
     public bool RekeyPending { get; init; }
 
+    // O estado guardado neste computador existe mas não se leu: nada o substitui por um vazio (SyncAgent.StateUnreadableText).
+    public bool StateUnreadable { get; init; }
+
+    // Itens do cofre que ficaram de fora da última ronda (não abriram ou não se puderam cifrar).
+    public int SecretErrors { get; init; }
+
     // Fase Choose num aparelho sem nenhum estado desta conta (SyncAgent.MayAutoRequest): pode pedir a aprovação.
     public bool MayAutoPair { get; init; }
 
@@ -237,6 +249,8 @@ public sealed class SyncAgent
     private bool _needsUpdate;
     private bool _needsSignIn;
     private int _pendingDevices;
+    // Itens do cofre que ficaram de fora da última ronda (não abriram ou não se puderam cifrar): as Definições di-lo.
+    private int _secretErrors;
     private int _waiting;
     // Identificadores errados na pausa da troca de chave (ConfirmRekeyAsync). Só memória, como as tentativas dos códigos.
     private int _rekeyWrong;
@@ -272,10 +286,30 @@ public sealed class SyncAgent
         _store = store;
         _now = now;
         _delay = delay;
-        _saved = store.Load();
-        // O registo do kit: migra um estado da 0.2.14 (sem registo) e corrige um que não corresponda ao segredo. Só em
-        // memória: vai para o disco na gravação seguinte. Um segredo ilegível não impede o agente de nascer: fica sem kit
-        // (a ronda dá o erro dela, como antes).
+        _defaultName = deviceName;
+        DeviceName = deviceName;
+        try { Adopt(store.Load()); }
+        catch (SyncStateUnreadableException)
+        {
+            // Existe e não se leu: sem estado em memória, parado, e nada o substitui até se voltar a ler (ReloadState).
+            _saved = null;
+            _unreadable = true;
+            _phase = SyncPhase.Stopped;
+            _notice = StateUnreadableText;
+        }
+    }
+
+    private readonly string _defaultName;
+
+    // O estado guardado não se leu (SyncStateUnreadableException): ver EnsureReadable.
+    private bool _unreadable;
+
+    // Fica com o estado lido: o registo do kit (migra um estado da 0.2.14 sem registo e corrige um que não corresponda ao
+    // segredo; só em memória, vai para o disco na gravação seguinte; um segredo ilegível não impede o agente de nascer:
+    // fica sem kit, a ronda dá o erro dela), o nome, a fase e o aviso. Chamar com _gate (ou no construtor).
+    private void Adopt(SavedSync? saved)
+    {
+        _saved = saved;
         if (_saved?.Secret is { } kept)
         {
             try
@@ -295,10 +329,37 @@ public sealed class SyncAgent
             }
         }
         // O nome escolhido aqui; senão o que o estado do motor já tem (ligado antes desta versão); senão o de omissão.
-        DeviceName = DeviceNameText.Clean(_saved?.DeviceName) ?? DeviceNameText.Clean(_saved?.Engine?.Device.Name) ?? deviceName;
+        DeviceName = DeviceNameText.Clean(_saved?.DeviceName) ?? DeviceNameText.Clean(_saved?.Engine?.Device.Name) ?? _defaultName;
         _phase = _saved is { Enabled: true } ? SyncPhase.On : _saved?.Stopped is not null ? SyncPhase.Stopped : SyncPhase.Off;
         _notice = _saved?.Stopped;
     }
+
+    // Volta a ler o estado guardado quando da última vez não se leu. true = já se lê (ou nunca falhou): null conta como
+    // «não há estado». false = continua por ler.
+    public bool ReloadState()
+    {
+        lock (_gate)
+        {
+            if (!_unreadable) return true;
+            SavedSync? loaded;
+            try { loaded = _store.Load(); }
+            catch (SyncStateUnreadableException) { return false; }
+            _unreadable = false;
+            Adopt(loaded);
+        }
+        Notify();
+        return true;
+    }
+
+    // Os cinco sítios que criam um estado vazio quando não há nenhum (_saved ??= new SavedSync()) começam por aqui: com um
+    // estado que existe e não se leu, não criam nada.
+    private void EnsureReadable()
+    {
+        if (!ReloadState()) throw new SyncUserException(StateUnreadableText);
+    }
+
+    public const string StateUnreadableText =
+        "O estado da sincronização deste computador não se conseguiu ler (o ficheiro está ocupado por outro programa, ou a proteção do Windows falhou). Nada foi apagado nem substituído. Feche o Éteris e abra-o outra vez, ou carregue em «Ligar outra vez». Se continuar, «Recomeçar sem o estado antigo» põe o ficheiro de lado e este computador volta a entrar na conta.";
 
     public string DeviceName { get; private set; }
 
@@ -307,6 +368,7 @@ public sealed class SyncAgent
     {
         cancellationToken.ThrowIfCancellationRequested();
         var clean = DeviceNameText.Clean(name) ?? throw new SyncUserException("Escreva um nome para este computador.");
+        EnsureReadable();
         lock (_gate)
         {
             if (clean == DeviceName) return Task.CompletedTask;
@@ -397,6 +459,7 @@ public sealed class SyncAgent
     // anfitrião, antes de chamar isto.
     public void SetCollections(IEnumerable<string> collections, bool on)
     {
+        EnsureReadable();
         lock (_gate)
         {
             _saved ??= new SavedSync();
@@ -614,6 +677,8 @@ public sealed class SyncAgent
                     ChainReplaced = _saved?.Secret is not null
                         && (_phase == SyncPhase.Choose || (_phase == SyncPhase.Stopped && _saved.Stopped == GoneText)),
                     RekeyPending = RekeyHeld(_saved),
+                    StateUnreadable = _unreadable,
+                    SecretErrors = _secretErrors,
                     MayAutoPair = _phase == SyncPhase.Choose && MayAutoRequest(_saved),
                     JoinedNow = _justJoined && _phase == SyncPhase.On,
                     AccountSecrets = _saved is { Secret: not null, AccountSecrets: true },
@@ -636,6 +701,7 @@ public sealed class SyncAgent
 
     public async Task StartAsync(bool switchAccount, CancellationToken cancellationToken = default)
     {
+        EnsureReadable();
         // «Apagar os meus dados…» por acabar (o Éteris fechou a meio): acaba primeiro; a conta nova começa do zero. Se não
         // acabar, diz porquê e como sair dali: tentar de novo, ou ligar sem acabar de apagar (AbandonCloudDeletion).
         if (DeletePending)
@@ -715,6 +781,18 @@ public sealed class SyncAgent
         catch (Exception e) when (IsTransient(e))
         {
             Fail(e);
+            return false;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Uma exceção fora das passageiras (um defeito, não a rede): a ronda não falha calada para sempre. O erro fica à
+            // vista no estado e uma linha no registo, só com o tipo (nunca a mensagem, que pode ter dados).
+            Log?.Invoke($"A ronda acabou com uma falha inesperada ({e.GetType().Name}).");
+            lock (_gate)
+            {
+                _error = $"A sincronização falhou com um erro inesperado ({e.GetType().Name}). O Éteris tenta outra vez mais tarde.";
+                if (_phase == SyncPhase.Starting) _phase = SyncPhase.On;
+            }
             return false;
         }
         finally
@@ -939,6 +1017,7 @@ public sealed class SyncAgent
             _needsSignIn = false;
             _needsUpdate = report.NeedsUpdate;
             _pendingDevices = report.Pending.Count;
+            _secretErrors = report.SecretErrors;
             _phase = SyncPhase.On;
             _justJoined = false;
         }
@@ -1391,6 +1470,7 @@ public sealed class SyncAgent
     // até ao fim da primeira ronda o estado diz JoinedNow.
     private async Task<bool> JoinCoreAsync(AccountSecret account, string? from, bool fresh, CancellationToken cancellationToken)
     {
+        EnsureReadable();
         SavedSync? before;
         bool wasOn, hadBefore;
         lock (_gate)
@@ -2124,6 +2204,7 @@ public sealed class SyncAgent
                     // Os selos novos não servem de nada contra o que o aparelho removido já leu (desenho, secção 4.5).
                     if (device is not null && engine.State.Records.Values.Any(r => !r.Deleted && Model.Collections.IsSecret(r.Collection)))
                         done += " O aparelho removido já tinha as suas palavras-passe: mude as dos sites importantes.";
+                    if (device is not null) done += " Reveja também as proteções (Escudo, «HTTPS primeiro») que esse aparelho possa ter mudado.";
                     _notice = newcomers.Count == 0 ? done
                         : done + $" Apareceu na conta {string.Join(", ", newcomers)}, que não estava na lista: não recebeu a chave nova. Se for seu, junte-o outra vez com o kit novo ou por aprovação.";
                 }
@@ -2187,6 +2268,7 @@ public sealed class SyncAgent
     // A primeira metade (síncrona, só disco): o anfitrião chama-a na rota, antes de responder à página.
     public void BeginCloudDeletion()
     {
+        EnsureReadable();
         GuestFlow? guest;
         List<HostFlow> hosts;
         lock (_gate)
@@ -2220,6 +2302,7 @@ public sealed class SyncAgent
             _needsSignIn = false;
             _needsUpdate = false;
             _pendingDevices = 0;
+            _secretErrors = 0;
             _waiting = 0;
             _devices = [];
             _secretsInAccount = false;
@@ -2268,7 +2351,7 @@ public sealed class SyncAgent
                     catch (ArgumentException e)
                     {
                         left.Add(path);
-                        Log?.Invoke($"Apagar do transporte: «{path}» ficou de fora ({e.Message}).");
+                        Log?.Invoke($"Apagar do transporte: um ficheiro ficou de fora ({e.GetType().Name}).");
                     }
                 }
             }
@@ -2292,7 +2375,7 @@ public sealed class SyncAgent
         catch (Exception e)
         {
             var text = NotDeletedText(e);
-            Log?.Invoke($"Apagar do transporte: não acabou ({e.GetType().Name}: {e.Message}).");
+            Log?.Invoke($"Apagar do transporte: não acabou ({e.GetType().Name}).");
             if (IsTransient(e)) Fail(e);
             lock (_gate)
                 if (ReferenceEquals(_saved, saved) && saved.DeletePending)
@@ -2380,10 +2463,18 @@ public sealed class SyncAgent
             _accountBy = null;
             _accountSince = 0;
             _phase = SyncPhase.Off;
+            // O estado guardado continua por ler (sem «apagar a chave»): fica parado, com o aviso, para a página continuar a
+            // oferecer «Recomeçar sem o estado antigo» (SyncStatus.StateUnreadable) em vez de a esconder até reiniciar.
+            if (_unreadable && !forgetKey)
+            {
+                _phase = SyncPhase.Stopped;
+                _notice = StateUnreadableText;
+            }
             if (forgetKey)
             {
                 if (_saved is not null) _saved.Enabled = false; // uma ronda em curso com este objeto já não grava
                 _saved = null;
+                _unreadable = false; // o estado deixou de existir (ou vai deixar: _store.Delete a seguir)
                 // O disco não deixou apagar o estado: «Sair» acaba na mesma (em baixo) e só depois o diz.
                 try { _store.Delete(); }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)

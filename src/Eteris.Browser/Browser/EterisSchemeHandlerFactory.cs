@@ -455,6 +455,10 @@ public sealed class EterisSchemeHandlerFactory(bool privateContext = false) : IS
             case "/sync-pair-confirm":
                 Sync.SyncService.Agent()?.ConfirmPairing();
                 break;
+            case "/sync-state-reset":
+                // «Recomeçar sem o estado antigo»: o estado da sincronização não se leu; põe o ficheiro de lado.
+                Sync.SyncService.SetAsideState();
+                break;
             case "/sync-pair-cancel":
                 Sync.SyncService.Agent()?.CancelPairing();
                 break;

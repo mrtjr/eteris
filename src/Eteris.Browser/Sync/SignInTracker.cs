@@ -96,6 +96,9 @@ internal sealed class SignInTracker(Func<long> now)
         OAuthException { Failure: OAuthFailure.TimedOut } => SignInStage.TimedOut,
         OAuthException { Failure: OAuthFailure.MissingScope } => SignInStage.DriveDenied,
         OAuthException => SignInStage.Refused,
+        // O prazo do cliente HTTP (60 s) também chega como TaskCanceledException, mas com a TimeoutException por dentro: é falta
+        // de ligação, não «Cancelar».
+        OperationCanceledException { InnerException: TimeoutException } => SignInStage.NoNetwork,
         OperationCanceledException => SignInStage.Idle,
         HttpRequestException or IOException or System.Net.Sockets.SocketException => SignInStage.NoNetwork,
         _ => SignInStage.Refused,

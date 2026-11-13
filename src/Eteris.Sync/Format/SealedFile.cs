@@ -29,6 +29,9 @@ public static class SealedFile
     private const int FixedHeader = 10;
     private const byte OptionBrotli = 1;
     public const int MaxPlainBytes = 64 * 1024 * 1024;
+    // O maior ficheiro selado que um transporte entrega (lote ou instantâneo): o conteúdo máximo, com o enchimento, a
+    // etiqueta e o cabeçalho, e uma folga. Acima disto nem se lê (SyncPaths.MaxBytes).
+    public const int MaxFileBytes = 72 * 1024 * 1024;
 
     public const char Batch = 'B';
     public const char Snapshot = 'S';

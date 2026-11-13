@@ -28,7 +28,11 @@ public readonly record struct Hlc(long Wall, int Counter, string Node) : ICompar
     {
         var parts = text.Split('-', 3);
         if (parts.Length != 3) throw new FormatException("HLC inválido: " + text);
-        return new Hlc(long.Parse(parts[0], CultureInfo.InvariantCulture), int.Parse(parts[1], CultureInfo.InvariantCulture), parts[2]);
+        // Um valor fora do alcance (de um aparelho da conta com defeito) é um formato inválido, não um OverflowException.
+        if (!long.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var wall)
+            || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var counter))
+            throw new FormatException("HLC inválido.");
+        return new Hlc(wall, counter, parts[2]);
     }
 }
 

@@ -5,6 +5,15 @@
 ### Conta e sincronização
 
 - **«Sair» no menu ⋯.** Com sessão iniciada, o cartão da conta no topo do menu tem um «Sair» à direita: sai só deste computador, como «Sair deste computador» nas Definições (nada é revogado na Google e os outros computadores continuam ligados), e nunca apaga a chave da sincronização. Pede confirmação no próprio botão («Confirmar») antes de sair.
+- Notas: uma alteração vinda de outro computador que chega enquanto está a escrever já não é esmagada pela sua edição seguinte; as duas fundem-se.
+- Um ficheiro posto no Drive por quem não tem a chave já não consegue gastar gigabytes de memória: cada tipo de ficheiro tem um tamanho máximo, conferido antes de o ler.
+- Preencher uma palavra-passe num computador que ainda não recebeu a alteração feita noutro já não repõe a antiga em todos.
+- Se o estado da sincronização não se conseguir ler ao abrir, o Éteris diz-no e não o substitui por um vazio quando se carrega em «Ligar»; «Recomeçar sem o estado antigo» põe o ficheiro de lado e este computador volta a entrar na conta.
+- Quando outro computador da conta desliga uma proteção (HTTPS primeiro, DNS cifrado, o Escudo ou o modo estrito num site), o estado da sincronização passa a dizê-lo.
+- Um pedido à Google que esgota o prazo no início de sessão já não desaparece como se tivesse carregado em «Cancelar»: a barra diz «Sem ligação à Google. Tente de novo.»
+- O Drive às vezes responde ao limite de pedidos com um 403 (em vez do 429): o Éteris espera e repete, em vez de falhar a ronda.
+- Uma sincronização que falha por um erro inesperado diz-no nas Definições e deixa um registo local sem dados (`sync\sync.log`, que sai ao «Sair deste computador»), em vez de falhar calada; as Definições dizem também quando há alterações de outro aparelho por ler. Um lote com conteúdo malformado, ou um registo de chaves sem a chave embrulhada, é recusado em vez de fazer cair a ronda.
+- Definições › Sincronização › O que passa entre PCs diz agora que uma linha desligada continua guardada, cifrada, neste computador, e deixa de falar de pastas de favoritos (que não existem).
 
 ### Pesquisa
 

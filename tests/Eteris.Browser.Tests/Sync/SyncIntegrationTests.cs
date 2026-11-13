@@ -140,9 +140,13 @@ public class SyncIntegrationTests
             foreach (var text in new[] { "segredo", "nota", "secret" })
                 Assert.DoesNotContain(text, Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
             Assert.Equal("segredo-da-conta", store.Load()!.Secret);
-            Assert.Null(new DpapiSyncStore(path, new Dpapi("google-tokens")).Load()); // outra «entropia» não abre
+            // Outra «entropia» não abre: não se lê, e não é «não existe» (o agente não o substitui por um vazio).
+            Assert.Throws<Eteris.Sync.Engine.SyncStateUnreadableException>(() => new DpapiSyncStore(path, new Dpapi("google-tokens")).Load());
+            // O ficheiro posto de lado pode ter a chave: sai com «apagar a chave».
+            File.WriteAllBytes(path + DpapiSyncStore.AsideSuffix, [1]);
             store.Delete();
             Assert.Null(store.Load());
+            Assert.False(File.Exists(path + DpapiSyncStore.AsideSuffix));
         }
         finally
         {
@@ -411,6 +415,67 @@ public class SyncIntegrationTests
 
         foreach (var file in new[] { Path.Combine(root, "Sync", "BrowserProfile.cs"), Path.Combine(root, "Data", "UserSettings.cs") })
             Assert.DoesNotContain("DeviceName", File.ReadAllText(file, Encoding.UTF8));
+    }
+
+    // Auditoria, SYN-05: o registo local da sincronização não guarda caminhos nem nomes (só a hora, um texto fixo e o tipo da
+    // falha) e fica pequeno. As pastas do exemplo estão fora de \Users\ para o RepositoryHygieneTests não as confundir com
+    // um perfil verdadeiro.
+    [Fact]
+    public void SyncLog_KeepsNoPaths_AndStaysSmall()
+    {
+        Assert.Equal(@"falha em <perfil>\sync\sync.state de <utilizador>\x",
+            SyncLog.Clean(@"falha em D:\perfil\sync\sync.state de D:\pessoa\x", @"D:\perfil", @"D:\pessoa"));
+        Assert.Equal(@"D:\perfil\x", SyncLog.Clean(@"D:\perfil\x", string.Empty, string.Empty));
+        Assert.Equal(200, SyncLog.Clean(new string('a', 500), @"D:\perfil", @"D:\pessoa").Length);
+        Assert.Equal("a b", SyncLog.Clean("a\r\nb", string.Empty, string.Empty));
+    }
+
+    // Auditoria, SYN-05: tudo o que o agente passa a Log vai para o sync.log: só texto fixo e o tipo da exceção, nunca a
+    // mensagem (que pode ter nomes e caminhos) nem um caminho do transporte.
+    [Fact]
+    public void AgentLog_CarriesOnlyFixedTextAndTheExceptionType()
+    {
+        // Todas as chamadas que levam texto ao registo (também as partidas em várias linhas), no agente e no serviço.
+        var root = GoogleSyncTests.FindRoot();
+        var calls = new List<string>();
+        foreach (var file in new[] { Path.Combine(root, "src", "Eteris.Sync", "Engine", "SyncAgent.cs"), Path.Combine(root, "src", "Eteris.Browser", "Sync", "SyncService.cs") })
+            calls.AddRange(Regex.Matches(File.ReadAllText(file), @"(Log\?\.Invoke|SyncLog\.Write)\([^;]*;", RegexOptions.Singleline).Select(m => m.Value));
+        Assert.NotEmpty(calls);
+        foreach (var call in calls)
+        {
+            Assert.DoesNotContain(".Message", call, StringComparison.Ordinal);
+            Assert.DoesNotContain("{path}", call, StringComparison.Ordinal);
+            Assert.DoesNotContain("{file", call, StringComparison.Ordinal);
+        }
+    }
+
+    // Decisão do dono sobre o sync.log: sai em qualquer «Sair deste computador», não só com «apagar a chave» (o comentário e os
+    // textos dizem-no), e a página de privacidade di-lo.
+    [Fact]
+    public void SyncLog_LeavesOnEverySignOut_AndThePrivacyPageSaysSo()
+    {
+        var service = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "SyncService.cs")).Replace("\r\n", "\n");
+        var start = service.IndexOf("public static void SignOut(bool forgetKey)", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var body = service[start..service.IndexOf("\n    }\n", start, StringComparison.Ordinal)];
+        Assert.Contains("SyncLog.Delete();", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (forgetKey) SyncLog.Delete", body, StringComparison.Ordinal);
+        Assert.Contains("sync.log", Eteris.Browser.Browser.PrivacyPage.SyncLocal, StringComparison.Ordinal);
+        Assert.Contains("Sair deste computador", Eteris.Browser.Browser.PrivacyPage.SyncLocal, StringComparison.Ordinal);
+    }
+
+    // Auditoria, SYN-10: uma carga das regras de bloqueio por site que falhou não é «sem regras»: o Escudo fica ilegível
+    // nessa ronda, e as regras não se apagam nos outros computadores.
+    [Fact]
+    public void SiteRules_AFailedLoad_IsNotAnEmptyList()
+    {
+        Assert.True(Eteris.Browser.Shields.SiteRules.Load(() => throw new IOException("a base não abre")).Failed);
+        Assert.True(Eteris.Browser.Shields.SiteRules.Load(() => null).Failed);                       // a base nem abriu
+        var (saved, failed) = Eteris.Browser.Shields.SiteRules.Load(() => [("exemplo.test", "rastreador.test")]);
+        Assert.False(failed);
+        Assert.Single(saved.All());
+        var profile = File.ReadAllText(Path.Combine(GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", "Sync", "BrowserProfile.cs"));
+        Assert.Contains("Shields.SiteRules.ReadAll().Select(", profile, StringComparison.Ordinal);
     }
 
     // ---- barra de aprovação (0.2.15, T8) ---------------------------------------------------------------------------

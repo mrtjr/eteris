@@ -312,6 +312,27 @@ public sealed class SyncAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task Notes_RemoteEditNotYetApplied_IsMergedWithTheNextLocalEdit()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Profile.SetNotes("linha 1\nlinha 2\nlinha 3");
+        await Settle(casa, trabalho);
+        casa.Profile.SetNotes("linha 1 (casa)\nlinha 2\nlinha 3");
+        Assert.True(await casa.Agent.RunAsync());
+        _now += 1000;
+        // O trabalho está a escrever nas notas: a ronda traz a versão da casa e não a aplica.
+        trabalho.Profile.Refuse = c => c.Collection == Collections.Notes;
+        Assert.True(await trabalho.Agent.RunAsync());
+        Assert.Equal("linha 1\nlinha 2\nlinha 3", trabalho.Profile.Notes);
+        trabalho.Profile.Refuse = _ => false;
+        trabalho.Profile.SetNotes("linha 1\nlinha 2\nlinha 3 (trabalho)");
+        _now += 1000;
+        await Settle(trabalho, casa);
+        Assert.Equal("linha 1 (casa)\nlinha 2\nlinha 3 (trabalho)", casa.Profile.Notes);
+        Assert.Equal(casa.Profile.Notes, trabalho.Profile.Notes);
+    }
+
+    [Fact]
     public async Task RefusedChange_StaysLocal_AndDoesNotResurrectForTheOthers()
     {
         var (casa, trabalho) = await TwoAsync();
@@ -1465,6 +1486,115 @@ public sealed class SyncAgentTests : IDisposable
         await Settle(trabalho, casa);
         Assert.Equal("A", casa.Profile.Title("https://a.example/"));
         Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
+    }
+
+    // Auditoria, SYN-10: um Escudo que não se leu nesta ronda não apaga as regras por site nos outros computadores.
+    [Fact]
+    public async Task UnreadableShield_DoesNotDeleteTheSiteRulesOnTheOtherDevices()
+    {
+        var (casa, trabalho) = await TwoAsync();
+        casa.Profile.Set(Collections.Shield, "rule|exemplo.test|rastreador.test", new JsonObject());
+        await Settle(casa, trabalho);
+        Assert.NotNull(trabalho.Profile.Get(Collections.Shield, "rule|exemplo.test|rastreador.test"));
+
+        trabalho.Profile.Unreadable.Add(Collections.Shield);
+        _now += 1000;
+        await Settle(trabalho, casa);
+        Assert.NotNull(casa.Profile.Get(Collections.Shield, "rule|exemplo.test|rastreador.test"));
+
+        trabalho.Profile.Unreadable.Clear();
+        await Settle(trabalho, casa);
+        Assert.NotNull(casa.Profile.Get(Collections.Shield, "rule|exemplo.test|rastreador.test"));
+        Assert.Equal(casa.Profile.Fingerprint(), trabalho.Profile.Fingerprint());
+    }
+
+    // Um perfil que rebenta a ler, com um erro que não é dos passageiros (um defeito, não a rede).
+    private sealed class ThrowingProfile(MemoryProfile inner) : ILocalProfileReader
+    {
+        public bool Throw { get; set; }
+
+        public LocalRead Read() => Throw ? throw new InvalidCastException("dados inventados") : inner.Read();
+
+        public IReadOnlyList<LocalItem> Collect() => Read().Items;
+
+        public IReadOnlyCollection<LocalChange> Apply(IReadOnlyList<LocalChange> changes) => inner.Apply(changes);
+    }
+
+    // Auditoria, SYN-05: uma exceção fora das passageiras a meio de uma ronda deixa o erro à vista e uma linha de registo
+    // (sem dados), em vez de a ronda falhar calada para sempre.
+    [Fact]
+    public async Task UnexpectedFailure_IsShownAndLogged_NotSwallowed()
+    {
+        var lines = new List<string>();
+        var profile = new ThrowingProfile(new MemoryProfile());
+        var agent = new SyncAgent(() => _cloud, profile, new MemoryStore(), "Casa", Now, Quick) { Log = lines.Add };
+        _cloud.Watch("Casa", agent);
+        await agent.StartAsync();
+        profile.Throw = true;
+        Assert.False(await agent.RunAsync());
+        Assert.Equal("A sincronização falhou com um erro inesperado (InvalidCastException). O Éteris tenta outra vez mais tarde.", agent.Status.Error);
+        Assert.Single(lines);
+        Assert.Contains("InvalidCastException", lines[0]);
+        Assert.DoesNotContain("dados inventados", lines[0]);
+
+        // Quem chama cancelou: continua a ser um cancelamento, não uma falha.
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => agent.RunAsync(cancellationToken: cancelled.Token));
+    }
+
+    // Auditoria, SYN-09: um estado que não se leu não é «não existe»: nada o substitui por um vazio.
+    [Fact]
+    public async Task UnreadableState_IsNotOverwrittenByStart()
+    {
+        var inner = new MemoryStore();
+        var casa = NewDevice("Casa", store: inner);
+        await casa.Agent.StartAsync();
+        Assert.True(await casa.Agent.RunAsync());
+        var id = inner.Load()!.Engine!.Device.Id;
+        var saves = inner.Saves;
+
+        var failing = new FailingStore(inner) { Fail = true };
+        var agent = new SyncAgent(() => _cloud, new MemoryProfile(), failing, "Casa", Now, Quick);
+        Assert.True(agent.Status.StateUnreadable);
+        Assert.Equal(SyncAgent.StateUnreadableText, agent.Status.Notice);
+        await Assert.ThrowsAsync<SyncUserException>(() => agent.StartAsync());
+        Assert.Throws<SyncUserException>(() => agent.SetCollections([Collections.Bookmarks], on: false));
+        Assert.Throws<SyncUserException>(() => agent.BeginCloudDeletion());
+        await Assert.ThrowsAsync<SyncUserException>(() => agent.RenameDeviceAsync("Outro nome"));
+        Assert.Equal(saves, inner.Saves);
+
+        failing.Fail = false;
+        await agent.StartAsync();
+        Assert.Equal(SyncPhase.On, agent.Status.Phase);
+        Assert.False(agent.Status.StateUnreadable);
+        Assert.Equal(id, inner.Load()!.Engine!.Device.Id);
+    }
+
+    // Revisão final: «Sair» sem apagar a chave com o estado ainda por ler não esconde a recuperação (a página deixa de a oferecer
+    // se o estado passar a «desligada» sem StateUnreadable).
+    [Fact]
+    public async Task SignOutWithoutForgettingTheKey_KeepsAnUnreadableStateVisible()
+    {
+        var inner = new MemoryStore();
+        var casa = NewDevice("Casa", store: inner);
+        await casa.Agent.StartAsync();
+        var agent = new SyncAgent(() => _cloud, new MemoryProfile(), new FailingStore(inner) { Fail = true }, "Casa", Now, Quick);
+        agent.SignOut(forgetKey: false);
+        Assert.True(agent.Status.StateUnreadable);
+        Assert.Equal(SyncPhase.Stopped, agent.Status.Phase);
+        Assert.Equal(SyncAgent.StateUnreadableText, agent.Status.Notice);
+    }
+
+    private sealed class FailingStore(MemoryStore inner) : ISyncStore
+    {
+        public bool Fail { get; set; }
+
+        public SavedSync? Load() => Fail ? throw new SyncStateUnreadableException("não se leu") : inner.Load();
+
+        public void Save(SavedSync saved) => inner.Save(saved);
+
+        public void Delete() => inner.Delete();
     }
 
     // Dois computadores criam a conta ao mesmo tempo (Drive vazio para os dois): o de identificador maior sai da sua,
