@@ -127,7 +127,7 @@ public partial class MainWindow
         GlanceExpand.Visibility = Visibility.Collapsed;
         GlanceReading.Text = string.Empty;
         GlanceTitle.Text = LinkPreview.HostOf(url);
-        AutomationProperties.SetName(GlanceCard, "Espreitar: " + GlanceTitle.Text);
+        NameGlanceCard(GlanceTitle.Text);
         GlanceByline.Visibility = Visibility.Collapsed;
         GlanceDescription.Visibility = Visibility.Collapsed;
         GlanceImageHost.Visibility = Visibility.Collapsed;
@@ -147,16 +147,24 @@ public partial class MainWindow
         if (text is not null) Sync.LiveRegion.Announce(GlanceStatusText);
     }
 
+    // O nome acessível do cartão. Um Border não tem par de automação: o nome vai também no ScrollViewer do cartão, que
+    // o leitor de ecrã vê.
+    private void NameGlanceCard(string title)
+    {
+        AutomationProperties.SetName(GlanceCard, "Espreitar: " + title);
+        AutomationProperties.SetName(GlanceScrollViewer, "Espreitar: " + title);
+    }
+
     // O ícone do site: o favicon guardado na cache local (a das listas, só leitura, também na janela privada, que não
     // escreve nela) ou, sem ele, a 1.ª letra do site num círculo. Nenhum pedido.
     private void ShowGlanceSiteIcon(string url, string site)
     {
-        var icon = CachedSiteIcon(url);
+        var icon = CachedSiteIcon(url, rememberMiss: false);
         GlanceFavicon.Source = icon;
         GlanceFavicon.Visibility = icon is null ? Visibility.Collapsed : Visibility.Visible;
         GlanceMonogram.Visibility = icon is null ? Visibility.Visible : Visibility.Collapsed;
         GlanceMonogramText.Text = LinkPreview.Monogram(site);
-        AutomationProperties.SetName(GlanceMonogram, site);
+        AutomationProperties.SetName(GlanceMonogramText, site);
     }
 
     private void AnimateGlanceIn()
@@ -278,7 +286,7 @@ public partial class MainWindow
         ShowGlanceSiteIcon(info.Url, info.Site);
         GlanceReading.Text = info.ReadingTime.Length > 0 ? "· " + info.ReadingTime : string.Empty;
         GlanceTitle.Text = info.Title;
-        AutomationProperties.SetName(GlanceCard, "Espreitar: " + info.Title);
+        NameGlanceCard(info.Title);
         GlanceByline.Text = info.Byline ?? string.Empty;
         GlanceByline.Visibility = info.Byline is null ? Visibility.Collapsed : Visibility.Visible;
         GlanceDescription.Text = info.Description ?? string.Empty;

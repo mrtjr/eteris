@@ -176,11 +176,16 @@ public class ReviewGlanceTests
         Assert.Contains("GlanceExpand.Visibility = info.HasMore ? Visibility.Visible : Visibility.Collapsed;", code);
         Assert.Contains("LinkPreview.NoSummaryStatus", code);
         Assert.DoesNotContain("Esta página não tem texto para mostrar", code);
+        // Um Border não tem par de automação: o nome do cartão também vai no ScrollViewer, e o do monograma no texto.
         Assert.Contains("AutomationProperties.SetName(GlanceCard, \"Espreitar: \" + ", code);
-        Assert.Contains("AutomationProperties.SetName(GlanceMonogram, ", code);
-        // O favicon só vem da cache local (a mesma das listas), também na janela privada, que não escreve nela.
-        Assert.Contains("CachedSiteIcon(", code);
-        Assert.Contains("AppData.SiteIcons([url])", Source("MainWindow.Sidebar.cs"));
+        Assert.Contains("AutomationProperties.SetName(GlanceScrollViewer, \"Espreitar: \" + ", code);
+        Assert.Contains("AutomationProperties.SetName(GlanceMonogramText, ", code);
+        // O favicon só vem da cache local (a mesma das listas), também na janela privada, que não escreve nela. Uma falta
+        // vista pelo Espreitar (a página ainda a carregar, o ícone ainda por guardar) não fica na cache da janela.
+        Assert.Contains("CachedSiteIcon(url, rememberMiss: false)", code);
+        var sidebar = Source("MainWindow.Sidebar.cs");
+        Assert.Contains("AppData.SiteIcons([url])", sidebar);
+        Assert.Contains("if (icon is not null || rememberMiss) _siteIconCache[site] = icon;", sidebar);
     }
 
     private static string Source(string file, [System.Runtime.CompilerServices.CallerFilePath] string caller = "")
