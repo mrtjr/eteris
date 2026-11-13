@@ -268,6 +268,8 @@ public class LinkPreviewTests
     [InlineData("A Apple apresentou o novo iPhone e o novo iPad numa sessão em Cupertino.")]
     [InlineData("O projeto foi reescrito em TypeScript, que compila para JavaScript, e ficou mais fácil de manter.")]
     [InlineData("A OpenAI lançou o ChatGPT para o iPhone, e o YouTube e o LinkedIn seguiram-lhe os passos.")]
+    // Conta cada sequência de letras, não a palavra com a pontuação: «WhatsApp/TikTok» e «JavaScript-based» são duas marcas.
+    [InlineData("Os vídeos do WhatsApp/TikTok e os sites JavaScript-based da PlayStation’s Store ficam de fora.")]
     public void IsProse_AcceptsARealParagraph(string line) => Assert.True(LinkPreview.IsProse(line));
 
     [Theory]

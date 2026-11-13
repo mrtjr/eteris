@@ -322,19 +322,25 @@ public static partial class LinkPreview
     private const string ProsePunctuation = ".,;:!?…'\"«»“”‘’„()[]-–—/。、，！？：；「」『』（）";
     private const string FinalPunctuation = ".!?…:»\"”)。！？";
 
-    // Uma minúscula seguida de uma maiúscula dentro da mesma palavra, numa palavra de pelo menos MinGluedLetters letras
+    // Uma minúscula seguida de uma maiúscula dentro de uma sequência de pelo menos MinGluedLetters letras seguidas
     // («InícioHistória», «LFuncionamentoEstatuto»): duas palavras da estrutura coladas. As marcas em CamelCase são curtas
-    // («WhatsApp», «TikTok», «iPhone», «JavaScript», «PlayStation») e não contam: duas delas no mesmo parágrafo
-    // tiravam-no do resumo e de «Ler tudo aqui».
+    // («WhatsApp», «TikTok», «iPhone», «JavaScript», «PlayStation») e não contam, nem juntas por pontuação
+    // («WhatsApp/TikTok», «JavaScript-based»): duas delas no mesmo parágrafo tiravam-no do resumo e de «Ler tudo aqui».
     private static bool IsGlued(string word)
     {
-        if (word.Count(char.IsLetter) < MinGluedLetters) return false;
-        for (var i = 1; i < word.Length; i++)
-            if (char.IsLower(word[i - 1]) && char.IsUpper(word[i])) return true;
+        foreach (Match run in LetterRun().Matches(word))
+        {
+            if (run.Length < MinGluedLetters) continue;
+            for (var i = 1; i < run.Length; i++)
+                if (char.IsLower(run.Value[i - 1]) && char.IsUpper(run.Value[i])) return true;
+        }
         return false;
     }
 
     private const int MinGluedLetters = 12;
+
+    [GeneratedRegex(@"\p{L}+")]
+    private static partial Regex LetterRun();
 
     // Escritas sem espaços entre palavras: chinês (Han), japonês (hiragana, katakana), tailandês, laosiano, khmer, birmanês.
     private static bool IsUnspacedScript(int c)
