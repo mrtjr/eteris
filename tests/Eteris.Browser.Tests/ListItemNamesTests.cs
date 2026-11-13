@@ -113,6 +113,8 @@ public class ListItemNamesTests
         { "MainWindow.xaml#SideSpaceStrip", "space", "Trabalho · 0 abas", null },
         { "MainWindow.xaml#SidebarLinkList", "link", "Receitas de outono", null },
         { "MainWindow.xaml#SidebarLinkList", "heading", "Hoje", null },
+        // Um nome vazio também cai no ToString(): uma aba a tocar sem título (nem da página nem da Media Session) diz o site.
+        { "MainWindow.xaml#MediaList", "untitled-media", "exemplo.pt", "exemplo.pt" },
         { "MainWindow.xaml#SiteInfoPermissions", "permission", "Câmara: Bloqueado", null },
         { "MainWindow.xaml#SiteKnowledgeList", "knowledge", "3 cookies", "Guardados por este site" },
         { "MainWindow.xaml#MediaList", "media", "Concerto de Natal", "Coro · exemplo.pt" },
@@ -207,6 +209,7 @@ public class ListItemNamesTests
         "permission" => Private(typeof(MainWindow), "PermissionRow", SitePermission.Camera, "Câmara", "Bloqueado", Brushes.Gray),
         "knowledge" => new SiteKnowledge.Line("\uE7BA", "3 cookies", "Guardados por este site"),
         "media" => Tab(t => { t.Title = "Página do coro"; t.MediaTitle = "Concerto de Natal"; t.MediaArtist = "Coro"; }),
+        "untitled-media" => Tab(t => { t.Title = ""; t.ApplyMedia(new MediaInfo(Tabs.MediaState.Playing, true, null, null)); }),
         "download" => Download(),
         "host" => new KeyValuePair<string, int>("rastreador.exemplo", 3),
         "certificate" => Private(typeof(ClientCertificateDialog), "Item", "CN=Ana — emitido por CA Exemplo", "AB12"),

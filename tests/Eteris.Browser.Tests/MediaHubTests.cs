@@ -28,6 +28,19 @@ public class MediaHubTests
     public void Parse_TrimsVeryLongTitles()
         => Assert.Equal(120, MediaInfo.Parse("{\"s\":\"playing\",\"t\":\"" + new string('x', 400) + "\"}").Title!.Length);
 
+    // Sem título da Media Session nem da página, o site (o nome da linha para o leitor de ecrã nunca fica vazio).
+    [Fact]
+    public void Tab_WithoutAnyTitle_HeadlineIsTheSite()
+    {
+        var tab = new BrowserTab("https://www.radio.pt/ao-vivo") { Title = " " };
+        Assert.Equal("radio.pt", tab.MediaHeadline);
+        var raised = new List<string?>();
+        tab.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        tab.Address = "https://outra.pt/";
+        Assert.Contains(nameof(BrowserTab.MediaHeadline), raised);
+        Assert.Equal("outra.pt", tab.MediaHeadline);
+    }
+
     [Fact]
     public void Tab_ShowsMediaTitleOrFallsBackToPageTitle()
     {
