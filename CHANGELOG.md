@@ -1,5 +1,20 @@
 # Alterações
 
+## 0.2.18 — por publicar
+
+### Novo
+
+- **Vigiar o preço** de uma página: no menu do botão direito (ou na paleta, «vigiar») escolha «Vigiar o preço desta página» e o Éteris avisa quando o preço baixar. Lê o preço dos dados estruturados da loja (e não das prestações «12x de…»), e quando não os há, do pedaço escolhido.
+- **Avisar quando um pedaço mudar**: «Avisar quando um pedaço mudar…» deixa clicar num pedaço da página (a disponibilidade, um resultado, um estado de encomenda) e avisa quando o texto dele mudar.
+- As vigias visitam a página num motor escondido, **sem os seus cookies** e sem imagens, de 2 em 2 horas (mais devagar quando falha), e só com o Éteris aberto. Os avisos aparecem dentro do Éteris, nunca do sistema. Um site que recusa visitas automáticas (desafio, 403 ou 429 duas vezes seguidas) fica «bloqueado»: o Éteris não contorna proteções e passa a ler o preço só quando abrir a página.
+- **eteris://vigias** lista as vigias com o último preço e a curva, e deixa abrir, pausar e apagar. A janela privada não vigia nem mostra as vigias.
+- **Recortar um pedaço ao vivo**: «Recortar um pedaço ao vivo…» abre uma janela pequena, sempre por cima, só com esse pedaço da página, que pode recarregar sozinho («Recarregar a cada…»). O recorte usa a sua sessão (os seus cookies), e eteris://privacy diz quais recortes recarregam sozinhos.
+
+### Privacidade
+
+- eteris://privacy passa a contar as vigias ativas e paradas e os recortes que recarregam sozinhos, e a política de privacidade explica os dois.
+- Apagar o histórico de um período apaga também os preços e textos que as vigias leram nesse período (as vigias ficam). «Esquecer ao fechar» deixa as vigias; só o «Triturar» do site as leva.
+
 ## 0.2.17 — 2026-11-13
 
 A versão das **limpezas que chegam a todo o lado**: o que o Éteris diz que apaga, apaga-o em todo o sítio onde os dados estão (também no motor de vídeo e no disco), e os textos de privacidade dizem só o que o código faz. Fecha a auditoria de novembro, com dezenas de correções de segurança, privacidade e estabilidade, e traz o «Sair» no menu ⋯, o Google como escolha de motor de pesquisa, os sites que ficavam incompletos com o Escudo ligado (como o ge.globo.com) e os sites que pedem certificado de cliente.
