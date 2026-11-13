@@ -226,6 +226,9 @@ public partial class MainWindow
             onSession: mobile ? ApplyMobileUserAgent : null);
         _webPanelInjectors[url] = injector;
         var panelHistory = new MainFrameHistory();
+        // A identidade deste painel na fila dos pedidos de certificado (MainWindow.xaml.cs, AskClientCertificate): pergunta
+        // só com o painel à vista na barra lateral, e volta a poder perguntar a cada navegação nova.
+        var certificatePage = new object();
         var browser = new ChromiumWebBrowser(url)
         {
             Visibility = Visibility.Hidden,
@@ -245,8 +248,13 @@ public partial class MainWindow
                 userAgent: mobile ? WebPanels.MobileUserAgent : null,
                 // Rede local: o que o site já tem autorizado nas abas vale também na barra lateral.
                 localNetworkAllowed: IsLocalNetworkAllowed,
-                onMainNavigation: nav => Volatile.Write(ref panelHistory.Last, nav),
-                chooseCertificate: AskClientCertificate),
+                onMainNavigation: nav =>
+                {
+                    Volatile.Write(ref panelHistory.Last, nav);
+                    if (!nav.IsRedirect) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
+                },
+                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _sidebarOpen && _sidebarPanel?.Url == url,
+                    () => ClientCertificateDialog.FromPanel(url), host, port, rows)),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
         // ferramentas de programador agem sobre o painel (WebPanelKeys), não sobre a aba por trás.

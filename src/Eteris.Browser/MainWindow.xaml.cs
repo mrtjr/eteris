@@ -57,6 +57,8 @@ public partial class MainWindow : Window
         Tabs.KeepsAwake = tab => IsCapturingTab(tab) || tab.Media == MediaState.Playing || IsHeld(tab, DateTime.UtcNow)
                                  || _split?.PaneOf(tab) is not null;
         StateChanged += (_, _) => OnWindowStateChanged();
+        // Os pedidos de certificado ainda à espera respondem «não enviar» quando a janela fecha (o CEF tem sempre resposta).
+        Closed += (_, _) => _clientCertificates.Close();
         SourceInitialized += (_, _) =>
         {
             WindowEffects.Apply(this, BorderColor, darkMode: !UsesLight);
@@ -141,6 +143,8 @@ public partial class MainWindow : Window
         {
             OnSplitTabRemoved(tab);
             tab.PropertyChanged -= OnTabPropertyChanged;
+            // Os pedidos de certificado que a aba deixou na fila são recusados (e nada fica preso a ela).
+            _clientCertificates.Forget(tab);
             // Foi para a reserva de outro Espaço sem adormecer (trancada ou com som): o motor fica, escondido.
             if (!tab.IsSleeping && Tabs.WorkspaceOf(tab) is { IsCurrent: false }) continue;
             ReleaseBrowser(tab);
@@ -151,9 +155,44 @@ public partial class MainWindow : Window
     }
 
     // MOT-01: o site pede um certificado de cliente. O diálogo é do Éteris, modal sobre esta janela (nunca o motor, nunca o
-    // primeiro da lista) e nada fica lembrado. Vem da thread de rede do CEF; a janela responde na sua thread.
-    private Task<string?> AskClientCertificate(string host, int port, IReadOnlyList<ClientCertificateRow> rows)
-        => Dispatcher.InvokeAsync(() => ClientCertificateDialog.Ask(this, host, port, rows)).Task;
+    // primeiro da lista) e o Éteris não guarda nada. Vem da thread de rede do CEF; a janela responde na sua thread.
+    // Um diálogo de cada vez, os outros em fila; uma aba fora da vista e a página que já recusou três vezes seguidas são
+    // recusadas sem perguntar (Shields/ClientCertificatePrompts.cs). O diálogo diz de que aba vem o pedido.
+    private readonly ClientCertificatePrompts _clientCertificates = new();
+
+    private Task<string?> AskClientCertificate(BrowserTab tab, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+        => AskClientCertificate(tab, () => Tabs.Tabs.Contains(tab) && IsTabOnScreen(tab), () => ClientCertificateDialog.FromTab(tab.Title),
+            host, port, rows);
+
+    private Task<string?> AskClientCertificate(object page, Func<bool> isOnScreen, Func<string?> from, string host, int port,
+        IReadOnlyList<ClientCertificateRow> rows)
+        => Dispatcher.InvokeAsync(() =>
+        {
+            var answer = _clientCertificates.Ask(page, host, port, rows, from(), isOnScreen);
+            ShowNextClientCertificate();
+            return answer;
+        }).Task.Unwrap();
+
+    // O Espreitar não pergunta nada: o pedido de certificado é recusado.
+    private static Task<string?> RefuseClientCertificate(string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+        => Task.FromResult<string?>(null);
+
+    private void ShowNextClientCertificate()
+    {
+        if (_clientCertificates.Next() is not { } request) return;
+        Dispatcher.InvokeAsync(() =>
+        {
+            // A janela fechou entretanto: o pedido já foi recusado (ClientCertificatePrompts.Close), sem diálogo.
+            if (!ReferenceEquals(_clientCertificates.Showing, request)) return;
+            string? answer = null;
+            try { answer = ClientCertificateDialog.Ask(this, request.Host, request.Port, request.Rows, request.From); }
+            finally
+            {
+                _clientCertificates.Answered(request, answer);
+                ShowNextClientCertificate();
+            }
+        });
+    }
 
     private void CreateBrowser(BrowserTab tab)
     {
@@ -217,6 +256,9 @@ public partial class MainWindow : Window
                 {
                     Volatile.Write(ref mainHistory.Last, nav);
                     OnMainNavigation(tab, nav);
+                    // Navegação nova (não um redirecionamento): a aba volta a poder perguntar por certificados. Chega antes
+                    // do pedido de certificado do documento novo (este sai no aperto de mão, depois do OnBeforeBrowse).
+                    if (!nav.IsRedirect) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(tab));
                 },
                 onCloaked: (host, target) =>
                 {
@@ -230,7 +272,7 @@ public partial class MainWindow : Window
                     });
                 },
                 observatory: tab.Observatory,
-                chooseCertificate: AskClientCertificate),
+                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows)),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += () =>

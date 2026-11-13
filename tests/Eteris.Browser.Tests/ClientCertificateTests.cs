@@ -64,9 +64,13 @@ public class ClientCertificateTests
     [Fact]
     public void EveryRequestHandler_GetsTheEterisDialog()
     {
-        // Abas, sites fixados na barra lateral e Espreitar: nenhum fica com o comportamento do motor.
-        foreach (var file in new[] { "MainWindow.xaml.cs", "MainWindow.WebPanels.cs", "MainWindow.Glance.cs" })
-            Assert.Contains("chooseCertificate: ", Source(file));
+        // Abas, sites fixados na barra lateral e Espreitar: nenhum fica com o comportamento do motor. Abas e sites fixados
+        // perguntam no diálogo do Éteris; o Espreitar não pergunta nada (recusa sempre).
+        foreach (var file in new[] { "MainWindow.xaml.cs", "MainWindow.WebPanels.cs" })
+            Assert.Contains("AskClientCertificate(", Source(file));
+        var glance = Source("MainWindow.Glance.cs");
+        Assert.Contains("chooseCertificate: RefuseClientCertificate", glance);
+        Assert.DoesNotContain("AskClientCertificate", glance);
     }
 
     [Fact]
@@ -80,6 +84,19 @@ public class ClientCertificateTests
         Assert.Contains("IsCancel=\"True\"", xaml);
         Assert.Contains("O site fica a saber quem é.", code + xaml);
         Assert.DoesNotContain("Settings", code);
+    }
+
+    [Fact]
+    public void Dialog_SaysWhereTheRequestComesFrom()
+    {
+        Assert.Equal("Pedido feito na aba «Banco — Entrar».", ClientCertificateDialog.FromTab("  Banco — Entrar "));
+        Assert.Equal("Pedido feito numa aba sem título.", ClientCertificateDialog.FromTab(" "));
+        var longTitle = ClientCertificateDialog.FromTab(new string('a', 200));
+        Assert.Contains("…»", longTitle);
+        Assert.True(longTitle.Length < 100);
+        Assert.Equal("Pedido feito no site fixado na barra lateral (mail.exemplo.pt).",
+            ClientCertificateDialog.FromPanel("https://mail.exemplo.pt/caixa"));
+        Assert.Contains("request.From", Source("MainWindow.xaml.cs"));
     }
 
     [Fact]

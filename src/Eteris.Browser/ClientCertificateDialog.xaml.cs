@@ -15,13 +15,19 @@ public partial class ClientCertificateDialog : Window
     private DateTime _shownUtc = DateTime.MaxValue;
     private DateTime _activatedUtc = DateTime.MinValue;
 
-    private ClientCertificateDialog(string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+    private ClientCertificateDialog(string host, int port, IReadOnlyList<ClientCertificateRow> rows, string? from)
     {
         InitializeComponent();
         // Negrito só no site (o nome vem do pedido, nunca é lido como marcação).
         Question.Inlines.Add(new System.Windows.Documents.Run(host + ":" + port.ToString(System.Globalization.CultureInfo.InvariantCulture))
         { FontWeight = FontWeights.SemiBold });
         Question.Inlines.Add(new System.Windows.Documents.Run(" pede um certificado para o identificar. O site fica a saber quem é."));
+        // De que aba (ou site fixado) vem o pedido: com vários pedidos em fila, cada diálogo diz o seu. Texto simples.
+        if (!string.IsNullOrEmpty(from))
+        {
+            Question.Inlines.Add(new System.Windows.Documents.LineBreak());
+            Question.Inlines.Add(new System.Windows.Documents.Run(from) { FontSize = 12 });
+        }
         foreach (var row in rows)
             List.Items.Add(new Item($"{row.Subject} — emitido por {row.Issuer} — válido até {row.ValidUntil}", row.Thumbprint));
         List.SelectionChanged += (_, _) => SendButton.IsEnabled = List.SelectedItem is Item;
@@ -42,12 +48,27 @@ public partial class ClientCertificateDialog : Window
         Close();
     }
 
+    // O título da aba é escolhido pela página: só texto, cortado.
+    private const int TitleLimit = 60;
+
+    public static string FromTab(string? title)
+    {
+        var text = title?.Trim() ?? string.Empty;
+        if (text.Length == 0) return "Pedido feito numa aba sem título.";
+        if (text.Length > TitleLimit) text = text[..TitleLimit].TrimEnd() + "…";
+        return "Pedido feito na aba «" + text + "».";
+    }
+
+    public static string FromPanel(string url)
+        => "Pedido feito no site fixado na barra lateral ("
+           + (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host.Length > 0 ? uri.Host : url) + ").";
+
     // Pergunta ao utilizador, com o dono na janela do pedido. Corre na thread da janela.
-    public static string? Ask(Window owner, string host, int port, IReadOnlyList<ClientCertificateRow> rows)
+    public static string? Ask(Window owner, string host, int port, IReadOnlyList<ClientCertificateRow> rows, string? from = null)
     {
         try
         {
-            var dialog = new ClientCertificateDialog(host, port, rows);
+            var dialog = new ClientCertificateDialog(host, port, rows, from);
             if (owner.IsLoaded) dialog.Owner = owner;
             dialog.ShowDialog();
             return dialog._chosen;

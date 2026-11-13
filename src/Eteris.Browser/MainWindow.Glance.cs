@@ -178,9 +178,9 @@ public partial class MainWindow
             MenuHandler = new SilentMenuHandler(),
             PermissionHandler = PermissionHandler,
             // A rede local que o utilizador deixou ao site também chega na pré-visualização (sem cartão: a pré-visualização
-            // não pergunta nada).
+            // não pergunta nada). Um pedido de certificado de cliente é recusado, sem diálogo.
             RequestHandler = new PrivacyRequestHandler(() => ShieldEngine.Current, ShieldOn, onBlocked: _ => { }, isPrivate: IsPrivate,
-                localNetworkAllowed: IsLocalNetworkAllowed, chooseCertificate: AskClientCertificate),
+                localNetworkAllowed: IsLocalNetworkAllowed, chooseCertificate: RefuseClientCertificate),
         };
         // O pedido a que o documento pertence fixa-se quando ele é confirmado (ver GlanceLoads).
         browser.FrameLoadStart += (_, e) =>
