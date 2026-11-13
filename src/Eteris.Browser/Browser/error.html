@@ -17,6 +17,8 @@
   h1 { font-size: 30px; font-weight: 600; letter-spacing: -.01em; }
   p { color: var(--muted); font-size: 16px; margin-top: 12px; line-height: 1.5; }
   .url { color: var(--faint); font-size: 13px; margin-top: 10px; word-break: break-all; }
+  .suggest { font-size: 15px; margin-top: 14px; }
+  .suggest a { color: #67e8f9; font-weight: 600; text-underline-offset: 3px; }
   button { margin-top: 26px; border: 0; border-radius: 999px; padding: 11px 26px; font: inherit; font-weight: 600; font-size: 14px;
            color: #0b0d13; background: var(--iris); cursor: pointer; box-shadow: 0 10px 34px rgba(139,92,246,.3); }
   button:hover { filter: brightness(1.08); }
@@ -50,6 +52,7 @@
   html.light ::selection { background: rgba(139, 92, 246, .25); }
 
   html.light button.quiet { background: #fff; }
+  html.light .suggest a { color: #0e7490; }
   html.light .diag { background: rgba(255,255,255,.7); }
   html.light .warn { color: #92400e; background: rgba(245,158,11,.12); }
   html.light body { background: radial-gradient(ellipse 60% 50% at 50% 35%, #ffffff 0%, var(--bg) 70%); }
@@ -61,12 +64,14 @@
   <h1 id="title"></h1>
   <p id="detail"></p>
   <div class="url" id="url"></div>
+  <p class="suggest" id="suggest" hidden>Queria dizer <a id="suggestLink"></a>?</p>
   <div class="diag" id="diag" hidden>
     <div class="cause"><b id="cause"></b><span id="errname"></span></div>
     <ul id="tips"></ul>
   </div>
   <div class="warn" id="warn">Palavras-passe, mensagens e dados de pagamento escritos aqui viajam à vista. Só continue se confia na rede e no site.</div>
   <div class="actions">
+    <button id="search" hidden></button>
     <button id="retry" hidden>Tentar de novo</button>
     <button id="back" hidden>Voltar</button>
     <button id="once" class="quiet" hidden>Continuar sem segurança (só desta vez)</button>
@@ -126,6 +131,22 @@
   if (data.retry) {
     retry.hidden = false;
     retry.addEventListener('click', () => { location.href = data.url; });
+  }
+  // O nome não resolve: «Pesquisar «nome»» no motor escolhido passa a ser o botão principal (o endereço da pesquisa vem
+  // feito do Éteris, só com o nome do site), e «Tentar de novo» fica discreto.
+  if (data.search) {
+    const search = document.getElementById('search');
+    search.textContent = data.search.label;
+    search.hidden = false;
+    search.addEventListener('click', () => { location.href = data.search.url; });
+    retry.classList.add('quiet');
+  }
+  // «Queria dizer X?»: um site do histórico ou dos favoritos a 2 letras ou menos (calculado no Éteris, sem rede).
+  if (data.suggestion) {
+    const link = document.getElementById('suggestLink');
+    link.textContent = data.suggestion.host;
+    link.href = data.suggestion.url;
+    document.getElementById('suggest').hidden = false;
   }
   if (data.offline) {
     // Apanhe a luz: o orbe íris segue o rato e apanha as partículas que caem.

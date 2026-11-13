@@ -19,10 +19,16 @@ public static class InternalPages
     // As páginas internas seguem o tema da aplicação (o servidor marca <html class="light">) e a Cor do Éteris
     // (um <style> no <head> redefine a variável --iris, que todas as páginas usam, --accent com a cor base e --accent-2
     // com o segundo tom: os controlos ligados — pílulas, interruptores — pintam-se com os dois).
+    // É o ponto único por onde passam todas as páginas internas (a nova aba, também a privada, a de erro, o cofre e as
+    // restantes): por isso é aqui que entra a pele comum (Browser/EterisSkin.cs), logo a seguir ao <head>, antes dos
+    // estilos da própria página (que a podem afinar) e antes da Cor do Éteris, nos dois temas. Uma resposta sem <head>
+    // (os redirecionamentos) fica como está.
     public static string Themed(string html, bool light) => Themed(html, light, AccentManager.Stops);
 
     public static string Themed(string html, bool light, IReadOnlyList<Color> accentStops)
     {
+        var opening = html.IndexOf("<head>", StringComparison.OrdinalIgnoreCase);
+        if (opening >= 0) html = html.Insert(opening + "<head>".Length, EterisSkin.Style);
         if (light)
             html = html.Replace("<html lang=\"pt\">", "<html lang=\"pt\" class=\"light\">")
                        .Replace("<meta name=\"color-scheme\" content=\"dark\">", "<meta name=\"color-scheme\" content=\"light\">");

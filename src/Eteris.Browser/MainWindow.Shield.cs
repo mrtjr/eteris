@@ -112,22 +112,68 @@ public partial class MainWindow
     }
 
     // Regras genéricas das listas (##.classe, ###id): aplicadas às classes e ids que existem na página,
-    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde.
-    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde. Depois delas, nas duas
+    // passagens, a página recolhe os buracos que o Escudo deixou (CosmeticScripts.CollapseHoles): os iframe e img
+    // bloqueados desta aba (tab; um painel web não tem) e os lugares só com «Publicidade». Nunca no auto-teste. A página
+    // só recebe os endereços bloqueados que ela própria tem, da origem dela (OwnBlockedAsync; CosmeticScripts).
+    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url, BrowserTab? tab = null)
     {
-        if (ShieldEngine.Cosmetic is not { } engine) return;
         if (WebHost(url) is not { } host || !ShieldOn(host)) return;
+        var holes = !SelfTest.IsTestPage(url);
 
         foreach (var delay in new[] { 0, 2500 })
         {
             if (delay > 0) await Task.Delay(delay);
             if (browser.IsDisposed || browser.GetMainFrame()?.Url != url) return;
-            var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
-            if (!result.Success || result.Result is not string raw) return;
-            var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
-            var css = engine.GenericCss(url, classes, ids);
-            if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
+            if (ShieldEngine.Cosmetic is { } engine)
+            {
+                var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
+                if (!result.Success || result.Result is not string raw) return;
+                var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
+                var css = engine.GenericCss(url, classes, ids);
+                if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
+            }
+            if (holes)
+                PageScript.Run(browser, CosmeticScripts.CollapseHoles(await OwnBlockedAsync(browser, tab?.BlockedElementsFor(url) ?? []), origin: CosmeticScripts.OriginOf(url)));
         }
+    }
+
+    // Dos endereços bloqueados, os que a página tem nos seus iframe e imagens partidas (CosmeticScripts.OwnBlocked).
+    private static async Task<IReadOnlyList<string>> OwnBlockedAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, IReadOnlyList<string> blocked)
+    {
+        if (blocked.Count == 0) return [];
+        var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectElementSources);
+        return result.Success && result.Result is string sources ? CosmeticScripts.OwnBlocked(blocked, sources) : [];
+    }
+
+    // Os bloqueios chegam aos poucos (uma imagem tardia, um iframe de um anúncio que só aparece ao rolar): juntam-se
+    // durante um instante e a página recolhe-os de uma vez. Um endereço repetido também agenda: o elemento que o pede
+    // pode ser novo (a mesma moldura de anúncio numa rota nova de uma SPA, ou ao rolar). Se nenhum endereço bloqueado
+    // for da página (um beacon new Image(), que nunca está nela), só corre a 1.ª chamada, curta, e nada mais.
+    private readonly HashSet<BrowserTab> _holesQueued = [];
+
+    private async void OnBlockedElement(BrowserTab tab, string? page, string url)
+    {
+        try
+        {
+            tab.RecordBlockedElement(page, url);
+            if (!_holesQueued.Add(tab)) return;
+            try { await Task.Delay(400); }
+            finally { _holesQueued.Remove(tab); }
+            await CollapseHolesAsync(tab);
+        }
+        catch (Exception) { }
+    }
+
+    // O documento em vigor no frame principal (não tab.Address, que muda antes do commit): a origem dele escolhe os
+    // endereços, e o script confere-a outra vez.
+    private async Task CollapseHolesAsync(BrowserTab tab)
+    {
+        if (!_browsers.TryGetValue(tab, out var browser) || browser.IsDisposed) return;
+        var url = browser.GetMainFrame()?.Url;
+        if (WebHost(url) is not { } host || !ShieldOn(host) || SelfTest.IsTestPage(url)) return;
+        var own = await OwnBlockedAsync(browser, tab.BlockedElementsFor(url));
+        if (own.Count > 0) PageScript.Run(browser, CosmeticScripts.CollapseHoles(own, labels: false, CosmeticScripts.OriginOf(url)));
     }
 
     private void Shield_Click(object sender, RoutedEventArgs e)

@@ -29,6 +29,7 @@ public class InjectedScriptsSyntaxTests
         { "áudio", AudioIndicator.AudibleScript },
         { "filtros cosméticos", CosmeticScripts.Inject(".anuncio { display: none !important; }") },
         { "filtros cosméticos (antes da página)", CosmeticScripts.InjectEarly(".anuncio { display: none !important; }") },
+        { "Escudo sem buracos (recolher)", CosmeticScripts.CollapseHoles(["https://ads.example/a.gif", "https://ads.example/b.html#x"]) },
         { "corpo async (DevTools)", Eteris.Browser.Browser.PageScript.Expression("return await Promise.resolve(1);", asyncBody: true) },
         { "vídeo só em H.264 (deteção)", VideoEngine.WatchScript },
         { "vídeo só em H.264 (deteção tardia)", VideoEngine.LateWatchScript },

@@ -274,7 +274,9 @@ public partial class MainWindow : Window
                     });
                 },
                 observatory: tab.Observatory,
-                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows)),
+                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows),
+                // Uma imagem ou um iframe da página que o Escudo bloqueou: a página recolhe-o (MainWindow.Shield.cs).
+                onBlockedElement: (page, url) => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, page, url))),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += () =>
@@ -447,7 +449,7 @@ public partial class MainWindow : Window
                 DetectReaderable(tab, browser, url);
                 ApplyHiddenElements(browser, url);
                 CaptureThumbnail(tab, browser, url);
-                _ = ApplyGenericCosmeticsAsync(browser, url);
+                _ = ApplyGenericCosmeticsAsync(browser, url, tab);
                 SettleChainLater(tab);
                 if (SelfTest.IsTestPage(url)) _ = RunSelfTestAsync(tab, browser, url);
                 // Uma página vigiada aberta pelo utilizador: lida ali, sem visita extra (MainWindow.Watch.cs).

@@ -71,4 +71,22 @@ public class PrivacyEntriesTests
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
         return dir!.FullName;
     }
+
+    // Proposta 3: a linha das barras sobrepostas só aparece com a opção ligada (lida da linha de comandos real do motor),
+    // e então avisa que muda o que os sites medem e leva às Definições.
+    [Fact]
+    public void OverlayScrollbars_AppearInThePrivacyPage_OnlyWhenOn()
+    {
+        static PrivacyPage.State With(bool overlay) => new(
+            new Dictionary<string, string>(CefConfigurator.Build("p", overlayScrollbars: overlay).CefCommandLineArgs),
+            Eteris.Browser.Shields.PrivacySignals.Headers, GpcScript: true, ThirdPartyCookiesBlocked: true, WebRtcProtected: true,
+            SecureDns: null, Language: "pt-PT", HideFromCapture: false, VisibleWindows: 1, HiddenWindows: 0);
+
+        Assert.DoesNotContain(PrivacyPage.Promises(With(false)), p => p.Id == "engine-look");
+        var look = Assert.Single(PrivacyPage.Promises(With(true)), p => p.Id == "engine-look");
+        Assert.False(look.Kept);
+        Assert.Contains("muda o que os sites medem", look.Title);
+        Assert.Contains("OverlayScrollbar", look.Detail);
+        Assert.Equal("eteris://settings/#aspeto", look.Fix);
+    }
 }

@@ -50,6 +50,9 @@ public static class NewTabPage
             // Aviso do Éteris (rede de segurança do sandbox: Infrastructure/SandboxFallback.cs), também na janela privada.
             notice,
             greeting = Greeting(now.Hour),
+            // A data do relógio, feita aqui (só a 1.ª letra maiúscula); o dia diz à página até quando vale.
+            date = DateLine(now),
+            day = now.Year * 10000 + now.Month * 100 + now.Day,
             blocked = isPrivate ? 0 : blocked,
             token = isPrivate ? null : InternalPages.Token,
             theme = (prefs ?? new UserSettings()).NewTabTheme,
@@ -86,6 +89,16 @@ public static class NewTabPage
         };
         return Template.Value.Replace("{{DATA}}", JsonSerializer.Serialize(data));
     }
+
+    // «Quinta-feira, 12 de novembro»: a data em português europeu com só a 1.ª letra maiúscula (o text-transform:
+    // capitalize da página dava «Quinta-Feira, 12 De Novembro»).
+    public static string DateLine(DateTime now)
+    {
+        var text = now.ToString("dddd, d 'de' MMMM", PortugueseCulture);
+        return text.Length == 0 ? text : char.ToUpper(text[0], PortugueseCulture) + text[1..];
+    }
+
+    private static readonly System.Globalization.CultureInfo PortugueseCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-PT");
 
     private static string? IconFor(IReadOnlyDictionary<string, string>? icons, string url)
         => HistoryStore.SiteIconKey(url) is { } key ? icons?.GetValueOrDefault(key) : null;
