@@ -138,13 +138,23 @@ public sealed class WatchRunner(Func<bool, IRequestContext> contextFor, Func<IRe
             IsHitTestVisible = false,
         };
         _guard = (AppRedirectGuard)browser.RequestHandler;
+        // Conteúdo web confirmado: a rede de segurança do sandbox deixa de contar quedas dos filhos (INF-01), como nas abas.
+        browser.FrameLoadStart += (_, e) =>
+        {
+            if (e.Frame.IsMain && Infrastructure.SandboxFallback.IsWebContent(e.Url)) Infrastructure.StartupGuard.Current.WebContentCommitted();
+        };
         _browser = browser;
         _host = HostWindow();
         _host.Content = browser;
         _host.Show();
 
         var created = browser.WaitForInitialLoadAsync();
-        if (await Task.WhenAny(created, Task.Delay(CreateLimit, ct)) != created) return null;
+        if (await Task.WhenAny(created, Task.Delay(CreateLimit, ct)) != created)
+        {
+            // O motor não nasceu a tempo: sai já (janela incluída), e a vigia seguinte tenta um novo.
+            Release();
+            return null;
+        }
         ct.ThrowIfCancellationRequested();
         browser.GetBrowserHost()?.SetAudioMuted(true);
         return browser;

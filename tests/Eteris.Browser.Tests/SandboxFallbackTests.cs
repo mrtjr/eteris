@@ -218,7 +218,7 @@ public class SandboxFallbackTests
     }
 
     [Theory]
-    [InlineData("MainWindow.xaml.cs")] [InlineData("MainWindow.WebPanels.cs")] [InlineData("MainWindow.Glance.cs")]
+    [InlineData("MainWindow.xaml.cs")] [InlineData("MainWindow.WebPanels.cs")] [InlineData("MainWindow.Glance.cs")] [InlineData("Watching/WatchRunner.cs")]
     public void EveryBrowser_ReportsCommittedWebContent(string file)
         => Assert.Matches(@"IsWebContent\(e\.Url\)\) (Infrastructure\.)?StartupGuard\.Current\.WebContentCommitted\(\);",
             File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", file)));
