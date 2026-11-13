@@ -43,11 +43,12 @@ public partial class MainWindow
             // Só para a página à vista: uma aba em segundo plano fica registada no Escudo sem interromper.
             if (!ReferenceEquals(tab, Tabs.Active) && _split?.PaneOf(tab) is null) continue;
             if (!_localNetworkAsked.Add(site)) continue;
+            // O cartão que sai sem resposta (a aba navegou, fechou ou adormeceu) deixa o site voltar a perguntar (Drop).
             _pendingPermissions.Add(new PendingPermission(site, [SitePermission.LocalNetwork], allowed =>
             {
                 // Os pedidos travados já falharam: a página volta a carregar para os repetir com autorização.
                 if (allowed && HasEngine(tab) && _browsers.TryGetValue(tab, out var browser) && IsReady(browser)) browser.Reload();
-            }, Drop: () => { }, EmbeddedIn: null, CanRemember: false, Detail: LocalNetworkText.CardDetail(label), Tab: tab));
+            }, Drop: () => _localNetworkAsked.Remove(site), EmbeddedIn: null, CanRemember: false, Detail: LocalNetworkText.CardDetail(label), Tab: tab));
             ShowNextPermission();
         }
         if (active) UpdateShieldButton();

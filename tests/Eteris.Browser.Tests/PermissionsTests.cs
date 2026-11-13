@@ -165,7 +165,8 @@ public sealed class PermissionsTests : IDisposable
         Assert.Contains("else if (current.CanRemember && PermissionRemember.IsChecked == true)", card);
         Assert.Contains("else if (allowed && current.CanRemember)", card);
         var lan = Source("MainWindow.LocalNetwork.cs");
-        Assert.Contains("Drop: () => { }", lan);
+        // O cartão que sai sem resposta (a aba navegou ou fechou) deixa o site voltar a perguntar.
+        Assert.Contains("Drop: () => _localNetworkAsked.Remove(site)", lan);
         Assert.Contains("CanRemember: false", lan);
     }
 
