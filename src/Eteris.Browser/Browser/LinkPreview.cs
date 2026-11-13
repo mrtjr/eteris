@@ -327,10 +327,11 @@ public static partial class LinkPreview
         => c is (>= 0x3040 and <= 0x30FF) or (>= 0x3400 and <= 0x4DBF) or (>= 0x4E00 and <= 0x9FFF) or (>= 0xF900 and <= 0xFAFF)
             or (>= 0x20000 and <= 0x3134F) or (>= 0x0E00 and <= 0x0EFF) or (>= 0x1780 and <= 0x17FF) or (>= 0x1000 and <= 0x109F);
 
-    // O título sem o nome do site (« – Wikipédia, a enciclopédia livre», «PÚBLICO | »). Corta-se o último segmento, ou
-    // o 1.º, quando fala do site: tem o nome do site ou a marca do anfitrião (o nome antes do sufixo público:
-    // «wikipedia», «publico», «bbc»), sem acentos nem maiúsculas e em palavras inteiras. Se as duas pontas falam do site
-    // («GitHub - cli/cli: GitHub’s official…»), sai a mais curta. Nunca fica vazio. Tail é o segmento cortado.
+    // O título sem o nome do site (« – Wikipédia, a enciclopédia livre», «PÚBLICO | »). Corta-se o último segmento ou,
+    // se esse não for o site, o 1.º, quando é o nome do site (NamesSite): começa pelo nome do site ou pela marca do
+    // anfitrião (o nome antes do sufixo público: «wikipedia», «publico», «bbc»), sem acentos nem maiúsculas e em palavras
+    // inteiras, e pouco mais tem. Um segmento que só menciona o site («Ensino público», «Crossing the Atlantic», «Time to
+    // act») é título. Nunca fica vazio. Tail é o segmento cortado.
     public static (string Title, string? Tail) CleanTitle(string title, string? siteName, string host)
     {
         var original = Clean(title) ?? string.Empty;
@@ -346,34 +347,38 @@ public static partial class LinkPreview
         var names = new[] { Words(siteName), Words(Brand(host)) }.Where(n => string.Concat(n).Length >= 2).ToArray();
         var lead = original[..first].Trim();
         var end = original[(last + lastLength)..].Trim();
-        var cutEnd = TalksAboutSite(end, names);
-        var cutLead = TalksAboutSite(lead, names);
-        if (cutEnd && cutLead && lead.Length < end.Length) cutEnd = false;
-        if (cutEnd && original[..last].Trim() is { Length: > 0 } kept) return (kept, end);
-        if (cutLead && original[(first + firstLength)..].Trim() is { Length: > 0 } rest) return (rest, lead);
+        if (NamesSite(end, names) && original[..last].Trim() is { Length: > 0 } kept) return (kept, end);
+        if (NamesSite(lead, names) && original[(first + firstLength)..].Trim() is { Length: > 0 } rest) return (rest, lead);
         return (original, null);
     }
 
     private static readonly string[] TitleSeparators = [" – ", " — ", " | ", " - ", " · ", " :: "];
 
-    // O segmento tem, em palavras seguidas, o nome do site ou a marca («Blog do Zé» → «blogdoze», «El País» → «elpais»).
-    private static bool TalksAboutSite(string segment, string[][] names)
+    // O segmento é o nome do site: as primeiras palavras formam o nome ou a marca («Blog do Zé» → «blogdoze», «El País» →
+    // «elpais») e, até à 1.ª vírgula, sobra no máximo uma palavra («Wikipédia, a enciclopédia livre», «BBC News»,
+    // «PÚBLICO»); ou o segmento inteiro é o nome («Wikimedia Foundation, Inc.»).
+    private static bool NamesSite(string segment, string[][] names)
     {
         var words = Words(segment);
+        var beforeComma = Words(segment.Split(',')[0]);
         foreach (var name in names)
         {
             var wanted = string.Concat(name);
-            for (var i = 0; i < words.Length; i++)
-            {
-                var joined = string.Empty;
-                for (var j = i; j < words.Length && joined.Length < wanted.Length; j++)
-                {
-                    joined += words[j];
-                    if (joined == wanted) return true;
-                }
-            }
+            if (WordsAfter(words, wanted) == 0 || WordsAfter(beforeComma, wanted) is 0 or 1) return true;
         }
         return false;
+    }
+
+    // Quantas palavras sobram depois de as primeiras formarem o nome; -1 quando não o formam.
+    private static int WordsAfter(string[] words, string wanted)
+    {
+        var joined = string.Empty;
+        for (var i = 0; i < words.Length && joined.Length < wanted.Length; i++)
+        {
+            joined += words[i];
+            if (joined == wanted) return words.Length - i - 1;
+        }
+        return -1;
     }
 
     // Palavras sem acentos nem maiúsculas, só com letras e algarismos.

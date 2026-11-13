@@ -375,9 +375,22 @@ public class LinkPreviewTests
     [InlineData("Título da notícia - Observador", null, "observador.pt", "Título da notícia", "Observador")]
     [InlineData("Ukraine war latest - BBC News", "BBC News", "www.bbc.co.uk", "Ukraine war latest", "BBC News")]
     [InlineData("Como fiz isto – Blog do Zé", null, "blogdoze.pt", "Como fiz isto", "Blog do Zé")]
-    // As duas pontas falam do site: sai a mais curta (o nome), não a descrição do repositório.
+    // A descrição do repositório fala do GitHub, mas não começa por ele: sai o 1.º segmento, que é só o nome.
     [InlineData("GitHub - cli/cli: GitHub’s official command line tool", "GitHub", "github.com", "cli/cli: GitHub’s official command line tool", "GitHub")]
     public void CleanTitle_StripsLeadingBrand(string raw, string? site, string host, string expected, string expectedTail)
+    {
+        var (title, tail) = LinkPreview.CleanTitle(raw, site, host);
+        Assert.Equal(expected, title);
+        Assert.Equal(expectedTail, tail);
+    }
+
+    // As duas pontas começam pelo site: corta-se o fim (o sufixo do site), não o título. Um 1.º segmento que fala do site
+    // mas tem mais do que o nome e uma palavra é título.
+    [Theory]
+    [InlineData("Wikipédia em português – Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org", "Wikipédia em português", "Wikipédia, a enciclopédia livre")]
+    [InlineData("Wikipédia – Wikipédia, a enciclopédia livre", "Wikimedia Foundation, Inc.", "pt.wikipedia.org", "Wikipédia", "Wikipédia, a enciclopédia livre")]
+    [InlineData("Ensino público | PÚBLICO", null, "www.publico.pt", "Ensino público", "PÚBLICO")]
+    public void CleanTitle_PrefersCuttingTheSiteSuffix(string raw, string? site, string host, string expected, string expectedTail)
     {
         var (title, tail) = LinkPreview.CleanTitle(raw, site, host);
         Assert.Equal(expected, title);
@@ -390,6 +403,13 @@ public class LinkPreviewTests
     [InlineData("Spider-Man: Homecoming", null, "imdb.com")]
     [InlineData("Público", null, "www.publico.pt")]
     [InlineData("", null, "exemplo.pt")]
+    // A marca do site é uma palavra comum do próprio título (o og:title vem sem o sufixo do site): o título fica inteiro.
+    [InlineData("Ensino público - o que muda em setembro", null, "www.publico.pt")]
+    [InlineData("Serviço Nacional de Saúde – o investimento público caiu", "PÚBLICO", "www.publico.pt")]
+    [InlineData("Crossing the Atlantic – a history of migration", null, "www.theatlantic.com")]
+    [InlineData("Globo de Ouro – os vencedores", null, "g1.globo.com")]
+    [InlineData("A Bola de Ouro – os nomeados", null, "www.abola.pt")]
+    [InlineData("Time to act - the climate report", null, "time.com")]
     public void CleanTitle_KeepsTitlesWithoutSite(string raw, string? site, string host)
     {
         var (title, tail) = LinkPreview.CleanTitle(raw, site, host);
