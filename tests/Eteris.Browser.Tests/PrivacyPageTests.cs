@@ -49,6 +49,46 @@ public class PrivacyPageTests
         Assert.Contains("sem os seus cookies, salvo onde escolheu «com a minha sessão» (kabum.com.br).", with);
     }
 
+    // Achado 8: «Nenhuma vigia» só quando não há nenhuma. Com vigias paradas (em pausa, bloqueadas, sem pedaço), elas
+    // existem: a linha diz que nenhuma está ativa.
+    [Fact]
+    public void Watches_StoppedOnesAreNotNone()
+    {
+        var detail = Find(Good() with { StoppedWatches = 2 }, "watches").Detail;
+        Assert.Equal("Nenhuma vigia ativa (2 paradas: em pausa, bloqueadas ou sem pedaço): o Éteris não visita sites sozinho.", detail);
+        Assert.StartsWith("Nenhuma vigia ativa (1 parada:",
+            Find(Good() with { StoppedWatches = 1 }, "watches").Detail);
+    }
+
+    // Um recorte ao vivo com «Recarregar a cada…» volta a pedir a página sozinho, com a sessão do utilizador: a linha
+    // deixa de dizer «o Éteris não visita sites sozinho» e diz quais.
+    [Fact]
+    public void Watches_ReloadingClipsAreVisitsToo()
+    {
+        var one = Find(Good() with { ReloadingClips = [("kabum.com.br", 5)] }, "watches");
+        Assert.True(one.Kept);
+        Assert.DoesNotContain("não visita sites sozinho", one.Detail);
+        Assert.Equal("Nenhuma vigia. 1 recorte ao vivo recarrega sozinho kabum.com.br a cada 5 min, com a sua sessão (os seus cookies).", one.Detail);
+
+        var two = Find(Good() with { ReloadingClips = [("kabum.com.br", 5), ("pichau.com.br", 60)], StoppedWatches = 1 }, "watches").Detail;
+        Assert.Equal("Nenhuma vigia ativa (1 parada: em pausa, bloqueada ou sem pedaço). "
+            + "2 recortes ao vivo recarregam sozinhos (kabum.com.br a cada 5 min, pichau.com.br a cada 60 min), com a sua sessão (os seus cookies).", two);
+
+        var withWatches = Find(Good() with { Watches = [("pichau.com.br", 120, false)], ReloadingClips = [("kabum.com.br", 15)] }, "watches").Detail;
+        Assert.StartsWith("1 vigia a pichau.com.br:", withWatches);
+        Assert.EndsWith(" 1 recorte ao vivo recarrega sozinho kabum.com.br a cada 15 min, com a sua sessão (os seus cookies).", withWatches);
+    }
+
+    [Fact]
+    public void Current_ReadsTheStoppedWatchesAndTheReloadingClips()
+    {
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "Browser", "PrivacyPage.cs"));
+        var current = page[page.IndexOf("public static State Current()", StringComparison.Ordinal)..];
+        Assert.Contains("ReloadingClips = ClipWindow.Reloading,", current);
+        Assert.Contains("StoppedWatches = ", current);
+        Assert.Empty(ClipWindow.Reloading);
+    }
+
     // A linha «DNS cifrado» lê o que foi pedido ao motor no arranque (Local State), não o estado em vigor: diz-o (EGR-15).
     [Fact]
     public void Dns_DetailSaysItWasRequested_NotVerified()

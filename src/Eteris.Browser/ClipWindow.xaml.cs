@@ -27,6 +27,14 @@ public partial class ClipWindow : Window
     // Recortes abertos em toda a aplicação (a conta do limite).
     public static int OpenCount => s_open.Count;
 
+    // Os recortes com «Recarregar a cada…» ligado (o site e os minutos), para eteris://privacy/: voltam a pedir a página
+    // sozinhos, com a sessão. Uma cópia que se troca no fio da interface (SetReload, Release) e se lê de qualquer fio.
+    private static volatile IReadOnlyList<(string Site, int Minutes)> s_reloading = [];
+    public static IReadOnlyList<(string Site, int Minutes)> Reloading => s_reloading;
+
+    private static void PublishReloading()
+        => s_reloading = s_open.Where(c => c._reloadMinutes > 0).Select(c => (c._site, c._reloadMinutes)).ToList();
+
     private const double BarHeight = 30, Edge = 5, Frame = 1;
     private static readonly TimeSpan IsolateLimit = TimeSpan.FromSeconds(15);
 
@@ -136,6 +144,7 @@ public partial class ClipWindow : Window
     {
         _reloadMinutes = ReloadChoices.Contains(minutes) ? minutes : 0;
         _reload.Stop();
+        PublishReloading();
         if (_reloadMinutes == 0) return;
         _reload.Interval = TimeSpan.FromMinutes(_reloadMinutes);
         _reload.Start();
@@ -156,6 +165,7 @@ public partial class ClipWindow : Window
         _closed = true;
         s_open.Remove(this);
         _reload.Stop();
+        PublishReloading();
         PageScript.Release(_browser);
         try { if (!_browser.IsDisposed) _browser.Dispose(); } catch (Exception) { }
     }
