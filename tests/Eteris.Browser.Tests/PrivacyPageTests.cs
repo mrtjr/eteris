@@ -185,7 +185,7 @@ public class PrivacyPageTests
             PrivacyPage.SyncSees);
         Assert.Equal("Se ligar a sincronização", PrivacyPage.SyncBlockTitle);
         var page = PrivacyTemplate();
-        foreach (var part in new[] { "title", "goes", "sees", "key" })
+        foreach (var part in new[] { "title", "goes", "sees", "key", "local" })
             Assert.Matches(@"\.textContent = data\.sync\." + part + ";", page);
         Assert.DoesNotContain("innerHTML", page);
         Assert.True(page.IndexOf("<section id=\"sincronizacao\"", StringComparison.Ordinal) < page.IndexOf("<h2>Promessas</h2>", StringComparison.Ordinal));
@@ -203,12 +203,89 @@ public class PrivacyPageTests
         Assert.Contains("href=\"eteris://privacy/#sincronizacao\"", Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "settings.html"));
     }
 
+    // INF-10, PRO-09: o isolamento das páginas, o motor completo do Escudo e o HTTPS primeiro estão à vista.
+    [Theory]
+    [InlineData(Isolation.On, true, null)] [InlineData(Isolation.OffBySwitch, false, "--eteris-no-sandbox")]
+    [InlineData(Isolation.OffAfterFailures, false, "precau")] [InlineData(Isolation.OffRetried, false, "neste arranque")]
+    [InlineData(Isolation.OffInThisBuild, false, "Esta vers")]
+    public void Sandbox_RowFollowsTheState(Isolation isolation, bool kept, string? says)
+    {
+        var row = Find(Good() with { Sandbox = isolation }, "sandbox");
+        Assert.Equal(kept, row.Kept);
+        if (says is not null) Assert.Contains(says, row.Detail);
+        Assert.Equal(isolation == Isolation.OffAfterFailures ? PrivacyPage.SandboxRetryUrl : null, row.Fix);
+    }
+
+    [Fact]
+    public void Sandbox_On_SaysWhenTheNetworkServiceIsOutside()
+    {
+        var row = Find(Good() with { NetworkSandboxed = false }, "sandbox");
+        Assert.True(row.Kept);
+        Assert.Contains("fora do AppContainer", row.Detail);
+    }
+
+    // INF-09: o motor já não lê o --no-sandbox do Chromium, por isso a linha deixa de olhar para ele.
+    [Fact]
+    public void Sandbox_Row_NoLongerLooksAtTheChromiumSwitch()
+    {
+        var page = Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "PrivacyPage.cs");
+        Assert.DoesNotContain("\"--no-sandbox\"", page);
+        Assert.DoesNotContain("ou --no-sandbox", Find(Good() with { Sandbox = Isolation.OffBySwitch }, "sandbox").Detail);
+    }
+
+    [Fact]
+    public void Sandbox_RetryPending_SaysNextStart()
+    {
+        var row = Find(Good() with { Sandbox = Isolation.OffAfterFailures, SandboxRetryPending = true }, "sandbox");
+        Assert.Contains("próximo arranque", row.Detail);
+        Assert.Null(row.Fix);
+    }
+
+    [Fact]
+    public void Shield_MinimalList_IsBroken()
+    {
+        var row = Find(Good() with { FullShield = false }, "shield");
+        Assert.False(row.Kept);
+        Assert.Contains("lista m", row.Detail);
+        Assert.True(Find(Good(), "shield").Kept);
+    }
+
+    [Fact]
+    public void HttpsFirst_Off_IsOptional()
+    {
+        Assert.True(Find(Good(), "https-first").Kept);
+        var off = Find(Good() with { HttpsFirst = false }, "https-first");
+        Assert.Null(off.Kept);
+        Assert.Equal("eteris://settings/#privacidade", off.Fix);
+    }
+
+    [Fact]
+    public void Render_GivesTheRetryLinkATokenAndALabel()
+    {
+        var html = PrivacyPage.Render(Good() with { Sandbox = Isolation.OffAfterFailures });
+        Assert.Contains(PrivacyPage.SandboxRetryUrl + "?t=" + InternalPages.Token, html);
+        Assert.Contains("fixLabel", html);
+        Assert.Contains("p.fixLabel", PrivacyTemplate());
+    }
+
+    [Fact]
+    public void RetryRoute_IsAuthorizedAndOutsideThePrivateWindow()
+    {
+        var source = Sync.GoogleSyncTests.Src("Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs");
+        var at = source.IndexOf("Host: \"privacy\", AbsolutePath: \"/sandbox-retry\"", StringComparison.Ordinal);
+        Assert.True(at >= 0);
+        var body = source.Substring(at, 600);
+        Assert.Contains("!privateContext", body);
+        Assert.Contains("InternalPages.IsAuthorized(request.Url)", body);
+        Assert.Contains("StartupGuard.Current.Reenable()", body);
+    }
+
     // R15: o bloco é uma explicação, não uma promessa medida, e não dá à página nenhum poder de rede novo.
     [Fact]
     public void SyncBlock_IsNotAPromise_AndAddsNoNetworkPower()
     {
-        string[] ids = ["gpc-header", "gpc-js", "ad-apis", "quiet", "passwords", "no-google", "cookies", "jars", "referrer", "language",
-            "hints", "lan", "bounce", "cname", "webrtc", "dns", "recall", "gpu-cache", "engine-tuning"];
+        string[] ids = ["sandbox", "gpc-header", "gpc-js", "ad-apis", "quiet", "passwords", "no-google", "cookies", "jars", "referrer", "language",
+            "hints", "lan", "bounce", "cname", "webrtc", "dns", "recall", "gpu-cache", "engine-tuning", "shield", "https-first"];
         foreach (var syncOn in new[] { false, true })
             Assert.Equal(ids, PrivacyPage.Promises(Good() with { SyncOn = syncOn }).Select(p => p.Id));
         var page = PrivacyTemplate();

@@ -19,7 +19,7 @@ public sealed record PerfTweak(string Id, string What, bool OnByDefault, bool Be
 //   --eteris-ajustes=e3,-e5               liga o e3 e desliga o e5; também «tudo», «nada», «motor» (os do motor) e o
 //                                         número de uma experiência para as suas entradas («e14» = e14.1…e14.6);
 //   ETERIS_TEST_AJUSTES=e3,-e5            o mesmo, para os braços A/B das medições (build/perf); inerte numa instalação,
-//                                         como os outros ETERIS_TEST_* (Infrastructure/PerfDiagnostics.cs).
+//                                         como os outros de PerfDiagnostics (Infrastructure/PerfDiagnostics.cs).
 //
 // Ligados por omissão: e1, e4, e5 e, desde a medição da 0.2.14, e8 e e13. Cada um desliga-se sozinho com o sinal menos
 // (--eteris-ajustes=-e8, ETERIS_TEST_AJUSTES=-e8,-e13): é o braço «sem» dos A/B.

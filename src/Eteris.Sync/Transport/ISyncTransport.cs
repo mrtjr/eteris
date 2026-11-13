@@ -36,6 +36,24 @@ public static partial class SyncPaths
 {
     public const string Root = "eteris/";
 
+    // Tamanho máximo de cada tipo de ficheiro, conferido pelo transporte antes de o pôr em memória: quem tem acesso à
+    // pasta sem ter a chave (um aparelho removido) não gasta a memória de quem lê com um ficheiro enorme.
+    public const int SmallFileBytes = 64 * 1024;
+    public const int StateFileBytes = 1024 * 1024;
+
+    // O máximo de um ficheiro pelo seu nome lógico: registo de chaves, mensagens r/ e passos do emparelhamento são
+    // pequenos, o estado de um aparelho cabe em 1 MiB, e o resto (lotes d/, instantâneos s/, nomes desconhecidos) em
+    // SealedFile.MaxFileBytes.
+    public static int MaxBytes(string path)
+    {
+        var parts = path.Split('/');
+        if (parts.Length > 1 && parts[1] == "pair") return SmallFileBytes;
+        if (parts.Length == 3 && parts[2] == "keys") return SmallFileBytes;
+        if (parts.Length > 2 && parts[2] == "r") return SmallFileBytes;
+        if (parts.Length == 4 && parts[2] == "a") return StateFileBytes;
+        return Format.SealedFile.MaxFileBytes;
+    }
+
     public static string Chain(string chain) => $"{Root}{chain}/";
     public static string Keys(string chain) => $"{Root}{chain}/keys";
     public static string Batches(string chain) => $"{Root}{chain}/d/";

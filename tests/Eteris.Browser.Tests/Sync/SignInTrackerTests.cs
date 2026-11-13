@@ -121,6 +121,7 @@ public class SignInTrackerTests
         { new OAuthException("outra coisa"), nameof(SignInStage.Refused) },
         { new OperationCanceledException(), nameof(SignInStage.Idle) },
         { new TaskCanceledException(), nameof(SignInStage.Idle) },
+        { new TaskCanceledException("prazo", new TimeoutException()), nameof(SignInStage.NoNetwork) },
         { new HttpRequestException("sem rede"), nameof(SignInStage.NoNetwork) },
         { new IOException("ligação caiu"), nameof(SignInStage.NoNetwork) },
         { new SocketException(10061), nameof(SignInStage.NoNetwork) },

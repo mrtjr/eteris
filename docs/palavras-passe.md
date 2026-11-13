@@ -151,8 +151,10 @@ repositório (o `VaultService` do Éteris, com a mesma DPAPI) — 2 palavras-pas
   mesmo utilizador altera o ficheiro sem passar por ela. Só valem «true» e «false» exatos (`UserSettings.TryParseSwitch`):
   «False», «FALSE» e « false » são recusados nas rotas `/set` e na importação de perfil, em vez de desligarem o interruptor
   sem pedir o Windows.
-- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; a versão
-  instalada ignora-a, como as outras `ETERIS_TEST_*` (`TestSwitches.ReauthFor`).
+- **Via de teste:** `ETERIS_TEST_REAUTH=aceitar|recusar` responde sem janela nenhuma, para as provas ao vivo; só numa
+  compilação com a via de teste (a publicação não a traz: `build/publish.ps1` desliga a constante `ETERIS_TEST_HOOKS` e
+  confere o binário) e só num perfil de teste (`--user-data-dir`); a versão instalada ignora-a, como as outras
+  `ETERIS_TEST_*` (`TestSwitches.ReauthFor`, `ReauthForProfile`).
 
 Testes: `Vault/WindowsReauthTests` (graça de 5 min por janela sem renovação; bloqueio, suspensão e fecho; «sempre»
 sem graça; recusa; cancelamento quando a aba sai da frente; conta sem proteção; pedidos simultâneos; política D-5;
@@ -899,8 +901,10 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
 
 - **Chave local e impressão gravadas com cada item** (`VaultStore`: colunas `sync_key` e `sync_print`, com
   `K_sync = HKDF(chave do cofre, "Eteris.Cofre:sync")`): `sync_key = HMAC(K_sync, coleção ‖ chave natural)` e
-  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar, «última
-  utilização»), por isso a sincronização compara o cofre **sem decifrar nada**. Um cofre de antes (sem as colunas)
+  `sync_print = HMAC(K_sync, forma canónica do item)`. São escritas sempre que o item muda (guardar, editar), por isso a
+  sincronização compara o cofre **sem decifrar nada**. A «última utilização» não entra na impressão (`SecretSchemas.LastUsedField`):
+  preencher não conta como alterar o item; a utilização segue com a alteração seguinte e, ao aplicar um item recebido, fica a mais
+  recente das duas. Um cofre de antes (sem as colunas)
   ganha-as ao abrir; os itens dele ganham a chave e a impressão na primeira leitura. Nenhuma das duas diz o site, o
   utilizador ou o conteúdo, e são de cada computador (outra chave do cofre, outras chaves locais).
 - **Formato da sincronização** (`Vault/VaultSyncMap.cs`): cada item vai com os nomes de `SecretSchemas`; a chave
@@ -924,7 +928,9 @@ Prova ao vivo: com o D3 (o cofre real do navegador entre dois perfis de teste, p
   repor a pasta inteira). Mudar o cofre neste computador marca uma ronda
   para 10 s depois (`VaultService.Changed` → `SyncService.Touch`), como os favoritos.
 - **Nunca sobe:** o histórico local, os candidatos por guardar, a chave do cofre, a janela de graça, os «Pedir o Windows
-  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre não muda a impressão).
+  Hello…» e a «última utilização» das janelas privadas (nem chega a ser gravada: C7; ler o cofre ou preencher não muda a impressão:
+  `ReadingOrUsingTheVault_ChangesNothingThatSyncs`, `AutofillOnAStaleDevice_DoesNotRevertAPasswordChangedElsewhere` e
+  `OldPrints_AreNotSentAsLocalChanges_AfterTheUpgrade`).
 
 Testes: `Vault/VaultSyncProfileTests` — só chaves e impressões opacas, estáveis ao reabrir; as sete coleções de ida e
 volta para outro computador **sem eco**, com chaves locais diferentes, servindo depois as sugestões, o cartão e «nunca

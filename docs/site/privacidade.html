@@ -68,7 +68,9 @@
       <p>Além das páginas que abre, o Éteris faz apenas estes pedidos, e nenhum leva dados pessoais:</p>
       <ul>
         <li><strong>Atualizações:</strong> pergunta ao GitHub (<code>github.com/mrtjr/eteris</code>, releases) se há uma
-          versão nova e descarrega-a de lá. O GitHub vê o endereço IP do pedido.</li>
+          versão nova e descarrega-a de lá. Pergunta depois de abrir e, com o Éteris aberto, de 6 em 6 horas; se a
+          pergunta falhar, repete-a passados 5, 15 e 60 minutos e quando a rede volta ou o computador retoma. Antes de
+          descarregar, confere a assinatura da lista de versões. O GitHub vê o endereço IP do pedido.</li>
         <li><strong>Listas do Escudo:</strong> descarrega as listas de filtros do uBlock Origin de
           <code>ublockorigin.github.io</code> e a EasyList Portuguesa de <code>easylist-downloads.adblockplus.org</code>.</li>
         <li><strong>Sugestões de pesquisa:</strong> só se as ligar nas Definições (vêm desligadas), o que escreve na barra
@@ -254,7 +256,7 @@
       <section id="connections">
         <h2>4. Connections Éteris makes on its own</h2>
         <ul>
-          <li><strong>Updates:</strong> checks GitHub (<code>github.com/mrtjr/eteris</code> releases) for a new version and downloads it from there. GitHub sees the request's IP address.</li>
+          <li><strong>Updates:</strong> checks GitHub (<code>github.com/mrtjr/eteris</code> releases) for a new version and downloads it from there. It checks after starting and, while Éteris is open, every 6 hours; if a check fails, it tries again after 5, 15 and 60 minutes and when the network comes back or the computer resumes. Before downloading, it verifies the signature of the version list. GitHub sees the request's IP address.</li>
           <li><strong>Shield lists:</strong> downloads uBlock Origin filter lists from <code>ublockorigin.github.io</code> and EasyList Portuguese from <code>easylist-downloads.adblockplus.org</code>.</li>
           <li><strong>Search suggestions:</strong> only if you turn them on (off by default), what you type in the address bar is sent to your chosen search engine.</li>
           <li><strong>Encrypted DNS:</strong> only if you choose it, site names are resolved by the chosen provider.</li>

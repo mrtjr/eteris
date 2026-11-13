@@ -185,7 +185,7 @@ public sealed class SyncEngine
                 var bytes = await _transport.ReadAsync(SyncPaths.Batch(ChainId, Device.Id, seq), cancellationToken).ConfigureAwait(false);
                 if (bytes is null) continue;
                 var context = SyncPaths.BatchContext(Device.Id, seq);
-                var payload = Json.Parse<BatchPayload>(SealedFile.Open(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, context, bytes));
+                var payload = Json.ParseBatch(SealedFile.Open(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, context, bytes));
                 if (payload.Device != Device.Id || payload.Seq != seq) continue;
                 foreach (var version in payload.NotesHistory ?? []) Remember(version, outgoing: false);
                 foreach (var record in payload.Records)
@@ -244,6 +244,17 @@ public sealed class SyncEngine
         Remember(new NotesVersion(NotesId(text, parents), parents, version, text), outgoing: true);
         Accept(record, outgoing: true);
         return version;
+    }
+
+    // As notas mudadas aqui, sabendo o texto da última ronda (baseText, o que este computador já tinha lido da conta). Se
+    // entretanto chegou uma versão de outro aparelho que ficou por aplicar (o utilizador estava a escrever), o texto novo
+    // é descendente do texto antigo e não dessa versão: gravá-lo como descendente dela apagava a edição do outro nos dois.
+    // Funde-se a três (base, versão da conta, texto novo) e a fusão é que segue.
+    public Hlc SetNotes(string text, string? baseText)
+    {
+        var current = Get(Collections.Notes, Collections.NotesKey);
+        if (baseText is null || current is null || baseText == Notes) return SetNotes(text);
+        return SetNotes(NotesMerge.Merge(baseText, Notes, text, Label(current.Version.Node), Label(Device.Id)).Text);
     }
 
     private Hlc Stage(string collection, string key, JsonObject? data, bool deleted)
@@ -444,7 +455,7 @@ public sealed class SyncEngine
                     var bytes = await _transport.ReadAsync(SyncPaths.Batch(ChainId, device, seq), cancellationToken).ConfigureAwait(false)
                                 ?? throw new FormatException("o lote desapareceu");
                     var context = SyncPaths.BatchContext(device, seq);
-                    var payload = Json.Parse<BatchPayload>(SealedFile.Open(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, context, bytes));
+                    var payload = Json.ParseBatch(SealedFile.Open(_keys.FileKey(SealedFile.Batch, context), SealedFile.Batch, ChainId, context, bytes));
                     if (payload.Device != device || payload.Seq != seq) throw new FormatException("lote fora do lugar");
                     if (payload.DeviceName.Length > 0) State.DeviceNames[device] = payload.DeviceName;
                     foreach (var version in payload.NotesHistory ?? []) Remember(version, outgoing: false);
@@ -504,7 +515,7 @@ public sealed class SyncEngine
                 var bytes = await _transport.ReadAsync(path, cancellationToken).ConfigureAwait(false);
                 if (bytes is null) continue;
                 var context = SyncPaths.SnapshotContext(device, seq);
-                var snapshot = Json.Parse<SnapshotPayload>(SealedFile.Open(_keys.FileKey(SealedFile.Snapshot, context), SealedFile.Snapshot, ChainId, context, bytes));
+                var snapshot = Json.ParseSnapshot(SealedFile.Open(_keys.FileKey(SealedFile.Snapshot, context), SealedFile.Snapshot, ChainId, context, bytes));
                 if (snapshot.Device == device && snapshot.Seq == seq) list.Add(snapshot);
             }
             catch (Exception e) when (e is CryptographicException or FormatException or UnsupportedFormatException)
@@ -620,7 +631,9 @@ public sealed class SyncEngine
         };
 
     private static string[] Parents(SyncRecord record)
-        => record.Data?["parents"] is JsonArray array ? array.Select(n => n?.GetValue<string>() ?? string.Empty).Where(s => s.Length > 0).ToArray() : [];
+        => record.Data?["parents"] is JsonArray array
+            ? array.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : string.Empty).Where(s => s.Length > 0).ToArray()
+            : [];
 
     // Identidade de uma versão das notas: o texto E de onde veio (como um commit do git). Voltar a um texto antigo é
     // uma versão nova, não a antiga — senão desfazer uma alteração parecia «já visto» e não chegava aos outros.

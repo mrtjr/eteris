@@ -107,6 +107,25 @@ public sealed class StartupGuard(string path, Func<TimeSpan> sinceStart, Func<Da
         lock (_gate) _webContent = true;
     }
 
+    // A pessoa pediu para voltar a ligar o sandbox («Voltar a ligar», eteris://privacy/): zera a contagem e o «desligado
+    // nesta versão» já no disco, e este arranque fica sem nada por gravar (o Flush do fecho não desfaz a reposição, e um
+    // arranque «bom» sem sandbox não volta a pôr o estado antigo). Sem Begin não há estado e devolve falso.
+    public bool Reenable()
+    {
+        lock (_gate)
+        {
+            if (_begun is null) return false;
+            _begun = _begun with { DisabledFor = null, Failures = 0, Origins = null };
+            _toWrite = null;
+            Write(path, SandboxFallback.Reenabled(_begun));
+            ReenableRequested = true;
+            return true;
+        }
+    }
+
+    // O sandbox foi mandado voltar a ligar neste arranque: volta no próximo (eteris://privacy/ di-lo).
+    public bool ReenableRequested { get; private set; }
+
     private void CountChildFailure(string origin)
     {
         lock (_gate)

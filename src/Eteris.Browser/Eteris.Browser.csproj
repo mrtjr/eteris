@@ -89,6 +89,12 @@
   <!-- CefSharp com o patch v2 do sandbox (build/cefsharp, docs/sandbox.md passo D): só quando se passa o feed local
        produzido por build/cefsharp/pack-local.ps1 (-p:EterisCefSharpFeed=<pasta> -p:EterisCefSharpN=<n>). Sem ele, o
        CefSharp oficial 156.0.150 e nada muda (o ponteiro do sandbox é ignorado: CefConfigurator.SandboxSupported). -->
+  <!-- Ganchos só para as provas: a via de teste da confirmação do Windows (ETERIS_TEST_REAUTH) só existe numa compilação com
+       esta constante (ligada por omissão, para os testes). build/publish.ps1 desliga-a com -p:EterisTestHooks=false e
+       recusa uma publicação que ainda traga o gancho (VAU-08). -->
+  <PropertyGroup>
+    <DefineConstants Condition="'$(EterisTestHooks)' != 'false'">$(DefineConstants);ETERIS_TEST_HOOKS</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup>
     <RestoreAdditionalProjectSources Condition="'$(EterisCefSharpFeed)' != ''">$(EterisCefSharpFeed)</RestoreAdditionalProjectSources>
     <DefineConstants Condition="'$(EterisCefSharpFeed)' != ''">$(DefineConstants);ETERIS_CEFSHARP_SANDBOX</DefineConstants>

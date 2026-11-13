@@ -797,7 +797,12 @@ scripts em `scratchpad\rede\live-*.ps1`):
 **Proxy com o serviço de rede no AppContainer (D9).** Só por argumentos do motor na linha de comandos do Éteris (nada
 nas definições do Windows): um proxy HTTP de teste em Python (`127.0.0.1:8899`, regista cada pedido; responde ele
 próprio a anfitriões `*.test`, que não existem no DNS, e encaminha o resto; `CONNECT` para HTTPS) e um PAC servido em
-`127.0.0.1:8898` (`PROXY 127.0.0.1:8899` para tudo menos `127.0.0.1`/`localhost`). Cópia `sbx-rede` com a ACL (2/2),
+`127.0.0.1:8898` (`PROXY 127.0.0.1:8899` para tudo menos `127.0.0.1`/`localhost`). **Desde a 0.2.17 o motor ignora os interruptores do Chromium postos na linha de comandos do
+Éteris (`CommandLineArgsDisabled`, INF-09); as provas abaixo repetem-se com `--eteris-proxy=<proxy>` e
+`--eteris-proxy-pac=<PAC>`, que só valem com `--user-data-dir` (`StartupArgs.TestProxy`) e põem o `--proxy-server` e o
+`--proxy-pac-url` nos argumentos do próprio Éteris. A prova ao vivo com a publicação com sandbox (o bootstrap continua
+a arrancar, `chrome://sandbox` igual, `--no-sandbox` já sem efeito) está por fazer: se o bootstrap deixar de arrancar com
+esta definição, reverter o commit.** Cópia `sbx-rede` com a ACL (2/2),
 perfil novo por caso; `chrome://sandbox` em todos: **Network Service no AppContainer** `S-1-15-2-373877586-…`
 (integridade Default), renderers Lockdown/Untrusted, GPU Limited/Low.
 
@@ -824,6 +829,16 @@ O proxy em `127.0.0.1` funciona a partir do AppContainer.
 `GET http://clients2.google.com/time/1/current?cup2key=…` (o relógio de rede do Chromium) e um `CONNECT
 www.google.com:443`, apesar do `disable-background-networking` e do `disable-component-update`. Fica para o `main`
 (candidato: `NetworkTimeServiceQuerying` no `disable-features` e procurar a origem do `www.google.com`).
+
+**Arranques falhados que não são do sandbox (INF-04, 0.2.17).** A rede de segurança acima só existe com o sandbox
+possível; sem ele (publicação de emergência, um PC onde o sandbox não arranca) um Éteris que cai ao arrancar caía de novo
+em todos os arranques, sem forma de ir buscar a versão que o corrige. Numa **instalação** (e só nela), o `Program.Main`
+conta cada arranque no ficheiro `startup-rescue.json` (`{"Pending":N}`, na pasta do perfil), depois da instância única e
+antes do motor; a 1.ª página (ou um fecho normal) apaga-o. À 3.ª tentativa seguida (`StartupRescue.FailedStartsToRescue` =
+2 falhadas antes) o Éteris pergunta se se procura já uma versão corrigida; com «Sim» descarrega-a e instala-a (a lista
+assinada de sempre, `UpdateService.RescueAsync`) e reabre, com «Não» arranca normalmente. Custa uma leitura e uma escrita
+de um ficheiro pequeno antes da 1.ª página, só numa instalação: é a exceção à regra R-2 que o dono tem de aceitar (feita
+à mão, sem o `JsonSerializer`, e medida em «Medição do marcador» abaixo).
 
 ## Passo A — resultado (2026-11-07): feito
 

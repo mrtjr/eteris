@@ -60,6 +60,20 @@ public enum SandboxNotice
     RetriedWithoutSandbox,
 }
 
+// O estado do isolamento das páginas para eteris://privacy/ (INF-10): ligado, ou desligado e porquê.
+public enum Isolation
+{
+    On,
+    // Um interruptor na linha de comandos (--eteris-no-sandbox, --no-sandbox) ou o sandbox não ficou ativo.
+    OffBySwitch,
+    // Desligado por precaução depois de arranques falhados nesta versão (a pessoa pode voltar a ligar).
+    OffAfterFailures,
+    // A DLL cliente arrancou o Éteris sem sandbox só neste arranque.
+    OffRetried,
+    // Esta publicação não tem o isolamento (CefSharp oficial, sem o bootstrap).
+    OffInThisBuild,
+}
+
 public readonly record struct SandboxStart(SandboxFallbackState State, bool UseSandbox, SandboxNotice Notice);
 
 public static class SandboxFallback
@@ -178,6 +192,23 @@ public static class SandboxFallback
     // a seguir repõe a sessão com todas as abas a dormir (INF-01), para uma página não voltar a correr sozinha.
     public static bool PreviousStartFailed(SandboxFallbackState previous)
         => previous.DisabledFor is null && (previous.Failures > 0 || (previous.Starting && previous.WithSandbox));
+
+    // Porque é que o isolamento está (ou não) ligado, para a linha «Páginas isoladas» de eteris://privacy/ (INF-10).
+    // «supported»/«available»: esta publicação pode ter sandbox; «active»: o Éteris pediu-o ao motor; «engineNoSandbox»:
+    // há um --no-sandbox do Chromium nos argumentos (o que o Éteris pediu não é o que ficou em vigor).
+    public static Isolation IsolationOf(bool supported, bool available, bool active, SandboxNotice notice, bool manualOff, bool engineNoSandbox)
+    {
+        if (!supported || !available) return Isolation.OffInThisBuild;
+        if (notice == SandboxNotice.DisabledAfterFailures) return Isolation.OffAfterFailures;
+        if (notice == SandboxNotice.RetriedWithoutSandbox) return Isolation.OffRetried;
+        if (manualOff || engineNoSandbox || !active) return Isolation.OffBySwitch;
+        return Isolation.On;
+    }
+
+    // «Voltar a ligar» (D6): o estado depois de a pessoa pedir ao sandbox para voltar a ser tentado no arranque seguinte.
+    // Os ajustes de desempenho desligados por precaução não se tocam.
+    public static SandboxFallbackState Reenabled(SandboxFallbackState state)
+        => state with { Starting = false, DisabledFor = null, Failures = 0, Origins = null };
 
     // Estados de terminação de uma página (CefTerminationStatus da CEF; o enum do CefSharp 156 só vai até 3): o motor
     // não conseguiu lançar o processo (TS_LAUNCH_FAILED = 4) ou matou-o por falha de integridade do código

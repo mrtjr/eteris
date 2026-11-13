@@ -240,4 +240,33 @@ public class WhatsNewTests
         Assert.Contains(WhatsNewPage.Highlights, h => h.Detail.Contains("gerada por IA", StringComparison.Ordinal));
         Assert.DoesNotContain(WhatsNewPage.Highlights, h => h.Detail.Contains("fotografia", StringComparison.OrdinalIgnoreCase));
     }
+
+    // CAD-05, PRO-09: uma publicação de emergência sem sandbox não anuncia o isolamento que não tem.
+    [Fact]
+    public void HighlightsFor_WithoutSandbox_ReplacesOnlyThatHighlight()
+    {
+        var without = WhatsNewPage.HighlightsFor(sandbox: false);
+        Assert.Equal(WhatsNewPage.Highlights.Count, without.Count);
+        Assert.DoesNotContain(without, h => h.Title == WhatsNewPage.SandboxTitle);
+        Assert.Single(without, h => h.Title == WhatsNewPage.NoSandboxTitle);
+        Assert.Equal(WhatsNewPage.Highlights.Where(h => h.Title != WhatsNewPage.SandboxTitle), without.Where(h => h.Title != WhatsNewPage.NoSandboxTitle));
+        Assert.Same(WhatsNewPage.Highlights, WhatsNewPage.HighlightsFor(sandbox: true));
+    }
+
+    [Fact]
+    public void Render_WithoutSandbox_DoesNotAnnounceIsolation()
+    {
+        // O JSON da página escapa os acentos: comparam-se troços ASCII.
+        Assert.Contains("isoladas (sandbox)", WhatsNewPage.Render("0.2.15", sandbox: true));
+        var html = WhatsNewPage.Render("0.2.15", sandbox: false);
+        Assert.DoesNotContain("isoladas (sandbox)", html);
+        Assert.DoesNotContain("corre fechada", html);
+        Assert.Contains("corre sem isolamento", html);
+        Assert.Equal(WhatsNewPage.Render("0.2.15", sandbox: true), WhatsNewPage.Render("0.2.15"));
+    }
+
+    [Fact]
+    public void WhatsNew_IsRenderedWithTheRealSandboxState()
+        => Assert.Contains("WhatsNewPage.Render(SettingsPage.Version, Infrastructure.CefConfigurator.SandboxSupported && Infrastructure.SandboxInfo.Available != 0)",
+            File.ReadAllText(Path.Combine(Root(), "src", "Eteris.Browser", "Browser", "EterisSchemeHandlerFactory.cs")));
 }

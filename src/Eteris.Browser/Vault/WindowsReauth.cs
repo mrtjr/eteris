@@ -215,10 +215,16 @@ public enum TestReauthMode { Accept, Refuse }
 
 public static class Reauth
 {
-    // A real, ou a de teste (ETERIS_TEST_REAUTH, nunca na versão instalada: Infrastructure.TestSwitches.Reauth).
+    // A real, ou a de teste (ETERIS_TEST_REAUTH, nunca na versão instalada: Infrastructure.TestSwitches.Reauth). A de teste só
+    // existe numa compilação com a constante ETERIS_TEST_HOOKS: a publicação não a leva (build/publish.ps1).
+#if ETERIS_TEST_HOOKS
     public static IReauth Create(TestReauthMode? test) => test is { } mode ? new TestReauth(mode) : new WindowsReauth();
+#else
+    public static IReauth Create(TestReauthMode? test) => new WindowsReauth();
+#endif
 }
 
+#if ETERIS_TEST_HOOKS
 // Só para as provas ao vivo: responde sem janela nenhuma.
 internal sealed class TestReauth(TestReauthMode mode) : IReauth
 {
@@ -227,6 +233,7 @@ internal sealed class TestReauth(TestReauthMode mode) : IReauth
     public Task<ReauthOutcome> VerifyAsync(nint owner, string message, CancellationToken cancel)
         => Task.FromResult(mode == TestReauthMode.Accept ? ReauthOutcome.Verified : ReauthOutcome.Canceled);
 }
+#endif
 
 // A real: Windows Hello pelo UserConsentVerifier (COM puro) e, sem Hello, a palavra-passe do Windows (CredUI).
 public sealed class WindowsReauth : IReauth

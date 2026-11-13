@@ -36,7 +36,11 @@ public sealed class FolderTransport : ISyncTransport
     public async Task<byte[]?> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
         var file = Physical(path);
-        try { return await File.ReadAllBytesAsync(file, cancellationToken).ConfigureAwait(false); }
+        try
+        {
+            if (new FileInfo(file).Length > SyncPaths.MaxBytes(path)) throw new FormatException("Ficheiro grande demais.");
+            return await File.ReadAllBytesAsync(file, cancellationToken).ConfigureAwait(false);
+        }
         catch (FileNotFoundException) { return null; }
         catch (DirectoryNotFoundException) { return null; }
     }

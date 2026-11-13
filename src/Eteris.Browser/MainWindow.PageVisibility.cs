@@ -225,7 +225,11 @@ public partial class MainWindow
                 }
                 if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupTrace.Mark("aba.apresentada", presented[i].ToString());
                 // Uma página apareceu: o arranque correu bem (rede de segurança do sandbox).
-                if (presented[i] != PageSwap.Presented.No) Infrastructure.StartupGuard.Current.Healthy();
+                if (presented[i] != PageSwap.Presented.No)
+                {
+                    Infrastructure.StartupGuard.Current.Healthy();
+                    Infrastructure.StartupRescue.Healthy();
+                }
             }
             if (!confirming) _presentationWaits.End(arriving[i]);
         }
@@ -251,6 +255,7 @@ public partial class MainWindow
                 if (PageSwap.NeedsMargin([presented])) await Task.Delay(PageSwap.PresentMargin);
                 _presentation.Presented(page, arrival);
                 Infrastructure.StartupGuard.Current.Healthy();
+                Infrastructure.StartupRescue.Healthy();
             }
         }
         finally

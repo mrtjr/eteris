@@ -101,4 +101,10 @@ public class CefConfiguratorTests
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
         return dir!.FullName;
     }
+
+    // INF-09: o motor deixa de ler os interruptores do Chromium e da CEF postos na linha de comandos do Éteris
+    // (--remote-debugging-port, --proxy-server, --no-sandbox, --user-data-dir do Chromium…); os CefCommandLineArgs do
+    // próprio Éteris continuam a valer.
+    [Fact]
+    public void Build_IgnoresTheProcessCommandLine() => Assert.True(CefConfigurator.Build("p").CommandLineArgsDisabled);
 }

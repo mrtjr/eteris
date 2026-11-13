@@ -6,7 +6,8 @@
 # com --no-sandbox, como até à 0.2.13.
 # Com sandbox exige também a marca dos testes aprovados no modo com sandbox (build/sandbox/out/tests-ok.json, do
 # build-all.ps1) para o HEAD atual, sem alterações por gravar, e para estas mesmas peças (feed, DLL cliente, motor).
-# No fim grava publish\eteris-build.json (versão, modo, commit, CefSharp com o SHA256 das montagens): o pack.ps1 só
+# No fim grava publish\eteris-build.json (versão, modo, commit, CefSharp com o SHA256 das montagens, o SHA256 do manifesto do
+# motor, as versões das ferramentas e a lista dos ficheiros publicados com o SHA256 de cada um): o pack.ps1 só
 # empacota uma pasta com essa marca, e ela fica na instalação como registo do que a release leva. Se alguma verificação
 # falhar, a pasta publish\ é apagada.
 # -GoogleOAuthJson <caminho> (docs/sincronizacao.md): o identificador da aplicação Google («App para computador»,
@@ -40,6 +41,7 @@ $dirty = @(Git-Out @("status", "--porcelain")).Count -gt 0
 # lugar da do NuGet. Só se publica o modo «codecs da plataforma» (nenhum descodificador com patentes no libcef) e só
 # da mesma versão/commit que o CefSharp espera; cada ficheiro tem de bater com o SHA256 do manifesto.
 $cefRuntime = Join-Path $root "build\cef-codecs\out\runtime"
+$runtimeManifestSha = $null
 if (Test-Path -LiteralPath (Join-Path $cefRuntime "libcef.dll")) {
   $expectedFileVersion = "156.0.15+gcf671c0+chromium-156.0.8078.80"
   $expectedCommit = "cf671c072925b27823a61181152f4f288e8e4306"
@@ -55,6 +57,17 @@ if (Test-Path -LiteralPath (Join-Path $cefRuntime "libcef.dll")) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Motor com codecs: falta $($file.path)" }
     if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) { throw "Motor com codecs: $($file.path) não bate com o manifesto" }
   }
+  # Um ficheiro a mais na pasta do motor iria para a publicação sem estar no manifesto (CAD-08): o manifesto lista tudo o
+  # que o build.ps1 do motor empacotou, menos ele próprio.
+  $inManifest = @{}
+  foreach ($file in $manifest.files) { $inManifest[($file.path -replace '\\', '/')] = $true }
+  $runtimePrefix = (Resolve-Path -LiteralPath $cefRuntime).Path.TrimEnd('\') + '\'
+  foreach ($file in Get-ChildItem -LiteralPath $cefRuntime -File -Recurse) {
+    $relative = $file.FullName.Substring($runtimePrefix.Length) -replace '\\', '/'
+    if ($relative -eq "manifest.json") { continue }
+    if (-not $inManifest.ContainsKey($relative)) { throw "Motor com codecs: $relative está na pasta do motor e fora do manifesto (recompile com build/cef-codecs/build.ps1 ou apague-o)" }
+  }
+  $runtimeManifestSha = Sha256 $manifestPath
   "Motor com codecs da plataforma: $fileVersion ($(@($manifest.files).Count) ficheiros verificados)"
 }
 
@@ -103,7 +116,7 @@ if ($NoSandbox) {
   "Sandbox: CefSharp 156.0.150-eteris.$CefSharpN ($CefSharpFeed), DLL cliente $SandboxClientDll"
   $sandboxArgs = @("-p:EterisSandbox=true", "-p:EterisCefSharpFeed=$CefSharpFeed", "-p:EterisCefSharpN=$CefSharpN", "-p:EterisSandboxClientDll=$SandboxClientDll")
 }
-dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o $publishDir -p:Version=$Version @sandboxArgs
+dotnet publish "$root\src\Eteris.Browser" -c Release -r win-x64 --self-contained -o $publishDir -p:Version=$Version -p:EterisTestHooks=false @sandboxArgs
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish saiu com $LASTEXITCODE" }
 
 # A forma publicada tem de ser a pedida (docs/sandbox.md, opção B): com sandbox, Eteris.Browser.exe = bootstrap da CEF,
@@ -132,6 +145,15 @@ if ($NoSandbox) {
   if ((Sha256 (Join-Path $publishDir "Eteris.Browser.dll")) -ne $testsInfo.client_sha256) { throw "Sandbox: a DLL cliente publicada não é a testada" }
   "Publicado COM sandbox: $publishDir (bootstrap $($exe.ProductName) $($exe.ProductVersion), DLL cliente CEF $($client.ProductVersion))"
 }
+
+# A via de teste da confirmação do Windows (ETERIS_TEST_REAUTH) não vai no binário publicado (VAU-08): só existe numa
+# compilação com a constante ETERIS_TEST_HOOKS, que o dotnet publish de cima desliga. Confere-se o .NET publicado (o
+# Eteris.App.dll com sandbox, o Eteris.Browser.dll sem ele) à procura do nome da variável em UTF-16LE, onde o compilador
+# guarda os textos; procurado nos bytes, sem alinhamento (um texto pode começar num byte ímpar).
+$dotnetDll = Join-Path $publishDir $(if ($NoSandbox) { "Eteris.Browser.dll" } else { "Eteris.App.dll" })
+$latin1 = [Text.Encoding]::GetEncoding(28591)
+$hookName = $latin1.GetString([Text.Encoding]::Unicode.GetBytes('ETERIS_TEST_REAUTH'))
+if ($latin1.GetString([IO.File]::ReadAllBytes($dotnetDll)).Contains($hookName)) { throw "O binário publicado traz a via de teste da reautenticação (ETERIS_TEST_REAUTH): o dotnet publish tem de levar -p:EterisTestHooks=false" }
 
 # Nenhum binário nosso publicado leva o caminho do perfil de quem compila (o nome do utilizador do Windows), nos dois
 # modos: Eteris.Browser.dll (o .NET sem sandbox, a DLL cliente nativa com ele), Eteris.App.dll, eteris_shields.dll, o
@@ -163,6 +185,20 @@ if ($oauth) {
   Write-Warning "Publicado SEM login Google (falta -GoogleOAuthJson): a secção Sincronização e o menu dizem «indisponível nesta compilação». O pack.ps1 só a empacota com -SemLogin."
 }
 
+# As versões das ferramentas que fizeram esta publicação (nulo quando o comando falha ou não existe) e a lista do que ficou
+# em publish\ com o SHA256 de cada ficheiro (CAD-08): o pack.ps1 confere-a antes de empacotar, e a marca fica como registo.
+function Tool-Version([string]$Command, [string[]]$Arguments, [string]$LineStart = "") {
+  $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  try {
+    $lines = @(& $Command @Arguments 2>$null | ForEach-Object { (([string]$_).Trim() -replace '\s+', ' ') } | Where-Object { $_ -and $_ -match $LineStart })
+    if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) { $null } else { $lines[0] }
+  } catch { $null } finally { $ErrorActionPreference = $old }
+}
+$publishPrefix = (Resolve-Path -LiteralPath $publishDir).Path.TrimEnd('\') + '\'
+$publishPaths = @(Get-ChildItem -LiteralPath $publishDir -File -Recurse | ForEach-Object { $_.FullName.Substring($publishPrefix.Length) -replace '\\', '/' })
+[Array]::Sort($publishPaths, [StringComparer]::Ordinal)
+$publishFiles = @(foreach ($relative in $publishPaths) { [ordered]@{ path = $relative; sha256 = Sha256 (Join-Path $publishDir ($relative -replace '/', '\')) } })
+
 # Marca do fim (só aqui, com tudo verificado): o pack.ps1 exige-a e ela vai na instalação como registo da release.
 $build = [ordered]@{
   version               = $Version
@@ -174,5 +210,12 @@ $build = [ordered]@{
   sandbox_client_sha256 = $(if ($NoSandbox) { $null } else { $testsInfo.client_sha256 })
   sandbox_tests_utc     = $(if ($NoSandbox) { $null } else { $testsInfo.tested_utc })
   google_oauth          = [bool]$oauth
+  runtime_manifest_sha256 = $runtimeManifestSha
+  tools                 = [ordered]@{
+    dotnet_sdk = Tool-Version "dotnet" @("--version")
+    rustc      = Tool-Version "rustc" @("--version")
+    vpk        = Tool-Version "dotnet" @("tool", "list", "-g") "^vpk\s"
+  }
+  files                 = $publishFiles
 }
 [IO.File]::WriteAllText((Join-Path $publishDir "eteris-build.json"), ($build | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
