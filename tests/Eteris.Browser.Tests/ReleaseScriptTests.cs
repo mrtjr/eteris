@@ -411,6 +411,11 @@ public class ReleaseScriptTests
         var script = File.ReadAllText(Path.Combine(Root(), "build", "release.ps1"));
         Assert.DoesNotContain("Get-FileHash", script);
         Assert.Contains("[System.Security.Cryptography.SHA256]::Create()", script);
+        // O pack.ps1 também corre no CI (SandboxPublishTests): a conferência da marca da publicação (CAD-08) segue a mesma
+        // regra.
+        var pack = File.ReadAllText(Path.Combine(Root(), "build", "pack.ps1"));
+        Assert.DoesNotContain("Get-FileHash", pack);
+        Assert.Contains("[System.Security.Cryptography.SHA256]::Create()", pack);
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string source = "")
