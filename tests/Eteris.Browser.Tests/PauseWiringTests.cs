@@ -206,6 +206,16 @@ public class PauseWiringTests
         Assert.Contains("foreach (var window in PausedWindows()) window.RefreshPauseTimer(window._pause!);", everywhere);
     }
 
+    // Uma transferência que começa durante a Pausa (uma página escondida, a resposta a um clique de antes do Ctrl+.) não
+    // abre o painel das transferências por cima do ecrã calmo (um Popup é uma janela própria): abre ao voltar.
+    [Fact]
+    public void ADownloadDuringThePause_OpensItsPanelOnTheReturn()
+    {
+        Assert.Matches(@"if \(_pause is \{ \} paused\) paused\.DownloadStarted = true;\s*else DownloadsPopup\.IsOpen = true;", Source("MainWindow.Downloads.cs"));
+        var exit = Regex.Match(Source("MainWindow.Pause.cs"), @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Contains("if (state.DownloadStarted) DownloadsPopup.IsOpen = true;", exit);
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

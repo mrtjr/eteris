@@ -60,6 +60,8 @@ public partial class MainWindow
         public string? LastCountdown;
         // Os avisos pedidos durante a Pausa (ShowToast): aparecem ao voltar.
         public List<(string Message, ToastAction[] Actions)> Toasts { get; } = [];
+        // Começou uma transferência durante a Pausa: o painel das transferências abre ao voltar.
+        public bool DownloadStarted;
     }
 
     private PauseState? _pause;
@@ -272,6 +274,7 @@ public partial class MainWindow
         // tamanho já dado; depois StackPages), e o site fixado aberto na barra lateral.
         LayoutBrowsers();
         if (_sidebarOpen && CurrentWebPanelBrowser is not null && _sidebarPanel is { } panel) ShowWebPanel(panel, focus: false);
+        if (state.DownloadStarted) DownloadsPopup.IsOpen = true;
 
         // 2. O som, só a quem a Pausa o tirou, que ainda existe e que o utilizador não silenciou à mão entretanto.
         var back = state.Plan.Return(PauseEngines());
