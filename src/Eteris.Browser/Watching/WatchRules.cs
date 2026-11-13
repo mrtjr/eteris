@@ -171,6 +171,12 @@ public static class WatchRules
         => w.UseSession || w.Status == WatchStatus.Blocked || w.BaselineFromTab
            || (w.Kind == WatchKind.Price ? w.LastPrice is null : w.LastText is null);
 
+    // O lote do relógio ainda deve visitar (e gravar) esta vigia? Relida da base antes de cada visita e outra vez antes de
+    // gravar: apagada (null), posta em pausa, bloqueada, sem pedaço ou com a próxima hora já para a frente (a leitura
+    // passiva leu-a entretanto) fica de fora. A mesma regra que WatchStore.Due.
+    public static bool StillDue(PageWatch? w, DateTime nowUtc)
+        => w is { Paused: false } && w.Status is not (WatchStatus.Blocked or WatchStatus.Missing) && w.NextCheckUtc <= nowUtc;
+
     // Uma verificação falhada: conta para Failures (e para o recuo da agenda).
     public static bool IsFailure(WatchCheck check)
         => check.Block != PageBlock.None || check.Status is WatchStatus.Failing or WatchStatus.Missing;

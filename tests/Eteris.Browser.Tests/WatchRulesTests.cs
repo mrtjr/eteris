@@ -1,3 +1,4 @@
+using System.IO;
 using Eteris.Browser.Watching;
 
 namespace Eteris.Browser.Tests;
@@ -408,6 +409,44 @@ public class WatchRulesTests
         Assert.Null(WatchRules.Passive(change, Reading(pieceFound: false), PageBlock.None, Now));
         var missing = change with { Status = WatchStatus.Missing, Failures = 2 };
         Assert.Null(WatchRules.Passive(missing, Reading(pieceFound: false), PageBlock.None, Now));
+    }
+
+    // Achado 3: o lote do relógio lê a lista no início e pode demorar dezenas de segundos por vigia. Antes de cada visita
+    // e outra vez antes de gravar, a vigia relê-se: uma apagada, posta em pausa, bloqueada, sem pedaço ou que a leitura
+    // passiva acabou de ler (a próxima hora passou para a frente) já não se visita nem se grava.
+    [Fact] public void StillDue_OnlyWhatTheClockShouldStillVisit()
+    {
+        var due = Watch() with { NextCheckUtc = Now.AddMinutes(-1) };
+        Assert.True(WatchRules.StillDue(due, Now));
+        Assert.True(WatchRules.StillDue(due with { NextCheckUtc = Now }, Now));
+        Assert.False(WatchRules.StillDue(null, Now));
+        Assert.False(WatchRules.StillDue(due with { Paused = true }, Now));
+        Assert.False(WatchRules.StillDue(due with { Status = WatchStatus.Blocked }, Now));
+        Assert.False(WatchRules.StillDue(due with { Status = WatchStatus.Missing }, Now));
+        Assert.False(WatchRules.StillDue(due with { NextCheckUtc = Now.AddHours(2) }, Now));
+    }
+
+    [Fact] public void ClockBatch_RereadsEachWatchBeforeVisitingAndBeforeSaving()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Eteris.Browser", "MainWindow.Watch.cs"));
+        var batch = code[code.IndexOf("private async Task CheckDueWatchesAsync(", StringComparison.Ordinal)..];
+        batch = batch[..batch.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.Contains("WatchRules.StillDue(", batch);
+
+        var check = code[code.IndexOf("private async Task CheckWatchAsync(", StringComparison.Ordinal)..];
+        check = check[..check.IndexOf("\n    }", StringComparison.Ordinal)];
+        var read = check.IndexOf("runner.ReadAsync(", StringComparison.Ordinal);
+        var recheck = check.IndexOf("WatchRules.StillDue(", read, StringComparison.Ordinal);
+        Assert.True(read > 0 && recheck > read, "a vigia relê-se depois da visita");
+        Assert.Contains("WatchRules.ToCheck(fresh,", check[recheck..]);
+        Assert.Contains("SaveWatchCheck(fresh,", check[recheck..]);
+    }
+
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(source)!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Eteris.slnx"))) dir = dir.Parent;
+        return dir!.FullName;
     }
 
     private static PageWatch Watch(WatchKind kind = WatchKind.Price, decimal? lastPrice = null, string? currency = "BRL",

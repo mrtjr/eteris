@@ -64,7 +64,9 @@ public partial class MainWindow
         OpenClip(seed.Url, seed.Selector, ClipLayout.Size(0, 0, SystemParameters.WorkArea));
     }
 
-    // Um lote: as vigias com a hora chegada, uma de cada vez. Um tique a meio de um lote não começa outro.
+    // Um lote: as vigias com a hora chegada, uma de cada vez. Um tique a meio de um lote não começa outro. Uma visita
+    // pode demorar dezenas de segundos: cada vigia relê-se antes de ser visitada (e outra vez antes de gravar, em
+    // CheckWatchAsync), e as que entretanto foram apagadas, postas em pausa ou lidas na aba ficam de fora.
     private async Task CheckDueWatchesAsync(CancellationToken ct)
     {
         if (_watchBusy || ct.IsCancellationRequested) return;
@@ -80,6 +82,7 @@ public partial class MainWindow
             foreach (var watch in due)
             {
                 if (ct.IsCancellationRequested) break;
+                if (!WatchRules.StillDue(FreshWatch(watch), DateTime.UtcNow)) continue;
                 await CheckWatchAsync(_watchRunner, watch, ct);
             }
         }
@@ -94,14 +97,21 @@ public partial class MainWindow
     private IRequestContext WatchContext(bool useSession)
         => useSession ? Cef.GetGlobalRequestContext() : CreatePrivateContext(onBlocked: null);
 
-    // Uma verificação: ler, passar a verificação, gravar com a próxima hora e, se a vigia ainda existe, avisar.
+    // Uma verificação: ler, passar a verificação, gravar com a próxima hora e, se a vigia ainda existe, avisar. Depois da
+    // visita a vigia relê-se: a verificação e o aviso partem do que está gravado agora (a leitura passiva pode ter
+    // gravado e avisado o mesmo preço entretanto), e uma vigia já fora da agenda não grava nem avisa.
     private async Task CheckWatchAsync(WatchRunner runner, PageWatch before, CancellationToken ct)
     {
         var (reading, block) = await runner.ReadAsync(before.Url, before.Selector, before.Kind, before.UseSession, ct);
         // A janela fechou a meio: a leitura interrompida não conta como falha.
         if (ct.IsCancellationRequested) return;
-        SaveWatchCheck(before, WatchRules.ToCheck(before, reading, block, DateTime.UtcNow));
+        var now = DateTime.UtcNow;
+        if (FreshWatch(before) is not { } fresh || !WatchRules.StillDue(fresh, now)) return;
+        SaveWatchCheck(fresh, WatchRules.ToCheck(fresh, reading, block, now));
     }
+
+    // A vigia como está gravada agora (null se foi apagada).
+    private static PageWatch? FreshWatch(PageWatch watch) => AppData.WatchesFor(watch.Url).FirstOrDefault(w => w.Id == watch.Id);
 
     // Grava uma verificação com a hora da próxima e, se a vigia ainda existe, avisa. Serve a ronda do relógio, a leitura
     // passiva e a primeira leitura de uma vigia acabada de criar (que nunca avisa: não há leitura anterior).
