@@ -43,6 +43,61 @@ public sealed record MediaInfo(MediaState State, bool Audible, string? Title, st
 
     public const string PauseScript = "document.querySelectorAll('video,audio').forEach(function (m) { if (!m.paused) m.pause(); })";
 
+    // A Pausa (Ctrl+., MainWindow.Pause.cs): pausa só o que está a tocar e marca-o com data-eteris-pausa; devolve quantos
+    // pausou. Tira primeiro as marcas que tenham ficado de uma Pausa anterior (um «Retomar» que ninguém carregou): o
+    // «Retomar» seguinte só toca o que esta pausou. Corre em todos os motores da janela; nos que não tocam nada não mexe.
+    // Só o documento principal: o som de um iframe de outro site fica só calado (SetAudioMuted), não pausado. Sai também
+    // do Picture-in-Picture (a janela flutuante do Chromium, sempre por cima, ficava sobre o ecrã calmo); não volta a
+    // entrar no regresso, que isso pede um gesto do utilizador.
+    public const string PauseMarkScript = """
+        (function () {
+          try {
+            var n = 0;
+            Array.prototype.forEach.call(document.querySelectorAll('video,audio'), function (m) {
+              if (m.dataset) delete m.dataset.eterisPausa;
+              if (!m.paused && !m.ended) { m.pause(); m.dataset.eterisPausa = '1'; n++; }
+            });
+            try {
+              if (document.pictureInPictureElement && document.exitPictureInPicture) {
+                var p = document.exitPictureInPicture();
+                if (p && p.catch) p.catch(function () {});
+              }
+            } catch (e) { }
+            return n;
+          } catch (e) { return 0; }
+        })()
+        """;
+
+    // No que o utilizador já tinha silenciado, a Pausa não pausa nada (não se ouve): só sai do Picture-in-Picture.
+    public const string LeavePictureInPictureScript = """
+        (function () {
+          try {
+            if (document.pictureInPictureElement && document.exitPictureInPicture) {
+              var p = document.exitPictureInPicture();
+              if (p && p.catch) p.catch(function () {});
+            }
+          } catch (e) { }
+          return 0;
+        })()
+        """;
+
+    // «Retomar o que tocava» (o botão do aviso, com gesto do utilizador): toca só o que a Pausa marcou e tira a marca.
+    public const string ResumeMarkedScript = """
+        (function () {
+          try {
+            var n = 0;
+            Array.prototype.forEach.call(document.querySelectorAll('video,audio'), function (m) {
+              if (!m.dataset || !m.dataset.eterisPausa) return;
+              delete m.dataset.eterisPausa;
+              n++;
+              var p = m.play();
+              if (p && p.catch) p.catch(function () {});
+            });
+            return n;
+          } catch (e) { return 0; }
+        })()
+        """;
+
     public static MediaInfo Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return Nothing;

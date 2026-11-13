@@ -9,6 +9,7 @@ public partial class BrowserTab : ObservableObject
 
     [NotifyPropertyChangedFor(nameof(Host))]
     [NotifyPropertyChangedFor(nameof(MediaSubline))]
+    [NotifyPropertyChangedFor(nameof(MediaHeadline))]
     [ObservableProperty]
     private string _address;
 
@@ -192,7 +193,8 @@ public partial class BrowserTab : ObservableObject
     [ObservableProperty]
     private string? _mediaArtist;
 
-    public string MediaHeadline => MediaTitle ?? Title;
+    // Nunca vazio: é também o nome da linha da multimédia para o leitor de ecrã (vazio, o WPF diria o ToString()).
+    public string MediaHeadline => MediaTitle ?? (string.IsNullOrWhiteSpace(Title) ? Host : Title);
 
     public string MediaSubline => MediaArtist is { } artist ? $"{artist} · {Host}" : Host;
 

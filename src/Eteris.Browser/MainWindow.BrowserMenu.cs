@@ -299,6 +299,7 @@ public partial class MainWindow
         var submenuRow = SubmenuRow("\uE8D7", VaultPages.MenuTitle);
         Row("\uE896", "Transferências", ToggleDownloads, "Ctrl+J");
         Row("\uE71D", "Radar de abas", ToggleRadar, "Ctrl+Shift+A");
+        Row("\uE708", "Pausa", TogglePause, "Ctrl+.");
         Row("\uE8A0", SidebarOpen ? "Fechar a barra lateral" : "Barra lateral", () => ToggleSidebar(), "Ctrl+Shift+B");
 
         Divider();

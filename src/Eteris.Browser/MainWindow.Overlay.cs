@@ -224,8 +224,9 @@ public partial class MainWindow
     private const int OverlayHideFrames = 2;
     private bool _overlayHidePending;
 
+    // Na Pausa a camada fica escondida (barra de procura, permissões, avisos, janela flutuante): nada por cima do ecrã calmo.
     private bool OverlayNeeded()
-        => _overlayRoot is not null && WindowState != WindowState.Minimized
+        => _pause is null && _overlayRoot is not null && WindowState != WindowState.Minimized
            && _overlayRoot.Children.OfType<UIElement>().Any(c => c.Visibility == Visibility.Visible && c.Opacity > 0.01);
 
     private void SyncOverlayBounds()
@@ -250,6 +251,12 @@ public partial class MainWindow
     // Ao fechar uma barra ou painel da camada, o teclado volta para a página.
     private void ReturnFocusToPage()
     {
+        // Na Pausa a página está escondida: o teclado fica no ecrã calmo.
+        if (_pause is not null)
+        {
+            FocusPauseView();
+            return;
+        }
         if (_overlay is { IsActive: true }) Activate();
         if (ActiveBrowser is { } browser) Keyboard.Focus(browser);
         else if (ActiveVideo is { } video) video.Focus();

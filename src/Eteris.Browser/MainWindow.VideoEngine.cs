@@ -133,7 +133,8 @@ public partial class MainWindow
         // Os sites cuja cosmética já está registada nesta aba: o mesmo conjunto aqui e nas navegações (WireVideoView).
         var cosmeticHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         WireVideoView(tab, view, core, environment, cosmeticHosts);
-        if (tab.IsMuted || TestSwitches.Mute) core.IsMuted = true;
+        if (tab.IsMuted || TestSwitches.Mute || _pause is not null) core.IsMuted = true;
+        JoinPause(view, tab.IsMuted);
         if (resumeAt > 1) await ResumeAtAsync(core, resumeAt);
         await EnsureVideoCosmeticsAsync(core, url, cosmeticHosts);
         // O GPC visível ao JavaScript e a lista de dispositivos sem nomes, antes dos scripts da página (o cabeçalho
@@ -587,6 +588,8 @@ public partial class MainWindow
         DropPermissions(p => ReferenceEquals(p.Tab, tab));
         _videoSwitching.Remove(tab);
         if (!_videoViews.Remove(tab, out var view)) return;
+        _pause?.Plan.Forget(view);
+        _replay.Remove(view);
         BrowserHost.Children.Remove(view);
         view.Dispose();
     }
@@ -678,7 +681,7 @@ public partial class MainWindow
 
     private void SetVideoMuted(BrowserTab tab)
     {
-        if (_videoViews.TryGetValue(tab, out var view) && view.CoreWebView2 is { } core) core.IsMuted = tab.IsMuted || TestSwitches.Mute;
+        if (_videoViews.TryGetValue(tab, out var view) && view.CoreWebView2 is { } core) core.IsMuted = tab.IsMuted || TestSwitches.Mute || _pause is not null;
     }
 
     // ---------- Limpezas no perfil do motor de vídeo ----------

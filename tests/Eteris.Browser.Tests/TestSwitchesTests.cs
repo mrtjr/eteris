@@ -32,11 +32,12 @@ public class TestSwitchesTests
             .Distinct().Order(StringComparer.Ordinal).ToList();
         Assert.Equal(["ETERIS_DEMO_UPDATE", "ETERIS_TEST_AJUSTES", "ETERIS_TEST_CLIP", "ETERIS_TEST_CONTADORES", "ETERIS_TEST_CRASH_BEFORE_PAINT",
             "ETERIS_TEST_DEVTOOLS_PORT", "ETERIS_TEST_ENERGIA", "ETERIS_TEST_HOST_RULES", "ETERIS_TEST_MUTE", "ETERIS_TEST_PRESSAO", "ETERIS_TEST_PURO",
-            "ETERIS_TEST_REAUTH", "ETERIS_TEST_SHOP_DIR", "ETERIS_TEST_SYNC_FOLDER", "ETERIS_TEST_WATCH", "ETERIS_TEST_WATCH_SECONDS",
+            "ETERIS_TEST_REAUTH", "ETERIS_TEST_SEM_MOVIMENTO", "ETERIS_TEST_SHOP_DIR", "ETERIS_TEST_SYNC_FOLDER", "ETERIS_TEST_WATCH", "ETERIS_TEST_WATCH_SECONDS",
             "ETERIS_TRACE_GC_AT", "ETERIS_TRACE_STARTUP"], found);
         var switches = Source(Path.Combine("Infrastructure", "TestSwitches.cs"));
         Assert.Matches(@"DevToolsPort\s*=>\s*DevToolsPortFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_DEVTOOLS_PORT""\),\s*AppPaths\.IsCustomProfile\)", switches);
         Assert.Matches(@"Mute\s*=>\s*MuteFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_MUTE""\),\s*AppPaths\.IsCustomProfile\)", switches);
+        Assert.Matches(@"ReducedMotion\s*=>\s*ReducedMotionFor\(Environment\.GetEnvironmentVariable\(""ETERIS_TEST_SEM_MOVIMENTO""\),\s*IsInstalled,\s*AppPaths\.IsCustomProfile\)", switches);
     }
 
     // As da vigia (loja de teste, vigia semeada, intervalo em segundos) só valem num perfil de teste e numa cópia não

@@ -25,6 +25,8 @@ public partial class MainWindow
 
     private void OnSideMouseButton(object sender, MouseButtonEventArgs e)
     {
+        // Na Pausa (MainWindow.Pause.cs) a aba está escondida: voltar ou avançar nela mudava-a sem se ver.
+        if (_pause is not null) return;
         if (e.ChangedButton == MouseButton.XButton1) { GoBack(); e.Handled = true; }
         else if (e.ChangedButton == MouseButton.XButton2) { GoForward(); e.Handled = true; }
     }

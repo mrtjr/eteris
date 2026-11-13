@@ -38,7 +38,10 @@ public partial class MainWindow
             // O painel abriu sozinho (ou ganhou uma linha nova): durante 1 s um clique não abre nada.
             _downloadsOpenedUtc = DateTime.UtcNow;
             DownloadsPopup.SetCurrentValue(Popup.PlacementTargetProperty, DownloadsButton);
-            DownloadsPopup.IsOpen = true;
+            // Na Pausa o painel (um Popup: janela própria, por cima de tudo) não se abre por cima do ecrã calmo: abre ao
+            // voltar (MainWindow.Pause.cs), como os avisos.
+            if (_pause is { } paused) paused.DownloadStarted = true;
+            else DownloadsPopup.IsOpen = true;
 
             // Aba aberta diretamente num link de transferência: não fica uma página branca (como no Chrome).
             if (tab is not null && !tab.CanGoBack && string.Equals(tab.Address, url, StringComparison.OrdinalIgnoreCase))

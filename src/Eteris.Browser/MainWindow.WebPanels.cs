@@ -141,6 +141,12 @@ public partial class MainWindow
                 continue;
             }
             _webPanelHiddenSince.Remove(other);
+            // A Pausa (MainWindow.Pause.cs): fica escondido até voltar (os sites fixados mudaram noutra janela, por exemplo).
+            if (_pause is not null)
+            {
+                HideWebPanel(view);
+                continue;
+            }
             view.Visibility = Visibility.Visible;
             if (view.IsBrowserInitialized) SetPageVisible(view, true);
         }
@@ -174,6 +180,8 @@ public partial class MainWindow
                 continue;
             }
             if (_sidebarOpen && _sidebarPanel?.Url == url) continue;
+            // O que a Pausa parou (a música na barra) não adormece enquanto ela dura (MainWindow.Pause.cs).
+            if (PauseHolds(_webPanelBrowsers[url])) continue;
             if (!WebPanels.ShouldSleep(WebPanels.Find(_webPanels, url)?.KeepAwake == true, since, nowUtc, threshold)) continue;
             _ = SleepWebPanelUnlessBusyAsync(url);
         }
@@ -195,7 +203,7 @@ public partial class MainWindow
             if (media.Audible || media.State == global::Eteris.Browser.Tabs.MediaState.Playing) return;
             // Entretanto o site pode ter voltado à vista, começado uma chamada, sido largado ou tirado da barra.
             if (!_webPanelBrowsers.TryGetValue(url, out var same) || !ReferenceEquals(same, browser) || !_webPanelHiddenSince.ContainsKey(url)
-                || (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser)) return;
+                || (_sidebarOpen && _sidebarPanel?.Url == url) || IsCapturing(browser) || PauseHolds(browser)) return;
             ReleaseWebPanelBrowser(url);
         }
         finally { _webPanelsFallingAsleep.Remove(url); }
@@ -253,9 +261,11 @@ public partial class MainWindow
                 onMainNavigation: nav =>
                 {
                     Volatile.Write(ref panelHistory.Last, nav);
+                    // As marcas da Pausa vão-se com o documento (MainWindow.Pause.cs): sai do «Retomar».
+                    Dispatcher.InvokeAsync(() => ForgetReplay(_webPanelBrowsers.GetValueOrDefault(url)));
                     if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
                 },
-                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _sidebarOpen && _sidebarPanel?.Url == url,
+                chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _pause is null && _sidebarOpen && _sidebarPanel?.Url == url,
                     () => ClientCertificateDialog.FromPanel(url), host, port, rows)),
         };
         // Os atalhos do Éteris chegam do painel como de qualquer página, mas recarregar, procurar, imprimir e as
@@ -320,7 +330,8 @@ public partial class MainWindow
             Dispatcher.InvokeAsync(() =>
             {
                 if (browser.IsDisposed) return;
-                SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen);
+                SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen && _pause is null);
+                JoinPause(browser, muted: false);
             });
         };
         _webPanelBrowsers[url] = browser;
@@ -347,6 +358,9 @@ public partial class MainWindow
     // Tecla premida com o foco num site fixado (thread do CEF).
     private bool ShortcutFromWebPanel(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt, bool repeat)
     {
+        // A Pausa decide num só sítio (ShortcutFromPage): Esc e Ctrl+. voltam, o resto é engolido — também as teclas do
+        // painel, que de outro modo imprimiam ou recarregavam o site escondido.
+        if (_pausedForPage) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         if (WebPanelKeys.Resolve(key, ctrl, shift, alt) is not { } command) return ShortcutFromPage(virtualKey, ctrl, shift, alt, repeat: repeat);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
@@ -400,6 +414,8 @@ public partial class MainWindow
         _webPanelHiddenSince.Remove(url);
         if (_webPanelInjectors.Remove(url, out var injector)) injector.Dispose();
         if (!_webPanelBrowsers.Remove(url, out var browser)) return;
+        _pause?.Plan.Forget(browser);
+        _replay.Remove(browser);
         if (ReferenceEquals(_findPanel, browser)) CloseFind();
         SidebarWebHost.Children.Remove(browser);
         PageScript.Release(browser);

@@ -15,7 +15,10 @@ public partial class MainWindow
     private DateTime? _lastSleepRoundUtc;
     private DateTime? _sleepFloorUtc;
 
-    private bool IsHeld(BrowserTab tab, DateTime nowUtc) => _sleepHolds.TryGetValue(tab, out var until) && nowUtc < until;
+    // Também o que a Pausa parou (MainWindow.Pause.cs, PauseHolds): o sono por tempo, por pressão e a mudança de Espaço
+    // passam todos por aqui.
+    private bool IsHeld(BrowserTab tab, DateTime nowUtc)
+        => PauseHolds(tab) || (_sleepHolds.TryGetValue(tab, out var until) && nowUtc < until);
 
     private bool IsCapturingTab(BrowserTab tab) => _browsers.TryGetValue(tab, out var browser) && IsCapturing(browser);
 
@@ -33,6 +36,8 @@ public partial class MainWindow
         ReleaseVaultChannel(tab);
         _sleepHolds.Remove(tab);
         if (!_browsers.Remove(tab, out var browser)) return;
+        _pause?.Plan.Forget(browser);
+        _replay.Remove(browser);
         ForgetCnameQuota(browser);
         PageScript.Release(browser);
         // Quente: está tapada pela aba à vista, pode ir já.
@@ -153,7 +158,7 @@ public partial class MainWindow
         // Entretanto a aba pode ter fechado, ido para à vista, começado a tocar ou adormecido por outro caminho.
         if (!_browsers.TryGetValue(tab, out var same) || !ReferenceEquals(same, browser) || tab.IsSleeping
             || IsTabOnScreen(tab) || tab.IsAudible || tab.IsLocked) return;
-        if (!byUser && (IsCapturing(browser) || tab.Media == MediaState.Playing)) return;
+        if (!byUser && (IsCapturing(browser) || tab.Media == MediaState.Playing || PauseHolds(tab))) return;
         // Sem resposta (página sem contexto de script: PDF, página de erro) adormece como sempre: não tem texto a perder.
         var probe = result.Success ? SleepProbe.Parse(result.Result) : null;
         if (!byUser && probe is { KeepsAwake: true })

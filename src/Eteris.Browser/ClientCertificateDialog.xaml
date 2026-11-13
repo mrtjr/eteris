@@ -18,6 +18,8 @@
                      AutomationProperties.Name="Certificados disponíveis">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
+                        <!-- Leitor de ecrã: o certificado, não o ToString() do item (ListItemNamesTests) -->
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Text}" />
                         <Setter Property="Padding" Value="10,8" />
                         <Setter Property="Template">
                             <Setter.Value>

@@ -65,9 +65,18 @@
                 </MultiDataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+        <!-- Leitor de ecrã: o nome de um item de lista é o do seu contentor (aqui, o ContentPresenter do ItemsControl);
+             sem ele, o WPF diz o ToString() do item («Eteris.Browser.Tabs.Workspace»). O nome do Border do molde não
+             chega ao item. O mesmo em todas as listas com dados (ListItemNamesTests). -->
+        <Style x:Key="SpaceChipContainer" TargetType="ContentPresenter">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Summary}" />
+        </Style>
 
         <Style x:Key="PaletteItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding Subtitle}" />
+            <Setter Property="AutomationProperties.AcceleratorKey" Value="{Binding Shortcut}" />
             <EventSetter Event="PreviewMouseLeftButtonUp" Handler="PaletteItem_Click" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -164,6 +173,8 @@
         <Style x:Key="TabItemStyle" TargetType="ListBoxItem">
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding DisplayTitle}" />
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding StatusLine}" />
             <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
             <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TabItem_PreviewMouseLeftButtonDown" />
             <EventSetter Event="PreviewMouseRightButtonUp" Handler="TabItem_PreviewMouseRightButtonUp" />
@@ -366,6 +377,8 @@
         <!-- Linha da lista «▾» de todas as abas -->
         <Style x:Key="TabListItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding Subtitle}" />
             <EventSetter Event="PreviewMouseLeftButtonUp" Handler="TabListItem_Click" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -401,6 +414,13 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True" />
             <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    </Style>
+                </Setter.Value>
+            </Setter>
             <Setter Property="ItemsPanel">
                 <Setter.Value>
                     <ItemsPanelTemplate>
@@ -498,6 +518,8 @@
         </Style>
         <Style x:Key="SideTabItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding DisplayTitle}" />
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding StatusLine}" />
             <EventSetter Event="PreviewMouseDown" Handler="TabItem_PreviewMouseDown" />
             <EventSetter Event="PreviewMouseRightButtonUp" Handler="TabItem_PreviewMouseRightButtonUp" />
             <Setter Property="Template">
@@ -657,6 +679,8 @@
 
         <Style x:Key="SuggestionItemStyle" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Text}" />
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding Detail}" />
             <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Suggestion_Click" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -795,7 +819,7 @@
                         <ItemsControl x:Name="SpaceStrip" ItemsSource="{Binding Workspaces}" VerticalAlignment="Center" Margin="0,0,6,3"
                                       Visibility="Collapsed" Focusable="False" SizeChanged="SpaceStrip_SizeChanged"
                                       shell:WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Espaços"
-                                      ItemTemplate="{StaticResource SpaceChipTemplate}">
+                                      ItemContainerStyle="{StaticResource SpaceChipContainer}" ItemTemplate="{StaticResource SpaceChipTemplate}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Orientation="Horizontal" />
@@ -811,7 +835,7 @@
                                           Focusable="False" PanningMode="HorizontalOnly" CanContentScroll="False"
                                           PreviewMouseWheel="TabScroll_PreviewMouseWheel" ScrollChanged="TabScroll_ScrollChanged"
                                           shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                                <ListBox x:Name="TabList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
+                                <ListBox x:Name="TabList" AutomationProperties.Name="Abas" ItemsSource="{Binding Tabs}" SelectedItem="{Binding Active}"
                                          PreviewMouseMove="TabList_PreviewMouseMove" PreviewMouseLeftButtonUp="TabList_PreviewMouseLeftButtonUp" LostMouseCapture="TabList_LostMouseCapture"
                                          ItemContainerStyle="{StaticResource TabItemStyle}"
                                          Background="Transparent" BorderThickness="0" Padding="0"
@@ -1181,6 +1205,18 @@
                                     <TextBlock x:Name="SiteInfoNoPermissions" Text="Este site não tem permissões guardadas."
                                                FontSize="12.5" Foreground="{DynamicResource TextMutedBrush}" />
                                     <ItemsControl x:Name="SiteInfoPermissions">
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="AutomationProperties.Name">
+                                                    <Setter.Value>
+                                                        <MultiBinding StringFormat="{}{0}: {1}">
+                                                            <Binding Path="Name" />
+                                                            <Binding Path="State" />
+                                                        </MultiBinding>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid Margin="0,3">
@@ -1211,6 +1247,12 @@
                                     <TextBlock Text="O QUE ESTE SITE SABE DE TI" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextFaintBrush}"
                                                Margin="0,0,0,6" />
                                     <ItemsControl x:Name="SiteKnowledgeList" AutomationProperties.Name="O que este site sabe de ti">
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                                                <Setter Property="AutomationProperties.HelpText" Value="{Binding Detail}" />
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid Margin="0,4">
@@ -1279,7 +1321,7 @@
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black" />
                             </Border.Effect>
-                            <ListBox x:Name="SuggestionList" Focusable="False" Background="Transparent" BorderThickness="0"
+                            <ListBox x:Name="SuggestionList" AutomationProperties.Name="Sugestões" Focusable="False" Background="Transparent" BorderThickness="0"
                                      ItemContainerStyle="{StaticResource SuggestionItemStyle}"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.Template>
@@ -1375,6 +1417,12 @@
                                     <TextBlock Text="Multimédia" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </DockPanel>
                                 <ItemsControl x:Name="MediaList">
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="AutomationProperties.Name" Value="{Binding MediaHeadline}" />
+                                            <Setter Property="AutomationProperties.HelpText" Value="{Binding MediaSubline}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border x:Name="Row" CornerRadius="12" Padding="10,8" Background="Transparent" Cursor="Hand"
@@ -1444,6 +1492,12 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                                 <ItemsControl x:Name="DownloadsList">
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="AutomationProperties.Name" Value="{Binding FileName}" />
+                                            <Setter Property="AutomationProperties.HelpText" Value="{Binding Status}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border x:Name="Row" CornerRadius="12" Padding="10,8" Background="Transparent" Cursor="Hand"
@@ -1545,6 +1599,12 @@
                                 </StackPanel>
 
                                 <ItemsControl x:Name="ShieldHosts" Margin="0,10,0,0">
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="AutomationProperties.Name" Value="{Binding Key}" />
+                                            <Setter Property="AutomationProperties.HelpText" Value="{Binding Value, StringFormat=Pedidos bloqueados: {0}}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,3">
@@ -1630,7 +1690,7 @@
                     <!-- Espaços nas abas verticais: os mesmos chips, em linhas, por cima do filtro -->
                     <ItemsControl x:Name="SideSpaceStrip" DockPanel.Dock="Top" ItemsSource="{Binding Workspaces}" Margin="8,0,8,6"
                                   Visibility="Collapsed" Focusable="False" AutomationProperties.Name="Espaços"
-                                  ItemTemplate="{StaticResource SpaceChipTemplate}">
+                                  ItemContainerStyle="{StaticResource SpaceChipContainer}" ItemTemplate="{StaticResource SpaceChipTemplate}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -1653,7 +1713,7 @@
                             Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="12"
                             Content="&#xE76B;" Click="SideCollapse_Click" ToolTip="Encolher a barra de abas" />
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ListBox x:Name="SideTabList"
+                        <ListBox x:Name="SideTabList" AutomationProperties.Name="Abas"
                                  ItemContainerStyle="{StaticResource SideTabItemStyle}"
                                  Background="Transparent" BorderThickness="0" Padding="0">
                             <ListBox.Template>
@@ -1965,7 +2025,7 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="13" Margin="0,1,10,0"
                                Foreground="{DynamicResource IrisBrush}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="ToastText" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"
+                    <TextBlock x:Name="ToastText" AutomationProperties.LiveSetting="Polite" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"
                                TextWrapping="Wrap" MaxWidth="560" />
                     <!-- «Anular», «Abrir», «Mostrar na pasta»: preenchidos em ShowToast -->
                     <StackPanel x:Name="ToastActions" Orientation="Horizontal" Margin="6,0,-8,0" VerticalAlignment="Center" Visibility="Collapsed" />
@@ -2000,7 +2060,7 @@
                                        Text="Escreva um comando, o nome de uma aba ou um site…" />
                         </Grid>
                         <Border Height="1" Background="{DynamicResource FieldBorderBrush}" />
-                        <ListBox x:Name="PaletteList" Margin="8,8,8,4" MaxHeight="452" Focusable="False"
+                        <ListBox x:Name="PaletteList" AutomationProperties.Name="Comandos" Margin="8,8,8,4" MaxHeight="452" Focusable="False"
                                  Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource PaletteItemStyle}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.Template>

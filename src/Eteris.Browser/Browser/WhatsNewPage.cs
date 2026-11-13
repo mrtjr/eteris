@@ -29,10 +29,12 @@ public static class WhatsNewPage
 
     // O 1.º destaque da versão anterior: a divisória «Versões anteriores» fica antes dele (NewCount). Numa versão nova,
     // passa a ser o 1.º destaque da versão que acabou de sair.
-    public const string PreviousVersionFirstTitle = "Todas as janelas voltam";
+    public const string PreviousVersionFirstTitle = "Sites completos com o Escudo";
 
     public static readonly IReadOnlyList<Highlight> Highlights =
     [
+        // 0.2.18 (conferido com o CHANGELOG da 0.2.18: a Pausa)
+        new("🌿", "Pausa", "Cala e pausa o som e o vídeo das abas de todas as janelas e esconde as páginas atrás de um ecrã calmo, até «Voltar» (Esc). Nada recomeça sozinho.", "Ctrl+."),
         // 0.2.17 (textos conferidos com o CHANGELOG da 0.2.17: o bloqueio como numa extensão, o «Sair» do menu ⋯, o Google
         // como escolha, as limpezas no motor de vídeo, nos subdomínios e no disco, e a janela do certificado de cliente)
         new("🧩", "Sites completos com o Escudo", "Sites como o ge.globo.com e o g1 já não ficam a meio com o Escudo ligado: um pedido bloqueado falha como numa extensão, e os rastreadores continuam bloqueados."),

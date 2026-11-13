@@ -52,6 +52,7 @@ public static class ShortcutSheet
             new("F11", "Modo foco (o rato no topo mostra as barras)"),
             new("Alt", "Mostrar as barras no modo foco"),
             new("Ctrl+Shift+M", "Janela flutuante"),
+            new("Ctrl+.", "Pausa (silencia tudo e esconde as páginas; Esc volta)"),
             new("Ctrl+Shift+B", "Barra lateral (Notas, Para ler, Favoritos, Histórico)"),
             new("Ctrl+Shift+E", "Notas (na barra lateral)"),
             new("Ctrl + / Ctrl −", "Zoom (memorizado por site)"),

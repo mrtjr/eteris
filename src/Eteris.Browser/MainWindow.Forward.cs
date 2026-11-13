@@ -27,6 +27,8 @@ public partial class MainWindow
             OpenWindow(isPrivate: false, url);
             return;
         }
+        // Um link de outra aplicação é um gesto do utilizador: acaba a Pausa na janela que o recebe (MainWindow.Pause.cs).
+        if (url is not null || StartupArgs.WantsNewTab(args)) target.EndPauseHere();
         if (url is not null) target.Tabs.NewTab(url);
         else if (StartupArgs.WantsNewTab(args)) target.OpenNewTab();
         target.BringToFront();
