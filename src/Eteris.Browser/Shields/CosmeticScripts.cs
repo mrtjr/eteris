@@ -53,9 +53,13 @@ public static class CosmeticScripts
     //     imagem só se continuar partida (se a página a trocou por outra que carregou, fica);
     //  2. os contentores que ficaram só com um rótulo «Publicidade», «Anúncio» ou «Pub» (texto ou ::before/::after),
     //     sem mais texto, imagem, vídeo, controlo ou imagem de fundo à vista, e com lugar reservado (≥ 40 px e pelo menos
-    //     16 px além do rótulo). Sobe-se no máximo 6 níveis e nunca até html, body, main, article, header, footer ou nav.
-    // Um rótulo que é texto a sério nunca se esconde: dentro de uma ligação, botão, título, legenda, navegação ou campo
-    // editável. Esconder é o display:none !important no próprio elemento, sem marcas com o nome do Éteris.
+    //     16 px além do rótulo, sem contar o enchimento nem a borda: um cartão ou uma pastilha só altos pelo padding não
+    //     são lugar de anúncio). Sobe-se no máximo 6 níveis e nunca até html, body, main, article, header, footer, nav,
+    //     nem a uma célula, linha ou tabela, nem a um item ou lista (li, dt, dd, ul, ol, dl): esses nunca se escondem.
+    // Um rótulo que é texto a sério nunca se esconde: dentro de uma ligação, botão, título, legenda, navegação, campo
+    // editável ou de um controlo feito à mão (onclick, tabindex, cursor de mão), e numa célula ou item de lista com o
+    // texto todo «Publicidade» (uma rubrica de despesas, uma categoria). Esconder é o display:none !important no próprio
+    // elemento, sem marcas com o nome do Éteris.
 
     // O núcleo, sem DOM (testado no Node): label(texto) e box(rótulo, altura do rótulo, acessos ao DOM) e hit(endereços).
     public const string HolesCore = """
@@ -67,12 +71,13 @@ public static class CosmeticScripts
           },
           INSIDE: /^(A|BUTTON|LABEL|SELECT|OPTION|TEXTAREA|SUMMARY|NAV|H[1-6]|CAPTION|FIGCAPTION|LEGEND)$/,
           ROLES: /^(heading|button|link|menuitem|tab|option|navigation)$/,
-          STOP: /^(HTML|BODY|MAIN|ARTICLE|HEADER|FOOTER|NAV)$/,
+          STOP: /^(HTML|BODY|MAIN|ARTICLE|HEADER|FOOTER|NAV|TABLE|THEAD|TBODY|TFOOT|TR|TD|TH|UL|OL|DL|LI|DT|DD)$/,
           MIN: 40,
-          // dom: parent(e), tag(e) em maiúsculas, role(e), editable(e), filled(e) (outro conteúdo à vista), height(e).
+          // dom: parent(e), tag(e) em maiúsculas, role(e), editable(e), interactive(e) (um controlo feito à mão), filled(e)
+          // (outro conteúdo à vista), height(e) (a altura sem o enchimento nem a borda).
           box: function (label, labelHeight, dom) {
             for (var e = label; e; e = dom.parent(e))
-              if (Holes.INSIDE.test(dom.tag(e)) || Holes.ROLES.test(dom.role(e) || '') || dom.editable(e)) return null;
+              if (Holes.INSIDE.test(dom.tag(e)) || Holes.ROLES.test(dom.role(e) || '') || dom.editable(e) || dom.interactive(e)) return null;
             if (Holes.STOP.test(dom.tag(label)) || dom.filled(label)) return null;
             var box = label;
             for (var i = 0; i < 6; i++) {
@@ -144,13 +149,19 @@ public static class CosmeticScripts
             tag: function (e) { return e.tagName; },
             role: function (e) { return e.getAttribute('role'); },
             editable: function (e) { return !!e.isContentEditable; },
+            interactive: function (e) {
+              return e.hasAttribute('onclick') || e.hasAttribute('tabindex') || getComputedStyle(e).cursor === 'pointer';
+            },
             filled: function (e) {
               if (filled.has(e) || background(e)) return true;
               var all = e.getElementsByTagName('*');
               for (var i = 0; i < all.length; i++) if (rendered(all[i]) && background(all[i])) return true;
               return false;
             },
-            height: function (e) { return e.getBoundingClientRect().height; }
+            height: function (e) {
+              var s = getComputedStyle(e), px = function (v) { return parseFloat(v) || 0; };
+              return e.getBoundingClientRect().height - px(s.paddingTop) - px(s.paddingBottom) - px(s.borderTopWidth) - px(s.borderBottomWidth);
+            }
           };
           labels.forEach(function (l) { var b = Holes.box(l[0], l[1], dom); if (b) hide(b); });
           return hidden;

@@ -41,8 +41,8 @@ public class ShieldHolesTests
 
     // A árvore de imitação: cada nó tem tag, altura, se tem outro conteúdo à vista (filled), papel e pai.
     private const string Tree = """
-        const N = (tag, h, o = {}) => ({ tag, h, filled: !!o.filled, role: o.role || null, editable: !!o.editable, parent: o.parent || null, name: o.name || tag });
-        const dom = { parent: e => e.parent, tag: e => e.tag, role: e => e.role, editable: e => e.editable, filled: e => e.filled, height: e => e.h };
+        const N = (tag, h, o = {}) => ({ tag, h, filled: !!o.filled, role: o.role || null, editable: !!o.editable, interactive: !!o.interactive, parent: o.parent || null, name: o.name || tag });
+        const dom = { parent: e => e.parent, tag: e => e.tag, role: e => e.role, editable: e => e.editable, interactive: e => e.interactive, filled: e => e.filled, height: e => e.h };
         const box = (label, lh) => { const b = Holes.box(label, lh, dom); return b ? b.name : 'nada'; };
         const html = N('HTML', 5000, { filled: true }), body = N('BODY', 5000, { filled: true, parent: html });
         """;
@@ -119,8 +119,37 @@ public class ShieldHolesTests
     [InlineData("const d = N('DIV', 22, { parent: body }); console.log(box(N('SPAN', 16, { parent: d }), 16));")]
     [InlineData("console.log(box(N('DIV', 48, { parent: body }), 40));")]
     [InlineData("const li = N('LI', 18, { parent: body }); console.log(box(N('SPAN', 16, { parent: li }), 16));")]
+    // Revisão: uma célula, um item de lista ou de definição com o texto todo «Publicidade» (uma rubrica de despesas, uma
+    // categoria) é conteúdo, por mais alto que seja — escondida, a linha da tabela desalinhava-se. A subida também pára
+    // neles. E um mosaico clicável sem <a>/<button> (onclick, tabindex, cursor de mão) é um controlo: o filtro «Pub».
+    [InlineData("const tr = N('TR', 48, { filled: true, parent: body }); console.log(box(N('TD', 48, { parent: tr }), 16));")]
+    [InlineData("const tr = N('TR', 90, { filled: true, parent: body }); console.log(box(N('TH', 90, { parent: tr }), 16));")]
+    [InlineData("const ul = N('UL', 200, { filled: true, parent: body }); console.log(box(N('LI', 44, { parent: ul }), 16));")]
+    [InlineData("const tr = N('TR', 48, { filled: true, parent: body }); const td = N('TD', 48, { parent: tr }); console.log(box(N('SPAN', 16, { parent: td }), 16));")]
+    [InlineData("const dl = N('DL', 200, { filled: true, parent: body }); console.log(box(N('DD', 44, { parent: dl }), 16));")]
+    [InlineData("const grid = N('DIV', 200, { filled: true, parent: body }); const tile = N('DIV', 80, { parent: grid, interactive: true }); console.log(box(N('SPAN', 20, { parent: tile }), 20));")]
+    [InlineData("const grid = N('DIV', 200, { filled: true, parent: body }); const tile = N('DIV', 80, { parent: grid }); console.log(box(N('SPAN', 20, { parent: tile, interactive: true }), 20));")]
     public void RealText_NeverCollapses(string build)
         => Assert.Equal("nada", Box(build));
+
+    // A subida pára na célula ou no item, mas um lugar reservado dentro dele (um anúncio num item de uma lista de
+    // notícias) continua a recolher-se — só ele, não o item.
+    [Fact]
+    public void ASlotInsideAListItemOrCell_StillCollapses_ButNotTheItem()
+    {
+        Assert.Equal("slot", Box("""
+            const ul = N('UL', 900, { filled: true, parent: body });
+            const li = N('LI', 270, { parent: ul });
+            const slot = N('DIV', 250, { parent: li, name: 'slot' });
+            console.log(box(N('SPAN', 16, { parent: slot }), 16));
+            """));
+        Assert.Equal("slot", Box("""
+            const tr = N('TR', 300, { filled: true, parent: body });
+            const td = N('TD', 300, { parent: tr });
+            const slot = N('DIV', 250, { parent: td, name: 'slot' });
+            console.log(box(N('SPAN', 16, { parent: slot }), 16));
+            """));
+    }
 
     [Fact]
     public void Hit_MatchesTheBlockedAddress_WithoutTheFragment()
@@ -149,11 +178,12 @@ public class ShieldHolesTests
           constructor(tag, o = {}) {
             Object.assign(this, { tagName: tag.toUpperCase(), children: [], childNodes: [], parentElement: null, h: o.h ?? 20, w: o.w ?? 300,
               attrs: o.attrs || {}, before: o.before || 'none', after: o.after || 'none', bg: o.bg || 'none', isContentEditable: false,
-              src: o.src || '', currentSrc: o.currentSrc, naturalWidth: o.naturalWidth ?? 0, id: o.id || '' });
+              src: o.src || '', currentSrc: o.currentSrc, naturalWidth: o.naturalWidth ?? 0, id: o.id || '', pad: o.pad, border: o.border, cursor: o.cursor });
             this.style = { display: '', setProperty: (k, v, p) => { if (k === 'display' && p === 'important') this.style.display = v; } };
           }
           add(...kids) { for (const k of kids) { k.parentElement = this; this.childNodes.push(k); if (k instanceof El) this.children.push(k); } return this; }
           getAttribute(n) { return this.attrs[n] ?? null; }
+          hasAttribute(n) { return this.attrs[n] != null; }
           getBoundingClientRect() { return hidden(this) ? { width: 0, height: 0 } : { width: this.w, height: this.h }; }
           getClientRects() { return hidden(this) ? [] : [this.getBoundingClientRect()]; }
           all() { return this.children.flatMap(c => [c, ...c.all()]); }
@@ -169,7 +199,8 @@ public class ShieldHolesTests
         globalThis.NodeFilter = { SHOW_TEXT: 4 };
         globalThis.getComputedStyle = (e, pseudo) => ({
           content: pseudo === '::before' ? e.before : pseudo === '::after' ? e.after : 'normal',
-          backgroundImage: pseudo ? 'none' : e.bg, fontSize: '12px' });
+          backgroundImage: pseudo ? 'none' : e.bg, fontSize: '12px', cursor: e.cursor || 'auto',
+          paddingTop: (e.pad ?? 0) + 'px', paddingBottom: (e.pad ?? 0) + 'px', borderTopWidth: (e.border ?? 0) + 'px', borderBottomWidth: (e.border ?? 0) + 'px' });
         const page = body => {
           const html = el('html', { h: 5000 }, body);
           globalThis.document = {
@@ -241,6 +272,29 @@ public class ShieldHolesTests
               el('main', { h: 2000 }, el('p', { h: 40 }, 'Notícia'))));
             """, []));
     }
+
+    // Revisão: o que só é alto pelo enchimento (padding) e pela borda não é lugar reservado — um cartão de categoria
+    // «Publicidade», um filtro «Pub» em forma de pastilha. Nem um mosaico clicável «Pub» (cursor de mão, tabindex,
+    // onclick), nem uma célula ou um item de lista. O lugar do anúncio do Público, ao lado, recolhe-se na mesma.
+    [Fact]
+    public void Script_PaddedCardsChipsCellsAndClickableTiles_Stay()
+        => Assert.Equal("1 pubHorz0", RunPage("""
+            page(el('body', { h: 3000 },
+              el('ad-placement', { id: 'pubHorz0', h: 291, before: '"publicidade"' }),
+              el('main', { h: 2000 },
+                el('p', { h: 40 }, 'Despesas do mês'),
+                el('table', { h: 100 }, el('tbody', { h: 100 },
+                  el('tr', { h: 48 }, el('td', { id: 'celula', h: 48, pad: 12 }, 'Publicidade'), el('td', { h: 48, pad: 12 }, '1 200 EUR')),
+                  el('tr', { h: 70 }, el('td', { id: 'alta', h: 70 }, 'Publicidade'), el('td', { h: 70 }, 'Três linhas de texto')))),
+                el('ul', { h: 100 }, el('li', { id: 'item', h: 44, pad: 12 }, 'Publicidade'), el('li', { h: 44, pad: 12 }, 'Vendas')),
+                el('div', { h: 50 }, el('span', { id: 'pastilha', h: 44, pad: 12, border: 1 }, 'Pub'), el('span', { h: 44, pad: 12 }, 'Bar')),
+                el('div', { h: 100 }, el('div', { id: 'cartao', h: 44, pad: 12, border: 1 }, 'Publicidade'), el('div', { h: 44, pad: 12 }, 'Desporto')),
+                el('div', { h: 200 },
+                  el('div', { id: 'mosaico', h: 80, cursor: 'pointer' }, el('span', { h: 20, cursor: 'pointer' }, 'Pub')),
+                  el('div', { id: 'foco', h: 80, attrs: { tabindex: '0' } }, el('span', { h: 20 }, 'Anúncio')),
+                  el('div', { id: 'clique', h: 80, attrs: { onclick: 'abrir()' } }, el('span', { h: 20 }, 'Pub')),
+                  el('div', { h: 80 }, el('span', { h: 20 }, 'Restaurante'))))));
+            """, []));
 
     // Os bloqueios que chegam depois do carregamento (labels: false): a página só volta a procurar rótulos se recolheu
     // algum iframe ou imagem — um beacon (new Image()) bloqueado que não está na página não faz percorrer a página toda.
