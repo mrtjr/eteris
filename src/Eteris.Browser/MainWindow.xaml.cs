@@ -721,7 +721,7 @@ public partial class MainWindow : Window
         // A Pausa (MainWindow.Pause.cs) vem antes de tudo: Esc e Ctrl+. voltam; Tab, Enter e Espaço seguem para o ecrã calmo.
         if (_pause is not null)
         {
-            e.Handled = HandlePauseKey(key, ctrl, shift, alt);
+            e.Handled = HandlePauseKey(key, ctrl, shift, alt, e.IsRepeat);
             return;
         }
 
@@ -757,6 +757,8 @@ public partial class MainWindow : Window
         // Ctrl+Z do Éteris: só aqui (teclas da moldura) e fora dos campos de texto — com o foco na página, o Ctrl+Z
         // nem passa por esta janela e a página desfaz o que é seu.
         else if (ctrl && !shift && !alt && key == Key.Z && !TextInputHasFocus()) UndoLast();
+        // O Ctrl+. mantido premido entra na Pausa uma só vez (MainWindow.Pause.cs, HandlePauseKey).
+        else if (e.IsRepeat && IsPauseToggleKey(key, ctrl, shift, alt)) { }
         else if (Shortcut(key, ctrl, shift, alt) is { } action) action();
         else if (key == Key.Escape && _pageFullscreen) ExitPageFullscreen();
         else if (key == Key.Escape && Tabs.Active?.IsLoading == true && !Omnibox.IsKeyboardFocusWithin) StopActive();
@@ -837,7 +839,7 @@ public partial class MainWindow : Window
         // A Pausa (MainWindow.Pause.cs): a página está escondida e nenhuma tecla vai para ela; Esc e Ctrl+. voltam.
         if (_pausedForPage)
         {
-            if (key == Key.Escape || (ctrl && !shift && !alt && key == Key.OemPeriod)) Dispatcher.InvokeAsync(ResumeEverywhere);
+            if (!repeat && (key == Key.Escape || IsPauseToggleKey(key, ctrl, shift, alt))) Dispatcher.InvokeAsync(ResumeEverywhere);
             return true;
         }
         var shortcut = Shortcut(key, ctrl, shift, alt);
@@ -853,6 +855,8 @@ public partial class MainWindow : Window
         // A lista de sugestões de palavras-passe aberta (ou ↓ num campo com sugestões): ↑ ↓ Enter Esc são dela e a
         // página nunca os vê (MainWindow.Vault.cs).
         if (SuggestionKeyFromPage(key, ctrl, shift, alt, from) is { } listKey) return listKey;
+        // O Ctrl+. mantido premido entra na Pausa uma só vez.
+        if (repeat && IsPauseToggleKey(key, ctrl, shift, alt)) return true;
         if (shortcut is { } action)
         {
             Dispatcher.InvokeAsync(action);

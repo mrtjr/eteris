@@ -143,11 +143,15 @@ public partial class MainWindow
         if (PausedWindows().Count == 0) s_pauseEndsAt = null;
     }
 
-    private bool HandlePauseKey(Key key, bool ctrl, bool shift, bool alt)
+    private static bool IsPauseToggleKey(Key key, bool ctrl, bool shift, bool alt) => ctrl && !shift && !alt && key == Key.OemPeriod;
+
+    private bool HandlePauseKey(Key key, bool ctrl, bool shift, bool alt, bool repeat)
     {
-        if (key == Key.Escape || (ctrl && !shift && !alt && key == Key.OemPeriod))
+        if (key == Key.Escape || IsPauseToggleKey(key, ctrl, shift, alt))
         {
-            ResumeEverywhere();
+            // A tecla mantida premida (repetição automática) não volta a alternar: entrava e saía da Pausa ao ritmo da
+            // repetição, e cada nova Pausa apagava as marcas da anterior (o «Retomar» já não retomava nada).
+            if (!repeat) ResumeEverywhere();
             return true;
         }
         // Tab, Enter, Espaço e as setas (os chips e «Voltar») e o Alt+F4 seguem o caminho normal do WPF; nenhum atalho do
