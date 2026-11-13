@@ -117,6 +117,9 @@ public class PinnedHomeWiringTests
         Assert.Equal("{DynamicResource {x:Static SystemColors.HighlightBrushKey}}", Setter(triggers[contrast], "HomeDot", "Fill"));
         Assert.Equal("{DynamicResource {x:Static SystemColors.WindowBrushKey}}", Setter(triggers[contrast], "HomeDot", "Stroke"));
         Assert.Equal("{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}", Setter(triggers[contrast], "HomeGlyph", "Foreground"));
+        // O HighlightText só tem contraste garantido sobre o Highlight: o fundo da aba continua a ser o do Éteris (o Aquatic
+        // dava #263B50 sobre #2A2F45, 1,15:1), por isso o ⌂ leva o Highlight por trás.
+        Assert.Equal("{DynamicResource {x:Static SystemColors.HighlightBrushKey}}", Setter(triggers[contrast], "HomeGlyph", "Background"));
         // Nada se mexe: o ponto não pulsa (o «reduzir movimento» não tem nada a parar).
         Assert.DoesNotContain(template.Descendants(), e => (string?)e.Attribute("Storyboard.TargetName") is "HomeDot" or "HomeGlyph");
     }

@@ -406,6 +406,8 @@
                             <DataTrigger Binding="{Binding Path=(SystemParameters.HighContrast)}" Value="True">
                                 <Setter TargetName="HomeDot" Property="Fill" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
                                 <Setter TargetName="HomeDot" Property="Stroke" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                                <!-- O HighlightText só tem contraste garantido sobre o Highlight (o fundo da aba continua a ser o do Éteris) -->
+                                <Setter TargetName="HomeGlyph" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
                                 <Setter TargetName="HomeGlyph" Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
@@ -761,6 +763,8 @@
                             <DataTrigger Binding="{Binding Path=(SystemParameters.HighContrast)}" Value="True">
                                 <Setter TargetName="HomeDot" Property="Fill" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
                                 <Setter TargetName="HomeDot" Property="Stroke" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                                <!-- O HighlightText só tem contraste garantido sobre o Highlight (o fundo da aba continua a ser o do Éteris) -->
+                                <Setter TargetName="HomeGlyph" Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
                                 <Setter TargetName="HomeGlyph" Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
