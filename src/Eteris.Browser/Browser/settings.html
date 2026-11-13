@@ -391,6 +391,19 @@
           <label class="switch"><input type="checkbox" data-key="hideFromCapture"><i></i></label>
         </div>
         <div class="item">
+          <div class="label"><b>Trancar as janelas privadas</b><span>Ao bloquear o Windows, ao suspender o computador e depois de algum tempo sem uso, as janelas privadas escondem as abas atrás de um cartão que só abre com o Windows Hello (ou com a palavra-passe do Windows). Nunca se trancam por falta de uso com som, vídeo ou uma chamada em curso. É uma camada de conveniência, não uma cifra: as abas continuam abertas na memória deste computador e as páginas continuam a correr. Para trancar já: Ctrl+Alt+L ou a paleta (Ctrl+K).</span></div>
+          <label class="switch"><input type="checkbox" data-key="privateLock"><i></i></label>
+        </div>
+        <div class="item" id="privateLockMinutesItem" hidden>
+          <div class="label"><b>Trancar depois de parada</b><span>Tempo sem uso de uma janela privada até se trancar. «Nunca» deixa só o bloqueio do Windows e a suspensão.</span></div>
+          <div class="seg" data-key="privateLockMinutes">
+            <button data-value="5">5 min</button>
+            <button data-value="15">15 min</button>
+            <button data-value="60">1 hora</button>
+            <button data-value="0">Nunca</button>
+          </div>
+        </div>
+        <div class="item">
           <div class="label"><b>Apagar dados de navegação</b><span id="clearResult">Histórico, cookies e dados de sites, imagens em cache.</span></div>
           <button class="action" id="clearToggle">Apagar…</button>
         </div>
@@ -822,7 +835,7 @@
   });
 
   // O arquivo automático só fecha abas depois de o utilizador escolher um prazo: até lá nenhum fica marcado.
-  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: data.archiveConfirmed ? String(data.archive) : '', tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density, siteLanguage: data.siteLanguage };
+  const current = { engine: data.engine, startup: data.startup, sleep: String(data.sleep), archive: data.archiveConfirmed ? String(data.archive) : '', tabs: data.tabs, dns: data.dns, theme: data.theme, density: data.density, siteLanguage: data.siteLanguage, privateLockMinutes: String(data.privateLockMinutes) };
   document.getElementById('systemLanguage').textContent = '(' + data.systemLanguage + ')';
 
   document.querySelectorAll('.seg[data-key]').forEach(seg => {
@@ -842,6 +855,11 @@
   // A opção do sono por pressão só existe com o ajuste e13 (Tabs/MemoryPressure.cs), ligado por omissão: só fica
   // escondida se o ajuste for desligado pelo interruptor.
   document.getElementById('sleepPressureItem').hidden = data.sleepPressure === null;
+
+  // «Trancar depois de parada» só se vê com «Trancar as janelas privadas» ligado (no carregamento e ao mudar o interruptor).
+  const showPrivateLockMinutes = on => { document.getElementById('privateLockMinutesItem').hidden = !on; };
+  showPrivateLockMinutes(!!data.privateLock);
+  document.querySelector('input[data-key="privateLock"]').addEventListener('change', e => showPrivateLockMinutes(e.target.checked));
 
   document.querySelectorAll('input[data-key]').forEach(input => {
     input.checked = !!data[input.dataset.key];

@@ -262,4 +262,48 @@ public class SettingsPageTests
         Assert.Contains(Eteris.Browser.Browser.InternalPages.Token, html);
         Assert.DoesNotContain("{{DATA}}", html);
     }
+
+    // A tranca das janelas privadas (MainWindow.PrivateLock.cs): ligada por omissão, como no Safari, com 15 min sem uso.
+    [Fact]
+    public void PrivateLock_IsOnWith15MinutesByDefault()
+    {
+        Assert.True(new UserSettings().PrivateLock);
+        Assert.Equal(15, new UserSettings().PrivateLockMinutes);
+        var html = Eteris.Browser.Browser.SettingsPage.Render(new UserSettings { PrivateLock = false, PrivateLockMinutes = 60 });
+        Assert.Contains("\"privateLock\":false", html);
+        Assert.Contains("\"privateLockMinutes\":60", html);
+    }
+
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("5", 5)]
+    [InlineData("15", 15)]
+    [InlineData("60", 60)]
+    public void PrivateLockMinutes_AcceptsTheChoices(string value, int minutes)
+        => Assert.Equal(minutes, new UserSettings().With("privateLockMinutes", value)!.PrivateLockMinutes);
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("30")]
+    [InlineData("15 ")]
+    [InlineData("-5")]
+    [InlineData("True")]
+    [InlineData("")]
+    public void PrivateLockMinutes_RefusesTheRest(string value) => Assert.Null(new UserSettings().With("privateLockMinutes", value));
+
+    [Fact]
+    public void PrivateLock_IsASwitch()
+    {
+        Assert.False(new UserSettings().With("privateLock", "false")!.PrivateLock);
+        Assert.True(new UserSettings { PrivateLock = false }.With("privateLock", "true")!.PrivateLock);
+        Assert.Null(new UserSettings().With("privateLock", "talvez"));
+    }
+
+    // Deste computador: não viajam com a sincronização nem vão no perfil exportado (ProfileTransfer só leva as que viajam).
+    [Fact]
+    public void PrivateLock_DoesNotTravel()
+    {
+        Assert.DoesNotContain("privateLock", Eteris.Sync.Model.Collections.SyncableSettings);
+        Assert.DoesNotContain("privateLockMinutes", Eteris.Sync.Model.Collections.SyncableSettings);
+    }
 }

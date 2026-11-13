@@ -84,6 +84,10 @@ public sealed record UserSettings
     // O temporizador da Pausa (Ctrl+., Tabs/PauseTimer.cs): 0 = sem fim, 1, 5 ou 15 min, o último escolhido. Deste
     // computador (não viaja com a sincronização) e nunca gravado a partir de uma janela privada.
     public int PauseMinutes { get; set; }
+    // Trancar as janelas privadas (MainWindow.PrivateLock.cs): ao bloquear o Windows, ao suspender e depois de N minutos sem uso
+    // (0 = só ao bloquear e suspender). Deste computador: não viajam com a sincronização nem vão no perfil exportado.
+    public bool PrivateLock { get; set; } = true;
+    public int PrivateLockMinutes { get; set; } = Tabs.PrivateLockPolicy.DefaultMinutes;
     // Palavras-passe e preenchimento automático (docs/palavras-passe.md, B1). Oferecer para guardar e as sugestões ao
     // clicar num campo viajam entre computadores; «Pedir o Windows Hello…» é deste computador (D-5: desligado para as
     // palavras-passe, como o Chrome e o Firefox; ligado para pagamentos e documentos).
@@ -158,6 +162,9 @@ public sealed record UserSettings
         "readerSerif" when TryParseSwitch(value, out var on) => this with { ReaderSerif = on },
         "pauseMinutes" when int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pause)
                             && Tabs.PauseTimer.IsChoice(pause) => this with { PauseMinutes = pause },
+        "privateLock" when TryParseSwitch(value, out var on) => this with { PrivateLock = on },
+        "privateLockMinutes" when int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var lockMinutes)
+                                  && Tabs.PrivateLockPolicy.IsChoice(lockMinutes) => this with { PrivateLockMinutes = lockMinutes },
         "pwOffer" when TryParseSwitch(value, out var on) => this with { PasswordOffer = on },
         "pwSuggest" when TryParseSwitch(value, out var on) => this with { PasswordSuggestions = on },
         "pwAskHello" when TryParseSwitch(value, out var on) => this with { PasswordAskHello = on },
