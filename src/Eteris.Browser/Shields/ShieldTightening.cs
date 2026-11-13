@@ -10,6 +10,11 @@ namespace Eteris.Browser.Shields;
 // site. A cache em disco não: um acerto nela passa pelo tratador e é bloqueado (depois de reiniciar, o gpt.js volta a
 // ser bloqueado); uma aba nova também não (outro processo). Por isso as janelas ouvem Tightened e esvaziam a cache de
 // memória das páginas abertas do site (Browser/RendererCache.cs), e a aba ativa recarrega sem cache.
+// O que fica de fora: as outras páginas abertas do site não recarregam (o que já correu nelas continua; os pedidos novos
+// passam pelo Escudo). Uma página reposta pela cache de Voltar/Avançar corre um instante antes de recarregar (o motor
+// só avisa depois de a repor). A Cache Storage de um service worker não se toca: um script de terceiros que o service
+// worker do site lá guardou enquanto o site estava sem proteção continua a ser servido por ele, sem pedido ao tratador
+// (os envios desse script continuam bloqueados); só sai ao limpar os dados do site (docs/paridade.md, secção 8).
 public static class ShieldTightening
 {
     // O anfitrião cujo site ficou mais protegido; pode chegar de qualquer thread (a sincronização aplica fora da janela).

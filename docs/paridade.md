@@ -493,6 +493,12 @@ aba.
   CEF; estão medidos na secção 7 (0 pedidos sem ação do utilizador).
 - O service worker de um iframe de terceiros tem como topo a origem do iframe (a CEF não diz qual é a página de
   topo); as listas veem-no como «primeira parte» desse terceiro. As listas por domínio continuam a apanhá-lo.
+- Cache Storage de um service worker depois de o site ficar mais protegido (0.2.18, `Shields/ShieldTightening.cs`):
+  um script de terceiros que o service worker do site guardou na Cache Storage enquanto a exceção do Escudo estava
+  ligada (por exemplo o `analytics.js` com `NetworkFirst`) volta a ser servido por ele depois de a exceção sair: o
+  `fetch` do service worker é bloqueado, mas a resposta guardada sai da Cache Storage no renderer, sem pedido a nenhum
+  tratador. Os envios desse script ao rastreador continuam bloqueados. O Éteris esvazia só a cache de memória das
+  páginas abertas; a Cache Storage sai ao limpar os dados do site. Por construção (leitura do código), não medido.
 - Beacons (`sendBeacon`): o do mesmo site chega, com GPC (passa pela aba); os de outro site não chegaram ao servidor
   em nenhuma das duas versões, nem o do domínio livre — não é fuga, mas fica por perceber se o motor perde beacons
   legítimos de outro site.
