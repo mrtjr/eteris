@@ -63,6 +63,7 @@ public static class ShortcutSheet
         new("Janelas e página", [
             new("Ctrl+N", "Nova janela"),
             new("Ctrl+Shift+N", "Nova janela privada"),
+            new("Ctrl+Alt+L", Tabs.PrivateLockText.ShortcutAction),
             new("Ctrl+P", "Imprimir"),
             new("Ctrl+U", "Ver código-fonte"),
             new("F12", "Ferramentas de programador"),

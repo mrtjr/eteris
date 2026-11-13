@@ -30,7 +30,8 @@ public class WhatsNewTests
 
     // 0.2.18: a Pausa à frente (Ctrl+., na folha de atalhos), curta e só com o que o código faz — cala e pausa o som e o
     // vídeo de todas as janelas, esconde as páginas, e nada recomeça sozinho ao voltar. A seguir, as abas fixadas com
-    // casa; a divisória «Versões anteriores» fica depois dos destaques da 0.2.18 (NewCount), antes do 1.º da 0.2.17.
+    // casa e as janelas privadas trancadas; a divisória «Versões anteriores» fica depois dos destaques da 0.2.18
+    // (NewCount), antes do 1.º da 0.2.17.
     [Fact]
     public void Highlights_LeadWithThePauseIn0218()
     {
@@ -62,6 +63,25 @@ public class WhatsNewTests
         foreach (var s in new[] { "IA", "sempre", "nunca", "Edge", "sincroniz" })
             Assert.DoesNotContain(s, home.Title + " " + home.Detail, StringComparison.Ordinal);
         Assert.InRange(WhatsNewPage.NewCount, 2, 8);
+    }
+
+    // 0.2.18: as janelas privadas trancadas logo a seguir às abas fixadas com casa (Ctrl+Alt+L, na folha de atalhos): curto,
+    // honesto (conveniência, não cifra) e sem prometer mais do que o código faz.
+    [Fact]
+    public void Highlights_TheLockedPrivateWindowsFollowTheHome()
+    {
+        var titles = WhatsNewPage.Highlights.Select(h => h.Title).ToList();
+        var at = titles.IndexOf("Janelas privadas trancadas");
+        Assert.Equal(titles.IndexOf("Abas fixadas com casa") + 1, at);
+        Assert.True(at < WhatsNewPage.NewCount, "na versão em curso");
+        var tranca = WhatsNewPage.Highlights[at];
+        Assert.Equal("Ctrl+Alt+L", tranca.Keys);
+        Assert.True(tranca.Detail.Length <= 180, tranca.Detail);
+        Assert.Contains("Windows Hello", tranca.Detail);
+        Assert.Contains("não cifra", tranca.Detail);
+        foreach (var s in new[] { "IA", "sempre", "nunca", "Edge" })
+            Assert.DoesNotContain(s, tranca.Title + " " + tranca.Detail, StringComparison.Ordinal);
+        Assert.Equal(3, WhatsNewPage.NewCount);
     }
 
     // 0.2.17: cinco destaques à frente, curtos, que só prometem o que o CHANGELOG da 0.2.17 diz — os sites completos com o

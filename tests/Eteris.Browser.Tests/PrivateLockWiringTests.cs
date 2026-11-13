@@ -33,6 +33,31 @@ public class PrivateLockWiringTests
         Assert.Matches(@"if \(_pause is not null\) return;\s*(//[^\n]*\n\s*)*if \(_privateLock is not null\) return;", Source("MainWindow.Mouse.cs"));
     }
 
+    // Ctrl+Alt+L, só com o Alt da esquerda (o AltGr+L escreve «ł») e só com uma janela privada aberta (lido de um contador,
+    // porque o Shortcut também corre no fio do CEF): sem janela privada, continua da página. Antes dos Espaços.
+    [Fact]
+    public void CtrlAltL_LocksThePrivateWindows_OnlyWithTheLeftAltAndAPrivateWindowOpen()
+    {
+        var shortcut = Body(Source("MainWindow.xaml.cs"), "private Action? Shortcut(Key key, bool ctrl, bool shift, bool alt)");
+        var block = Regex.Match(shortcut, @"if \(ctrl && alt\)\s*\{(?<block>.*?)\n        \}", RegexOptions.Singleline).Groups["block"].Value;
+        var lockKey = block.IndexOf("if (PrivateLockPolicy.IsLockKey(key, shift, IsLeftAltDown()) && s_privateWindowsOpen > 0) return LockPrivateWindowsNow;", StringComparison.Ordinal);
+        Assert.True(lockKey >= 0, "o Ctrl+Alt+L no bloco do Ctrl+Alt");
+        Assert.True(lockKey < block.IndexOf("WorkspaceShortcut.Resolve", StringComparison.Ordinal));
+        Assert.Contains("s_privateWindowsOpen++;", Source("MainWindow.PrivateLock.cs"));
+        Assert.Contains("s_privateWindowsOpen--;", Source("MainWindow.PrivateLock.cs"));
+    }
+
+    [Fact]
+    public void PaletteAndMenu_HaveTheCommand()
+    {
+        Assert.Contains("\"Trancar janelas privadas\", \"Esconde as abas privadas até desbloquear com o Windows Hello (não é uma cifra)\", \"Ctrl+Alt+L\", LockPrivateWindowsNow",
+            Source("MainWindow.Palette.cs"));
+        Assert.Contains("if (PrivateWindows().Count > 0) Row(\"\\uE72E\", \"Trancar janelas privadas\", LockPrivateWindowsNow, \"Ctrl+Alt+L\");", Source("MainWindow.BrowserMenu.cs"));
+        Assert.Equal("Trancar janelas privadas", Eteris.Browser.Tabs.PrivateLockText.CommandTitle);
+        Assert.Contains(Eteris.Browser.Palette.ShortcutSheet.Groups.Single(g => g.Title == "Janelas e página").Items,
+            s => s.Keys == "Ctrl+Alt+L" && s.Action == Eteris.Browser.Tabs.PrivateLockText.ShortcutAction);
+    }
+
     [Fact]
     public void Pages_StayHidden()
     {

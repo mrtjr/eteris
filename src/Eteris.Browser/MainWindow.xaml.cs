@@ -800,7 +800,13 @@ public partial class MainWindow : Window
     {
         // A exceção: Ctrl+Alt+1…9 e Ctrl+Alt+←/→ mudam de Espaço — mas só com o Alt da esquerda físico (o AltGr é
         // Ctrl+Alt da direita para o Windows, e AltGr+2 tem de continuar a escrever «@»).
-        if (ctrl && alt) return WorkspaceShortcut.Resolve(key, shift, IsLeftAltDown()) is { } move ? () => RunWorkspaceShortcut(move) : null;
+        if (ctrl && alt)
+        {
+            // Trancar as janelas privadas (MainWindow.PrivateLock.cs): só com o Alt da esquerda (o AltGr+L escreve «ł») e
+            // só com uma janela privada aberta (lido de um contador, porque isto também corre no fio do CEF).
+            if (PrivateLockPolicy.IsLockKey(key, shift, IsLeftAltDown()) && s_privateWindowsOpen > 0) return LockPrivateWindowsNow;
+            return WorkspaceShortcut.Resolve(key, shift, IsLeftAltDown()) is { } move ? () => RunWorkspaceShortcut(move) : null;
+        }
         // Alt+F e Alt+E, como no Chrome e no Brave.
         if (alt && !ctrl && !shift && key is Key.F or Key.E) return () => ToggleBrowserMenu(byKeyboard: true);
         if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) return ToggleShortcuts;

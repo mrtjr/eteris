@@ -19,6 +19,7 @@ public class ShortcutSheetTests
     [InlineData("Ctrl+Shift+B")]
     [InlineData("Ctrl+.")]
     [InlineData("Alt+Home")]
+    [InlineData("Ctrl+Alt+L")]
     public void ListsTheMainShortcuts(string keys)
         => Assert.Contains(ShortcutSheet.Groups.SelectMany(g => g.Items), s => s.Keys.Contains(keys));
 

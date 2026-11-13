@@ -125,6 +125,9 @@ public partial class MainWindow
         if (PrivateWindows().Count > 0)
             yield return new("", "Terminar sessão privada", "Fecha todas as janelas privadas e apaga o que ficou nelas (pede confirmação)",
                 null, OfferEndPrivateSession);
+        // A tranca das janelas privadas (MainWindow.PrivateLock.cs), de qualquer janela.
+        if (PrivateWindows().Count > 0)
+            yield return new("", "Trancar janelas privadas", "Esconde as abas privadas até desbloquear com o Windows Hello (não é uma cifra)", "Ctrl+Alt+L", LockPrivateWindowsNow);
         if (SelectedTabs is { Count: >= 2 } selected)
         {
             var count = TabSelection.Count(selected.Count);

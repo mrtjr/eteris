@@ -17,6 +17,11 @@
 - «Usar este endereço como casa» (no menu da aba e na paleta) troca a casa, com «Anular». A paleta ganha também «Fixar esta aba» e «Desafixar esta aba»; desafixar esquece a casa, e voltar a fixar guarda o endereço desse momento. Nas sessões de versões anteriores, as abas fixadas ficam com a casa no endereço em que estavam.
 - A casa fica só na sessão deste computador: não vai para a sincronização nem para o ficheiro do perfil, e na janela privada não é gravada. Ao abrir o Éteris, cada aba fixada volta onde estava, não à casa.
 - O Alt+Home passa a ser do Éteris também com o foco na página (é o atalho de «página inicial» do Chrome e do Firefox): as páginas deixam de o receber.
+- **Janelas privadas trancadas**: ao bloquear o Windows, ao suspender o computador ou depois de 15 minutos sem uso, as janelas privadas escondem as abas atrás de um cartão «Janela privada trancada», que só abre com o Windows Hello (ou, sem ele, com a palavra-passe do Windows). Desbloquear uma desbloqueia todas; cancelar deixa-as trancadas. Para trancar já: Ctrl+Alt+L, a paleta ou o menu ⋯ («Trancar janelas privadas»). Uma janela privada só com abas novas não se tranca sozinha.
+- Trancada, a janela não mostra o título, o endereço nem o ícone de nenhuma aba: a faixa das abas e a barra de endereço ficam tapadas, a barra de tarefas diz «Janela privada trancada» e a miniatura da barra de tarefas e do Alt+Tab passa a ser uma imagem neutra. As ferramentas de programador e o Picture-in-Picture dessa janela fecham-se, e os avisos das páginas (`alert`, `confirm`) não aparecem enquanto está trancada.
+- Por falta de uso, nunca se tranca com som, vídeo ou uma chamada (câmara, microfone ou ecrã) em curso. Trancar não para nada: as páginas continuam a correr e o som continua («Pausar tudo», Ctrl+., cala-o sem desbloquear). Em Definições › Privacidade e segurança: «Trancar as janelas privadas» (ligado) e «Trancar depois de parada» (5 min, 15 min, 1 hora ou nunca), só neste computador.
+- É uma camada de conveniência, não uma cifra: as abas continuam abertas na memória deste computador, e um programa que corra com a sua conta do Windows consegue lê-las. Nada disto fica gravado: a janela privada continua a não escrever nada no disco.
+- Com uma janela privada aberta, o Ctrl+Alt+L (com o Alt da esquerda) passa a ser do Éteris também com o foco na página.
 
 ### Espreitar
 
@@ -39,6 +44,8 @@
 - eteris://privacy passa a contar as vigias ativas e paradas e os recortes que recarregam sozinhos, e a política de privacidade explica os dois.
 - Apagar o histórico de um período apaga também os preços e textos que as vigias leram nesse período (as vigias ficam). «Esquecer ao fechar» deixa as vigias; só o «Triturar» do site as leva.
 - Voltar a ligar o Escudo num site (tirar a exceção) ou ligar o modo rigoroso protege logo: os scripts de anúncios e rastreadores que as páginas abertas desse site guardaram em memória enquanto estavam sem proteção já não voltam a correr ao recarregar nem numa visita nova (no Público, o script de anúncios do Google continuava a carregar), e voltar atrás para uma página carregada antes da mudança carrega-a outra vez, já protegida. Uma página do site que esteja aberta noutra aba fica como estava até ser recarregada, e o que um site guardou no próprio service worker só sai ao limpar os dados dele.
+- A paleta de uma janela privada deixa de mostrar as abas de outra janela privada que esteja trancada.
+- As janelas auxiliares do Éteris (a camada por cima da página e a bolha dos links) deixam de guardar o título da página aberta quando apareceram.
 
 ### Correções
 
