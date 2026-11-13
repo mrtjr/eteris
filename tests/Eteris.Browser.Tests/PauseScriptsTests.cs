@@ -1,3 +1,4 @@
+using Eteris.Browser.Browser;
 using Eteris.Browser.Tabs;
 
 namespace Eteris.Browser.Tests;
@@ -65,4 +66,16 @@ public class PauseScriptsTests
         Assert.Contains("eterisPausa", MediaInfo.PauseMarkScript);
         Assert.Contains("eterisPausa", MediaInfo.ResumeMarkedScript);
     }
+
+    // No motor de vídeo os scripts passam pelo canal único (Browser/VideoPageScript.cs, Runtime.evaluate pelo DevTools do
+    // WebView2): da resposta só se lê um número; o resto (erro, texto, exceção da página) dá nulo.
+    [Theory]
+    [InlineData("{\"result\":{\"type\":\"number\",\"value\":2,\"description\":\"2\"}}", 2.0)]
+    [InlineData("{\"result\":{\"type\":\"number\",\"value\":0}}", 0.0)]
+    [InlineData("{\"result\":{\"type\":\"string\",\"value\":\"2\"}}", null)]
+    [InlineData("{\"result\":{\"type\":\"object\",\"subtype\":\"error\"},\"exceptionDetails\":{}}", null)]
+    [InlineData("não é JSON", null)]
+    [InlineData("[]", null)]
+    public void VideoEngine_ReadsOnlyANumber(string json, double? expected)
+        => Assert.Equal(expected, VideoPageScript.NumberResult(json));
 }

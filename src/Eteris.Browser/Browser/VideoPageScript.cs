@@ -67,4 +67,31 @@ public static class VideoPageScript
         }
         catch (Exception) { return false; }
     }
+
+    // Um script na página do motor de vídeo (Runtime.evaluate pelo DevTools do WebView2), com ou sem gesto do utilizador,
+    // que devolve um número: a Pausa (MainWindow.Pause.cs) pausa e marca o que toca, e o «Retomar o que tocava» toca-o
+    // outra vez com o gesto do clique. Nulo se falhou (o motor a fechar, uma exceção da página).
+    public static async Task<double?> EvaluateNumberAsync(CoreWebView2 core, string expression, bool userGesture = false)
+    {
+        try
+        {
+            return NumberResult(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                JsonSerializer.Serialize(new { expression, returnByValue = true, userGesture })));
+        }
+        catch (Exception) { return null; }
+    }
+
+    // O número na resposta do Runtime.evaluate ({"result":{"type":"number","value":2}}), ou nulo.
+    public static double? NumberResult(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("result", out var result) && result.ValueKind == JsonValueKind.Object
+                   && result.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Number
+                ? value.GetDouble() : null;
+        }
+        catch (JsonException) { return null; }
+    }
 }

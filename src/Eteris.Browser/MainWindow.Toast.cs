@@ -30,6 +30,12 @@ public partial class MainWindow
     // pasta», até duas) fica 6 s, recebe o rato e não desaparece enquanto o rato estiver por cima.
     private void ShowToast(string message, params ToastAction[] actions)
     {
+        // Na Pausa os avisos ficam em fila e aparecem ao voltar (MainWindow.Pause.cs).
+        if (_pause is not null)
+        {
+            QueuePausedToast(message, actions);
+            return;
+        }
         WireToast();
         ToastText.Text = message;
         ToastActions.Children.Clear();

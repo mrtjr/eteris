@@ -55,7 +55,7 @@ public partial class MainWindow
     {
         tab.IsMuted = !tab.IsMuted;
         if (_browsers.TryGetValue(tab, out var browser) && browser.IsBrowserInitialized)
-            browser.GetBrowserHost()?.SetAudioMuted(tab.IsMuted);
+            browser.GetBrowserHost()?.SetAudioMuted(tab.IsMuted || _pause is not null);
         SetVideoMuted(tab);
     }
 

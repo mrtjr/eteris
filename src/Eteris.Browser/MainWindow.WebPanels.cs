@@ -141,6 +141,12 @@ public partial class MainWindow
                 continue;
             }
             _webPanelHiddenSince.Remove(other);
+            // A Pausa (MainWindow.Pause.cs): fica escondido até voltar (os sites fixados mudaram noutra janela, por exemplo).
+            if (_pause is not null)
+            {
+                HideWebPanel(view);
+                continue;
+            }
             view.Visibility = Visibility.Visible;
             if (view.IsBrowserInitialized) SetPageVisible(view, true);
         }
@@ -320,7 +326,8 @@ public partial class MainWindow
             Dispatcher.InvokeAsync(() =>
             {
                 if (browser.IsDisposed) return;
-                SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen);
+                SetPageVisible(browser, _sidebarPanel?.Url == url && _sidebarOpen && _pause is null);
+                JoinPause(browser, muted: false);
             });
         };
         _webPanelBrowsers[url] = browser;
@@ -400,6 +407,7 @@ public partial class MainWindow
         _webPanelHiddenSince.Remove(url);
         if (_webPanelInjectors.Remove(url, out var injector)) injector.Dispose();
         if (!_webPanelBrowsers.Remove(url, out var browser)) return;
+        _pause?.Plan.Forget(browser);
         if (ReferenceEquals(_findPanel, browser)) CloseFind();
         SidebarWebHost.Children.Remove(browser);
         PageScript.Release(browser);

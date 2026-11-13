@@ -94,6 +94,7 @@ public partial class MainWindow : Window
         SetUpLiveDot();
         WatchUnseen();
         WatchMiniBar();
+        WatchPause();
         WatchOmniboxMenu();
         SetUpSideFilter();
         WatchWorkspaces();
@@ -479,6 +480,8 @@ public partial class MainWindow : Window
             if (browser.IsBrowserInitialized) StartupTrace.Mark("aba.cef");
             if (browser.IsBrowserInitialized && browser.GetBrowser() is { } cef) injector.Start(cef);
             if (browser.IsBrowserInitialized && tab.IsMuted) browser.GetBrowserHost()?.SetAudioMuted(true);
+            // Pronta durante a Pausa: entra calada (MainWindow.Pause.cs).
+            if (browser.IsBrowserInitialized) Dispatcher.InvokeAsync(() => JoinPause(browser, tab.IsMuted));
             // Abas abertas em segundo plano: a janela do Chromium fica logo escondida (ver SetPageWindowVisible).
             if (browser.IsBrowserInitialized) Dispatcher.InvokeAsync(LayoutBrowsers);
         };
@@ -715,6 +718,13 @@ public partial class MainWindow : Window
         e.Handled = true;
         AltKeyDown(key, ctrl, shift);
 
+        // A Pausa (MainWindow.Pause.cs) vem antes de tudo: Esc e Ctrl+. voltam; Tab, Enter e Espaço seguem para o ecrã calmo.
+        if (_pause is not null)
+        {
+            e.Handled = HandlePauseKey(key, ctrl, shift, alt);
+            return;
+        }
+
         if (RadarOpen)
         {
             e.Handled = HandleRadarKey(key, ctrl, shift, alt);
@@ -764,6 +774,8 @@ public partial class MainWindow : Window
         // Alt+F e Alt+E, como no Chrome e no Brave.
         if (alt && !ctrl && !shift && key is Key.F or Key.E) return () => ToggleBrowserMenu(byKeyboard: true);
         if (key == Key.F1 || (ctrl && key is Key.OemQuestion or Key.Divide)) return ToggleShortcuts;
+        // A Pausa, como no Vivaldi: o Ctrl+. passa a ser do Éteris também com o foco na página (o «Quick fix» do vscode.dev).
+        if (ctrl && !shift && key == Key.OemPeriod) return TogglePause;
         if (ctrl && shift && key == Key.A) return ToggleRadar;
         if (ctrl && key == Key.K) return TogglePalette;
         if (ctrl && key == Key.J) return ToggleDownloads;
@@ -822,6 +834,12 @@ public partial class MainWindow : Window
     {
         var key = KeyInterop.KeyFromVirtualKey(virtualKey);
         Dispatcher.InvokeAsync(() => AltKeyDown(key, ctrl, shift));
+        // A Pausa (MainWindow.Pause.cs): a página está escondida e nenhuma tecla vai para ela; Esc e Ctrl+. voltam.
+        if (_pausedForPage)
+        {
+            if (key == Key.Escape || (ctrl && !shift && !alt && key == Key.OemPeriod)) Dispatcher.InvokeAsync(ResumeEverywhere);
+            return true;
+        }
         var shortcut = Shortcut(key, ctrl, shift, alt);
         if (_browserMenuOpenForPage)
         {

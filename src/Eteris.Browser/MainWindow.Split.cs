@@ -287,6 +287,8 @@ public partial class MainWindow
     // A página da aba fica à vista: numa das metades, ou a da aba ativa fora do ecrã dividido.
     private bool ShouldShow(BrowserTab tab, FrameworkElement page)
     {
+        // Na Pausa (MainWindow.Pause.cs) nenhuma página fica à vista: nem a ativa, nem as metades, nem o motor de vídeo.
+        if (_pause is not null) return false;
         // A meio da troca para o motor de vídeo, só a página do motor principal se vê (até o WebView2 pintar).
         if (page is Microsoft.Web.WebView2.Wpf.WebView2 && _videoSwitching.Contains(tab)) return false;
         return _split?.PaneOf(tab) is not null || (_split is null && ReferenceEquals(tab, Tabs.Active));

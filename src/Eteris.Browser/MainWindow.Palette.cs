@@ -80,6 +80,7 @@ public partial class MainWindow
 
         yield return new("", "Nova aba", "Abrir a página inicial do Éteris", "Ctrl+T", OpenNewTab);
         yield return new("\uE71D", "Radar de abas", "Encontre, compare ou reabra abas desta janela", "Ctrl+Shift+A", ToggleRadar);
+        yield return new("\uE708", "Pausa", "Silencia tudo e esconde as páginas — Esc para voltar", "Ctrl+.", TogglePause);
         if (s_closedWindows.Latest is { } closedWindow)
             yield return new("\uE8A7", closedWindow.ReopenLabel,
                 (closedWindow.SpacesWithTabs > 1 ? $"Em {closedWindow.SpacesWithTabs} Espaços · " : string.Empty)
