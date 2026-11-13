@@ -134,6 +134,18 @@ public class ShieldHolesTests
 
     // A subida pára na célula ou no item, mas um lugar reservado dentro dele (um anúncio num item de uma lista de
     // notícias) continua a recolher-se — só ele, não o item.
+    // O controlo feito à mão só conta no próprio rótulo e nos elementos que a subida adota como lugar: um invólucro
+    // focável lá em cima (<main tabindex="-1"> de uma ligação «saltar para o conteúdo», a raiz de uma SPA) não desliga a
+    // recolha de todos os lugares de anúncio debaixo dele.
+    [Fact]
+    public void AnInteractiveWrapperAboveTheSlot_DoesNotStopIt()
+        => Assert.Equal("slot", Box("""
+            const wrapper = N('DIV', 4000, { parent: body, interactive: true });
+            const column = N('DIV', 900, { filled: true, parent: wrapper });
+            const slot = N('DIV', 250, { parent: column, name: 'slot' });
+            console.log(box(N('SPAN', 16, { parent: slot }), 16));
+            """));
+
     [Fact]
     public void ASlotInsideAListItemOrCell_StillCollapses_ButNotTheItem()
     {
@@ -277,6 +289,17 @@ public class ShieldHolesTests
     // Revisão: o que só é alto pelo enchimento (padding) e pela borda não é lugar reservado — um cartão de categoria
     // «Publicidade», um filtro «Pub» em forma de pastilha. Nem um mosaico clicável «Pub» (cursor de mão, tabindex,
     // onclick), nem uma célula ou um item de lista. O lugar do anúncio do Público, ao lado, recolhe-se na mesma.
+    [Fact]
+    public void Script_AFocusableWrapperHighUp_StillLetsTheSlotsCollapse()
+        => Assert.Equal("2 slot,pubHorz0", RunPage("""
+            page(el('body', { h: 3000 },
+              el('div', { id: 'app', h: 3000, attrs: { onclick: 'rota()' } },
+                el('main', { h: 2000, attrs: { tabindex: '-1' } },
+                  el('p', { h: 40 }, 'Notícia'),
+                  el('div', { id: 'slot', h: 250 }, el('span', { h: 16 }, 'Anúncio'))),
+                el('div', { h: 400 }, el('p', { h: 40 }, 'Mais'), el('ad-placement', { id: 'pubHorz0', h: 291, before: '"publicidade"', attrs: { tabindex: '-1' } })))));
+            """, []));
+
     [Fact]
     public void Script_PaddedCardsChipsCellsAndClickableTiles_Stay()
         => Assert.Equal("1 pubHorz0", RunPage("""

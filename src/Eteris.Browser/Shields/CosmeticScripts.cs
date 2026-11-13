@@ -57,7 +57,8 @@ public static class CosmeticScripts
     //     são lugar de anúncio). Sobe-se no máximo 6 níveis e nunca até html, body, main, article, header, footer, nav,
     //     nem a uma célula, linha ou tabela, nem a um item ou lista (li, dt, dd, ul, ol, dl): esses nunca se escondem.
     // Um rótulo que é texto a sério nunca se esconde: dentro de uma ligação, botão, título, legenda, navegação, campo
-    // editável ou de um controlo feito à mão (onclick, tabindex, cursor de mão), e numa célula ou item de lista com o
+    // editável; nem um controlo feito à mão (onclick, tabindex ≥ 0, cursor de mão) — este só no próprio rótulo e nos
+    // elementos que a subida adota como lugar (um <main tabindex="-1"> lá em cima não conta); e numa célula ou item com o
     // texto todo «Publicidade» (uma rubrica de despesas, uma categoria). Esconder é o display:none !important no próprio
     // elemento, sem marcas com o nome do Éteris.
 
@@ -73,16 +74,17 @@ public static class CosmeticScripts
           ROLES: /^(heading|button|link|menuitem|tab|option|navigation)$/,
           STOP: /^(HTML|BODY|MAIN|ARTICLE|HEADER|FOOTER|NAV|TABLE|THEAD|TBODY|TFOOT|TR|TD|TH|UL|OL|DL|LI|DT|DD)$/,
           MIN: 40,
-          // dom: parent(e), tag(e) em maiúsculas, role(e), editable(e), interactive(e) (um controlo feito à mão), filled(e)
-          // (outro conteúdo à vista), height(e) (a altura sem o enchimento nem a borda).
+          // dom: parent(e), tag(e) em maiúsculas, role(e), editable(e), interactive(e) (um controlo feito à mão: só no
+          // rótulo e no que a subida adota), filled(e) (outro conteúdo à vista), height(e) (sem o enchimento nem a borda).
           box: function (label, labelHeight, dom) {
             for (var e = label; e; e = dom.parent(e))
-              if (Holes.INSIDE.test(dom.tag(e)) || Holes.ROLES.test(dom.role(e) || '') || dom.editable(e) || dom.interactive(e)) return null;
-            if (Holes.STOP.test(dom.tag(label)) || dom.filled(label)) return null;
+              if (Holes.INSIDE.test(dom.tag(e)) || Holes.ROLES.test(dom.role(e) || '') || dom.editable(e)) return null;
+            if (Holes.STOP.test(dom.tag(label)) || dom.filled(label) || dom.interactive(label)) return null;
             var box = label;
             for (var i = 0; i < 6; i++) {
               var p = dom.parent(box);
               if (!p || Holes.STOP.test(dom.tag(p)) || dom.filled(p)) break;
+              if (dom.interactive(p)) return null;
               box = p;
             }
             var h = dom.height(box);
@@ -199,7 +201,7 @@ public static class CosmeticScripts
             role: function (e) { return e.getAttribute('role'); },
             editable: function (e) { return !!e.isContentEditable; },
             interactive: function (e) {
-              return e.hasAttribute('onclick') || e.hasAttribute('tabindex') || getComputedStyle(e).cursor === 'pointer';
+              return e.hasAttribute('onclick') || parseInt(e.getAttribute('tabindex'), 10) >= 0 || getComputedStyle(e).cursor === 'pointer';
             },
             filled: function (e) {
               if (filled.has(e) || background(e)) return true;
