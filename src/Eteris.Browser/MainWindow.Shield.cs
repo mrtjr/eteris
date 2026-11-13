@@ -112,22 +112,54 @@ public partial class MainWindow
     }
 
     // Regras genéricas das listas (##.classe, ###id): aplicadas às classes e ids que existem na página,
-    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde.
-    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
+    // no fim do carregamento e outra vez pouco depois, para anúncios injetados mais tarde. Depois delas, nas duas
+    // passagens, a página recolhe os buracos que o Escudo deixou (CosmeticScripts.CollapseHoles): os iframe e img
+    // bloqueados desta aba (tab; um painel web não tem) e os lugares só com «Publicidade». Nunca no auto-teste.
+    private async Task ApplyGenericCosmeticsAsync(CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url, BrowserTab? tab = null)
     {
-        if (ShieldEngine.Cosmetic is not { } engine) return;
         if (WebHost(url) is not { } host || !ShieldOn(host)) return;
+        var holes = !SelfTest.IsTestPage(url);
 
         foreach (var delay in new[] { 0, 2500 })
         {
             if (delay > 0) await Task.Delay(delay);
             if (browser.IsDisposed || browser.GetMainFrame()?.Url != url) return;
-            var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
-            if (!result.Success || result.Result is not string raw) return;
-            var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
-            var css = engine.GenericCss(url, classes, ids);
-            if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
+            if (ShieldEngine.Cosmetic is { } engine)
+            {
+                var result = await PageScript.EvaluateAsync(browser, CosmeticScripts.CollectClassesAndIds);
+                if (!result.Success || result.Result is not string raw) return;
+                var (classes, ids) = CosmeticScripts.ParseClassesAndIds(raw);
+                var css = engine.GenericCss(url, classes, ids);
+                if (css.Length > 0) PageScript.Run(browser, CosmeticScripts.Inject(css));
+            }
+            if (holes) PageScript.Run(browser, CosmeticScripts.CollapseHoles(tab?.BlockedElements ?? []));
         }
+    }
+
+    // Os bloqueios chegam aos poucos (uma imagem tardia, um iframe de um anúncio que só aparece ao rolar): juntam-se
+    // durante um instante e a página recolhe-os de uma vez.
+    private readonly HashSet<BrowserTab> _holesQueued = [];
+
+    private async void OnBlockedElement(BrowserTab tab, string url)
+    {
+        try
+        {
+            tab.RecordBlockedElement(url);
+            if (!_holesQueued.Add(tab)) return;
+            try { await Task.Delay(400); }
+            finally { _holesQueued.Remove(tab); }
+            CollapseHoles(tab);
+        }
+        catch (Exception) { }
+    }
+
+    private void CollapseHoles(BrowserTab tab)
+    {
+        if (!_browsers.TryGetValue(tab, out var browser) || browser.IsDisposed) return;
+        var url = tab.Address;
+        if (WebHost(url) is not { } host || !ShieldOn(host) || SelfTest.IsTestPage(url)) return;
+        var blocked = tab.BlockedElements;
+        if (blocked.Count > 0) PageScript.Run(browser, CosmeticScripts.CollapseHoles(blocked));
     }
 
     private void Shield_Click(object sender, RoutedEventArgs e)

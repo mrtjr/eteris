@@ -15,7 +15,8 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     Func<string, bool>? localNetworkAllowed = null, Action<string, string>? onLocalNetworkBlocked = null,
     Action<IReadOnlyList<string>>? onTrackingSkipped = null, Action<MainNavigation>? onMainNavigation = null,
     Action<string, string>? onCloaked = null, SiteObservatory? observatory = null,
-    Func<string, int, IReadOnlyList<ClientCertificateRow>, Task<string?>>? chooseCertificate = null)
+    Func<string, int, IReadOnlyList<ClientCertificateRow>, Task<string?>>? chooseCertificate = null,
+    Action<string>? onBlockedElement = null)
     : CefSharp.Handler.RequestHandler
 {
     protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request,
@@ -96,7 +97,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     }
 
     private readonly PrivacyResourceHandler _resources = new(blocker, isProtected, onBlocked, userAgent, onMainFrameRequest, isPrivate,
-        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked, observatory);
+        localNetworkAllowed, onLocalNetworkBlocked, onTrackingSkipped, onCloaked, observatory, onBlockedElement: onBlockedElement);
 
     protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser,
         IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
@@ -151,9 +152,33 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
     internal sealed class PrivacyResourceHandler(Func<IRequestBlocker> blocker, Func<string, bool> isProtected, Action<string> onBlocked,
         string? userAgent, Action? onMainFrameRequest = null, bool isPrivate = false, Func<string, bool>? localNetworkAllowed = null,
         Action<string, string>? onLocalNetworkBlocked = null, Action<IReadOnlyList<string>>? onTrackingSkipped = null,
-        Action<string, string>? onCloaked = null, SiteObservatory? observatory = null, bool browserless = false, string? browserlessTop = null)
+        Action<string, string>? onCloaked = null, SiteObservatory? observatory = null, bool browserless = false, string? browserlessTop = null,
+        Action<string>? onBlockedElement = null)
         : CefSharp.Handler.ResourceRequestHandler
     {
+        // «Escudo sem buracos» (CosmeticScripts.CollapseHoles): uma imagem ou um iframe bloqueado que a página principal
+        // consegue ver — a imagem pedida pelo próprio documento principal, o iframe filho direto dele. O endereço de um
+        // pedido feito dentro de um iframe (de outro site, até) nunca chega à página de cima. Na dúvida (frame destacado,
+        // sem pai), nada.
+        internal static bool InMainDocument(ResourceType type, IFrame? frame)
+        {
+            if (frame is null || !frame.IsValid) return false;
+            if (type == ResourceType.Image) return frame.IsMain;
+            if (type != ResourceType.SubFrame || frame.IsMain) return false;
+            using var parent = frame.Parent;
+            return parent is { IsValid: true, IsMain: true };
+        }
+
+        private void BlockedElement(IFrame? frame, IRequest request)
+        {
+            if (onBlockedElement is null || browserless) return;
+            try
+            {
+                if (InMainDocument(request.ResourceType, frame)) onBlockedElement(request.Url);
+            }
+            catch (Exception) { }
+        }
+
         // Observatório do site (Shields/SiteObservatory.cs): cada sub-recurso com a decisão que teve. Um incremento num
         // dicionário por pedido — o resto só se calcula quando o painel abre.
         private void Observe(string url, ResourceType type, ObservedVerdict verdict, string? detail = null, string? pageUrl = null)
@@ -508,6 +533,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             {
                 blocking = true;
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var strictBlocked) ? strictBlocked.Host : request.Url);
+                BlockedElement(frame, request);
                 Observe(request.Url, request.ResourceType, ObservedVerdict.Strict, pageUrl: pageUrl);
                 return CefReturnValue.Cancel;
             }
@@ -517,6 +543,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
             {
                 blocking = true;
                 onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var ruled) ? ruled.Host : request.Url);
+                BlockedElement(frame, request);
                 Observe(request.Url, request.ResourceType, ObservedVerdict.UserBlocked, pageUrl: pageUrl);
                 return CefReturnValue.Cancel;
             }
@@ -531,6 +558,7 @@ public sealed class PrivacyRequestHandler(Func<IRequestBlocker> blocker, Func<st
 
             blocking = true;
             onBlocked(Uri.TryCreate(request.Url, UriKind.Absolute, out var blocked) ? blocked.Host : request.Url);
+            BlockedElement(frame, request);
             Observe(request.Url, request.ResourceType, ObservedVerdict.Blocked, pageUrl: pageUrl);
             return CefReturnValue.Cancel;
         }

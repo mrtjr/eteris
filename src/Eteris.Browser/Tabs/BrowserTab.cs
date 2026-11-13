@@ -265,6 +265,22 @@ public partial class BrowserTab : ObservableObject
 
     public void RecordCloaked(string label) => _cloaked.Add(label);
 
+    // «Escudo sem buracos» (CosmeticScripts.CollapseHoles): os endereços das imagens e dos iframes do documento principal
+    // que o Escudo bloqueou nesta página, para a página os recolher. Só em memória, cada um uma vez, no máximo
+    // RememberedBlockedElements (saem os mais antigos), e recomeçam com cada página (ResetShield).
+    public const int RememberedBlockedElements = 200;
+
+    private readonly List<string> _blockedElements = [];
+
+    public IReadOnlyList<string> BlockedElements => _blockedElements.ToList();
+
+    public void RecordBlockedElement(string url)
+    {
+        if (_blockedElements.Contains(url)) return;
+        _blockedElements.Add(url);
+        if (_blockedElements.Count > RememberedBlockedElements) _blockedElements.RemoveAt(0);
+    }
+
     public void RecordBlocked(string host)
     {
         _blockedHosts[host] = _blockedHosts.GetValueOrDefault(host) + 1;
@@ -304,6 +320,7 @@ public partial class BrowserTab : ObservableObject
         _localNetworkBlocked.Clear();
         _trackingSkips.Clear();
         _cloaked.Clear();
+        _blockedElements.Clear();
         BlockedCount = 0;
     }
 

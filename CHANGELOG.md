@@ -12,6 +12,7 @@
 
 ### Correções
 
+- Com o Escudo ligado, o lugar dos anúncios bloqueados deixa de ficar vazio na página: as imagens e as molduras que o Escudo bloqueou e os espaços que ficavam só com «Publicidade», «Anúncio» ou «Pub» (como o bloco no topo do Público ou do Observador) são recolhidos, neste computador e sem pedidos de rede. Num site com o Escudo desligado, a página fica como o site a desenhou.
 - Quando o nome de um site não existe, a página de erro passa a ter o botão principal «Pesquisar «nome»» no motor de pesquisa escolhido; se o nome estiver a uma ou duas letras de um site do histórico ou dos favoritos, pergunta «Queria dizer …?». A comparação é feita neste computador, sem pedidos de rede, e nunca na janela privada.
 - A data da nova aba aparece só com a primeira letra maiúscula («Quinta-feira, 12 de novembro»).
 - As boas-vindas deixam de dizer que não há sincronização: dizem que é opcional e cifrada de ponta a ponta.

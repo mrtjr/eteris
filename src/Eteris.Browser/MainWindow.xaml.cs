@@ -273,7 +273,9 @@ public partial class MainWindow : Window
                     });
                 },
                 observatory: tab.Observatory,
-                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows)),
+                chooseCertificate: (host, port, rows) => AskClientCertificate(tab, host, port, rows),
+                // Uma imagem ou um iframe da página que o Escudo bloqueou: a página recolhe-o (MainWindow.Shield.cs).
+                onBlockedElement: url => Dispatcher.InvokeAsync(() => OnBlockedElement(tab, url))),
         };
         browser.MenuHandler = NewPageMenuHandler(tab, browser);
         browser.AddressChanged += () =>
@@ -445,7 +447,7 @@ public partial class MainWindow : Window
                 DetectReaderable(tab, browser, url);
                 ApplyHiddenElements(browser, url);
                 CaptureThumbnail(tab, browser, url);
-                _ = ApplyGenericCosmeticsAsync(browser, url);
+                _ = ApplyGenericCosmeticsAsync(browser, url, tab);
                 SettleChainLater(tab);
                 if (SelfTest.IsTestPage(url)) _ = RunSelfTestAsync(tab, browser, url);
                 // 1.º documento da aba (nasceu sem os scripts precoces) ou qualquer outro: a deteção de vídeo que não
