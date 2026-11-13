@@ -119,6 +119,14 @@ public partial class ClipWindow : Window
         {
             if (WindowState != WindowState.Normal) WindowState = WindowState.Normal;
         };
+        // Mais proteção no site recortado (Shields/ShieldTightening.cs): o recorte fica aberto e recarrega sozinho, por isso
+        // larga a cache de memória do renderer, como as abas (senão servia-lhe os scripts carregados sem proteção).
+        void OnTightened(string host) => Dispatcher.InvokeAsync(() =>
+        {
+            if (!_closed && !_browser.IsDisposed && Shields.ShieldTightening.Affects(host, _browser.Address)) _ = RendererCache.EvictAsync(_browser);
+        });
+        Shields.ShieldTightening.Tightened += OnTightened;
+        Closed += (_, _) => Shields.ShieldTightening.Tightened -= OnTightened;
         Closed += (_, _) => Release();
     }
 

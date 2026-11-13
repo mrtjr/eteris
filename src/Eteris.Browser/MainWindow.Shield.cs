@@ -181,13 +181,13 @@ public partial class MainWindow
     // scripts que correram sem proteção: carrega outra vez, sem cache, e o processo dela larga a cache de memória (o
     // processo de uma página na cache de Voltar/Avançar não estava entre as páginas abertas quando a proteção mudou).
     // Antes, os scripts do site são atualizados, como no recarregar da barra (MainWindow.Reload.cs).
-    private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)
+    private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)
     {
         try
         {
             if (!IsReady(browser)) return;
             _ = RendererCache.EvictAsync(browser);
-            await ScriptsReadyFor(tab, browser, tab.Address);
+            await ScriptsReadyFor(tab, browser, url);
             if (IsReady(browser)) browser.Reload(ignoreCache: true);
         }
         catch (Exception)

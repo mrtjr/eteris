@@ -421,7 +421,7 @@ public partial class MainWindow : Window
                     tab.LeavePage(leaving);
                     if (restored && tab.ReturnToPage(arriving)) OnPageRestored(tab, browser, arriving);
                     // Reposta tal como estava antes de o site ficar mais protegido (Shields/ShieldTightening.cs).
-                    if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser);
+                    if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser, arriving);
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
             mainRequestsAtCommit = requests;

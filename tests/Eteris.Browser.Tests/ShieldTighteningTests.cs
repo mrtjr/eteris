@@ -89,6 +89,17 @@ public class ShieldTighteningTests
         Assert.Contains("RendererCache.EvictAsync(browser)", watch);
     }
 
+    // O recorte ao vivo é uma janela à parte, que fica aberta e recarrega sozinha: também larga a cache do site.
+    [Fact]
+    public void Clip_EvictsItsPageOfTheSite()
+    {
+        var clip = Source("ClipWindow.xaml.cs");
+        Assert.Contains("Shields.ShieldTightening.Tightened += OnTightened;", clip);
+        Assert.Contains("Closed += (_, _) => Shields.ShieldTightening.Tightened -= OnTightened;", clip);
+        Assert.Contains("Shields.ShieldTightening.Affects(host, _browser.Address)", clip);
+        Assert.Contains("RendererCache.EvictAsync(_browser)", clip);
+    }
+
     // O interruptor e a paleta recarregam a aba ativa sem cache quando a proteção volta: a página que recarrega não
     // espera pela limpeza (que é assíncrona) para pedir os scripts outra vez ao tratador.
     [Fact]
@@ -132,10 +143,12 @@ public class ShieldTighteningTests
         var leftAt = main.IndexOf("var leftAt = tab.LeftAt(arriving);", StringComparison.Ordinal);
         var leave = main.IndexOf("tab.LeavePage(leaving);", StringComparison.Ordinal);
         Assert.True(leftAt > 0 && leave > leftAt);
-        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser);", main);
-        var reload = Body(Source("MainWindow.Shield.cs"), "private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)");
+        // O endereço que chegou, não o da aba (que pode ainda não ter mudado quando isto corre).
+        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser, arriving);", main);
+        var reload = Body(Source("MainWindow.Shield.cs"),
+            "private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser, string url)");
         Assert.Contains("RendererCache.EvictAsync(browser)", reload);
-        Assert.Contains("await ScriptsReadyFor(tab, browser, tab.Address);", reload);
+        Assert.Contains("await ScriptsReadyFor(tab, browser, url);", reload);
         Assert.Contains("browser.Reload(ignoreCache: true)", reload);
         Assert.Contains("catch (Exception)", reload);
     }
