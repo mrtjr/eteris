@@ -23,13 +23,14 @@ public sealed record SessionSpace(string Name, int ColorIndex, string? Icon = nu
 
 // O que o utilizador deu à aba (Tabs/TabIdentity.cs): nome próprio, emoji e cor do ícone; tudo opcional.
 // Seen = última visita (Unix ms), para o arquivo automático contar o tempo real e não desde o último arranque.
+// Home = a casa de uma aba fixada (Tabs/PinnedHome.cs), só nas fixadas; um Éteris antigo ignora o campo.
 public sealed record SessionTabMeta(string? Name = null, string? Emoji = null, int? Color = null, string? Note = null, bool Locked = false,
-    long? Seen = null)
+    long? Seen = null, string? Home = null)
 {
     public static readonly SessionTabMeta Empty = new();
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsEmpty => Name is null && Emoji is null && Color is null && Note is null && !Locked && Seen is null;
+    public bool IsEmpty => Name is null && Emoji is null && Color is null && Note is null && !Locked && Seen is null && Home is null;
 }
 
 // Ecrã dividido gravado na sessão: índices das duas abas (na lista gravada) e a orientação («side» / «stacked»).

@@ -112,9 +112,18 @@ public class ReadyNewTabTests
          + "\"Metas\":[{\"Name\":\"x\",\"Emoji\":\"🙂\",\"Color\":2,\"Note\":\"n\",\"Locked\":true,\"Seen\":1730000000000},{},{}],"
          + "\"Spaces\":[{\"Name\":\"Casa\",\"ColorIndex\":1},{\"Name\":\"Trabalho\",\"ColorIndex\":4,\"Icon\":\"💼\",\"Left\":1730000000000,"
          + "\"Tabs\":{\"Urls\":[\"https://d.pt/\"],\"ActiveIndex\":0}}],\"SpaceIndex\":1}"],
+        // A casa das abas fixadas (Tabs/PinnedHome.cs), só no meta das fixadas.
+        [PinnedHomeSession],
         // Campos a null e desconhecidos.
         ["{\"Urls\":[\"https://a.pt/\"],\"ActiveIndex\":0,\"Titles\":null,\"Split\":null,\"Futuro\":{\"x\":1}}"],
     ];
+
+    private const string PinnedHomeSession = "{\"Urls\":[\"https://a.pt/x\",\"https://b.pt/\"],\"ActiveIndex\":0,\"Pinned\":[true,false],"
+        + "\"Metas\":[{\"Home\":\"https://a.pt/\"},{}]}";
+
+    [Fact]
+    public void Session_ReadsTheHomeWithGeneratedCode()
+        => Assert.Equal("https://a.pt/", JsonSerializer.Deserialize(PinnedHomeSession, StartupJsonContext.Default.Session)!.Metas![0].Home);
 
     [Theory]
     [MemberData(nameof(SessionFiles))]

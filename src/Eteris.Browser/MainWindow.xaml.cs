@@ -583,7 +583,8 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName is nameof(BrowserTab.Address) or nameof(BrowserTab.Title) or nameof(BrowserTab.IsPinned)
             or nameof(BrowserTab.Group) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.CustomTitle)
-            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)) ScheduleSessionSave();
+            or nameof(BrowserTab.Emoji) or nameof(BrowserTab.ColorIndex) or nameof(BrowserTab.Note) or nameof(BrowserTab.IsLocked)
+            or nameof(BrowserTab.Home)) ScheduleSessionSave();
         if (e.PropertyName is nameof(BrowserTab.IsPinned) or nameof(BrowserTab.IsHiddenByGroup) or nameof(BrowserTab.IsGroupHead)) UpdateTabWidth();
         // Uma aba quente que começa a tocar som arrefece já (Tabs/WarmTabs.cs).
         if (e.PropertyName is nameof(BrowserTab.IsAudible) or nameof(BrowserTab.Media) && _warmPages.Count > 0) ReviewWarmPages();
