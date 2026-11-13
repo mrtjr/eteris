@@ -62,6 +62,9 @@ public partial class MainWindow
         public List<(string Message, ToastAction[] Actions)> Toasts { get; } = [];
         // Começou uma transferência durante a Pausa: o painel das transferências abre ao voltar.
         public bool DownloadStarted;
+        // Onde estava o teclado ao entrar (a barra de endereço, as Notas): volta para lá.
+        public UIElement? FocusBefore;
+        public (int Start, int Length)? FocusSelection;
     }
 
     private PauseState? _pause;
@@ -183,6 +186,8 @@ public partial class MainWindow
     private void EnterPause()
     {
         if (_pause is not null || !IsLoaded) return;
+        // Onde estava o teclado, antes de os fechos abaixo o mudarem (ExitPause devolve-o).
+        var focusBefore = (IsActive ? Keyboard.FocusedElement : FocusManager.GetFocusedElement(this)) as UIElement;
         _replay = [];
         // 1. O que estava aberto por cima da página fecha (a camada fica escondida durante a Pausa: OverlayNeeded).
         ClosePalette();
@@ -206,7 +211,11 @@ public partial class MainWindow
 
         // 2. O plano, de todos os motores vivos da janela: as abas de todos os Espaços com motor (as dos Espaços fora de vista
         // dormem sem motor e não tocam), os motores de vídeo e os sites fixados na barra lateral, abertos ou não.
-        var state = new PauseState(PausePlan<FrameworkElement>.From(PauseEngines()));
+        var state = new PauseState(PausePlan<FrameworkElement>.From(PauseEngines()))
+        {
+            FocusBefore = focusBefore,
+            FocusSelection = focusBefore is TextBox box ? (box.SelectionStart, box.SelectionLength) : null,
+        };
         _pause = state;
         _pausedForPage = true;
 
@@ -229,8 +238,27 @@ public partial class MainWindow
 
         // 6. O ecrã calmo na própria janela (as janelas nativas das páginas já estão escondidas).
         ShowPauseView(state);
+        EnableCoveredChrome(false);
         UpdateOverlayVisibility();
     }
+
+    // Os controlos que o ecrã calmo tapa (a barra de título com as abas, a de ferramentas, as abas verticais) continuavam na
+    // árvore de automação e a funcionar pelo Invoke do leitor de ecrã («Voltar» e «Recarregar» mexiam na aba escondida).
+    // Desligados durante a Pausa. Nunca um contentor de páginas (PageFrame, a barra lateral dos sites fixados): um
+    // HwndHost desligado desliga também a janela do Chromium.
+    private void EnableCoveredChrome(bool enabled)
+    {
+        foreach (var covered in new UIElement[] { TitleBar, Toolbar, SideBar })
+        {
+            if (enabled) covered.ClearValue(IsEnabledProperty);
+            else covered.IsEnabled = false;
+        }
+    }
+
+    // O teclado volta para onde estava, se ainda se vê e é desta janela (não uma página: essa é o ReturnFocusToPage).
+    private bool FocusCanReturnTo(PauseState state, UIElement element)
+        => element is { IsVisible: true, IsEnabled: true, Focusable: true } and not (ChromiumWebBrowser or WebView2)
+           && ReferenceEquals(Window.GetWindow(element), this) && state.View?.IsAncestorOf(element) != true;
 
     private List<PauseEngine<FrameworkElement>> PauseEngines()
     {
@@ -306,7 +334,16 @@ public partial class MainWindow
         HoldAfterPause(back.Replay);
         UpdateOverlayVisibility();
         ShowPausedToasts(state, _replay.Count);
-        if (IsActive) ReturnFocusToPage();
+        // 4. O teclado volta para onde estava (a barra de endereço, as Notas); senão, para a página.
+        EnableCoveredChrome(true);
+        if (state.FocusBefore is { } before && FocusCanReturnTo(state, before))
+        {
+            if (IsActive) Keyboard.Focus(before);
+            else FocusManager.SetFocusedElement(this, before);
+            // Numa caixa de texto, o cursor e a seleção também (a barra de endereço seleciona tudo ao receber o foco).
+            if (before is TextBox box && state.FocusSelection is { } selection) box.Select(selection.Start, selection.Length);
+        }
+        else if (IsActive) ReturnFocusToPage();
         else if (ActiveBrowser is { } page) FocusManager.SetFocusedElement(this, page);
         RefreshMediaHub();
     }

@@ -277,6 +277,40 @@ public class PauseWiringTests
     public void ThePinnedSiteKeys_StopAtThePause()
         => Assert.Matches(@"private bool ShortcutFromWebPanel\(ChromiumWebBrowser browser, int virtualKey, bool ctrl, bool shift, bool alt, bool repeat\)\s*\{\s*(//[^\n]*\n\s*)*if \(_pausedForPage\) return ShortcutFromPage\(virtualKey, ctrl, shift, alt, repeat: repeat\);", Source("MainWindow.WebPanels.cs"));
 
+    // Ao voltar, o teclado volta para onde estava (a barra de endereço, as Notas, o filtro), e não sempre para a página: as
+    // teclas seguintes, pensadas para a barra, iam para o YouTube («k» retomava o vídeo que a Pausa parou). A página só se
+    // o foco estava nela (ou o elemento já não se vê).
+    [Fact]
+    public void TheReturn_GivesTheFocusBackWhereItWas()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        var enter = Regex.Match(pause, @"private void EnterPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Matches(@"^\s*if \(_pause is not null \|\| !IsLoaded\) return;\s*(//[^\n]*\n\s*)*var focusBefore = ", enter);
+        var exit = Regex.Match(pause, @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Matches(@"if \(state\.FocusBefore is \{ \} before && FocusCanReturnTo\(state, before\)\)\s*\{\s*if \(IsActive\) Keyboard\.Focus\(before\);\s*else FocusManager\.SetFocusedElement\(this, before\);[\s\S]*?\r?\n        \}\s*else if \(IsActive\) ReturnFocusToPage\(\);", exit);
+        Assert.Contains("and not (ChromiumWebBrowser or WebView2)", pause);
+        // Numa caixa de texto, o cursor e a seleção também (a barra de endereço seleciona tudo ao receber o foco: a tecla
+        // seguinte apagava o que se estava a escrever).
+        Assert.Contains("if (before is TextBox box && state.FocusSelection is { } selection) box.Select(selection.Start, selection.Length);", exit);
+    }
+
+    // Os controlos tapados pelo ecrã calmo (a barra de título com as abas, a de ferramentas, as abas verticais) ficavam na
+    // árvore de automação e funcionavam pelo Invoke do leitor de ecrã: «Voltar» e «Recarregar» mexiam na aba escondida, e
+    // «Nova aba» levava o teclado a uma barra de endereço invisível. Ficam desligados durante a Pausa (nunca um contentor
+    // de páginas: um HwndHost desligado desligava a janela do Chromium), e voltam ao normal antes de o foco regressar.
+    [Fact]
+    public void TheCoveredControls_AreDisabledDuringThePause()
+    {
+        var pause = Source("MainWindow.Pause.cs");
+        Assert.Matches(@"private void EnableCoveredChrome\(bool enabled\)\s*\{\s*foreach \(var covered in new UIElement\[\] \{ TitleBar, Toolbar, SideBar \}\)", pause);
+        var enter = Regex.Match(pause, @"private void EnterPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.Contains("EnableCoveredChrome(false);", enter);
+        var exit = Regex.Match(pause, @"private void ExitPause\(\)\s*\{(?<body>.*?)\r?\n    \}", RegexOptions.Singleline).Groups["body"].Value;
+        Assert.True(exit.IndexOf("EnableCoveredChrome(true);", StringComparison.Ordinal) is var on && on >= 0
+                    && on < exit.IndexOf("state.FocusBefore", StringComparison.Ordinal), "EnableCoveredChrome(true) antes de devolver o foco");
+        Assert.DoesNotContain("PageFrame.IsEnabled", pause);
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")
