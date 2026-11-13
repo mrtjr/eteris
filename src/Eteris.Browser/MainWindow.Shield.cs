@@ -138,20 +138,42 @@ public partial class MainWindow
 
     private void ShieldObservatory_Click(object sender, RoutedEventArgs e) => OpenObservatory();
 
+    // Com mais proteção, a aba recarrega sem cache: os scripts que a página carregou sem ela voltam a passar pelo Escudo
+    // sem esperar pela limpeza da cache de memória (assíncrona; WatchShieldTightening).
     private void StrictToggle_Click(object sender, RoutedEventArgs e)
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.SetStrict(host, StrictToggle.IsChecked == true, IsPrivate);
-        ReloadActive();
+        var on = StrictToggle.IsChecked == true;
+        AppData.SetStrict(host, on, IsPrivate);
+        ReloadActive(ignoreCache: on);
         FillShieldPopup();
     }
 
     private void ShieldToggle_Click(object sender, RoutedEventArgs e)
     {
         if (WebHost(Tabs.Active?.Address) is not { } host) return;
-        AppData.SetShield(host, ShieldToggle.IsChecked == true, IsPrivate);
-        ReloadActive();
+        var on = ShieldToggle.IsChecked == true;
+        AppData.SetShield(host, on, IsPrivate);
+        ReloadActive(ignoreCache: on);
         UpdateShieldButton();
         FillShieldPopup();
+    }
+
+    // Um site ficou mais protegido (Shields/ShieldTightening.cs; de qualquer janela, da paleta, de «Repor site» ou da
+    // sincronização): as páginas dele abertas nesta janela esvaziam a cache de memória do renderer, que servia sem
+    // pedido os scripts carregados sem proteção. Todas, não só a ativa: a outra aba do site também os servia.
+    private void WatchShieldTightening()
+    {
+        void OnTightened(string host) => Dispatcher.InvokeAsync(() =>
+        {
+            var pages = _browsers.Values.Concat(_webPanelBrowsers.Values);
+            if (_glanceBrowser is { } glance) pages = pages.Append(glance);
+            foreach (var browser in pages.ToList())
+            {
+                if (!browser.IsDisposed && ShieldTightening.Affects(host, browser.Address)) _ = RendererCache.EvictAsync(browser);
+            }
+        });
+        ShieldTightening.Tightened += OnTightened;
+        Closed += (_, _) => ShieldTightening.Tightened -= OnTightened;
     }
 }

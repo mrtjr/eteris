@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         StartupTrace.Mark("janela.abas");
         WatchSnoozed();
         WatchPages();
+        WatchShieldTightening();
         WatchArchive();
         RestorePlacement(restored?.Placement);
         WatchUpdates();

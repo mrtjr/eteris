@@ -20,18 +20,31 @@ public static class AppData
 
     public static bool IsShieldOn(string host, bool isPrivate) => isPrivate && PrivateShield.TryGetValue(host, out var on) ? on : IsShieldOn(host);
 
+    // Mais proteção num site avisa as janelas (Shields/ShieldTightening.cs): a cache de memória das páginas dele sai.
     public static void SetShield(string host, bool on, bool isPrivate)
     {
-        if (isPrivate) PrivateShield[host] = on;
-        else SetShield(host, on);
+        if (!isPrivate)
+        {
+            SetShield(host, on);
+            return;
+        }
+        var was = IsShieldOn(host, isPrivate: true);
+        PrivateShield[host] = on;
+        Shields.ShieldTightening.Changed(host, was, on);
     }
 
     public static bool IsStrict(string host, bool isPrivate) => isPrivate && PrivateStrict.TryGetValue(host, out var on) ? on : IsStrict(host);
 
     public static void SetStrict(string host, bool on, bool isPrivate)
     {
-        if (isPrivate) PrivateStrict[host] = on;
-        else SetStrict(host, on);
+        if (!isPrivate)
+        {
+            SetStrict(host, on);
+            return;
+        }
+        var was = IsStrict(host, isPrivate: true);
+        PrivateStrict[host] = on;
+        Shields.ShieldTightening.Changed(host, was, on);
     }
 
     public static IReadOnlyList<string> HiddenElements(string host, bool isPrivate)
@@ -260,12 +273,14 @@ public static class AppData
     public static void SetShield(string host, bool on)
     {
         if (LazyShieldExceptions.Value is not { } store) return;
+        var was = IsShieldOn(host);
         try
         {
             if (on) store.Remove(host);
             else store.Add(host);
         }
         catch (Exception) { }
+        Shields.ShieldTightening.Changed(host, was, IsShieldOn(host));
         NotifySyncableChanged();
     }
 
@@ -676,12 +691,14 @@ public static class AppData
 
     public static void SetStrict(string host, bool on)
     {
+        var was = IsStrict(host);
         try
         {
             if (on) LazyStrict.Value?.Add(host);
             else LazyStrict.Value?.Remove(host);
         }
         catch (Exception) { }
+        Shields.ShieldTightening.Changed(host, was, IsStrict(host));
         NotifySyncableChanged();
     }
 
