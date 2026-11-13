@@ -282,8 +282,8 @@ public static partial class LinkPreview
     // quando cumpre tudo isto: pelo menos MinParagraphChars e 6 palavras (a regra das palavras não vale nas escritas sem
     // espaços entre palavras, como o chinês e o japonês); letras em pelo menos 60% dos carateres que não são espaço;
     // algarismos e símbolos (o que não é letra nem pontuação de texto corrido: «°», «′», «·», «|»…) em no máximo 25%; no
-    // máximo uma «palavra colada» (minúscula seguida de maiúscula dentro da mesma palavra); e acaba em pontuação final
-    // ou tem pelo menos 120 carateres.
+    // máximo uma «palavra colada» (minúscula seguida de maiúscula dentro de uma palavra comprida, IsGlued); e acaba em
+    // pontuação final ou tem pelo menos 120 carateres.
     public static bool IsProse(string? line)
     {
         var text = Clean(line);
@@ -314,13 +314,19 @@ public static partial class LinkPreview
     private const string ProsePunctuation = ".,;:!?…'\"«»“”‘’„()[]-–—/。、，！？：；「」『』（）";
     private const string FinalPunctuation = ".!?…:»\"”)。！？";
 
-    // Uma minúscula seguida de uma maiúscula dentro da mesma palavra («continentalEditar», «LFuncionamentoEstatuto»).
+    // Uma minúscula seguida de uma maiúscula dentro da mesma palavra, numa palavra de pelo menos MinGluedLetters letras
+    // («InícioHistória», «LFuncionamentoEstatuto»): duas palavras da estrutura coladas. As marcas em CamelCase são curtas
+    // («WhatsApp», «TikTok», «iPhone», «JavaScript», «PlayStation») e não contam: duas delas no mesmo parágrafo
+    // tiravam-no do resumo e de «Ler tudo aqui».
     private static bool IsGlued(string word)
     {
+        if (word.Count(char.IsLetter) < MinGluedLetters) return false;
         for (var i = 1; i < word.Length; i++)
             if (char.IsLower(word[i - 1]) && char.IsUpper(word[i])) return true;
         return false;
     }
+
+    private const int MinGluedLetters = 12;
 
     // Escritas sem espaços entre palavras: chinês (Han), japonês (hiragana, katakana), tailandês, laosiano, khmer, birmanês.
     private static bool IsUnspacedScript(int c)

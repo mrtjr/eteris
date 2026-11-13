@@ -263,6 +263,11 @@ public class LinkPreviewTests
     [InlineData("Uma frase longa que não acaba em ponto final porque o autor a deixou assim mas que tem palavras e letras suficientes para ser lida como prosa")]
     // Chinês, sem espaços entre palavras: a regra das seis palavras não se aplica.
     [InlineData("欧洲大陆是欧洲的大陆部分，不包括周围的岛屿和群岛，在英国通常被称为大陆，与不列颠群岛相对，也常用于其他岛国。")]
+    // Marcas em CamelCase (curtas) não são palavras coladas: notícias de tecnologia com duas ou mais continuam a ser prosa.
+    [InlineData("O WhatsApp e o TikTok anunciaram ontem novas regras para proteger os menores…")]
+    [InlineData("A Apple apresentou o novo iPhone e o novo iPad numa sessão em Cupertino.")]
+    [InlineData("O projeto foi reescrito em TypeScript, que compila para JavaScript, e ficou mais fácil de manter.")]
+    [InlineData("A OpenAI lançou o ChatGPT para o iPhone, e o YouTube e o LinkedIn seguiram-lhe os passos.")]
     public void IsProse_AcceptsARealParagraph(string line) => Assert.True(LinkPreview.IsProse(line));
 
     [Theory]
@@ -300,6 +305,21 @@ public class LinkPreviewTests
         Assert.DoesNotContain(info.Paragraphs, p => p.Contains("textContent", StringComparison.Ordinal));
         Assert.Equal(4, info.FullParagraphs.Count);
         Assert.True(info.HasMore);
+    }
+
+    // Um parágrafo do meio com duas marcas em CamelCase não desaparece do resumo nem de «Ler tudo aqui».
+    [Fact]
+    public void Parse_KeepsParagraphsWithCamelCaseBrands()
+    {
+        var paras = new[]
+        {
+            "O Governo apresentou ontem uma proposta de lei sobre o uso das redes sociais pelos mais novos.",
+            "O WhatsApp e o TikTok anunciaram ontem novas regras para proteger os menores…",
+            "A proposta segue agora para o Parlamento, onde será discutida antes do fim do ano.",
+        };
+        var info = LinkPreview.Parse(JsonSerializer.Serialize(new { head = "", paras }), Page)!;
+        Assert.Equal(paras, info.Paragraphs);
+        Assert.Equal(paras, info.FullParagraphs);
     }
 
     [Fact]
