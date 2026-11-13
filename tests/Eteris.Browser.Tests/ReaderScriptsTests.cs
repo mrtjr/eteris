@@ -84,4 +84,41 @@ public class ReaderScriptsTests
         Assert.Contains("function isProbablyReaderable(", ReaderScripts.Detect);
         Assert.Contains("return isProbablyReaderable(document);", ReaderScripts.Detect);
     }
+
+    // Proposta 3: o leitor nunca tem barra horizontal — o texto parte palavras compridas, as tabelas e os blocos de
+    // código rolam por dentro, as figuras e a média cabem na coluna.
+    [Fact]
+    public void ReaderCss_HasNoHorizontalOverflow()
+    {
+        var css = ReaderCss();
+        Assert.Matches(@"\.wrap \{[^}]*overflow-y: auto; overflow-x: hidden;", css);
+        Assert.Contains(".content { overflow-wrap: anywhere; }", css);
+        Assert.Contains(".content table { display: block; max-width: 100%; overflow-x: auto; }", css);
+        Assert.Contains(".content figure, .content video, .content iframe, .content svg, .content canvas { max-width: 100%; height: auto; }", css);
+        Assert.Matches(@"\.content pre \{[^}]*overflow-x: auto;", css);
+    }
+
+    // As barras do leitor: 10 px, sem setas, arredondadas, na cor do tema (--muted; --fg ao pairar), sem as propriedades
+    // normalizadas que desligam o ::-webkit-scrollbar; e o leitor também respeita «reduzir movimento».
+    [Fact]
+    public void ReaderCss_HasThinThemedScrollbarsAndReducedMotion()
+    {
+        var css = ReaderCss();
+        Assert.Contains("::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }", css);
+        Assert.Contains("::-webkit-scrollbar-button { display: none; }", css);
+        Assert.Contains("::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }", css);
+        Assert.Contains("::-webkit-scrollbar-thumb:hover { background-color: var(--fg); }", css);
+        Assert.DoesNotContain("scrollbar-color", css);
+        Assert.DoesNotContain("scrollbar-width", css);
+        Assert.Contains("@media (prefers-reduced-motion: reduce)", css);
+        Assert.Contains("behavior: still ? 'auto' : 'smooth'", ReaderScripts.Toggle);
+    }
+
+    private static string ReaderCss()
+    {
+        var script = ReaderScripts.Toggle;
+        var start = script.IndexOf("const css = `", StringComparison.Ordinal);
+        Assert.True(start > 0);
+        return script[start..script.IndexOf('`', start + "const css = `".Length)];
+    }
 }

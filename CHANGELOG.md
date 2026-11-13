@@ -7,6 +7,7 @@
 - As páginas do Éteris (Definições, Histórico, Favoritos, Novidades, nova aba, também a privada, página de erro e as restantes) têm barras de deslocamento finas, sem setas e arredondadas, que seguem o tema claro ou escuro e ficam mais visíveis ao passar o rato. Em alto contraste do Windows, voltam a ser as do sistema.
 - Com os efeitos de animação desligados no Windows, as páginas do Éteris deixam de ter transições e animações.
 - Os botões e os campos das páginas do Éteris mostram um anel visível quando se chega a eles pelo teclado.
+- O modo de leitura deixa de ter barra horizontal: as tabelas e os blocos de código rolam por dentro, e as figuras e os vídeos cabem na coluna. As barras ficam finas e na cor do tema do leitor (escuro, sépia ou claro), e com os efeitos de animação desligados no Windows o leitor também fica sem transições.
 
 ## 0.2.17 — 2026-11-13
 
