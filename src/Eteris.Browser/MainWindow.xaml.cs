@@ -260,6 +260,8 @@ public partial class MainWindow : Window
                 {
                     Volatile.Write(ref mainHistory.Last, nav);
                     OnMainNavigation(tab, nav);
+                    // As marcas da Pausa vão-se com o documento (MainWindow.Pause.cs): sai do «Retomar».
+                    Dispatcher.InvokeAsync(() => ForgetReplay(_browsers.GetValueOrDefault(tab)));
                     // O utilizador navegou (não a página sozinha): a aba volta a poder perguntar por certificados. Chega antes
                     // do pedido de certificado do documento novo (este sai no aperto de mão, depois do OnBeforeBrowse).
                     if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(tab));

@@ -124,4 +124,20 @@ public class PausePlanTests
         plan.Forget("a");
         Assert.False(plan.Holds("a"));
     }
+
+    // A página principal de um motor navegou durante a Pausa: as marcas foram-se com o documento. Deixa de contar como «a
+    // tocar» (o «Retomar» não dá o gesto do utilizador a um documento que a Pausa nunca pausou), mas continua calado e
+    // recebe o som de volta.
+    [Fact]
+    public void AnEngineThatNavigated_IsNoLongerPlaying_ButGetsItsSoundBack()
+    {
+        var plan = PausePlan<string>.From([E("a", media: MediaState.Playing), E("b", media: MediaState.Playing)]);
+        plan.Navigated("a");
+        plan.Navigated("x");
+        Assert.Equal(["b"], plan.PlayingAudible);
+        Assert.False(plan.Holds("a"));
+        var back = plan.Return([E("a"), E("b")]);
+        Assert.Equal(["b"], back.Replay);
+        Assert.Equal(["a", "b"], back.Unmute);
+    }
 }

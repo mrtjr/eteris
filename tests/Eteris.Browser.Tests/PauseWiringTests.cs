@@ -235,6 +235,17 @@ public class PauseWiringTests
         Assert.Contains("ShowNextClientCertificate();", exit);
     }
 
+    // O «Retomar» guarda motores, não documentos: quando a página principal navega (o utilizador levou a aba para outro
+    // site), as marcas foram-se e o motor sai do «Retomar» (e do plano da Pausa, se ela ainda dura) — o comando da paleta não
+    // dá o gesto do utilizador ao documento novo.
+    [Fact]
+    public void ANavigation_TakesTheEngineOutOfTheResume()
+    {
+        Assert.Contains("Dispatcher.InvokeAsync(() => ForgetReplay(_browsers.GetValueOrDefault(tab)));", Source("MainWindow.xaml.cs"));
+        Assert.Contains("Dispatcher.InvokeAsync(() => ForgetReplay(_webPanelBrowsers.GetValueOrDefault(url)));", Source("MainWindow.WebPanels.cs"));
+        Assert.Matches(@"private void ForgetReplay\(FrameworkElement\? engine\)\s*\{\s*if \(engine is null\) return;\s*_replay\.Remove\(engine\);\s*_pause\?\.Plan\.Navigated\(engine\);\s*\}", Source("MainWindow.Pause.cs"));
+    }
+
     private static readonly string Root = FindRoot();
 
     private static string FindRoot([System.Runtime.CompilerServices.CallerFilePath] string source = "")

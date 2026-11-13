@@ -261,6 +261,8 @@ public partial class MainWindow
                 onMainNavigation: nav =>
                 {
                     Volatile.Write(ref panelHistory.Last, nav);
+                    // As marcas da Pausa vão-se com o documento (MainWindow.Pause.cs): sai do «Retomar».
+                    Dispatcher.InvokeAsync(() => ForgetReplay(_webPanelBrowsers.GetValueOrDefault(url)));
                     if (ClientCertificatePrompts.ResetsRefusals(nav.UserGesture, nav.IsRedirect, nav.Transition)) Dispatcher.InvokeAsync(() => _clientCertificates.Navigated(certificatePage));
                 },
                 chooseCertificate: (host, port, rows) => AskClientCertificate(certificatePage, () => _pause is null && _sidebarOpen && _sidebarPanel?.Url == url,

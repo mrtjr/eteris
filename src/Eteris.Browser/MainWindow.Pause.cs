@@ -349,6 +349,16 @@ public partial class MainWindow
         foreach (var engine in engines) _ = ReplayAsync(engine);
     }
 
+    // A página principal do motor navegou: as marcas da Pausa foram-se com o documento. Sai do «Retomar» (o comando da
+    // paleta não tem prazo: dava o gesto do utilizador ao site novo) e, com a Pausa ainda ligada, deixa de contar como «a
+    // tocar» (fica calado e recebe o som de volta).
+    private void ForgetReplay(FrameworkElement? engine)
+    {
+        if (engine is null) return;
+        _replay.Remove(engine);
+        _pause?.Plan.Navigated(engine);
+    }
+
     private static async Task ReplayAsync(FrameworkElement engine)
     {
         try
