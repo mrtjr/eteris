@@ -15,15 +15,31 @@ public static class ShieldTightening
     // O anfitrião cujo site ficou mais protegido; pode chegar de qualquer thread (a sincronização aplica fora da janela).
     public static event Action<string>? Tightened;
 
+    // Quando cada site ficou mais protegido pela última vez (Environment.TickCount64), nesta sessão.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> s_tightenedAt = new(StringComparer.Ordinal);
+
     // Quem muda a proteção de um site chama isto: só uma mudança real para mais proteção avisa.
     public static void Changed(string host, bool wasProtected, bool isProtected)
     {
-        if (isProtected && !wasProtected) Tightened?.Invoke(host);
+        if (!isProtected || wasProtected) return;
+        s_tightenedAt[SiteOf(host)] = Environment.TickCount64;
+        Tightened?.Invoke(host);
     }
 
     // A página está no site (o mesmo domínio registável, como a exceção do Escudo: Data/ShieldExceptionStore.cs).
     public static bool Affects(string host, string? pageUrl)
+        => PageSite(pageUrl) is { } site && site == SiteOf(host);
+
+    // Voltar/Avançar pela cache de páginas repõe a página tal como estava quando foi deixada (leftAt; null = a aba não a
+    // guardou), sem pedidos (medido: o gpt.js da reprodução local corria com googletag.apiReady true). Se o site dela
+    // ficou mais protegido depois disso, a página tem de carregar outra vez.
+    public static bool TightenedSince(string? pageUrl, long? leftAt)
+        => PageSite(pageUrl) is { } site && s_tightenedAt.TryGetValue(site, out var at) && (leftAt is not { } left || at >= left);
+
+    private static string SiteOf(string host) => TrackerBlocker.RegistrableDomain(host.ToLowerInvariant());
+
+    private static string? PageSite(string? pageUrl)
         => Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.Host.Length > 0
-           && string.Equals(TrackerBlocker.RegistrableDomain(uri.Host.ToLowerInvariant()),
-               TrackerBlocker.RegistrableDomain(host.ToLowerInvariant()), StringComparison.Ordinal);
+            ? SiteOf(uri.Host)
+            : null;
 }

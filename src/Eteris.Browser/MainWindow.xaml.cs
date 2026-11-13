@@ -417,8 +417,11 @@ public partial class MainWindow : Window
                 var restored = e.TransitionType.HasFlag(TransitionType.ForwardBack);
                 Dispatcher.InvokeAsync(() =>
                 {
+                    var leftAt = tab.LeftAt(arriving);
                     tab.LeavePage(leaving);
                     if (restored && tab.ReturnToPage(arriving)) OnPageRestored(tab, browser, arriving);
+                    // Reposta tal como estava antes de o site ficar mais protegido (Shields/ShieldTightening.cs).
+                    if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser);
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
             mainRequestsAtCommit = requests;

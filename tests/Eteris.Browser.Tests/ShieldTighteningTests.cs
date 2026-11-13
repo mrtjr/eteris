@@ -103,6 +103,43 @@ public class ShieldTighteningTests
         Assert.Contains("AppData.SetShield(host, !on, IsPrivate);\n                    ReloadActive(ignoreCache: !on);", palette.ReplaceLineEndings("\n"));
     }
 
+    // Voltar para uma página guardada na cache de Voltar/Avançar repõe-na tal como estava, sem pedidos (medido: o gpt.js
+    // da reprodução local com googletag.apiReady true). Se foi deixada antes de o site ficar mais protegido, carrega-se
+    // outra vez.
+    [Fact]
+    public void TightenedSince_APageLeftBeforeMoreProtection()
+    {
+        var host = "t" + Guid.NewGuid().ToString("N") + ".example";
+        var page = "https://www." + host + "/artigo";
+        var left = Environment.TickCount64;
+        Assert.False(ShieldTightening.TightenedSince(page, left));
+        Assert.False(ShieldTightening.TightenedSince(page, null));
+        ShieldTightening.Changed(host, wasProtected: true, isProtected: false);
+        Assert.False(ShieldTightening.TightenedSince(page, left));
+        ShieldTightening.Changed(host, wasProtected: false, isProtected: true);
+        Assert.True(ShieldTightening.TightenedSince(page, left));
+        // Sem registo de quando foi deixada (a aba só guarda as últimas): carrega outra vez, pelo seguro.
+        Assert.True(ShieldTightening.TightenedSince(page, null));
+        Assert.False(ShieldTightening.TightenedSince(page, Environment.TickCount64 + 60_000));
+        Assert.False(ShieldTightening.TightenedSince("https://outro" + host + "/", null));
+        Assert.False(ShieldTightening.TightenedSince("eteris://newtab/", null));
+    }
+
+    [Fact]
+    public void Window_ReloadsARestoredPageLeftBeforeMoreProtection()
+    {
+        var main = Source("MainWindow.xaml.cs");
+        var leftAt = main.IndexOf("var leftAt = tab.LeftAt(arriving);", StringComparison.Ordinal);
+        var leave = main.IndexOf("tab.LeavePage(leaving);", StringComparison.Ordinal);
+        Assert.True(leftAt > 0 && leave > leftAt);
+        Assert.Contains("if (restored && ShieldTightening.TightenedSince(arriving, leftAt)) ReloadRestored(tab, browser);", main);
+        var reload = Body(Source("MainWindow.Shield.cs"), "private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)");
+        Assert.Contains("RendererCache.EvictAsync(browser)", reload);
+        Assert.Contains("await ScriptsReadyFor(tab, browser, tab.Address);", reload);
+        Assert.Contains("browser.Reload(ignoreCache: true)", reload);
+        Assert.Contains("catch (Exception)", reload);
+    }
+
     private static string Source(params string[] parts)
         => File.ReadAllText(Path.Combine([GoogleSyncTests.FindRoot(), "src", "Eteris.Browser", .. parts]));
 

@@ -176,4 +176,23 @@ public partial class MainWindow
         ShieldTightening.Tightened += OnTightened;
         Closed += (_, _) => ShieldTightening.Tightened -= OnTightened;
     }
+
+    // Uma página reposta pela cache de Voltar/Avançar, deixada antes de o site dela ficar mais protegido, volta com os
+    // scripts que correram sem proteção: carrega outra vez, sem cache, e o processo dela larga a cache de memória (o
+    // processo de uma página na cache de Voltar/Avançar não estava entre as páginas abertas quando a proteção mudou).
+    // Antes, os scripts do site são atualizados, como no recarregar da barra (MainWindow.Reload.cs).
+    private async void ReloadRestored(BrowserTab tab, CefSharp.Wpf.HwndHost.ChromiumWebBrowser browser)
+    {
+        try
+        {
+            if (!IsReady(browser)) return;
+            _ = RendererCache.EvictAsync(browser);
+            await ScriptsReadyFor(tab, browser, tab.Address);
+            if (IsReady(browser)) browser.Reload(ignoreCache: true);
+        }
+        catch (Exception)
+        {
+            // `async void`: uma exceção aqui fechava o Éteris.
+        }
+    }
 }

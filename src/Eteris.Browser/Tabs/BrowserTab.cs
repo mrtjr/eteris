@@ -311,22 +311,33 @@ public partial class BrowserTab : ObservableObject
     // (back/forward cache) repõe a página tal como estava, sem pedidos novos, por isso repõe-se o que ela tinha.
     public const int RememberedPages = 8;
 
-    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon, string? FaviconSite);
+    // LeftAt: quando foi deixada (Environment.TickCount64), para saber se o site ficou mais protegido depois disso.
+    private sealed record LeftPage(string Url, int Blocked, Dictionary<string, int> Hosts, ImageSource? Favicon, string? FaviconSite,
+        long LeftAt);
 
     private readonly List<LeftPage> _leftPages = [];
 
     // A página url vai ser substituída: guarda o estado dela e começa a contagem da seguinte do zero. Chamado uma vez
-    // por pedido da página nova (um redirecionamento repete-o): uma contagem já recomeçada não apaga a guardada.
+    // por pedido da página nova (um redirecionamento repete-o): uma contagem já recomeçada não apaga a guardada, mas o
+    // momento em que foi deixada é sempre o último.
     public void LeavePage(string? url)
     {
+        var now = Environment.TickCount64;
         if (url is not null && (BlockedCount > 0 || _leftPages.All(p => p.Url != url)))
         {
             _leftPages.RemoveAll(p => p.Url == url);
-            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite));
+            _leftPages.Add(new LeftPage(url, BlockedCount, new(_blockedHosts, StringComparer.OrdinalIgnoreCase), Favicon, FaviconSite, now));
             if (_leftPages.Count > RememberedPages) _leftPages.RemoveAt(0);
+        }
+        else if (url is not null && _leftPages.FindLastIndex(p => p.Url == url) is var i and >= 0)
+        {
+            _leftPages[i] = _leftPages[i] with { LeftAt = now };
         }
         ResetShield();
     }
+
+    // Quando a página url foi deixada pela última vez; null se a aba não a guardou.
+    public long? LeftAt(string url) => _leftPages.FindLast(p => p.Url == url)?.LeftAt;
 
     // Voltou a url pela cache de páginas: repõe a contagem e o ícone dela. false se não há nada guardado.
     public bool ReturnToPage(string url)

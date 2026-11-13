@@ -14,7 +14,7 @@
 
 - eteris://privacy passa a contar as vigias ativas e paradas e os recortes que recarregam sozinhos, e a política de privacidade explica os dois.
 - Apagar o histórico de um período apaga também os preços e textos que as vigias leram nesse período (as vigias ficam). «Esquecer ao fechar» deixa as vigias; só o «Triturar» do site as leva.
-- Voltar a ligar o Escudo num site (tirar a exceção) ou ligar o modo rigoroso protege logo: os scripts de anúncios e rastreadores que as páginas abertas desse site guardaram em memória enquanto estavam sem proteção já não voltam a correr ao recarregar nem numa visita nova (no Público, o script de anúncios do Google continuava a carregar).
+- Voltar a ligar o Escudo num site (tirar a exceção) ou ligar o modo rigoroso protege logo: os scripts de anúncios e rastreadores que as páginas abertas desse site guardaram em memória enquanto estavam sem proteção já não voltam a correr ao recarregar, numa visita nova nem ao voltar atrás para uma dessas páginas (no Público, o script de anúncios do Google continuava a carregar).
 
 ## 0.2.17 — 2026-11-13
 

@@ -43,6 +43,22 @@ public class BackForwardCacheTests
         Assert.Equal(0, tab.BlockedCount);
     }
 
+    // A cache de páginas repõe a página tal como estava quando foi deixada: o momento fica guardado, para se saber se o
+    // site ficou mais protegido depois disso (Shields/ShieldTightening.cs). Deixá-la outra vez muda-o, mesmo sem bloqueios.
+    [Fact]
+    public void LeavingAPage_RemembersWhen()
+    {
+        var tab = new BrowserTab("https://a.pt/");
+        Assert.Null(tab.LeftAt("https://a.pt/"));
+        var before = Environment.TickCount64;
+        tab.LeavePage("https://a.pt/");
+        var first = tab.LeftAt("https://a.pt/");
+        Assert.True(first >= before);
+        Thread.Sleep(40);
+        tab.LeavePage("https://a.pt/");
+        Assert.True(tab.LeftAt("https://a.pt/") > first);
+    }
+
     [Fact]
     public void OnlyTheLastPagesAreRemembered()
     {
