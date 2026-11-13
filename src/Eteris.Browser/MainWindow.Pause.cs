@@ -496,26 +496,10 @@ public partial class MainWindow
             else element.SetResourceReference(property, "TextBrush");
         }
 
-        // Os PillButton do tema não recebem o foco (para não o tirarem à página): aqui recebem-no e mostram-no com um anel
-        // do contraste do texto.
-        Style Focusable(string basedOn)
-        {
-            var ring = new FrameworkElementFactory(typeof(Border));
-            ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
-            ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(19));
-            ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-4));
-            if (highContrast) ring.SetValue(Border.BorderBrushProperty, SystemColors.HighlightBrush);
-            else if (picture is not null) ring.SetValue(Border.BorderBrushProperty, Brushes.White);
-            else ring.SetResourceReference(Border.BorderBrushProperty, "TextBrush");
-            var visual = new Style();
-            visual.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate { VisualTree = ring }));
-            var style = new Style(typeof(Button), (Style)FindResource(basedOn));
-            style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
-            style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, visual));
-            return style;
-        }
-        state.ChipStyle = Focusable("PillButton");
-        state.ChosenStyle = Focusable("PrimaryPillButton");
+        // O anel do foco: a cor de realce do sistema em alto contraste, branco sobre a paisagem, o texto do tema sem ela.
+        var ringBrush = highContrast ? SystemColors.HighlightBrush : picture is not null ? Brushes.White : null;
+        state.ChipStyle = FocusableButtonStyle("PillButton", ringBrush);
+        state.ChosenStyle = FocusableButtonStyle("PrimaryPillButton", ringBrush);
 
         var view = new PauseSurface { ClipToBounds = true, Background = Brushes.Transparent, Focusable = false };
         AutomationProperties.SetName(view, PauseCapture.ViewName(capturing));
@@ -543,41 +527,7 @@ public partial class MainWindow
             view.Children.Add(new Rectangle { Fill = Brushes.Black, Opacity = 0.55, IsHitTestVisible = false });
         }
 
-        // Os botões da janela continuam a funcionar (o ecrã calmo tapa a barra de título e a de ferramentas). O resto da
-        // faixa de cima continua a servir para arrastar a janela (WindowChrome).
-        var caption = new StackPanel { Orientation = Orientation.Horizontal, Height = 34 };
-        Button CaptionButton(string glyph, string name, string style, RoutedEventHandler click)
-        {
-            var button = new Button { Content = glyph, ToolTip = name, Style = (Style)FindResource(style) };
-            AutomationProperties.SetName(button, name);
-            WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-            button.Click += click;
-            caption.Children.Add(button);
-            return button;
-        }
-        CaptionButton("", "Minimizar", "CaptionButton", Minimize_Click);
-        var maximize = CaptionButton("", "Maximizar", "CaptionButton", Maximize_Click);
-        maximize.SetBinding(ContentControl.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = MaximizeButton });
-        maximize.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(FrameworkElement.ToolTip)) { Source = MaximizeButton });
-        // O nome vem do estilo CaptionButton (ligado à dica): «Restaurar» com a janela maximizada, e não um «Maximizar» fixo.
-        maximize.ClearValue(AutomationProperties.NameProperty);
-        maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
-        CaptionButton("", "Fechar", "CloseCaptionButton", CloseWindow_Click);
-        var captionCard = new Border
-        {
-            Child = caption,
-            CornerRadius = new CornerRadius(0, 0, 0, 10),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        if (highContrast)
-        {
-            captionCard.Background = SystemColors.WindowBrush;
-            foreach (var button in caption.Children.OfType<Button>()) button.Foreground = SystemColors.WindowTextBrush;
-        }
-        else captionCard.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
-        Panel.SetZIndex(captionCard, 1);
-        view.Children.Add(captionCard);
+        view.Children.Add(BuildCaptionCard(mini, highContrast));
 
         var center = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
 
@@ -719,6 +669,64 @@ public partial class MainWindow
         state.Back = back;
         state.Chips = chips;
         return view;
+    }
+
+    // Os PillButton do tema não recebem o foco (para não o tirarem à página): nos ecrãs que tapam a janela (a Pausa, a tranca
+    // das janelas privadas) recebem-no e mostram-no com um anel do contraste do texto (ringBrush; null = o TextBrush do tema).
+    private Style FocusableButtonStyle(string basedOn, Brush? ringBrush)
+    {
+        var ring = new FrameworkElementFactory(typeof(Border));
+        ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(19));
+        ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-4));
+        if (ringBrush is not null) ring.SetValue(Border.BorderBrushProperty, ringBrush);
+        else ring.SetResourceReference(Border.BorderBrushProperty, "TextBrush");
+        var visual = new Style();
+        visual.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate { VisualTree = ring }));
+        var style = new Style(typeof(Button), (Style)FindResource(basedOn));
+        style.Setters.Add(new Setter(UIElement.FocusableProperty, true));
+        style.Setters.Add(new Setter(FrameworkElement.FocusVisualStyleProperty, visual));
+        return style;
+    }
+
+    // Os botões da janela (minimizar, maximizar ou restaurar, fechar) nos ecrãs que tapam a barra de título e a de
+    // ferramentas (a Pausa, a tranca das janelas privadas): continuam a funcionar. O resto da faixa de cima continua a
+    // servir para arrastar a janela (WindowChrome).
+    private Border BuildCaptionCard(bool mini, bool highContrast)
+    {
+        var caption = new StackPanel { Orientation = Orientation.Horizontal, Height = 34 };
+        Button CaptionButton(string glyph, string name, string style, RoutedEventHandler click)
+        {
+            var button = new Button { Content = glyph, ToolTip = name, Style = (Style)FindResource(style) };
+            AutomationProperties.SetName(button, name);
+            WindowChrome.SetIsHitTestVisibleInChrome(button, true);
+            button.Click += click;
+            caption.Children.Add(button);
+            return button;
+        }
+        CaptionButton("", "Minimizar", "CaptionButton", Minimize_Click);
+        var maximize = CaptionButton("", "Maximizar", "CaptionButton", Maximize_Click);
+        maximize.SetBinding(ContentControl.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = MaximizeButton });
+        maximize.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(FrameworkElement.ToolTip)) { Source = MaximizeButton });
+        // O nome vem do estilo CaptionButton (ligado à dica): «Restaurar» com a janela maximizada, e não um «Maximizar» fixo.
+        maximize.ClearValue(AutomationProperties.NameProperty);
+        maximize.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
+        CaptionButton("", "Fechar", "CloseCaptionButton", CloseWindow_Click);
+        var captionCard = new Border
+        {
+            Child = caption,
+            CornerRadius = new CornerRadius(0, 0, 0, 10),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        if (highContrast)
+        {
+            captionCard.Background = SystemColors.WindowBrush;
+            foreach (var button in caption.Children.OfType<Button>()) button.Foreground = SystemColors.WindowTextBrush;
+        }
+        else captionCard.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        Panel.SetZIndex(captionCard, 1);
+        return captionCard;
     }
 
     // De todas as janelas abertas (a chamada pode estar noutra, atrás desta): a Pausa é de todas. O site de uma janela
